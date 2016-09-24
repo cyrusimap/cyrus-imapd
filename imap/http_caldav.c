@@ -165,7 +165,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
                              struct index_record *record, void *data);
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data);
+                      struct index_record *record, void *data, void **obj);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
@@ -1973,9 +1973,59 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 }
 
 
+struct timezone_rock {
+    icalcomponent *old;
+    icalcomponent *new;
+};
+
+static void add_timezone(icalparameter *param, void *data)
+{
+    struct timezone_rock *tzrock = (struct timezone_rock *) data;
+    const char *tzid = icalparameter_get_tzid(param);
+
+    /* Check if this tz is in our new object */
+    if (!icalcomponent_get_timezone(tzrock->new, tzid)) {
+        icalcomponent *vtz = NULL;
+
+        if (tzrock->old) {
+            /* Fetch tz from old object and add to new */
+            icaltimezone *tz = icalcomponent_get_timezone(tzrock->old, tzid);
+            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
+        }
+        else {
+            /* Fetch tz from our tzdist repository */
+            struct buf buf = BUF_INITIALIZER;
+            const char *path;
+            int fd;
+
+            /* Open and mmap the timezone file */
+            buf_printf(&buf, "%s%s/%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+            path = buf_cstring(&buf);
+
+            if ((fd = open(path, O_RDONLY)) != -1) {
+                struct buf data = BUF_INITIALIZER;
+                icalcomponent *ical;
+
+                buf_init_mmap(&data, 1, fd, path, MAP_UNKNOWN_LEN, NULL);
+                ical = ical_string_as_icalcomponent(&data);
+                vtz = icalcomponent_get_first_component(ical,
+                                                        ICAL_VTIMEZONE_COMPONENT);
+                icalcomponent_remove_component(ical, vtz);
+                icalcomponent_free(ical);
+                buf_free(&data);
+                close(fd);
+            }
+            buf_free(&buf);
+        }
+
+        if (vtz) icalcomponent_add_component(tzrock->new, vtz);
+    }
+}
+
+
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data)
+                      struct index_record *record, void *data, void **obj)
 {
     int r;
 
@@ -1985,7 +2035,14 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     if (record && record->uid) {
         /* GET on a resource */
         struct caldav_data *cdata = (struct caldav_data *) data;
+        unsigned need_tz = 0;
+        const char **hdr;
+        icalcomponent *ical;
         int ret = HTTP_CONTINUE;
+
+        /* Check for optional CalDAV-Timezones header */
+        hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
+        if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
 
         if (cdata->comp_flags.tzbyref) {
             if (!cdata->organizer && cdata->sched_tag) {
@@ -2000,10 +2057,25 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                     ret = HTTP_NOT_MODIFIED;
                 }
             }
+            if (need_tz) {
+                /* Add VTIMEZONE components for known TZIDs */
+                struct timezone_rock tzrock = { NULL, NULL };
+                icalcomponent *comp, *next;
+                icalcomponent_kind kind;
+
+                *obj = ical = record_to_ical(mailbox, record, NULL);
+                tzrock.new = ical;
+
+                comp = icalcomponent_get_first_real_component(ical);
+                kind = icalcomponent_isa(comp);
+                for (; comp; comp = next) {
+                    next = icalcomponent_get_next_component(ical, kind);
+                    icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
+                }
+            }
         }
-        else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+        else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
             /* Strip known VTIMEZONEs */
-            icalcomponent *ical;
             struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
             char *userid = NULL;
 
@@ -2015,15 +2087,13 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                 goto done;
             }
 
-            ical = record_to_ical(mailbox, record, &userid);
+            *obj = ical = record_to_ical(mailbox, record, &userid);
 
             caldav_store_resource(txn, ical, mailbox,
                                   cdata->dav.resource, caldavdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
                                   userid);
             free(userid);
-
-            icalcomponent_free(ical);
 
             /* Fetch the new DAV and index records */
             caldav_lookup_resource(caldavdb, mailbox->name,
@@ -2037,6 +2107,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
             caldav_close(caldavdb);
         }
+
+        /* iCalendar data in response should not be transformed */
+        txn->flags.cc |= CC_NOTRANSFORM;
 
       done:
         return ret;
@@ -2708,56 +2781,6 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 }
 
 
-struct import_rock {
-    icalcomponent *old;
-    icalcomponent *new;
-};
-
-static void add_timezone(icalparameter *param, void *data)
-{
-    struct import_rock *irock = (struct import_rock *) data;
-    const char *tzid = icalparameter_get_tzid(param);
-
-    /* Check if this tz is in our new object */
-    if (!icalcomponent_get_timezone(irock->new, tzid)) {
-        icalcomponent *vtz = NULL;
-
-        if (irock->old) {
-            /* Fetch tz from old object and add to new */
-            icaltimezone *tz = icalcomponent_get_timezone(irock->old, tzid);
-            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
-        }
-        else {
-            /* Fetch tz from our tzdist repository */
-            struct buf buf = BUF_INITIALIZER;
-            const char *path;
-            int fd;
-
-            /* Open and mmap the timezone file */
-            buf_printf(&buf, "%s%s/%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
-            path = buf_cstring(&buf);
-
-            if ((fd = open(path, O_RDONLY)) != -1) {
-                struct buf data = BUF_INITIALIZER;
-                icalcomponent *ical;
-
-                buf_init_mmap(&data, 1, fd, path, MAP_UNKNOWN_LEN, NULL);
-                ical = ical_string_as_icalcomponent(&data);
-                vtz = icalcomponent_get_first_component(ical,
-                                                        ICAL_VTIMEZONE_COMPONENT);
-                icalcomponent_remove_component(ical, vtz);
-                icalcomponent_free(ical);
-                buf_free(&data);
-                close(fd);
-            }
-            buf_free(&buf);
-        }
-
-        if (vtz) icalcomponent_add_component(irock->new, vtz);
-    }
-}
-
-
 /* Perform a bulk import */
 static int caldav_import(struct transaction_t *txn, void *obj,
                          struct mailbox *mailbox, void *destdb,
@@ -2797,7 +2820,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
          comp; comp = next) {
         icalcomponent *newical;
-        struct import_rock irock;
+        struct timezone_rock tzrock;
 
         next = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT);
         kind = icalcomponent_isa(comp);
@@ -2819,9 +2842,9 @@ static int caldav_import(struct transaction_t *txn, void *obj,
         /* Look for matching UIDs (recurrence set) */
 
         /* Add required timezone components */
-        irock.old = ical;
-        irock.new = newical;
-        icalcomponent_foreach_tzid(comp, &add_timezone, &irock);
+        tzrock.old = ical;
+        tzrock.new = newical;
+        icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
 
         /* Append a unique resource name to URL and perform a PUT */
         uid = icalcomponent_get_uid(comp);
@@ -5185,19 +5208,19 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         if (need_tz) {
             if (cdata->comp_flags.tzbyref) {
                 /* Add VTIMEZONE components for known TZIDs */
-                struct import_rock irock = { NULL, NULL };
+                struct timezone_rock tzrock = { NULL, NULL };
                 icalcomponent *comp, *next;
                 icalcomponent_kind kind;
 
                 if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
                 ical = fctx->obj;
-                irock.new = ical;
+                tzrock.new = ical;
 
                 comp = icalcomponent_get_first_real_component(ical);
                 kind = icalcomponent_isa(comp);
                 for (; comp; comp = next) {
                     next = icalcomponent_get_next_component(ical, kind);
-                    icalcomponent_foreach_tzid(comp, &add_timezone, &irock);
+                    icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
                 }
             }
         }

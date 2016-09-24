@@ -73,7 +73,7 @@ static int webdav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data);
+                      struct index_record *record, void *data, void **obj);
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb, unsigned flags);
@@ -505,7 +505,8 @@ static int webdav_parse_path(const char *path,
 /* Perform a GET/HEAD request on a WebDAV resource */
 static int webdav_get(struct transaction_t *txn,
                       struct mailbox *mailbox __attribute__((unused)),
-                      struct index_record *record, void *data)
+                      struct index_record *record, void *data,
+                      void **obj __attribute__((unused)))
 {
     if (record && record->uid) {
         /* GET on a resource */

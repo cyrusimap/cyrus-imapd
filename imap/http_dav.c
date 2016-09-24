@@ -4573,7 +4573,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
-    void *davdb = NULL;
+    void *davdb = NULL, *obj = NULL;
     char *freeme = NULL;
 
     /* Parse the path */
@@ -4601,7 +4601,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     if (!txn->req_tgt.resource) {
         /* Do any collection processing */
-        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL);
+        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
 
         /* We don't handle GET on a collection */
         return HTTP_NO_CONTENT;
@@ -4680,7 +4680,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
         resp_body->maxage = 3600;       /* 1 hr */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED && record.uid) break;
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -4690,19 +4690,19 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     /* Do any special processing */
     if (gparams->get) {
-        ret = gparams->get(txn, mailbox, &record, ddata);
+        ret = gparams->get(txn, mailbox, &record, ddata, &obj);
         if (ret != HTTP_CONTINUE) goto done;
 
         ret = 0;
     }
 
-    if (record.uid) {
-        if (mime && !resp_body->type) {
-            txn->flags.vary |= VARY_ACCEPT;
-            resp_body->type = mime->content_type;
-        }
+    if (mime && !resp_body->type) {
+        txn->flags.vary |= VARY_ACCEPT;
+        resp_body->type = mime->content_type;
+    }
 
-        /* Resource length doesn't include RFC 5322 header */
+    if (!obj) {
+        /* Raw resource - length doesn't include RFC 5322 header */
         offset = record.header_size;
         datalen = record.size - offset;
 
@@ -4711,34 +4711,34 @@ int meth_get_head(struct transaction_t *txn, void *params)
             r = mailbox_map_record(mailbox, &record, &msg_buf);
             if (r) goto done;
 
-            /* iCalendar data in response should not be transformed */
-            txn->flags.cc |= CC_NOTRANSFORM;
-
             data = buf_base(&msg_buf) + offset;
 
             if (mime != gparams->mime_types) {
-                /* Not the storage format - convert into requested MIME type */
-                struct buf inbuf, *outbuf;
-                void *obj;
+                /* Not the storage format - create resource object */
+                struct buf inbuf;
 
                 buf_init_ro(&inbuf, data, datalen);
                 obj = gparams->mime_types[0].to_object(&inbuf);
                 buf_free(&inbuf);
-
-                outbuf = mime->from_object(obj);
-                datalen = buf_len(outbuf);
-                data = freeme = buf_release(outbuf);
-                buf_destroy(outbuf);
-
-                if (gparams->mime_types[0].free)
-                    gparams->mime_types[0].free(obj);
             }
         }
+    }
+
+    if (obj) {
+        /* Convert object into requested MIME type */
+        struct buf *outbuf = mime->from_object(obj);
+
+        datalen = buf_len(outbuf);
+        if (txn->meth == METH_GET) data = freeme = buf_release(outbuf);
+        buf_destroy(outbuf);
+
+        if (gparams->mime_types[0].free) gparams->mime_types[0].free(obj);
     }
 
     write_body(precond, txn, data, datalen);
 
     buf_free(&msg_buf);
+    free(freeme);
 
   done:
     if (davdb) gparams->davdb.close_db(davdb);
@@ -4746,7 +4746,6 @@ int meth_get_head(struct transaction_t *txn, void *params)
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
     }
-    free(freeme);
     mailbox_close(&mailbox);
 
     return ret;
@@ -8688,9 +8687,8 @@ static int get_server_info(struct transaction_t *txn)
 static int notify_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
 
-static int notify_get(struct transaction_t *txn,
-                      struct mailbox *mailbox __attribute__((unused)),
-                      struct index_record *record, void *data);
+static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
+                      struct index_record *record, void *data, void **obj);
 
 static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
@@ -8886,7 +8884,8 @@ struct namespace_t namespace_notify = {
 
 /* Perform a GET/HEAD request on a WebDAV notification resource */
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data)
+                      struct index_record *record, void *data,
+                      void **obj __attribute__((unused)))
 {
     const char **hdr;
     struct webdav_data *wdata = (struct webdav_data *) data;

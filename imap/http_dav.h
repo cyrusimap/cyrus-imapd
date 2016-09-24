@@ -444,7 +444,7 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 
 /* Function to do special processing for GET method (optional) */
 typedef int (*get_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
-                          struct index_record *record, void *data);
+                          struct index_record *record, void *data, void **obj);
 
 /* Function to convert to/from MIME type */
 struct mime_type_t {
