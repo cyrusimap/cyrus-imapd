@@ -2096,8 +2096,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             free(userid);
 
             /* Fetch the new DAV and index records */
+            /* NOTE: previous contents of cdata was freed by store_resource */
             caldav_lookup_resource(caldavdb, mailbox->name,
-                                   cdata->dav.resource, data, /*tombstones*/0);
+                                   txn->req_tgt.resource, &cdata, /*tombstones*/0);
 
             mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
 
