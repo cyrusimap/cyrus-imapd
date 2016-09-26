@@ -460,7 +460,7 @@ static void myinit(void)
         config_getstring(IMAPOPT_LDAP_URI) : config_getstring(IMAPOPT_LDAP_SERVERS));
 
     ptsm->version = (config_getint(IMAPOPT_LDAP_VERSION) == 2 ? LDAP_VERSION2 : LDAP_VERSION3);
-    ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
+    ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIMEOUT);
     ptsm->timeout.tv_usec = 0;
     ptsm->restart = config_getswitch(IMAPOPT_LDAP_RESTART);
 
