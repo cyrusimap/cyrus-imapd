@@ -2681,10 +2681,13 @@ product version in the capabilities
 /* The absolute path to the TLS sessions db file. If not specified,
    will be configdirectory/tls_sessions.db */
 
-{ "tls_session_timeout", 1440, INT }
-/* The length of time (in minutes) that a TLS session will be cached
-   for later reuse.  The maximum value is 1440 (24 hours), the
-   default.  A value of 0 will disable session caching. */
+{ "tls_session_timeout", "24h", DURATION }
+/* The length of time that a TLS session will be cached for later
+   reuse.  The maximum value is 24 hours, also the default.  A
+   value of 0 will disable session caching.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "tls_versions", "tls1_0 tls1_1 tls1_2 tls1_3", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts

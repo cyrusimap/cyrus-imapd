@@ -1001,10 +1001,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                                    SSL_SESS_CACHE_NO_AUTO_CLEAR |
                                    SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
 
-    /* Get the session timeout from the config file (in minutes) */
-    timeout = config_getint(IMAPOPT_TLS_SESSION_TIMEOUT);
+    /* Get the session timeout from the config file */
+    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT, 'm');
     if (timeout < 0) timeout = 0;
-    if (timeout > 1440) timeout = 1440; /* 24 hours max */
+    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
 
     /* A timeout of zero disables session caching */
     if (timeout) {
@@ -1015,8 +1015,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         /* Set the context for session reuse -- use the service ident */
         SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
 
-        /* Set the timeout for the internal/external cache (in seconds) */
-        SSL_CTX_set_timeout(s_ctx, timeout*60);
+        /* Set the timeout for the internal/external cache */
+        SSL_CTX_set_timeout(s_ctx, timeout);
 
         /* Set the callback functions for the external session cache */
         SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
