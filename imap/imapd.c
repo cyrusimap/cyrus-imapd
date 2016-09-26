@@ -2753,7 +2753,7 @@ static void cmd_login(char *tag, char *user)
         syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
                imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
 
-        failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -2879,7 +2879,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                                 VARIABLE_LISTEND);
-            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }

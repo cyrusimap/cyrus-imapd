@@ -714,7 +714,7 @@ static void cmd_authenticate(char *mech, char *resp)
             syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
                    sync_clienthost, mech, sasl_errdetail(sync_saslconn));
 
-            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }

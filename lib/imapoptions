@@ -854,8 +854,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    EXPUNGE and should result in greater responsiveness for the client,
    especially when expunging a large number of messages. */
 
-{ "failedloginpause", 3, INT }
-/* Number of seconds to pause after a failed login. */
+{ "failedloginpause", "3s", DURATION }
+/* Time to pause after a failed login.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "flushseenstate", 1, SWITCH, "2.5.0" }
 /* Deprecated. No longer used */
