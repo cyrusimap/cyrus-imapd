@@ -936,7 +936,7 @@ static void cmdloop(void)
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {
                 int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);
-                int minpollsec = config_getint(IMAPOPT_POPMINPOLL)*60;
+                int minpollsec = config_getduration(IMAPOPT_POPMINPOLL, 'm');
 
                 /* check preconditions! */
                 if (!popd_mailbox)
@@ -1531,7 +1531,7 @@ static void cmd_pass(char *pass)
  */
 static void cmd_capa(void)
 {
-    int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
+    int minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm');
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);
     int mechcount;
     const char *mechlist;
@@ -1871,11 +1871,11 @@ int openinbox(void)
             goto fail;
         }
 
-        if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
-            popd_mailbox->i.pop3_last_login + 60*minpoll > popd_login_time) {
+        if ((minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm')) &&
+            popd_mailbox->i.pop3_last_login + minpoll > popd_login_time) {
             prot_printf(popd_out,
                         "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
-                        minpoll, minpoll > 1 ? "s" : "");
+                        minpoll / 60, minpoll / 60 > 1 ? "s" : "");
             mailbox_close(&popd_mailbox);
             goto fail;
         }
