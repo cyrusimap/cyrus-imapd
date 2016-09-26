@@ -245,6 +245,8 @@ EXPORTED int config_getduration(enum imapopt opt, int defunit)
     assert_not_deprecated(opt);
     assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
+    if (imapopts[opt].val.s == NULL) return 0;
+
     int duration = parse_duration(imapopts[opt].val.s, defunit);
     char errbuf[1024];
 
