@@ -1965,11 +1965,13 @@ If all partitions are over that limit, this feature is not used anymore.
    have their messages available via RSS.  If not set, a default
    wildmat of "*" (ALL mailboxes) will be used. */
 
-{ "rss_maxage", 0, INT }
-/* Maximum age (in days) of items to display in an RSS channel.  If
-   non-zero, httpd will only display items received within the last
-   \fIrss_maxage\fR days.  If set to 0, all available items will be
-   displayed (the default). */
+{ "rss_maxage", NULL, DURATION }
+/* Maximum age of items to display in an RSS channel.  If non-zero,
+   httpd will only display items received within this time period.
+   If set to 0, all available items will be displayed (the default).
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
 { "rss_maxitems", 0, INT }
 /* Maximum number of items to display in an RSS channel.  If non-zero,

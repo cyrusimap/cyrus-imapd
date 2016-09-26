@@ -842,8 +842,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* Get maximum age of items to display */
-    max_age = config_getint(IMAPOPT_RSS_MAXAGE);
-    if (max_age > 0) age_mark = time(0) - (max_age * 60 * 60 * 24);
+    max_age = config_getduration(IMAPOPT_RSS_MAXAGE, 'd');
+    if (max_age > 0) age_mark = time(0) - max_age;
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
