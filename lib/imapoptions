@@ -1757,9 +1757,12 @@ If all partitions are over that limit, this feature is not used anymore.
    user waits a sufficient amount of time, they will get back many or all
    of the slots. */
 
-{ "poptimeout", 10, INT }
-/* Set the length of the POP server's inactivity autologout timer,
-   in minutes.  The minimum value is 10, the default. */
+{ "poptimeout", "10m", DURATION }
+/* Set the length of the POP server's inactivity autologout timer.
+   The minimum value is 10 minutes, the default.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "popuseacl", 0, SWITCH }
 /* Enforce IMAP ACLs in the pop server.  Due to the nature of the POP3

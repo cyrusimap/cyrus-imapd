@@ -518,9 +518,8 @@ int service_main(int argc __attribute__((unused)),
     popd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     /* Set inactivity timer */
-    popd_timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (popd_timeout < 10) popd_timeout = 10;
-    popd_timeout *= 60;
+    popd_timeout = config_getduration(IMAPOPT_POPTIMEOUT, 'm');
+    if (popd_timeout < 10 * 60) popd_timeout = 10 * 60;
     prot_settimeout(popd_in, popd_timeout);
     prot_setflushonread(popd_in, popd_out);
 
