@@ -992,11 +992,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* For backwards compatibility with Cyrus 1.5.10 and earlier -- ignore
   the reference argument in LIST or LSUB commands. */
 
-{ "imapidlepoll", 60, INT }
-/* The interval (in seconds) for polling for mailbox changes and
-   ALERTs while running the IDLE command.  This option is used when
-   idled is not enabled or cannot be contacted.  The minimum value is
-   1.  A value of 0 will disable IDLE. */
+{ "imapidlepoll", "60s", DURATION }
+/* The interval for polling for mailbox changes and ALERTs while running
+   the IDLE command.  This option is used when idled is not enabled or
+   cannot be contacted.  The minimum value is 1 second.  A value of 0
+   will disable IDLE.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "imapidresponse", 1, SWITCH }
 /* If enabled, the server responds to an ID command with a parameter

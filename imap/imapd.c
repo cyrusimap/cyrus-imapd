@@ -3349,7 +3349,7 @@ static void cmd_idle(char *tag)
 
         /* get polling period */
         if (idle_period == -1) {
-            idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+            idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
         }
 
         if (CAPA(backend_current, CAPA_IDLE)) {
