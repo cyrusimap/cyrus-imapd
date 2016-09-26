@@ -2547,12 +2547,18 @@ product version in the capabilities
 /* Number of TCP keepalive probes to send before declaring the
    connection dead (0 == system default) */
 
-{ "tcp_keepalive_idle", 0, INT }
-/* Number of seconds a connection must be idle before keepalive
-   probes are sent (0 == system default) */
+{ "tcp_keepalive_idle", "0", DURATION }
+/* How long a connection must be idle before keepalive probes are sent
+   (0 == system default).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
-{ "tcp_keepalive_intvl", 0, INT }
-/* Number of seconds between keepalive probes (0 == system default) */
+{ "tcp_keepalive_intvl", "0", DURATION }
+/* Time between keepalive probes (0 == system default).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "temp_path", "/tmp", STRING }
 /* The pathname to store temporary files in */
