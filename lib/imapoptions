@@ -2525,9 +2525,13 @@ product version in the capabilities
    next opportunity. Safer than sending signals to running processes.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_timeout", 1800, INT }
-/* Number of seconds to wait for a response before returning a timeout
-   failure when talking to a replication peer (client or server). */
+{ "sync_timeout", "30m", DURATION }
+/* How long to wait for a response before returning a timeout failure
+   when talking to a replication peer (client or server).  The minimum
+   duration is 3 seconds, the default is 30 minutes.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "sync_try_imap", 1, SWITCH }
 /* Whether sync_client should try to perform an IMAP connection

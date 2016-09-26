@@ -766,7 +766,7 @@ static void replica_connect(const char *channel)
     }
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
     prot_settimeout(sync_in, timeout);
 
