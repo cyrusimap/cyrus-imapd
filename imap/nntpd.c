@@ -540,9 +540,8 @@ int service_main(int argc __attribute__((unused)),
     nntp_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     /* Set inactivity timer */
-    nntp_timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
-    if (nntp_timeout < 3) nntp_timeout = 3;
-    nntp_timeout *= 60;
+    nntp_timeout = config_getduration(IMAPOPT_NNTPTIMEOUT, 'm');
+    if (nntp_timeout < 3 * 60) nntp_timeout = 3 * 60;
     prot_settimeout(nntp_in, nntp_timeout);
     prot_setflushonread(nntp_in, nntp_out);
 

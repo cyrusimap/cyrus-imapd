@@ -1621,9 +1621,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path to the newsrc db file.  If not specified,
    will be configdirectory/fetchnews.db */
 
-{ "nntptimeout", 3, INT }
-/* Set the length of the NNTP server's inactivity autologout timer,
-   in minutes.  The minimum value is 3, the default. */
+{ "nntptimeout", "3m", DURATION }
+/* Set the length of the NNTP server's inactivity autologout timer.
+   The minimum value is 3 minutes, also the default.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "notesmailbox", NULL, STRING }
 /* The top level mailbox in each user's account which is used to store
