@@ -899,9 +899,8 @@ int service_main(int argc __attribute__((unused)),
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
-    httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
+    httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
     if (httpd_timeout < 0) httpd_timeout = 0;
-    httpd_timeout *= 60;
     prot_settimeout(httpd_in, httpd_timeout);
     prot_setflushonread(httpd_in, httpd_out);
 

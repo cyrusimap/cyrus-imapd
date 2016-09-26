@@ -977,10 +977,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that enabling this option will increase the amount of data
    sent across the wire. */
 
-{ "httptimeout", 5, INT }
-/* Set the length of the HTTP server's inactivity autologout timer,
-   in minutes.  The default is 5.  The minimum value is 0, which will
-   disable persistent connections. */
+{ "httptimeout", "5m", DURATION }
+/* Set the length of the HTTP server's inactivity autologout timer.
+   The default is 5 minutes.  The minimum value is 0, which will
+   disable persistent connections.
+.PP
+   For backwards compatibility, if no unit is specified, minutes
+   is assumed. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING }
 /* Unix domain socket that idled listens on. */
