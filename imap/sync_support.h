@@ -60,7 +60,7 @@ extern struct protocol_t csync_protocol;
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
 const char *sync_get_config(const char *channel, const char *val);
-int sync_get_intconfig(const char *channel, const char *val);
+int sync_get_durationconfig(const char *channel, const char *val, int defunit);
 int sync_get_switchconfig(const char *channel, const char *val);
 
 /* ====================================================================== */

@@ -2511,11 +2511,14 @@ product version in the capabilities
 /* The authentication realm to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_repeat_interval", 1, INT }
-/* Minimum interval (in seconds) between replication runs in rolling
-   replication mode. If a replication run takes longer than this
-   time, we repeat immediately.
-   Prefix with a channel name to only apply for that channel */
+{ "sync_repeat_interval", "1s", DURATION }
+/* Minimum interval between replication runs in rolling replication
+   mode. If a replication run takes longer than this time, we repeat
+   immediately.  Prefix with a channel name to only apply for that
+   channel.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "sync_shutdown_file", NULL, STRING }
 /* Simple latch used to tell sync_client(8) that it should shut down at the

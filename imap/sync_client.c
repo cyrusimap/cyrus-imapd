@@ -1188,7 +1188,7 @@ int main(int argc, char **argv)
                 sync_shutdown_file = sync_get_config(channel, "sync_shutdown_file");
 
             if (!min_delta)
-                min_delta = sync_get_intconfig(channel, "sync_repeat_interval");
+                min_delta = sync_get_durationconfig(channel, "sync_repeat_interval", 's');
 
             do_daemon(channel, sync_shutdown_file, timeout, min_delta);
         }
