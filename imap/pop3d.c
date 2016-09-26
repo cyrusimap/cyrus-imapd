@@ -1511,7 +1511,7 @@ static void cmd_pass(char *pass)
                popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
         if ((!popd_starttls_done) &&
-            (plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+            (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
              != 0) {
             sleep(plaintextloginpause);
         }

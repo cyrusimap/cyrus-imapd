@@ -1708,11 +1708,14 @@ selected, and those chances increase when other partitions get closer
 If all partitions are over that limit, this feature is not used anymore.
  */
 
-{ "plaintextloginpause", 0, INT }
-/* Number of seconds to pause after a successful plaintext login.  For
-   systems that support strong authentication, this permits users to
-   perceive a cost of using plaintext passwords.  (This does not
-   affect the use of PLAIN in SASL authentications.) */
+{ "plaintextloginpause", NULL, DURATION }
+/* Time to pause after a successful plaintext login.  For systems that
+   support strong authentication, this permits users to perceive a cost
+   of using plaintext passwords.  (This does not affect the use of PLAIN
+   in SASL authentications.)
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "plaintextloginalert", NULL, STRING }
 /* Message to send to client after a successful plaintext login. */

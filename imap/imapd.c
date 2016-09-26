@@ -2808,7 +2808,7 @@ static void cmd_login(char *tag, char *user)
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
-            int plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
+            int plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
             if (plaintextloginpause) {
                 sleep(plaintextloginpause);
             }
