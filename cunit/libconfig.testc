@@ -359,6 +359,19 @@ static void test_duration_default(void)
     CU_ASSERT_EQUAL(timeout, 32 * 60);
 }
 
+static void test_duration_nodefault(void)
+{
+    int plaintextloginpause = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* plaintextloginpause: <none> (default) */
+    );
+
+    plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
+    CU_ASSERT_EQUAL(plaintextloginpause, 0);
+}
+
 static void test_duration_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
