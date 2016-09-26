@@ -917,7 +917,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* Setup the signal handler for keepalive heartbeat */
-    httpd_keepalive = config_getint(IMAPOPT_HTTPKEEPALIVE);
+    httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE, 's');
     if (httpd_keepalive < 0) httpd_keepalive = 0;
     if (httpd_keepalive) {
         struct sigaction action;

@@ -950,13 +950,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    files, etc) rooted at this directory.  Otherwise, httpd will not
    serve any static content. */
 
-{ "httpkeepalive", 20, INT }
-/* Set the length of the HTTP server's keepalive heartbeat in seconds.
-   The default is 20.  The minimum value is 0, which will disable the
-   keepalive heartbeat.  When enabled, if a request takes longer than
-   \fIhttpkeepalive\fR seconds to process, the server will send the client
-   provisional responses every \fIhttpkeepalive\fR seconds until the
-   final response can be sent */
+{ "httpkeepalive", "20s", DURATION }
+/* Set the length of the HTTP server's keepalive heartbeat.  The
+   default is 20 seconds.  The minimum value is 0, which will disable
+   the keepalive heartbeat.  When enabled, if a request takes longer
+   than \fIhttpkeepalive\fR to process, the server will send the client
+   provisional responses every \fIhttpkeepalive\fR until the final
+   response can be sent.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "cgi", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
