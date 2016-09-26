@@ -615,9 +615,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    \fBclient_bind\fR is enabled.  If not set (the default),
    \fRservername\fR will be used. */
 
-{ "client_timeout", 10, INT }
-/* Number of seconds to wait before returning a timeout failure when
-   performing a client connection (e.g., in a murder environment) */
+{ "client_timeout", "10s", DURATION }
+/* Time to wait before returning a timeout failure when performing a
+   client connection (e.g. in a murder environment).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed.  */
 
 { "commandmintimer", NULL, STRING }
 /* Time in seconds. Any imap command that takes longer than this

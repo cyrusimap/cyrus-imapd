@@ -1086,7 +1086,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
             int n;
             fd_set wfds, rfds;
             time_t now = time(NULL);
-            time_t timeout = now + config_getint(IMAPOPT_CLIENT_TIMEOUT);
+            time_t timeout = now + config_getduration(IMAPOPT_CLIENT_TIMEOUT, 's');
             struct timeval waitfor;
 
             /* select() socket for writing until we succeed, fail, or timeout */
@@ -1139,7 +1139,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     ret->in = prot_new(sock, 0);
     ret->out = prot_new(sock, 1);
     ret->sock = sock;
-    prot_settimeout(ret->in, config_getint(IMAPOPT_CLIENT_TIMEOUT));
+    prot_settimeout(ret->in, config_getduration(IMAPOPT_CLIENT_TIMEOUT, 's'));
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
 
