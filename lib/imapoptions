@@ -2816,10 +2816,10 @@ of the incoming network interface, or if no record is found, the
    in their namespace. They provides virtual partitions, with quotas and QoS
    features. */
 
-{ "openio_rawx_timeout", 30, INT }
+{ "openio_rawx_timeout", "30s", DURATION }
 /* The OpenIO timeout to query to the RAWX services (default 30 sec). */
 
-{ "openio_proxy_timeout", 5, INT }
+{ "openio_proxy_timeout", "5s", DURATION }
 /* The OpenIO timeout to query to the PROXY services (default 5 sec). */
 
 { "openio_autocreate", 0, SWITCH }
