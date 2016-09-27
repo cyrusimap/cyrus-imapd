@@ -1292,8 +1292,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "ldap_timeout", 5, INT }
-/* Specify a number of seconds a search can take before timing out. */
+{ "ldap_timeout", "5s", DURATION }
+/* How long a search can take before timing out.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "ldap_ca_dir", NULL, STRING }
 /* Path to a directory with CA (Certificate Authority) certificates. */
