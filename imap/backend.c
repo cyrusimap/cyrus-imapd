@@ -847,7 +847,7 @@ static int backend_login(struct backend *ret, const char *userid,
                  (strcmp(prot->service, "pop3")))) {
                 char rsessionid[MAX_SESSIONID_SIZE];
                 parse_sessionid(my_status, rsessionid);
-                syslog(LOG_NOTICE, "proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
+                syslog(LOG_NOTICE, "auditlog: proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
             }
         }
 
