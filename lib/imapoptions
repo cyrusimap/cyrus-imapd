@@ -1286,8 +1286,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Use transport layer security for ldap:// using STARTTLS. Do not use
    ldaps:// in 'ldap_uri' with this option enabled. */
 
-{ "ldap_time_limit", 5, INT }
-/* Specify a number of seconds for a search request to complete. */
+{ "ldap_time_limit", "5s", DURATION }
+/* How long to wait for a search request to complete.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "ldap_timeout", 5, INT }
 /* Specify a number of seconds a search can take before timing out. */

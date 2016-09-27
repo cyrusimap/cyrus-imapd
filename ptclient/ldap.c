@@ -478,7 +478,7 @@ static void myinit(void)
 
     ptsm->referrals = config_getswitch(IMAPOPT_LDAP_REFERRALS);
     ptsm->size_limit = config_getint(IMAPOPT_LDAP_SIZE_LIMIT);
-    ptsm->time_limit = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
+    ptsm->time_limit = config_getduration(IMAPOPT_LDAP_TIME_LIMIT, 's');
 
     p = config_getstring(IMAPOPT_LDAP_SCOPE);
 
