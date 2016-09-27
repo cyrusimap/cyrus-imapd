@@ -1871,9 +1871,12 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The absolute path to the ptscache db file.  If not specified,
    will be configdirectory/ptscache.db */
 
-{ "ptscache_timeout", 10800, INT }
-/* The timeout (in seconds) for the PTS cache database when using the
-   auth_krb_pts authorization method (default: 3 hours). */
+{ "ptscache_timeout", "3h", DURATION }
+/* The timeout for the PTS cache database when using the auth_krb_pts
+   authorization method (default: 3 hours).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "ptskrb5_convert524", 1, SWITCH }
 /* When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
