@@ -42,6 +42,7 @@
 
 #include "cunit/cunit.h"
 
+#include "lib/exitcodes.h"
 #include "lib/libconfig.h"
 #include "lib/retry.h"
 #include "lib/xmalloc.h"
@@ -180,7 +181,7 @@ static void test_stringlist_invalid(void)
         "configdirectory: "DBDIR"/conf\n"
         "annotation_db: junk\n"
     );
-    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for annotation_db in line 2");
+    CU_EXPECT_CYRFATAL_END(EC_CONFIG, "invalid value 'junk' for annotation_db in line 2");
 }
 
 static void test_enum_value(void)
@@ -216,7 +217,7 @@ static void test_enum_invalid(void)
         "configdirectory: "DBDIR"/conf\n"
         "delete_mode: junk\n"
     );
-    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for delete_mode in line 2");
+    CU_EXPECT_CYRFATAL_END(EC_CONFIG, "invalid value 'junk' for delete_mode in line 2");
 }
 
 static void test_bitfield_value(void)
@@ -255,7 +256,7 @@ static void test_bitfield_invalid(void)
         "configdirectory: "DBDIR"/conf\n"
         "httpmodules: caldav junk\n"
     );
-    CU_EXPECT_CYRFATAL_END(75, "invalid value 'junk' for httpmodules in line 2");
+    CU_EXPECT_CYRFATAL_END(EC_CONFIG, "invalid value 'junk' for httpmodules in line 2");
 }
 
 static void test_magic_configdirectory_value(void)
