@@ -1190,6 +1190,7 @@ static int ptsmodule_make_authstate_filter(
     char **vals = NULL;
     char *attrs[] = {(char *)ptsm->member_attribute,NULL};
     char *dn = NULL;
+    char *errdn = NULL;
 
     rc = ptsmodule_connect();
     if (rc != PTSM_OK) {
@@ -1253,16 +1254,25 @@ static int ptsmodule_make_authstate_filter(
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
 
+        if (errdn) ldap_memfree(errdn);
+        errdn = ldap_get_dn(ptsm->ld, entry);
+
         vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
         if (vals == NULL) {
-            syslog(LOG_ERR, "Multiple values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+            syslog(LOG_ERR, "Multiple values for attribute '%s' on entry '%s'",
+                            ptsm->member_attribute,
+                            errdn);
             continue;
         }
 
         if (ldap_count_values(vals) < 1 ) {
-            syslog(LOG_ERR, "No values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+            syslog(LOG_ERR, "No values for attribute '%s' on entry '%s'",
+                            ptsm->member_attribute,
+                            errdn);
         } else if (ldap_count_values(vals) > 1) {
-            syslog(LOG_ERR, "Too many values for attribute '%s' on entry '%s'", ptsm->member_attribute, entry);
+            syslog(LOG_ERR, "Too many values for attribute '%s' on entry '%s'",
+                            ptsm->member_attribute,
+                            errdn);
         } else {
             *reply = "too many values";
             rc = PTSM_FAIL;
@@ -1284,11 +1294,14 @@ static int ptsmodule_make_authstate_filter(
 
         ldap_value_free(vals);
         vals = NULL;
+
+        if (errdn) ldap_memfree(errdn);
+        errdn = NULL;
     }
 
     rc = PTSM_OK;
 
-done:;
+done:
 
     if (res)
         ldap_msgfree(res);
@@ -1298,6 +1311,8 @@ done:;
         free(filter);
     if (base)
         free(base);
+    if (errdn)
+        ldap_memfree(errdn);
 
     return rc;
 }
