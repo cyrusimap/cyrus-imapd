@@ -614,7 +614,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	    if (!(strcmp(prot->service, "imap") &&
 		 (strcmp(prot->service, "pop3")))) {
 		parse_sessionid(my_status, rsessionid);
-		syslog(LOG_NOTICE, "proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
+		syslog(LOG_NOTICE, "auditlog: proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
 	    }
 	}
 
