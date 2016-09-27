@@ -382,6 +382,64 @@ static void test_duration_invalid(void)
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "unparsable duration 'junk' for timeout in line 2");
 }
 
+struct duration_parse_data {
+    const char *str;
+    int expected;
+};
+
+static const struct duration_parse_data duration_parse_tests[] = {
+    { "", 0 },
+    { "0", 0 },
+    { "0s", 0 },
+    { "0m", 0 },
+    { "0h", 0 },
+    { "0d", 0 },
+    { "0h0m", 0 },
+    { "0h0m0s", 0 },
+    { "0h0m1s", 1 },
+    { "1", 1 },
+    { "1s", 1 },
+    { "1m", 60 },
+    { "1h", 60 * 60 },
+    { "1d", 24 * 60 * 60 },
+    { "123", 123 },
+    { "123s", 123 },
+    { "123m", 123 * 60 },
+    { "123h", 123 * 60 * 60 },
+    { "123d", 123 * 24 * 60 * 60 },
+    { "1m1", 60 + 1 },
+    { "1m1s", 60 + 1 },
+    { "1h1m", (60 * 60) + 60 },
+    { "1h1s", (60 * 60) + 1 },
+    { "1d1h", (24 * 60 * 60) + (60 * 60) },
+    { "1h1m1s", (60 * 60) + 60 + 1 },
+    { "1m1m", 60 + 60 },
+    { "123m456", (123 * 60) + 456 },
+    { "123m456s", (123 * 60) + 456 },
+    { "123h456m", (123 * 60 * 60) + (456 * 60) },
+    { "123h456s", (123 * 60 * 60) + 456 },
+    { "123d456h", (123 * 24 * 60 * 60) + (456 * 60 * 60) },
+    { "123h456m789s", (123 * 60 * 60) + (456 * 60) + 789 },
+    { "123m456m", (123 * 60) + (456 * 60) },
+
+    { "0c", -1 },
+    { "1c", -1 },
+    { "123c", -1 },
+    { "1h1c", -1 },
+    { "1c23s", -1 },
+};
+
+static void test_duration_parse(void)
+{
+    const size_t n = sizeof(duration_parse_tests) / sizeof(duration_parse_tests[0]);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        const struct duration_parse_data *test = &duration_parse_tests[i];
+        CU_ASSERT_EQUAL(config_parseduration(test->str, 's'), test->expected);
+    }
+}
+
 static void test_magic_configdirectory_value(void)
 {
     const char *idlesocket = NULL;
