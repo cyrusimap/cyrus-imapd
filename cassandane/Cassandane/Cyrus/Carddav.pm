@@ -103,7 +103,7 @@ sub test_carddavcreate
 }
 
 sub test_counters
-    :Conversations
+    :Conversations :min_version_3_0
 {
     my ($self) = @_;
     my $KEY = "/private/vendor/cmu/cyrus-imapd/usercounters";
