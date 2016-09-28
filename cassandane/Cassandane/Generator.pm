@@ -50,7 +50,7 @@ use Cassandane::Address;
 use Cassandane::Message;
 use Cassandane::Util::SHA;
 
-our $admin = 'qa@cyrus.foundation';
+our $admin = 'qa@cyrus.works';
 
 our @girls_forenames = (
     # Top 10 girl baby names in 2006 according to
