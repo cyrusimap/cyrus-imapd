@@ -1063,4 +1063,41 @@ sub test_list_special_use_return_subscribed
 
 }
 
+sub test_issue11
+    :VirtDomains :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo\@example.com");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(username => "foo\@example.com");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("Drafts");
+    $footalk->create("Sent");
+    $footalk->create("Trash");
+
+    $footalk->subscribe("INBOX");
+    $footalk->subscribe("Drafts");
+    $footalk->subscribe("Sent");
+    $footalk->subscribe("Trash");
+
+    $footalk->setmetadata("Drafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    $footalk->setmetadata("Sent", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    my $alldata = $footalk->list([qw( SPECIAL-USE )], "", "*",
+				  'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog Dumper $alldata;
+    $self->_assert_list_data($alldata, '/', {
+	'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+	'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+    });
+
+}
+
 1;
