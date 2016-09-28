@@ -193,7 +193,7 @@ EOF
 }
 
 sub test_homeset_extradomain
-    :ReverseACLs
+    :ReverseACLs :min_version_3_0
 {
     my ($self) = @_;
 
