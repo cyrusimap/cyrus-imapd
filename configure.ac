@@ -97,6 +97,7 @@ AS_IF([test "x$enable_coverage" = "xyes"], [
     GCOV_LDFLAGS="--coverage"
     GCOV_LIBS="-lgcov"
 ])
+AM_CONDITIONAL([HAVE_COVERAGE], [test "x$enable_coverage" = "xyes"])
 
 AC_SUBST(GCOV_CFLAGS)
 AC_SUBST(GCOV_CXXFLAGS)
