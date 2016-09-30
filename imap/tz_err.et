@@ -60,6 +60,12 @@ ec TZ_INVALID_END,
 ec TZ_INVALID_CHANGEDSINCE,
    "urn:ietf:params:tzdist:error:invalid-changedsince"
 
+ec TZ_INVALID_LATITUDE,
+   "urn:ietf:params:tzdist:error:invalid-latitude"
+
+ec TZ_INVALID_LONGITUDE,
+   "urn:ietf:params:tzdist:error:invalid-longitude"
+
 ec TZ_NOT_FOUND,
    "urn:ietf:params:tzdist:error:tzid-not-found"
 

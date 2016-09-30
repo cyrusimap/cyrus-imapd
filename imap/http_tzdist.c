@@ -55,6 +55,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <errno.h>
 
 #include "global.h"
 #include "hash.h"
@@ -82,6 +83,7 @@
 static time_t compile_time;
 static unsigned synctoken_prefix;
 static ptrarray_t *leap_seconds = NULL;
+static int geo_enabled = 0;
 static void tzdist_init(struct buf *serverinfo);
 static void tzdist_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
@@ -164,6 +166,101 @@ struct namespace_t namespace_tzdist = {
 };
 
 
+#ifdef HAVE_SHAPELIB
+#include <shapefil.h>
+
+static SHPHandle shp = NULL;
+static DBFHandle dbf = NULL;
+static int npoly = 0;
+
+static void open_shape_file(struct buf *serverinfo)
+{
+    char buf[1024];
+    int shapetype;
+    double minbound[4], maxbound[4];
+    DBFFieldType fieldtype;
+
+    buf_printf(serverinfo, " ShapeLib/%s", SHAPELIB_VERSION);
+
+    snprintf(buf, sizeof(buf), "%s%s%s",
+             config_dir, FNAME_ZONEINFODIR, FNAME_SHAPEFILE);
+    if (!(shp = SHPOpen(buf, "rb"))) {
+        syslog(LOG_ERR, "Failed to open file %s", buf);
+        return;
+    }
+
+    if (!(dbf = DBFOpen(buf, "rb"))) {
+        syslog(LOG_ERR, "Failed to open file %s", buf);
+        return;
+    }
+
+    /* Sanity check the shape files */
+    SHPGetInfo(shp, &npoly, &shapetype, minbound, maxbound);
+    if (!npoly || shapetype != SHPT_POLYGON ||          /* polygons */
+        minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
+        minbound[1] < -90.0  || maxbound[1] > 90.0 ||   /* latitude range */
+        npoly != DBFGetRecordCount(dbf)) return;        /* record counts */
+
+    fieldtype = DBFGetFieldInfo(dbf, 0, buf, NULL, NULL);
+    if (fieldtype != FTString || strcmp(buf, "TZID")) return;  /* TZIDs */
+
+    geo_enabled = 1;
+}
+
+static void close_shape_file()
+{
+    if (dbf) DBFClose(dbf);
+    if (shp) SHPClose(shp);
+}
+
+static int pt_in_poly(int nvert, double *vx, double *vy, double px, double py)
+{
+    int i, j, in = 0;
+
+    for (i = 0, j = nvert - 1; i < nvert; j = i++) {
+        if (((vy[i] > py) != (vy[j] > py)) &&
+            (px < (vx[j] - vx[i]) * (py - vy[i]) / (vy[j] - vy[i]) + vx[i])) {
+            in = !in;
+        }
+    }
+
+    return in;
+}
+
+static const char *tzid_from_geo(double latitude, double longitude)
+{
+    int i;
+
+    for (i = 0; i < npoly; i++) {
+        SHPObject *poly = SHPReadObject(shp, i);
+        int r = pt_in_poly(poly->nVertices, poly->padfX, poly->padfY,
+                           longitude, latitude);
+        SHPDestroyObject(poly);
+        
+        if (r) return DBFReadStringAttribute(dbf, i, 0);
+    }
+
+    return NULL;
+}
+#else
+
+static void open_shape_file(struct buf *serverinfo __attribute__((unused)))
+{
+    return;
+}
+static void close_shape_file()
+{
+    return;
+}
+static const char *tzid_from_geo(double latitude __attribute__((unused)),
+                                 double longitude __attribute__((unused)))
+{
+    return NULL;
+}
+
+#endif /* HAVE_SHAPELIB */
+
+
 struct leapsec {
     long long int t;      /* transition time */
     long int sec;         /* leap seconds */
@@ -233,6 +330,8 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 
     initialize_tz_error_table();
 
+    open_shape_file(serverinfo);
+
     read_leap_seconds();
     if (!leap_seconds || leap_seconds->count < 2) {
         /* Disable application/tzfile+leap */
@@ -253,6 +352,8 @@ static void tzdist_shutdown(void)
     struct leapsec *leap;
 
     zoneinfo_close(NULL);
+
+    close_shape_file();
 
     if (!leap_seconds) return;
 
@@ -448,6 +549,22 @@ static int action_capa(struct transaction_t *txn)
             return HTTP_SERVER_ERROR;
         }
 
+        if (geo_enabled) {
+            /* Add geolocate action */
+            json_t *actions = json_object_get(root, "actions");
+
+            json_array_append_new(actions,
+                                  json_pack("{s:s s:s s:["
+                                            "  {s:s s:b}"
+                                            "  {s:s s:b}"
+                                            "]}",
+                                            "name", "geolocate", "uri-template",
+                                            "/zones{?latitude,longitude}",
+                                            "parameters",
+                                            "name", "latitude", "required", 1,
+                                            "name", "longitude", "required", 1));
+        }
+
         /* Add supported formats */
         formats = json_object_get(json_object_get(root, "info"), "formats");
         for (mime = tz_mime_types; mime->content_type; mime++) {
@@ -597,7 +714,6 @@ static int list_cb(const char *tzid, int tzidlen,
     return 0;
 }
 
-
 /* Perform a list action */
 static int action_list(struct transaction_t *txn)
 {
@@ -621,6 +737,31 @@ static int action_list(struct transaction_t *txn)
         }
         pattern = param->s;
     }
+    else if (geo_enabled &&
+             (param = hash_lookup("latitude", &txn->req_qparams))) {
+        double latitude, longitude;
+        char *endptr;
+
+        latitude = strtod(param->s, &endptr);
+        if (param->next             /* once only */
+            || *endptr || errno) {  /* valid value */ 
+            return json_error_response(txn, TZ_INVALID_LATITUDE, param, NULL);
+        }
+
+        if ((param = hash_lookup("longitude", &txn->req_qparams)))
+            longitude = strtod(param->s, &endptr);
+        if (!param || param->next   /* mandatory, once only */
+            || *endptr || errno) {  /* valid value */
+            return json_error_response(txn, TZ_INVALID_LONGITUDE, param, NULL);
+        }
+
+        pattern = tzid_from_geo(latitude, longitude);
+        if (!pattern) return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
+    }
+    else if (geo_enabled &&
+             (param = hash_lookup("longitude", &txn->req_qparams))) {
+        return json_error_response(txn, TZ_INVALID_LATITUDE, NULL, NULL);
+    }
     else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
         unsigned prefix = 0;
 
@@ -634,6 +775,9 @@ static int action_list(struct transaction_t *txn)
         if (prefix != synctoken_prefix || changedsince > info.dtstamp) {
             changedsince = 0;
         }
+    }
+    else if (hash_numrecords(&txn->req_qparams)) {
+        return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -1676,6 +1820,8 @@ static const char *param_names[] = {
     "start",
     "end",
     "changedsince",
+    "latitude",
+    "longitude",
     "tzid"
 };
 
