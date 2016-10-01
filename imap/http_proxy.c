@@ -676,14 +676,19 @@ static void send_response(struct transaction_t *txn, long code,
             }
         }
         else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
-            simple_hdr(txn, "Content-Length", hdr[0]);
+            if (txn->flags.ver == VER_2) {
+                /* Prevent end of stream */
+                txn->flags.te = TE_CHUNKED;
+            }
+            else simple_hdr(txn, "Content-Length", hdr[0]);
         }
 
         end_resp_headers(txn, code);
     }
     else {
         /* Body is buffered, so send using "identity" TE */
-        simple_hdr(txn, "Content-Length", "%lu", len);
+        if (txn->flags.ver != VER_2)
+            simple_hdr(txn, "Content-Length", "%lu", len);
         end_resp_headers(txn, code);
         write_body(0, txn, buf_base(body), len);
     }
