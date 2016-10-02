@@ -1965,10 +1965,8 @@ static json_t* location_from_ical(context_t *ctx, icalproperty *prop)
     json_t *loc, *t;
 
     /* (X-)LOCATION's value maps to a location with "name" as value */
-    /* FIXME libical requires X-properties to have a non-zero length
-     * string value. Ignore the "_" location from location_to_ical */
     val = icalproperty_get_value_as_string(prop);
-    loc = json_pack("{s:s}", "name", val && strcmp(val, "_") ? val : "");
+    loc = json_pack("{s:s}", "name", val ? val : "");
     localizations_from_icalprop(ctx, "name", prop);
 
     param = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
@@ -3941,8 +3939,7 @@ location_to_ical(context_t *ctx, icalcomponent *comp, const char *id, json_t *lo
         icalproperty_set_x_name(prop, JMAPICAL_XPROP_LOCATION);
     }
 
-    /* FIXME libical requires X-properties to have a value */
-    val = icalvalue_new_from_string(ICAL_TEXT_VALUE, name ? name : "_");
+    val = icalvalue_new_from_string(ICAL_TEXT_VALUE, name ? name : "");
     icalproperty_set_value(prop, val);
     localizations_to_icalprop(ctx, "name", prop);
 
