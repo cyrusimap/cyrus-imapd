@@ -2204,12 +2204,17 @@ static int parse_expect(struct transaction_t *txn)
 /* Parse Connection header(s) for interesting options */
 static int parse_connection(struct transaction_t *txn)
 {
-    int ret = 0, i;
     const char **conn = spool_getheader(txn->req_hdrs, "Connection");
+    int i;
 
     if (conn && txn->flags.ver == VER_2) {
         txn->error.desc = "Connection not allowed in HTTP/2";
         return HTTP_BAD_REQUEST;
+    }
+
+    if (!httpd_timeout || txn->flags.ver == VER_1_0) {
+        /* Non-persistent connection by default */
+        txn->flags.conn |= CONN_CLOSE;
     }
 
     /* Look for interesting connection tokens */
@@ -2218,65 +2223,58 @@ static int parse_connection(struct transaction_t *txn)
         char *token;
 
         while ((token = tok_next(&tok))) {
-            /* Check if client wants to upgrade */
-            if (!strcasecmp(token, "Upgrade")) {
-                txn->flags.conn |= CONN_UPGRADE;
-            }
-            else if (httpd_timeout) {
-                /* Check if this is a non-persistent connection */
-                if (!strcasecmp(token, "close")) {
+            switch (txn->flags.ver) {
+            case VER_1_1:
+                if (!strcasecmp(token, "Upgrade")) {
+                    /* Client wants to upgrade */
+                    const char **upgrade =
+                        spool_getheader(txn->req_hdrs, "Upgrade");
+
+                    if (upgrade && upgrade[0]) {
+                        syslog(LOG_NOTICE,
+                               "client requested upgrade to %s", upgrade[0]);
+
+                        if (!httpd_tls_done && tls_enabled() &&
+                            !strncmp(upgrade[0], TLS_VERSION,
+                                     strcspn(upgrade[0], " ,"))) {
+                            /* Upgrade to TLS */
+                            txn->flags.conn |= CONN_UPGRADE;
+                            txn->flags.upgrade |= UPGRADE_TLS;
+                        }
+#ifdef HAVE_NGHTTP2
+                        else if (http2_callbacks &&
+                                 !strncmp(upgrade[0],
+                                          NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                          strcspn(upgrade[0], " ,"))) {
+                            /* Upgrade to HTTP/2 */
+                            txn->flags.conn |= CONN_UPGRADE;
+                            txn->flags.upgrade |= UPGRADE_HTTP2;
+                        }
+#endif /* HAVE_NGHTTP2 */
+                        else {
+                            /* Unknown/unsupported protocol - no upgrade */
+                        }
+                    }
+                }
+                else if (!strcasecmp(token, "close")) {
+                    /* Non-persistent connection */
                     txn->flags.conn |= CONN_CLOSE;
                 }
+                break;
 
-                /* Check if this is a persistent connection */
-                else if (!strcasecmp(token, "keep-alive")) {
-                    txn->flags.conn |= CONN_KEEPALIVE;
+            case VER_1_0:
+                if (httpd_timeout && !strcasecmp(token, "keep-alive")) {
+                    /* Persistent connection */
+                    txn->flags.conn = CONN_KEEPALIVE;
                 }
+                break;
             }
         }
 
         tok_fini(&tok);
     }
 
-    if (!httpd_timeout) txn->flags.conn |= CONN_CLOSE;
-    else if (txn->flags.conn & CONN_CLOSE) {
-        /* close overrides keep-alive */
-        txn->flags.conn &= ~CONN_KEEPALIVE;
-    }
-    else if (txn->flags.ver == VER_1_0 && !(txn->flags.conn & CONN_KEEPALIVE)) {
-        /* HTTP/1.0 - non-persistent connection unless keep-alive */
-        txn->flags.conn |= CONN_CLOSE;
-    }
-
-    if (txn->flags.conn & CONN_UPGRADE) {
-        const char **upgrd;
-
-        if ((upgrd = spool_getheader(txn->req_hdrs, "Upgrade"))) {
-            syslog(LOG_NOTICE, "client requested upgrade to %s", upgrd[0]);
-
-            /* Check if we need to upgrade to TLS */
-            if (!strncmp(upgrd[0], TLS_VERSION, strcspn(upgrd[0], " ,"))) {
-                if (!httpd_tls_done && tls_enabled()) {
-                    txn->flags.upgrade |= UPGRADE_TLS;
-                }
-            }
-#ifdef HAVE_NGHTTP2
-            /* Check if we need to upgrade to HTTP/2 */
-            else if (http2_callbacks &&
-                     !strncmp(upgrd[0], NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-                              strcspn(upgrd[0], " ,"))) {
-                txn->flags.upgrade |= UPGRADE_HTTP2;
-            }
-#endif /* HAVE_NGHTTP2 */
-        }
-    }
-
-    if (!txn->flags.upgrade) {
-        /* Unknown/unsupported protocol - no upgrade */
-        txn->flags.conn &= ~CONN_UPGRADE;
-    }
-
-    return ret;
+    return 0;
 }
 
 
