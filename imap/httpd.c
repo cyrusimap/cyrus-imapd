@@ -2399,7 +2399,7 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
     }
 #endif /* HAVE_NGHTTP2 */
 
-    prot_printf(txn->conn->pout, "%s: ", name);
+    prot_printf(txn->conn->pout, "%c%s: ", toupper(name[0]), name+1);
     prot_puts(txn->conn->pout, buf_cstring(&buf));
     prot_puts(txn->conn->pout, "\r\n");
 
