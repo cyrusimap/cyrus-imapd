@@ -4280,7 +4280,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
 
     /* description */
     pe = readprop(ctx, event, "description", is_create, "s", &val);
-    if (pe > 0) {
+    if (pe > 0 && strlen(val)) {
         icalcomponent_set_description(comp, val);
     }
     if (ctx->localizations) {
