@@ -45,7 +45,8 @@ git submodule update
   mkdir build
   cd build
   LDFLAGS=-Wl,-rpath,$PREFIX/lib:$PREFIX/lib/x86_64-linux-gnu \
-    cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX -DCMAKE_SKIP_RPATH=ON ..
+    cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX \
+          -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
   make $MAKEOPTS
   sudo make install
 )
