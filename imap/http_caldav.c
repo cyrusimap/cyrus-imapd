@@ -472,6 +472,15 @@ static const struct prop_entry caldav_props[] = {
     { "bulk-requests", NS_MECOM, PROP_COLLECTION,
       propfind_bulkrequests, NULL, NULL },
 
+#ifdef ENABLE_APPLEPUSHSERVICE
+    /* Apple push notifications
+       https://trac.calendarserver.org/browser/CalendarServer/trunk/doc/Extensions/caldav-pubsubdiscovery.txt */
+    { "push-transports", NS_CS, PROP_COLLECTION,
+      propfind_push_transports, NULL, (void *) MBTYPE_CALENDAR },
+    { "pushkey", NS_CS, PROP_COLLECTION,
+      propfind_pushkey, NULL, NULL },
+#endif
+
     { NULL, 0, 0, NULL, NULL, NULL }
 };
 

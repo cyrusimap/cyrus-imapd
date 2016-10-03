@@ -72,6 +72,7 @@
 #define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS       "http://calendarserver.org/ns/"
 #define XML_NS_MECOM    "http://me.com/_namespace/"
+#define XML_NS_MOBME    "urn:mobileme:davservices"
 #define XML_NS_APPLE    "http://apple.com/ns/ical/"
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
@@ -93,9 +94,10 @@ enum {
     NS_ISCHED,
     NS_CS,
     NS_MECOM,
+    NS_MOBME,
     NS_CYRUS,
 };
-#define NUM_NAMESPACE 7
+#define NUM_NAMESPACE 8
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
@@ -838,6 +840,15 @@ int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);
+
+int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
+                             struct propfind_ctx *fctx,
+                             xmlNodePtr prop, xmlNodePtr resp,
+                             struct propstat propstat[], void *rock);
+int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
+                     struct propfind_ctx *fctx,
+                     xmlNodePtr prop, xmlNodePtr resp,
+                     struct propstat propstat[], void *rock);
 
 /* PROPPATCH callbacks */
 int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,

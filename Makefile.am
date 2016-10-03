@@ -1222,6 +1222,7 @@ nodist_imap_httpd_SOURCES = \
 imap_httpd_SOURCES = \
 	imap/caldav_db.c \
 	imap/http_admin.c \
+	imap/http_applepush.c \
 	imap/http_caldav.c \
 	imap/http_caldav.h \
 	imap/http_caldav_sched.c \

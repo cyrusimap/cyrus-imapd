@@ -275,6 +275,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "aps_topic", NULL, STRING }
 /* Topic for Apple Push Service registration. */
+{ "aps_topic_caldav", NULL, STRING }
+/* Topic for Apple Push Service registration for CalDAV. */
+{ "aps_topic_carddav", NULL, STRING }
+/* Topic for Apple Push Service registration for CardDAV. */
 
 { "archive_enabled", 0, SWITCH }
 /* Is archiving enabled for this server.  You also need to have an

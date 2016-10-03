@@ -88,6 +88,8 @@
 
 #define CALENDAR_EVENTS (EVENT_CALENDAR_ALARM)
 
+#define APPLEPUSHSERVICE_EVENTS (EVENT_APPLEPUSHSERVICE|EVENT_APPLEPUSHSERVICE_DAV)
+
 
 static const char *notifier = NULL;
 static struct namespace namespace;
@@ -169,6 +171,13 @@ static struct mboxevent event_template =
     { EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN, "apsDeviceToken", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_APPLEPUSHSERVICE_SUBTOPIC,     "apsSubtopic",    EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_APPLEPUSHSERVICE_MAILBOXES,    "mailboxes",      EVENT_PARAM_ARRAY,  { 0 }, 0 },
+
+    /* for dav push */
+    { EVENT_APPLEPUSHSERVICE_DAV_TOPIC,            "apsTopic",        EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_APPLEPUSHSERVICE_DAV_DEVICE_TOKEN,     "apsDeviceToken",  EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER,     "mailboxUser",     EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,           "expiry",          EVENT_PARAM_INT,    { 0 }, 0 },
 #endif
 
     /* always at end to let the parser to easily truncate this part */
@@ -230,7 +239,7 @@ EXPORTED void mboxevent_init(void)
 
 #ifdef ENABLE_APPLEPUSHSERVICE
     if (groups & IMAP_ENUM_EVENT_GROUPS_APPLEPUSHSERVICE)
-        enabled_events |= EVENT_APPLEPUSHSERVICE;
+        enabled_events |= APPLEPUSHSERVICE_EVENTS;
 #endif
 }
 
@@ -438,6 +447,20 @@ static int mboxevent_expected_applepushservice_param(enum event_param param) {
         return 0;
     }
 }
+
+static int mboxevent_expected_applepushservice_dav_param(enum event_param param) {
+    switch (param) {
+    case EVENT_APPLEPUSHSERVICE_DAV_TOPIC:
+    case EVENT_APPLEPUSHSERVICE_DAV_DEVICE_TOKEN:
+    case EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER:
+    case EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID:
+    case EVENT_APPLEPUSHSERVICE_DAV_EXPIRY:
+    case EVENT_USER:
+        return 1;
+    default:
+        return 0;
+    }
+}
 #endif
 
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
@@ -448,6 +471,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 #ifdef ENABLE_APPLEPUSHSERVICE
     if (type == EVENT_APPLEPUSHSERVICE)
         return mboxevent_expected_applepushservice_param(param);
+    if (type == EVENT_APPLEPUSHSERVICE_DAV)
+        return mboxevent_expected_applepushservice_dav_param(param);
 #endif
 
     switch (param) {
@@ -1249,6 +1274,25 @@ EXPORTED void mboxevent_set_applepushservice(struct mboxevent *event,
 
     FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
 }
+
+EXPORTED void mboxevent_set_applepushservice_dav(struct mboxevent *event,
+                                                 const char *aps_topic,
+                                                 const char *device_token,
+                                                 const char *userid,
+                                                 const char *mailbox_userid,
+                                                 const char *mailbox_uniqueid,
+                                                 int mbtype,
+                                                 unsigned int expiry)
+{
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DAV_TOPIC,            xstrdupnull(aps_topic));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DAV_DEVICE_TOKEN,     xstrdupnull(device_token));
+    FILL_STRING_PARAM(event,   EVENT_USER,                                  xstrdupnull(userid));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER,     xstrdupnull(mailbox_userid));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID, xstrdupnull(mailbox_uniqueid));
+    FILL_STRING_PARAM(event,   EVENT_MBTYPE,                                xstrdup(mboxlist_mbtype_to_string(mbtype)));
+    FILL_UNSIGNED_PARAM(event, EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,           expiry);
+
+}
 #endif
 
 static const char *event_to_name(enum event_type type)
@@ -1304,6 +1348,8 @@ static const char *event_to_name(enum event_type type)
 #ifdef ENABLE_APPLEPUSHSERVICE
     case EVENT_APPLEPUSHSERVICE:
         return "ApplePushService";
+    case EVENT_APPLEPUSHSERVICE_DAV:
+        return "ApplePushServiceDAV";
 #endif
     default:
         fatal("Unknown message event", EC_SOFTWARE);

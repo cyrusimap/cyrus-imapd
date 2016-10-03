@@ -101,7 +101,8 @@ static const struct dav_namespace_t {
     { XML_NS_CARDDAV, "C" },
     { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
-    { XML_NS_MECOM, "MM" },
+    { XML_NS_MECOM, "MC" },
+    { XML_NS_MOBME, "MM" },
     { XML_NS_CYRUS, "CY" },
     { XML_NS_USERFLAG, "UF" },
     { XML_NS_SYSFLAG, "SF" },
@@ -156,6 +157,7 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
                               struct propstat propstat[], void *rock);
+
 
 static int propfind_csnotify_collection(struct propfind_ctx *fctx,
                                         xmlNodePtr props);
@@ -1106,6 +1108,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MECOM))
                     ensure_ns(respNs, NS_MECOM, root,
+                              (const char *) nsDef->href,
+                              (const char *) nsDef->prefix);
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MOBME))
+                    ensure_ns(respNs, NS_MOBME, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
@@ -2552,7 +2558,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch MM:bulk-requests */
+/* Callback to fetch MC:bulk-requests */
 int propfind_bulkrequests(const xmlChar *name, xmlNsPtr ns,
                           struct propfind_ctx *fctx,
                           xmlNodePtr prop __attribute__((unused)),
@@ -9525,6 +9531,70 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
 
     return 0;
 }
+
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
+                             struct propfind_ctx *fctx,
+                             xmlNodePtr prop __attribute__((unused)),
+                             xmlNodePtr resp,
+                             struct propstat propstat[],
+                             void *rock __attribute__((unused)))
+{
+    xmlNodePtr node, transport, subscription_url;
+
+    assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR || fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
+
+    /* Only on home sets */
+    if (fctx->req_tgt->collection)
+        return HTTP_NOT_FOUND;
+
+    const char *aps_topic = config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
+    if (!aps_topic) {
+        syslog(LOG_ERR, "aps_topic_%s not configured, can't build CS:push-transports response", fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? "caldav" : "carddav");
+        return HTTP_NOT_FOUND;
+    }
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_CS], &propstat[PROPSTAT_OK],
+                        name, ns, NULL, 0);
+
+    transport = xmlNewChild(node, NULL, BAD_CAST "transport", NULL);
+    xmlNewProp(transport, BAD_CAST "type", BAD_CAST "APSD");
+
+    subscription_url = xmlNewChild(transport, NULL, BAD_CAST "subscription-url", NULL);
+    xml_add_href(subscription_url, fctx->ns[NS_DAV], "/applepush/subscribe");
+
+    xmlNewChild(transport, NULL, BAD_CAST "apsbundleid", BAD_CAST aps_topic);
+
+    ensure_ns(fctx->ns, NS_MOBME, resp->parent, XML_NS_MOBME, "MM");
+    xmlNewChild(transport, fctx->ns[NS_MOBME], BAD_CAST "env", BAD_CAST "PRODUCTION"); // XXX from config, I think?
+
+    xmlNewChild(transport, NULL, BAD_CAST "refresh-interval", BAD_CAST "86400"); // XXX from config
+
+    return 0;
+}
+
+int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
+                     struct propfind_ctx *fctx,
+                     xmlNodePtr prop __attribute__((unused)),
+                     xmlNodePtr resp __attribute__((unused)),
+                     struct propstat propstat[],
+                     void *rock __attribute__((unused)))
+{
+    /* Only on collections */
+    if (!fctx->req_tgt->collection)
+        return HTTP_NOT_FOUND;
+
+    /* key is userid and mailbox uniqueid */
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/%s", fctx->req_tgt->userid, fctx->mailbox->uniqueid);
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+#endif /* ENABLE_APPLEPUSHSERVICE */
+
 
 struct userid_rights {
     long positive;

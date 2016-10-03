@@ -85,7 +85,8 @@ enum event_type {
     /* Other */
 #ifdef ENABLE_APPLEPUSHSERVICE
     ,
-    EVENT_APPLEPUSHSERVICE    = (1<<23)
+    EVENT_APPLEPUSHSERVICE     = (1<<23),
+    EVENT_APPLEPUSHSERVICE_DAV = (1<<24)
 #endif
 };
 
@@ -158,6 +159,11 @@ enum event_param {
     EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN,
     EVENT_APPLEPUSHSERVICE_SUBTOPIC,
     EVENT_APPLEPUSHSERVICE_MAILBOXES,
+    EVENT_APPLEPUSHSERVICE_DAV_TOPIC,
+    EVENT_APPLEPUSHSERVICE_DAV_DEVICE_TOKEN,
+    EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER,
+    EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID,
+    EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,
 #endif
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
@@ -362,6 +368,18 @@ void mboxevent_set_applepushservice(struct mboxevent *event,
                                     struct applepushserviceargs *applepushserviceargs,
                                     strarray_t *mailboxes,
                                     const char *userid);
+
+/*
+ * APS subscription for DAV collection
+ */
+void mboxevent_set_applepushservice_dav(struct mboxevent *event,
+                                        const char *aps_topic,
+                                        const char *device_token,
+                                        const char *userid,
+                                        const char *mailbox_userid,
+                                        const char *mailbox_uniqueid,
+                                        int mbtype,
+                                        unsigned int expiry);
 #endif
 
 #endif /* _MBOXEVENT_H */

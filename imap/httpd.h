@@ -133,7 +133,10 @@ enum {
     URL_NS_RSS,
     URL_NS_DBLOOKUP,
     URL_NS_JMAP,
-    URL_NS_ADMIN
+    URL_NS_ADMIN,
+#ifdef ENABLE_APPLEPUSHSERVICE
+    URL_NS_APPLEPUSH
+#endif
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -477,6 +480,9 @@ extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
 extern struct namespace_t namespace_admin;
+#ifdef ENABLE_APPLEPUSHSERVICE
+extern struct namespace_t namespace_applepush;
+#endif
 
 
 /* XXX  These should be included in struct transaction_t */
