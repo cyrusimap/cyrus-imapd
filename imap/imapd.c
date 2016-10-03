@@ -256,6 +256,14 @@ struct list_rock {
     struct listargs *listargs;
     char *last_name;
     int last_attributes;
+    int (*findall)(struct namespace *namespace,
+		   const char *pattern, int isadmin, const char *userid,
+		   struct auth_state *auth_state, int (*proc)(),
+		   void *rock);
+    int (*findsub)(struct namespace *namespace,
+		   const char *pattern, int isadmin, const char *userid,
+		   struct auth_state *auth_state, int (*proc)(),
+		   void *rock, int force);
 };
 
 /* Information about one mailbox name that LIST returns */
@@ -11634,9 +11642,9 @@ static int list_cb(char *name, int matchlen, int maycreate,
 
     /* XXX: is there a cheaper way to figure out \Subscribed? */
     if (rock->listargs->ret & LIST_RET_SUBSCRIBED)
-	mboxlist_findsub(&imapd_namespace, name, imapd_userisadmin,
-			 imapd_userid, imapd_authstate, set_subscribed,
-			 &rock->last_attributes, 0);
+	rock->findsub(&imapd_namespace, name, imapd_userisadmin,
+		      imapd_userid, imapd_authstate, set_subscribed,
+		      &rock->last_attributes, 0);
 
     return 0;
 }
@@ -11858,6 +11866,8 @@ static void list_data(struct listargs *listargs)
 	struct list_rock rock;
 	memset(&rock, 0, sizeof(struct list_rock));
 	rock.listargs = listargs;
+	rock.findall = findall;
+	rock.findsub = findsub;
 
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
