@@ -183,6 +183,10 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
                             struct propstat propstat[], void *rock);
+static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock);
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -411,6 +415,8 @@ static const struct prop_entry caldav_props[] = {
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
       propfind_caldata, NULL, &partial_caldata },
+    { "schedule-user-address", NS_CYRUS, PROP_RESOURCE,
+      propfind_scheduser, NULL, NULL },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
@@ -5177,6 +5183,36 @@ static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
         icalcomponent_remove_component(ical, comp);
         icalcomponent_free(comp);
     }
+}
+
+/* Callback to prescreen/fetch CALDAV:calendar-data */
+static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop,
+                            xmlNodePtr resp __attribute__((unused)),
+                            struct propstat propstat[],
+                            void *rock __attribute__((unused)))
+{
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+
+    if (propstat) {
+        if (!fctx->record || !fctx->mailbox) return HTTP_NOT_FOUND;
+
+        message_t *m = message_new_from_record(fctx->mailbox, fctx->record);
+
+        message_get_field(m, "x-schedule-user-address",
+                          MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+
+        message_unref(&m);
+    }
+
+    if (buf.len) {
+        r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
+                             CALDAV_SUPP_DATA, buf.s, buf.len);
+    }
+
+    return r;
 }
 
 /* Callback to prescreen/fetch CALDAV:calendar-data */
