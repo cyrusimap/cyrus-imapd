@@ -11641,10 +11641,19 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     /* XXX: is there a cheaper way to figure out \Subscribed? */
-    if (rock->listargs->ret & LIST_RET_SUBSCRIBED)
-	rock->findsub(&imapd_namespace, name, imapd_userisadmin,
+    if (rock->listargs->ret & LIST_RET_SUBSCRIBED) {
+	char namebuf[MAX_MAILBOX_PATH] = {0};
+
+	/* XXX mboxlist_findsub and mboxlist_findsub_alt need input that uses
+	 * internal namespace separator, but external namespace names
+	 */
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name, imapd_userid, namebuf);
+	mboxname_hiersep_tointernal(&imapd_namespace, namebuf, strlen(namebuf));
+
+	rock->findsub(&imapd_namespace, namebuf, imapd_userisadmin,
 		      imapd_userid, imapd_authstate, set_subscribed,
 		      &rock->last_attributes, 0);
+    }
 
     return 0;
 }
