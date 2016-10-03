@@ -4395,8 +4395,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     if (pe > 0) {
         remove_icalxprop(comp, JMAPICAL_XPROP_USEDEFALERTS);
         if (default_alerts) {
-            /* FIXME libical set BOOLEAN value to "1", not "TRUE" */
-            icalvalue *val = icalvalue_new_x("TRUE");
+            icalvalue *val = icalvalue_new_boolean(1);
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFALERTS);
             icalproperty_set_value(prop, val);
