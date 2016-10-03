@@ -52,7 +52,6 @@
 #include "arrayu64.h"
 #include "hash.h"
 #include "hashu64.h"
-#include "mailbox.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -126,6 +125,8 @@ struct conversation {
     char            *subject;
     int             dirty;
 };
+
+#include "mailbox.h"
 
 /* Sets the suffix used for conversations db filenames.  Only needed
  * when doing special weird stuff like the conversations audit mode */
