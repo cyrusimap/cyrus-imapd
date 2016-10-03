@@ -2698,24 +2698,22 @@ static int localdate_to_icaltime(const char *buf,
     return 1;
 }
 
-static int utcdate_to_icaltime(const char *buf,
-                               icaltimetype *dt) {
-    struct tm tm;
-    time_t t;
-    const char *p;
+static int utcdate_to_icaltime(const char *src,
+                               icaltimetype *dt)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t len = strlen(src);
+    int r;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-    memset(&tm, 0, sizeof(struct tm));
-    tm.tm_isdst = -1;
-
-    /* Parse UTCDate. */
-    p = strptime(buf, "%Y-%m-%dT%H:%M:%SZ", &tm);
-    if (!p || *p) {
+    if (!len || src[len-1] != 'Z') {
         return 0;
     }
 
-    t = mktime(&tm);
-    *dt = icaltime_from_timet_with_zone(t, 0, icaltimezone_get_utc_timezone());
-    return 1;
+    buf_setmap(&buf, src, len-1);
+    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0);
+    buf_free(&buf);
+    return r;
 }
 
 /* Add or overwrite the datetime property kind in comp. If tz is not NULL, set
