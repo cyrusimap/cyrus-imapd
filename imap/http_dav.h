@@ -71,7 +71,7 @@
 #define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
 #define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS       "http://calendarserver.org/ns/"
-#define XML_NS_MM       "http://me.com/_namespace/"
+#define XML_NS_MECOM    "http://me.com/_namespace/"
 #define XML_NS_APPLE    "http://apple.com/ns/ical/"
 #define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
@@ -90,7 +90,7 @@ enum {
     NS_CARDDAV,
     NS_ISCHED,
     NS_CS,
-    NS_MM,
+    NS_MECOM,
     NS_CYRUS,
 };
 #define NUM_NAMESPACE 7

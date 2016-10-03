@@ -463,7 +463,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_sync_token, NULL, NULL },
 
     /* Apple Mobile Me properties */
-    { "bulk-requests", NS_MM, PROP_COLLECTION,
+    { "bulk-requests", NS_MECOM, PROP_COLLECTION,
       propfind_bulkrequests, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }

@@ -103,7 +103,7 @@ static const struct dav_namespace_t {
     { XML_NS_CARDDAV, "C" },
     { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
-    { XML_NS_MM, "MM" },
+    { XML_NS_MECOM, "MM" },
     { XML_NS_CYRUS, "CY" },
     { XML_NS_USERFLAG, "UF" },
     { XML_NS_SYSFLAG, "SF" },
@@ -382,7 +382,7 @@ static const struct precond_t {
     { "valid-managed-id", NS_CALDAV },
 
     /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
-    { "ctag-ok", NS_MM },
+    { "ctag-ok", NS_MECOM },
 
     /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
@@ -711,7 +711,7 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
                 get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
                 r = !strcmp(cond, buf_cstring(&buf));
                 if (!r) {
-                    get_synctoken(mailbox, &buf, XML_NS_MM "ctag/");
+                    get_synctoken(mailbox, &buf, XML_NS_MECOM "ctag/");
                     r = !strcmp(cond, buf_cstring(&buf));
                 }
                 buf_free(&buf);
@@ -1106,8 +1106,8 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                     ensure_ns(respNs, NS_CS, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MM))
-                    ensure_ns(respNs, NS_MM, root,
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MECOM))
+                    ensure_ns(respNs, NS_MECOM, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
