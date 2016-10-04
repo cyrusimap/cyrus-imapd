@@ -1090,13 +1090,32 @@ sub test_virtdomains_return_subscribed_altns
     $footalk->setmetadata("Sent", "/private/specialuse", "\\Sent");
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    my $alldata = $footalk->list([qw( SPECIAL-USE )], "", "*",
-				  'RETURN', [qw(SUBSCRIBED)]);
+    my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
+				    'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog Dumper $specialuse;
+    $self->_assert_list_data($specialuse, '/', {
+	'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+	'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+    });
+
+    $admintalk->create("user/bar\@example.com");
+    $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
+
+    $admintalk->setacl("user/bar/shared-folder\@example.com",
+		       'foo@example.com' => 'lrswipkxtecd');
+
+    $footalk->subscribe("Other Users/bar/shared-folder");
+
+    my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
     xlog Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
-	'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-	'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+	'INBOX'		=> [qw( \\HasNoChildren \\Subscribed )],
+	'Drafts'	=> [qw( \\HasNoChildren \\Subscribed )],
+	'Sent'		=> [qw( \\HasNoChildren \\Subscribed )],
+	'Trash'		=> [qw( \\HasNoChildren \\Subscribed )],
+	'Other Users/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
@@ -1127,13 +1146,32 @@ sub test_virtdomains_return_subscribed_noaltns
     $footalk->setmetadata("INBOX/Sent", "/private/specialuse", "\\Sent");
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    my $alldata = $footalk->list([qw( SPECIAL-USE )], "", "*",
-				  'RETURN', [qw(SUBSCRIBED)]);
+    my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
+				    'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog Dumper $specialuse;
+    $self->_assert_list_data($specialuse, '/', {
+	'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+	'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+    });
+
+    $admintalk->create("user/bar\@example.com");
+    $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
+
+    $admintalk->setacl("user/bar/shared-folder\@example.com",
+		       'foo@example.com' => 'lrswipkxtecd');
+
+    $footalk->subscribe("user/bar/shared-folder");
+
+    my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
     xlog Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
-	'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-	'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+	'INBOX'		=> [qw( \\HasChildren \\Subscribed )],
+	'INBOX/Drafts'	=> [qw( \\HasNoChildren \\Subscribed )],
+	'INBOX/Sent'	=> [qw( \\HasNoChildren \\Subscribed )],
+	'INBOX/Trash'	=> [qw( \\HasNoChildren \\Subscribed )],
+	'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
