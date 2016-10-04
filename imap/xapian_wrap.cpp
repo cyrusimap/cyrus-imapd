@@ -707,11 +707,13 @@ struct xapian_snipgen
 
 class CharsetTermNormalizer : public Xapian::SnippetGenerator::TermNormalizer
 {
-    charset_index utf8;
+    charset_t utf8;
     std::map<const std::string, std::string> cache;
 
     public:
     CharsetTermNormalizer() : utf8(charset_lookupname("utf-8")) { }
+
+    ~CharsetTermNormalizer() { charset_free(&utf8); }
 
     virtual const std::string & normalize(const std::string & term)
     {
