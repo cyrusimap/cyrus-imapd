@@ -1485,7 +1485,10 @@ static int conversations_set_guid(struct conversations_state *state,
 
     char *new = strarray_join(old, ",");
 
-    r = cyrusdb_store(state->db, key, strlen(key), new, strlen(new), &state->txn);
+    if (new)
+        r = cyrusdb_store(state->db, key, strlen(key), new, strlen(new), &state->txn);
+    else
+        r = cyrusdb_delete(state->db, key, strlen(key), &state->txn, /*force*/1);
 
     buf_free(&item);
     strarray_free(old);
