@@ -1063,7 +1063,7 @@ sub test_list_special_use_return_subscribed
 
 }
 
-sub test_issue11
+sub test_virtdomains_return_subscribed_altns
     :VirtDomains :UnixHierarchySep :AltNamespace
 {
     my ($self) = @_;
@@ -1071,7 +1071,8 @@ sub test_issue11
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user/foo\@example.com");
 
-    my $foostore = $self->{instance}->get_service('imap')->create_store(username => "foo\@example.com");
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo\@example.com");
     my $footalk = $foostore->get_client();
 
     $footalk->create("Drafts");
@@ -1097,7 +1098,43 @@ sub test_issue11
 	'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
 	'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
     });
+}
 
+sub test_virtdomains_return_subscribed_noaltns
+    :VirtDomains :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo\@example.com");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo\@example.com");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("INBOX/Drafts");
+    $footalk->create("INBOX/Sent");
+    $footalk->create("INBOX/Trash");
+
+    $footalk->subscribe("INBOX");
+    $footalk->subscribe("INBOX/Drafts");
+    $footalk->subscribe("INBOX/Sent");
+    $footalk->subscribe("INBOX/Trash");
+
+    $footalk->setmetadata("INBOX/Drafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    $footalk->setmetadata("INBOX/Sent", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    my $alldata = $footalk->list([qw( SPECIAL-USE )], "", "*",
+				  'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog Dumper $alldata;
+    $self->_assert_list_data($alldata, '/', {
+	'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+	'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+    });
 }
 
 1;
