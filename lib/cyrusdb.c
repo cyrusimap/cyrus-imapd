@@ -563,6 +563,12 @@ EXPORTED int cyrusdb_sync(const char *backend)
     return db->sync();
 }
 
+EXPORTED int cyrusdb_unlink(const char *backend __attribute__((unused)),
+                            const char *fname, int flags)
+{
+    return cyrusdb_generic_unlink(fname, flags);
+}
+
 EXPORTED cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
@@ -644,6 +650,14 @@ HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
 HIDDEN int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unused)),
                               const char *dirname __attribute__((unused)))
 {
+    return 0;
+}
+
+HIDDEN int cyrusdb_generic_unlink(const char *fname, int flags __attribute__((unused)))
+{
+    if (fname)
+        unlink(fname);
+    /* XXX - check that it exists unless FORCE flag? */
     return 0;
 }
 

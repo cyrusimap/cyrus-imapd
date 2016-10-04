@@ -221,6 +221,8 @@ extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 extern int cyrusdb_convert(const char *fromfname, const char *tofname,
                            const char *frombackend, const char *tobackend);
 
+extern int cyrusdb_unlink(const char *backend, const char *fname, int flags);
+
 extern int cyrusdb_dumpfile(struct db *db,
                             const char *prefix, size_t prefixlen,
                             FILE *f,
@@ -302,5 +304,6 @@ int cyrusdb_generic_done(void);
 int cyrusdb_generic_sync(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
+int cyrusdb_generic_unlink(const char *fname, int flags);
 
 #endif /* INCLUDED_CYRUSDB_H */
