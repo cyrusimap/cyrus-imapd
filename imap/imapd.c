@@ -5649,7 +5649,7 @@ static void cmd_search(char *tag, int usinguid)
         return;
     }
 
-    if (searchargs->charset == -1) {
+    if (searchargs->charset == CHARSET_UNKNOWN_CHARSET) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
                error_message(IMAP_UNRECOGNIZED_CHARSET));
     }

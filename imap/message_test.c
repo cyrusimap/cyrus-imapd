@@ -110,7 +110,7 @@ static void dump_buf(FILE *fp, const struct buf *data)
 #undef MAX_TEXT
 }
 
-static int dump_one_section(int partno, int charset, int encoding,
+static int dump_one_section(int partno, charset_t charset, int encoding,
                             const char *subtype, struct buf *data,
                             void *rock __attribute__((unused)))
 {

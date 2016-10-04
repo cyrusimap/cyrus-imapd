@@ -97,20 +97,6 @@ struct unfold_state {
     int skipws;
 };
 
-struct table_state {
-    const struct charmap (*curtable)[256];
-    const struct charmap (*initialtable)[256];
-    int bytesleft;
-    int codepoint;
-    int mode;
-    int num_bits;
-
-    /* Additional state fields for UTF-7 and IMAP UTF-7. See utf7_2uni. */
-    const char *index_64;
-    int shift;
-    int hi;
-};
-
 struct canon_state {
     int flags;
     int seenspace;
@@ -166,20 +152,53 @@ struct striphtml_state {
     enum html_state stack[2];
 };
 
-struct imaputf7_state {
+#define CHARSET_ICUBUF_MAXSIZE 4096
+#define CHARSET_ICUBUF_MINSIZE 8
+
+struct charset_converter {
+    /* An open ICU converter for ICU backed converters. Or NULL.  */
+    UConverter *conv;
+
+    /* The numeric charset identifier for table converters. Or -1 */
+    int num;
+
+    /* Table converter backend state */
+    const struct charmap (*curtable)[256];
+    const struct charmap (*initialtable)[256];
+    int bytesleft;
+    int codepoint;
     int mode;
-    uint8_t bytes[3];
-    size_t num_bytes;
+    int num_bits;
+
+    /* ICU converter backend state */
+    short flush;      /* set if conv should be flushed */
+    char *buf;        /* Target and source cache */
+    size_t buf_size;
+    char *tgt_base;
+    char *tgt_top;
+    char *tgt_next;
+    char *src_base;
+    char *src_top;
+    char *src_next;
 };
 
 struct convert_rock;
 
+static void icu_reset(struct convert_rock *rock, size_t len, int to_uni);
+static void icu_flush(struct convert_rock *rock);
+static void icu_free(struct convert_rock *rock);
+
+static void table_reset(struct convert_rock *rock, int to_uni);
+static void table_free(struct convert_rock *rock);
+
 typedef void convertproc_t(struct convert_rock *rock, int c);
 typedef void freeconvert_t(struct convert_rock *rock);
+typedef void flushproc_t(struct convert_rock *rock);
 
 struct convert_rock {
     convertproc_t *f;
     freeconvert_t *cleanup;
+    flushproc_t *flush;
     struct convert_rock *next;
     void *state;
 };
@@ -236,32 +255,6 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
-/*
- * Table for decoding modified base64 for IMAP UTF7
- */
-static const char index_64m[256] = {
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, 63,XX,XX,XX,
-    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
-    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
-    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
-    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-};
-#define CHAR64M(c,t)  ((t)[(unsigned char)(c)])
-
-static const uint16_t HI_SURROGATE_START = 0xd800;
-static const uint16_t LO_SURROGATE_START = 0xdc00;
-
 EXPORTED int encoding_lookupname(const char *s)
 {
     switch (s[0]) {
@@ -300,6 +293,14 @@ EXPORTED const char *encoding_name(int encoding)
     }
 }
 
+static void convert_flush(struct convert_rock *rock)
+{
+    while (rock) {
+        if (rock->flush) rock->flush(rock);
+        rock = rock->next;
+    }
+}
+
 static inline void convert_putc(struct convert_rock *rock, int c)
 {
     if (charset_debug) {
@@ -317,6 +318,7 @@ static void convert_cat(struct convert_rock *rock, const char *s)
         convert_putc(rock, (unsigned char)*s);
         s++;
     }
+    convert_flush(rock);
 }
 
 static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
@@ -325,6 +327,7 @@ static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
         convert_putc(rock, (unsigned char)*s);
         s++;
     }
+    convert_flush(rock);
 }
 
 /* convertproc_t conversion functions */
@@ -463,328 +466,6 @@ static void unfold2uni(struct convert_rock *rock, int c)
     }
 }
 
-/* Given an octet which is a codepoint in some 7bit or 8bit character
- * set, or the Unicode replacement character, emit the corresponding
- * Unicode codepoint. */
-static void table2uni(struct convert_rock *rock, int c)
-{
-    struct table_state *s = (struct table_state *)rock->state;
-    struct charmap *map;
-
-    if (c == U_REPLACEMENT) {
-        convert_putc(rock->next, c);
-        return;
-    }
-
-    assert((unsigned)c <= 0xff);
-    map = (struct charmap *)&s->curtable[0][c & 0xff];
-    if (map->c)
-        convert_putc(rock->next, map->c);
-
-    s->curtable = s->initialtable + map->next;
-}
-
-/* Given an octet in a UTF-8 encoded string, possibly emit a Unicode
- * code point */
-static void utf8_2uni(struct convert_rock *rock, int c)
-{
-    struct table_state *s = (struct table_state *)rock->state;
-
-    if (c == U_REPLACEMENT) {
-emit_replacement:
-        convert_putc(rock->next, U_REPLACEMENT);
-        s->bytesleft = 0;
-        s->codepoint = 0;
-        return;
-    }
-
-    assert((unsigned)c <= 0xff);
-
-    /*
-     * The following bytes are never valid in UTF-8 streams:
-     *
-     * C0-C1    could only be used for overlong encoding of
-     *          basic ASCII characters
-     * F5-FD    start bytes of sequences that could only encode
-     *          numbers larger than the 0x10FFFF limit of Unicode
-     * FE-FF    not valid start bytes or anything else
-     *
-     * Thanks to http://en.wikipedia.org/wiki/UTF-8
-     *
-     * These checks are interspersed with bitwise checks below.
-     *
-     * When we see a valid leading character but a sequence has
-     * not finished, we have detected an ill-formed sequence.  The
-     * correct thing to do according to Section 3.9 of the Unicode
-     * standard 6.0 is to jettison the current sequence, emit the
-     * Replacement character and begin a new sequence with the new
-     * character.  From the standard:
-     *
-     *      For example, with the input UTF-8 code unit sequence
-     *      <C2 41 42>, such a UTF-8 conversion process must not
-     *      return <U+FFFD> or <U+FFFD, U+0042>, because either of
-     *      those outputs would be the result of misinterpreting
-     *      a well-formed subsequence as being part of the ill-formed
-     *      subsequence. The expected return value for such a process
-     *      would instead be <U+FFFD, U+0041, U+0042>.
-     */
-
-    if ((c & 0xf8) == 0xf0) { /* 11110xxx */
-        /* first of a 4 char sequence */
-        if (s->bytesleft)       /* incomplete sequence */
-            convert_putc(rock->next, U_REPLACEMENT);
-        if (c >= 0xf5 && c <= 0xf7) goto emit_replacement;
-        s->bytesleft = 3;
-        s->codepoint = c & 0x07; /* 00000111 */
-    }
-    else if ((c & 0xf0) == 0xe0) { /* 1110xxxx */
-        /* first of a 3 char sequence */
-        if (s->bytesleft)       /* incomplete sequence */
-            convert_putc(rock->next, U_REPLACEMENT);
-        s->bytesleft = 2;
-        s->codepoint = c & 0x0f; /* 00001111 */
-    }
-    else if ((c & 0xe0) == 0xc0) { /* 110xxxxx */
-        /* first of a 2 char sequence */
-        if (s->bytesleft)       /* incomplete sequence */
-            convert_putc(rock->next, U_REPLACEMENT);
-        if (c == 0xc0 || c == 0xc1) goto emit_replacement;
-        s->bytesleft = 1;
-        s->codepoint = c & 0x1f; /* 00011111 */
-    }
-    else if ((c & 0xc0) == 0x80) { /* 10xxxxxx */
-        /* continuation char, handle only if expected */
-        if (s->bytesleft > 0) {
-            s->codepoint = (s->codepoint << 6) + (c & 0x3f); /* 00111111 */
-            s->bytesleft--;
-            if (!s->bytesleft) {
-                convert_putc(rock->next, s->codepoint);
-                s->codepoint = 0;
-            }
-        }
-        else
-            goto emit_replacement;
-    }
-    else if (c >= 0xf8 && c <= 0xff) {
-        goto emit_replacement;
-    }
-    else { /* plain ASCII char */
-        if (s->bytesleft)       /* incomplete sequence */
-            convert_putc(rock->next, U_REPLACEMENT);
-        convert_putc(rock->next, c);
-        s->bytesleft = 0;
-        s->codepoint = 0;
-    }
-}
-
-/* Given an octet in a UTF-7 encoded string, possibly emit a Unicode
- * code point */
-static void utf7_2uni (struct convert_rock *rock, int c)
-{
-    struct table_state *s = (struct table_state *)rock->state;
-
-    /* Table for base64. */
-    const char *idx = s->index_64;
-
-    if (c == U_REPLACEMENT) {
-        convert_putc(rock->next, c);
-        return;
-    }
-
-    assert((unsigned)c <= 0xff);
-
-    if (c & 0x80) { /* skip 8-bit chars */
-        convert_putc(rock->next, U_REPLACEMENT);
-        return;
-    }
-
-    /* Inside a base64 encoded unicode fragment */
-    if (s->mode) {
-        /* '-' marks the end of a fragment */
-        if (c == '-') {
-            /* special case: sequence +- creates output '+' (or '&' for IMAP) */
-            if (s->mode == 1)
-                convert_putc(rock->next, s->shift);
-            /* otherwise no output for the '-' */
-            s->mode = 0;
-            s->num_bits = 0;
-            s->codepoint = 0;
-        }
-        /* a normal char drops us out of base64 mode */
-        else if (CHAR64M(c,idx) == XX) {
-            /* pass on the char */
-            convert_putc(rock->next, c);
-            /* and switch back to ASCII mode */
-            s->mode = 0;
-            /* XXX: warn if num_bits > 4 or codepoint != 0 */
-            s->num_bits = 0;
-            s->codepoint = 0;
-        }
-        /* base64 char - process it into the state machine */
-        else {
-            s->mode = 2; /* we have some content, so don't process special +- */
-            /* add the 6 bits of value from this character */
-            s->codepoint = (s->codepoint << 6) + CHAR64M(c,idx);
-            s->num_bits += 6;
-            if (s->num_bits >= 16) {
-                /* we've got a full character's worth of bits */
-                s->num_bits -= 16;
-                /* extract the 16-bit character */
-                int t = s->codepoint >> s->num_bits;
-                /* keep the remainder. avoid overflow by trimming. */
-                s->codepoint &= ((1 << s->num_bits) - 1);
-
-                if (!s->hi && t >= HI_SURROGATE_START) {
-                    /* start of a two-character UTF-16 sequence. keep the
-                     * high surrogate and wait for the next character */
-                    s->hi = t;
-                } else if (s->hi && t >= LO_SURROGATE_START) {
-                    /* this low surrogate finishes a two-character UTF16
-                     * sequence. join the surrogates to a codepoint */
-                    uint32_t lo = t, hi = s->hi;
-                    uint32_t x = (hi & ((1 << 6) -1)) << 10 | (lo & ((1 << 10) -1));
-                    uint32_t w = (hi >> 6) & ((1 << 5) - 1);
-                    uint32_t u = w + 1;
-
-                    /* emit joined codepoint and clear hi surrogate */
-                    convert_putc(rock->next, u << 16 | x);
-                    s->hi = 0;
-                } else {
-                    /* send it down the line */
-                    convert_putc(rock->next, t & 0x7fff);
-                    /* always clear the high surrogate, even for bogus data */
-                    s->hi = 0;
-                }
-            }
-        }
-    }
-
-    /* regular ASCII mode */
-    else {
-        /* '+' (or '&' for IMAP)  switches to base64 unicode mode */
-        if (c == s->shift) {
-            s->mode = 1; /* switch mode, but no content processed yet */
-            s->codepoint = 0;
-            s->num_bits = 0;
-        }
-        /* regular ASCII char */
-        else {
-            convert_putc(rock->next, c);
-        }
-    }
-}
-
-/* Flush buffered octets if in base64 mode. If at the end of the octet stream,
- * also emit '-' to leave base64 and reset state. */
-static void utf16_2imaputf7_flush(struct convert_rock *rock, int eos)
-{
-    static const char tbl[64] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
-
-#define IMAPUTF7_B64(c) \
-    convert_putc(rock->next, tbl[(c)])
-
-    struct imaputf7_state *s = (struct imaputf7_state *)rock->state;
-    uint8_t *src = s->bytes;
-
-    if (s->mode) {
-
-        assert(s->num_bytes <= 3);
-
-        /* Base64 encode buffered bytes. */
-        if (s->num_bytes == 3) {
-            IMAPUTF7_B64(src[0] >> 2);
-            IMAPUTF7_B64(((src[0] & 0x03) << 4) | (src[1] >> 4));
-            IMAPUTF7_B64(((src[1] & 0x0f) << 2) | ((src[2] & 0xc0) >> 6));
-            IMAPUTF7_B64(src[2] & 0x3f);
-        } else if (s->num_bytes) {
-            IMAPUTF7_B64(src[0] >> 2);
-            if (s->num_bytes == 1) {
-                IMAPUTF7_B64((src[0] & 0x03) << 4);
-            } else {
-                IMAPUTF7_B64(((src[0] & 0x03) << 4) | (src[1] >> 4));
-                IMAPUTF7_B64((src[1] & 0x0f) << 2);
-            }
-        }
-        s->num_bytes = 0;
-
-        if (eos) {
-            /* Leave base64 mode at end of stream. */
-            convert_putc(rock->next, '-');
-            s->mode = 0;
-        }
-    }
-
-#undef IMAPUTF7_B64
-}
-
-/* Given two octets in a UTF-16 encoded string, emit the octets of its
- * IMAP UTF-7 representation, as defined in RFC 3501 */
-static void utf16_2imaputf7(struct convert_rock *rock, int c)
-{
-    struct imaputf7_state *s = (struct imaputf7_state *)rock->state;
-
-    if (c == U_REPLACEMENT) {
-        convert_putc(rock->next, c);
-        return;
-    }
-
-    assert((unsigned)c <= 0xffff);
-
-    /* Inside modified base64 mode. */
-    if (s->mode) {
-
-        /* Leave base64 mode for any printable IMAP UTF7 character.
-         *
-         * RFC 3501, section 5.1.3 Mailbox International Naming Convention
-         * states:
-         *
-         * "In modified UTF-7, printable US-ASCII characters, except for "&",
-         * represent themselves; that is, characters with octet values
-         * 0x20-0x25 and 0x27-0x7e."
-         *
-         * Some implementations emit any octet value 0x0-0x7e as printable, but
-         * let's be strict unless this turns out to be an issue.
-         * */
-        if (0x20 <= c && c <= 0x7e) {
-            /* Flush pipe with end-of-stream set. */
-            utf16_2imaputf7_flush(rock, 1);
-
-            /* Emit plain IMAP UTF7 character. */
-            convert_putc(rock->next, c & 0xff);
-            if (c == '&') convert_putc(rock->next, '-');
-
-            /* Bail out early. */
-            return;
-        }
-
-        /* Buffer octets. */
-        s->bytes[s->num_bytes++] = (c >> 8) & 0xff;
-        if (s->num_bytes == 3) utf16_2imaputf7_flush(rock, 0);
-        s->bytes[s->num_bytes++] = c & 0xff;
-        if (s->num_bytes == 3) utf16_2imaputf7_flush(rock, 0);
-    }
-    /* Inside plain mode. */
-    else {
-        /* Copy through printable IMAP UTF7 characters. */
-        if (0x20 <= c && c <= 0x7e) {
-            convert_putc(rock->next, c & 0xff);
-            if (c == '&') convert_putc(rock->next, '-');
-
-            /* Bail out early. */
-            return;
-        }
-
-        /* Switch to base64 mode. */
-        convert_putc(rock->next, '&');
-        s->mode = 1;
-
-        /* Buffer octets. */
-        s->bytes[s->num_bytes++] = (c >> 8) & 0xff;
-        s->bytes[s->num_bytes++] = c & 0xff;
-    }
-}
-
 /*
  * Given a Unicode codepoint, emit one or more Unicode codepoints in
  * search-normalised form (having applied recursive Unicode
@@ -908,67 +589,6 @@ static void uni2html(struct convert_rock *rock, int c)
     convert_putc(rock->next, c);
 }
 
-/* Given a 16-bit Unicode codepoint, emit its two octets */
-static void utf16_2bytes(struct convert_rock *rock, int c) {
-    assert(c <= 0xffff);
-    convert_putc(rock->next, (c >> 8) & 0xff);
-    convert_putc(rock->next, c & 0xff);
-}
-
-/* Given a Unicode codepoint, emit its valid UTF-16 characters */
-static void uni2utf16(struct convert_rock *rock, int c)
-{
-    if (!unicode_isvalid(c)) {
-        c = U_REPLACEMENT;
-    }
-
-    if (c <= 0xffff) {
-        /* Basic Multilingual Plane (BMP) */
-        convert_putc(rock->next, c);
-    } else {
-        /* Supplementary Planes (SMP, SIP, SSP, S PUA A/B) */
-        uint16_t x = (uint16_t) c;
-        uint32_t u = (c >> 16) & ((1 << 5) - 1);
-        uint16_t w = (uint16_t) u - 1;
-
-        uint16_t hi = HI_SURROGATE_START | (w << 6) | x >> 10;
-        convert_putc(rock->next, hi);
-
-        uint16_t lo = (uint16_t) (LO_SURROGATE_START | (x & ((1 << 10) - 1)));
-        convert_putc(rock->next, lo);
-    }
-}
-
-/* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
-static void uni2utf8(struct convert_rock *rock, int c)
-{
-    if (!unicode_isvalid(c))
-        c = U_REPLACEMENT;
-
-    /* UTF-8 can encode code points up to 0x7fffffff, but the currently
-     * defined last valid codepoint is 0x10ffff so we only handle that
-     * range. */
-
-    if (c > 0xffff) {
-        convert_putc(rock->next, 0xF0 + ((c >> 18) & 0x07));
-        convert_putc(rock->next, 0x80 + ((c >> 12) & 0x3f));
-        convert_putc(rock->next, 0x80 + ((c >>  6) & 0x3f));
-        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
-    }
-    else if (c > 0x7ff) {
-        convert_putc(rock->next, 0xE0 + ((c >> 12) & 0x0f));
-        convert_putc(rock->next, 0x80 + ((c >>  6) & 0x3f));
-        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
-    }
-    else if (c > 0x7f) {
-        convert_putc(rock->next, 0xC0 + ((c >>  6) & 0x1f));
-        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
-    }
-    else {
-        convert_putc(rock->next, c);
-    }
-}
-
 static void byte2search(struct convert_rock *rock, int c)
 {
     struct search_state *s = (struct search_state *)rock->state;
@@ -1022,6 +642,279 @@ static void byte2buffer(struct convert_rock *rock, int c)
     struct buf *buf = (struct buf *)rock->state;
 
     buf_putc(buf, c & 0xff);
+}
+
+/* Given an octet c and an icu converter, convert c to
+ * its Unicode codepoint. During a flush, c is ignored.
+ */
+static void icu2uni(struct convert_rock *rock, int c)
+{
+    struct charset_converter *s = (struct charset_converter*) rock->state;
+    UErrorCode err;
+
+    /* Assert a sane state. */
+    assert(s->flush || ((unsigned)c) <= 0xff || c == U_REPLACEMENT);
+
+    /* Fill up the buffer until its either full or we are flushing. */
+    if (!s->flush && c <= 0xff) {
+        *s->src_next++ = c;
+        /* Is there still space in the buffer? */
+        if (s->src_next < s->src_top) return;
+    }
+
+    do {
+        size_t n;
+        UChar32 cp;
+
+        /* Set up the target buffer. */
+        const UChar *tgt_limit = (const UChar*) s->tgt_top;
+        UChar *tgt = (UChar *) s->tgt_next;
+
+        /* Set up the source buffer */
+        const char *src = s->src_base;
+        const char *src_limit = s->src_next;
+
+        /* Convert the source buffer to Unicode. */
+        err = U_ZERO_ERROR;
+        ucnv_toUnicode(s->conv, &tgt, tgt_limit, &src, src_limit, NULL,
+                s->flush || c == U_REPLACEMENT, &err); 
+
+        /* Keep any bytes left in the source buffer. */
+        n = src_limit - src;
+        if (n) memmove(s->src_base, src, n);
+        s->src_next = s->src_base + n;
+
+        /* Bail out on errors. */
+        if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+            convert_putc(rock->next, U_REPLACEMENT);
+            return;
+        }
+
+        /* Emit any complete codepoints. */
+        UChar *t = (UChar *) s->tgt_base;
+        while (t < tgt && (U16_IS_SINGLE(*t) || t < tgt-1)) {
+            ssize_t i = 0;
+            U16_NEXT(t, i, tgt - t, cp);
+            convert_putc(rock->next, cp);
+            t += i;
+        }
+
+        /* Keep any incomplete codepoints and reset the target buffer. */
+        n = (tgt - t) * sizeof(UChar);
+        if (n) memmove(s->tgt_base, t, n);
+        s->tgt_next = s->tgt_base + n;
+
+    } while (err == U_BUFFER_OVERFLOW_ERROR);
+
+    /* Pass any errors down the pipeline. */
+    if (c == U_REPLACEMENT) {
+        convert_putc(rock->next, c);
+    }
+
+}
+
+/* Given Unicode codepoint c and an icu converter, convert c and emit
+ * its octets. During a flush, c is ignored. */
+static void uni2icu(struct convert_rock *rock, int c)
+{
+    struct charset_converter *s = (struct charset_converter*) rock->state;
+    UErrorCode err;
+
+    UChar *src_next = (UChar*) s->src_next;
+
+    /* Fill up the buffer until its either full or we are flushing. */
+    if (!s->flush) {
+        if (U16_LENGTH(c) == 1) {
+            *src_next++ = c;
+        } else {
+            *src_next++ = U16_LEAD(c);
+            *src_next++ = U16_TRAIL(c);
+        }
+        s->src_next = (char *) src_next;
+        /* Can we buffer at least one more 32-bit codepoint. */
+        if (s->src_next < (s->src_top - 2*sizeof(UChar))) return;
+    }
+
+    do {
+        size_t n;
+        char *t;
+
+        /* Set up the target buffer. */
+        char *tgt = s->tgt_base;
+        const char *tgt_limit = s->tgt_top;
+
+        /* Set up the source buffer */
+        const UChar *src = (const UChar *) s->src_base;
+        const UChar *src_limit = (const UChar *) s->src_next;
+
+        /* Convert the source buffer from Unicode. */
+        err = U_ZERO_ERROR;
+        ucnv_fromUnicode(s->conv, &tgt, tgt_limit, &src, src_limit, NULL,
+                s->flush, &err);
+
+        /* Keep any bytes left in the source buffer. */
+        n = (src_limit - src) * sizeof(UChar);
+        if (n) memmove(s->src_base, src, n);
+        s->src_next = s->src_base + n;
+
+        /* Bail out on errors. */
+        if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+            convert_putc(rock->next, U_REPLACEMENT);
+            return;
+        }
+
+        /* Emit any converted octets. */
+        for (t = s->tgt_base; t < tgt; t++)
+            convert_putc(rock->next, *t);
+
+        /* Reset the target buffer. */
+        s->tgt_next = s->tgt_base;
+
+    } while (err == U_BUFFER_OVERFLOW_ERROR);
+}
+
+/* Given an octet in a UTF-8 encoded string, possibly emit a Unicode
+ * code point */
+static void utf8_2uni(struct convert_rock *rock, int c)
+{
+    struct charset_converter *s = (struct charset_converter *)rock->state;
+
+    if (c == U_REPLACEMENT) {
+emit_replacement:
+        convert_putc(rock->next, U_REPLACEMENT);
+        s->bytesleft = 0;
+        s->codepoint = 0;
+        return;
+    }
+
+    assert((unsigned)c <= 0xff);
+
+    /*
+     * The following bytes are never valid in UTF-8 streams:
+     *
+     * C0-C1    could only be used for overlong encoding of
+     *          basic ASCII characters
+     * F5-FD    start bytes of sequences that could only encode
+     *          numbers larger than the 0x10FFFF limit of Unicode
+     * FE-FF    not valid start bytes or anything else
+     *
+     * Thanks to http://en.wikipedia.org/wiki/UTF-8
+     *
+     * These checks are interspersed with bitwise checks below.
+     *
+     * When we see a valid leading character but a sequence has
+     * not finished, we have detected an ill-formed sequence.  The
+     * correct thing to do according to Section 3.9 of the Unicode
+     * standard 6.0 is to jettison the current sequence, emit the
+     * Replacement character and begin a new sequence with the new
+     * character.  From the standard:
+     *
+     *      For example, with the input UTF-8 code unit sequence
+     *      <C2 41 42>, such a UTF-8 conversion process must not
+     *      return <U+FFFD> or <U+FFFD, U+0042>, because either of
+     *      those outputs would be the result of misinterpreting
+     *      a well-formed subsequence as being part of the ill-formed
+     *      subsequence. The expected return value for such a process
+     *      would instead be <U+FFFD, U+0041, U+0042>.
+     */
+
+    if ((c & 0xf8) == 0xf0) { /* 11110xxx */
+        /* first of a 4 char sequence */
+        if (s->bytesleft)       /* incomplete sequence */
+            convert_putc(rock->next, U_REPLACEMENT);
+        if (c >= 0xf5 && c <= 0xf7) goto emit_replacement;
+        s->bytesleft = 3;
+        s->codepoint = c & 0x07; /* 00000111 */
+    }
+    else if ((c & 0xf0) == 0xe0) { /* 1110xxxx */
+        /* first of a 3 char sequence */
+        if (s->bytesleft)       /* incomplete sequence */
+            convert_putc(rock->next, U_REPLACEMENT);
+        s->bytesleft = 2;
+        s->codepoint = c & 0x0f; /* 00001111 */
+    }
+    else if ((c & 0xe0) == 0xc0) { /* 110xxxxx */
+        /* first of a 2 char sequence */
+        if (s->bytesleft)       /* incomplete sequence */
+            convert_putc(rock->next, U_REPLACEMENT);
+        if (c == 0xc0 || c == 0xc1) goto emit_replacement;
+        s->bytesleft = 1;
+        s->codepoint = c & 0x1f; /* 00011111 */
+    }
+    else if ((c & 0xc0) == 0x80) { /* 10xxxxxx */
+        /* continuation char, handle only if expected */
+        if (s->bytesleft > 0) {
+            s->codepoint = (s->codepoint << 6) + (c & 0x3f); /* 00111111 */
+            s->bytesleft--;
+            if (!s->bytesleft) {
+                convert_putc(rock->next, s->codepoint);
+                s->codepoint = 0;
+            }
+        }
+        else
+            goto emit_replacement;
+    }
+    else if (c >= 0xf8 && c <= 0xff) {
+        goto emit_replacement;
+    }
+    else { /* plain ASCII char */
+        if (s->bytesleft)       /* incomplete sequence */
+            convert_putc(rock->next, U_REPLACEMENT);
+        convert_putc(rock->next, c);
+        s->bytesleft = 0;
+        s->codepoint = 0;
+    }
+}
+
+/* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
+static void uni2utf8(struct convert_rock *rock, int c)
+{
+    if (!unicode_isvalid(c))
+        c = U_REPLACEMENT;
+
+    /* UTF-8 can encode code points up to 0x7fffffff, but the currently
+     * defined last valid codepoint is 0x10ffff so we only handle that
+     * range. */
+
+    if (c > 0xffff) {
+        convert_putc(rock->next, 0xF0 + ((c >> 18) & 0x07));
+        convert_putc(rock->next, 0x80 + ((c >> 12) & 0x3f));
+        convert_putc(rock->next, 0x80 + ((c >>  6) & 0x3f));
+        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
+    }
+    else if (c > 0x7ff) {
+        convert_putc(rock->next, 0xE0 + ((c >> 12) & 0x0f));
+        convert_putc(rock->next, 0x80 + ((c >>  6) & 0x3f));
+        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
+    }
+    else if (c > 0x7f) {
+        convert_putc(rock->next, 0xC0 + ((c >>  6) & 0x1f));
+        convert_putc(rock->next, 0x80 + ( c        & 0x3f));
+    }
+    else {
+        convert_putc(rock->next, c);
+    }
+}
+
+/* Given an octet which is a codepoint in some 7bit or 8bit character
+ * set, or the Unicode replacement character, emit the corresponding
+ * Unicode codepoint. */
+static void table2uni(struct convert_rock *rock, int c)
+{
+    struct charset_converter *s = (struct charset_converter *)rock->state;
+    struct charmap *map;
+
+    if (c == U_REPLACEMENT) {
+        convert_putc(rock->next, c);
+        return;
+    }
+
+    assert((unsigned)c <= 0xff);
+    map = (struct charmap *)&s->curtable[0][c & 0xff];
+    if (map->c)
+        convert_putc(rock->next, map->c);
+
+    s->curtable = s->initialtable + map->next;
 }
 
 /*
@@ -1585,60 +1478,17 @@ static const char *convert_name(struct convert_rock *rock)
     if (rock->f == qp2byte) return "qp2byte";
     if (rock->f == striphtml2uni) return "striphtml2uni";
     if (rock->f == unfold2uni) return "unfold2uni";
-    if (rock->f == table2uni) return "table2uni";
     if (rock->f == uni2searchform) return "uni2searchform";
     if (rock->f == uni2html) return "uni2html";
+    if (rock->f == table2uni) return "table2uni";
     if (rock->f == uni2utf8) return "uni2utf8";
-    if (rock->f == uni2utf16) return "uni2utf16";
-    if (rock->f == utf7_2uni) return "utf7_2uni";
     if (rock->f == utf8_2uni) return "utf8_2uni";
-    if (rock->f == utf16_2imaputf7) return "utf16_2imaputf7";
-    if (rock->f == utf16_2bytes) return "utf16_2bytes";
+    if (rock->f == uni2icu) return "uni2icu";
+    if (rock->f == icu2uni) return "icu2uni";
     return "wtf";
 }
 
 /* convert_rock manipulation routines */
-
-static void table_switch(struct convert_rock *rock, int charset_num)
-{
-    struct table_state *state = (struct table_state *)rock->state;
-
-    /* wipe any current state */
-    memset(state, 0, sizeof(struct table_state));
-
-    /* it's a table based lookup */
-    if (chartables_charset_table[charset_num].table) {
-        /* set up the initial table */
-        state->curtable = state->initialtable
-            = chartables_charset_table[charset_num].table;
-        rock->f = table2uni;
-    }
-
-    /* special case UTF-8 */
-    else if (strstr(chartables_charset_table[charset_num].name, "utf-8")) {
-        rock->f = utf8_2uni;
-    }
-
-    /* special case IMAP UTF-7 */
-    else if (strstr(chartables_charset_table[charset_num].name, "imap-utf-7")) {
-        rock->f = utf7_2uni;
-        state->index_64 = index_64m;
-        state->shift = '&';
-    }
-
-    /* special case UTF-7 */
-    else if (strstr(chartables_charset_table[charset_num].name, "utf-7")) {
-        rock->f = utf7_2uni;
-        state->index_64 = index_64;
-        state->shift = '+';
-    }
-
-    /* should never happen */
-    else {
-        exit(1);
-        /* do something fatal here! */
-    }
-}
 
 /* Extract a cstring from a buffer.  NOTE: caller must free the memory
  * themselves once this is called.  Resets the state.  If you don't
@@ -1663,6 +1513,109 @@ static void basic_free(struct convert_rock *rock)
     if (rock) {
         if (rock->state) free(rock->state);
         free(rock);
+    }
+}
+
+static void icu_flush(struct convert_rock *rock)
+{
+    struct charset_converter *s = (struct charset_converter *) rock->state;
+    s->flush = 1;
+    if (rock->f == icu2uni) {
+        icu2uni(rock, -1);
+    }
+    else if (rock->f == uni2icu) {
+        uni2icu(rock, U_REPLACEMENT);
+    }
+    s->flush = 0;
+}
+
+static void icu_free(struct convert_rock *rock)
+{
+    if (rock) {
+        if (rock->state) icu_reset(rock, 0 /*don't care*/, -1 /*don't care*/);
+        free(rock);
+    }
+}
+
+static void icu_reset(struct convert_rock *rock, size_t len, int to_uni)
+{
+    struct charset_converter *s = (struct charset_converter *)rock->state;
+    size_t buf_size = CHARSET_ICUBUF_MAXSIZE;
+
+    if (len && len < buf_size) buf_size = len;
+    if (buf_size < CHARSET_ICUBUF_MINSIZE) buf_size = CHARSET_ICUBUF_MINSIZE;
+
+    if (s->buf_size < buf_size) {
+        s->buf = xrealloc(s->buf, buf_size * 2);
+        s->buf_size = buf_size;
+    }
+
+    ucnv_reset(s->conv);
+    s->tgt_base = s->buf;
+    s->tgt_top = s->tgt_base + s->buf_size;
+    s->tgt_next = s->tgt_base;
+    s->src_base = s->buf + s->buf_size;
+    s->src_top = s->src_base + s->buf_size;
+    s->src_next = s->src_base;
+
+    rock->f = to_uni ? icu2uni : uni2icu;
+    rock->flush = icu_flush;
+    rock->cleanup = icu_free;
+}
+
+static void table_free(struct convert_rock *rock)
+{
+    if (rock) free(rock);
+}
+
+static void table_reset(struct convert_rock *rock, int to_uni)
+{
+    struct charset_converter *s = (struct charset_converter *)rock->state;
+
+    if (chartables_charset_table[s->num].table) {
+        s->initialtable = chartables_charset_table[s->num].table;
+        s->curtable = s->initialtable;
+    }
+    if (strstr(chartables_charset_table[s->num].name, "utf-8")) {
+        rock->f = to_uni ? utf8_2uni : uni2utf8;
+    } else {
+        /* A truly table-based converter may never convert from Unicode
+         * to its charmap. This has been implicitly assumed in the existing
+         * code, but let's be explicit here. */
+        assert(to_uni);
+        rock->f = table2uni;
+    }
+    s->bytesleft = 0;
+    s->codepoint = 0;
+    s->mode = 0;
+    s->num_bits = 0;
+
+    rock->cleanup = table_free;
+}
+
+static void convert_switch(struct convert_rock *rock, charset_t to, int to_uni)
+{
+    struct charset_converter *s = (struct charset_converter *) rock->state;
+    size_t buf_size = 0;
+
+    /* make sure that the new state is sane */
+    assert((to->conv == NULL) != (to->num == -1));
+
+    /* flush any cached bytes in the ICU converter */
+    if (s->conv) {
+        buf_size = s->buf_size;
+        icu_flush(rock);
+        icu_reset(rock, 0 /*don't care*/, to_uni);
+    } else {
+        table_reset(rock, to_uni);
+    }
+
+    /* how the new state in the pipeline */
+    rock->state = to;
+    if (to->conv) {
+        icu_reset(rock, buf_size, to_uni);
+    } else {
+        table_reset(rock, to_uni);
     }
 }
 
@@ -1693,9 +1646,10 @@ static void striphtml_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
-static void convert_free(struct convert_rock *rock) {
+static void convert_nfree(struct convert_rock *rock, int n) {
     struct convert_rock *next;
-    while (rock) {
+    int i = 0;
+    while (rock && (!n || (i++ < n))) {
         next = rock->next;
         if (rock->cleanup)
             rock->cleanup(rock);
@@ -1704,6 +1658,7 @@ static void convert_free(struct convert_rock *rock) {
         rock = next;
     }
 }
+#define convert_free(rock) convert_nfree(rock, 0)
 
 /* converter initialisation routines */
 
@@ -1752,20 +1707,26 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *uni_init(struct convert_rock *next)
+static struct convert_rock *convert_init(struct charset_converter *s,
+                                         int to_uni,
+                                         size_t len,
+                                         struct convert_rock *next)
 {
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->f = uni2utf8;
+    struct convert_rock *rock;
+    rock = xzmalloc(sizeof(struct convert_rock));
+    rock->state = s;
     rock->next = next;
-    return rock;
-}
 
-static struct convert_rock *table_init(int charset_num, struct convert_rock *next)
-{
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->state = xzmalloc(sizeof(struct table_state));
-    rock->next = next;
-    table_switch(rock, charset_num);
+    /* Assert a sane state */
+    assert((s->conv == NULL) != (s->num == -1));
+
+    /* Initialize rock based on the converter type */
+    if (s->conv) {
+        icu_reset(rock, len, to_uni);
+    } else {
+        table_reset(rock, to_uni);
+    } 
+
     return rock;
 }
 
@@ -1806,24 +1767,6 @@ static struct convert_rock *buffer_init(void)
     return rock;
 }
 
-static struct convert_rock *uni2utf16_init(struct convert_rock *next)
-{
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->f = uni2utf16;
-    rock->next = next;
-    return rock;
-}
-
-static struct convert_rock *utf16_2imaputf7_init(struct convert_rock *next)
-{
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    struct imaputf7_state *s = xzmalloc(sizeof(struct imaputf7_state));
-    rock->state = s;
-    rock->f = utf16_2imaputf7;
-    rock->next = next;
-    return rock;
-}
-
 struct convert_rock *striphtml_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
@@ -1837,26 +1780,79 @@ struct convert_rock *striphtml_init(struct convert_rock *next)
     return rock;
 }
 
+static char* convert_to_name(const char *to, charset_t charset,
+                             const char *src, size_t len)
+{
+    UErrorCode err = U_ZERO_ERROR;
+    const char *from;
+    char *res = NULL;
+    size_t n;
+
+    /* determine the name of the source encoding */
+    from = charset_name(charset);
+
+    /* allocate the target buffer */
+    /* we preflight to compromise between memory and runtime efficiency */
+    n = ucnv_convert(to, from, res, 0, src, len, &err) + 1;
+    if (err != U_BUFFER_OVERFLOW_ERROR) return NULL;
+    res = xmalloc(n);
+
+    /* run the conversion */
+    err = U_ZERO_ERROR;
+    ucnv_convert(to, from, res, n, src, len, &err);
+    if (U_FAILURE(err)) {
+        free(res);
+        return NULL;
+    }
+
+    return res;
+}
+
+static charset_t lookup_buf(const char *buf, size_t len)
+{
+    char *name = xstrndup(buf, len);
+    charset_t cs = charset_lookupname(name);
+    free(name);
+    return cs;
+}
+
 
 /* API */
 
 /*
- * Return the name of the given character set number, or NULL if
+ * Return the name of the given character set number, or "unknown" if
  * not known.
  */
-EXPORTED const char *charset_name(charset_index i)
+EXPORTED const char *charset_name(charset_t charset)
 {
-    return (i >= 0 && i < chartables_num_charsets ?
-            chartables_charset_table[i].name : "unknown");
+    const char *name;
+
+    if (charset->conv) {
+        UErrorCode err = U_ZERO_ERROR;
+        name = ucnv_getName(charset->conv, &err);
+        if (U_SUCCESS(err))
+            return name;
+    } else if (charset->num >= 0 && charset->num < chartables_num_charsets) {
+        return chartables_charset_table[charset->num].name;
+    }
+
+    return "unknown";
 }
 
 /*
- * Lookup the character set 'name'.  Returns the character set number
- * or -1 if there is no matching character set.
+ * Lookup the character set 'name'.  Returns the character set
+ * or CHARSET_UNKNOWN_CHARSET if there is no matching character set.
  */
-EXPORTED int charset_lookupname(const char *name)
+EXPORTED charset_t charset_lookupname(const char *name)
 {
     int i;
+    struct charset_converter *s;
+    UErrorCode err;
+    UConverter *conv;
+
+    /* create the converter */
+    s = xzmalloc(sizeof(struct charset_converter));
+    s->num = -1;
 
     /* translate to canonical name */
     for (i = 0; charset_aliases[i].name; i++) {
@@ -1866,21 +1862,51 @@ EXPORTED int charset_lookupname(const char *name)
         }
     }
 
-    /* look up canonical name */
+    /* Is it a table based lookup, or UTF-8? */
     for (i = 0; i < chartables_num_charsets; i++) {
-        if (!strcasecmp(name, chartables_charset_table[i].name))
-            return i;
+        if (!strcasecmp(name, chartables_charset_table[i].name)) {
+            if ((chartables_charset_table[i].table) || !strcmp(name, "utf-8")) {
+                s->num = i;
+                return s;
+            }
+        }
     }
 
-    return -1;
+    /* Otherwise, let's see if we can fallback to ICU */
+    err = U_ZERO_ERROR;
+    conv = ucnv_open(name, &err);
+    if (U_SUCCESS(err)) {
+        s->conv = conv;
+        return s;
+    }
+
+    /* Still here? This means we don't know this charset name */
+    free(s);
+    return CHARSET_UNKNOWN_CHARSET;
 }
 
-static int lookup_buf(const char *buf, int len)
+EXPORTED void charset_free(charset_t *charsetp)
 {
-    char *name = xstrndup(buf, len);
-    int res = charset_lookupname(name);
-    free(name);
-    return res;
+    if (charsetp && *charsetp != CHARSET_UNKNOWN_CHARSET) {
+        struct charset_converter *s = *charsetp;
+        /* Close the ICU converter */
+        if (s->conv) ucnv_close(s->conv);
+        /* Free up memory. */
+        if (s->buf) free(s->buf);
+        /* Release the converter */
+        free(s);
+        *charsetp = CHARSET_UNKNOWN_CHARSET;
+    }
+}
+
+/* Lookup charset for the legacy numeric charset identifier id */
+EXPORTED charset_t charset_lookupnumid(int id)
+{
+    if (id < 0 || id >= chartables_num_charsets)
+        return CHARSET_UNKNOWN_CHARSET;
+    if (!chartables_charset_table[id].name)
+        return CHARSET_UNKNOWN_CHARSET;
+    return charset_lookupname(chartables_charset_table[id].name);
 }
 
 /*
@@ -1888,21 +1914,23 @@ static int lookup_buf(const char *buf, int len)
  * into canonical searching form.  Returns a newly allocated string
  * which must be free()d by the caller.
  */
-EXPORTED char *charset_convert(const char *s, int charset, int flags)
+EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
+    charset_t utf8;
 
     if (!s) return 0;
 
-    if (charset < 0 || charset >= chartables_num_charsets)
-        return xstrdup("X");
+    if (charset == CHARSET_UNKNOWN_CHARSET) return xstrdup("X");
+
+    utf8 = charset_lookupname("utf-8");
 
     /* set up the conversion path */
     tobuffer = buffer_init();
-    input = uni_init(tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
     input = canon_init(flags, input);
-    input = table_init(charset, input);
+    input = convert_init(charset, 1/*to_uni*/, 0, input);
 
     /* do the conversion */
     convert_cat(input, s);
@@ -1912,29 +1940,34 @@ EXPORTED char *charset_convert(const char *s, int charset, int flags)
 
     /* clean up */
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
 
 /* Convert from a given charset and encoding into IMAP UTF-7 */
-EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, int charset, int encoding)
+EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding)
 {
-    struct convert_rock *input, *imaputf7, *tobuffer;
+    struct convert_rock *input, *tobuffer;
     char *res;
+    charset_t imaputf7;
 
     /* Initialize character set mapping */
-    if (charset < 0 || charset >= chartables_num_charsets)
-        return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
 
     /* check for trivial search */
     if (len == 0)
         return xstrdup("");
 
+    /* check if we can convert the whole block at once */
+    if (encoding == ENCODING_NONE)
+        return convert_to_name("imap-mailbox-name", charset, msg_base, len);
+
     /* set up the conversion path */
+    imaputf7 = charset_lookupname("imap-mailbox-name");
     tobuffer = buffer_init();
-    imaputf7 = utf16_2imaputf7_init(tobuffer);
-    input = uni2utf16_init(imaputf7);
-    input = table_init(charset, input);
+    input = convert_init(imaputf7, 0/*to_uni*/, len, tobuffer);
+    input = convert_init(charset, 1/*to_uni*/, len, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -1955,48 +1988,53 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, int charset
         default:
             /* Don't know encoding--nothing can match */
             convert_free(input);
+            charset_free(&imaputf7);
             return 0;
     }
 
     /* do the conversion */
     convert_catn(input, msg_base, len);
 
-    /* flush any remaining base64 octets from imaputf7 */
-    utf16_2imaputf7_flush(imaputf7, 1 /*eos*/);
-
     /* extract the result */
     res = buffer_cstring(tobuffer);
 
     /* clean up */
     convert_free(input);
+    charset_free(&imaputf7);
 
     return res;
 }
 
 EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
 {
-    int charset = charset_lookupname("utf-8");
-    return charset_convert(s, charset, flags);
+    charset_t utf8 = charset_lookupname("utf-8");
+    return charset_convert(s, utf8, flags);
+    charset_free(&utf8);
 }
 
 /* Convert from a given charset and encoding into utf8 */
-EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encoding)
+EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
-
+    charset_t utf8;
+   
     /* Initialize character set mapping */
-    if (charset < 0 || charset >= chartables_num_charsets)
-        return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return NULL;
 
     /* check for trivial search */
     if (len == 0)
         return xstrdup("");
 
+    /* check if we can convert the whole block at once */
+    if (encoding == ENCODING_NONE)
+        return convert_to_name("utf-8", charset, msg_base, len);
+
     /* set up the conversion path */
+    utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = uni_init(tobuffer);
-    input = table_init(charset, input);
+    input = convert_init(utf8, 0/*to_uni*/, len, tobuffer);
+    input = convert_init(charset, 1/*to_uni*/, len, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -2017,12 +2055,14 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, int charset, in
     default:
         /* Don't know encoding--nothing can match */
         convert_free(input);
+        charset_free(&utf8);
         return 0;
     }
 
     convert_catn(input, msg_base, len);
     res = buffer_cstring(tobuffer);
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
@@ -2033,14 +2073,19 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     int eatspace = 0;
     const char *start, *endcharset, *encoding, *end;
     int len;
-    int charset;
     const char *p;
-    int defaultcs = (flags & CHARSET_MIME_UTF8) ? charset_lookupname("utf-8") : 0;
+    charset_t defaultcs, cs;
 
     if (!s) return;
 
     /* set up the conversion path */
-    input = table_init(defaultcs, target);
+    if (flags & CHARSET_MIME_UTF8) {
+        defaultcs = charset_lookupname("utf-8");
+    } else {
+        defaultcs = charset_lookupname("us-ascii");
+    }
+    input = convert_init(defaultcs, 1/*to_uni*/, 0, target);
+
     /* note: we assume the caller of this function has already
      * determined that all newlines are followed by whitespace */
     unfold = unfold_init(0 /*skipws*/, input);
@@ -2069,9 +2114,10 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             for (p = s; p < (start-1) && Uisspace(*p); p++);
             if (p < (start-1)) eatspace = 0;
         }
+
         if (!eatspace) {
             len = start - s - 1;
-            table_switch(input, defaultcs);
+            convert_switch(input, defaultcs, 1/*to_uni*/);
             convert_catn(unfold, s, len);
         }
 
@@ -2079,15 +2125,14 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
          * Get the 1522-word's character set
          */
         start++;
-        charset = lookup_buf(start, endcharset-start);
-        if (charset < 0) {
+        cs = lookup_buf(start, endcharset-start);
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
             /* Unrecognized charset, nothing will match here */
             convert_putc(input, U_REPLACEMENT); /* unknown character */
         }
         else {
             struct convert_rock *extract;
-
-            table_switch(input, charset);
+            convert_switch(input, cs, 1/*to_uni*/);
 
             /* choose decoder */
             if (encoding[1] == 'q' || encoding[1] == 'Q') {
@@ -2102,6 +2147,8 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             /* clean up */
             basic_free(extract);
         }
+        convert_switch(input, defaultcs, 1 /*to_uni*/);
+        charset_free(&cs);
 
         /* Prepare for the next iteration */
         s = start = end+2;
@@ -2110,13 +2157,14 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
     /* Copy over the tail part of the input string */
     if (*s) {
-        table_switch(input, defaultcs);
+        convert_switch(input, defaultcs, 1/*to_uni*/); /* US_ASCII */
         convert_cat(unfold, s);
     }
 
-    /* just free these ones, the rest can be cleaned up by the sender */
+    /* just free the first two items, the rest can be cleaned up by the sender */
     basic_free(unfold);
-    basic_free(input);
+    convert_nfree(input, 1);
+    charset_free(&defaultcs);
 }
 
 /*
@@ -2128,11 +2176,13 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
+    charset_t utf8;
 
     if (!s) return NULL;
 
+    utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = uni_init(tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
     input = canon_init(flags, input);
 
     mimeheader_cat(input, s, flags);
@@ -2140,6 +2190,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     res = buffer_cstring(tobuffer);
 
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
@@ -2178,17 +2229,20 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
+    charset_t utf8;
 
     if (!s) return NULL;
 
+    utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = uni_init(tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
 
     mimeheader_cat(input, s, flags);
 
     res = buffer_cstring(tobuffer);
 
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
@@ -2198,9 +2252,10 @@ EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
 {
     struct convert_rock *input, *tosearch;
     int res;
+    charset_t utf8 = charset_lookupname("utf-8");
 
     tosearch = search_init(substr, pat);
-    input = uni_init(tosearch);
+    input = convert_init(utf8, 0/*to_uni*/, 0, tosearch);
     input = canon_init(flags, input);
 
     mimeheader_cat(input, s, flags);
@@ -2208,6 +2263,7 @@ EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
     res = search_havematch(tosearch);
 
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
@@ -2251,7 +2307,9 @@ EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
 {
     struct convert_rock *tosearch;
     struct convert_rock *input;
-    int charset = charset_lookupname("utf-8");
+    charset_t utf8from, utf8to;
+    utf8from = charset_lookupname("utf-8");
+    utf8to = charset_lookupname("utf-8");
     int res;
 
     if (!substr[0])
@@ -2261,9 +2319,9 @@ EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
     tosearch = search_init(substr, pat);
 
     /* and the input stream */
-    input = uni_init(tosearch);
+    input = convert_init(utf8to, 0/*to_uni*/, len, tosearch);
     input = canon_init(flags, input);
-    input = table_init(charset, input);
+    input = convert_init(utf8from, 1/*to_uni*/, len, input);
 
     /* feed the handler */
     while (len-- > 0) {
@@ -2276,6 +2334,8 @@ EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
 
     /* clean up */
     convert_free(input);
+    charset_free(&utf8from);
+    charset_free(&utf8to);
 
     return res;
 }
@@ -2289,25 +2349,26 @@ EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
  */
 EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
                        const char *msg_base, size_t len,
-                       int charset, int encoding, int flags)
+                       charset_t charset, int encoding, int flags)
 {
     struct convert_rock *input, *tosearch;
     size_t i;
     int res;
+    charset_t utf8;
 
     /* Initialize character set mapping */
-    if (charset < 0 || charset >= chartables_num_charsets)
-        return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
 
     /* check for trivial search */
     if (strlen(substr) == 0)
         return 1;
 
     /* set up the conversion path */
+    utf8 = charset_lookupname("utf-8");
     tosearch = search_init(substr, pat);
-    input = uni_init(tosearch);
+    input = convert_init(utf8, 0/*to_uni*/, len, tosearch);
     input = canon_init(flags, input);
-    input = table_init(charset, input);
+    input = convert_init(charset, 1/*to_uni*/, len, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -2328,6 +2389,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
     default:
         /* Don't know encoding--nothing can match */
         convert_free(input);
+        charset_free(&utf8);
         return 0;
     }
 
@@ -2340,6 +2402,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
     res = search_havematch(tosearch); /* copy before we free it */
 
     convert_free(input);
+    charset_free(&utf8);
 
     return res;
 }
@@ -2348,29 +2411,31 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
                              void *rock,
                              const struct buf *data,
-                             int charset, int encoding,
+                             charset_t charset, int encoding,
                              const char *subtype, int flags)
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;
     size_t i;
-
+    charset_t utf8;
+    
     if (charset_debug)
         fprintf(stderr, "charset_extract()\n");
 
     /* Initialize character set mapping */
-    if (charset < 0 || charset >= chartables_num_charsets)
-        return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
 
     /* set up the conversion path */
+    utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = uni_init(tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
     input = canon_init(flags, input);
 
     if (!strcmpsafe(subtype, "HTML")) {
         if ((flags & CHARSET_SKIPHTML)) {
             /* silently pretend we indexed it, but actually ignore it */
             convert_free(input);
+            charset_free(&utf8);
             return 1;
         }
         /* this is text/html data, so we can make ourselves useful by
@@ -2378,7 +2443,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
         input = striphtml_init(input);
     }
 
-    input = table_init(charset, input);
+    input = convert_init(charset, 1/*to_uni*/, 0, input);
 
     switch (encoding) {
     case ENCODING_NONE:
@@ -2398,6 +2463,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
     default:
         /* Don't know encoding--nothing can match */
         convert_free(input);
+        charset_free(&utf8);
         return 0;
     }
 
@@ -2413,11 +2479,14 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
             buf_reset(out);
         }
     }
-    if (out->len) { /* finish it */
+    /* finish it */
+    convert_flush(input);
+    if (out->len) { 
         cb(out, rock);
     }
 
     convert_free(input);
+    charset_free(&utf8);
 
     return 1;
 }

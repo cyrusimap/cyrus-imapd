@@ -118,7 +118,7 @@ static int message_parse_headers(struct msg *msg,
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
-                                  int *encoding, int *charset);
+                                  int *encoding, charset_t *charset);
 static void message_parse_string(const char *hdr, char **hdrp);
 static void message_parse_header(const char *hdr, struct buf *buf);
 static void message_parse_type(const char *hdr, struct body *body);
@@ -528,12 +528,16 @@ static void message_find_part(struct body *body, const char *section,
         }
 
         if (!body->decoded_body) {
-            int encoding, charset;
+            int encoding;
+            charset_t charset = CHARSET_UNKNOWN_CHARSET;
             message_parse_charset(body, &encoding, &charset);
-            if (charset < 0) charset = 0; /* unknown, try ASCII */
+            if (charset == CHARSET_UNKNOWN_CHARSET)
+                /* try ASCII */
+                charset = charset_lookupname("US-ASCII");
             body->decoded_body = charset_to_utf8(
                 msg_base + body->content_offset, body->content_size,
                 charset, encoding); /* returns a cstring */
+            charset_free(&charset);
         }
 
         /* grow the array and add the new part */
@@ -641,6 +645,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
         /* We're at top-level--preallocate space to store cached headers */
         buf_ensure(&body->cacheheaders, 1024);
     }
+
 
     sawboundary = message_parse_headers(msg, body, defaultContentType,
                                         boundaries);
@@ -921,11 +926,13 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
  * parse a charset and encoding out of a body structure
  */
 static void message_parse_charset(const struct body *body,
-                                  int *e_ptr, int *c_ptr)
+                                  int *e_ptr, charset_t *c_ptr)
 {
+
     int encoding = ENCODING_NONE;
-    int charset = 0;
+    charset_t charset = charset_lookupname("US-ASCII");
     struct param *param;
+
 
     if (body->encoding) {
         switch (body->encoding[0]) {
@@ -962,8 +969,9 @@ static void message_parse_charset(const struct body *body,
         for (param = body->params; param; param = param->next) {
             if (!strcasecmp(param->attribute, "charset")) {
                 if (param->value && *param->value) {
+                    charset_free(&charset);
                     charset = charset_lookupname(param->value);
-                    if (charset < 0)
+                    if (charset == CHARSET_UNKNOWN_CHARSET)
                         syslog(LOG_NOTICE, "message_parse_charset: unknown charset %s for text/%s", param->value, body->subtype);
                 }
                 break;
@@ -971,12 +979,16 @@ static void message_parse_charset(const struct body *body,
         }
     }
     else if (!strcmp(body->type, "MESSAGE")) {
-        if (!strcmp(body->subtype, "RFC822"))
-            charset = -1;
+        if (!strcmp(body->subtype, "RFC822")) {
+            charset_free(&charset);
+            charset = CHARSET_UNKNOWN_CHARSET;
+        }
         encoding = ENCODING_NONE;
     }
-    else
-        charset = -1;
+    else {
+        charset_free(&charset);
+        charset = CHARSET_UNKNOWN_CHARSET;
+    }
 
     if (e_ptr) *e_ptr = encoding;
     if (c_ptr) *c_ptr = charset;
@@ -1826,7 +1838,7 @@ static int message_pendingboundary(const char *s, int slen,
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
  */
-int message_write_cache(struct index_record *record, const struct body *body)
+EXPORTED int message_write_cache(struct index_record *record, const struct body *body)
 {
     static struct buf cacheitem_buffer;
     struct buf ib[NUM_CACHE_FIELDS];
@@ -2308,17 +2320,29 @@ static void message_write_section(struct buf *buf, const struct body *body)
 }
 
 /*
- * Write the 32-bit charset/encoding value for section 'body' to 'buf'
+ * Write the 32-bit charset/encoding value and the charset identifier
+ * for section 'body' to 'buf'
  */
 static void message_write_charset(struct buf *buf, const struct body *body)
 {
-    int encoding, charset;
+    int encoding;
+    charset_t charset;
+    size_t len = 0;
+    const char *name = NULL;
 
     message_parse_charset(body, &encoding, &charset);
 
-    if (charset == -1) charset = 0xffff;
+    /* write charset/encoding preamble */
+    if (charset != CHARSET_UNKNOWN_CHARSET) {
+        name = charset_name(charset);
+        len = strlen(name);
+        if (len > 0xffffff) len = 0;
+    }
+    buf_appendbit32(buf, ((encoding & 0xff) << 24)|(len & 0xffffff));
 
-    buf_appendbit32(buf, (encoding & 0xff)|((charset & 0xffff)>>16));
+    /* write charset identifier */
+    if (len && name) buf_appendcstr(buf, name);
+    charset_free(&charset);
 }
 
 /*
@@ -2431,6 +2455,7 @@ EXPORTED void message_free_body(struct body *body)
     if (body->x_me_message_id) free(body->x_me_message_id);
     if (body->references) free(body->references);
     if (body->received_date) free(body->received_date);
+    if (body->charset_id) free(body->charset_id);
 
     if (body->subpart) {
         if (body->numparts) {
@@ -2894,11 +2919,14 @@ static int message_read_body(struct protstream *strm, struct body *body)
  * Read cached binary bodystructure.
  * Analog to mesage_write_section()
  */
-static void message_read_binarybody(struct body *body, const char **sect)
+static void message_read_binarybody(struct body *body, const char **sect,
+                                    uint32_t cache_version)
 {
     bit32 n, i;
     const char *p = *sect;
     struct body *subpart;
+    struct buf buf = BUF_INITIALIZER;
+    size_t len;
 
     n = CACHE_ITEM_BIT32(*sect);
     p = *sect += CACHE_ITEM_SIZE_SKIP;
@@ -2930,8 +2958,35 @@ static void message_read_binarybody(struct body *body, const char **sect)
         p += CACHE_ITEM_SIZE_SKIP;
         body->content_size = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
-        body->charset_cte = CACHE_ITEM_BIT32(p);
+
+        /* read encoding and charset identifier */
+        body->charset_enc = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
+        /* XXX
+         * CACHE_MINOR_VERSION 4 replaces numeric charset ids with
+         * variable-length strings. Remove this conditional (and its
+         * else branch) once cache versions <= 3 are deprecated
+         */
+        if (cache_version >= 4) {
+            /* determine the length of the charset identifer */
+            len = (body->charset_enc & 0xffffff);
+            if (len) {
+                /* read len bytes as charset id */
+                buf_appendmap(&buf, p, len);
+                body->charset_id = buf_newcstring(&buf);
+                buf_reset(&buf);
+                p += len;
+            } else {
+                /* the charset is unknown */
+                body->charset_id = NULL;
+            }
+            body->charset_enc = ((body->charset_enc >> 24) & 0xff);
+        } else {
+            /* Cache versions <= 3 store charset and encoding in 4 bytes,
+             * but the code was broken. Just presume it's unknown. */
+            body->charset_enc &= 0xff;
+            body->charset_id = NULL;
+        }
     }
 
     /* read body parts */
@@ -2944,15 +2999,41 @@ static void message_read_binarybody(struct body *body, const char **sect)
         p += CACHE_ITEM_SIZE_SKIP;
         subpart[i].content_size = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
-        subpart[i].charset_cte = CACHE_ITEM_BIT32(p);
+
+        /* read encoding and charset identifier */
+        subpart[i].charset_enc = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
+        /* XXX
+         * CACHE_MINOR_VERSION 4 replaces numeric charset ids with
+         * variable-length strings. Remove this conditional (and its
+         * else branch) once cache versions <= 3 are deprecated
+         */
+        if (cache_version >= 4) {
+            /* determine the length of the charset identifer */
+            len = (subpart[i].charset_enc & 0xffffff);
+            if (len) {
+                /* read len bytes as charset id */
+                buf_appendmap(&buf, p, len);
+                subpart[i].charset_id = buf_newcstring(&buf);
+                buf_reset(&buf);
+                p += len;
+            } else {
+                /* the charset is unknown */
+                subpart[i].charset_id = NULL;
+            }
+            subpart[i].charset_enc = ((subpart[i].charset_enc >> 24) & 0xff);
+        } else {
+            /* Cache versions <= 3 store charset and encoding in 4 bytes,
+             * but the code was broken. Just presume it's unknown. */
+            subpart[i].charset_enc &= 0xff;
+            subpart[i].charset_id = NULL;
+        }
     }
 
     /* read sub-parts */
     for (*sect = p, i = 0; i < n-1; i++) {
-        message_read_binarybody(&subpart[i], sect);
+        message_read_binarybody(&subpart[i], sect, cache_version);
     }
-
 }
 
 /*
@@ -2988,7 +3069,7 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
 
     /* Read binary bodystructure from cache */
     binbody = cacheitem_base(record, CACHE_SECTION);
-    message_read_binarybody(&toplevel, &binbody);
+    message_read_binarybody(&toplevel, &binbody, record->cache_version);
 }
 
 static void de_nstring_buf(struct buf *src, struct buf *dst)
@@ -3256,8 +3337,10 @@ out:
         uint32_t header_size;
         uint32_t content_offset;
         uint32_t content_size;
-        uint16_t charset;
-        uint16_t encoding;
+
+        uint8_t      encoding;
+        uint24_t     length of charset identifier in bytes (=len)
+        uint8_t[len] charset identifier
     };
 
     struct section {
@@ -3707,11 +3790,13 @@ out:
     return r;
 }
 
-static int parse_bodystructure_sections(const char **cachestrp, const char *cacheend, struct body *body)
+static int parse_bodystructure_sections(const char **cachestrp, const char *cacheend,
+                                        struct body *body, uint32_t cache_version)
 {
     struct body *this;
     int nsubparts;
     int part;
+    uint32_t cte;
 
     if (*cachestrp + 4 > cacheend)
         return IMAP_MAILBOX_BADFORMAT;
@@ -3724,7 +3809,9 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
     if (strcmp(body->type, "MESSAGE") == 0
         && strcmp(body->subtype, "RFC822") == 0) {
+
         if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+
             /*
              * Part 0 of a message/rfc822 is the message header/text.
              * Nested parts of a message/rfc822 containing a multipart
@@ -3737,7 +3824,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
             body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
             body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-            *cachestrp += 5*4;
+            *cachestrp += 4*4;
+
+            /* Skip 0x0000ffff */
+            *cachestrp += 1*4;
 
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
@@ -3745,13 +3835,23 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 this->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
                 this->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
                 this->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-                *cachestrp += 5*4;
+                *cachestrp += 4*4;
+
+                /* Skip charset/encoding identifiers. */
+                cte = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += 1*4;
+                /* XXX CACHE_MINOR_VERSION 4 replaces numeric charset
+                 * identifiers with variable-length strings. Remove
+                 * this conditional once cache versions <= 3 are
+                 * deprecated */
+                if (cache_version >= 4)
+                    *cachestrp += (cte & 0xffffff);
             }
 
             /* and parse subparts */
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
-                if (parse_bodystructure_sections(cachestrp, cacheend, this))
+                if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version))
                     return IMAP_MAILBOX_BADFORMAT;
             }
         }
@@ -3770,10 +3870,26 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
             body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
             body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-            *cachestrp += 10*4;
+            *cachestrp += 9*4;
+
+            if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+                /* Treat 0-part multipart as 0-length text */
+                *cachestrp += 1*4;
+            }
+            else {
+                /* Skip charset/encoding identifiers. */
+                cte = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += 1*4;
+                /* XXX CACHE_MINOR_VERSION 4 replaces numeric charset
+                 * identifiers with variable-length strings. Remove
+                 * this conditional once cache versions <= 3 are
+                 * deprecated */
+                if (cache_version >= 4)
+                    *cachestrp += (cte & 0xffffff);
+            }
 
             /* and parse subpart */
-            if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart))
+            if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version))
                 return IMAP_MAILBOX_BADFORMAT;
         }
     }
@@ -3796,7 +3912,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
         for (part = 0; part < body->numparts; part++) {
             this = &body->subpart[part];
-            if (parse_bodystructure_sections(cachestrp, cacheend, this))
+            if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version))
                 return IMAP_MAILBOX_BADFORMAT;
         }
     }
@@ -3841,7 +3957,7 @@ static int message_parse_cbodystructure(message_t *m)
     toplevel.subtype = "RFC822";
     toplevel.subpart = m->body;
 
-    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel);
+    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel, m->record.cache_version);
     if (r) syslog(LOG_ERR, "IOERROR: parsing section structure for %s %u (%.*s)",
                   m->mailbox->name, m->record.uid,
                   (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
@@ -3898,7 +4014,7 @@ static void body_get_leaf_types(struct body *body, strarray_t *types)
 
 static int body_foreach_text_section(struct body *body,
                                      struct message *message,
-                                     int (*proc)(int isbody, int charset, int encoding,
+                                     int (*proc)(int isbody, charset_t charset, int encoding,
                                                  const char *subtype, struct buf *data, void *rock),
                                      void *rock)
 {
@@ -3915,13 +4031,15 @@ static int body_foreach_text_section(struct body *body,
     }
 
     if (!strcmpsafe(body->type, "TEXT")) {
-        int encoding, charset;
+        int encoding;
+        charset_t charset = CHARSET_UNKNOWN_CHARSET;
         message_parse_charset(body, &encoding, &charset);
 
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
         r = proc(/*isbody*/1, charset, encoding,
                  body->subtype, &data, rock);
         buf_free(&data);
+        charset_free(&charset);
 
         if (r) return r;
     }
@@ -3945,7 +4063,7 @@ static int body_foreach_text_section(struct body *body,
  * and the return value of 'proc' is returned.  Otherwise returns 0.
  */
 EXPORTED int message_foreach_text_section(message_t *m,
-                         int (*proc)(int isbody, int charset, int encoding,
+                         int (*proc)(int isbody, charset_t charset, int encoding,
                                      const char *subtype, struct buf *data, void *rock),
                          void *rock)
 {

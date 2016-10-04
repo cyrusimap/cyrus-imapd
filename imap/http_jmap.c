@@ -812,7 +812,7 @@ static char *jmap_mailbox_name(const char *mboxname) {
          * created via IMAP. In any case, determine name from the the
          * last segment of the mailboxname hierarchy. */
         char *extname, *q = NULL;
-        charset_index cs;
+        charset_t cs;
 
         if (strcmp(mboxname, inboxname)) {
             mbname_t *mbname = mbname_from_intname(mboxname);
@@ -828,6 +828,7 @@ static char *jmap_mailbox_name(const char *mboxname) {
                 free(extname);
                 extname = q;
             }
+            charset_free(&cs);
             mbname_free(&mbname);
         } else {
             extname = xstrdup("Inbox");
@@ -1205,7 +1206,7 @@ static int jmap_mailbox_newname_cb(const mbentry_t *mbentry, void *vrock) {
  *
  * Return the malloced, combined name, or NULL on error. */
 char *jmap_mailbox_newname(const char *name, const char *parentname) {
-    charset_index cs;
+    charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
     struct buf buf = BUF_INITIALIZER;
     int r;
@@ -1249,6 +1250,7 @@ char *jmap_mailbox_newname(const char *name, const char *parentname) {
 
 done:
     buf_free(&buf);
+    charset_free(&cs);
     return mboxname;
 }
 
@@ -1987,7 +1989,7 @@ static void jmap_message_bodies_extract_plain(const struct buf *buf, void *rock)
  * strings. Later parts in a multipart message of the same conten type
  * overwrite earlier ones. */
 static int jmap_message_bodies_cb(int isbody,
-                                  int charset,
+                                  charset_t charset,
                                   int encoding,
                                   const char *subtype,
                                   struct buf *data,
@@ -2288,10 +2290,12 @@ static json_t *jmap_message_from_record(const char *id,
              * Might want to make striphtml in charset.c public to only get
              * rid of the HTML tags? */
             struct buf data = BUF_INITIALIZER;
+            charset_t utf8 = charset_lookupname("utf8");
             buf_setcstr(&data, d.html);
             charset_extract(&jmap_message_bodies_extract_plain, &d.text,
-                    &data, charset_lookupname("utf8"), ENCODING_NONE, "HTML", 0);
+                    &data, utf8, ENCODING_NONE, "HTML", 0);
             buf_free(&data);
+            charset_free(&utf8);
         }
         json_object_set_new(msg, "textBody", d.text ? json_string(d.text) : json_null());
     }

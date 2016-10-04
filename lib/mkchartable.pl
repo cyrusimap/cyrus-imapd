@@ -492,54 +492,54 @@ sub printlookup {
     print OUTPUT <<EOF;
 
 /*
- * Mapping of character sets to tables
+ * Mapping of character sets to tables. This table is deprecated and
+ * is only used for backward compatibility.
  */
 
 HIDDEN const struct charset chartables_charset_table[] = {
     { "us-ascii", chartables_us_ascii },        /* US-ASCII must be charset number 0 */
     { "utf-8", 0 }, /* handled directly */
-    { "utf-7", 0 }, /* handled directly */
-    { "iso-8859-1", chartables_iso_8859_1 },
-    { "iso-8859-2", chartables_iso_8859_2 },
-    { "iso-8859-3", chartables_iso_8859_3 },
-    { "iso-8859-4", chartables_iso_8859_4 },
-    { "iso-8859-5", chartables_iso_8859_5 },
-    { "iso-8859-6", chartables_iso_8859_6 },
-    { "iso-8859-7", chartables_iso_8859_7 },
-    { "iso-8859-8", chartables_iso_8859_8 },
-    { "iso-8859-9", chartables_iso_8859_9 },
-    { "koi8-r", chartables_koi8_r },
-    { "iso-2022-jp", chartables_iso_2022_jp },
-    { "iso-2022-kr", chartables_iso_2022_kr },
-    { "gb2312", chartables_gb2312 },
-    { "big5", chartables_big5 },
+    /* All remaining legacy charsets are handled by ICU */
+    { "utf-7", 0 }, 
+    { "iso-8859-1", 0 },
+    { "iso-8859-2", 0 },
+    { "iso-8859-3", 0 },
+    { "iso-8859-4", 0 },
+    { "iso-8859-5", 0 },
+    { "iso-8859-6", 0 },
+    { "iso-8859-7", 0 },
+    { "iso-8859-8", 0 },
+    { "iso-8859-9", 0 },
+    { "koi8-r", 0 },
+    { "iso-2022-jp", 0 },
+    { "iso-2022-kr", 0 },
+    { "gb2312", 0 },
+    { "big5", 0 },
     /* Compatibility names */
-    { "unicode-1-1-utf-7", 0 }, /* handled directly */
-    { "unicode-2-0-utf-7", 0 }, /* handled directly */
-    { "x-unicode-2-0-utf-7", 0 }, /* handled directly */
+    { "unicode-1-1-utf-7", 0 }, 
+    { "unicode-2-0-utf-7", 0 },
+    { "x-unicode-2-0-utf-7", 0 },
     /* End Compatibility Names */
-    { "iso-8859-15", chartables_iso_8859_15 },
-    { "windows-1252", chartables_windows_1252 },
-    { "windows-1256", chartables_windows_1256 },
-    { "windows-1250", chartables_windows_1250 },
-    { "windows-1251", chartables_windows_1251 },
-    { "windows-1255", chartables_windows_1255 },
-    { "iso-8859-10", chartables_iso_8859_10 },
-    { "iso-8859-11", chartables_iso_8859_11 },
-    { "iso-8859-13", chartables_iso_8859_13 },
-    { "iso-8859-14", chartables_iso_8859_14 },
-    { "iso-8859-16", chartables_iso_8859_16 },
-    { "windows-1254", chartables_windows_1254 },
-    { "windows-1258", chartables_windows_1258 },
-    { "windows-874", chartables_windows_874 },
-
-    { "imap-utf-7", 0 }, /* handled directly */
-
-    { "msdos-latin1", chartables_msdos_latin1 },
-    { "windows-31j", chartables_windows_31j },
-    { "windows-936", chartables_windows_936 },
-    { "windows-1257", chartables_windows_1257 },
-    { "koi8-u", chartables_koi8_u },
+    { "iso-8859-15", 0 },
+    { "windows-1252", 0 },
+    { "windows-1256", 0 },
+    { "windows-1250", 0 },
+    { "windows-1251", 0 },
+    { "windows-1255", 0 },
+    { "iso-8859-10", 0 },
+    { "iso-8859-11", 0 },
+    { "iso-8859-13", 0 },
+    { "iso-8859-14", 0 },
+    { "iso-8859-16", 0 },
+    { "windows-1254", 0 },
+    { "windows-1258", 0 },
+    { "windows-874", 0 },
+    { "imap-utf-7", 0 }, 
+    { "windows-850", 0 },
+    { "windows-31j", 0 },
+    { "windows-936", 0 },
+    { "windows-1257", 0 },
+    { "koi8-u", 0 },
 
     /* New character sets should only be added to end so that
      * cache files stay with valid information */

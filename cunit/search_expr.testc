@@ -44,7 +44,7 @@ static void test_get_search_program(void)
         buf_cstring(&actual_errs); \
         CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \
         if (c != EOF) { \
-            CU_ASSERT_EQUAL(searchargs->charset, 0); \
+            CU_ASSERT_STRING_EQUAL(charset_name(searchargs->charset), "us-ascii"); \
             CU_ASSERT_PTR_NOT_NULL(searchargs->root); \
             actual_out = search_expr_serialise(searchargs->root); \
             CU_ASSERT_STRING_EQUAL(actual_out, expected_out); \

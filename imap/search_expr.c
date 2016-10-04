@@ -1929,7 +1929,7 @@ struct searchmsg_rock
     int result;
 };
 
-static int searchmsg_cb(int partno, int charset, int encoding,
+static int searchmsg_cb(int partno, charset_t charset, int encoding,
                         const char *subtype __attribute((unused)),
                         struct buf *data, void *rock)
 {
@@ -1946,8 +1946,7 @@ static int searchmsg_cb(int partno, int charset, int encoding,
     }
     else {
         /* body-like */
-        if (charset < 0 || charset == 0xffff)
-             return 0;
+        if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
         sr->result = charset_searchfile(sr->substr, sr->pat,
                                         data->s, data->len,
                                         charset, encoding, charset_flags);

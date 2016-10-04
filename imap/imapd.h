@@ -205,7 +205,7 @@ enum {
 /* Things that may be searched for */
 struct searchargs {
     struct search_expr *root;
-    int charset;
+    charset_t charset;
     int state;
     /* used only during parsing */
     int fuzzy_depth;

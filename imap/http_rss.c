@@ -283,7 +283,7 @@ static int meth_get(struct transaction_t *txn,
                 outbuf = charset_decode_mimebody(buf_base(&msg_buf) +
                                                  part->content_offset,
                                                  part->content_size,
-                                                 part->charset_cte & 0xff,
+                                                 part->charset_enc,
                                                  &part->decoded_body, &outsize);
 
                 if (!outbuf) {
@@ -1196,13 +1196,17 @@ static void display_part(struct transaction_t *txn,
             (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
             /* Display non-attachment text part */
             int ishtml = !strcmp(body->subtype, "HTML");
-            int charset = (body->charset_cte << 16) & 0xffff;
-            int encoding = body->charset_cte & 0xff;
+            charset_t charset = charset_lookupname(body->charset_id);
+            int encoding = body->charset_enc;
 
-            if (charset == 0xffff) charset = 0; /* unknown, try ASCII */
+            if (charset == CHARSET_UNKNOWN_CHARSET) {
+                /* unknown, try ASCII */
+                charset = charset_lookupname("us-ascii");
+            }
             body->decoded_body =
                 charset_to_utf8(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);
+            charset_free(&charset);
             if (!ishtml) buf_printf_markup(buf, level, "<pre>");
             write_body(0, txn, buf_cstring(buf), buf_len(buf));
             buf_reset(buf);

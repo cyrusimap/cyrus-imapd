@@ -57,6 +57,7 @@
 #include "mailbox.h"
 #include "strarray.h"
 #include "util.h"
+#include "charset.h"
 
 /*
  * Parsed form of a body-part
@@ -74,7 +75,8 @@ struct body {
     struct param *disposition_params;
     struct param *language;
     char *location;
-    int charset_cte;            /* charset/encoding in binary bodystructure */
+    int charset_enc;            /* encoding in binary bodystructure */
+    char *charset_id;           /* charset in binary bodystructure */
 
     /* Location/size information */
     long header_offset;
@@ -283,7 +285,7 @@ extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
 extern int message_get_fname(message_t *m, const char **fnamep);
 extern int message_foreach_text_section(message_t *m,
-                   int (*proc)(int isbody, int charset, int encoding,
+                   int (*proc)(int isbody, charset_t charset, int encoding,
                                const char *subtype, struct buf *data, void *rock),
                    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);

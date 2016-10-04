@@ -3,6 +3,7 @@ utf8                utf-8
 utf7                utf-7
 unicode-1-1-utf-8   utf-8
 unicode-1-1-utf-7   utf7
+imap-utf-7          IMAP-mailbox-name
 
 # even ASCII is not exempt
 ascii               us-ascii
@@ -93,11 +94,12 @@ win-1257            windows-1257
 cp1258              windows-1258
 win-1258            windows-1258
 
-cp850               msdos-latin1
-CP850               msdos-latin1
-cp-850              msdos-latin1
-CP-850              msdos-latin1
-dos-latin1          msdos-latin1
+cp850               windows-850
+CP850               windows-850
+cp-850              windows-850
+CP-850              windows-850
+dos-latin1          windows-850
+msdos-latin1        windows-850
 
 cp932               windows-31j
 CP932               windows-31j

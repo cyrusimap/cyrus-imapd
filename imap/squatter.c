@@ -446,7 +446,7 @@ static int squatter_build_query(search_builder_t *bx, const char *query)
     char *q;
     int r = 0;
     int part;
-    int utf8 = charset_lookupname("utf-8");
+    charset_t utf8 = charset_lookupname("utf-8");
 
     while ((p = tok_next(&tok))) {
         if (!strncasecmp(p, "__begin:", 8)) {
@@ -509,6 +509,7 @@ static int squatter_build_query(search_builder_t *bx, const char *query)
     r = 0;
 
 out:
+    charset_free(&utf8);
     tok_fini(&tok);
     return r;
 

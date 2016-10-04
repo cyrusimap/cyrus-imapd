@@ -2149,6 +2149,11 @@ CMU_PERL_MAKEMAKER(perl/imap)
 CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
 fi
 
+dnl check for libicu. we need this for charset conversions.
+PKG_CHECK_MODULES([ICU], [icu-uc])
+AC_SUBST([ICU_LIBS])
+AC_SUBST([ICU_CFLAGS])
+
 AC_OUTPUT
 echo "
 Cyrus Server configured components

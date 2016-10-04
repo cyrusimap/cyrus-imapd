@@ -1564,6 +1564,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     struct searchargs searchargs;
     unsigned long length;
     struct mailbox *mailbox = state->mailbox;
+    charset_t ascii = charset_lookupname("US-ASCII");
 
     if (!(contents && contents[0])) return(0);
 
@@ -1579,8 +1580,8 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     searchargs.root->attr = search_attr_find("text");
 
     /* Use US-ASCII to emulate fgrep */
-    searchargs.root->value.s = charset_convert(contents, charset_lookupname("US-ASCII"),
-                                charset_flags);
+
+    searchargs.root->value.s = charset_convert(contents, ascii, charset_flags);
 
     search_expr_internalise(state, searchargs.root);
 
@@ -1604,6 +1605,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
         buf_free(&buf);
     }
 
+    charset_free(&ascii);
     search_expr_free(searchargs.root);
     free(msgno_list);
 
@@ -4590,7 +4592,7 @@ static void extract_cb(const struct buf *text, void *rock)
     str->receiver->append_text(str->receiver, text);
 }
 
-static int getsearchtext_cb(int partno, int charset, int encoding,
+static int getsearchtext_cb(int partno, charset_t charset, int encoding,
                             const char *subtype, struct buf *data,
                             void *rock)
 {
@@ -6501,7 +6503,8 @@ EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
     sa = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
     sa->tag = tag;
     sa->state = state;
-    /* default charset is US-ASCII which is always 0 */
+    /* default charset is US-ASCII */
+    sa->charset = charset_lookupname("US-ASCII");
 
     sa->namespace = namespace;
     sa->userid = userid;
@@ -6518,6 +6521,7 @@ EXPORTED void freesearchargs(struct searchargs *s)
 {
     if (!s) return;
 
+    charset_free(&s->charset);
     search_expr_free(s->root);
     free(s);
 }

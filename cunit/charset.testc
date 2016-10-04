@@ -12,35 +12,41 @@ extern int charset_debug;
 
 static void test_lookupname(void)
 {
-    int cs, cs2;
+    charset_t cs, cs2;
 
     /* us-ascii must exist */
     cs = charset_lookupname("us-ascii");
-    CU_ASSERT(cs >= 0);
+    CU_ASSERT_PTR_NOT_NULL(cs);
 
     /* names are case-insensitive */
     cs2 = charset_lookupname("US-ASCII");
-    CU_ASSERT(cs2 >= 0);
-    CU_ASSERT_EQUAL(cs, cs2);
+    CU_ASSERT_PTR_NOT_NULL(cs2);
+    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
+    charset_free(&cs2);
 
     cs2 = charset_lookupname("Us-AsCiI");
-    CU_ASSERT(cs2 >= 0);
-    CU_ASSERT_EQUAL(cs, cs2);
+    CU_ASSERT_PTR_NOT_NULL(cs2);
+    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
+    charset_free(&cs2);
+    charset_free(&cs);
 
     /* some others must also exist */
     cs = charset_lookupname("utf-8");
-    CU_ASSERT(cs >= 0);
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    charset_free(&cs);
 
     cs = charset_lookupname("utf-7");
-    CU_ASSERT(cs >= 0);
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    charset_free(&cs);
 
     cs = charset_lookupname("iso-8859-1");
-    CU_ASSERT(cs >= 0);
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    charset_free(&cs);
 }
 
 static void test_to_utf8(void)
 {
-    int cs;
+    charset_t cs;
     char *s;
     static const char ASCII_1[] = "Hello World";
     static const char ASCII_2[] = "Hello W\370rld";
@@ -54,7 +60,7 @@ static void test_to_utf8(void)
 "mathematics is the most beautiful branch of philosophy.\r\n";
 
     cs = charset_lookupname("us-ascii");
-    CU_ASSERT(cs >= 0);
+    CU_ASSERT_PTR_NOT_NULL(cs);
 
     /* zero length input */
     s = charset_to_utf8("", 0, cs, ENCODING_NONE);
@@ -67,7 +73,7 @@ static void test_to_utf8(void)
     CU_ASSERT_PTR_NULL(s);
 
     /* invalid charset */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), 0xdeadbeef, ENCODING_NONE);
+    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
     CU_ASSERT_PTR_NULL(s);
 
     /* simple ASCII string */
@@ -93,14 +99,16 @@ static void test_to_utf8(void)
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_4);
     free(s);
+    
+    charset_free(&cs);
 }
 
 static void test_to_imaputf7(void)
 {
-    int csu8 = charset_lookupname("utf-8");
-    CU_ASSERT(csu8 >= 0);
-    int csu7 = charset_lookupname("imap-utf-7");
-    CU_ASSERT(csu7 >= 0);
+    charset_t csu8 = charset_lookupname("utf-8");
+    CU_ASSERT_PTR_NOT_NULL(csu8);
+    charset_t csu7 = charset_lookupname("imap-utf-7");
+    CU_ASSERT_PTR_NOT_NULL(csu7);
 
 #define TESTCASE(in, want) \
     { \
@@ -143,21 +151,25 @@ static void test_to_imaputf7(void)
     TESTCASE("\x0D\x0A", "&AA0ACg-");
 
 #undef TESTCASE
+
+    charset_free(&csu8);
+    charset_free(&csu7);
 }
 
-static void test_table(void)
+static void test_misc_charsets(void)
 {
 #define TESTCASE(alias, in, want) \
     { \
         char *s; \
         static const char _in[] = (in); \
         static const char _want[] = (want); \
-        int cs = charset_lookupname(alias); \
-        CU_ASSERT(cs >= 0); \
+        charset_t cs = charset_lookupname(alias); \
+        CU_ASSERT_PTR_NOT_NULL(cs); \
         s = charset_to_utf8(_in, strlen(_in), cs, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
         free(s); \
+        charset_free(&cs); \
     }
 
     /* MSDOS Latin1 aka CP-850 */
@@ -181,9 +193,9 @@ static void test_table(void)
 
     /* KOI8-U */
     TESTCASE("koi8-u", "Hello, World", "Hello, World");
-    TESTCASE("koi8-u", "\xa4\xa6\xa7\xad\xb4\xb6\xb7\xbd",
+    TESTCASE("koi8-u", "\xA4\xA6\xA7\xAD\xB4\xB6\xB7\xBD",
                        "\xD1\x94\xD1\x96\xD1\x97\xD2\x91"
-                       "\xD0\x83\xD0\x86\xD0\x87\xD2\x90");
+                       "\xD0\x84\xD0\x86\xD0\x87\xD2\x90");
 
 #undef TESTCASE
 }
@@ -195,36 +207,38 @@ static void test_qp(void)
     { \
         static const char _in[] = (in); \
         static const char _exp[] = (exp); \
-        int _cs = (cs); \
+        charset_t _cs = charset_lookupname(cs); \
+        CU_ASSERT_PTR_NOT_NULL(_cs); \
         int _enc = (enc); \
         char *s = charset_to_utf8(_in, sizeof(_in)-1, _cs, _enc); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
         free(s); \
+        charset_free(&_cs); \
     }
 
     /* encoding of SP */
-    TESTCASE("ab=20xy", 0, ENCODING_QP, "ab xy");
+    TESTCASE("ab=20xy", "us-ascii", ENCODING_QP, "ab xy");
 
     /* encoding of '=' */
-    TESTCASE("ab=3Dxy", 0, ENCODING_QP, "ab=xy");
+    TESTCASE("ab=3Dxy", "us-ascii", ENCODING_QP, "ab=xy");
 
     /* lowercase also */
-    TESTCASE("ab=3dxy", 0, ENCODING_QP, "ab=xy");
+    TESTCASE("ab=3dxy", "us-ascii", ENCODING_QP, "ab=xy");
 
     /* underscore is not special outside of headers */
-    TESTCASE("ab_xy", 0, ENCODING_QP, "ab_xy");
+    TESTCASE("ab_xy", "us-ascii", ENCODING_QP, "ab_xy");
 
     /* invalid characters after = are passed through
      * even if one of them is a valid hexchar */
-    TESTCASE("ab=ZZxy", 0, ENCODING_QP, "ab=ZZxy");
-    TESTCASE("ab=ZCxy", 0, ENCODING_QP, "ab=ZCxy");
-    TESTCASE("ab=CZxy", 0, ENCODING_QP, "ab=CZxy");
-    TESTCASE("ab=Zcxy", 0, ENCODING_QP, "ab=Zcxy");
-    TESTCASE("ab=cZxy", 0, ENCODING_QP, "ab=cZxy");
+    TESTCASE("ab=ZZxy", "us-ascii", ENCODING_QP, "ab=ZZxy");
+    TESTCASE("ab=ZCxy", "us-ascii", ENCODING_QP, "ab=ZCxy");
+    TESTCASE("ab=CZxy", "us-ascii", ENCODING_QP, "ab=CZxy");
+    TESTCASE("ab=Zcxy", "us-ascii", ENCODING_QP, "ab=Zcxy");
+    TESTCASE("ab=cZxy", "us-ascii", ENCODING_QP, "ab=cZxy");
 
     /* soft line break */
-    TESTCASE("ab=\r\nxy", 0, ENCODING_QP, "abxy");
+    TESTCASE("ab=\r\nxy", "us-ascii", ENCODING_QP, "abxy");
 
 #undef TESTCASE
 }
@@ -319,6 +333,14 @@ static void test_decode_mimeheader(void)
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_3e);
     free(s);
+
+    static const char ASCII_EUC_KR[] = "A =?EUC-KR?B?wMzIo8Dn?= B";
+    static const char SEARCH_EUC_KR[] = "A""\x20\xec\x9d\xb4\xed\x98\xb8\xec\x9e\xac""B";
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    s = charset_decode_mimeheader(ASCII_EUC_KR, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_EUC_KR);
+    free(s);
 }
 
 static void test_parse_mimeheader(void)
@@ -381,7 +403,7 @@ static void test_mimeheader_badcharset(void)
     /* when given an unknown charset, the entire word is
      * replaced with a single Unicode replacement char */
     char *s;
-    static const char ASCII_1[] = "A =?EUC-KR?B?wMzIo8Dn?= B";
+    static const char ASCII_1[] = "A =?foo?B?wMzIo8Dn?= B";
     static const char SEARCH_1[] = "A " UTF8_REPLACEMENT "B";
     int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
 
@@ -509,11 +531,13 @@ static void test_search_mimeheader(void)
                                          "=?Cp1252?Q?jektiv_EF-S_18-55_mm_1:3,5-5,6_geh=F6rt_Ihnen!?=";
     static const char SEARCH_CP1252[] = "Herzlichen";
     int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    charset_t cs = charset_lookupname("us-ascii");
 
-    s = charset_convert(SEARCH_CP1252, 0, flags);
+    s = charset_convert(SEARCH_CP1252, cs, flags);
     pat = charset_compilepat(s);
     CU_ASSERT(charset_search_mimeheader(s, pat, SUBJECT_CP1252, flags));
     charset_freepat(pat);
+    charset_free(&cs);
     free(s);
 }
 
@@ -530,10 +554,13 @@ static void test_rfc5051(void)
     static const char STR_RFC5051[] = {0xc7, 0x84, 0};
     static const char RES_RFC5051[] = {'D', 'z', 0xcc, 0x8c, 0};
     int flags = 0; /* super complient */
+    charset_t cs;
 
-    s = charset_convert(STR_RFC5051, charset_lookupname("utf-8"), flags);
+    cs = charset_lookupname("utf-8");
+    s = charset_convert(STR_RFC5051, cs, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, RES_RFC5051);
+    charset_free(&cs);
     free(s);
 }
 
@@ -553,7 +580,8 @@ static void append_text(const struct buf *text, void *rock)
 #define TESTCASE(in, cs, enc, st, exp) \
     { \
         static const char _in[] = (in); \
-        static int _cs = (cs); \
+        charset_t _cs = charset_lookupname(cs); \
+        CU_ASSERT_PTR_NOT_NULL(_cs); \
         int _enc = (enc); \
         static const char _st[] = (st); \
         static const char _exp[] = (exp); \
@@ -571,6 +599,7 @@ static void append_text(const struct buf *text, void *rock)
  \
         buf_free(&bin); \
         buf_free(&tr.out); \
+        charset_free(&_cs); \
     }
 
 static void test_extract(void)
@@ -579,181 +608,181 @@ static void test_extract(void)
     /* data thanks to hipsteripsum.me */
 
     /* simplest case - no space, plain text is capitalised */
-    TESTCASE("freegan", 0, ENCODING_NONE, "PLAIN", "FREEGAN");
+    TESTCASE("freegan", "us-ascii", ENCODING_NONE, "PLAIN", "FREEGAN");
 
     /* capitalised text is still capitalised */
-    TESTCASE("FANNY PACK", 0, ENCODING_NONE, "PLAIN", "FANNY PACK");
+    TESTCASE("FANNY PACK", "us-ascii", ENCODING_NONE, "PLAIN", "FANNY PACK");
 
     /* single spaces become single spaces */
     TESTCASE("before they sold out",
-             0, ENCODING_NONE, "PLAIN",
+             "us-ascii", ENCODING_NONE, "PLAIN",
              "BEFORE THEY SOLD OUT");
 
     /* multiple spaces are squashed to a single spaces */
     TESTCASE("you    probably \t haven't\r\nheard\t\r\tof them",
-             0, ENCODING_NONE, "PLAIN",
+             "us-ascii", ENCODING_NONE, "PLAIN",
              "YOU PROBABLY HAVEN'T HEARD OF THEM");
 
     /* invalid UTF-8 bytes become the Replacement character */
-    TESTCASE("a\300b", 0, ENCODING_NONE, "PLAIN", /* 0xC0 */
+    TESTCASE("a\300b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xC0 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\301b", 0, ENCODING_NONE, "PLAIN", /* 0xC1 */
+    TESTCASE("a\301b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xC1 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\365b", 0, ENCODING_NONE, "PLAIN", /* 0xF5 */
+    TESTCASE("a\365b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xF5 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\366b", 0, ENCODING_NONE, "PLAIN", /* 0xF6 */
+    TESTCASE("a\366b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xF6 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\367b", 0, ENCODING_NONE, "PLAIN", /* 0xF7 */
+    TESTCASE("a\367b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xF7 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\370b", 0, ENCODING_NONE, "PLAIN", /* 0xF8 */
+    TESTCASE("a\370b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xF8 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\371b", 0, ENCODING_NONE, "PLAIN", /* 0xF9 */
+    TESTCASE("a\371b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xF9 */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\372b", 0, ENCODING_NONE, "PLAIN", /* 0xFA */
+    TESTCASE("a\372b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFA */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\373b", 0, ENCODING_NONE, "PLAIN", /* 0xFB */
+    TESTCASE("a\373b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFB */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\374b", 0, ENCODING_NONE, "PLAIN", /* 0xFC */
+    TESTCASE("a\374b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFC */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\375b", 0, ENCODING_NONE, "PLAIN", /* 0xFD */
+    TESTCASE("a\375b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFD */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\376b", 0, ENCODING_NONE, "PLAIN", /* 0xFE */
+    TESTCASE("a\376b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFE */
              "A"UTF8_REPLACEMENT"B");
-    TESTCASE("a\377b", 0, ENCODING_NONE, "PLAIN", /* 0xFF */
+    TESTCASE("a\377b", "us-ascii", ENCODING_NONE, "PLAIN", /* 0xFF */
              "A"UTF8_REPLACEMENT"B");
 
     /* ill-formed UTF-8 sequences become the Replacement character */
 
     /* 2-byte sequence lead byte then a non-continuation byte */
-    TESTCASE("a\302bcd", 0, ENCODING_NONE, "PLAIN",
+    TESTCASE("a\302bcd", "us-ascii", ENCODING_NONE, "PLAIN",
              "A"UTF8_REPLACEMENT"BCD");
     /* 3-byte sequence lead byte then a non-continuation byte */
-    TESTCASE("a\340bcde", 0, ENCODING_NONE, "PLAIN",
+    TESTCASE("a\340bcde", "us-ascii", ENCODING_NONE, "PLAIN",
              "A"UTF8_REPLACEMENT"BCDE");
     /* 4-byte sequence lead byte then a non-continuation byte */
-    TESTCASE("a\360bcdef", 0, ENCODING_NONE, "PLAIN",
+    TESTCASE("a\360bcdef", "us-ascii", ENCODING_NONE, "PLAIN",
              "A"UTF8_REPLACEMENT"BCDEF");
     /* unexpected continuation byte */
-    TESTCASE("a\240bc", 0, ENCODING_NONE, "PLAIN",
+    TESTCASE("a\240bc", "us-ascii", ENCODING_NONE, "PLAIN",
              "A"UTF8_REPLACEMENT"BC");
 
     /* HTML: correctly formed balanced tag pairs */
     TESTCASE("<b>Photo</b> <em>booth</em>",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "PHOTO BOOTH");
 
     /* HTML: unbalanced tags */
     TESTCASE("<b>American<b> <b>Apparel</b>",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "AMERICAN APPAREL");
 
     /* HTML: OMITTAG tags with and without end tags */
     TESTCASE("<hr>Terry<hr> <hr>Richardson</hr>",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         " TERRY RICHARDSON ");
 
     /* HTML: non-phrasing tags are replaced with whitespace */
     TESTCASE("hella<br>mlkshk",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "HELLA MLKSHK");
     TESTCASE("godard<br/>synth",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "GODARD SYNTH");
     TESTCASE("<div>vinyl</div><div>narwhal</div>",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         " VINYL NARWHAL ");
 
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "LEGGINGS GASTROPUB");
 
     /* HTML: unquoted tag parameters */
     TESTCASE("<a href=foo.html>biodiesel</a> <img srcbeer.jpg>seitan",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "BIODIESEL SEITAN");
 
     /* HTML: contents of SCRIPT tag */
     TESTCASE("viral <script>bicycle rights</script>readymade",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "VIRAL READYMADE");
 
     /* HTML: HTML4 SCRIPT tag with no contents */
     TESTCASE("cardigan <script type=\"text/javascript\" "
              "src=\"truffaut.js\"></script>williamsburg",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "CARDIGAN WILLIAMSBURG");
 
     /* HTML: XHTML SCRIPT empty-element-tag aka self-closing tag */
     TESTCASE("brunch <script type=\"text/javascript\" "
              "src=\"cred.js\"/>shoreditch",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "BRUNCH SHOREDITCH");
 
     /* HTML: contents of STYLE tag */
     TESTCASE("pickled <style>whatever tumblr</style>stumptown",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "PICKLED STUMPTOWN");
 
     /* HTML: comments, correctly formed */
     TESTCASE("pinterest <!-- master cleanse -->forage",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "PINTEREST FORAGE");
 
     /* HTML: comments correctly formed with embedded -- */
     TESTCASE("polaroid <!-- food -- truck -->letterpress",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "POLAROID LETTERPRESS");
 
     /* HTML: comments correctly formed with embedded tags */
     TESTCASE("semiotics <!-- messenger <hr> bag -->scenester",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "SEMIOTICS SCENESTER");
 
     /* HTML: comments correctly formed with embedded -> */
     TESTCASE("butcher <!-- cosby -> sweater -->whatever",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "BUTCHER WHATEVER");
 
     /* HTML: comments correctly formed with ---> ending */
     TESTCASE("ennui <!-- art party --->keffiyeh",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "ENNUI KEFFIYEH");
 
     /* HTML: trivial comment */
     TESTCASE("street <!-->art",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "STREET ART");
 
     /* HTML: initial DOCTYPE is ignored */
     TESTCASE("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" "
              "\"http://www.w3.org/TR/html4/strict.dtd\">ethnic sustainable",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "ETHNIC SUSTAINABLE");
 
     /* HTML: simple character references */
     TESTCASE("&quot;Twee &amp; Keytar&quot; &lt;dreamcatcher@umami.org&gt;",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "\"TWEE & KEYTAR\" <DREAMCATCHER@UMAMI.ORG>");
 
     /* HTML: naked & is emitted */
     TESTCASE("gentrify&<b>sartorial</b>",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "GENTRIFY&SARTORIAL");
 
     /* HTML: non-zero length unterminated entities are emitted */
     TESTCASE("tattooed&amp locavore",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "TATTOOED& LOCAVORE");
 
     /* HTML: decimal Unicode entities: U+267B RECYCLE SYMBOL */
     TESTCASE("odd&#9851;future",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "ODD♻FUTURE");
 
     /* HTML: hexadecimal Unicode entities: U+2704 SCISSORS */
     TESTCASE("odd&#x2704;future",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "ODD✄FUTURE");
 
     /* HTML: compatibility numerical character references */
@@ -766,7 +795,7 @@ static void test_extract(void)
         "U&#148;V&#149;W&#150;X&#151;"
         "Y&#152;Z&#153;A&#154;B&#155;"
         "C&#156;D&#157;E&#158;F&#159;g",
-        0, ENCODING_NONE, "HTML",
+        "us-ascii", ENCODING_NONE, "HTML",
         "A€BC‚DƑ"  /* ƒ capitalised */
         "E„F...G†H‡"      /* … normalised to ... */
         "IˆJ‰KSL‹" /* Š normalised to S */
@@ -782,76 +811,76 @@ static void test_extract(void)
     /* HTML: numerical character references to invalid Unicode
      * codepoints and valid codepoints just adjacent to invalid
      * ranges.  HTML5 requires us to emit a Replacement char. */
-    TESTCASE("A&#xd7ff;B", 0, ENCODING_NONE, "HTML", "A\355\237\277B");
-    TESTCASE("A&#xd800;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#xd801;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#xdffe;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#xdfff;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#xc000;B", 0, ENCODING_NONE, "HTML", "A\354\200\200B");
-    TESTCASE("A&#x10fffd;B", 0, ENCODING_NONE, "HTML", "A\364\217\277\275B");
-    TESTCASE("A&#x110000;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#x7fffffff;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&#xffffffff;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xd7ff;B", "us-ascii", ENCODING_NONE, "HTML", "A\355\237\277B");
+    TESTCASE("A&#xd800;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xd801;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xdffe;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xdfff;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xc000;B", "us-ascii", ENCODING_NONE, "HTML", "A\354\200\200B");
+    TESTCASE("A&#x10fffd;B", "us-ascii", ENCODING_NONE, "HTML", "A\364\217\277\275B");
+    TESTCASE("A&#x110000;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#x7fffffff;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#xffffffff;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
     /* HTML: zero numerical character reference.  The HTML5 spec says
      * to return a Replacement char. */
-    TESTCASE("A&#0;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&#0;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
     /* HTML: numerical character references whose codepoints the HTML5
      * spec says are a parse error.  We just silently swallow these. */
     /* U+0001..U+0008 */
-    TESTCASE("A&#1;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#8;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#1;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#8;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
     /* U+000B */
-    TESTCASE("A&#xb;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xb;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
     /* U+000E..U+001F */
-    TESTCASE("A&#xe;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x1f;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xe;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x1f;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
     /* U+007F..U+009f, when not a compatibility codepoint */
-    TESTCASE("A&#x7f;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x81;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x8D;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x8F;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x90;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x9D;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x7f;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x81;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x8D;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x8F;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x90;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x9D;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
     /* U+FDD0..U+FDEF */
-    TESTCASE("A&#xFDD0;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xFDEF;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFDD0;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFDEF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
     /* the last two codepoints in each plane */
-    TESTCASE("A&#xFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x1FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x1FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x2FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x2FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x3FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x3FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x4FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x4FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x5FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x5FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x6FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x6FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x7FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x7FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x8FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x8FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x9FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x9FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xAFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xAFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xBFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xBFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xCFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xCFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xDFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xDFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xEFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xEFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xFFFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#xFFFFF;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x10FFFE;B", 0, ENCODING_NONE, "HTML", "AB");
-    TESTCASE("A&#x10FFFF;B", 0, ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x1FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x1FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x2FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x2FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x3FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x3FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x4FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x4FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x5FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x5FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x6FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x6FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x7FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x7FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x8FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x8FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x9FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x9FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xAFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xAFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xBFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xBFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xCFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xCFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xDFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xDFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xEFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xEFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFFFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#xFFFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x10FFFE;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
+    TESTCASE("A&#x10FFFF;B", "us-ascii", ENCODING_NONE, "HTML", "AB");
 
     /* HTML: some of the more obscure named character references.  The
      * tricky part is testing the case sensitivity and unusual character
@@ -860,27 +889,27 @@ static void test_extract(void)
 
     /* &alpha; and &Alpha; are both defined but both get normalised
      * to GREEK CAPITAL LETTER ALPHA */
-    TESTCASE("A&alpha;B", 0, ENCODING_NONE, "HTML", "AΑB");
-    TESTCASE("A&Alpha;B", 0, ENCODING_NONE, "HTML", "AΑB");
+    TESTCASE("A&alpha;B", "us-ascii", ENCODING_NONE, "HTML", "AΑB");
+    TESTCASE("A&Alpha;B", "us-ascii", ENCODING_NONE, "HTML", "AΑB");
     /* &clubs; is defined, &Clubs is not */
-    TESTCASE("A&clubs;B", 0, ENCODING_NONE, "HTML", "A♣B");
-    TESTCASE("A&Clubs;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&clubs;B", "us-ascii", ENCODING_NONE, "HTML", "A♣B");
+    TESTCASE("A&Clubs;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
     /* &fjlig; is defined to emit a 2-codepoint sequence */
-    TESTCASE("A&fjlig;B", 0, ENCODING_NONE, "HTML", "AFJB");
+    TESTCASE("A&fjlig;B", "us-ascii", ENCODING_NONE, "HTML", "AFJB");
     /* &ycirc; emits a codepoint which is then normalised and capitalised */
-    TESTCASE("A&ycirc;B", 0, ENCODING_NONE, "HTML", "AYB");
+    TESTCASE("A&ycirc;B", "us-ascii", ENCODING_NONE, "HTML", "AYB");
     /* &uparrow; and &UpArrow; are both defined to the same codepoint,
      * which survives normalisation intact, but neither &UParrow; nor
      * &upARROW; are defined.  &Uparrow is defined to a *different*
      * codepoint which also survives normalisation. */
-    TESTCASE("A&uparrow;B", 0, ENCODING_NONE, "HTML", "A↑B");
-    TESTCASE("A&Uparrow;B", 0, ENCODING_NONE, "HTML", "A⇑B");
-    TESTCASE("A&UpArrow;B", 0, ENCODING_NONE, "HTML", "A↑B");
-    TESTCASE("A&UParrow;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
-    TESTCASE("A&upARROW;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&uparrow;B", "us-ascii", ENCODING_NONE, "HTML", "A↑B");
+    TESTCASE("A&Uparrow;B", "us-ascii", ENCODING_NONE, "HTML", "A⇑B");
+    TESTCASE("A&UpArrow;B", "us-ascii", ENCODING_NONE, "HTML", "A↑B");
+    TESTCASE("A&UParrow;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&upARROW;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
     /* &nonesuch; is most definitely not defined */
-    TESTCASE("A&nonesuch;B", 0, ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+    TESTCASE("A&nonesuch;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 }
 #undef TESTCASE
 
