@@ -2336,9 +2336,9 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     if (charset != CHARSET_UNKNOWN_CHARSET) {
         name = charset_name(charset);
         len = strlen(name);
-        if (len > 0xffffff) len = 0;
+        if (len > 0xffff) len = 0;
     }
-    buf_appendbit32(buf, ((encoding & 0xff) << 24)|(len & 0xffffff));
+    buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff));
 
     /* write charset identifier */
     if (len && name) buf_appendcstr(buf, name);
@@ -2960,33 +2960,23 @@ static void message_read_binarybody(struct body *body, const char **sect,
         p += CACHE_ITEM_SIZE_SKIP;
 
         /* read encoding and charset identifier */
+        /* Cache versions <= 3 store charset and encoding in 4 bytes,
+         * but the code was broken. Just presume the charset unknown. */
         body->charset_enc = CACHE_ITEM_BIT32(p);
+        body->charset_id = NULL;
         p += CACHE_ITEM_SIZE_SKIP;
-        /* XXX
-         * CACHE_MINOR_VERSION 4 replaces numeric charset ids with
-         * variable-length strings. Remove this conditional (and its
-         * else branch) once cache versions <= 3 are deprecated
-         */
         if (cache_version >= 4) {
             /* determine the length of the charset identifer */
-            len = (body->charset_enc & 0xffffff);
+            len = (body->charset_enc >> 16) & 0xffff;
             if (len) {
                 /* read len bytes as charset id */
                 buf_appendmap(&buf, p, len);
                 body->charset_id = buf_newcstring(&buf);
                 buf_reset(&buf);
                 p += len;
-            } else {
-                /* the charset is unknown */
-                body->charset_id = NULL;
             }
-            body->charset_enc = ((body->charset_enc >> 24) & 0xff);
-        } else {
-            /* Cache versions <= 3 store charset and encoding in 4 bytes,
-             * but the code was broken. Just presume it's unknown. */
-            body->charset_enc &= 0xff;
-            body->charset_id = NULL;
         }
+        body->charset_enc &= 0xff;
     }
 
     /* read body parts */
@@ -3001,33 +2991,23 @@ static void message_read_binarybody(struct body *body, const char **sect,
         p += CACHE_ITEM_SIZE_SKIP;
 
         /* read encoding and charset identifier */
+        /* Cache versions <= 3 store charset and encoding in 4 bytes,
+         * but the code was broken. Just presume the charset unknown. */
         subpart[i].charset_enc = CACHE_ITEM_BIT32(p);
+        subpart[i].charset_id = NULL;
         p += CACHE_ITEM_SIZE_SKIP;
-        /* XXX
-         * CACHE_MINOR_VERSION 4 replaces numeric charset ids with
-         * variable-length strings. Remove this conditional (and its
-         * else branch) once cache versions <= 3 are deprecated
-         */
         if (cache_version >= 4) {
             /* determine the length of the charset identifer */
-            len = (subpart[i].charset_enc & 0xffffff);
+            len = (subpart[i].charset_enc >> 16) & 0xffff;
             if (len) {
                 /* read len bytes as charset id */
                 buf_appendmap(&buf, p, len);
                 subpart[i].charset_id = buf_newcstring(&buf);
                 buf_reset(&buf);
                 p += len;
-            } else {
-                /* the charset is unknown */
-                subpart[i].charset_id = NULL;
             }
-            subpart[i].charset_enc = ((subpart[i].charset_enc >> 24) & 0xff);
-        } else {
-            /* Cache versions <= 3 store charset and encoding in 4 bytes,
-             * but the code was broken. Just presume it's unknown. */
-            subpart[i].charset_enc &= 0xff;
-            subpart[i].charset_id = NULL;
         }
+        subpart[i].charset_enc &= 0xff;
     }
 
     /* read sub-parts */
