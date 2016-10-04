@@ -1159,11 +1159,20 @@ sub test_virtdomains_return_subscribed_altns
 
     $admintalk->create("user/bar\@example.com");
     $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
-
     $admintalk->setacl("user/bar/shared-folder\@example.com",
 		       'foo@example.com' => 'lrswipkxtecd');
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
     $footalk->subscribe("Other Users/bar/shared-folder");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    $admintalk->create("another-namespace\@example.com");
+    $admintalk->create("another-namespace/folder\@example.com");
+    $admintalk->setacl("another-namespace/folder\@example.com",
+		       'foo@example.com' => 'lrswipkxtecd');
+
+    $footalk->subscribe("Shared Folders/another-namespace/folder");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
 
     my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
@@ -1173,7 +1182,12 @@ sub test_virtdomains_return_subscribed_altns
 	'Drafts'	=> [qw( \\HasNoChildren \\Subscribed )],
 	'Sent'		=> [qw( \\HasNoChildren \\Subscribed )],
 	'Trash'		=> [qw( \\HasNoChildren \\Subscribed )],
-	'Other Users/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
+	'Other Users/bar/shared-folder'
+			=> [qw( \\HasNoChildren \\Subscribed )],
+	'Shared Folders/another-namespace'
+			=> [qw( \\HasChildren )],
+	'Shared Folders/another-namespace/folder'
+			=> [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
@@ -1215,11 +1229,21 @@ sub test_virtdomains_return_subscribed_noaltns
 
     $admintalk->create("user/bar\@example.com");
     $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
-
     $admintalk->setacl("user/bar/shared-folder\@example.com",
 		       'foo@example.com' => 'lrswipkxtecd');
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
     $footalk->subscribe("user/bar/shared-folder");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
+    $admintalk->create("another-namespace\@example.com");
+    $admintalk->create("another-namespace/folder\@example.com");
+    $admintalk->setacl("another-namespace/folder\@example.com",
+		       'foo@example.com' => 'lrswipkxtecd');
+    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+
+    $footalk->subscribe("another-namespace/folder");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
 
     my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
@@ -1230,6 +1254,8 @@ sub test_virtdomains_return_subscribed_noaltns
 	'INBOX/Sent'	=> [qw( \\HasNoChildren \\Subscribed )],
 	'INBOX/Trash'	=> [qw( \\HasNoChildren \\Subscribed )],
 	'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
+	'another-namespace' => [qw( \\HasChildren ) ],
+	'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
