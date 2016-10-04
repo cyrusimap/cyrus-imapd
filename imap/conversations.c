@@ -202,7 +202,7 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
 
     open = xzmalloc(sizeof(struct conversations_open));
 
-    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &open->s.db);
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_CONVERT, &open->s.db);
     if (r || open->s.db == NULL) {
         free(open);
         return IMAP_IOERROR;
