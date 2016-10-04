@@ -531,14 +531,14 @@ err:
 EXPORTED const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
-    char buf[16];
+    char buf[32];
     int n;
 
     f = fopen(fname, "r");
     if (!f) return NULL;
 
     /* empty file? */
-    n = fread(buf, 16, 1, f);
+    n = fread(buf, 32, 1, f);
     fclose(f);
 
     if (n != 1) return NULL;
@@ -549,6 +549,9 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 
     if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
         return "twoskip";
+
+    if (!strncmp(buf+16, "\xde\xc0\xef\xbe", 4))
+        return "lmdb";
 
     /* unable to detect SQLite databases or flat files explicitly here */
     return NULL;
