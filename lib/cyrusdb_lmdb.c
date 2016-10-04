@@ -775,6 +775,9 @@ static int archive(const strarray_t *fnames, const char *dirname)
     size_t length, rest, n;
     int i, r, init = 1;
 
+    if (!strarray_size(fnames))
+        return 0;
+
     construct_hash_table(&want, strarray_size(fnames), 0);
     for (i = 0; i < fnames->count; i++) {
         hash_insert(strarray_nth(fnames, i), (void*) 1, &want);
