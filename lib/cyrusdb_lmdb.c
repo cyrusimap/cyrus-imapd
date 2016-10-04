@@ -841,6 +841,15 @@ fail:
     return r;
 }
 
+static int myunlink(const char *fname, int flags __attribute__((unused)))
+{
+    /* XXX: smart lock checks? */
+    char *lockname = strconcat(fname, "-lock", (char *)NULL);
+    unlink(fname);
+    unlink(lockname);
+    free(lockname);
+    return 0;
+}
 
 EXPORTED struct cyrusdb_backend cyrusdb_lmdb =
 {
@@ -850,7 +859,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_lmdb =
     &done,
     &mysync,
     &archive,
-    &cyrusdb_generic_unlink,
+    &myunlink,
 
     &myopen,
     &myclose,
