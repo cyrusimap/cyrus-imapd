@@ -731,8 +731,7 @@ out:
         conversations_abort(&state_real);
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);
-    if (filename_temp)
-        unlink(filename_temp);
+    cyrusdb_unlink(config_conversations_db, filename_temp, 0);
     free(filename_temp);
     free(filename_real);
     return r;
