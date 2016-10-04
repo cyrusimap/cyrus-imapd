@@ -900,6 +900,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     &done,
     &cyrusdb_generic_sync,
     &cyrusdb_generic_noarchive,
+    NULL,
 
     &myopen,
     &myclose,

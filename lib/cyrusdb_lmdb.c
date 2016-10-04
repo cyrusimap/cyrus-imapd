@@ -850,6 +850,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_lmdb =
     &done,
     &mysync,
     &archive,
+    &cyrusdb_generic_unlink,
 
     &myopen,
     &myclose,

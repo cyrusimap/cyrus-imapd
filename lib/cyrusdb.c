@@ -563,10 +563,11 @@ EXPORTED int cyrusdb_sync(const char *backend)
     return db->sync();
 }
 
-EXPORTED int cyrusdb_unlink(const char *backend __attribute__((unused)),
-                            const char *fname, int flags)
+EXPORTED int cyrusdb_unlink(const char *backend, const char *fname, int flags)
 {
-    return cyrusdb_generic_unlink(fname, flags);
+    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
+    if (!db->unlink) return 0;
+    return db->unlink(fname, flags);
 }
 
 EXPORTED cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)

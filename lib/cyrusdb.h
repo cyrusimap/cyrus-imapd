@@ -110,6 +110,9 @@ struct cyrusdb_backend {
      * into the specified directory */
     int (*archive)(const strarray_t *fnames, const char *dirname);
 
+    /* unlinks this specific database, including cleaning up any environment */
+    int (*unlink)(const char *fname, int flags);
+
     /* open the specified database in the global environment */
     int (*open)(const char *fname, int flags, struct dbengine **ret, struct txn **tid);
 

@@ -2391,6 +2391,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
     &cyrusdb_generic_done,
     &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
+    &cyrusdb_generic_unlink,
 
     &myopen,
     &myclose,
