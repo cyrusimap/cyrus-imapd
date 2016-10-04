@@ -58,6 +58,22 @@ extern "C" {
 #define JMAPICAL_ERROR_PROPS    4
 #define JMAPICAL_ERROR_UID      5
 
+/* Custom iCalendar properties */
+#define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
+/* FIXME libical doesn't parse USEDEFAULTALERTS, must use X-prefix */
+#define JMAPICAL_XPROP_USEDEFALERTS  "X-JMAP-USEDEFAULTALERTS"
+
+/* Custom iCalendar parameters */
+#define JMAPICAL_XPARAM_ID            "X-JMAP-ID"
+#define JMAPICAL_XPARAM_LOCALIZATION  "X-JMAP-LOCALIZATION"
+#define JMAPICAL_XPARAM_LOCATIONID    "X-JMAP-LOCATIONID"
+#define JMAPICAL_XPARAM_NAME          "X-JMAP-NAME"
+#define JMAPICAL_XPARAM_PROPERTIES    "X-JMAP-PROPERTIES"
+#define JMAPICAL_XPARAM_REL           "X-JMAP-REL"
+
+#define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
+
+
 const char* jmapical_strerror(int err);
 
 typedef struct {

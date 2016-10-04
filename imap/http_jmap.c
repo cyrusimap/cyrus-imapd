@@ -8660,14 +8660,24 @@ typedef struct calevent_filter {
     const char *summary;
     const char *description;
     const char *location;
-    const char *organizer;
+    const char *owner;
     const char *attendee;
 } calevent_filter;
 
-/* Match text with icalproperty kind in VEVENT comp and its recurrences. */
-static int calevent_filter_match_textprop(icalcomponent *comp,
-                                          const char *text,
-                                          icalproperty_kind kind) {
+static int calevent_filter_match_textprop_value(icalproperty *prop,
+                                                const char *text)
+{
+    const char *val = icalproperty_get_value_as_string(prop);
+    if (val && jmap_match_text(val, text)) {
+        return 1;
+    }
+    return 0;
+}
+
+static int calevent_filter_match_textprop_x(icalcomponent *comp,
+                                           const char *text,
+                                           const char *name)
+{
     icalproperty *prop;
     icalcomponent *ical;
 
@@ -8675,14 +8685,42 @@ static int calevent_filter_match_textprop(icalcomponent *comp,
         return 0;
     }
 
-    /* Look for text in comp. */
-    for (prop = icalcomponent_get_first_property(comp, kind);
-         prop;
-         prop = icalcomponent_get_next_property(comp, kind)) {
-        const char *val = icalproperty_get_value_as_string(prop);
-        if (val && jmap_match_text(val, text)) {
-            return 1;
+    ical = icalcomponent_get_parent(comp);
+    if (!ical || icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT) {
+        return 0;
+    }
+
+    /* Look for text in any VEVENT of comp. */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+
+            if (strcmp(icalproperty_get_x_name(prop), name)) {
+                continue;
+            }
+            if (calevent_filter_match_textprop_value(prop, text)) {
+                return 1;
+            }
         }
+    }
+
+    return 0;
+}
+
+/* Match text with icalproperty kind in VEVENT comp and its recurrences. */
+static int calevent_filter_match_textprop(icalcomponent *comp,
+                                          const char *text,
+                                          icalproperty_kind kind)
+{
+    icalproperty *prop;
+    icalcomponent *ical;
+
+    if (icalcomponent_isa(comp) != ICAL_VEVENT_COMPONENT) {
+        return 0;
     }
 
     ical = icalcomponent_get_parent(comp);
@@ -8690,18 +8728,16 @@ static int calevent_filter_match_textprop(icalcomponent *comp,
         return 0;
     }
 
-    /* Look for text in any recurrence of comp. */
+    /* Look for text in any VEVENT of comp. */
     for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-            continue;
-        }
+
         for (prop = icalcomponent_get_first_property(comp, kind);
-                prop;
-                prop = icalcomponent_get_next_property(comp, kind)) {
-            const char *val = icalproperty_get_value_as_string(prop);
-            if (val && jmap_match_text(val, text)) {
+             prop;
+             prop = icalcomponent_get_next_property(comp, kind)) {
+
+            if (calevent_filter_match_textprop_value(prop, text)) {
                 return 1;
             }
         }
@@ -8758,10 +8794,14 @@ static int calevent_filter_match(void *vf, void *rock)
     /* text */
     if (f->text) {
         int m = calevent_filter_match_textprop(comp, f->text, ICAL_SUMMARY_PROPERTY);
-        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_DESCRIPTION_PROPERTY);
-        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_LOCATION_PROPERTY);
-        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_ORGANIZER_PROPERTY);
-        if (!m) calevent_filter_match_textprop(comp, f->text, ICAL_ATTENDEE_PROPERTY);
+        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_DESCRIPTION_PROPERTY);
+        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_LOCATION_PROPERTY);
+        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_ORGANIZER_PROPERTY);
+        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_ATTENDEE_PROPERTY);
+
+        if (!m) m = calevent_filter_match_textprop_x(comp, f->text, JMAPICAL_XPROP_LOCATION);
+        if (!m) m = calevent_filter_match_textprop_x(comp, f->text, "X-APPLE-STRUCTURED-LOCATION");
+
         if (!m) {
             return 0;
         }
@@ -8769,8 +8809,9 @@ static int calevent_filter_match(void *vf, void *rock)
     if ((f->summary && !calevent_filter_match_textprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) ||
         (f->description && !calevent_filter_match_textprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) ||
         (f->location && !calevent_filter_match_textprop(comp, f->location, ICAL_LOCATION_PROPERTY)) ||
-        (f->organizer && !calevent_filter_match_textprop(comp, f->organizer, ICAL_ORGANIZER_PROPERTY)) ||
-        (f->attendee && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY))) {
+        (f->owner && !calevent_filter_match_textprop(comp, f->owner, ICAL_ORGANIZER_PROPERTY)) ||
+        (f->attendee && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY)
+                     && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ORGANIZER_PROPERTY))) {
         return 0;
     }
 
@@ -8826,7 +8867,7 @@ static void *calevent_filter_parse(json_t *arg,
 
     /* after */
     if (JNOTNULL(json_object_get(arg, "after"))) {
-        pe = readprop_full(arg, prefix, "after", 0 /*mandatory*/, invalid, "s", &val);
+        pe = readprop_full(arg, prefix, "after", 0, invalid, "s", &val);
         if (pe > 0) {
             if (jmap_date_to_icaltime(val, &f->after, 0 /*isAllDay*/)) {
                 buf_printf(&buf, "%s.%s", prefix, "after");
@@ -8838,7 +8879,7 @@ static void *calevent_filter_parse(json_t *arg,
 
     /* before */
     if (JNOTNULL(json_object_get(arg, "before"))) {
-        pe = readprop_full(arg, prefix, "before", 0 /*mandatory*/, invalid, "s", &val);
+        pe = readprop_full(arg, prefix, "before", 0, invalid, "s", &val);
         if (pe > 0) {
             if (jmap_date_to_icaltime(val, &f->before, 0 /*isAllDay*/)) {
                 buf_printf(&buf, "%s.%s", prefix, "before");
@@ -8850,32 +8891,32 @@ static void *calevent_filter_parse(json_t *arg,
 
     /* text */
     if (JNOTNULL(json_object_get(arg, "text"))) {
-        pe = readprop_full(arg, prefix, "text", 0 /*mandatory */, invalid, "s", &f->text);
+        pe = readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
     }
 
     /* summary */
     if (JNOTNULL(json_object_get(arg, "summary"))) {
-        pe = readprop_full(arg, prefix, "summary", 0 /*mandatory */, invalid, "s", &f->summary);
+        pe = readprop_full(arg, prefix, "summary", 0, invalid, "s", &f->summary);
     }
 
     /* description */
     if (JNOTNULL(json_object_get(arg, "description"))) {
-        pe = readprop_full(arg, prefix, "description", 0 /*mandatory */, invalid, "s", &f->description);
+        pe = readprop_full(arg, prefix, "description", 0, invalid, "s", &f->description);
     }
 
     /* location */
     if (JNOTNULL(json_object_get(arg, "location"))) {
-        pe = readprop_full(arg, prefix, "location", 0 /*mandatory */, invalid, "s", &f->location);
+        pe = readprop_full(arg, prefix, "location", 0, invalid, "s", &f->location);
     }
 
-    /* organizer */
-    if (JNOTNULL(json_object_get(arg, "organizer"))) {
-        pe = readprop_full(arg, prefix, "organizer", 0 /*mandatory */, invalid, "s", &f->organizer);
+    /* owner */
+    if (JNOTNULL(json_object_get(arg, "owner"))) {
+        pe = readprop_full(arg, prefix, "owner", 0, invalid, "s", &f->owner);
     }
 
     /* attendee */
     if (JNOTNULL(json_object_get(arg, "attendee"))) {
-        pe = readprop_full(arg, prefix, "attendee", 0 /*mandatory */, invalid, "s", &f->attendee);
+        pe = readprop_full(arg, prefix, "attendee", 0, invalid, "s", &f->attendee);
     }
 
     buf_free(&buf);
