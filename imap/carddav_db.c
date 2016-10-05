@@ -931,7 +931,7 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 
         /* Report mailbox event. */
-        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE|EVENT_CALENDAR);
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         mboxevent_extract_record(mboxevent, mailbox, &oldrecord);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_numunseen(mboxevent, mailbox, -1);
