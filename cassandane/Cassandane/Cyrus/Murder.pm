@@ -40,11 +40,14 @@
 package Cassandane::Cyrus::Murder;
 use strict;
 use warnings;
+use Data::Dumper;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
+
+$Data::Dumper::Sortkeys = 1;
 
 sub new
 {
@@ -97,6 +100,46 @@ sub test_frontend_commands
     $self->assert_not_null($result);
 
     # XXX test other commands
+}
+
+sub test_list_specialuse
+{
+    my ($self) = @_;
+
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{backend_store}->get_client();
+
+    # create some special-use folders
+    foreach my $specialuse (qw( Drafts Junk Sent Trash )) {
+	$frontend->create("INBOX.$specialuse");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+	$frontend->subscribe("INBOX.$specialuse");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+	$frontend->setmetadata("INBOX.$specialuse",
+			       '/private/specialuse', "\\$specialuse");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # ask the frontend about them
+    my $fresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
+	'RETURN', [qw(SUBSCRIBED)]);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    xlog Dumper $fresult;
+
+    # expect there to be four
+    # XXX check this more strictly for actual expected results
+    $self->assert_equals(4, scalar @{$fresult});
+
+    # ask the backend about them
+    my $bresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
+	'RETURN', [qw(SUBSCRIBED)]);
+    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+    xlog Dumper $bresult;
+
+    # expect the same results as on frontend
+    $self->assert_deep_equals($fresult, $bresult);
 }
 
 1;
