@@ -52,6 +52,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "libconfig.h"
+#include "mboxevent.h"
 #include "times.h"
 #include "util.h"
 #include "xstrlcat.h"
@@ -916,7 +917,7 @@ done:
 }
 
 EXPORTED int carddav_remove(struct mailbox *mailbox,
-                          uint32_t olduid, int isreplace)
+                            uint32_t olduid, int isreplace, const char *userid)
 {
 
     int userflag;
@@ -926,7 +927,17 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
     if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
         if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
         oldrecord.system_flags |= FLAG_EXPUNGED;
+
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+
+        /* Report mailbox event. */
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE|EVENT_CALENDAR);
+        mboxevent_extract_record(mboxevent, mailbox, &oldrecord);
+        mboxevent_extract_mailbox(mboxevent, mailbox);
+        mboxevent_set_numunseen(mboxevent, mailbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
+        mboxevent_notify(mboxevent);
+        mboxevent_free(&mboxevent);
     }
     if (r) {
         syslog(LOG_ERR, "expunging record (%s) failed: %s",

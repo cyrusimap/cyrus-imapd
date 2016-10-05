@@ -157,7 +157,8 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
-                   uint32_t olduid, int isreplace);
+                   uint32_t olduid, int isreplace,
+                   const char *userid);
 
 /* calculate a mailbox name */
 char *carddav_mboxname(const char *userid, const char *name);
