@@ -2492,6 +2492,10 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     r = _commit_changes(mailbox);
     if (r) return r;
 
+    /* always update xconvmodseq, it might have been done by annotations */
+    r = mailbox_update_xconvmodseq(mailbox, mailbox->i.highestmodseq, /*force*/0);
+    if (r) return r;
+
     mailbox_index_header_to_buf(&mailbox->i, buf);
 
     lseek(mailbox->index_fd, 0, SEEK_SET);
