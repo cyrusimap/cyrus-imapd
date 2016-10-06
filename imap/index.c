@@ -113,13 +113,13 @@ static void index_fetchmsg(struct index_state *state,
                     unsigned start_octet, unsigned octet_count);
 static int index_fetchsection(struct index_state *state, const char *resp,
                               const struct buf *msg,
-                              char *section,
-                              const char *cachestr, unsigned size,
+                              char *section, struct body *body, unsigned size,
                               unsigned start_octet, unsigned octet_count);
+
 static void index_fetchfsection(struct index_state *state,
                                 const char *msg_base, unsigned long msg_size,
                                 struct fieldlist *fsection,
-                                const char *cachestr,
+                                struct body *body,
                                 unsigned start_octet, unsigned octet_count);
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
                               unsigned offset, unsigned size);
@@ -3146,12 +3146,19 @@ void index_fetchmsg(struct index_state *state, const struct buf *msg,
     if (domain != DOMAIN_7BIT) prot_data_boundary(state->out);
 }
 
+static int body_is_rfc822(struct body *body)
+{
+    return body &&
+        !strcasecmpsafe(body->type, "MESSAGE") &&
+        !strcasecmpsafe(body->subtype, "RFC822");
+}
+
 /*
  * Helper function to fetch a body section
  */
 static int index_fetchsection(struct index_state *state, const char *resp,
                               const struct buf *inmsg,
-                              char *section, const char *cachestr, unsigned size,
+                              char *section, struct body *body, unsigned size,
                               unsigned start_octet, unsigned octet_count)
 {
     const char *p;
@@ -3178,7 +3185,6 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     }
 
     while (*p != ']' && *p != 'M') {
-        int num_parts = CACHE_ITEM_BIT32(cachestr);
         int r;
 
         /* Generate the actual part number */
@@ -3205,42 +3211,39 @@ static int index_fetchsection(struct index_state *state, const char *resp,
             }
         }
 
+        /* Embedded RFC822 messages contain one extra tree level */
+        if ((r || skip) && body_is_rfc822(body)) {
+            body = body->subpart;
+        }
+
         /* section number too large */
-        if (skip >= num_parts) goto badpart;
+        if (skip >= body->numparts + 1) goto badpart;
 
         if (*p != ']' && *p != 'M') {
             /* We are NOT at the end of a part specification, so there's
              * a subpart being requested.  Find the subpart in the tree. */
 
-            /* Skip the headers for this part, along with the number of
-             * sub parts */
-            cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
-
-            /* Skip to the correct part */
-            while (--skip) {
-                if (CACHE_ITEM_BIT32(cachestr) > 0) {
-                    /* Skip each part at this level */
-                    skip += CACHE_ITEM_BIT32(cachestr)-1;
-                    cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
-                }
-                cachestr += CACHE_ITEM_SIZE_SKIP;
+            if (skip) {
+                body = body->subpart + skip - 1;
+                skip = 0;
             }
         }
     }
 
     if (*p == 'M') fetchmime++;
 
-    cachestr += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP + (fetchmime ? 0 : 2 * 4);
+    if (skip) {
+        if (body->numparts + 1 <= skip)
+            goto badpart;
+        body = body->subpart + skip - 1;
+    }
 
-    if (CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
-        goto badpart;
-
-    offset = CACHE_ITEM_BIT32(cachestr);
-    size = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
+    offset = body->content_offset;
+    size = body->content_size;
 
     if (msg.s && (p = strstr(resp, "BINARY"))) {
         /* BINARY or BINARY.SIZE */
-        int encoding = CACHE_ITEM_BIT32(cachestr + 2 * 4) & 0xff;
+        int encoding = body->charset_enc & 0xff;
         size_t newsize;
 
         /* check that the offset isn't corrupt */
@@ -3294,7 +3297,7 @@ static void index_fetchfsection(struct index_state *state,
                                 const char *msg_base,
                                 unsigned long msg_size,
                                 struct fieldlist *fsection,
-                                const char *cachestr,
+                                struct body *body,
                                 unsigned start_octet, unsigned octet_count)
 {
     const char *p;
@@ -3316,37 +3319,36 @@ static void index_fetchfsection(struct index_state *state,
     p = fsection->section;
 
     while (*p != 'H') {
-        int num_parts = CACHE_ITEM_BIT32(cachestr);
-
         r = parseint32(p, &p, &skip);
         if (*p == '.') p++;
 
         /* section number too large */
-        if (r || skip == 0 || skip >= num_parts) goto badpart;
+        if (r || skip == 0 || skip >= body->numparts + 1) goto badpart;
 
-        cachestr += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
-        while (--skip) {
-            if (CACHE_ITEM_BIT32(cachestr) > 0) {
-                skip += CACHE_ITEM_BIT32(cachestr)-1;
-                cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
-            }
-            cachestr += CACHE_ITEM_SIZE_SKIP;
+        /* Embedded RFC822 messages contain one extra tree level */
+        if ((r || skip) && body_is_rfc822(body)) {
+            body = body->subpart;
+        }
+
+        if (skip) {
+            body = body->subpart + skip - 1;
+            skip = 0;
         }
     }
 
     /* leaf object */
-    if (0 == CACHE_ITEM_BIT32(cachestr)) goto badpart;
+    if (!body->numparts) goto badpart;
 
-    cachestr += 4;
+    if (body_is_rfc822(body))
+        body = body->subpart;
 
-    if (CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
-        goto badpart;
+    if (!body->header_size) goto badpart;
 
     if (p[13]) fields_not++;    /* Check for "." after "HEADER.FIELDS" */
 
     buf = index_readheader(msg_base, msg_size,
-                           CACHE_ITEM_BIT32(cachestr),
-                           CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP));
+                           body->header_offset,
+                           body->header_size);
 
     if (fields_not) {
         message_pruneheader(buf, 0, fsection->fields);
@@ -3814,6 +3816,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     int r = 0;
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
+    struct body *body = NULL;
 
     /* Check the modseq against changedsince */
     if (fetchargs->changedsince && im->modseq <= fetchargs->changedsince)
@@ -4008,6 +4011,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                        (fetchitems & FETCH_IS_PARTIAL) ?
                          fetchargs->octet_count : 0);
     }
+
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
         int i;
         prot_printf(state->out, "%cBODY[%s ", sepchar, fsection->section);
@@ -4025,16 +4029,19 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "%s ", fsection->trail);
 
         if (fetchargs->cache_atleast > record.cache_version) {
-            if (!mailbox_cacherecord(mailbox, &record))
+            if (!mailbox_cacherecord(mailbox, &record)) {
+                message_read_bodystructure(&record, &body);
                 index_fetchfsection(state, buf.s, buf.len,
                                     fsection,
-                                    cacheitem_base(&record, CACHE_SECTION),
+                                    body,
                                     (fetchitems & FETCH_IS_PARTIAL) ?
                                       fetchargs->start_octet : oi->start_octet,
                                     (fetchitems & FETCH_IS_PARTIAL) ?
                                       fetchargs->octet_count : oi->octet_count);
-            else
+                message_free_body(body);
+            } else {
                 prot_printf(state->out, "NIL");
+            }
 
         }
         else {
@@ -4057,13 +4064,14 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         oi = &section->octetinfo;
 
         if (!mailbox_cacherecord(mailbox, &record)) {
+            message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
-                                   section->name, cacheitem_base(&record, CACHE_SECTION),
-                                   record.size,
-                                   (fetchitems & FETCH_IS_PARTIAL) ?
-                                    fetchargs->start_octet : oi->start_octet,
-                                   (fetchitems & FETCH_IS_PARTIAL) ?
-                                    fetchargs->octet_count : oi->octet_count);
+                    section->name, body, record.size,
+                    (fetchitems & FETCH_IS_PARTIAL) ?
+                    fetchargs->start_octet : oi->start_octet,
+                    (fetchitems & FETCH_IS_PARTIAL) ?
+                    fetchargs->octet_count : oi->octet_count);
+            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4078,13 +4086,14 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         if (!mailbox_cacherecord(mailbox, &record)) {
             oi = &section->octetinfo;
+            message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
-                                   section->name, cacheitem_base(&record, CACHE_SECTION),
-                                   record.size,
+                                   section->name, body, record.size,
                                    (fetchitems & FETCH_IS_PARTIAL) ?
                                     fetchargs->start_octet : oi->start_octet,
                                    (fetchitems & FETCH_IS_PARTIAL) ?
                                     fetchargs->octet_count : oi->octet_count);
+            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4098,10 +4107,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                  "%cBINARY.SIZE[%s ", sepchar, section->name);
 
         if (!mailbox_cacherecord(mailbox, &record)) {
+            message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
-                                   section->name, cacheitem_base(&record, CACHE_SECTION),
-                                   record.size,
+                                   section->name, body, record.size,
                                    fetchargs->start_octet, fetchargs->octet_count);
+            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4138,7 +4148,6 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
      * so there we go */
     static char text_mime[] = "HEADER";
     struct buf buf = BUF_INITIALIZER;
-    const char *cacheitem;
     int fetchmime = 0, domain = DOMAIN_7BIT;
     const char *data;
     size_t size;
@@ -4147,6 +4156,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     int r = 0;
     char *decbuf = NULL;
     struct index_record record;
+    struct body *body = NULL;
+    size_t section_offset, section_size;
 
     r = index_lock(state);
     if (r) return r;
@@ -4164,6 +4175,9 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     r = mailbox_cacherecord(mailbox, &record);
     if (r) goto done;
 
+    message_read_bodystructure(&record, &body);
+    if (!body) goto done;
+
     /* Open the message file */
     if (mailbox_map_record(mailbox, &record, &buf)) {
         r = IMAP_NO_MSGGONE;
@@ -4173,8 +4187,6 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     data = buf.s;
     size = buf.len;
 
-    cacheitem = cacheitem_base(&record, CACHE_SECTION);
-
     /* Special-case BODY[] */
     if (!section || !*section) {
         /* whole message, no further parsing */
@@ -4183,8 +4195,6 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         const char *p = ucase((char *) section);
 
         while (*p && *p != 'M') {
-            int num_parts = CACHE_ITEM_BIT32(cacheitem);
-
             /* Generate the actual part number */
             r = parseint32(p, &p, &skip);
             if (*p == '.') p++;
@@ -4209,8 +4219,13 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
                 }
             }
 
+            /* Embedded RFC822 messages contain one extra tree level */
+            if ((r || skip) && body_is_rfc822(body)) {
+                body = body->subpart;
+            }
+
             /* section number too large */
-            if (skip >= num_parts) {
+            if (skip >= body->numparts + 1) {
                 r = IMAP_BADURL;
                 goto done;
             }
@@ -4218,35 +4233,25 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
             if (*p && *p != 'M') {
                 /* We are NOT at the end of a part specification, so there's
                  * a subpart being requested.  Find the subpart in the tree. */
-
-                /* Skip the headers for this part, along with the number of
-                 * sub parts */
-                cacheitem += num_parts * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
-
-                /* Skip to the correct part */
-                while (--skip) {
-                    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
-                        /* Skip each part at this level */
-                        skip += CACHE_ITEM_BIT32(cacheitem)-1;
-                        cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
-                    }
-                    cacheitem += CACHE_ITEM_SIZE_SKIP;
+                if (skip) {
+                    body = body->subpart + skip - 1;
+                    skip = 0;
                 }
             }
         }
 
         if (*p == 'M') fetchmime++;
 
-        cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
-            (fetchmime ? 0 : 2 * 4);
-
-        if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
-            r = IMAP_BADURL;
-            goto done;
+        if (skip) {
+            if (body->numparts + 1 <= skip) {
+                r = IMAP_BADURL;
+                goto done;
+            }
+            body = body->subpart + skip - 1;
         }
 
-        size_t section_offset = CACHE_ITEM_BIT32(cacheitem);
-        size_t section_size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+        section_offset = fetchmime ? body->header_offset : body->content_offset;
+        section_size = fetchmime ? body->header_size : body->content_size;
 
         if (section_offset + section_size < section_offset
             || section_offset + section_size > size) {
@@ -4270,7 +4275,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         prot_printf(pout, " (BODY");
     }
     else if (params & URLFETCH_BINARY) {
-        int encoding = CACHE_ITEM_BIT32(cacheitem + 2 * 4) & 0xff;
+        int encoding = body->charset_enc & 0xff;
 
         prot_printf(pout, " (BINARY");
 
@@ -4329,6 +4334,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     index_unlock(state);
     buf_free(&buf);
 
+    if (body) message_free_body(body);
     if (decbuf) free(decbuf);
     return r;
 }
