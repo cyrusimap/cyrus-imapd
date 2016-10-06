@@ -109,18 +109,55 @@ sub test_list_specialuse
     my $frontend = $self->{frontend_store}->get_client();
     my $backend = $self->{backend_store}->get_client();
 
+    my %specialuse = map { $_ => 1 } qw( Drafts Junk Sent Trash );
+    my %other = map { $_ => 1 } qw( lists personal timesheets );
+
     # create some special-use folders
-    foreach my $specialuse (qw( Drafts Junk Sent Trash )) {
-	$frontend->create("INBOX.$specialuse");
+    foreach my $f (keys %specialuse) {
+	$frontend->create("INBOX.$f");
 	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->subscribe("INBOX.$specialuse");
+	$frontend->subscribe("INBOX.$f");
 	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->setmetadata("INBOX.$specialuse",
-			       '/private/specialuse', "\\$specialuse");
+	$frontend->setmetadata("INBOX.$f",
+			       '/private/specialuse', "\\$f");
 	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
     }
+
+    # create some other non special-use folders (control group)
+    foreach my $f (keys %other) {
+	$frontend->create("INBOX.$f");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+	$frontend->subscribe("INBOX.$f");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # ask the backend about them
+    my $bresult = $backend->list([qw(SPECIAL-USE)], "", "*",
+	'RETURN', [qw(SUBSCRIBED)]);
+    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+    xlog Dumper $bresult;
+
+    # check the responses
+    my %found;
+    foreach my $r (@{$bresult}) {
+	my ($flags, $sep, $name) = @{$r};
+	# carve out the interesting part of the name
+	$self->assert_matches(qr/^INBOX$sep/, $name);
+	$name = substr($name, 6);
+	$found{$name} = 1;
+	# only want specialuse folders
+	$self->assert(exists $specialuse{$name});
+	# must be flagged with appropriate flag
+	$self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+	# must be flagged with \subscribed
+	$self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
+    }
+
+    # make sure no expected responses were missing
+    $self->assert_deep_equals(\%specialuse, \%found);
 
     # ask the frontend about them
     my $fresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
@@ -128,18 +165,8 @@ sub test_list_specialuse
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     xlog Dumper $fresult;
 
-    # expect there to be four
-    # XXX check this more strictly for actual expected results
-    $self->assert_equals(4, scalar @{$fresult});
-
-    # ask the backend about them
-    my $bresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
-	'RETURN', [qw(SUBSCRIBED)]);
-    $self->assert_str_equals('ok', $backend->get_last_completion_response());
-    xlog Dumper $bresult;
-
-    # expect the same results as on frontend
-    $self->assert_deep_equals($fresult, $bresult);
+    # expect the same results as on backend
+    $self->assert_deep_equals($bresult, $fresult);
 }
 
 1;
