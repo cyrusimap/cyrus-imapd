@@ -234,7 +234,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV, PROP_COLLECTION,
@@ -257,7 +257,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, "" },
 
     /* Cyrus properties */
     { "address-groups", NS_CYRUS, PROP_RESOURCE,

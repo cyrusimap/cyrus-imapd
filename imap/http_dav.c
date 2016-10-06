@@ -92,8 +92,6 @@
 
 #include <libxml/uri.h>
 
-#define SYNC_TOKEN_URL_SCHEME "data:,"
-
 static const struct dav_namespace_t {
     const char *href;
     const char *prefix;

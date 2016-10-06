@@ -80,6 +80,8 @@
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
 
+#define SYNC_TOKEN_URL_SCHEME "data:,"
+
 #define SHARED_COLLECTION_DELIM '.'
 
 /* Index into known namespace array */

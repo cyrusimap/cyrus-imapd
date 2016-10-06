@@ -192,11 +192,11 @@ static const struct prop_entry webdav_props[] = {
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, NULL },
+      propfind_sync_token, NULL, "" },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
