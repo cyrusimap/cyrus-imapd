@@ -6443,13 +6443,11 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
     /* check for INBOX.INBOX creation by broken Apple clients */
-    char *copy = xstrdup(mbname_intname(mbname));
-    lcase(copy);
-
-    if (strstr(copy, "inbox.inbox."))
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (strarray_size(boxes) > 1
+        && !strcasecmp(strarray_nth(boxes, 0), "INBOX")
+        && !strcasecmp(strarray_nth(boxes, 1), "INBOX"))
         r = IMAP_MAILBOX_BADNAME;
-
-    free(copy);
 
     if (r) {
     err:
