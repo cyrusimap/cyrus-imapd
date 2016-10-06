@@ -174,4 +174,283 @@ sub test_duplicate_headers
     $self->assert_deep_equals(\%exp, $res->{1}->{envelope});
 }
 
+sub test_fetch_section
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # Start body
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+
+    # Subpart 1
+    $body .= ""
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "\r\n"
+    . "body1"
+    . "\r\n";
+
+    # Subpart 2
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: text/html;charset=\"ISO-8859-1\"\r\n"
+    . "\r\n"
+    . "<html><body><p>body2</p></body></html>"
+    . "\r\n";
+
+    # Subpart 3
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: multipart/mixed;boundary=frontier\r\n"
+    . "\r\n";
+
+    # Subpart 3.1
+    $body .= "--frontier\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body31"
+    . "\r\n";
+
+    # Subpart 3.2
+    $body .= "--frontier\r\n"
+    . "Content-Type: multipart/mixed;boundary=border\r\n"
+    . "\r\n"
+    . "body32"
+    . "\r\n";
+
+    # Subpart 3.2.1
+    $body .= "--border\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body321"
+    . "\r\n";
+
+    # Subpart 3.2.2
+    $body .= "--border\r\n"
+    . "Content-Type: application/octet-stream\r\n"
+    . "Content-Transfer-Encoding: base64\r\n"
+    . "\r\n"
+    . "PGh0bWw+CiAgPGhlYWQ+CiAg=="
+    . "\r\n";
+
+    # End subpart 3.2
+    $body .= "--border--\r\n";
+
+    # End subpart 3
+    $body .= "--frontier--\r\n";
+
+    # Subpart 4
+    my $msg4 = ""
+    . "Return-Path: <Ava.Nguyen\@local>\r\n"
+    . "Mime-Version: 1.0\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "Content-Transfer-Encoding: 7bit\r\n"
+    . "Subject: bar\r\n"
+    . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+    . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+    . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+    . "To: Test User <test\@local>\r\n"
+    . "\r\n"
+    . "body4";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: message/rfc822\r\n"
+    . "\r\n"
+    . $msg4
+    . "\r\n";
+
+    # Subpart 5
+    my $msg5 = ""
+    . "Return-Path: <bla\@local>\r\n"
+    . "Mime-Version: 1.0\r\n"
+    . "Content-Type: multipart/mixed;boundary=subpart5\r\n"
+    . "Content-Transfer-Encoding: 7bit\r\n"
+    . "Subject: baz\r\n"
+    . "From: blu\@local\r\n"
+    . "Message-ID: <fake.12123239947.6507\@local>\r\n"
+    . "Date: Wed, 06 Oct 2016 14:59:07 +1100\r\n"
+    . "To: Test User <test\@local>\r\n"
+    . "\r\n"
+    . "--subpart5\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body51"
+    . "\r\n"
+    . "--subpart5\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body52"
+    . "\r\n"
+    . "--subpart5--\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: message/rfc822\r\n"
+    . "\r\n"
+    . $msg5
+    . "\r\n";
+
+    # End body
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body1");
+
+    $res = $imaptalk->fetch('1', '(BODY[2])');
+    $self->assert_str_equals($res->{'1'}->{body}, "<html><body><p>body2</p></body></html>");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body31");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body321");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.2])');
+    $self->assert_str_equals($res->{'1'}->{body}, "PGh0bWw+CiAgPGhlYWQ+CiAg==");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.2]<4.3>)');
+    $self->assert_str_equals($res->{'1'}->{body}, substr("PGh0bWw+CiAgPGhlYWQ+CiAg==", 4, 3));
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[4.HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{'1'}->{headers}->{"content-type"}[0], "text/plain");
+
+    $res = $imaptalk->fetch('1', '(BODY[4.TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body4");
+
+    $res = $imaptalk->fetch('1', '(BODY[4])');
+    $self->assert_str_equals($res->{'1'}->{body}, $msg4);
+
+    $res = $imaptalk->fetch('1', '(BODY[5.2])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body52");
+
+    # Check for some bogus subparts
+    $res = $imaptalk->fetch('1', '(BODY[3.2.3])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BODY[4.2])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BODY[-1])');
+    $self->assert_null($res->{'1'}->{body});
+}
+
+sub test_fetch_urlfetch
+{
+    my ($self) = @_;
+
+    my %exp_sub;
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $store->set_folder("INBOX");
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body;
+
+    # Subpart 1
+    $body = "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "\r\n"
+    . "body1"
+    . "\r\n";
+
+    # Subpart 2
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: multipart/mixed;boundary=frontier\r\n"
+    . "\r\n";
+
+    # Subpart 2.1
+    $body .= "--frontier\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body21"
+    . "\r\n";
+
+    # End subpart 2
+    $body .= "--frontier--\r\n";
+
+    # Subpart 3
+    my $msg3 = ""
+    . "Return-Path: <Ava.Nguyen\@local>\r\n"
+    . "Mime-Version: 1.0\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "Content-Transfer-Encoding: 7bit\r\n"
+    . "Subject: bar\r\n"
+    . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+    . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+    . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+    . "To: Test User <test\@local>\r\n"
+    . "\r\n"
+    . "body3";
+
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: message/rfc822\r\n"
+    . "\r\n"
+    . $msg3
+    . "\r\n";
+
+    # End body
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    my $uid;
+    my %handlers =
+    (
+        appenduid => sub
+        {
+            my ($cmd, $ids) = @_;
+            $uid = ${$ids}[1];
+        },
+    );
+
+    my $res;
+
+    # Copy the whole message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=HEADER",
+            "URL", "/INBOX/;uid=1/;section=TEXT",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{$uid}->{body}, $body);
+
+    # Merge the headers of an embedded RFC822 message with a plaintext subpart
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3.HEADER", 
+            "URL", "/INBOX/;uid=1/;section=2.1",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "body21");
+
+    # Extract an embedded RFC822 message into a new standalone message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "body3");
+}
+
+
 1;
