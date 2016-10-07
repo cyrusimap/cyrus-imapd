@@ -324,6 +324,12 @@ sub test_fetch_section
     $res = $imaptalk->fetch('1', '(BODY[4.TEXT])');
     $self->assert_str_equals($res->{'1'}->{body}, "body4");
 
+    $res = $imaptalk->fetch('1', '(BODY[4.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body4");
+
+    $res = $imaptalk->fetch('1', '(BODY[4.1.MIME])');
+    $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
+
     $res = $imaptalk->fetch('1', '(BODY[4])');
     $self->assert_str_equals($res->{'1'}->{body}, $msg4);
 
