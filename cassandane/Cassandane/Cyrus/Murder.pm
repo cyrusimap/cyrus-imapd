@@ -169,4 +169,73 @@ sub test_list_specialuse
     $self->assert_deep_equals($bresult, $fresult);
 }
 
+sub test_xlist
+{
+    my ($self) = @_;
+
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{backend_store}->get_client();
+
+    my %specialuse = map { $_ => 1 } qw( Drafts Junk Sent Trash );
+    my %other = map { $_ => 1 } qw( lists personal timesheets );
+
+    # create some special-use folders
+    foreach my $f (keys %specialuse) {
+	$frontend->create("INBOX.$f");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+	$frontend->setmetadata("INBOX.$f",
+			       '/private/specialuse', "\\$f");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # create some other non special-use folders (control group)
+    foreach my $f (keys %other) {
+	$frontend->create("INBOX.$f");
+	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # ask the backend about them
+    my $bresult = $backend->xlist("", "*");
+    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+    xlog "backend: " . Dumper $bresult;
+
+    # check the responses
+    my %found;
+    foreach my $r (@{$bresult}) {
+	my ($flags, $sep, $name) = @{$r};
+	if ($name eq 'INBOX') {
+	    $found{$name} = 1;
+	    # must be flagged with \Inbox
+	    $self->assert_equals(1, scalar grep { $_ eq '\\Inbox' } @{$flags});
+	}
+	else {
+	    # carve out the interesting part of the name
+	    $self->assert_matches(qr/^INBOX$sep/, $name);
+	    $name = substr($name, 6);
+	    $found{$name} = 1;
+	    $self->assert(exists $specialuse{$name} or exists $other{$name});
+	    if (exists $specialuse{$name}) {
+		# must be flagged with appropriate flag
+		$self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+	    }
+	    else {
+		# must not be flagged with name-based flag
+		$self->assert_equals(0, scalar grep { $_ eq "\\$name" } @{$flags});
+	    }
+	}
+    }
+
+    # make sure no expected responses were missing
+    $self->assert_deep_equals({ 'INBOX' => 1, %specialuse, %other }, \%found);
+
+    # ask the frontend about them
+    my $fresult = $frontend->xlist("", "*");
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    xlog "frontend: " . Dumper $fresult;
+
+    # expect the same results as on backend
+    $self->assert_deep_equals($bresult, $fresult);
+}
+
 1;
