@@ -44,6 +44,7 @@
 #include <config.h>
 
 #include "vcard_support.h"
+#include "syslog.h"
 
 #include "global.h"
 
@@ -62,7 +63,28 @@ struct vparse_card *vcard_parse_string(const char *str, int repair)
     vparser.ctrl = repair ? VPARSE_CTRL_SKIP : VPARSE_CTRL_REJECT;
     vr = vparse_parse(&vparser, 0);
     if (vr) {
-        // XXX report error
+        struct vparse_errorpos pos;
+        vparse_fillpos(&vparser, &pos);
+        if (pos.startpos < 60) {
+            int len = pos.errorpos - pos.startpos;
+            syslog(LOG_ERR, "vcard error %s at line %d char %d: %.*s ---> %.*s <---",
+                   vparse_errstr(vr), pos.errorline, pos.errorchar,
+                   pos.startpos, str, len, str + pos.startpos);
+        }
+        else if (pos.errorpos - pos.startpos < 40) {
+            int len = pos.errorpos - pos.startpos;
+            syslog(LOG_ERR, "vcard error %s at line %d char %d: ... %.*s ---> %.*s <---",
+                   vparse_errstr(vr), pos.errorline, pos.errorchar,
+                   40 - len, str + pos.errorpos - 40,
+                   len, str + pos.startpos);
+        }
+        else {
+            syslog(LOG_ERR, "error %s at line %d char %d: %.*s ... %.*s <--- (started at line %d char %d)",
+                   vparse_errstr(vr), pos.errorline, pos.errorchar,
+                   20, str + pos.startpos,
+                   20, str + pos.errorpos - 20,
+                   pos.startline, pos.startchar);
+        }
     }
     else {
         vcard = vparser.card;

@@ -96,12 +96,13 @@ static void test_control_chars(void)
 
 static void test_crlf(void)
 {
-#define TESTCASE(in, wanterr, wantbuf) \
+#define TESTCASE(in, wantctrl, wanterr, wantbuf) \
     { \
         struct vparse_state vparser; \
         memset(&vparser, 0, sizeof(struct vparse_state)); \
         vparse_set_multival(&vparser, "adr"); \
         vparser.base = (in); \
+        vparser.ctrl = (wantctrl); \
         int vr = vparse_parse(&vparser, 0); \
         CU_ASSERT_EQUAL(vr, (wanterr)); \
         if (wantbuf != NULL) { \
@@ -120,7 +121,9 @@ static void test_crlf(void)
         "NOTE:All lines end on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(crlf, PE_OK, crlf);
+    TESTCASE(crlf, VPARSE_CTRL_IGNORE, PE_OK, crlf);
+    TESTCASE(crlf, VPARSE_CTRL_SKIP, PE_OK, crlf);
+    TESTCASE(crlf, VPARSE_CTRL_REJECT, PE_OK, crlf);
 
     /* All lines end on LF */
     char lf_in[] =
@@ -135,17 +138,22 @@ static void test_crlf(void)
         "NOTE:All lines end on LF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(lf_in, PE_OK, lf_out);
+    TESTCASE(lf_in, VPARSE_CTRL_IGNORE, PE_OK, lf_out);
+    TESTCASE(lf_in, VPARSE_CTRL_SKIP, PE_OK, lf_out);
+    TESTCASE(lf_in, VPARSE_CTRL_REJECT, PE_OK, lf_out);
+
 
     /* All lines end on CR */
+    /* This is all actually just one line */
     char cr[] =
         "BEGIN:VCARD\r"
         "VERSION:3.0\r"
-        /* This one is rejected */
         "NOTE:All lines end on CR\r"
         "REV:2008-04-24T19:52:43Z\r"
         "END:VCARD\r";
-    TESTCASE(cr, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr, VPARSE_CTRL_IGNORE, PE_FINISHED_EARLY, NULL);
+    TESTCASE(cr, VPARSE_CTRL_SKIP, PE_FINISHED_EARLY, NULL);
+    TESTCASE(cr, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
 
     /* Some lines end on CRLF and some on LF */
     char mixed_in[] =
@@ -160,7 +168,9 @@ static void test_crlf(void)
         "NOTE:Some lines end on LF and some on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(mixed_in, PE_OK, mixed_out);
+    TESTCASE(mixed_in, VPARSE_CTRL_IGNORE, PE_OK, mixed_out);
+    TESTCASE(mixed_in, VPARSE_CTRL_SKIP, PE_OK, mixed_out);
+    TESTCASE(mixed_in, VPARSE_CTRL_REJECT, PE_OK, mixed_out);
 
     /* An extra CR before CRLF */
     char extra_cr_in[] =
@@ -175,7 +185,9 @@ static void test_crlf(void)
         "NOTE:An extra CR before CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(extra_cr_in, PE_OK, extra_cr_out);
+    TESTCASE(extra_cr_in, VPARSE_CTRL_IGNORE, PE_OK, extra_cr_out);
+    TESTCASE(extra_cr_in, VPARSE_CTRL_SKIP, PE_OK, extra_cr_out);
+    TESTCASE(extra_cr_in, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
 
     /* Two LF make one empty line */
     char lflf_in[] =
@@ -190,7 +202,9 @@ static void test_crlf(void)
         "NOTE:Two LF make one empty line\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(lflf_in, PE_OK, lflf_out);
+    TESTCASE(lflf_in, VPARSE_CTRL_IGNORE, PE_OK, lflf_out);
+    TESTCASE(lflf_in, VPARSE_CTRL_SKIP, PE_OK, lflf_out);
+    TESTCASE(lflf_in, VPARSE_CTRL_REJECT, PE_OK, lflf_out);
 
     /* One lonely CR in the middle of text */
     /* Single-value */
@@ -200,12 +214,25 @@ static void test_crlf(void)
         "NOTE:One lonely \r in the middle of text\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
+    char cr_val1_skip[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:One lonely  in the middle of text\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
     /* Multi-value */
     char cr_val2[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:One lonely CR in the middle of text\r\n"
-        "ADR:;;123\rMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
+        "ADR:;;123\r\\nMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    char cr_val2_skip[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:One lonely CR in the middle of text\r\n"
+        "ADR:;;123\\nMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
     /* CR in key */
@@ -215,11 +242,23 @@ static void test_crlf(void)
         "NOTE\r:CR in key\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
+    char cr_key_skip[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:CR in key\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
     /* CR in param name */
     char cr_para1[] =
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "EMAIL;TYPE\r=work:foo@local\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+    char cr_para1_skip[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "EMAIL;TYPE=work:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
     /* CR in param name */
@@ -229,11 +268,24 @@ static void test_crlf(void)
         "EMAIL;TYPE=work\r:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
         "END:VCARD\r\n";
-    TESTCASE(cr_val1, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_val2, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_key, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_para1, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_para2, PE_ILLEGAL_CHAR, NULL);
+    char cr_para2_skip[] =
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "EMAIL;TYPE=work:foo@local\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n";
+
+    TESTCASE(cr_val1, VPARSE_CTRL_SKIP, PE_OK, cr_val1_skip);
+    TESTCASE(cr_val2, VPARSE_CTRL_SKIP, PE_OK, cr_val2_skip);
+    TESTCASE(cr_key, VPARSE_CTRL_SKIP, PE_OK, cr_key_skip);
+    TESTCASE(cr_para1, VPARSE_CTRL_SKIP, PE_OK, cr_para1_skip);
+    TESTCASE(cr_para2, VPARSE_CTRL_SKIP, PE_OK, cr_para2_skip);
+
+    TESTCASE(cr_val1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_val2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_key, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_para1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
+    TESTCASE(cr_para2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
 
 #undef TESTCASE
 }

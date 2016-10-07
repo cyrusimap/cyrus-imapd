@@ -26,8 +26,9 @@ PE_NUMERR /* last */
 };
 
 enum parse_ctrl {
-    VPARSE_CTRL_REJECT = 0,
-    VPARSE_CTRL_SKIP
+    VPARSE_CTRL_IGNORE = 0,
+    VPARSE_CTRL_SKIP,
+    VPARSE_CTRL_REJECT
 };
 
 struct vparse_state {
