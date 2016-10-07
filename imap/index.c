@@ -4030,7 +4030,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         if (fetchargs->cache_atleast > record.cache_version) {
             if (!mailbox_cacherecord(mailbox, &record)) {
-                message_read_bodystructure(&record, &body);
+                if (!body) message_read_bodystructure(&record, &body);
                 index_fetchfsection(state, buf.s, buf.len,
                                     fsection,
                                     body,
@@ -4038,7 +4038,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                                       fetchargs->start_octet : oi->start_octet,
                                     (fetchitems & FETCH_IS_PARTIAL) ?
                                       fetchargs->octet_count : oi->octet_count);
-                message_free_body(body);
             } else {
                 prot_printf(state->out, "NIL");
             }
@@ -4064,14 +4063,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         oi = &section->octetinfo;
 
         if (!mailbox_cacherecord(mailbox, &record)) {
-            message_read_bodystructure(&record, &body);
+            if (!body) message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
                     section->name, body, record.size,
                     (fetchitems & FETCH_IS_PARTIAL) ?
                     fetchargs->start_octet : oi->start_octet,
                     (fetchitems & FETCH_IS_PARTIAL) ?
                     fetchargs->octet_count : oi->octet_count);
-            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4086,14 +4084,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         if (!mailbox_cacherecord(mailbox, &record)) {
             oi = &section->octetinfo;
-            message_read_bodystructure(&record, &body);
+            if (!body) message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
                                    section->name, body, record.size,
                                    (fetchitems & FETCH_IS_PARTIAL) ?
                                     fetchargs->start_octet : oi->start_octet,
                                    (fetchitems & FETCH_IS_PARTIAL) ?
                                     fetchargs->octet_count : oi->octet_count);
-            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4107,11 +4104,10 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                  "%cBINARY.SIZE[%s ", sepchar, section->name);
 
         if (!mailbox_cacherecord(mailbox, &record)) {
-            message_read_bodystructure(&record, &body);
+            if (!body) message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
                                    section->name, body, record.size,
                                    fetchargs->start_octet, fetchargs->octet_count);
-            message_free_body(body);
             if (!r) sepchar = ' ';
         }
     }
@@ -4120,6 +4116,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, ")\r\n");
     }
     buf_free(&buf);
+    if (body) message_free_body(body);
 
     return r;
 }
