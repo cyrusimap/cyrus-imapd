@@ -3319,8 +3319,8 @@ out:
         uint32_t content_offset;
         uint32_t content_size;
 
-        uint8_t      encoding;
-        uint24_t     length of charset identifier in bytes (=len)
+        uint32_t encoding & (len << 16);
+                 length of charset identifier in bytes (=len)
         uint8_t[len] charset identifier
     };
 
