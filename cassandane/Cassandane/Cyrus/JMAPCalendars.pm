@@ -1929,9 +1929,10 @@ sub test_getcalendareventlist
                             "title" => "foo",
                             "description" => "bar",
                             "showAsFree" => JSON::false,
-                            "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "timeZone" => undef,
+                            "isAllDay" => JSON::false,
+                            "start" => "2016-07-01T10:00:00",
+                            "timeZone" => "Etc/GMT+1",
+                            "duration" => "PT1H",
                         },
                         "#2" => {
                             "calendarId" => $calidB,
@@ -1939,8 +1940,8 @@ sub test_getcalendareventlist
                             "description" => "",
                             "showAsFree" => JSON::false,
                             "isAllDay" => JSON::true,
-                            "start" => "2015-10-06T00:00:00",
-                            "timeZone" => undef,
+                            "start" => "2016-01-01T00:00:00",
+                            "duration" => "P2D",
                         }
                     }}, "R1"]]);
     my $id1 = $res->[0][1]{created}{"#1"}{id};
@@ -1954,8 +1955,8 @@ sub test_getcalendareventlist
     xlog "get filtered calendar event list with flat filter";
     $res = $jmap->Request([ ['getCalendarEventList', {
                     "filter" => {
-                        "after" => "2015-01-01T00:00:00Z",
-                        "before" => "2015-12-31T23:59:59Z",
+                        "after" => "2015-12-31T00:00:00Z",
+                        "before" => "2016-12-31T23:59:59Z",
                         "text" => "foo",
                         "description" => "bar"
                     }
@@ -1970,8 +1971,8 @@ sub test_getcalendareventlist
                         "operator" => "AND",
                         "conditions" => [
                             {
-                                "after" => "2015-01-01T00:00:00Z",
-                                "before" => "2015-12-31T23:59:59Z"
+                                "after" => "2015-12-31T00:00:00Z",
+                                "before" => "2016-12-31T23:59:59Z"
                             },
                             {
                                 "text" => "foo",
@@ -1983,6 +1984,238 @@ sub test_getcalendareventlist
     $self->assert_num_equals($res->[0][1]{total}, 1);
     $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
     $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+}
+
+sub test_getcalendareventlist_datetime
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog "create events";
+    my $res = $jmap->Request([['setCalendarEvents', { create => {
+                        # Start: 2016-01-01T08:00:00Z End: 2016-01-01T09:00:00Z
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "title" => "1",
+                            "description" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2016-01-01T09:00:00",
+                            "timeZone" => "Etc/GMT-1",
+                            "duration" => "PT1H",
+                        },
+                    }}, "R1"]]);
+
+    # Exact start and end match
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:00:00Z",
+                        "before" => "2016-01-01T09:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Check that boundaries are exclusive
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T09:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 0);
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "before" =>  "2016-01-01T08:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 0);
+
+    # Embedded subrange matches
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:15:00Z",
+                        "before" => "2016-01-01T08:45:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Overlapping subrange matches
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:15:00Z",
+                        "before" => "2016-01-01T09:15:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T07:45:00Z",
+                        "before" => "2016-01-01T08:15:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Create an infinite recurring datetime event
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        # Start: 2017-01-01T08:00:00Z End: eternity
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "title" => "e",
+                            "description" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::false,
+                            "start" => "2017-01-01T09:00:00",
+                            "timeZone" => "Etc/GMT-1",
+                            "duration" => "PT1H",
+                            "recurrenceRule" => {
+                                "frequency" => "yearly",
+                            },
+                        },
+                    }}, "R1"]]);
+    # Assert both events are found
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    # Search close to eternity
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2038-01-01T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+}
+
+sub test_getcalendareventlist_date
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog "create events";
+    my $res = $jmap->Request([['setCalendarEvents', { create => {
+                        # Start: 2016-01-01 End: 2016-01-03
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "title" => "1",
+                            "description" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2016-01-01T00:00:00",
+                            "duration" => "P3D",
+                        },
+                    }}, "R1"]]);
+
+    # Match on start and end day
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T00:00:00Z",
+                        "before" => "2016-01-03T23:59:59Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Match after on the first second of the start day
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T00:00:00Z",
+                        "before" => "2016-01-03T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Match before on the last second of the end day
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-03T23:59:59Z",
+                        "before" => "2016-01-03T23:59:59Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Match on interim day
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-02T00:00:00Z",
+                        "before" => "2016-01-03T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Match on partially overlapping timerange
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2015-12-31T12:00:00Z",
+                        "before" => "2016-01-01T12:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2015-01-03T12:00:00Z",
+                        "before" => "2016-01-04T12:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # Difference from the spec: 'before' is defined to be exclusive, but
+    # a full-day event starting on that day still matches.
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2015-12-31T00:00:00Z",
+                        "before" => "2016-01-01T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
+    # In DAV db the event ends at 20160104. Test that it isn't returned.
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-04T00:00:00Z",
+                        "before" => "2016-01-04T23:59:59Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 0);
+
+    # Create an infinite recurring datetime event
+    $res = $jmap->Request([['setCalendarEvents', { create => {
+                        # Start: 2017-01-01T08:00:00Z End: eternity
+                        "#1" => {
+                            "calendarId" => $calid,
+                            "title" => "2",
+                            "description" => "",
+                            "showAsFree" => JSON::false,
+                            "isAllDay" => JSON::true,
+                            "start" => "2017-01-01T00:00:00",
+                            "duration" => "P1D",
+                            "recurrenceRule" => {
+                                "frequency" => "yearly",
+                            },
+                        },
+                    }}, "R1"]]);
+    # Assert both events are found
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 2);
+    # Search close to eternity
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "after" =>  "2038-01-01T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals($res->[0][1]{total}, 1);
+
 }
 
 sub test_setcalendarevents_caldav
