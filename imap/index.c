@@ -3167,6 +3167,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     unsigned offset = 0;
     char *decbuf = NULL;
     struct buf msg = BUF_INITIALIZER;
+    struct body *top = body;
 
     buf_init_ro(&msg, inmsg->s, inmsg->len);
 
@@ -3186,6 +3187,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 
     while (*p != ']' && *p != 'M') {
         int r;
+        int parent_is_rfc822 = 0;
 
         /* Generate the actual part number */
         r = parseint32(p, &p, &skip);
@@ -3214,6 +3216,13 @@ static int index_fetchsection(struct index_state *state, const char *resp,
         /* Embedded RFC822 messages contain one extra tree level */
         if ((r || skip) && body_is_rfc822(body)) {
             body = body->subpart;
+            parent_is_rfc822 = 1;
+        }
+
+        /* RFC 3501: "Every message has at least one part number" */
+        if (skip == 1 && !body->numparts && (body == top || parent_is_rfc822)) {
+            if (*p != ']' && *p != 'M') goto badpart;
+            skip = 0;
         }
 
         /* section number too large */
@@ -3238,8 +3247,8 @@ static int index_fetchsection(struct index_state *state, const char *resp,
         body = body->subpart + skip - 1;
     }
 
-    offset = body->content_offset;
-    size = body->content_size;
+    offset = fetchmime ? body->header_offset : body->content_offset;
+    size = fetchmime ? body->header_size : body->content_size;
 
     if (msg.s && (p = strstr(resp, "BINARY"))) {
         /* BINARY or BINARY.SIZE */
@@ -4153,7 +4162,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     int r = 0;
     char *decbuf = NULL;
     struct index_record record;
-    struct body *body = NULL;
+    struct body *top, *body = NULL;
     size_t section_offset, section_size;
 
     r = index_lock(state);
@@ -4174,6 +4183,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
     message_read_bodystructure(&record, &body);
     if (!body) goto done;
+    top = body;
 
     /* Open the message file */
     if (mailbox_map_record(mailbox, &record, &buf)) {
@@ -4192,6 +4202,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         const char *p = ucase((char *) section);
 
         while (*p && *p != 'M') {
+            int parent_is_rfc822 = 0;
+
             /* Generate the actual part number */
             r = parseint32(p, &p, &skip);
             if (*p == '.') p++;
@@ -4219,6 +4231,16 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
             /* Embedded RFC822 messages contain one extra tree level */
             if ((r || skip) && body_is_rfc822(body)) {
                 body = body->subpart;
+                parent_is_rfc822 = 1;
+            }
+
+            /* RFC 3501: "Every message has at least one part number" */
+            if (skip == 1 && !body->numparts && (body == top || parent_is_rfc822)) {
+                if (*p != ']' && *p != 'M') {
+                    r = IMAP_BADURL;
+                    goto done;
+                }
+                skip = 0;
             }
 
             /* section number too large */
