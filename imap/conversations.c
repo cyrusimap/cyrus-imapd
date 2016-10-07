@@ -56,6 +56,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
+#include "bsearch.h"
 #include "charset.h"
 #include "dlist.h"
 #include "exitcodes.h"
@@ -1478,10 +1479,14 @@ static int conversations_set_guid(struct conversations_state *state,
 
     buf_printf(&item, "%d:%u", folder, record->uid);
 
-    if (add)
+    if (add) {
         strarray_add(old, buf_cstring(&item));
-    else
+        strarray_sort(old, cmpstringp_raw);
+    }
+    else {
         strarray_remove_all(old, buf_cstring(&item));
+        /* stays sorted :) */
+    }
 
     char *new = strarray_join(old, ",");
 
@@ -1964,6 +1969,17 @@ static int zero_f_cb(void *rock,
     return conversation_storestatus(state, key, keylen, &status);
 }
 
+static int zero_g_cb(void *rock,
+                     const char *key,
+                     size_t keylen,
+                     const char *val __attribute__((unused)),
+                     size_t vallen __attribute__((unused)))
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    int r = cyrusdb_delete(state->db, key, keylen, &state->txn, /*force*/1);
+    return r;
+}
+
 EXPORTED int conversations_zero_counts(struct conversations_state *state)
 {
     int r = 0;
@@ -1975,6 +1991,11 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state)
 
     /* wipe F counts */
     r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
+                        state, &state->txn);
+    if (r) return r;
+
+    /* wipe G keys (there's no modseq kept, so we can just wipe them) */
+    r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
                         state, &state->txn);
     if (r) return r;
 
