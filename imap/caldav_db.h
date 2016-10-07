@@ -145,6 +145,14 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
                    caldav_cb_t *cb, void *rock);
 
+/* process each entry for 'mailbox' in 'caldavdb' with cb()
+ * which last recurrence ends after 'after' and first
+ * recurrence starts before 'before'. The largest possible
+ * timerange spans from caldav_epoch to caldav_eternity. */
+int caldav_foreach_timerange(struct caldav_db *caldavdb, const char *mailbox,
+                             time_t after, time_t before,
+                             caldav_cb_t *cb, void *rock);
+
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
 int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,

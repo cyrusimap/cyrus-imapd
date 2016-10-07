@@ -395,6 +395,48 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     }
 }
 
+#define CMD_SELRANGE_MBOX CMD_READFIELDS \
+    " WHERE dtend > :after AND dtstart < :before " \
+    " AND mailbox = :mailbox AND alive = 1;"
+
+#define CMD_SELRANGE CMD_READFIELDS \
+    " WHERE dtend > :after AND dtstart < :before " \
+    " AND alive = 1;"
+
+EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
+                                      const char *mailbox,
+                                      time_t after, time_t before,
+                                      caldav_cb_t *cb, void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":after",     SQLITE_TEXT, { .s = NULL    } },
+        { ":before",   SQLITE_TEXT, { .s = NULL    } },
+        { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
+        { NULL,       SQLITE_NULL, { .s = NULL    } } };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+    icaltimetype dtafter, dtbefore;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    dtafter = icaltime_from_timet_with_zone(after, 0, utc);
+    dtbefore= icaltime_from_timet_with_zone(before, 0, utc);
+
+    bval[0].val.s = icaltime_as_ical_string(dtafter);
+    bval[1].val.s = icaltime_as_ical_string(dtbefore);
+
+    /* XXX - if 'before' defines the zero second of a day, a full-day
+     * event starting on that day matches. That's not entirely correct,
+     * since 'before' is defined to be exclusive. */
+
+    /* XXX - tombstones */
+
+    if (mailbox) {
+        return sqldb_exec(caldavdb->db, CMD_SELRANGE_MBOX, bval, &read_cb, &rrock);
+    } else {
+        return sqldb_exec(caldavdb->db, CMD_SELRANGE, bval, &read_cb, &rrock);
+    }
+}
+
 
 #define CMD_INSERT                                                      \
     "INSERT INTO ical_objs ("                                           \
