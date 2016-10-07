@@ -2338,7 +2338,9 @@ static void message_write_charset(struct buf *buf, const struct body *body)
         len = strlen(name);
         if (len > 0xffff) len = 0;
     }
-    buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff));
+    /* we store 0x100 to say that this is the newer version so that parsers
+     * can tell even without knowing what version of cache record this is */
+    buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff)|0x100);
 
     /* write charset identifier */
     if (len && name) buf_appendcstr(buf, name);
@@ -2926,8 +2928,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
     bit32 n, i;
     const char *p = *sect;
     struct body *subpart;
-    struct buf buf = BUF_INITIALIZER;
     size_t len;
+    uint32_t cte;
 
     n = CACHE_ITEM_BIT32(*sect);
     p = *sect += CACHE_ITEM_SIZE_SKIP;
@@ -2959,25 +2961,24 @@ static void message_read_binarybody(struct body *body, const char **sect,
         p += CACHE_ITEM_SIZE_SKIP;
         body->content_size = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
+        cte = CACHE_ITEM_BIT32(p);
+        p += CACHE_ITEM_SIZE_SKIP;
 
         /* read encoding and charset identifier */
         /* Cache versions <= 3 store charset and encoding in 4 bytes,
          * but the code was broken. Just presume the charset unknown. */
-        body->charset_enc = CACHE_ITEM_BIT32(p);
+        body->charset_enc = cte & 0xff;
         body->charset_id = NULL;
-        p += CACHE_ITEM_SIZE_SKIP;
         if (cache_version >= 4) {
             /* determine the length of the charset identifer */
-            len = (body->charset_enc >> 16) & 0xffff;
+            len = (cte >> 16) & 0xffff;
             if (len) {
+                /* XXX - assert (cte & 0xff00) == 0x100 */
                 /* read len bytes as charset id */
-                buf_appendmap(&buf, p, len);
-                body->charset_id = buf_newcstring(&buf);
-                buf_reset(&buf);
+                body->charset_id = xstrndup(p, len);
                 p += len;
             }
         }
-        body->charset_enc &= 0xff;
     }
 
     /* read body parts */
@@ -2990,25 +2991,24 @@ static void message_read_binarybody(struct body *body, const char **sect,
         p += CACHE_ITEM_SIZE_SKIP;
         subpart[i].content_size = CACHE_ITEM_BIT32(p);
         p += CACHE_ITEM_SIZE_SKIP;
+        cte = CACHE_ITEM_BIT32(p);
+        p += CACHE_ITEM_SIZE_SKIP;
 
         /* read encoding and charset identifier */
         /* Cache versions <= 3 store charset and encoding in 4 bytes,
          * but the code was broken. Just presume the charset unknown. */
-        subpart[i].charset_enc = CACHE_ITEM_BIT32(p);
+        subpart[i].charset_enc = cte & 0xff;
         subpart[i].charset_id = NULL;
-        p += CACHE_ITEM_SIZE_SKIP;
         if (cache_version >= 4) {
             /* determine the length of the charset identifer */
-            len = (subpart[i].charset_enc >> 16) & 0xffff;
+            len = (cte >> 16) & 0xffff;
             if (len) {
+                /* XXX - assert (cte & 0xff00) == 0x100 */
                 /* read len bytes as charset id */
-                buf_appendmap(&buf, p, len);
-                subpart[i].charset_id = buf_newcstring(&buf);
-                buf_reset(&buf);
+                subpart[i].charset_id = xstrndup(p, len);
                 p += len;
             }
         }
-        subpart[i].charset_enc &= 0xff;
     }
 
     /* read sub-parts */
@@ -3319,7 +3319,7 @@ out:
         uint32_t content_offset;
         uint32_t content_size;
 
-        uint32_t encoding & (len << 16);
+        uint32_t encoding & 0x100 & (len << 16)
                  length of charset identifier in bytes (=len)
         uint8_t[len] charset identifier
     };
@@ -3826,7 +3826,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                  * this conditional once cache versions <= 3 are
                  * deprecated */
                 if (cache_version >= 4)
-                    *cachestrp += (cte & 0xffffff);
+                    *cachestrp += (cte >> 16) & 0xffff;
             }
 
             /* and parse subparts */
@@ -3866,7 +3866,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                  * this conditional once cache versions <= 3 are
                  * deprecated */
                 if (cache_version >= 4)
-                    *cachestrp += (cte & 0xffffff);
+                    *cachestrp += (cte >> 16) & 0xffff;
             }
 
             /* and parse subpart */
@@ -3888,7 +3888,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             this->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
             this->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
             this->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
+            cte = CACHE_ITEM_BIT32(*cachestrp+4*4);
             *cachestrp += 5*4;
+
+            if (cache_version >= 4)
+                *cachestrp += (cte >> 16) & 0xffff;
         }
 
         for (part = 0; part < body->numparts; part++) {
