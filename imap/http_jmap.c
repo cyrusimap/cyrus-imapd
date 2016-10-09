@@ -7792,40 +7792,77 @@ done:
     return r;
 }
 
-/* Convert the JMAP datetime in buf to tm time. Return 0 on success. */
-static int jmap_date_to_tm(const char *buf, struct tm *tm) {
+/* FIXME dup from jmapical.c */
+/* Convert the JMAP local datetime in buf to tm time. Return non-zero on success. */
+static int localdate_to_tm(const char *buf, struct tm *tm) {
     /* Initialize tm. We don't know about daylight savings time here. */
     memset(tm, 0, sizeof(struct tm));
     tm->tm_isdst = -1;
 
-    /* Parse UTC date. */
-    const char *p = strptime(buf, "%Y-%m-%dT%H:%M:%SZ", tm);
+    /* Parse LocalDate. */
+    const char *p = strptime(buf, "%Y-%m-%dT%H:%M:%S", tm);
     if (!p || *p) {
-        return -1;
+        return 0;
     }
-    return 0;
+    return 1;
 }
 
-/* Convert the JMAP datetime formatted buf into ical datetime dt.
- * Return 0 on success. */
-static int jmap_date_to_icaltime(const char *buf,
+/* FIXME dup from jmapical.c */
+static int localdate_to_icaltime(const char *buf,
                                  icaltimetype *dt,
-                                 int isAllDay) {
+                                 icaltimezone *tz,
+                                 int is_allday) {
     struct tm tm;
     int r;
+    char *s = NULL;
     icaltimetype tmp;
+    int is_utc;
+    size_t n;
 
-    r = jmap_date_to_tm(buf, &tm);
-    if (r) return r;
+    r = localdate_to_tm(buf, &tm);
+    if (!r) return 0;
 
-    if (isAllDay && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
-        return 1;
+    if (is_allday && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
+        return 0;
     }
 
-    tmp = icaltime_from_timet_with_zone(mktime(&tm), 0, icaltimezone_get_utc_timezone());
-    tmp.is_date = isAllDay;
+    is_utc = tz == icaltimezone_get_utc_timezone();
+
+    /* Can't use icaltime_from_timet_with_zone since it tries to convert
+     * t from UTC into tz. Let's feed ical a DATETIME string, instead. */
+    s = xcalloc(19, sizeof(char));
+    n = strftime(s, 18, "%Y%m%dT%H%M%S", &tm);
+    if (is_utc) {
+        s[n]='Z';
+    }
+    tmp = icaltime_from_string(s);
+    free(s);
+    if (icaltime_is_null_time(tmp)) {
+        return 0;
+    }
+    tmp.zone = tz;
+    tmp.is_date = is_allday;
     *dt = tmp;
-    return 0;
+    return 1;
+}
+
+/* FIXME dup from jmapical.c */
+static int utcdate_to_icaltime(const char *src,
+                               icaltimetype *dt)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t len = strlen(src);
+    int r;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    if (!len || src[len-1] != 'Z') {
+        return 0;
+    }
+
+    buf_setmap(&buf, src, len-1);
+    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0);
+    buf_free(&buf);
+    return r;
 }
 
 static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
@@ -8759,6 +8796,7 @@ static int calevent_filter_match(void *vf, void *rock)
 
     icalcomponent *ical = cfrock->ical;
     struct caldav_data *cdata = cfrock->cdata;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* Locate main VEVENT. */
     icalcomponent *comp;
@@ -8778,16 +8816,16 @@ static int calevent_filter_match(void *vf, void *rock)
         return 0;
     }
     /* after */
-    if (!icaltime_is_null_time(f->after)) {
-        icaltimetype dtend = icaltime_from_string(cdata->dtend);
-        if (icaltime_compare(dtend, f->after) <= 0) {
+    if (icaltime_as_timet_with_zone(f->after, utc) != caldav_epoch) {
+        /* String compare to match caldav_foreach_timerange */
+        if (strcmp(cdata->dtend, icaltime_as_ical_string(f->after)) <= 0) {
             return 0;
         }
     }
     /* before */
-    if (!icaltime_is_null_time(f->before)) {
-        icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
-        if (icaltime_compare(dtstart, f->before) >= 0) {
+    if (icaltime_as_timet_with_zone(f->before, utc) != caldav_eternity) {
+        /* String compare to match caldav_foreach_timerange */
+        if (strcmp(cdata->dtstart, icaltime_as_ical_string(f->before)) >= 0) {
             return 0;
         }
     }
@@ -8830,6 +8868,67 @@ static void calevent_filter_free(void *vf)
     free(f);
 }
 
+static void
+calevent_filter_gettimerange(jmap_filter *f, time_t *before, time_t *after)
+{
+    if (!f) return;
+
+    if (f->kind == JMAP_FILTER_KIND_OPER) {
+        size_t i;
+        time_t bf, af;
+
+        for (i = 0; i < f->n_conditions; i++) {
+            bf = caldav_eternity;
+            af = caldav_epoch;
+
+            calevent_filter_gettimerange(f->conditions[i], &bf, &af);
+
+            if (bf != caldav_eternity) {
+                switch (f->op) {
+                    case JMAP_FILTER_OP_OR:
+                        if (*before == caldav_eternity || *before < bf)
+                            *before = bf;
+                        break;
+                    case JMAP_FILTER_OP_AND:
+                        if (*before == caldav_eternity || *before > bf)
+                            *before = bf;
+                        break;
+                    case JMAP_FILTER_OP_NOT:
+                        if (*after == caldav_epoch || *after < bf)
+                            *after = bf;
+                        break;
+                    default: /* unknown operator */ ;
+                }
+            }
+
+            if (af != caldav_epoch) {
+                switch (f->op) {
+                    case JMAP_FILTER_OP_OR:
+                        if (*after == caldav_epoch || *after > af)
+                            *after = af;
+                        break;
+                    case JMAP_FILTER_OP_AND:
+                        if (*after == caldav_epoch || *after < af)
+                            *after = af;
+                        break;
+                    case JMAP_FILTER_OP_NOT:
+                        if (*before == caldav_eternity || *before < af)
+                            *before = af;
+                        break;
+                    default: /* unknown operator */ ;
+                }
+            }
+        }
+    } else {
+        calevent_filter *cond = (calevent_filter *) f->cond;
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+        *before = icaltime_as_timet_with_zone(cond->before, utc);
+        *after = icaltime_as_timet_with_zone(cond->after, utc);
+    }
+}
+
+
 /* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
@@ -8841,6 +8940,7 @@ static void *calevent_filter_parse(json_t *arg,
     int pe;
     const char *val;
     struct buf buf = BUF_INITIALIZER;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* inCalendars */
     json_t *cals = json_object_get(arg, "inCalendars");
@@ -8867,26 +8967,30 @@ static void *calevent_filter_parse(json_t *arg,
 
     /* after */
     if (JNOTNULL(json_object_get(arg, "after"))) {
-        pe = readprop_full(arg, prefix, "after", 0, invalid, "s", &val);
+        pe = readprop_full(arg, prefix, "after", 1, invalid, "s", &val);
         if (pe > 0) {
-            if (jmap_date_to_icaltime(val, &f->after, 0 /*isAllDay*/)) {
+            if (!utcdate_to_icaltime(val, &f->after)) {
                 buf_printf(&buf, "%s.%s", prefix, "after");
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
         }
+    } else {
+        f->after = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
     }
 
     /* before */
     if (JNOTNULL(json_object_get(arg, "before"))) {
-        pe = readprop_full(arg, prefix, "before", 0, invalid, "s", &val);
+        pe = readprop_full(arg, prefix, "before", 1, invalid, "s", &val);
         if (pe > 0) {
-            if (jmap_date_to_icaltime(val, &f->before, 0 /*isAllDay*/)) {
+            if (!utcdate_to_icaltime(val, &f->before)) {
                 buf_printf(&buf, "%s.%s", prefix, "before");
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
         }
+    } else {
+        f->before = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
     }
 
     /* text */
@@ -8997,6 +9101,7 @@ static int getCalendarEventList(struct jmap_req *req)
     json_t *filter;
     struct caleventlist_rock rock;
     struct caldav_db *db;
+    time_t before, after;
 
     memset(&rock, 0, sizeof(struct caleventlist_rock));
 
@@ -9049,9 +9154,19 @@ static int getCalendarEventList(struct jmap_req *req)
     }
     json_decref(invalid);
 
-    /* Inspect every entry in this accounts mailbox. */
     rock.events = json_pack("[]");
-    r = caldav_foreach(db, NULL, getcalendareventlist_cb, &rock);
+    before = caldav_eternity;
+    after = caldav_epoch;
+    calevent_filter_gettimerange(rock.filter, &before, &after);
+
+    if (before != caldav_eternity || after != caldav_epoch) {
+        /* Fast path. Filter by timerange. */
+        r = caldav_foreach_timerange(db, NULL, after, before,
+                getcalendareventlist_cb, &rock);
+    } else {
+        /* Inspect every entry in this accounts mailboxes. */
+        r = caldav_foreach(db, NULL, getcalendareventlist_cb, &rock);
+    }
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) goto done;
 
