@@ -299,7 +299,7 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
 
     char hash_buf[2];
     char *template = strconcat(partition,
-                               "/", dir_hash_b(userid, 1, hash_buf),
+                               "/", dir_hash_b(userid, config_fulldirhash, hash_buf),
                                "/", userid, "_XXXXXX",
                                NULL);
 
