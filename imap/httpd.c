@@ -1786,16 +1786,14 @@ static int examine_request(struct transaction_t *txn)
         while ((param = tok_next(&tok))) {
             struct strlist *vals;
             char *key, *value;
-            tok_t tok2;
             size_t len;
 
             /* Split param into key and optional value */
-            tok_initm(&tok2, param, "=",
-                      TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
-            key = tok_next(&tok2);
-            value = tok_next(&tok2);
+            key = param;
+            value = strchr(param, '=');
 
             if (!value) value = "";
+            else *value++ = '\0';
             len = strlen(value);
             buf_ensure(&txn->buf, len+1);
 
@@ -1803,8 +1801,6 @@ static int examine_request(struct transaction_t *txn)
             appendstrlist(&vals,
                           xmlURIUnescapeString(value, len, txn->buf.s));
             hash_insert(key, vals, &txn->req_qparams);
-
-            tok_fini(&tok2);
         }
         tok_fini(&tok);
 
