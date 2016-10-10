@@ -21,7 +21,7 @@ Security and Authentication
 
 .. toctree::
     :maxdepth: 1
-    
+
     features/authentication-kerberos
     features/authentication-ldap
     features/authentication-sql
@@ -33,18 +33,19 @@ Mailbox Management
 
 .. toctree::
     :maxdepth: 1
-    
+
     features/automatic-creation-of-mailboxes
     features/namespaces
+    features/virtual-domains
     features/mailbox-annotations
     features/mailbox-distribution
-    
+
 Message Management
 ------------------
- 
+
 .. toctree::
     :maxdepth: 1
-    
+
     features/delayed-delete
     features/delayed-expunge
     features/message-annotations
@@ -52,23 +53,22 @@ Message Management
     features/shared-seen-state
     features/server-side-filtering
     features/event-notifications
-    
+
 Storage
 -------
 
 .. toctree::
     :maxdepth: 1
-    
+
     features/mail-spool-partitions
     features/mailbox-metadata-partitions
     features/quota
     features/single-instance-store
-    
+
 Load Management
 ---------------
 
 .. toctree::
     :maxdepth: 1
-    
+
     features/server-aggregation
-    
