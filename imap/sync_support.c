@@ -2892,6 +2892,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.pout = sstate->pout;
 
     r = mboxlist_usermboxtree(userid, mailbox_cb, &mrock, MBOXTREE_DELETED);
+    if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
         r = quota_work(qr->name, sstate->pout);
