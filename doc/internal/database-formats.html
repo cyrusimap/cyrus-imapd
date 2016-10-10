@@ -237,6 +237,7 @@ CREATE TABLE ical_objs (
  mailbox TEXT NOT NULL,
  resource TEXT NOT NULL,
  imap_uid INTEGER,
+ modseq INTEGER,
  lock_token TEXT,
  lock_owner TEXT,
  lock_ownerid TEXT,
@@ -248,6 +249,7 @@ CREATE TABLE ical_objs (
  dtend TEXT,
  comp_flags INTEGER,
  sched_tag TEXT,
+ alive INTEGER,
  UNIQUE( mailbox, resource )
 );
 </pre>
@@ -262,8 +264,7 @@ CREATE INDEX idx_ical_uid ON ical_objs ( ical_uid );
 
 <h3>CardDAV</h3>
 
-<p>The format of the vCard table used by CardDAV is as follows (work
-  in progress):</p>
+<p>The format of the vCard table used by CardDAV is as follows:</p>
 
 <pre>
 CREATE TABLE vcard_objs (
@@ -272,6 +273,7 @@ CREATE TABLE vcard_objs (
  mailbox TEXT NOT NULL,
  resource TEXT NOT NULL,
  imap_uid INTEGER,
+ modseq INTEGER,
  lock_token TEXT,
  lock_owner TEXT,
  lock_ownerid TEXT,
@@ -282,9 +284,43 @@ CREATE TABLE vcard_objs (
  fullname TEXT,
  name TEXT,
  nickname TEXT,
- email TEXT,
+ alive INTEGER,
  UNIQUE( mailbox, resource )
 );
+</pre>
+
+<h3>WebDAV</h3>
+
+<p>The format of the object table used by WebDAV (both generic WebDAV
+  and CalDAV Managed Attachments) is as follows:</p>
+
+<pre>
+CREATE TABLE dav_objs (
+ rowid INTEGER PRIMARY KEY,
+ creationdate INTEGER,
+ mailbox TEXT NOT NULL,
+ resource TEXT NOT NULL,
+ imap_uid INTEGER,
+ modseq INTEGER,
+ lock_token TEXT,
+ lock_owner TEXT,
+ lock_ownerid TEXT,
+ lock_expire INTEGER,
+ filename TEXT,
+ type TEXT,
+ subtype TEXT,
+ res_uid TEXT,
+ ref_count INTEGER,
+ alive INTEGER,
+ UNIQUE( mailbox, resource )
+);
+</pre>
+
+<p>Because CalDAV Managed Attachments requires the server to locate a resource
+  by Managed-ID, the WebDAV object table has an additional index as follows:</p>
+
+<pre>
+CREATE INDEX idx_res_uid ON dav_objs ( res_uid );
 </pre>
 
 </body>
