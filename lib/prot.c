@@ -116,7 +116,9 @@ EXPORTED struct protstream *prot_writebuf(struct buf *buf)
     newstream->writetobuf = buf;
     newstream->fd = PROT_NO_FD;
     newstream->logfd = PROT_NO_FD;
-    newstream->big_buffer = PROT_NO_FD;
+    newstream->big_buffer =  PROT_NO_FD;
+    /* there's no way to wait for + go ahead here! */
+    newstream->isclient = 1;
 
     return newstream;
 }
