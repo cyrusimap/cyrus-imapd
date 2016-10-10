@@ -59,6 +59,7 @@
 #include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/strarray.h"
+#include "lib/util.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -252,6 +253,10 @@ int main(int argc, char **argv)
     struct backup *backup = NULL;
     mbname_t *mbname = NULL;
     int i, opt, r = 0;
+
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:fmuv")) != EOF) {
         switch (opt) {

@@ -55,6 +55,7 @@
 
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
+#include "lib/util.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -303,7 +304,7 @@ static void save_argv0(const char *s)
         argv0 = s;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
 
@@ -312,6 +313,10 @@ int main (int argc, char **argv)
     enum ctlbu_cmd cmd = CTLBU_CMD_UNSPECIFIED;
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
+
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, ":AC:DFPScfmpst:x:uvw")) != EOF) {
         switch (opt) {
