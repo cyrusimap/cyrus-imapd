@@ -206,7 +206,8 @@ EXPORTED void gzuc_free(struct gzuncat **gzp)
     struct gzuncat *gz = *gzp;
     *gzp = NULL;
 
-    inflateEnd(&gz->strm);
+    if (gz->current_offset >= 0)
+        inflateEnd(&gz->strm);
 
     if (gz->in_buf) {
         free(gz->in_buf);
