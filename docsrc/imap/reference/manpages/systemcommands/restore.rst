@@ -59,13 +59,23 @@ the **-M** option can be used to overrride the destination mailbox (see below),
 but note the consequences of doing this when multiple mailbox objects have
 been specified, or when the **-r** option is in use.
 
+Mailboxes that are created during the restoration process will have their ACL
+set to the one stored in the backup.  The **-A** option can be used to override
+this.  Mailboxes that are not created during the restoration process (i.e. when
+restoring into mailboxes that already exists) will not have their ACLs altered.
 
 Options
 =======
 
 .. option:: -A acl
 
-    Apply specified *acl* to restored mailboxes.
+    Apply specified *acl* to restored mailboxes, rather than their ACLs as
+    stored in the backup.
+
+    If *acl* is the empty string (e.g. ``-A ""``), mailboxes will be restored
+    with the default ACL for their destination owner.  This is mostly useful
+    when restoring folders from one user's backup into a different user's
+    mailbox.
 
 .. option:: -C config-file
 

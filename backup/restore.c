@@ -694,11 +694,19 @@ static void apply_mailbox_options(struct backup_mailbox *mailbox,
 
     if (options->override_acl) {
         if (options->verbose) {
-            fprintf(stderr, "%s: overriding acl with %s (was %s)\n",
+            fprintf(stderr, "%s: overriding acl with '%s' (was '%s')\n",
                     mailbox->mboxname, options->override_acl, mailbox->acl);
         }
         if (mailbox->acl) free(mailbox->acl);
-        mailbox->acl = xstrdup(options->override_acl);
+
+        /* treat empty override string as no ACL, resulting in the mailbox
+         * being restored with the default ACL for its owner. */
+        if (*options->override_acl) {
+            mailbox->acl = xstrdup(options->override_acl);
+        }
+        else {
+            mailbox->acl = NULL;
+        }
     }
 
     if (!options->keep_uidvalidity) {
