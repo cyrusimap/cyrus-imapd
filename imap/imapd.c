@@ -12308,7 +12308,22 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     */
     int have_childinfo = MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_HASNOCHILDREN;
     if ((listargs->ret & LIST_RET_CHILDREN) && !(attributes & have_childinfo)) {
-        if (mbentry) mboxlist_mboxtree(mbentry->name, set_haschildren, &attributes, MBOXTREE_SKIP_ROOT);
+        if (imapd_namespace.isalt && !strcmp(extname, "INBOX")) {
+            /* don't look inside INBOX under altnamespace, its children aren't children */
+        }
+        else {
+            char *intname = NULL, *freeme = NULL;
+
+            /* if we got here via subscribed_cb, mbentry isn't set */
+            if (mbentry)
+                intname = mbentry->name;
+            else
+                intname = freeme = mboxname_from_external(extname, &imapd_namespace, imapd_userid);
+
+            mboxlist_mboxtree(intname, set_haschildren, &attributes, MBOXTREE_SKIP_ROOT);
+            if (freeme) free(freeme);
+        }
+
         if (!(attributes & MBOX_ATTRIBUTE_HASCHILDREN))
             attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
     }
