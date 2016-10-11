@@ -1539,14 +1539,17 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                         [Build HTTP/2 support into httpd?]),
                 AC_MSG_WARN([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
+        LIB_MATH=
         PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
                 AC_DEFINE(HAVE_SHAPELIB,[],
-                        [Build geographic support into tzdist?]),
-                AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])],
+                        [Build geographic support into tzdist?])
+                AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])
+                LIB_MATH="-lm"
+                ],
                 AC_MSG_WARN([tzdist will not have geolocation support.  Consider installing shapelib]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${SHAPELIB_LIBS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)

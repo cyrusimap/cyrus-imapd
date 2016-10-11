@@ -52,6 +52,7 @@
 #include <unistd.h>
 #endif
 #include <ctype.h>
+#include <math.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -202,7 +203,7 @@ static void open_shape_file(struct buf *serverinfo)
         npoly != DBFGetRecordCount(dbf)) return;        /* record counts */
 
     fieldtype = DBFGetFieldInfo(dbf, 0, buf, NULL, NULL);
-    if (fieldtype != FTString || strcmp(buf, "TZID")) return;  /* TZIDs */
+    if (fieldtype != FTString || strcasecmp(buf, "TZID")) return;  /* TZIDs */
 
     geo_enabled = 1;
 }
@@ -227,20 +228,136 @@ static int pt_in_poly(int nvert, double *vx, double *vy, double px, double py)
     return in;
 }
 
-static const char *tzid_from_geo(double latitude, double longitude)
+
+#define M_EARTH_RADIUS    6371008.7                    /* mean radius (meters) */
+
+#define M_PI_180          0.01745329251994329547       /* pi / 180             */
+
+#define deg2rad(deg)      (deg * M_PI_180)             /* degrees -> radians   */
+
+#define vec_normal(v)     vec_mult(1 / vec_mag(v), v)  /* normalize vector     */
+
+#define vec_diff(v1, v2)  acos(vec_dot_prod(v1, v2))   /* angular difference   */
+
+struct vector {
+    double x, y, z;
+};
+
+static struct vector *geo2vec(double lat, double lon, struct vector *p)
 {
+    /* Convert lat/lon to radians */
+    lat = deg2rad(lat);
+    lon = deg2rad(lon);
+
+    /* Convert lat/lon to unit vector */
+    p->x = cos(lat) * cos(lon);
+    p->y = cos(lat) * sin(lon);
+    p->z = sin(lat);
+
+    return p;
+}
+
+static double vec_mag(const struct vector *v)
+{
+    return sqrt(v->x * v->x + v->y * v->y + v->z * v->z);
+}
+
+static struct vector *vec_mult(double m, struct vector *v)
+{
+    v->x *= m;
+    v->y *= m;
+    v->z *= m;
+
+    return v;
+}
+
+static double vec_dot_prod(const struct vector *v1, const struct vector *v2)
+{
+    return (v1->x * v2->x + v1->y * v2->y + v1->z * v2->z);
+}
+
+static struct vector *vec_cross_prod(const struct vector *v1,
+                                    const struct vector *v2,
+                                    struct vector *r)
+{
+    r->x = v1->y * v2->z - v1->z * v2->y;
+    r->y = v1->z * v2->x - v1->x * v2->z;
+    r->z = v1->x * v2->y - v1->y * v2->x;
+
+    return r;
+}
+
+static int pt_near_poly(int nvert, double *vx, double *vy,
+                        struct vector *p, double range)
+{
+    int i, j;
+
+    for (i = 0, j = nvert - 1; i < nvert; j = i++) {
+        struct vector a, b, n;
+
+        geo2vec(vy[j], vx[j], &a);
+        geo2vec(vy[i], vx[i], &b);
+
+        /* Check if either end point of the line is within range */
+        if (vec_diff(p, &a) <= range || vec_diff(p, &b) <= range) return 1;
+
+        /* Find unit normal vector (n) for plane passing through a & b */
+        vec_normal(vec_cross_prod(&a, &b, &n));
+
+        /* Shortest distance between p and geodesic passing through a & b (ab) */
+        if (asin(fabs(vec_dot_prod(&n, p))) <= range) {
+            struct vector c, d;
+            double ab_len;
+
+            /* Find perpendicular geodesic (d) through p to ab */
+            vec_cross_prod(p, &n, &d);
+
+            /* Find intersection point (c) of d and ab */
+            vec_normal(vec_cross_prod(&n, &d, &c));
+
+            /* Make sure intersection point (c) lies between a & b */
+            ab_len = vec_diff(&a, &b);
+            if (vec_diff(&a, &c) <= ab_len && vec_diff(&b, &c) <= ab_len) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static strarray_t *tzid_from_geo(struct transaction_t *txn,
+                                 double latitude, double longitude,
+                                 double uncertainty)
+{
+    strarray_t *tzids = strarray_new();
+    struct vector p;
     int i;
+
+    if (uncertainty) {
+        /* using unit vectors */
+        geo2vec(latitude, longitude, &p);
+        uncertainty /= M_EARTH_RADIUS;
+    }
 
     for (i = 0; i < npoly; i++) {
         SHPObject *poly = SHPReadObject(shp, i);
+
         int r = pt_in_poly(poly->nVertices, poly->padfX, poly->padfY,
                            longitude, latitude);
+
+        if (!r && uncertainty) {
+            r = pt_near_poly(poly->nVertices, poly->padfX, poly->padfY,
+                             &p, uncertainty);
+        }
         SHPDestroyObject(poly);
-        
-        if (r) return DBFReadStringAttribute(dbf, i, 0);
+
+        if (r) strarray_append(tzids, DBFReadStringAttribute(dbf, i, 0));
+
+        keepalive_response(txn);
     }
 
-    return NULL;
+    return tzids;
 }
 #else
 
@@ -248,12 +365,16 @@ static void open_shape_file(struct buf *serverinfo __attribute__((unused)))
 {
     return;
 }
+
 static void close_shape_file()
 {
     return;
 }
-static const char *tzid_from_geo(double latitude __attribute__((unused)),
-                                 double longitude __attribute__((unused)))
+
+static strarray_t *tzid_from_geo(struct transaction_t *txn __attribute__((unused)),
+                                 double latitude __attribute__((unused)),
+                                 double longitude __attribute__((unused)),
+                                 double uncertainty __attribute__((unused)))
 {
     return NULL;
 }
@@ -559,10 +680,9 @@ static int action_capa(struct transaction_t *txn)
                                             "  {s:s s:b}"
                                             "]}",
                                             "name", "geolocate", "uri-template",
-                                            "/zones{?latitude,longitude}",
+                                            "/zones{?location}",
                                             "parameters",
-                                            "name", "latitude", "required", 1,
-                                            "name", "longitude", "required", 1));
+                                            "name", "location", "required", 1));
         }
 
         /* Add supported formats */
@@ -723,6 +843,9 @@ static int action_list(struct transaction_t *txn)
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
     time_t changedsince = 0, lastmod;
+    double latitude = 99.9, longitude = 0.0;
+    double altitude = 0.0, uncertainty = 0.0;
+    strarray_t *geo_tzids = NULL;
     json_t *root = NULL;
 
     /* Get info record from the database */
@@ -738,29 +861,55 @@ static int action_list(struct transaction_t *txn)
         pattern = param->s;
     }
     else if (geo_enabled &&
-             (param = hash_lookup("latitude", &txn->req_qparams))) {
-        double latitude, longitude;
+             (param = hash_lookup("location", &txn->req_qparams))) {
+        /* Parse 'geo' URI */
         char *endptr;
 
-        latitude = strtod(param->s, &endptr);
-        if (param->next             /* once only */
-            || *endptr || errno) {  /* valid value */ 
-            return json_error_response(txn, TZ_INVALID_LATITUDE, param, NULL);
+        if (param->next                         /* once only */
+            || strncmp(param->s, "geo:", 4)) {  /* value value */
+            return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
-        if ((param = hash_lookup("longitude", &txn->req_qparams)))
-            longitude = strtod(param->s, &endptr);
-        if (!param || param->next   /* mandatory, once only */
-            || *endptr || errno) {  /* valid value */
-            return json_error_response(txn, TZ_INVALID_LONGITUDE, param, NULL);
+        latitude = strtod(param->s + 4, &endptr);
+        if (errno || *endptr != ','
+            || latitude < -90.0 || latitude > 90.0) {  /* valid value */ 
+            return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
-        pattern = tzid_from_geo(latitude, longitude);
-        if (!pattern) return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
-    }
-    else if (geo_enabled &&
-             (param = hash_lookup("longitude", &txn->req_qparams))) {
-        return json_error_response(txn, TZ_INVALID_LATITUDE, NULL, NULL);
+        longitude = strtod(++endptr, &endptr);
+        if (errno || (*endptr && !strchr(",;", *endptr))
+            || longitude < -180.0 || longitude > 180.0) {  /* valid value */ 
+            return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+        }
+
+        if (*endptr == ',') {
+            altitude = strtod(++endptr, &endptr);
+            if (*endptr && *endptr != ';') {  /* valid value */
+                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            }
+            (void) altitude;
+        }
+
+        if (!strncmp(endptr, ";crs=", 5)) {
+            char *crs = endptr + 5;
+            size_t len = strcspn(crs, ";");
+
+            if (len != 5 || strncmp(crs, "wgs84", 5)) {  /* unsupported value */
+                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            }
+            endptr = crs + len;
+        }
+
+        if (!strncmp(endptr, ";u=", 3)) {
+            uncertainty = strtod(endptr + 3, &endptr);
+            if (errno || uncertainty < 0) {  /* valid value */ 
+                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            }
+        }
+
+        if (*endptr && *endptr != ';') {  /* valid value */
+            return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+        }
     }
     else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
         unsigned prefix = 0;
@@ -812,7 +961,8 @@ static int action_list(struct transaction_t *txn)
 
     if (txn->meth != METH_HEAD) {
         struct list_rock lrock = { NULL, NULL, NULL };
-        struct hash_table tzids;
+        struct hash_table tzids = HASH_TABLE_INITIALIZER;
+        int i = 0;
 
         /* Start constructing our response */
         root = json_pack("{s:s s:[]}",
@@ -825,21 +975,32 @@ static int action_list(struct transaction_t *txn)
 
         lrock.meta = info.data;
         lrock.tzarray = json_object_get(root, "timezones");
+
+        if (latitude <= 90) {
+            geo_tzids = tzid_from_geo(txn, latitude, longitude, uncertainty);
+            pattern = strarray_nth(geo_tzids, 0);
+            if (!pattern) pattern = "/";  /* force lookup failure */
+        }
+
         if (pattern) {
             construct_hash_table(&tzids, 500, 1);
             lrock.tztable = &tzids;
         }
 
         /* Add timezones to array */
-        zoneinfo_find(pattern, !pattern, changedsince, &list_cb, &lrock);
+        do {
+            zoneinfo_find(pattern, !pattern, changedsince, &list_cb, &lrock);
 
-        if (pattern) free_hash_table(&tzids, NULL);
+        } while (geo_tzids && (pattern = strarray_nth(geo_tzids, ++i)));
+
+        free_hash_table(&tzids, NULL);
     }
 
     /* Output the JSON object */
     ret = json_response(precond, txn, root, NULL);
 
   done:
+    strarray_free(geo_tzids);
     freestrlist(info.data);
     return ret;
 }
