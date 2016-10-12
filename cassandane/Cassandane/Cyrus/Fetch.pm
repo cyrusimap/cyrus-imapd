@@ -321,12 +321,6 @@ sub test_fetch_section
     $res = $imaptalk->fetch('1', '(BODY.PEEK[4.HEADER.FIELDS (CONTENT-TYPE)])');
     $self->assert_str_equals($res->{'1'}->{headers}->{"content-type"}[0], "text/plain");
 
-    $res = $imaptalk->fetch('1', '(BODY[4.TEXT])');
-    $self->assert_str_equals($res->{'1'}->{body}, "body4");
-
-    $res = $imaptalk->fetch('1', '(BODY[4.1])');
-    $self->assert_str_equals($res->{'1'}->{body}, "body4");
-
     $res = $imaptalk->fetch('1', '(BODY[4.1.MIME])');
     $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
 
@@ -340,7 +334,7 @@ sub test_fetch_section
     $res = $imaptalk->fetch('1', '(BODY[3.2.3])');
     $self->assert_null($res->{'1'}->{body});
 
-    $res = $imaptalk->fetch('1', '(BODY[3.2.1.1])');
+    $res = $imaptalk->fetch('1', '(BODY[3.2.1.2])');
     $self->assert_null($res->{'1'}->{body});
 
     $res = $imaptalk->fetch('1', '(BODY[4.2])');
@@ -350,13 +344,221 @@ sub test_fetch_section
     $self->assert_null($res->{'1'}->{body});
 }
 
+sub test_fetch_section_multipart
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # Start body
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+
+    # Subpart 1
+    $body .= ""
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "\r\n"
+    . "body1"
+    . "\r\n";
+
+    # Subpart 2
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: text/html;charset=\"ISO-8859-1\"\r\n"
+    . "\r\n"
+    . "<html><body><p>body2</p></body></html>"
+    . "\r\n";
+
+    # Subpart 3
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: multipart/mixed;boundary=frontier\r\n"
+    . "\r\n";
+
+    # Subpart 3.1
+    $body .= "--frontier\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body31"
+    . "\r\n";
+
+    # Subpart 3.2
+    $body .= "--frontier\r\n"
+    . "Content-Type: multipart/mixed;boundary=border\r\n"
+    . "\r\n"
+    . "body32"
+    . "\r\n";
+
+    # Subpart 3.2.1
+    $body .= "--border\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body321"
+    . "\r\n";
+
+    # Subpart 3.2.2
+    $body .= "--border\r\n"
+    . "Content-Type: application/octet-stream\r\n"
+    . "Content-Transfer-Encoding: base64\r\n"
+    . "\r\n"
+    . "PGh0bWw+CiAgPGhlYWQ+CiAg=="
+    . "\r\n";
+
+    # End subpart 3.2
+    $body .= "--border--\r\n";
+
+    # End subpart 3
+    $body .= "--frontier--\r\n";
+
+    # End body
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body1");
+
+    $res = $imaptalk->fetch('1', '(BODY[2])');
+    $self->assert_str_equals($res->{'1'}->{body}, "<html><body><p>body2</p></body></html>");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body31");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body321");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.1.MIME])');
+    $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
+    $self->assert(not $res->{'1'}->{body} =~ m/body321/);
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.2])');
+    $self->assert_str_equals($res->{'1'}->{body}, "PGh0bWw+CiAgPGhlYWQ+CiAg==");
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.2]<4.3>)');
+    $self->assert_str_equals($res->{'1'}->{body}, substr("PGh0bWw+CiAgPGhlYWQ+CiAg==", 4, 3));
+
+    # Check for some bogus subparts
+    $res = $imaptalk->fetch('1', '(BODY[3.2.3])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BODY[3.2.1.2])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BODY[4.2])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BODY[-1])');
+    $self->assert_null($res->{'1'}->{body});
+}
+
+sub test_fetch_section_rfc822digest
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $ct = "multipart/digest; boundary=\"foo\"";
+    my $from = "sub\@domain.org";
+    my $date = "Sun, 12 Aug 2012 12:34:56 +0300";
+    my $subj = "submsg";
+
+    my $body = ""
+    . "From: $from\r\n"
+    . "Date: $date\r\n"
+    . "Subject: $subj\r\n"
+    . "Content-Type: $ct\r\n"
+    . "\r\n"
+    . "prologue\r\n"
+    . "\r\n"
+    . "--foo\r\n"
+    . "\r\n"
+    . "From: m1\@example.com\r\n"
+    . "Subject: m1\r\n"
+    . "\r\n"
+    . "m1 body\r\n"
+    . "\r\n"
+    . "--foo\r\n"
+    . "X-Mime: m2 header\r\n"
+    . "\r\n"
+    . "From: m2\@example.com\r\n"
+    . "Subject: m2\r\n"
+    . "\r\n"
+    . "m2 body\r\n"
+    . "\r\n"
+    . "--foo--\r\n"
+    . "\r\n"
+    . "epilogue\r\n"
+    . "\r\n";
+
+    $self->make_message("foo",
+        mime_type => "message/rfc822",
+        body => $body,
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.HEADER])');
+    $self->assert_str_equals($res->{'1'}->{headers}->{"content-type"}[0], $ct);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"date"}[0], $date);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"from"}[0], $from);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"subject"}[0], $subj);
+}
+
+sub test_fetch_section_rfc822
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $body = ""
+    . "From: sub\@domain.org\r\n"
+    . "Date: Sun, 12 Aug 2012 12:34:56 +0300\r\n"
+    . "Subject: submsg\r\n"
+    . "\r\n"
+    . "foo";
+
+    $self->make_message("foo",
+        mime_type => "message/rfc822",
+        body => $body,
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, "foo");
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "foo");
+}
+
+
 sub test_fetch_section_nomultipart
 {
     my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 
-    $self->make_message("foo",
+    $self->make_message(
+        "foo",
+        from =>  Cassandane::Address->new(
+            localpart => 'foo',
+            domain    => 'example.com',
+        ),
         mime_type => "text/plain",
         body => "body1",
     );
@@ -378,6 +580,9 @@ sub test_fetch_section_nomultipart
 
     $res = $imaptalk->fetch('1', '(BODY[HEADER])');
     $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[HEADER.FIELDS (FROM)])');
+    $self->assert_str_equals($res->{'1'}->{headers}->{from}[0], "<foo\@example.com>");
 
     $res = $imaptalk->fetch('1', '(BODY[1.HEADER])');
     $self->assert_null($res->{'1'}->{body});
