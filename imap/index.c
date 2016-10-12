@@ -3153,6 +3153,56 @@ static int body_is_rfc822(struct body *body)
         !strcasecmpsafe(body->subtype, "RFC822");
 }
 
+static int find_part(struct body **pbody, int part, char next, int top)
+{
+    struct body *body = *pbody;
+    int is_rfc822 = body_is_rfc822(body);
+
+    /* Part 0 means HEADER/TEXT */
+
+    if (is_rfc822 && top) {
+        /* A top RFC822 message */
+        if (part > 1)
+            return IMAP_BADURL;
+        else if (!part)
+            body = body->subpart;
+        else if (next && next != ']' && next != 'M')
+            body = body->subpart;
+    } else if (is_rfc822 && body->subpart->numparts) {
+        /* An embedded RFC822 message with multiparts */
+        if (part && part >= body->subpart->numparts + 1)
+            return IMAP_BADURL;
+        if (part)
+            body = body->subpart->subpart + part - 1;
+        else
+            body = body->subpart;
+    } else if (is_rfc822) {
+        /* An embedded RFC822 message with one part */
+        if (part > 1)
+            return IMAP_BADURL;
+        if (!part || (next != ']' && next != 'M'))
+            body = body->subpart;
+    } else if (body->numparts) {
+        /* A multipart */
+        if (part >= body->numparts + 1)
+            return IMAP_BADURL;
+        if (part)
+            body = body->subpart + part - 1;
+        /* Bail out early for bogus URLs */
+        if (!body_is_rfc822(body) && (next == 'H' || next == 'T'))
+            return IMAP_BADURL;
+    } else {
+        /* Every message has at least one part number. */
+        if (part > 1)
+            return IMAP_BADURL;
+        if (next && next != ']' && next != 'M')
+            return IMAP_BADURL;
+    }
+
+    *pbody = body;
+    return 0;
+}
+
 /*
  * Helper function to fetch a body section
  */
@@ -3185,9 +3235,14 @@ static int index_fetchsection(struct index_state *state, const char *resp,
         return 0;
     }
 
+    /* Special-case BODY[TEXT] and BODY[HEADER] */
+    if (*p == 'T' || *p == 'H') {
+        if (*p == 'H') fetchmime++;
+        goto emitbody;
+    }
+
     while (*p != ']' && *p != 'M') {
         int r;
-        int parent_is_rfc822 = 0;
 
         /* Generate the actual part number */
         r = parseint32(p, &p, &skip);
@@ -3212,41 +3267,21 @@ static int index_fetchsection(struct index_state *state, const char *resp,
                 break;
             }
         }
-
-        /* Embedded RFC822 messages contain one extra tree level */
-        if ((r || skip) && body_is_rfc822(body)) {
-            body = body->subpart;
-            parent_is_rfc822 = 1;
-        }
-
-        /* RFC 3501: "Every message has at least one part number" */
-        if (skip == 1 && !body->numparts && (body == top || parent_is_rfc822)) {
-            if (*p != ']' && *p != 'M') goto badpart;
-            skip = 0;
-        }
-
-        /* section number too large */
-        if (skip >= body->numparts + 1) goto badpart;
-
+        
         if (*p != ']' && *p != 'M') {
             /* We are NOT at the end of a part specification, so there's
              * a subpart being requested.  Find the subpart in the tree. */
-
-            if (skip) {
-                body = body->subpart + skip - 1;
-                skip = 0;
-            }
+            r = find_part(&body, skip, *p, body == top);
+            if (r) goto badpart;
         }
     }
 
     if (*p == 'M') fetchmime++;
 
-    if (skip) {
-        if (body->numparts + 1 <= skip)
-            goto badpart;
-        body = body->subpart + skip - 1;
-    }
+    int r = find_part(&body, skip, *p, body == top);
+    if (r) goto badpart;
 
+emitbody:
     offset = fetchmime ? body->header_offset : body->content_offset;
     size = fetchmime ? body->header_size : body->content_size;
 
@@ -3318,6 +3353,7 @@ static void index_fetchfsection(struct index_state *state,
     char *buf;
     unsigned size;
     int r;
+    struct body *top = body;
 
     /* If no data, output null quoted string */
     if (!msg_base) {
@@ -3331,25 +3367,13 @@ static void index_fetchfsection(struct index_state *state,
         r = parseint32(p, &p, &skip);
         if (*p == '.') p++;
 
-        /* section number too large */
-        if (r || skip == 0 || skip >= body->numparts + 1) goto badpart;
+        if (r || skip == 0) goto badpart;
 
-        /* Embedded RFC822 messages contain one extra tree level */
-        if ((r || skip) && body_is_rfc822(body)) {
-            body = body->subpart;
-        }
-
-        if (skip) {
-            body = body->subpart + skip - 1;
-            skip = 0;
-        }
+        r = find_part(&body, skip, *p, body == top);
+        if (r) goto badpart;
     }
 
-    /* leaf object */
-    if (!body->numparts) goto badpart;
-
-    if (body_is_rfc822(body))
-        body = body->subpart;
+    if (body_is_rfc822(body)) body = body->subpart;
 
     if (!body->header_size) goto badpart;
 
@@ -4202,8 +4226,6 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         const char *p = ucase((char *) section);
 
         while (*p && *p != 'M') {
-            int parent_is_rfc822 = 0;
-
             /* Generate the actual part number */
             r = parseint32(p, &p, &skip);
             if (*p == '.') p++;
@@ -4228,46 +4250,18 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
                 }
             }
 
-            /* Embedded RFC822 messages contain one extra tree level */
-            if ((r || skip) && body_is_rfc822(body)) {
-                body = body->subpart;
-                parent_is_rfc822 = 1;
-            }
-
-            /* RFC 3501: "Every message has at least one part number" */
-            if (skip == 1 && !body->numparts && (body == top || parent_is_rfc822)) {
-                if (*p != ']' && *p != 'M') {
-                    r = IMAP_BADURL;
-                    goto done;
-                }
-                skip = 0;
-            }
-
-            /* section number too large */
-            if (skip >= body->numparts + 1) {
-                r = IMAP_BADURL;
-                goto done;
-            }
-
             if (*p && *p != 'M') {
                 /* We are NOT at the end of a part specification, so there's
                  * a subpart being requested.  Find the subpart in the tree. */
-                if (skip) {
-                    body = body->subpart + skip - 1;
-                    skip = 0;
-                }
+                r = find_part(&body, skip, *p, body == top);
+                if (r) goto done;
             }
         }
 
         if (*p == 'M') fetchmime++;
 
-        if (skip) {
-            if (body->numparts + 1 <= skip) {
-                r = IMAP_BADURL;
-                goto done;
-            }
-            body = body->subpart + skip - 1;
-        }
+        r = find_part(&body, skip, *p, body == top);
+        if (r) goto done;
 
         section_offset = fetchmime ? body->header_offset : body->content_offset;
         section_size = fetchmime ? body->header_size : body->content_size;
