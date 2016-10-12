@@ -6272,7 +6272,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     }
 
     /* need permission to delete from source if it's a move */
-    if (ismove && !(imapd_index->myrights & ACL_EXPUNGE))
+    if (!r && ismove && !(imapd_index->myrights & ACL_EXPUNGE))
         r = IMAP_PERMISSION_DENIED;
 
     /* local mailbox -> local mailbox */
