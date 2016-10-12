@@ -76,7 +76,7 @@ static void usage(void)
 
     fprintf(stderr, "\n%s\n",
             "Options:\n"
-            "    -A acl              # apply specified acl to restored mailboxes\n"
+            "    -A [acl]            # apply specified acl to restored mailboxes\n"
             "    -C alt_config       # alternate config file\n"
             "    -D                  # don't trim deletedprefix before restoring\n"
             "    -F input-file       # read mailboxes/messages from file rather than argv\n"
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
+    while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -278,6 +278,10 @@ int main(int argc, char **argv)
             break;
         case 'z':
             options.require_compression = 1;
+            break;
+        case ':':
+            if (optopt == 'A') options.override_acl = "";
+            else usage();
             break;
         default:
             usage();

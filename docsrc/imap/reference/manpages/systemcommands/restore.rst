@@ -67,15 +67,15 @@ restoring into mailboxes that already exists) will not have their ACLs altered.
 Options
 =======
 
-.. option:: -A acl
+.. option:: -A [acl]
 
     Apply specified *acl* to restored mailboxes, rather than their ACLs as
     stored in the backup.
 
-    If *acl* is the empty string (e.g. ``-A ""``), mailboxes will be restored
-    with the default ACL for their destination owner.  This is mostly useful
-    when restoring folders from one user's backup into a different user's
-    mailbox.
+    If *acl* is the empty string (e.g. ``-A ""``) or is unspecified, mailboxes
+    will be restored with the default ACL for their destination owner.  This
+    is mostly useful when restoring folders from one user's backup into a
+    different user's mailbox.
 
 .. option:: -C config-file
 
