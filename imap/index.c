@@ -4186,7 +4186,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     int r = 0;
     char *decbuf = NULL;
     struct index_record record;
-    struct body *top, *body = NULL;
+    struct body *top = NULL, *body = NULL;
     size_t section_offset, section_size;
 
     r = index_lock(state);
@@ -4347,7 +4347,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     index_unlock(state);
     buf_free(&buf);
 
-    if (body) message_free_body(body);
+    if (top) message_free_body(top);
     if (decbuf) free(decbuf);
     return r;
 }
