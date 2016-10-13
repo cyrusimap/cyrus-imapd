@@ -4244,19 +4244,27 @@ static void extract_one(struct buf *buf,
         buf_appendcstr(buf, p);
         break;
     case MESSAGE_SNIPPET:
-        if (isutf8)
-            p = charset_convert(buf_cstring(raw), charset_lookupname("utf-8"), CHARSET_SNIPPET);
-        else
+        if (isutf8) {
+            charset_t utf8 = charset_lookupname("utf-8");
+            p = charset_convert(buf_cstring(raw), utf8, CHARSET_SNIPPET);
+            charset_free(&utf8);
+        }
+        else {
             p = charset_decode_mimeheader(buf_cstring(raw), CHARSET_SNIPPET);
+        }
         buf_appendcstr(buf, p);
         break;
     case MESSAGE_SEARCH:
         /* TODO: need a variant of decode_mimeheader() which
          * takes two struct buf* and a search flag */
-        if (isutf8)
-            p = charset_convert(buf_cstring(raw), charset_lookupname("utf-8"), charset_flags);
-        else
+        if (isutf8) {
+            charset_t utf8 = charset_lookupname("utf-8");
+            p = charset_convert(buf_cstring(raw), utf8, charset_flags);
+            charset_free(&utf8);
+        }
+        else {
             p = charset_decode_mimeheader(buf_cstring(raw), charset_flags);
+        }
         buf_appendcstr(buf, p);
         break;
     }
