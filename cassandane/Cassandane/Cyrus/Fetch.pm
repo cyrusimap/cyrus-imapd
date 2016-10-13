@@ -568,11 +568,6 @@ sub test_fetch_section_nomultipart
     $res = $imaptalk->fetch('1', '(BODY[1])');
     $self->assert_str_equals($res->{'1'}->{body}, "body1");
 
-    # ".0 maps internally to .0.MIME"
-    $res = $imaptalk->fetch('1', '(BODY[0])');
-    $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
-    $self->assert(not $res->{'1'}->{body} =~ m/body1/);
-
     # RFC 3501: "Every message has at least one part number."
     $res = $imaptalk->fetch('1', '(BODY[1.MIME])');
     $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
@@ -587,12 +582,19 @@ sub test_fetch_section_nomultipart
     $res = $imaptalk->fetch('1', '(BODY[1.HEADER])');
     $self->assert_null($res->{'1'}->{body});
 
+    # invalid
+    $res = $imaptalk->fetch('1', '(BODY[0])');
+    $self->assert_null($res->{'1'}->{body});
+
+    # invalid
     $res = $imaptalk->fetch('1', '(BODY[1.1])');
     $self->assert_null($res->{'1'}->{body});
 
+    # invalid
     $res = $imaptalk->fetch('1', '(BODY[0.1])');
     $self->assert_null($res->{'1'}->{body});
 
+    # invalid
     $res = $imaptalk->fetch('1', '(BODY[1.0])');
     $self->assert_null($res->{'1'}->{body});
 
