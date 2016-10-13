@@ -1522,7 +1522,9 @@ static int examine_request(struct transaction_t *txn)
     else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
         txn->flags.conn |= CONN_UPGRADE;
-        txn->flags.upgrade = UPGRADE_TLS | UPGRADE_HTTP2;
+        txn->flags.upgrade = UPGRADE_HTTP2;
+        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))
+            txn->flags.upgrade |= UPGRADE_TLS;
     }
 
     /* Check message framing */
