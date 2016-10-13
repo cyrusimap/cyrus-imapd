@@ -59,7 +59,8 @@ use Cassandane::PortManager;
 
 my @stores = qw(store adminstore
 		replica_store replica_adminstore
-		frontend_store frontend_adminstore);
+		frontend_store frontend_adminstore
+		backend2_store backend2_adminstore);
 my %magic_handlers;
 
 # This code for storing function attributes is from
@@ -279,6 +280,7 @@ sub _create_instances
     my $sync_port;
     my $mupdate_port;
     my $backend1_imapd_port;
+    my $backend2_imapd_port;
     my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
@@ -326,6 +328,8 @@ sub _create_instances
 		mupdate_password => 'mupdpass',
 		proxyservers => 'mailproxy',
 		lmtp_admins => 'mailproxy',
+		proxy_authname => 'mailproxy',
+		proxy_password => 'mailproxy',
 	    );
 	}
 
@@ -383,6 +387,8 @@ sub _create_instances
 
 	if ($want->{murder})
 	{
+	    $backend2_imapd_port = Cassandane::PortManager::alloc();
+
 	    # set up a front end on which we also run the mupdate master
 	    my $frontend_conf = $self->{_config}->clone();
 	    $frontend_conf->set(
@@ -394,7 +400,8 @@ sub _create_instances
 		mupdate_username => 'mupduser',
 		mupdate_authname => 'mupduser',
 		mupdate_password => 'mupdpass',
-		serverlist => "localhost:$backend1_imapd_port",
+		serverlist =>
+		    "localhost:$backend1_imapd_port localhost:$backend2_imapd_port",
 		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
@@ -424,6 +431,44 @@ sub _create_instances
 	    $self->{instance}->remove_service('imap');
 	    $self->{instance}->add_service(name => 'imap',
 					   port => $backend1_imapd_port);
+
+
+	    # set up a second backend
+	    my $backend2_conf = $self->{_config}->clone();
+	    $backend2_conf->set(
+		servername => "localhost:$backend2_imapd_port",
+		mupdate_server => "localhost:$mupdate_port",
+		# XXX documentation says to use mupdate_port, but
+		# XXX this doesn't work -- need to embed port number in
+		# XXX mupdate_server setting instead.
+		#mupdate_port => $mupdate_port,
+		mupdate_username => 'mupduser',
+		mupdate_authname => 'mupduser',
+		mupdate_password => 'mupdpass',
+		proxyservers => 'mailproxy',
+		lmtp_admins => 'mailproxy',
+		sasl_mech_list => 'PLAIN',
+		proxy_authname => 'mailproxy',
+		proxy_password => 'mailproxy',
+	    );
+
+	    $instance_params{description} = "murder backend2 for test $self->{_name}";
+	    $instance_params{config} = $backend2_conf;
+	    $self->{backend2} = Cassandane::Instance->new(%instance_params,
+							  setup_mailbox => 0); # XXX ?
+	    $self->{backend2}->add_services(@{$want->{services}});
+
+	    # arrange for backend2 to push to mupdate on startup
+	    $self->{backend2}->add_start(name => 'mupdatepush',
+					 argv => ['ctl_mboxlist', '-m']);
+
+	    # arrange for backend2 imap to run on a known port
+	    $self->{backend2}->remove_service('imap');
+	    $self->{backend2}->add_service(name => 'imap',
+					   port => $backend2_imapd_port);
+
+	    $self->{backend2}->_setup_for_deliver()
+		if ($want->{deliver});
 	}
 
 	if ($want->{backups})
@@ -524,6 +569,8 @@ sub _start_instances
 	if (defined $self->{frontend});
     $self->{instance}->start()
 	if (defined $self->{instance});
+    $self->{backend2}->start()
+	if (defined $self->{backend2});
     $self->{replica}->start()
 	if (defined $self->{replica});
     $self->{backups}->start()
@@ -539,6 +586,8 @@ sub _start_instances
     $self->{frontend_adminstore} = undef;
     $self->{backend1_store} = undef;
     $self->{backend1_adminstore} = undef;
+    $self->{backend2_store} = undef;
+    $self->{backend2_adminstore} = undef;
 
     # Run the replication engine to create the user mailbox
     # in the replica.  Doing it this way avoids issues with
@@ -586,7 +635,7 @@ sub _start_instances
     }
     if (defined $self->{frontend})
     {
-	# aliases for the backend store(s)
+	# aliases for first backend store
 	$self->{backend1_store} = $self->{store};
 	$self->{backend1_adminstore} = $self->{adminstore};
 
@@ -596,6 +645,17 @@ sub _start_instances
 	    $self->{frontend_store} = $svc->create_store(%store_params)
 		if ($self->{_want}->{store});
 	    $self->{frontend_adminstore} = $svc->create_store(%adminstore_params)
+		if ($self->{_want}->{adminstore});
+	}
+    }
+    if (defined $self->{backend2})
+    {
+	my $svc = $self->{backend2}->get_service('imap');
+	if (defined $svc)
+	{
+	    $self->{backend2_store} = $svc->create_store(%store_params)
+		if ($self->{_want}->{store});
+	    $self->{backend2_adminstore} = $svc->create_store(%adminstore_params)
 		if ($self->{_want}->{adminstore});
 	}
     }
@@ -631,6 +691,12 @@ sub tear_down
 	$self->{backups}->stop();
 	$self->{backups}->cleanup();
 	$self->{backups} = undef;
+    }
+    if (defined $self->{backend2})
+    {
+	$self->{backend2}->stop();
+	$self->{backend2}->cleanup();
+	$self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
