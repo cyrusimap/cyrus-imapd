@@ -3154,7 +3154,7 @@ static int body_is_rfc822(struct body *body)
         !strcasecmpsafe(body->subtype, "RFC822");
 }
 
-static struct body *find_part(struct body *body, uint32_t part)
+static struct body *find_part(struct body *body, int32_t part)
 {
     if (body_is_rfc822(body))
         body = body->subpart;
@@ -3334,7 +3334,6 @@ static void index_fetchfsection(struct index_state *state,
     char *buf;
     unsigned size;
     int r;
-    struct body *top = body;
 
     /* If no data, output null quoted string */
     if (!msg_base) {
