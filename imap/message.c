@@ -2334,8 +2334,15 @@ static void message_write_charset(struct buf *buf, const struct body *body)
 
     /* write charset/encoding preamble */
     if (charset != CHARSET_UNKNOWN_CHARSET) {
+        size_t itemsize;
+
         name = charset_name(charset);
         len = strlen(name);
+
+        /* charset name length is a multiple of cache item size,
+         * including the terminating zero byte(s) */
+        itemsize = (size_t) CACHE_ITEM_SIZE_SKIP;
+        len = ((len / itemsize) + 1) * itemsize;
         if (len > 0xffff) len = 0;
     }
     /* we store 0x100 to say that this is the newer version so that parsers
@@ -2343,7 +2350,12 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff)|0x100);
 
     /* write charset identifier */
-    if (len && name) buf_appendcstr(buf, name);
+    if (len) {
+        char *tmp = (char*) xcalloc(sizeof(char), len);
+        memcpy(tmp, name, strlen(name));
+        buf_appendmap(buf, tmp, len);
+        free(tmp);
+    }
     charset_free(&charset);
 }
 
