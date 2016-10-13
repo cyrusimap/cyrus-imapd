@@ -278,7 +278,7 @@ sub _create_instances
     my ($self) = @_;
     my $sync_port;
     my $mupdate_port;
-    my $backend_imapd_port;
+    my $backend1_imapd_port;
     my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
@@ -312,10 +312,10 @@ sub _create_instances
 	if ($want->{murder})
 	{
 	    $mupdate_port = Cassandane::PortManager::alloc();
-	    $backend_imapd_port = Cassandane::PortManager::alloc();
+	    $backend1_imapd_port = Cassandane::PortManager::alloc();
 
 	    $conf->set(
-		servername => "localhost:$backend_imapd_port",
+		servername => "localhost:$backend1_imapd_port",
 		mupdate_server => "localhost:$mupdate_port",
 		# XXX documentation says to use mupdate_port, but
 		# XXX this doesn't work -- need to embed port number in
@@ -394,7 +394,7 @@ sub _create_instances
 		mupdate_username => 'mupduser',
 		mupdate_authname => 'mupduser',
 		mupdate_password => 'mupdpass',
-		serverlist => "localhost:$backend_imapd_port",
+		serverlist => "localhost:$backend1_imapd_port",
 		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
@@ -416,14 +416,14 @@ sub _create_instances
 					   prefork => 1);
 	    $self->{frontend}->add_services(@{$want->{services}});
 
-	    # arrange for the backend to push to mupdate on startup
+	    # arrange for backend1 to push to mupdate on startup
 	    $self->{instance}->add_start(name => 'mupdatepush',
 					 argv => ['ctl_mboxlist', '-m']);
 
-	    # arrange for the backend imapd to run on a known port
+	    # arrange for backend1 imapd to run on a known port
 	    $self->{instance}->remove_service('imap');
 	    $self->{instance}->add_service(name => 'imap',
-					   port => $backend_imapd_port);
+					   port => $backend1_imapd_port);
 	}
 
 	if ($want->{backups})
@@ -537,8 +537,8 @@ sub _start_instances
     $self->{replica_adminstore} = undef;
     $self->{frontend_store} = undef;
     $self->{frontend_adminstore} = undef;
-    $self->{backend_store} = undef;
-    $self->{backend_adminstore} = undef;
+    $self->{backend1_store} = undef;
+    $self->{backend1_adminstore} = undef;
 
     # Run the replication engine to create the user mailbox
     # in the replica.  Doing it this way avoids issues with
@@ -587,8 +587,8 @@ sub _start_instances
     if (defined $self->{frontend})
     {
 	# aliases for the backend store(s)
-	$self->{backend_store} = $self->{store};
-	$self->{backend_adminstore} = $self->{adminstore};
+	$self->{backend1_store} = $self->{store};
+	$self->{backend1_adminstore} = $self->{adminstore};
 
 	my $svc = $self->{frontend}->get_service('imap');
 	if (defined $svc)
@@ -617,8 +617,8 @@ sub tear_down
     }
     $self->{master_store} = undef;
     $self->{master_adminstore} = undef;
-    $self->{backend_store} = undef;
-    $self->{backend_adminstore} = undef;
+    $self->{backend1_store} = undef;
+    $self->{backend1_adminstore} = undef;
 
     if (defined $self->{instance})
     {

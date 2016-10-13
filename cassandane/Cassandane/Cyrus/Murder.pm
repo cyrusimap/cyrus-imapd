@@ -107,7 +107,7 @@ sub test_list_specialuse
     my ($self) = @_;
 
     my $frontend = $self->{frontend_store}->get_client();
-    my $backend = $self->{backend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
 
     my %specialuse = map { $_ => 1 } qw( Drafts Junk Sent Trash );
     my %other = map { $_ => 1 } qw( lists personal timesheets );
@@ -174,7 +174,7 @@ sub test_xlist
     my ($self) = @_;
 
     my $frontend = $self->{frontend_store}->get_client();
-    my $backend = $self->{backend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
 
     my %specialuse = map { $_ => 1 } qw( Drafts Junk Sent Trash );
     my %other = map { $_ => 1 } qw( lists personal timesheets );
@@ -251,7 +251,7 @@ sub test_move_to_backend_nonexistent
     $exp{C} = $self->make_message("Message C", store => $self->{frontend_store});
 
     my $frontend = $self->{frontend_store}->get_client();
-    my $backend = $self->{backend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
 
     # create a destination folder (on both frontend and backend)
     $frontend->create($dest_folder);
@@ -300,7 +300,7 @@ sub test_move_to_nonexistent
     $exp{C} = $self->make_message("Message C", store => $self->{frontend_store});
 
     my $frontend = $self->{frontend_store}->get_client();
-    my $backend = $self->{backend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
 
     # make sure we don't unexpectedly have the nonexistent folder
     my $f_folders = $frontend->list('', '*');
