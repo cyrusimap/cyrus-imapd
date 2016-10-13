@@ -5,7 +5,7 @@ Installation of Cyrus IMAP |imap_current_stable_version| on Fedora
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_current_stable_version| can
+    Packages for Cyrus IMAP version |imap_current_stable_version| can
     be obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:

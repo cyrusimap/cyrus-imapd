@@ -5,7 +5,7 @@ Installation of Cyrus IMAP |imap_last_stable_next_version| on CentOS
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_last_stable_next_version| can
+    Packages for Cyrus IMAP version |imap_last_stable_next_version| can
     be obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:

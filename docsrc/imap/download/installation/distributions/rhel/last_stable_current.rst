@@ -5,7 +5,7 @@ Installation of Cyrus IMAP |imap_last_stable_version| on Red Hat Enterprise Linu
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_last_stable_version| can be
+    Packages for Cyrus IMAP version |imap_last_stable_version| can be
     obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:
