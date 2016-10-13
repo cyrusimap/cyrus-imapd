@@ -361,6 +361,7 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     seqset_free(event->uidset);
     seqset_free(event->olduidset);
     strarray_fini(&event->midset);
+    strarray_fini(&event->flagnames);
 
     for (i = 0; i <= MAX_PARAM; i++) {
         if (event->params[i].filled && event->params[i].type == EVENT_PARAM_STRING)
@@ -656,11 +657,11 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
                 if ((i = strarray_find(&event->flagnames, "\\Deleted", 0)) >= 0) {
                     type = EVENT_MESSAGE_TRASH;
-                    strarray_remove(&event->flagnames, i);
+                    free(strarray_remove(&event->flagnames, i));
                 }
                 else if ((i = strarray_find(&event->flagnames, "\\Seen", 0)) >= 0) {
                     type = EVENT_MESSAGE_READ;
-                    strarray_remove(&event->flagnames, i);
+                    free(strarray_remove(&event->flagnames, i));
                 }
             }
 

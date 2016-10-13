@@ -1291,8 +1291,9 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_set_numunseen(flagsclear, mailbox, state->numunseen);
 
     mboxevent_notify(mboxevents);
-    mboxevent_freequeue(&mboxevents);
+
 out:
+    mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);
     seqset_free(seq);
