@@ -3153,54 +3153,26 @@ static int body_is_rfc822(struct body *body)
         !strcasecmpsafe(body->subtype, "RFC822");
 }
 
-static int find_part(struct body **pbody, int part, char next, int top)
+static struct body *find_part(struct body *body, uint32_t part)
 {
-    struct body *body = *pbody;
-    int is_rfc822 = body_is_rfc822(body);
+    if (body_is_rfc822(body))
+        body = body->subpart;
+    else if (!body->numparts)
+        return NULL;
 
-    /* Part 0 means HEADER/TEXT */
-
-    if (is_rfc822 && top) {
-        /* A top RFC822 message */
-        if (part > 1)
-            return IMAP_BADURL;
-        else if (!part)
-            body = body->subpart;
-        else if (next && next != ']' && next != 'M')
-            body = body->subpart;
-    } else if (is_rfc822 && body->subpart->numparts) {
-        /* An embedded RFC822 message with multiparts */
-        if (part && part >= body->subpart->numparts + 1)
-            return IMAP_BADURL;
-        if (part)
-            body = body->subpart->subpart + part - 1;
-        else
-            body = body->subpart;
-    } else if (is_rfc822) {
-        /* An embedded RFC822 message with one part */
-        if (part > 1)
-            return IMAP_BADURL;
-        if (!part || (next != ']' && next != 'M'))
-            body = body->subpart;
-    } else if (body->numparts) {
+    if (body->numparts) {
         /* A multipart */
         if (part >= body->numparts + 1)
-            return IMAP_BADURL;
-        if (part)
-            body = body->subpart + part - 1;
-        /* Bail out early for bogus URLs */
-        if (!body_is_rfc822(body) && (next == 'H' || next == 'T'))
-            return IMAP_BADURL;
-    } else {
+            return NULL;
+        body = body->subpart + part - 1;
+    }
+    else {
         /* Every message has at least one part number. */
         if (part > 1)
-            return IMAP_BADURL;
-        if (next && next != ']' && next != 'M')
-            return IMAP_BADURL;
+            return NULL;
     }
 
-    *pbody = body;
-    return 0;
+    return body;
 }
 
 /*
@@ -3212,16 +3184,17 @@ static int index_fetchsection(struct index_state *state, const char *resp,
                               unsigned start_octet, unsigned octet_count)
 {
     const char *p;
-    int32_t skip = 0;
-    int fetchmime = 0;
     unsigned offset = 0;
     char *decbuf = NULL;
     struct buf msg = BUF_INITIALIZER;
     struct body *top = body;
-
-    buf_init_ro(&msg, inmsg->s, inmsg->len);
+    int wantheader = 0;
+    int32_t mimenum = 0;
+    int r;
 
     p = section;
+
+    buf_init_ro(&msg, inmsg->s, inmsg->len);
 
     /* Special-case BODY[] */
     if (*p == ']') {
@@ -3235,57 +3208,64 @@ static int index_fetchsection(struct index_state *state, const char *resp,
         return 0;
     }
 
-    /* Special-case BODY[TEXT] and BODY[HEADER] */
-    if (*p == 'T' || *p == 'H') {
-        if (*p == 'H') fetchmime++;
-        goto emitbody;
+    /*
+       section         = "[" [section-spec] "]"
+
+       section-msgtext = "HEADER" / "HEADER.FIELDS" [".NOT"] SP header-list /
+                         "TEXT"
+                    ; top-level or MESSAGE/RFC822 part
+
+       section-part    = nz-number *("." nz-number)
+                    ; body part nesting
+
+       section-spec    = section-msgtext / (section-part ["." section-text])
+
+       section-text    = section-msgtext / "MIME"
+                    ; text other than actual body part (headers, etc.)
+     */
+
+    while (*p != ']') {
+        switch (*p) {
+        case 'H':
+            if (!body_is_rfc822(body)) goto badpart;
+            body = body->subpart;
+            p += 6;
+            wantheader = 1;
+            goto emitpart;
+        case 'T':
+            if (!body_is_rfc822(body)) goto badpart;
+            body = body->subpart;
+            p += 4;
+            goto emitpart;
+        case 'M':
+            if (body == top) goto badpart;
+            p += 4;
+            wantheader = 1;
+            goto emitpart;
+        default:
+            mimenum = 0;
+            r = parseint32(p, &p, &mimenum);
+            if (*p == '.') p++;
+            if (r || !mimenum) goto badpart;
+            body = find_part(body, mimenum);
+            if (!body) goto badpart;
+            break;
+        }
     }
 
-    while (*p != ']' && *p != 'M') {
-        int r;
+emitpart:
+    if (*p != ']') goto badpart;
 
-        /* Generate the actual part number */
-        r = parseint32(p, &p, &skip);
-        if (*p == '.') p++;
-
-        /* Handle .0, .HEADER, and .TEXT */
-        if (r || skip == 0) {
-            skip = 0;
-            /* We don't have any digits, so its a string */
-            switch (*p) {
-            case 'H':
-                p += 6;
-                fetchmime++;    /* .HEADER maps internally to .0.MIME */
-                break;
-
-            case 'T':
-                p += 4;
-                break;          /* .TEXT maps internally to .0 */
-
-            default:
-                fetchmime++;    /* .0 maps internally to .0.MIME */
-                break;
-            }
-        }
-        
-        if (*p != ']' && *p != 'M') {
-            /* We are NOT at the end of a part specification, so there's
-             * a subpart being requested.  Find the subpart in the tree. */
-            r = find_part(&body, skip, *p, body == top);
-            if (r) goto badpart;
-        }
+    if (wantheader) {
+        offset = body->header_offset;
+        size = body->header_size;
+    }
+    else {
+        offset = body->content_offset;
+        size = body->content_size;
     }
 
-    if (*p == 'M') fetchmime++;
-
-    int r = find_part(&body, skip, *p, body == top);
-    if (r) goto badpart;
-
-emitbody:
-    offset = fetchmime ? body->header_offset : body->content_offset;
-    size = fetchmime ? body->header_size : body->content_size;
-
-    if (msg.s && (p = strstr(resp, "BINARY"))) {
+    if (msg.s && !wantheader && (p = strstr(resp, "BINARY"))) {
         /* BINARY or BINARY.SIZE */
         int encoding = body->charset_enc & 0xff;
         size_t newsize;
@@ -3345,7 +3325,7 @@ static void index_fetchfsection(struct index_state *state,
                                 unsigned start_octet, unsigned octet_count)
 {
     const char *p;
-    int32_t skip = 0;
+    int32_t mimenum = 0;
     int fields_not = 0;
     const char *crlf = "\r\n";
     unsigned crlf_start = 0;
@@ -3364,13 +3344,13 @@ static void index_fetchfsection(struct index_state *state,
     p = fsection->section;
 
     while (*p != 'H') {
-        r = parseint32(p, &p, &skip);
+        r = parseint32(p, &p, &mimenum);
         if (*p == '.') p++;
 
-        if (r || skip == 0) goto badpart;
+        if (r || !mimenum) goto badpart;
 
-        r = find_part(&body, skip, *p, body == top);
-        if (r) goto badpart;
+        body = find_part(body, mimenum);
+        if (!body) goto badpart;
     }
 
     if (body_is_rfc822(body)) body = body->subpart;
@@ -3831,6 +3811,25 @@ static void index_printflags(struct index_state *state,
     prot_printf(state->out, ")\r\n");
 }
 
+/* interface message_read_bodystructure which makes sure the cache record
+ * exists and adds the MESSAGE/RFC822 wrapper to make fetch BODY[*]
+ * work consistently */
+static void loadbody(struct mailbox *mailbox, struct index_record *record,
+                     struct body **bodyp)
+{
+    if (*bodyp) return;
+    if (mailbox_cacherecord(mailbox, record)) return;
+    struct body *body = xzmalloc(sizeof(struct body));
+    message_read_bodystructure(record, &body->subpart);
+    body->type = xstrdup("MESSAGE");
+    body->subtype = xstrdup("RFC822");
+    body->header_offset = body->subpart->header_offset;
+    body->header_size = body->subpart->header_size;
+    body->content_offset = body->subpart->content_offset;
+    body->content_offset = body->subpart->content_size;
+    *bodyp = body;
+}
+
 /*
  * Helper function to send requested * FETCH data for a message
  */
@@ -4062,8 +4061,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "%s ", fsection->trail);
 
         if (fetchargs->cache_atleast > record.cache_version) {
-            if (!mailbox_cacherecord(mailbox, &record)) {
-                if (!body) message_read_bodystructure(&record, &body);
+            loadbody(mailbox, &record, &body);
+            if (body) {
                 index_fetchfsection(state, buf.s, buf.len,
                                     fsection,
                                     body,
@@ -4095,8 +4094,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         oi = &section->octetinfo;
 
-        if (!mailbox_cacherecord(mailbox, &record)) {
-            if (!body) message_read_bodystructure(&record, &body);
+        loadbody(mailbox, &record, &body);
+        if (body) {
             r = index_fetchsection(state, respbuf, &buf,
                     section->name, body, record.size,
                     (fetchitems & FETCH_IS_PARTIAL) ?
@@ -4115,9 +4114,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
                  "%cBINARY[%s ", sepchar, section->name);
 
-        if (!mailbox_cacherecord(mailbox, &record)) {
+        loadbody(mailbox, &record, &body);
+        if (body) {
             oi = &section->octetinfo;
-            if (!body) message_read_bodystructure(&record, &body);
             r = index_fetchsection(state, respbuf, &buf,
                                    section->name, body, record.size,
                                    (fetchitems & FETCH_IS_PARTIAL) ?
@@ -4136,8 +4135,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
                  "%cBINARY.SIZE[%s ", sepchar, section->name);
 
-        if (!mailbox_cacherecord(mailbox, &record)) {
-            if (!body) message_read_bodystructure(&record, &body);
+        loadbody(mailbox, &record, &body);
+        if (body) {
             r = index_fetchsection(state, respbuf, &buf,
                                    section->name, body, record.size,
                                    fetchargs->start_octet, fetchargs->octet_count);
@@ -4149,7 +4148,10 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, ")\r\n");
     }
     buf_free(&buf);
-    if (body) message_free_body(body);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
 
     return r;
 }
@@ -4178,10 +4180,10 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
      * so there we go */
     static char text_mime[] = "HEADER";
     struct buf buf = BUF_INITIALIZER;
-    int fetchmime = 0, domain = DOMAIN_7BIT;
+    int domain = DOMAIN_7BIT;
     const char *data;
     size_t size;
-    int32_t skip = 0;
+    int32_t wantheader = 0;
     unsigned long n;
     int r = 0;
     char *decbuf = NULL;
@@ -4202,10 +4204,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     r = index_reload_record(state, msgno, &record);
     if (r) goto done;
 
-    r = mailbox_cacherecord(mailbox, &record);
-    if (r) goto done;
-
-    message_read_bodystructure(&record, &body);
+    loadbody(mailbox, &record, &body);
     if (!body) goto done;
     top = body;
 
@@ -4224,47 +4223,42 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     }
     else {
         const char *p = ucase((char *) section);
+        int32_t mimenum = 0;
 
-        while (*p && *p != 'M') {
-            /* Generate the actual part number */
-            r = parseint32(p, &p, &skip);
-            if (*p == '.') p++;
-
-            /* Handle .0, .HEADER, and .TEXT */
-            if (r || skip == 0) {
-                skip = 0;
-                /* We don't have any digits, so its a string */
-                switch (*p) {
-                case 'H':
-                    p += 6;
-                    fetchmime++;  /* .HEADER maps internally to .0.MIME */
-                    break;
-
-                case 'T':
-                    p += 4;
-                    break;        /* .TEXT maps internally to .0 */
-
-                default:
-                    fetchmime++;  /* .0 maps internally to .0.MIME */
-                    break;
-                }
-            }
-
-            if (*p && *p != 'M') {
-                /* We are NOT at the end of a part specification, so there's
-                 * a subpart being requested.  Find the subpart in the tree. */
-                r = find_part(&body, skip, *p, body == top);
-                if (r) goto done;
+        while (*p) {
+            switch(*p) {
+            case 'H':
+                if (!body_is_rfc822(body)) goto badpart;
+                body = body->subpart;
+                p += 6;
+                wantheader = 1;
+                goto getoffset;
+            case 'T':
+                if (!body_is_rfc822(body)) goto badpart;
+                body = body->subpart;
+                p += 4;
+                goto getoffset;
+            case 'M':
+                if (top == body) goto badpart;
+                p += 4;
+                wantheader = 1;
+                goto getoffset;
+            default:
+                mimenum = 0;
+                r = parseint32(p, &p, &mimenum);
+                if (*p == '.') p++;
+                if (r || !mimenum) goto badpart;
+                body = find_part(body, mimenum);
+                if (!body) goto badpart;
+                break;
             }
         }
 
-        if (*p == 'M') fetchmime++;
+      getoffset:
+        if (*p) goto badpart;
 
-        r = find_part(&body, skip, *p, body == top);
-        if (r) goto done;
-
-        section_offset = fetchmime ? body->header_offset : body->content_offset;
-        section_size = fetchmime ? body->header_size : body->content_size;
+        section_offset = wantheader ? body->header_offset : body->content_offset;
+        section_size = wantheader ? body->header_size : body->content_size;
 
         if (section_offset + section_size < section_offset
             || section_offset + section_size > size) {
@@ -4347,9 +4341,16 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     index_unlock(state);
     buf_free(&buf);
 
-    if (top) message_free_body(top);
+    if (top) {
+        message_free_body(top);
+        free(top);
+    }
     if (decbuf) free(decbuf);
     return r;
+
+  badpart:
+    r = IMAP_PROTOCOL_BAD_PARAMETERS;
+    goto done;
 }
 
 /*
