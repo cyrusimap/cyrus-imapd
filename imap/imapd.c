@@ -658,6 +658,8 @@ static void imapd_refer(const char *tag,
 
     prot_printf(imapd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n",
                 tag, url);
+
+    free(imapurl.freeme);
 }
 
 /* wrapper for mboxlist_lookup that will force a referral if we are remote
@@ -13354,6 +13356,7 @@ static void cmd_genurlauth(char *tag)
                         "%s BAD Poorly specified URL to Genurlauth %s\r\n",
                         tag, arg1.s);
             eatline(imapd_in, c);
+            free(url.freeme);
             free(intname);
             return;
         }
@@ -13361,6 +13364,7 @@ static void cmd_genurlauth(char *tag)
         if (mbentry->mbtype & MBTYPE_REMOTE) {
             /* XXX  proxy to backend */
             mboxlist_entry_free(&mbentry);
+            free(url.freeme);
             free(intname);
             continue;
         }
@@ -13391,6 +13395,7 @@ static void cmd_genurlauth(char *tag)
             prot_printf(imapd_out,
                         "%s NO Error authorizing %s: %s\r\n",
                         tag, arg1.s, cyrusdb_strerror(r));
+            free(url.freeme);
             free(intname);
             return;
         }
@@ -13414,6 +13419,7 @@ static void cmd_genurlauth(char *tag)
         (void)prot_putc(' ', imapd_out);
         prot_printstring(imapd_out, urlauth);
         free(intname);
+        free(url.freeme);
     } while (c == ' ');
 
     if (!first) prot_printf(imapd_out, "\r\n");
