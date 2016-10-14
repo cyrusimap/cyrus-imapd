@@ -1,0 +1,59 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.10 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.10.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.10.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.10.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.10.tar.gz.sig
+
+.. _relnotes-2.5.10-changes:
+
+Changes Since 2.5.9
+===================
+
+Dependency changes
+------------------
+
+* Jansson versions >= 2.3 are now supported (was >= 2.7)
+* Restored support for AutoConf 2.63
+* GCC 6 is now supported
+
+Other changes
+-------------
+
+* :cyrusman:`master(8)` now supports a "-V" (print version and exit) option
+* version information is now based on git describe, not hard-coded strings
+
+Bug fixes
+---------
+
+* Fixed :issue:`34`: imapd in murder no longer crashes on MOVE to nonexistent folder
+  (thanks Wolfgang Breyha)
+* Fixed :issue:`15`: replication no longer crashes on mailboxes that are too old to be
+  replicated.  Instead, it fails with an error and logs a warning that they need to be
+  reconstructed
+* Fixed :issue:`45`: extended LIST doesn't lose options when proxied to backend
+* Fixed :task:`142`: extended LIST response no longer missing \\HasNoChildren flag on last
+  mailbox
+* Fixed :issue:`49`: httpd no longer crashes with assertion failure on shutdown after
+  CardDAV has been used
+* Fixed :issue:`31`: the ldap_timeout setting is now used correctly
+* Fixed bugzilla #3909: :cyrusman:`idled(8)` no longer runs as root (thanks Carlos Velasco)
+* Fixed :issue:`5`: renaming folder with annotations no longer increases annotation quota usage
+* Fixed: URLFETCH crash when section is NULL
+* various build system improvements
