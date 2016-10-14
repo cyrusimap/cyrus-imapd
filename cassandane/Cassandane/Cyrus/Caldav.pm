@@ -73,6 +73,7 @@ sub set_up
     $self->SUPER::set_up();
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
+    $ENV{JMAP_ALWAYS_FULL} = 1;
     $self->{caldav} = Net::CalDAVTalk->new(
 	user => 'cassandane',
 	password => 'pass',
