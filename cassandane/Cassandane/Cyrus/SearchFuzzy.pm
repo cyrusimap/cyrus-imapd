@@ -311,14 +311,22 @@ sub test_cjk_words
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
 
-    my $body = "明末時已經有香港地方的概念";
-
     xlog "Generate and index test messages.";
+
+    my $body = "明末時已經有香港地方的概念";
     my %params = (
         mime_charset => "utf-8",
         body => $body
     );
     $self->make_message("1", %params) || die;
+
+    # Splits into the words: "み, 円, 月額, 申込
+    $body = "申込み！月額円";
+    %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("2", %params) || die;
 
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
@@ -340,15 +348,43 @@ sub test_cjk_words
     ) || die;
     $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>$term</b>"), -1);
 
-    # Search for the CJK words 明末 and 時.
-    # IMAP search requires them to be ANDed and so they won't be found.
-    $term = "明末時";
+    # Search for the CJK words 明末 and 時, note that the
+    # word order is reversed to the original message
+    $term = "時明末";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
+
+    # Search for the partial CJK word 月
+    $term = "月";
     xlog "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
     ) || die;
     $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
+
+    # Search for the interleaved, partial CJK word 額申
+    $term = "額申";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
+
+    # Search for three of four words: "み, 月額, 申込",
+    # in different order than the original.
+    $term = "月額み申込";
+    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => $term }]
+    ) || die;
+    $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
 }
 
 sub test_subject_isutf8
