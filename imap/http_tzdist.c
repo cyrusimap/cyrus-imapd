@@ -677,7 +677,6 @@ static int action_capa(struct transaction_t *txn)
             json_array_append_new(actions,
                                   json_pack("{s:s s:s s:["
                                             "  {s:s s:b}"
-                                            "  {s:s s:b}"
                                             "]}",
                                             "name", "geolocate", "uri-template",
                                             "/zones{?location}",
