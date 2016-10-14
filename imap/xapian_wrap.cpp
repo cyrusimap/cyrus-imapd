@@ -702,71 +702,98 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
 struct xapian_snipgen
 {
     Xapian::Stem *stemmer;
-    Xapian::SnippetGenerator *snippet_generator;
+    Xapian::MSet *mset;
+    Xapian::Database *db;
+    struct buf *buf;
 };
 
-class CharsetTermNormalizer : public Xapian::SnippetGenerator::TermNormalizer
+class CharsetStemmer : public Xapian::StemImplementation
 {
     charset_t utf8;
     std::map<const std::string, std::string> cache;
+    Xapian::Stem stem;
 
     public:
-    CharsetTermNormalizer() : utf8(charset_lookupname("utf-8")) { }
+    CharsetStemmer(Xapian::Stem s) : utf8(charset_lookupname("utf-8")),
+                                     stem(s) { }
 
-    ~CharsetTermNormalizer() { charset_free(&utf8); }
+    virtual ~CharsetStemmer() { charset_free(&utf8); }
 
-    virtual const std::string & normalize(const std::string & term)
-    {
-        // Is this term already in the cache?
-        std::map<const std::string, std::string>::iterator it = cache.find(term);
+    virtual std::string operator() (const std::string &word) {
+        char *q;
+
+        // Is this word already in the cache?
+        std::map<const std::string, std::string>::iterator it = cache.find(word);
         if (it != cache.end()) {
             return it->second;
         }
 
-        // Convert the term to search form
-        char *q = charset_convert(term.c_str(), utf8, charset_flags);
+        // Convert the word to search form
+        q = charset_convert(word.c_str(), utf8, charset_flags);
         if (!q) {
-            return term;
+            return stem(word);
         }
 
-        // Store in cache and return the normalized term
-        cache[term] = q;
+        // Store the normalized word in the cache
+        cache[word] = stem(q);
         free(q);
-        return cache[term];
+        return cache[word];
+    }
+
+    virtual std::string get_description () const {
+        return "Cyrus search form";
     }
 };
 
 xapian_snipgen_t *xapian_snipgen_new(void)
 {
     xapian_snipgen_t *snipgen = NULL;
+    CharsetStemmer *stem = new CharsetStemmer(Xapian::Stem("en"));
 
-    try {
-        snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
-
-        snipgen->stemmer = new Xapian::Stem("en");
-        snipgen->snippet_generator = new Xapian::SnippetGenerator;
-        snipgen->snippet_generator->set_stemmer(*snipgen->stemmer);
-        snipgen->snippet_generator->set_normalizer(new CharsetTermNormalizer);
-    }
-    catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
-    }
+    snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
+    snipgen->stemmer = new Xapian::Stem(stem);
+    snipgen->db = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
+    snipgen->buf = buf_new();
 
     return snipgen;
 }
 
 void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
-    try {
-        delete snipgen->snippet_generator;
-        delete snipgen->stemmer;
-        free(snipgen);
+    delete snipgen->stemmer;
+    delete snipgen->mset;
+    delete snipgen->db;
+    buf_free(snipgen->buf);
+    free(snipgen);
+}
+
+Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, 
+                                         const std::string &match)
+{
+    std::vector<std::string> terms;
+    Xapian::TermGenerator term_generator;
+
+    term_generator.set_stemmer(*snipgen->stemmer);
+    term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
+            ~Xapian::TermGenerator::FLAG_CJK_WORDS);
+
+    term_generator.index_text(Xapian::Utf8Iterator(match));
+
+    const Xapian::Document & doc = term_generator.get_document();
+
+    Xapian::TermIterator it = doc.termlist_begin();
+    while (it != doc.termlist_end()) {
+        terms.push_back(*it);
+        it++;
     }
-    catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+
+    std::vector<Xapian::Query> v;
+    for(size_t i = 0; i < terms.size(); ++i)
+    {
+        v.push_back(Xapian::Query(terms[i]));
     }
+
+    return Xapian::Query(Xapian::Query::OP_OR, v.begin(), v.end());
 }
 
 int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
@@ -774,11 +801,13 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
     int r = 0;
 
     try {
-        snipgen->snippet_generator->add_match(match);
-    }
-    catch (const Xapian::Error &err) {
+        Xapian::Enquire enquire(*snipgen->db);
+        enquire.set_query(xapian_snipgen_build_query(snipgen, match));
+        snipgen->mset = new Xapian::MSet(enquire.get_mset(0, 0));
+
+    } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+                err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
 
@@ -787,55 +816,42 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
 
 int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned int context_length)
 {
-    int r = 0;
-
-    try {
-        snipgen->snippet_generator->reset();
-        snipgen->snippet_generator->set_context_length(context_length);
-    }
-    catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
-        r = IMAP_IOERROR;
-    }
-
-    return r;
+    return 0;
 }
 
 int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
 {
-    int r = 0;
-
-    try {
-        // Always enable CJK word tokenization
-        snipgen->snippet_generator->accept_text(Xapian::Utf8Iterator(part->s, part->len),
-                Xapian::SnippetGenerator::FLAG_CJK_WORDS);
-        snipgen->snippet_generator->increase_termpos();
-    }
-    catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
-        r = IMAP_IOERROR;
-    }
-
-    return r;
+    buf_insert(snipgen->buf, buf_len(snipgen->buf), part);
+    return 0;
 }
 
 int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 {
     int r = 0;
 
+    assert(snipgen->mset);
+
     try {
+        std::string snippet;
+        std::string text = std::string(buf_cstring(snipgen->buf));
+
+        snippet = snipgen->mset->snippet(text,
+                text.length(), // FIXME set length
+                *snipgen->stemmer,
+                Xapian::MSet::SNIPPET_TERMCOVER|Xapian::MSet::SNIPPET_EMPTY_NOMATCH,
+                "<b>", "</b>", "...",
+                Xapian::TermGenerator::FLAG_CJK_WORDS);
+
         buf_reset(buf);
-        buf_appendcstr(buf, snipgen->snippet_generator->get_snippets().c_str());
-        buf_cstring(buf);
-    }
-    catch (const Xapian::Error &err) {
+        buf_appendcstr(buf, snippet.c_str());
+
+    } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+                err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
 
+    buf_reset(snipgen->buf);
     return r;
 }
 
