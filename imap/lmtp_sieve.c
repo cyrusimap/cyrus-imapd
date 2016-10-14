@@ -678,7 +678,7 @@ static int send_response(void *ac,
 	    src->subj[i] = '\0';
 	    break;
 	}
-    fprintf(sm, "Subject: %s\r\n", src->subj);
+    fprintf(sm, "Subject: %s\r\n", charset_encode_mimeheader(src->subj, strlen(src->subj)));
     if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
     fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
     fprintf(sm, "MIME-Version: 1.0\r\n");
