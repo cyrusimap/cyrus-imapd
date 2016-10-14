@@ -177,7 +177,7 @@ sub assert_caldav_notified
     my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
     foreach my $payload (@payloads) {
         ($payload->{event}) = $self->{caldav}->vcalendarToEvents($payload->{ical});
-        $payload->{method} = delete $payload->{event}{_method};
+        $payload->{method} = delete $payload->{event}{method};
     }
 
     my @err;
@@ -1143,13 +1143,13 @@ sub test_freebusy
 
     $CalDAV->NewEvent($CalendarId, {
         start => '2015-01-01T12:00:00',
-        end => '2015-01-01T13:00:00',
+        duration => 'PT1H',
         summary => 'waterfall',
     });
 
     $CalDAV->NewEvent($CalendarId, {
         start => '2015-02-01T12:00:00',
-        end => '2015-02-01T13:00:00',
+        duration => 'PT1H',
         summary => 'waterfall2',
     });
 
@@ -1443,56 +1443,56 @@ EOF
    { recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST',
         event => {
             uid => $uuid,
-            organizer => { email => "cassandane\@example.com" },
-            exceptions => {
+            replyTo => { imip => "mailto:cassandane\@example.com" },
+            recurrenceOverrides => {
                 '2016-06-08T15:30:00' => {
-                    summary => "An Event with a different friend",
-                    attendees => [
-                        { email => "cassandane\@example.com" },
-                        { email => "test1\@example.com" },
-                        { email => "test3\@example.com" },
-                    ],
+                    title => "An Event with a different friend",
+                    participants => {
+                        "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                        "test1\@example.com" => { email => "test1\@example.com" },
+                        "test3\@example.com" => { email => "test3\@example.com" },
+                    },
                 },
             },
             start => '2016-06-01T15:30:00',
-            end => '2016-06-01T18:30:00',
-            summary => "An Event just us",
-            attendees => [
-                { email => "cassandane\@example.com" },
-                { email => "test1\@example.com" },
-                { email => "test2\@example.com" },
-            ],
+            title => "An Event just us",
+            participants => {
+                "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                "test1\@example.com" => { email => "test1\@example.com" },
+                "test2\@example.com" => { email => "test2\@example.com" },
+            },
         },
    },
    { recipient => "test2\@example.com", is_update => JSON::true, method => 'REQUEST',
         event => {
             uid => $uuid,
-            organizer => { email => "cassandane\@example.com" },
-            exceptions => {
+            replyTo => { imip => "mailto:cassandane\@example.com" },
+            recurrenceOverrides => {
                 '2016-06-08T15:30:00' => undef,
             },
             start => '2016-06-01T15:30:00',
-            end => '2016-06-01T18:30:00',
-            summary => "An Event just us",
-            attendees => [
-                { email => "cassandane\@example.com" },
-                { email => "test1\@example.com" },
-                { email => "test2\@example.com" },
-            ],
+            title => "An Event just us",
+            participants => {
+                "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                "test1\@example.com" => { email => "test1\@example.com" },
+                "test2\@example.com" => { email => "test2\@example.com" },
+            },
         },
    },
    { recipient => "test3\@example.com", is_update => JSON::false, method => 'REQUEST',
         event => {
             uid => $uuid,
-            organizer => { email => "cassandane\@example.com" },
-            attendees => [
-                { email => "cassandane\@example.com" },
-                { email => "test1\@example.com" },
-                { email => "test3\@example.com" },
-            ],
-            start => '2016-06-08T15:30:00',
-            end => '2016-06-08T18:30:00',
-            summary => "An Event with a different friend",
+            replyTo => { imip => "mailto:cassandane\@example.com" },
+            recurrenceOverrides => {
+                '2016-06-08T15:30:00' => {
+                    title => "An Event with a different friend",
+                    participants => {
+                        "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                        "test1\@example.com" => { email => "test1\@example.com" },
+                        "test3\@example.com" => { email => "test3\@example.com" },
+                    },
+                },
+            },
         },
    },
   );
@@ -2239,8 +2239,8 @@ EOF
         method => 'REPLY',
         event => {
             uid => $uuid,
-            organizer => { email => "test1\@example.com" },
-            exceptions => { '2016-06-08T15:30:00' => undef },
+            replyTo => { imip => "mailto:test1\@example.com" },
+            recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
         },
       },
     );
@@ -2299,12 +2299,15 @@ EOF
          recipient => "test1\@example.com",
          is_update => JSON::true,
          event => {
-           start => '2016-06-08T15:30:00',
-           attendees => [
-             { email => "cassandane\@example.com" },
-             { email => "test1\@example.com" },
-             { email => "test3\@example.com" },
-           ],
+           recurrenceOverrides => {
+             '2016-06-08T15:30:00' => {
+               participants => {
+                 "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                 "test1\@example.com" => { email => "test1\@example.com" },
+                 "test3\@example.com" => { email => "test3\@example.com" },
+               },
+             },
+           },
          },
        },
        {
@@ -2313,13 +2316,13 @@ EOF
          is_update => JSON::true,
          event => {
            start => '2016-06-01T15:30:00',
-           exceptions => { '2016-06-08T15:30:00' => undef },
-           attendees => [
-             { email => "cassandane\@example.com" },
-             { email => "test1\@example.com" },
-             { email => "test2\@example.com" },
-             { email => "test3\@example.com" },
-           ],
+           recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
+           participants => {
+             "cassandane\@example.com" => { email => "cassandane\@example.com" },
+             "test1\@example.com" => { email => "test1\@example.com" },
+             "test2\@example.com" => { email => "test2\@example.com" },
+             "test3\@example.com" => { email => "test3\@example.com" },
+           },
          },
        },
        {
@@ -2327,12 +2330,15 @@ EOF
          recipient => "test3\@example.com",
          is_update => JSON::true,
          event => {
-           start => '2016-06-08T15:30:00',
-           attendees => [
-             { email => "cassandane\@example.com" },
-             { email => "test1\@example.com" },
-             { email => "test3\@example.com" },
-           ],
+           recurrenceOverrides => {
+             '2016-06-08T15:30:00' => {
+               participants => {
+                 "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                 "test1\@example.com" => { email => "test1\@example.com" },
+                 "test3\@example.com" => { email => "test3\@example.com" },
+               },
+             },
+           },
          },
        },
     );
@@ -2394,36 +2400,24 @@ EOF
   my $href = "$CalendarId/$uuid.ics";
   $self->{caldav}->Request('DELETE', $href);
 
-  my $except1 = {
-    start => '2016-06-08T15:30:00',
-    attendees => [
-      { email => "cassandane\@example.com" },
-      { email => "test1\@example.com" },
-      { email => "test2\@example.com" },
-      { email => "test3\@example.com" },
-    ],
-  };
-
-  my $except2 = {
-    start => '2016-06-15T15:30:00',
-    attendees => [
-      { email => "cassandane\@example.com" },
-      { email => "test1\@example.com" },
-      { email => "test2\@example.com" },
-      { email => "test3\@example.com" },
-    ],
+  my $except = {
+    participants => {
+      "cassandane\@example.com" => { email => "cassandane\@example.com" },
+      "test1\@example.com" => { email => "test1\@example.com" },
+      "test2\@example.com" => { email => "test2\@example.com" },
+      "test3\@example.com" => { email => "test3\@example.com" },
+    },
   };
 
   my $regular = {
-    start => '2016-06-01T15:30:00',
-    attendees => [
-      { email => "cassandane\@example.com" },
-      { email => "test1\@example.com" },
-      { email => "test3\@example.com" },
-    ],
-    exceptions => {
-      '2016-06-08T15:30:00' => $except1,
-      '2016-06-15T15:30:00' => $except2,
+    participants => {
+      "cassandane\@example.com" => { email => "cassandane\@example.com" },
+      "test1\@example.com" => { email => "test1\@example.com" },
+      "test3\@example.com" => { email => "test3\@example.com" },
+    },
+    recurrenceOverrides => {
+      '2016-06-08T15:30:00' => $except,
+      '2016-06-15T15:30:00' => $except,
     },
   };
 
@@ -2436,7 +2430,12 @@ EOF
      {
        method => 'CANCEL',
        recipient => "test2\@example.com",
-       event => $except1,
+       event => {
+         recurrenceOverrides => {
+           '2016-06-08T15:30:00' => $except,
+           '2016-06-15T15:30:00' => $except,
+         },
+       },
      },
      {
        method => 'CANCEL',
@@ -2522,12 +2521,12 @@ EOF
       method => 'REPLY',
       recipient => 'friend@example.com',
       event => {
-        attendees => [
-          {
-            'rsvp' => 'yes',
+        participants => {
+          'cassandane@example.com' => {
+            'scheduleStatus' => 'accepted',
             'email' => 'cassandane@example.com'
           },
-        ],
+        },
       },
     },
   );
@@ -2608,12 +2607,12 @@ EOF
       method => 'REPLY',
       recipient => 'friend@example.com',
       event => {
-        attendees => [
-          {
-            'rsvp' => 'yes',
+        participants => {
+          'cassandane@example.com' => {
+            'scheduleStatus' => 'accepted',
             'email' => 'cassandane@example.com'
           },
-        ],
+        },
       },
     },
   );
