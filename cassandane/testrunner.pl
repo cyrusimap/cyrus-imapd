@@ -50,6 +50,9 @@ use Cassandane::Util::Log;
 use Cassandane::Cassini;
 use Cassandane::Instance;
 
+use Data::Dumper;
+$Data::Dumper::Indent = 1;
+
 my $format = 'tap';
 my $output_dir = 'reports';
 my $do_list = 0;
