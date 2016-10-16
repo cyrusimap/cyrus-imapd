@@ -2502,7 +2502,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
  * been used.
  */
 EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
-                                    char **decbuf, size_t *outlen)
+                                             char **decbuf, size_t *outlen)
 {
     struct convert_rock *input, *tobuffer;
 

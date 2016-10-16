@@ -3823,10 +3823,10 @@ static void loadbody(struct mailbox *mailbox, struct index_record *record,
     message_read_bodystructure(record, &body->subpart);
     body->type = xstrdup("MESSAGE");
     body->subtype = xstrdup("RFC822");
-    body->header_offset = body->subpart->header_offset;
-    body->header_size = body->subpart->header_size;
-    body->content_offset = body->subpart->content_offset;
-    body->content_offset = body->subpart->content_size;
+    body->header_offset = 0;
+    body->header_size = 0;
+    body->content_offset = 0;
+    body->content_offset = record->size;
     *bodyp = body;
 }
 
