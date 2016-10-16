@@ -411,14 +411,36 @@ sub test_subject_isutf8
 
     # Search subject without accents
     # my $term = "réunion critères";
-    my %searches = (
-        "reunion criteres" => 1,
-        "réunion critères" => 1,
-        "reunion critères" => 1,
-        "réunion criter" => 1,
-        "réunion crit" => 0,
-        "union critères" => 0,
-    );
+    my %searches;
+
+    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
+    if ($skipdiacrit && !($skipdiacrit eq "false")) {
+        # Diacritics are stripped before indexing and search. That's a sane
+        # choice as long as there is no language-specific stemming applied
+        # during indexing and search.
+        %searches = (
+            "reunion criteres" => 1,
+            "réunion critères" => 1,
+            "reunion critères" => 1,
+            "réunion criter" => 1,
+            "réunion crit" => 0,
+            "union critères" => 0,
+        );
+        my $term = "naive";
+    } else {
+        # Diacritics are not stripped from search. This currently is very
+        # restrictive: until Cyrus can stem by language, this is basically
+        # a whole-word match.
+        %searches = (
+            "reunion criteres" => 0,
+            "réunion critères" => 1,
+            "reunion critères" => 0,
+            "réunion criter" => 0,
+            "réunion crit" => 0,
+            "union critères" => 0,
+        );
+    }
+
     while (my($term, $expectedCnt) = each %searches) {
         xlog "SEARCH for FUZZY body \"$term\"";
         $r = $talk->search(
@@ -426,6 +448,7 @@ sub test_subject_isutf8
         ) || die;
         $self->assert_num_equals($expectedCnt, scalar @$r);
     }
+
 }
 
 
