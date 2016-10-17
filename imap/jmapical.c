@@ -4436,7 +4436,7 @@ jmapical_toical(json_t *obj, icalcomponent *src, jmapical_err_t *err)
 {
     icalcomponent *ical = NULL;
     icalcomponent *comp = NULL;
-    context_t *ctx;
+    context_t *ctx = NULL;
 
     if (src) {
         ical = icalcomponent_new_clone(src);
