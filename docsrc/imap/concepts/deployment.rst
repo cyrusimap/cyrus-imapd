@@ -10,10 +10,10 @@ successful deployment of Cyrus IMAP.
 .. toctree::
 
    deployment/deployment_scenarios
+   deployment/databases
    deployment/mailbox_creation_distribution
    deployment/known_protocol_limitations
    deployment/authentication_and_authorization
    deployment/performance_recommendations
    deployment/storage
    deployment/supported-platforms
-

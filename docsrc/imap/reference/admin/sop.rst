@@ -10,7 +10,6 @@ Standard Operating Procedures
     sop/mailbox-operations
     sop/reloading
     sop/altnamespace
-    sop/databases
     sop/deleting
     sop/administration-running
 

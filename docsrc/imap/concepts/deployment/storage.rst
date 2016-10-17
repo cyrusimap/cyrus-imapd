@@ -814,9 +814,8 @@ User's Groupware Folders
 ------------------------
 
 Users tend not to clean up their calendars, removing old appointments
-that have no bearing on today's views/operations any longer. Kolab
-Groupware does not (yet) provide means to purge these items. They do
-however count towards a user's quota.
+that have no bearing on today's views/operations any longer. They do
+count towards a user's quota.
 
 .. _imap-deployment-storage-capacity:
 
@@ -951,7 +950,7 @@ chunks, which may not be what you require at that moment.
     The :term:`MTBF` of a stable filesystem has most often been subject
     to the failure of the underlying disk, with the filesystem unable to
     recover (in time) from the underlying disk failing (partly).
-	
+
 
 .. _DRBD: http://www.drbd.org/
 .. _OSI model for networking: http://en.wikipedia.org/wiki/OSI_model
