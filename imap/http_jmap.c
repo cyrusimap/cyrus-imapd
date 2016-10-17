@@ -4676,16 +4676,30 @@ static int setContactGroups(struct jmap_req *req)
                 /* both N and FN get the name */
                 struct vparse_entry *entry = vparse_get_entry(card, NULL, "N");
                 if (entry) {
-                    free(entry->v.value);
+                    if (entry->multivalue) {
+                        strarray_free(entry->v.values);
+                        entry->v.values = NULL;
+                    } else {
+                        free(entry->v.value);
+                    }
                     entry->v.value = xstrdup(name);
+                    entry->multivalue = 0;
                 }
                 else {
                     vparse_add_entry(card, NULL, "N", name);
                 }
                 entry = vparse_get_entry(card, NULL, "FN");
                 if (entry) {
-                    free(entry->v.value);
+                    if (entry->multivalue) {
+                        /* FN isn't allowed to be a multi-value, but let's
+                         * rather check than deal with corrupt memory */
+                        strarray_free(entry->v.values);
+                        entry->v.values = NULL;
+                    } else {
+                        free(entry->v.value);
+                    }
                     entry->v.value = xstrdup(name);
+                    entry->multivalue = 0;
                 }
                 else {
                     vparse_add_entry(card, NULL, "FN", name);
