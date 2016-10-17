@@ -44,7 +44,7 @@ use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CalDAVTalk;
+use Net::CalDAVTalk qw(0.09);
 use Data::Dumper;
 
 use lib '.';
