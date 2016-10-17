@@ -1302,6 +1302,32 @@ done:
     return r;
 }
 
+static int cmd_get_meta(struct dlist *dl)
+{
+    struct open_backup *open = NULL;
+    mbname_t *mbname = NULL;
+    int r;
+
+    if (!dl->sval) return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    mbname = mbname_from_userid(dl->sval);
+    if (!mbname) return IMAP_INTERNAL;
+
+    r = backupd_open_backup(&open, mbname);
+    if (r) goto done;
+
+    /* TODO: seen */
+
+    r = backupd_print_subscriptions(open->backup);
+    if (r) goto done;
+
+    /* TODO: sieve */
+
+done:
+    if (mbname) mbname_free(&mbname);
+    return r;
+}
+
 static int is_mailboxes_single_user(struct dlist *dl)
 {
     char *userid = NULL;
@@ -1374,6 +1400,9 @@ static void cmd_get(struct dlist *dl)
     }
     else if (strcmp(dl->name, "FULLMAILBOX") == 0) {
         r = cmd_get_mailbox(dl, 1);
+    }
+    else if (strcmp(dl->name, "META") == 0) {
+        r = cmd_get_meta(dl);
     }
     else {
         r = IMAP_PROTOCOL_ERROR;
