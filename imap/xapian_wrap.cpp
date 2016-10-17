@@ -62,11 +62,14 @@ static Xapian::Stopper *get_stopper()
     return stopper;
 }
 
+static int snippet_length;
+
 /* ====================================================================== */
 
 void xapian_init(void)
 {
     /* do nothing */
+    snippet_length =  config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 }
 
 /* ====================================================================== */
@@ -837,7 +840,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         std::string text = std::string(buf_cstring(snipgen->buf));
 
         snippet = snipgen->mset->snippet(text,
-                text.length(), // FIXME set length
+                snippet_length,
                 *snipgen->stemmer,
                 Xapian::MSet::SNIPPET_TERMCOVER|Xapian::MSet::SNIPPET_EMPTY_NOMATCH,
                 "<b>", "</b>", "...",
