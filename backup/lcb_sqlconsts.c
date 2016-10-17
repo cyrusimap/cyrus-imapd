@@ -429,3 +429,22 @@ const char backup_index_subscription_insert_sql[] = QUOTE(
         :last_chunk_id, :mboxname, :unsubscribed
     );
 );
+
+#define SUBSCRIPTION_SELECT_FIELDS QUOTE(               \
+    sub.id, sub.last_chunk_id, mboxname, unsubscribed   \
+)
+
+const char backup_index_subscription_select_all_sql[] =
+    "SELECT " SUBSCRIPTION_SELECT_FIELDS
+    " FROM subscription AS sub"
+    " ORDER BY sub.id"
+    ";"
+;
+
+const char backup_index_subscription_select_chunkid_sql[] =
+    "SELECT " SUBSCRIPTION_SELECT_FIELDS
+    " FROM subscription AS sub"
+    " WHERE last_chunk_id = :last_chunk_id"
+    " ORDER BY sub.id"
+    ";"
+;

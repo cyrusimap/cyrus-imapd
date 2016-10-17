@@ -85,4 +85,7 @@ extern const char backup_index_message_select_live_chunkid_sql[];
 
 extern const char backup_index_subscription_update_sql[];
 extern const char backup_index_subscription_insert_sql[];
+extern const char backup_index_subscription_select_all_sql[];
+extern const char backup_index_subscription_select_chunkid_sql[];
+
 #endif

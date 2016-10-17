@@ -136,6 +136,7 @@ static void open_backups_list_close(struct open_backups_list *list, time_t age);
 
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
                                  void *rock __attribute__((__unused__)));
+static int backupd_print_subscriptions(struct backup *backup);
 static const char *backupd_response(int r);
 
 static void cmdloop(void);
@@ -1213,6 +1214,45 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
     return 0;
 }
 
+static int _sublist_add(const struct backup_subscription *sub, void *rock)
+{
+    strarray_t *list = (strarray_t *) rock;
+
+    if (sub->unsubscribed) return 0;
+
+    strarray_append(list, sub->mboxname);
+
+    return 0;
+}
+
+static int backupd_print_subscriptions(struct backup *backup)
+{
+    int i, r;
+    strarray_t list = STRARRAY_INITIALIZER;
+    struct dlist *kl = NULL;
+
+    r = backup_subscription_foreach(backup, 0, _sublist_add, &list);
+    if (r) goto done;
+
+    kl = dlist_newlist(NULL, "LSUB");
+
+    for (i = 0; i < list.count; i++) {
+        const char *mboxname = strarray_nth(&list, i);
+        dlist_setatom(kl, "MBOXNAME", mboxname);
+    }
+
+    if (kl->head) {
+        prot_puts(backupd_out, "* ");
+        dlist_print(kl, 1, backupd_out);
+        prot_puts(backupd_out, "\r\n");
+    }
+
+done:
+    if (kl) dlist_free(&kl);
+    strarray_fini(&list);
+    return r;
+}
+
 static const char *backupd_response(int r)
 {
     switch (r) {
@@ -1301,10 +1341,14 @@ static void cmd_get(struct dlist *dl)
         if (dl->sval) {
             mbname = mbname_from_userid(dl->sval);
             r = backupd_open_backup(&open, mbname);
-            if (!r)
-                r = backup_mailbox_foreach(open->backup, 0,
-                                           BACKUP_MAILBOX_NO_RECORDS,
-                                           backupd_print_mailbox, NULL);
+            if (r) goto done;
+
+            r = backup_mailbox_foreach(open->backup, 0,
+                                       BACKUP_MAILBOX_NO_RECORDS,
+                                       backupd_print_mailbox, NULL);
+            if (r) goto done;
+
+            r = backupd_print_subscriptions(open->backup);
         }
         else {
             r = IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1334,6 +1378,8 @@ static void cmd_get(struct dlist *dl)
     else {
         r = IMAP_PROTOCOL_ERROR;
     }
+
+done:
 
     if (mbname) mbname_free(&mbname);
 

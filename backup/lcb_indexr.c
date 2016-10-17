@@ -1024,3 +1024,59 @@ EXPORTED void backup_chunk_free(struct backup_chunk **chunkp)
 
     free(chunk);
 }
+
+struct _subscription_row_rock {
+    backup_subscription_foreach_cb proc;
+    void *rock;
+};
+
+static int _subscription_row_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct _subscription_row_rock *subrock = (struct _subscription_row_rock *) rock;
+    struct backup_subscription *sub = xzmalloc(sizeof *sub);
+    int r = 0;
+
+    int column = 0;
+    sub->id = _column_int(stmt, column++);
+    sub->last_chunk_id = _column_int(stmt, column++);
+    sub->mboxname = xstrdupnull(_column_text(stmt, column++));
+    sub->unsubscribed = _column_int64(stmt, column++);
+
+    if (subrock->proc)
+        r = subrock->proc(sub, subrock->rock);
+
+    backup_subscription_free(&sub);
+
+    return r;
+}
+
+EXPORTED int backup_subscription_foreach(struct backup *backup,
+                                         int chunk_id,
+                                         backup_subscription_foreach_cb cb,
+                                         void *rock)
+{
+    struct _subscription_row_rock subrock = { cb, rock };
+
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_subscription_select_chunkid_sql :
+        backup_index_subscription_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _subscription_row_cb, &subrock);
+
+    return r;
+}
+
+EXPORTED void backup_subscription_free(struct backup_subscription **subp)
+{
+    struct backup_subscription *sub = *subp;
+    *subp = NULL;
+
+    if (sub->mboxname) free(sub->mboxname);
+
+    free(sub);
+}

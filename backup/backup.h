@@ -291,6 +291,23 @@ int backup_message_foreach(struct backup *backup,
                            backup_message_foreach_cb cb, void *rock);
 
 
+/* reading backup subscription data */
+struct backup_subscription {
+    int id;
+    int last_chunk_id;
+    char *mboxname;
+    time_t unsubscribed;
+};
+
+void backup_subscription_free(struct backup_subscription **sub);
+
+typedef int (*backup_subscription_foreach_cb)(const struct backup_subscription *sub,
+                                              void *rock);
+int backup_subscription_foreach(struct backup *backup,
+                                int chunk_id,
+                                backup_subscription_foreach_cb cb,
+                                void *rock);
+
 /* writing backup data */
 enum backup_append_flush {
     BACKUP_APPEND_NOFLUSH = 0,
