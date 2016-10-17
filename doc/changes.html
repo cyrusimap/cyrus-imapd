@@ -8,13 +8,43 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.9</h1>
+<h2>Dependency changes</h2>
+<ul>
+<li>Jansson versions &gt;= 2.3 are now supported (was &gt;= 2.7)</li>
+<li>Restored support for AutoConf 2.63</li>
+<li>GCC 6 is now supported</li>
+</ul>
+<h2>Other changes</h2>
+<ul>
+<li>master(8) now supports a "-V" (print version and exit) option</li>
+<li>version information is now based on git describe, not hard-coded strings</li>
+</ul>
+<h2>Bug fixes</h2>
+<ul>
+<li>Fixed Issue #34: imapd in murder no longer crashes on MOVE to nonexistent folder
+(thanks Wolfgang Breyha)</li>
+<li>Fixed Issue #15: replication no longer crashes on mailboxes that are too old to be
+replicated.  Instead, it fails with an error and logs a warning that they need to be
+reconstructed</li>
+<li>Fixed Issue #45: extended LIST doesn't lose options when proxied to backend</li>
+<li>Fixed Task #142: extended LIST response no longer missing \HasNoChildren flag on last
+mailbox</li>
+<li>Fixed Issue #49: httpd no longer crashes with assertion failure on shutdown after
+CardDAV has been used</li>
+<li>Fixed Issue #31: the ldap_timeout setting is now used correctly</li>
+<li>Fixed bugzilla #3909: idled(8) no longer runs as root (thanks Carlos Velasco)</li>
+<li>Fixed Issue #5: renaming folder with annotations no longer increases annotation quota usage</li>
+<li>Fixed: URLFETCH crash when section is NULL</li>
+<li>various build system improvements</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.8</h1>
 <h2>Dependency changes</h2>
 <ul>
 <li>Libical 2.0.0 is now supported.</li>
 <li>preliminary support for OpenSSL 1.1.0 (not yet released)</li>
 </ul>
-</div>
 <h2>Other changes</h2>
 <ul>
 <li>ipurge(8) now supports a &#8220;-n&#8221; (dry run) option (thanks Valentin Vidic)</li>
