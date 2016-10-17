@@ -760,10 +760,11 @@ xapian_snipgen_t *xapian_snipgen_new(void)
 
 void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
+    snipgen->db->close();
     delete snipgen->stemmer;
     delete snipgen->mset;
     delete snipgen->db;
-    buf_free(snipgen->buf);
+    buf_destroy(snipgen->buf);
     free(snipgen);
 }
 
@@ -843,7 +844,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
         buf_reset(buf);
-        buf_appendcstr(buf, snippet.c_str());
+        buf_setcstr(buf, snippet.c_str());
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
