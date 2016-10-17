@@ -119,4 +119,14 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+# XXX Can't have a test suite without any tests in it!
+# (n.b. Cassandane::Cyrus::TestCase gets away with not having any tests,
+# because Cassandane::Unit::TestPlan::_schedule() explicitly excludes it
+# from scheduling.)
+sub test_placeholder
+{
+    my ($self) = @_;
+    $self->assert(1);
+}
+
 1;
