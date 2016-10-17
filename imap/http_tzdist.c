@@ -357,6 +357,17 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
         keepalive_response(txn);
     }
 
+    if (!strarray_size(tzids)) {
+        /* Calculate offset from GMT based on longitude */
+        /* XXX  Which offset does an exact multiple of +/- 7.5
+           and +/- 180 degrees belong to? */
+        char tzid[11];
+
+        sprintf(tzid, "Etc/GMT%+d",
+                (int) (longitude + copysign(1.0, longitude) * 7.5) / 15);
+        strarray_append(tzids, tzid);
+    }
+
     return tzids;
 }
 #else
