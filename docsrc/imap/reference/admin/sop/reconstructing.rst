@@ -1,3 +1,5 @@
+.. _reconstructing-mailboxes:
+
 Reconstructing Mailboxes
 ========================
 
@@ -40,4 +42,3 @@ Recovering a complete spool directory
 When invoked with the -m switch, ``reconstruct`` will rebuild the master mailboxes file. This can (in theory) be used to recover from almost any sort of data corruption.
 
 .. todo:: Is it possible to make things worse? For example if the system is still receiving emails because you forgot to turn off SMTP/LMTP first?
-

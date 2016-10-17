@@ -16,6 +16,9 @@ in :cyrusman:`imapd.conf(5)`. Files, by default, are stored in the configdirecto
 Changing the :ref:`storage type <storagetypes>` for a file will cause
 Cyrus to automatically convert the file to the new format.
 
+The data in these files can usually be rebuilt from the mail files themselves by
+:ref:`running reconstruct <reconstructing-mailboxes>`.
+
 File list
 =========
 
