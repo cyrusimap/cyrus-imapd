@@ -55,6 +55,10 @@ mailbox_message:
     char annotations
     timestamp expunged          -> time that it was expunged, or NULL if still alive
 
+subscription:
+    int last_chunk_id           -> chunk that knows the current state
+    char mboxname               -> no linkage to mailbox table, users can be sub'd to nonexistent
+    timestamp unsubscribed      -> time that it was unsubscribed, or NULL if still alive
 
 sieve scripts and messages are both identified by a GUID
 but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?

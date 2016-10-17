@@ -48,7 +48,7 @@
  */
 #define QUOTE(...) #__VA_ARGS__
 
-const int backup_index_version = 1;
+const int backup_index_version = 2;
 
 const char backup_index_initsql[] = QUOTE(
     CREATE TABLE chunk(
@@ -112,9 +112,28 @@ const char backup_index_initsql[] = QUOTE(
         UNIQUE (mailbox_id, message_id)
     );
     CREATE INDEX IF NOT EXISTS idx_mbr_uid ON mailbox_message(uid);
+
+    CREATE TABLE subscription(
+        id INTEGER PRIMARY KEY ASC,
+        last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
+        mboxname CHAR UNIQUE NOT NULL,
+        unsubscribed INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sub_mbx ON subscription(mboxname);
+);
+
+const char backup_index_upgrade_v2[] = QUOTE(
+    CREATE TABLE subscription(
+        id INTEGER PRIMARY KEY ASC,
+        last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
+        mboxname CHAR UNIQUE NOT NULL,
+        unsubscribed INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sub_mbx ON subscription(mboxname);
 );
 
 const struct sqldb_upgrade backup_index_upgrade[] = {
+    { 2, backup_index_upgrade_v2, NULL },
     { 0, NULL, NULL } /* leave me last */
 };
 
