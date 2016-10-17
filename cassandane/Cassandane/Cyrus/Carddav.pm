@@ -44,7 +44,7 @@ use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CardDAVTalk;
+use Net::CardDAVTalk 0.03;
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
