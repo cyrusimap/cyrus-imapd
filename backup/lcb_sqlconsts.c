@@ -413,3 +413,19 @@ const char backup_index_message_select_live_chunkid_sql[] =
     " WHERE chunk_id = :chunk_id"
     ";"
 ;
+
+const char backup_index_subscription_update_sql[] = QUOTE(
+    UPDATE subscription SET
+        last_chunk_id = :last_chunk_id,
+        unsubscribed = :unsubscribed
+    WHERE mboxname = :mboxname;
+);
+
+const char backup_index_subscription_insert_sql[] = QUOTE(
+    INSERT INTO subscription (
+        last_chunk_id, mboxname, unsubscribed
+    )
+    VALUES (
+        :last_chunk_id, :mboxname, :unsubscribed
+    );
+);

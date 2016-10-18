@@ -64,6 +64,8 @@ static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len);
 static int _index_rename(struct backup *backup, struct dlist *dl,
                          time_t ts, off_t dl_offset);
+static int _index_sub(struct backup *backup, struct dlist *dl,
+                      time_t ts, off_t dl_offset);
 
 HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len)
@@ -82,8 +84,16 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_rename(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "RESERVE") == 0)
         r = 0; /* nothing to index for a reserve, just return success */
-    else
-        syslog(LOG_DEBUG, "ignoring unrecognised dlist name: %s\n", dlist->name);
+    else if (strcmp(dlist->name, "SUB") == 0)
+        r = _index_sub(backup, dlist, ts, start);
+    else if (strcmp(dlist->name, "UNSUB") == 0)
+        r = _index_sub(backup, dlist, ts, start);
+    else if (config_debug) {
+        struct buf tmp = BUF_INITIALIZER;
+        dlist_printbuf(dlist, 1, &tmp);
+        syslog(LOG_DEBUG, "ignoring unrecognised dlist: %s\n", buf_cstring(&tmp));
+        buf_free(&tmp);
+    }
 
     return r;
 }
@@ -502,6 +512,52 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
     if (r) {
         syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
                __func__, r, oldmboxname, newmboxname);
+    }
+
+    return r ? IMAP_INTERNAL : 0;
+}
+
+static int _index_sub(struct backup *backup, struct dlist *dl,
+                      time_t ts, off_t dl_offset)
+{
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+
+    const char *mboxname = NULL;
+    int r;
+
+    if (!dlist_getatom(dl, "MBOXNAME", &mboxname))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
+        { ":mboxname",      SQLITE_TEXT,    { .s = mboxname } },
+        { ":unsubscribed",  SQLITE_NULL,    { .s = NULL } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    /* set the unsubscribed time if this is an UNSUB */
+    if (!strcmp(dl->name, "UNSUB")) {
+        syslog(LOG_DEBUG, "setting unsubscribed to %ld for %s", ts, mboxname);
+        struct sqldb_bindval *unsubscribed_bval = &bval[2];
+        assert(strcmp(unsubscribed_bval->name, ":unsubscribed") == 0);
+        unsubscribed_bval->type = SQLITE_INTEGER;
+        unsubscribed_bval->val.i = ts;
+    }
+
+    r = sqldb_exec(backup->db, backup_index_subscription_update_sql, bval,
+                   NULL, NULL);
+
+    if (!r && sqldb_changes(backup->db) == 0) {
+        r = sqldb_exec(backup->db, backup_index_subscription_insert_sql, bval,
+                       NULL, NULL);
+        if (r) {
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert subscription %s\n",
+                   __func__, r, mboxname);
+        }
+    }
+    else if (r) {
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update subscription %s",
+               __func__, r, mboxname);
     }
 
     return r ? IMAP_INTERNAL : 0;
