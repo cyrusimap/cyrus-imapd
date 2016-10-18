@@ -41,6 +41,11 @@ doc/murder.png
 doc/netnews.png
 doc/rst/
 doc/text/
+docsrc/.doctrees/
+docsrc/build/
+docsrc/imap/reference/manpages/configs/imapd.conf.rst
+docsrc/imap/reference/manpages/systemcommands/cyradm.rst
+docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 imap/arbitron
 imap/chk_cyrus
 imap/ctl_cyrusdb
