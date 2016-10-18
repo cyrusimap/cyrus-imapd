@@ -4020,7 +4020,7 @@ static int body_foreach_text_section(struct body *body,
 
     if (body->header_size) {
         buf_init_ro(&data, message->map.s + body->header_offset, body->header_size);
-        r = proc(/*isbody*/0, 0, 0, NULL, &data, rock);
+        r = proc(/*isbody*/0, CHARSET_UNKNOWN_CHARSET, 0, NULL, &data, rock);
         buf_free(&data);
 
         if (r) return r;

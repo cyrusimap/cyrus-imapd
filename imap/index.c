@@ -4590,7 +4590,7 @@ int index_search_evaluate(struct index_state *state,
 struct getsearchtext_rock
 {
     search_text_receiver_t *receiver;
-    int partcount;
+    int indexed_headers;
     int charset_flags;
 };
 
@@ -4612,7 +4612,7 @@ static void extract_cb(const struct buf *text, void *rock)
     str->receiver->append_text(str->receiver, text);
 }
 
-static int getsearchtext_cb(int partno, charset_t charset, int encoding,
+static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                             const char *subtype, struct buf *data,
                             void *rock)
 {
@@ -4620,17 +4620,17 @@ static int getsearchtext_cb(int partno, charset_t charset, int encoding,
     char *q;
     struct buf text = BUF_INITIALIZER;
 
-    if (!partno) {
-        /* header-like */
+    if (!isbody) {
+        /* Only index the headers of the top message */
+        if (str->indexed_headers)
+            return 0;
+
         q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
         buf_init_ro_cstr(&text, q);
-        if (++str->partcount == 1) {
-            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
-        } else {
-            stuff_part(str->receiver, SEARCH_PART_BODY, &text);
-        }
+        stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
         free(q);
         buf_free(&text);
+        str->indexed_headers = 1;
     }
     else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
         /* PGP encrypted body part - we don't want to index this,
@@ -4673,7 +4673,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
     receiver->begin_message(receiver, uid);
 
     str.receiver = receiver;
-    str.partcount = 0;
+    str.indexed_headers = 0;
     str.charset_flags = charset_flags;
 
     if (snippet) {
