@@ -825,17 +825,17 @@
 <span id="relnotes-3-0-0-beta3-changes"></span><h2>Major changes since the 2.5.x series<a class="headerlink" href="#major-changes-since-the-2-5-x-series" title="Permalink to this headline">¶</a></h2>
 <ul>
 <li><p class="first">Support added for FastMail-style conversations (threaded messages).
-(See the <code class="docutils literal"><span class="pre">conversations</span></code> options in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>)</p>
+(See the <code class="docutils literal"><span class="pre">conversations</span></code> options in <span class="xref std std-ref">imapd.conf</span>)</p>
 </li>
 <li><p class="first">Optional <a class="reference external" href="http://xapian.org">Xapian</a> integration for faster and shinier search. Note that this requires custom
 patches to Xapian, in this release. (See the <code class="docutils literal"><span class="pre">search_engine</span></code> option in
-<a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>, and <code class="docutils literal"><span class="pre">doc/README.xapian</span></code> in the
+<span class="xref std std-ref">imapd.conf</span>, and <code class="docutils literal"><span class="pre">doc/README.xapian</span></code> in the
 source distribution.))</p>
 </li>
 <li><p class="first">Archive support has arrived! Requires addition of an archive partition. (See <code class="docutils literal"><span class="pre">archive_*</span></code>
-options in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>)</p>
+options in <span class="xref std std-ref">imapd.conf</span>)</p>
 </li>
-<li><p class="first">Basic <a class="reference external" href="http://jmap.io">JMAP</a> support. (See <code class="docutils literal"><span class="pre">httpmodules</span></code> in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>)</p>
+<li><p class="first">Basic <a class="reference external" href="http://jmap.io">JMAP</a> support. (See <code class="docutils literal"><span class="pre">httpmodules</span></code> in <span class="xref std std-ref">imapd.conf</span>)</p>
 </li>
 <li><p class="first">Optional <a class="reference external" href="http://www.clamav.net">ClamAV</a> integration for AntiVirus support is now working again.
 Requires separate installation of <a class="reference external" href="http://www.clamav.net">ClamAV</a>. (See configure.ac <code class="docutils literal"><span class="pre">--with-clamav=DIR</span></code>)</p>
@@ -855,7 +855,7 @@ service process are now installed to <code class="docutils literal"><span class=
 <li><p class="first">Added support for replicating mailboxes/users to a particular partition.  <code class="docutils literal"><span class="pre">sync_client</span></code>
 now accepts a <code class="docutils literal"><span class="pre">-p</span></code> option.</p>
 </li>
-<li><p class="first">The <code class="docutils literal"><span class="pre">defaultdomain</span></code> setting in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>
+<li><p class="first">The <code class="docutils literal"><span class="pre">defaultdomain</span></code> setting in <span class="xref std std-ref">imapd.conf</span>
 now defaults to &#8220;internal&#8221; (was: NULL)</p>
 </li>
 <li><p class="first">Added experimental backup service.  See <code class="docutils literal"><span class="pre">docs/install-backup.html</span></code> in the source
@@ -868,26 +868,26 @@ distribution for preliminary installation/configuration/administration documenta
 <li><p class="first">New numeric header available for sorting: X-Spam-Score</p>
 </li>
 <li><p class="first">Added IMIP notification support to <a class="reference internal" href="../../../admin/systemcommands/notifyd.html#imap-admin-systemcommands-notifyd"><span>notifyd(8)</span></a>.  See
-<code class="docutils literal"><span class="pre">imipnotifier</span></code> in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a></p>
+<code class="docutils literal"><span class="pre">imipnotifier</span></code> in <span class="xref std std-ref">imapd.conf</span></p>
 </li>
 <li><p class="first">Optimised CRC32 implementation</p>
 </li>
 <li><p class="first">Added support for reverse ACLs, enabling faster LIST response.  See <code class="docutils literal"><span class="pre">reverseacls</span></code> in
-<a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a></p>
+<span class="xref std std-ref">imapd.conf</span></p>
 </li>
 <li><p class="first">Added cross-domain sharing support.  See <code class="docutils literal"><span class="pre">crossdomains</span></code> and <code class="docutils literal"><span class="pre">crossdomains_onlyother</span></code>
-in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a></p>
+in <span class="xref std std-ref">imapd.conf</span></p>
 </li>
 <li><p class="first">Added experimental object storage for mail data, with preliminary support for OpenIO and
 Caringo backends.  See configure.ac <code class="docutils literal"><span class="pre">--enable-objectstore</span></code>, and the <code class="docutils literal"><span class="pre">object_storage_*</span></code>,
-<code class="docutils literal"><span class="pre">openio_*</span></code> and <code class="docutils literal"><span class="pre">caringo_*</span></code> options in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a>.</p>
+<code class="docutils literal"><span class="pre">openio_*</span></code> and <code class="docutils literal"><span class="pre">caringo_*</span></code> options in <span class="xref std std-ref">imapd.conf</span>.</p>
 </li>
 <li><p class="first">Configurable POP3 UIDL format for compatibility with other mail servers.  Supports
 Courier Mail Server and Dovecot formats, in addition to Cyrus formats.  See <code class="docutils literal"><span class="pre">uidl_format</span></code>
-in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a></p>
+in <span class="xref std std-ref">imapd.conf</span></p>
 </li>
 <li><p class="first">Sieve now supports the <a class="reference external" href="http://tools.ietf.org/html/rfc5490">RFC 5490</a> Checking Mailbox Status and Accessing Mailbox Metadata
-extensions.  See <code class="docutils literal"><span class="pre">sieve_extensions</span></code> in <a class="reference internal" href="../../../admin/configs/imapd.conf.html#imap-admin-configs-imapd-conf"><span>imapd.conf</span></a></p>
+extensions.  See <code class="docutils literal"><span class="pre">sieve_extensions</span></code> in <span class="xref std std-ref">imapd.conf</span></p>
 </li>
 <li><p class="first">Under <code class="docutils literal"><span class="pre">delete_mode:</span> <span class="pre">delayed</span></code>, only the 20 most recently deleted mailboxes are kept
 for any given name.</p>

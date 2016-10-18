@@ -1100,21 +1100,30 @@ and partitions.  We recommend exploring these:</p>
 <div><p>Partition selection mode.</p>
 <dl class="docutils">
 <dt><em>random</em></dt>
-<dd>(pseudo-)random selection</dd>
-<dt><em>freespace-most</em></dt>
-<dd>partition with the most free space (KiB)</dd>
-<dt><em>freespace-percent-most</em></dt>
-<dd>partition with the most free space (%)</dd>
-<dt><em>freespace-percent-weighted</em></dt>
-<dd>each partition is weighted according to its free space (%); the more free space
-the partition has, the more chances it has to be selected</dd>
-<dt><em>freespace-percent-weighted-delta</em></dt>
-<dd><p class="first">each partition is weighted according to its difference of free space (%)
+<dd><p class="first">(pseudo-)random selection
+<em>freespace-most</em></p>
+<blockquote class="last">
+<div><p>partition with the most free space (KiB)
+<em>freespace-percent-most</em></p>
+<blockquote>
+<div><p>partition with the most free space (%)
+<em>freespace-percent-weighted</em></p>
+<blockquote>
+<div><p>each partition is weighted according to its free space (%); the more free space
+the partition has, the more chances it has to be selected
+<em>freespace-percent-weighted-delta</em></p>
+<blockquote>
+<div><p>each partition is weighted according to its difference of free space (%)
 compared to the most used partition; the more the partition is lagging behind
-the most used partition, the more chances it has to be selected</p>
+the most used
+partition, the more chances it has to be selected</p>
 <p>Note that actually even the most used partition has a few chances to be
 selected, and those chances increase when other partitions get closer</p>
-<p class="last">Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+<p>Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
 </dd>
 </dl>
 </div></blockquote>
@@ -1151,32 +1160,41 @@ CREATE.</div></blockquote>
 <div><p>Server selection mode.</p>
 <dl class="docutils">
 <dt><em>random</em></dt>
-<dd>(pseudo-)random selection</dd>
-<dt><em>freespace-most</em></dt>
-<dd>backend with the most (total) free space (KiB)</dd>
-<dt><em>freespace-percent-most</em></dt>
-<dd>backend whose partition has the most free space (%)</dd>
-<dt><em>freespace-percent-weighted</em></dt>
-<dd>same as for partition selection, comparing the free space (%) of the least used
-partition of each backend</dd>
-<dt><em>freespace-percent-weighted-delta</em></dt>
-<dd><p class="first">same as for partition selection, comparing the free space (%) of the least used
-partition of each backend.</p>
-<p class="last">Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+<dd><p class="first">(pseudo-)random selection
+<em>freespace-most</em></p>
+<blockquote class="last">
+<div><p>backend with the most (total) free space (KiB)
+<em>freespace-percent-most</em></p>
+<blockquote>
+<div><p>backend whose partition has the most free space (%)
+<em>freespace-percent-weighted</em></p>
+<blockquote>
+<div><p>same as for partition selection, comparing the free space (%) of the least used
+partition of each backend
+<em>freespace-percent-weighted-delta</em></p>
+<blockquote>
+<div><p>same as for partition selection, comparing the free space (%) of the least used
+partition of each backend</p>
+<p>Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
 </dd>
 </dl>
 </div></blockquote>
 </div></blockquote>
 <blockquote>
+<div><blockquote>
 <div><p><code class="docutils literal"><span class="pre">serverlist_select_usage_reinit:</span></code> 0</p>
-<blockquote>
-<div>For a given session, number of <strong>operations</strong> (e.g. backend selection)
-for which backend usage data are cached.</div></blockquote>
+<p>For a given session, number of <strong>operations</strong> (e.g. backend selection)
+for which backend usage data are cached.</p>
+</div></blockquote>
 </div></blockquote>
 <blockquote>
+<div><blockquote>
 <div><p><code class="docutils literal"><span class="pre">serverlist_select_soft_usage_limit:</span></code> 0</p>
-<blockquote>
-<div><p>Limit of backend usage (%): if a backend is over that limit, it is
+<p>Limit of backend usage (%): if a backend is over that limit, it is
 automatically excluded from selection mode.</p>
 <p>If all backends are over that limit, this feature is not used anymore.</p>
 </div></blockquote>

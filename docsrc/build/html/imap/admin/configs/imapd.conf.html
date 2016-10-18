@@ -801,7 +801,7 @@
           <div role="main" class="document">
             
   <div class="section" id="imapd-conf">
-<span id="imap-admin-configs-imapd-conf"></span><h1>imapd.conf<a class="headerlink" href="#imapd-conf" title="Permalink to this headline">¶</a></h1>
+<span id="imap-reference-manpages-configs-imapd-conf"></span><h1>imapd.conf<a class="headerlink" href="#imapd-conf" title="Permalink to this headline">¶</a></h1>
 <p>IMAP configuration file</p>
 <div class="section" id="description">
 <h2>DESCRIPTION<a class="headerlink" href="#description" title="Permalink to this headline">¶</a></h2>
@@ -820,16 +820,17 @@ set to.</p>
 (backslash) character may be used as the last character on a line to
 force it to continue on the next one.  No additional whitespace is
 inserted before or after the ``\&#8217;&#8216;.  Note that a line that is split
-using ``\&#8217;&#8217; character(s) is still considered a single line.</p>
-<dl class="docutils">
-<dt>For example</dt>
-<dd><p class="first"><em>option</em>:\</p>
-<blockquote class="last">
+using ``\&#8217;&#8217; character(s) is still considered a single line.
+For example</p>
+<blockquote>
+<div><p><em>option</em>:\</p>
+<blockquote>
 <div><p><em>value</em>1 <em>value</em>2 \</p>
 <blockquote>
 <div><em>value</em>3</div></blockquote>
 </div></blockquote>
-</dd>
+</div></blockquote>
+<dl class="docutils">
 <dt>is equivalent to</dt>
 <dd><em>option</em>: <em>value</em>1 <em>value</em>2   <em>value</em>3</dd>
 </dl>
@@ -852,7 +853,7 @@ are listed with ``&lt;none&gt;&#8217;&#8216;.</p>
 <div>The prefix for the addressbook mailboxes hierarchies.  The hierarchy
 delimiter will be automatically appended.  The public addressbook
 hierarchy will be at the toplevel of the shared namespace.  A
-user&#8217;s personal addressbook hierarchy will be a child of their Inbox.</div></blockquote>
+user&#8217;s personal calendar hierarchy will be a child of their Inbox.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">admins:</span></code> &lt;empty string&gt;</p>
 <blockquote>
 <div><p>The list of userids with administrative rights.  Separate each userid
@@ -929,14 +930,10 @@ such as cyradm (admins ONLY), reconstruct, quota, etc., NOR does it
 affect LMTP delivery of messages directly to mailboxes via
 plus-addressing.</p>
 </div></blockquote>
-<p><code class="docutils literal"><span class="pre">altprefix:</span></code> Alt Folders</p>
-<blockquote>
-<div>Alternative INBOX spellings that can&#8217;t be accessed in altnamespace
-otherwise go under here</div></blockquote>
 <p><code class="docutils literal"><span class="pre">annotation_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for mailbox annotations.</p>
-<p>Allowed values: <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">annotation_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -950,8 +947,8 @@ support problems, but it&#8217;s enabled by default.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">annotation_allow_undefined:</span></code> 0</p>
 <blockquote>
 <div>Allow clients to store values for entries which are not
-defined either by Cyrus or in the annotations_definitions
-file.</div></blockquote>
+* defined either by Cyrus or in the annotations_definitions
+* file.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">annotation_definitions:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div><p>File containing external (third-party) annotation definitions.</p>
@@ -1018,36 +1015,6 @@ particular the <strong>a</strong> permission bit does not achieve this.</p>
 or flags to a message when it is appended to a mailbox.  The path can
 be either an executable (including a script), or a UNIX domain
 socket.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">aps_topic:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>Topic for Apple Push Service registration.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">archive_enabled:</span></code> 0</p>
-<blockquote>
-<div>Is archiving enabled for this server.  You also need to have an
-archivepartition for the mailbox.  Archiving allows older email
-to be stored on slower, cheaper disks - even within the same
-mailbox, as distinct from partitions.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">archive_days:</span></code> 7</p>
-<blockquote>
-<div>The number of days after which to move messages to the archive partition
-if archiving is enabled</div></blockquote>
-<p><code class="docutils literal"><span class="pre">archive_maxsize:</span></code> 1024</p>
-<blockquote>
-<div>The size in kilobytes of the largest message that won&#8217;t be archived
-immediately.  Default is 1Mb</div></blockquote>
-<p><code class="docutils literal"><span class="pre">archive_keepflagged:</span></code> 0</p>
-<blockquote>
-<div>If set, messages with the \Flagged system flag won&#8217;t be archived,
-provided they are smaller than <strong>archive_maxsize</strong>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">archivepartition-name:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The pathname of the archive partition <em>name</em>, corresponding to
-spool partition <strong>partition-name</strong>.  For any mailbox residing in
-a directory on <strong>partition-name</strong>, the archived messages will be
-stored in a corresponding directory on <strong>archivepartition-name</strong>.
-Note that not every <strong>partition-name</strong> option is strictly required
-to have a corresponding <strong>archivepartition-name</strong> option, but that
-without one there&#8217;s no benefit to enabling archiving.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">auditlog:</span></code> 0</p>
 <blockquote>
 <div>Should cyrus output log entries for every action taken on a message
@@ -1070,7 +1037,7 @@ can be very useful for tracking down what happened if things look strange</div><
 <p><code class="docutils literal"><span class="pre">autosievefolders:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Deprecated in favor of <em>autocreate_sieve_folders</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">generate_compiled_sieve_script:</span></code> 0</p>
+<p><code class="docutils literal"><span class="pre">generate_compiled_sieve_script:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Deprecated in favor of <em>autocreate_sieve_script_compile</em>.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">autocreate_sieve_compiled_script:</span></code> &lt;none&gt;</p>
@@ -1088,18 +1055,22 @@ can be very useful for tracking down what happened if things look strange</div><
 <p><code class="docutils literal"><span class="pre">autocreate_inbox_folders:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div><p>If a user does not have an INBOX already, and the INBOX is to be
-created, create the list of folders in this setting as well.
-<em>autocreate_inbox_folders</em> is a list of INBOX&#8217;s subfolders
+created, create the list of folders in this setting as well.</p>
+<p>INBOX folders are created under both the following conditions:</p>
+<ol class="arabic">
+<li><p class="first">The user logins via the IMAP or the POP3 protocol.
+<em>autocreate_quota</em> option must have a value of zero or greater.
+2.</p>
+<blockquote>
+<div><p>A message arrives for the user through the <em>lmtpd(8)</em>.
+<em>autocreate_post</em> option must be enabled.</p>
+<p><em>autocreate_inbox_folders</em> is a list of INBOX&#8217;s subfolders
 separated by a &#8220;|&#8221;, that are automatically created by the server
-under the following two scenarios. Leading and trailing whitespace is
+under the previous two scenarios. Leading and trailing whitespace is
 stripped, so &#8220;Junk | Trash&#8221; results in two folders: &#8220;Junk&#8221; and
 &#8220;Trash&#8221;.</p>
-<p>INBOX folders are created under both the following conditions:</p>
-<ol class="arabic simple">
-<li>The user logins via the IMAP or the POP3 protocol.
-<em>autocreate_quota</em> option must have a value of zero or greater.</li>
-<li>A message arrives for the user through the <em>lmtpd(8)</em>.
-<em>autocreate_post</em> option must be enabled.</li>
+</div></blockquote>
+</li>
 </ol>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">autocreate_post:</span></code> 0</p>
@@ -1177,70 +1148,31 @@ to subscribe to.</div></blockquote>
 <blockquote>
 <div>A space separated list of users and/or groups that are allowed their INBOX to be
 automatically created.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backuppartition-name:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">berkeley_cachesize:</span></code> 512</p>
 <blockquote>
-<div>The pathname of the backup partition <em>name</em>.  At least one backup
-partition pathname MUST be specified if backups are in use.  Note that
-there is no relationship between spool partitions and backup partitions.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_compact_minsize:</span></code> 0</p>
+<div>Size (in kilobytes) of the shared memory buffer pool (cache) used
+by the berkeley environment.  The minimum allowed value is 20.  The
+maximum allowed value is 4194303 (4GB).</div></blockquote>
+<p><code class="docutils literal"><span class="pre">berkeley_locks_max:</span></code> 50000</p>
 <blockquote>
-<div><p>The minimum size in kilobytes of chunks in each backup.  The compact tool
-will try to combine adjacent chunks that are smaller than this.</p>
-<p>Setting this value to zero or negative disables combining of chunks.</p>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_compact_maxsize:</span></code> 0</p>
+<div>Maximum number of locks to be held or requested in the berkeley
+environment.</div></blockquote>
+<p><code class="docutils literal"><span class="pre">berkeley_txns_max:</span></code> 100</p>
 <blockquote>
-<div><p>The maximum size in kilobytes of chunks in each backup.  The compact tool
-will try to split chunks larger than this into smaller chunks.</p>
-<p>Setting this value to zero or negative disables splitting of chunks.</p>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_compact_work_threshold:</span></code> 1</p>
-<blockquote>
-<div>The number of chunks that must obviously need compaction before the compact
-tool will go ahead with the compaction.  If set to less than one, the value
-is treated as being one.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_staging_path:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The absolute path of the backup staging area.  If not specified,
-will be temp_path/backup</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_retention_days:</span></code> 7</p>
-<blockquote>
-<div>The number of days to keep content in backup after it has been deleted
-from the source.  If set to a negative value or zero, deleted content
-will be kept indefinitely.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_db:</span></code> twoskip</p>
-<blockquote>
-<div><p>The cyrusdb backend to use for the backup locations database.</p>
-<p>Allowed values: <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">backup_db_path:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The absolute path to the backup db file.  If not specified,
-will be confdir/backups.db</div></blockquote>
+<div>Maximum number of transactions to be supported in the berkeley
+environment.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">boundary_limit:</span></code> 1000</p>
 <blockquote>
 <div>messages are parsed recursively and a deep enough MIME structure
 can cause a stack overflow.  Do not parse deeper than this many
 layers of MIME structure.  The default of 1000 is much higher
 than any sane message should have.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">caldav_allowattach:</span></code> 1</p>
-<blockquote>
-<div>Enable managed attachments support on the caldav server.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">caldav_allowscheduling:</span></code> on</p>
 <blockquote>
 <div>Enable calendar scheduling operations. If set to &#8220;apple&#8221;, the
 server will emulate Apple CalendarServer behavior as closely as
 possible.
 Allowed values: <em>off</em>, <em>on</em>, <em>apple</em></div></blockquote>
-<p><code class="docutils literal"><span class="pre">caldav_create_attach:</span></code> 1</p>
-<blockquote>
-<div>Create the &#8216;Attachments&#8217; calendar if it doesn&#8217;t already exist</div></blockquote>
-<p><code class="docutils literal"><span class="pre">caldav_create_default:</span></code> 1</p>
-<blockquote>
-<div>Create the &#8216;Default&#8217; calendar if it doesn&#8217;t already exist</div></blockquote>
-<p><code class="docutils literal"><span class="pre">caldav_create_sched:</span></code> 1</p>
-<blockquote>
-<div>Create the &#8216;Inbox&#8217; and &#8216;Outbox&#8217; calendars if they don&#8217;t already exist</div></blockquote>
 <p><code class="docutils literal"><span class="pre">caldav_maxdatetime:</span></code> 20380119T031407Z</p>
 <blockquote>
 <div><p>The latest date and time accepted by the server (ISO format).  This
@@ -1293,47 +1225,6 @@ required.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">createonpost:</span></code> 0</p>
 <blockquote>
 <div>Deprecated in favor of <em>autocreate_post</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">conversations:</span></code> 0</p>
-<blockquote>
-<div>Enable the XCONVERSATIONS extensions.  Extract conversation
-tracking information from incoming messages and track them
-in per-user databases.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">conversations_counted_flags:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>space-separated list of flags for which per-conversation counts
-will be kept.  Note that you need to reconstruct the conversations
-database with ctl_conversationsdb if you change this option on a
-running server, or the counts will be wrong.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">conversations_db:</span></code> skiplist</p>
-<blockquote>
-<div><p>The cyrusdb backend to use for the per-user conversations database.</p>
-<p>Allowed values: <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">conversations_expire_days:</span></code> 90</p>
-<blockquote>
-<div>How long the conversations database keeps the message tracking
-information needed for receiving new messages in existing
-conversations, in days.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">crossdomains:</span></code> 0</p>
-<blockquote>
-<div>Enable cross domain sharing.  This works best with alt namespace and
-unix hierarchy separators on, so you get Other <a class="reference external" href="mailto:Users/foo&#37;&#52;&#48;example&#46;com/">Users/foo<span>&#64;</span>example<span>&#46;</span>com/</a>...</div></blockquote>
-<p><code class="docutils literal"><span class="pre">crossdomains_onlyother:</span></code> 0</p>
-<blockquote>
-<div>only show the domain for users in other domains than your own (for
-backwards compatibility if you&#8217;re already sharing</div></blockquote>
-<p><code class="docutils literal"><span class="pre">davdriveprefix:</span></code> #drive</p>
-<blockquote>
-<div>The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
-delimiter will be automatically appended.  The public storage
-hierarchy will be at the toplevel of the shared namespace.  A
-user&#8217;s personal storage hierarchy will be a child of their Inbox.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">davnotificationsprefix:</span></code> #notifications</p>
-<blockquote>
-<div>The prefix for the DAV notifications hierarchy.  The hierarchy
-delimiter will be automatically appended.  The public notifications
-hierarchy will be at the toplevel of the shared namespace.  A
-user&#8217;s personal notifications hierarchy will be a child of their Inbox.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">dav_realm:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The realm to present for HTTP authentication of generic DAV
@@ -1349,7 +1240,7 @@ is the service ID.  Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d</div></bloc
 <blockquote>
 <div>The Access Control List (ACL) placed on a newly-created (non-user)
 mailbox that does not have a parent mailbox.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">defaultdomain:</span></code> internal</p>
+<p><code class="docutils literal"><span class="pre">defaultdomain:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The default domain for virtual domain support</div></blockquote>
 <p><code class="docutils literal"><span class="pre">defaultpartition:</span></code> &lt;none&gt;</p>
@@ -1368,19 +1259,15 @@ specified, the server with the most free space will be used for new
 mailboxes.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">deletedprefix:</span></code> DELETED</p>
 <blockquote>
-<div><p>With <strong>delete_mode</strong> set to <em>delayed</em>, the
-<strong>deletedprefix</strong> setting defines the prefix for the hierarchy of
-deleted mailboxes.</p>
-<p>The hierarchy delimiter will be automatically appended.</p>
-</div></blockquote>
+<div>If &#8220;delete_mode&#8221; set to be &#8220;delayed&#8221;, the prefix for the deleted
+mailboxes hierarchy.  The hierarchy delimiter will be automatically
+appended.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">delete_mode:</span></code> delayed</p>
 <blockquote>
-<div><p>The manner in which mailboxes are deleted. In the default
-<em>delayed</em> mode, mailboxes that are being deleted are renamed to
-a special mailbox hierarchy under the <strong>deletedprefix</strong>, to be
-removed later by <strong>cyr_expire(8)</strong>.</p>
-<p>In <em>immediate</em> mode, the mailbox is removed from the filesystem
-immediately.</p>
+<div><p>The manner in which mailboxes are deleted. &#8220;immediate&#8221; mode is the
+default behavior in which mailboxes are removed immediately.  In
+&#8220;delayed&#8221; mode, mailboxes are renamed to a special hiearchy defined
+by the &#8220;deletedprefix&#8221; option to be removed later by cyr_expire.</p>
 <p>Allowed values: <em>immediate</em>, <em>delayed</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">deleteright:</span></code> c</p>
@@ -1420,7 +1307,7 @@ domain.</div></blockquote>
 <blockquote>
 <div>The cyrusdb backend to use for the duplicate delivery suppression
 and sieve.
-Allowed values: <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></div></blockquote>
+Allowed values: <em>berkeley</em>, <em>berkeley-nosync</em>, <em>berkeley-hash</em>, <em>berkeley-hash-nosync</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">duplicate_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The absolute path to the duplicate db file.  If not specified,
@@ -1455,12 +1342,12 @@ Set ALL for any folder</div></blockquote>
 <p><code class="docutils literal"><span class="pre">event_extra_params:</span></code> timestamp</p>
 <blockquote>
 <div><p>Space-separated list of extra parameters to add to any appropriated event.</p>
-<p>Allowed values: <em>bodyStructure</em>, <em>clientAddress</em>, <em>diskUsed</em>, <em>flagNames</em>, <em>messageContent</em>, <em>messageSize</em>, <em>messages</em>, <em>modseq</em>, <em>service</em>, <em>timestamp</em>, <em>uidnext</em>, <em>vnd.cmu.midset</em>, <em>vnd.cmu.unseenMessages</em>, <em>vnd.cmu.envelope</em>, <em>vnd.cmu.sessionId</em>, <em>vnd.cmu.mailboxACL</em>, <em>vnd.cmu.mbtype</em>, <em>vnd.cmu.davFilename</em>, <em>vnd.cmu.davUid</em>, <em>vnd.fastmail.clientId</em>, <em>vnd.fastmail.sessionId</em>, <em>vnd.fastmail.convExists</em>, <em>vnd.fastmail.convUnseen</em>, <em>vnd.fastmail.cid</em>, <em>vnd.fastmail.counters</em></p>
+<p>Allowed values: <em>bodyStructure</em>, <em>clientAddress</em>, <em>diskUsed</em>, <em>flagNames</em>, <em>messageContent</em>, <em>messageSize</em>, <em>messages</em>, <em>modseq</em>, <em>service</em>, <em>timestamp</em>, <em>uidnext</em>, <em>vnd.cmu.midset</em>, <em>vnd.cmu.unseenMessages</em>, <em>vnd.cmu.envelope</em>, <em>vnd.cmu.sessionId</em>, <em>vnd.cmu.mbtype</em>, <em>vnd.cmu.davFilename</em>, <em>vnd.cmu.davUid</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">event_groups:</span></code> message mailbox</p>
 <blockquote>
 <div><p>Space-separated list of groups of related events to turn on notification</p>
-<p>Allowed values: <em>message</em>, <em>quota</em>, <em>flags</em>, <em>access</em>, <em>mailbox</em>, <em>subscription</em>, <em>calendar</em>, <em>applepushservice</em></p>
+<p>Allowed values: <em>message</em>, <em>quota</em>, <em>flags</em>, <em>access</em>, <em>mailbox</em>, <em>subscription</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">event_notifier:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -1582,14 +1469,10 @@ provisional responses every <em>httpkeepalive</em> seconds until the
 final response can be sent</div></blockquote>
 <p><code class="docutils literal"><span class="pre">httpmodules:</span></code> &lt;empty string&gt;</p>
 <blockquote>
-<div><p>Space-separated list of HTTP modules that will be enabled in
+<div>Space-separated list of HTTP modules that will be enabled in
 httpd(8).  This option has no effect on modules that are disabled
-at compile time due to missing dependencies (e.g. libical).</p>
-<p>Note that &#8220;domainkey&#8221; depends on &#8220;ischedule&#8221; being enabled, and
-that both &#8220;freebusy&#8221; and &#8220;ischedule&#8221; depend on &#8220;caldav&#8221; being
-enabled.
-Allowed values: <em>caldav</em>, <em>carddav</em>, <em>domainkey</em>, <em>freebusy</em>, <em>ischedule</em>, <em>jmap</em>, <em>rss</em>, <em>tzdist</em>, <em>webdav</em></p>
-</div></blockquote>
+at compile time due to missing dependencies (e.g. libical).
+Allowed values: <em>caldav</em>, <em>carddav</em>, <em>domainkey</em>, <em>ischedule</em>, <em>rss</em>, <em>timezone</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">httpprettytelemetry:</span></code> 0</p>
 <blockquote>
 <div>If enabled, HTTP response payloads including server-generated
@@ -1626,10 +1509,6 @@ command, arguments, environment.  Otherwise the server returns NIL.</div></block
 userid+namespace syntax as the authentication/authorization id.
 Using userid+ (with an empty namespace) will list only subscribed
 mailboxes.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">imipnotifier:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>Notifyd(8) method to use for &#8220;IMIP&#8221; notifications which are based on
-the <a class="reference external" href="http://tools.ietf.org/html/rfc6047">RFC 6047</a>.  If not set, &#8220;IMIP&#8221; notifications are disabled.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">implicit_owner_rights:</span></code> lkxa</p>
 <blockquote>
 <div>The implicit Access Control List (ACL) for the owner of a mailbox.</div></blockquote>
@@ -1656,14 +1535,6 @@ See improved_mboxlist_sort.html.</p>
 &#8220;receivedheader&#8221; looks at the top most Received header
 or time/mtime otherwise
 Allowed values: <em>standard</em>, <em>receivedheader</em></div></blockquote>
-<p><code class="docutils literal"><span class="pre">jmap_preview_annot:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The name of the per-message annotation, if any, to store message
-previews.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">jmap_preview_length:</span></code> 64</p>
-<blockquote>
-<div>The maximum byte length of dynamically generated message previews. Previews
-stored in jmap_preview_annot take precedence.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">iolog:</span></code> 0</p>
 <blockquote>
 <div>Should cyrus output I/O log entries</div></blockquote>
@@ -1815,20 +1686,20 @@ ldaps:// in &#8216;ldap_uri&#8217; with this option enabled.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_ca_file:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Patch to a file containing CA (Certificate Authority) certificate(s).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">ldap_ciphers:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>List of SSL/TLS ciphers to allow.  The format of the string is
-described in ciphers(1).</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_client_cert:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>File containing the client certificate.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">ldap_client_key:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>File containing the private client key.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_verify_peer:</span></code> 0</p>
 <blockquote>
 <div>Require and verify server certificate.  If this option is yes,
 you must specify ldap_ca_file or ldap_ca_dir.</div></blockquote>
+<p><code class="docutils literal"><span class="pre">ldap_ciphers:</span></code> &lt;none&gt;</p>
+<blockquote>
+<div>List of SSL/TLS ciphers to allow.  The format of the string is
+described in ciphers(1).</div></blockquote>
+<p><code class="docutils literal"><span class="pre">ldap_client_key:</span></code> &lt;none&gt;</p>
+<blockquote>
+<div>File containing the private client key.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_tls_cacert_dir:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Deprecated in favor of <em>ldap_ca_dir</em>.</div></blockquote>
@@ -1841,7 +1712,7 @@ you must specify ldap_ca_file or ldap_ca_dir.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_tls_key:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Deprecated in favor of <em>ldap_client_key</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">ldap_tls_check_peer:</span></code> 0</p>
+<p><code class="docutils literal"><span class="pre">ldap_tls_check_peer:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Deprecated in favor of <em>ldap_verify_peer</em>.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ldap_tls_ciphers:</span></code> &lt;none&gt;</p>
@@ -1952,12 +1823,12 @@ will allow messages of any size (the default).</div></blockquote>
 <p><code class="docutils literal"><span class="pre">mboxkey_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for mailbox keys.</p>
-<p>Allowed values: <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>berkeley</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">mboxlist_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the mailbox list.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">mboxlist_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -1971,7 +1842,7 @@ will be confdir/mailboxes.db</div></blockquote>
 <div>Space-separated list of metadata files to be stored on a
 <em>metapartition</em> rather than in the mailbox directory on a spool
 partition.
-Allowed values: <em>header</em>, <em>index</em>, <em>cache</em>, <em>expunge</em>, <em>squat</em>, <em>annotations</em>, <em>lock</em>, <em>dav</em>, <em>archivecache</em></div></blockquote>
+Allowed values: <em>header</em>, <em>index</em>, <em>cache</em>, <em>expunge</em>, <em>squat</em>, <em>annotations</em>, <em>lock</em>, <em>dav</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">metapartition-name:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The pathname of the metadata partition <em>name</em>, corresponding to
@@ -2122,10 +1993,6 @@ will be confdir/fetchnews.db</div></blockquote>
 <blockquote>
 <div>Set the length of the NNTP server&#8217;s inactivity autologout timer,
 in minutes.  The minimum value is 3, the default.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">notesmailbox:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The top level mailbox in each user&#8217;s account which is used to store
-* Apple-style Notes.  Default is blank (disabled)</div></blockquote>
 <p><code class="docutils literal"><span class="pre">notifysocket:</span></code> {configdirectory}/socket/notify</p>
 <blockquote>
 <div>Unix domain socket that the mail notification daemon listens on.</div></blockquote>
@@ -2139,24 +2006,16 @@ command line options:</p>
 <div><dl class="option">
 <dt id="cmdoption-c">
 <code class="descname">-c</code><code class="descclassname">    class</code><a class="headerlink" href="#cmdoption-c" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dt>
+<code class="descname">.. option:: -p    priority</code></dt>
+<dt>
+<code class="descname">.. option:: -u    user</code></dt>
+<dt>
+<code class="descname">.. option:: -m    mailbox</code></dt>
+<dd><blockquote>
+<div>And the notification message will be available on <em>stdin</em>.</div></blockquote>
+</dd></dl>
 
-<dl class="option">
-<dt id="cmdoption-p">
-<code class="descname">-p</code><code class="descclassname">    priority</code><a class="headerlink" href="#cmdoption-p" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="option">
-<dt id="cmdoption-u">
-<code class="descname">-u</code><code class="descclassname">    user</code><a class="headerlink" href="#cmdoption-u" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="option">
-<dt id="cmdoption-m">
-<code class="descname">-m</code><code class="descclassname">    mailbox</code><a class="headerlink" href="#cmdoption-m" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<p>And the notification message will be available on <em>stdin</em>.</p>
 </div></blockquote>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">partition-name:</span></code> &lt;none&gt;</p>
@@ -2166,29 +2025,35 @@ pathname MUST be specified.  If the <strong>defaultpartition</strong> option is
 used, then its pathname MUST be specified.  For example, if the
 value of the <strong>defaultpartion</strong> option is <strong>default</strong>, then the
 <strong>partition-default</strong> field is required.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">outbox_sendlater:</span></code> 0</p>
-<blockquote>
-<div>If enabled, any message with a Draft flag will be sent at the time of its INTERNALDATE</div></blockquote>
 <p><code class="docutils literal"><span class="pre">partition_select_mode:</span></code> freespace-most</p>
 <blockquote>
 <div><p>Partition selection mode.</p>
 <dl class="docutils">
 <dt><em>random</em></dt>
-<dd>(pseudo-)random selection</dd>
-<dt><em>freespace-most</em></dt>
-<dd>partition with the most free space (KiB)</dd>
-<dt><em>freespace-percent-most</em></dt>
-<dd>partition with the most free space (%)</dd>
-<dt><em>freespace-percent-weighted</em></dt>
-<dd>each partition is weighted according to its free space (%); the more free space
-the partition has, the more chances it has to be selected</dd>
-<dt><em>freespace-percent-weighted-delta</em></dt>
-<dd><p class="first">each partition is weighted according to its difference of free space (%)
+<dd><p class="first">(pseudo-)random selection
+<em>freespace-most</em></p>
+<blockquote class="last">
+<div><p>partition with the most free space (KiB)
+<em>freespace-percent-most</em></p>
+<blockquote>
+<div><p>partition with the most free space (%)
+<em>freespace-percent-weighted</em></p>
+<blockquote>
+<div><p>each partition is weighted according to its free space (%); the more free space
+the partition has, the more chances it has to be selected
+<em>freespace-percent-weighted-delta</em></p>
+<blockquote>
+<div><p>each partition is weighted according to its difference of free space (%)
 compared to the most used partition; the more the partition is lagging behind
-the most used partition, the more chances it has to be selected</p>
+the most used
+partition, the more chances it has to be selected</p>
 <p>Note that actually even the most used partition has a few chances to be
 selected, and those chances increase when other partitions get closer</p>
-<p class="last">Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+<p>Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
 </dd>
 </dl>
 </div></blockquote>
@@ -2332,7 +2197,7 @@ DO NOT SET on frontends or things won&#8217;t work properly.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">ptscache_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the pts cache.</p>
-<p>Allowed values: <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">ptscache_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2360,7 +2225,7 @@ Allowed values: <em>cs0</em>, <em>cs1</em>, <em>cs2</em>, <em>cs3</em>, <em>cs4<
 <p><code class="docutils literal"><span class="pre">quota_db:</span></code> quotalegacy</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for quotas.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>sql</em>, <em>quotalegacy</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>sql</em>, <em>quotalegacy</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">quota_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2385,22 +2250,6 @@ amount, then warnings are always given).</div></blockquote>
 <blockquote>
 <div>If enabled, lmtpd rejects messages with 8-bit characters in the
 headers.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">restore_authname:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The authentication used by the restore tool when authenticating
-to an IMAP/sync server.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">restore_password:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The password used by the restore tool when authenticating to an
-IMAP/sync server.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">restore_realm:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The authentication realm used by the restore tool when
-authenticating to an IMAP/sync server.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">reverseacls:</span></code> 0</p>
-<blockquote>
-<div>At startup time, ctl_cyrusdb -r will check this value and it
-will either add or remove reverse ACL pointers from mailboxes.db</div></blockquote>
 <p><code class="docutils literal"><span class="pre">rfc2046_strict:</span></code> 0</p>
 <blockquote>
 <div>If enabled, imapd will be strict (per <a class="reference external" href="http://tools.ietf.org/html/rfc2046">RFC 2046</a>) when matching MIME
@@ -2471,49 +2320,18 @@ A value of 1 requires integrity protection; any higher value
 requires some amount of encryption.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">sasl_option:</span></code> 0</p>
 <blockquote>
-<div>Any SASL option can be set by preceding it with <strong>sasl_</strong>.  This
+<div>Any SASL option can be set by preceding it with &#8220;<a href="#id1"><span class="problematic" id="id2">sasl_</span></a>&#8221;.  This
 file overrides the SASL configuration file.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">sasl_pwcheck_method:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The mechanism used by the server to verify plaintext passwords.
 Possible values include &#8220;auxprop&#8221;, &#8220;saslauthd&#8221;, and &#8220;pwcheck&#8221;.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_batchsize:</span></code> 20</p>
-<blockquote>
-<div>The number of messages to be indexed in one batch (default 20).
-Note that long batches may delay user commands or mail delivery.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_normalisation_max:</span></code> 1000</p>
-<blockquote>
-<div>A resource bound for the combinatorial explosion of search expression
-tree complexity caused by normalising expressions with many OR nodes.
-These can use more CPU time to optimise than they save IO time in scanning
-folders.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_engine:</span></code> none</p>
-<blockquote>
-<div><p>The indexing engine used to speed up searching.</p>
-<p>Allowed values: <em>none</em>, <em>squat</em>, <em>sphinx</em>, <em>xapian</em></p>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_index_headers:</span></code> 1</p>
-<blockquote>
-<div>Whether to index headers other than From, To, Cc, Bcc, and Subject.
-Experiment shows that some headers such as Received and DKIM-Signature
-can contribute up to 2/3rds of the index size but almost nothing to
-the utility of searching.  Note that is header indexing is disabled,
-headers can still be searched, the searches will just be slower.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_indexed_db:</span></code> twoskip</p>
-<blockquote>
-<div><p>The cyrusdb backend to use for the search latest indexed uid state.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>twoskip</em></p>
-</div></blockquote>
 <p><code class="docutils literal"><span class="pre">search_skipdiacrit:</span></code> 1</p>
 <blockquote>
 <div>When searching, should diacriticals be stripped from the search
 terms.  The default is &#8220;true&#8221;, a search for &#8220;hav&#8221; will match
 &#8220;Håvard&#8221;.  This is not <a class="reference external" href="http://tools.ietf.org/html/rfc5051">RFC 5051</a> complient, but it backwards
 compatible, and may be preferred by some sites.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">search_skiphtml:</span></code> 0</p>
-<blockquote>
-<div>If enabled, HTML parts of messages are skipped, i.e. not indexed and
-not searchable.  Otherwise, they&#8217;re indexed.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">search_whitespace:</span></code> merge</p>
 <blockquote>
 <div>When searching, how whitespace should be handled.  Options are:
@@ -2527,7 +2345,7 @@ Allowed values: <em>skip</em>, <em>merge</em>, <em>keep</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">seenstate_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the seen state.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">sendmail:</span></code> /usr/lib/sendmail</p>
 <blockquote>
@@ -2543,30 +2361,28 @@ CREATE.</div></blockquote>
 <div><p>Server selection mode.</p>
 <dl class="docutils">
 <dt><em>random</em></dt>
-<dd>(pseudo-)random selection</dd>
-<dt><em>freespace-most</em></dt>
-<dd>backend with the most (total) free space (KiB)</dd>
-<dt><em>freespace-percent-most</em></dt>
-<dd>backend whose partition has the most free space (%)</dd>
-<dt><em>freespace-percent-weighted</em></dt>
-<dd>same as for partition selection, comparing the free space (%) of the least used
-partition of each backend</dd>
-<dt><em>freespace-percent-weighted-delta</em></dt>
-<dd><p class="first">same as for partition selection, comparing the free space (%) of the least used
-partition of each backend.</p>
-<p class="last">Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+<dd><p class="first">(pseudo-)random selection
+<em>freespace-most</em></p>
+<blockquote class="last">
+<div><p>backend with the most (total) free space (KiB)
+<em>freespace-percent-most</em></p>
+<blockquote>
+<div><p>backend whose partition has the most free space (%)
+<em>freespace-percent-weighted</em></p>
+<blockquote>
+<div><p>same as for partition selection, comparing the free space (%) of the least used
+partition of each backend
+<em>freespace-percent-weighted-delta</em></p>
+<blockquote>
+<div><p>same as for partition selection, comparing the free space (%) of the least used
+partition of each backend</p>
+<p>Allowed values: <em>random</em>, <em>freespace-most</em>, <em>freespace-percent-most</em>, <em>freespace-percent-weighted</em>, <em>freespace-percent-weighted-delta</em></p>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
+</div></blockquote>
 </dd>
 </dl>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">serverlist_select_usage_reinit:</span></code> 0</p>
-<blockquote>
-<div>For a given session, number of <strong>operations</strong> (e.g. backend selection)
-for which backend usage data are cached.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">serverlist_select_soft_usage_limit:</span></code> 0</p>
-<blockquote>
-<div><p>Limit of backend usage (%): if a backend is over that limit, it is
-automatically excluded from selection mode.</p>
-<p>If all backends are over that limit, this feature is not used anymore.</p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">servername:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2589,55 +2405,6 @@ responses. Information is displayed as follows:</p>
 product version in the capabilities
 Allowed values: <em>off</em>, <em>min</em>, <em>on</em></p>
 </div></blockquote>
-</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_allowreferrals:</span></code> 1</p>
-<blockquote>
-<div>If enabled, timsieved will issue referrals to clients when the
-user&#8217;s scripts reside on a remote server (in a Murder).
-Otherwise, timsieved will proxy traffic to the remote server.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_extensions:</span></code> fileinto reject vacation vacation-seconds imapflags notify envelope relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata</p>
-<blockquote>
-<div>Space-separated list of Sieve extensions allowed to be used in
-sieve scripts, enforced at submission by timsieved(8).  Any
-previously installed script will be unaffected by this option and
-will continue to execute regardless of the extensions used.  This
-option has no effect on options that are disabled at compile time
-(e.g., &#8220;regex&#8221;).
-Allowed values: <em>fileinto</em>, <em>reject</em>, <em>vacation</em>, <em>vacation-seconds</em>, <em>imapflags</em>, <em>notify</em>, <em>include</em>, <em>envelope</em>, <em>body</em>, <em>relational</em>, <em>regex</em>, <em>subaddress</em>, <em>copy</em>, <em>date</em>, <em>index</em>, <em>imap4flags</em>, <em>mailbox</em>, <em>mboxmetadata</em>, <em>servermetadata</em></div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_maxscriptsize:</span></code> 32</p>
-<blockquote>
-<div>Maximum size (in kilobytes) any sieve script can be, enforced at
-submission by timsieved(8).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_maxscripts:</span></code> 5</p>
-<blockquote>
-<div>Maximum number of sieve scripts any user may have, enforced at
-submission by timsieved(8).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_utf8fileinto:</span></code> 0</p>
-<blockquote>
-<div>If enabled, the sieve engine expects folder names for the
-<em>fileinto</em> action in scripts to use UTF8 encoding.  Otherwise,
-modified UTF7 encoding should be used.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_sasl_send_unsolicited_capability:</span></code> 0</p>
-<blockquote>
-<div>If enabled, timsieved will emit a capability response after a successful
-SASL authentication, per draft-martin-managesieve-12.txt .</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_vacation_min_response:</span></code> 259200 /* 3 days */</p>
-<blockquote>
-<div>Minimum time interval (in seconds) between consecutive vacation responses,
-per draft-ietf-vacation-seconds.txt .</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sieve_vacation_max_response:</span></code> 7776000 /* 90 days */</p>
-<blockquote>
-<div>Maximum time interval (in seconds) between consecutive vacation responses,
-per draft-ietf-vacation-seconds.txt .</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sievedir:</span></code> /usr/sieve</p>
-<blockquote>
-<div>If sieveusehomedir is false, this directory is searched for Sieve
-scripts.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sievenotifier:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div><p>Notifyd(8) method to use for &#8220;SIEVE&#8221; notifications.  If not set, &#8220;SIEVE&#8221;
-notifications are disabled.</p>
-<p>This method is only used when no method is specified in the script.</p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">sieveusehomedir:</span></code> 0</p>
 <blockquote>
@@ -2667,11 +2434,6 @@ not sync writes to the disk.  Enabling this option is NOT RECOMMENDED.</div></bl
 <div>If enabled, lmtpd returns temporary failures if the client does not
 successfully authenticate.  Otherwise lmtpd returns permanent failures
 (causing the mail to bounce immediately).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sortcache_db:</span></code> twoskip</p>
-<blockquote>
-<div>The cyrusdb backend to use for caching sort results (currently only
-used for xconvmultisort)
-Allowed values: <em>skiplist</em>, <em>twoskip</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">specialuse_extra:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Whitespace separated list of extra special-use attributes
@@ -2683,19 +2445,6 @@ if needed.</div></blockquote>
 <blockquote>
 <div>If enabled, this option causes LIST and LSUB output to always include
 the XLIST &#8220;special-use&#8221; flags</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sphinx_text_excludes_odd_headers:</span></code> 0</p>
-<blockquote>
-<div>If enabled, Sphinx will perform a TEXT search as if it matches
-FROM, TO, CC, BCC or SUBJECT but not any other headers.  This
-is contrary to the RFC but a more useful behaviour for most
-users.  Default: disabled.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sphinx_socket:</span></code> {configdirectory}/socket/sphinx</p>
-<blockquote>
-<div>Unix domain socket that the Sphinx searchd
-daemons listens on.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sphinx_pidfile:</span></code> /var/run/sphinx.pid</p>
-<blockquote>
-<div>File where the Sphinx searchd daemon writes its pid.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">sql_database:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>Name of the database which contains the cyrusdb table(s).</div></blockquote>
@@ -2730,7 +2479,7 @@ use with caution.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">subscription_db:</span></code> flat</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the subscriptions list.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">suppress_capabilities:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2745,7 +2494,7 @@ confused by new capabilities that some backends don&#8217;t support.</div></bloc
 <p><code class="docutils literal"><span class="pre">statuscache_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the imap status cache.</p>
-<p>Allowed values: <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>berkeley</em>, <em>berkeley-nosync</em>, <em>berkeley-hash</em>, <em>berkeley-hash-nosync</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">statuscache_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2787,13 +2536,12 @@ on a replica.</div></blockquote>
 <blockquote>
 <div>The default password to use when authenticating to a sync server.
 Prefix with a channel name to only apply for that channel</div></blockquote>
-<p><code class="docutils literal"><span class="pre">sync_port:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">sync_port:</span></code> csync</p>
 <blockquote>
 <div>Name of the service (or port number) of the replication service on
-replica host.  Prefix with a channel name to only apply for that
-channel.  If not specified, the replication client will first
-try &#8220;imap&#8221; (port 143) to check if imapd supports replication,
-otherwise it will default to &#8220;csync&#8221; (usually port 2005).</div></blockquote>
+replica host.  The default is &#8220;csync&#8221; which is usally port 2005, but
+any service name or numeric port can be specified.
+Prefix with a channel name to only apply for that channel</div></blockquote>
 <p><code class="docutils literal"><span class="pre">sync_realm:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The authentication realm to use when authenticating to a sync server.
@@ -2838,25 +2586,23 @@ probes are sent (0 == system default)</div></blockquote>
 <p><code class="docutils literal"><span class="pre">temp_path:</span></code> /tmp</p>
 <blockquote>
 <div>The pathname to store temporary files in</div></blockquote>
-<p><code class="docutils literal"><span class="pre">timeout:</span></code> 32</p>
+<p><code class="docutils literal"><span class="pre">timeout:</span></code> 30</p>
 <blockquote>
 <div>The length of the IMAP server&#8217;s inactivity autologout timer,
-in minutes.  The minimum value is 30, the default.  The default
-is 32 to allow a bit of leeway for clients that try to NOOP every
-30 minutes.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tls_ca_file:</span></code> &lt;none&gt;</p>
+in minutes.  The minimum value is 30, the default.</div></blockquote>
+<p><code class="docutils literal"><span class="pre">tls_ca_file:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_client_ca_file</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tls_ca_path:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">tls_ca_path:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_client_ca_dir</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tlscache_db:</span></code> twoskip</p>
+<p><code class="docutils literal"><span class="pre">tlscache_db:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_sessions_db</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tlscache_db_path:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">tlscache_db_path:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_sessions_db_path</em>.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tls_cert_file:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">tls_cert_file:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_server_cert</em>.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">tls_cipher_list:</span></code> DEFAULT</p>
@@ -2893,7 +2639,7 @@ of certificate-based authentication.</div></blockquote>
 <blockquote>
 <div>The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
 See &#8216;openssl ecparam -list_curves&#8217; for possible values.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">tls_key_file:</span></code> &lt;none&gt;</p>
+<p><code class="docutils literal"><span class="pre">tls_key_file:</span></code> DEFAULT</p>
 <blockquote>
 <div>Deprecated in favor of <em>tls_server_key</em>.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">tls_required:</span></code> 0</p>
@@ -2923,7 +2669,7 @@ tls_server_cert.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">tls_sessions_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the TLS cache.</p>
-<p>Allowed values: <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>berkeley</em>, <em>berkeley-nosync</em>, <em>berkeley-hash</em>, <em>berkeley-hash-nosync</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">tls_sessions_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2940,20 +2686,13 @@ default.  A value of 0 will disable session caching.</div></blockquote>
 with all protocols, and substracts protocols not in this list. Newer
 versions of SSL/TLS will need to be added here to allow them to get
 disabled.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">uidl_format:</span></code> cyrus</p>
-<blockquote>
-<div>Choose the format for UIDLs in pop3.  Possible values are &#8220;uidonly&#8221;,
-&#8220;cyrus&#8221;, &#8220;dovecot&#8221; and &#8220;courier&#8221;.  &#8220;uidonly&#8221; forces the old default
-of UID, &#8220;cyrus&#8221; is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
-hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID.
-Allowed values: <em>uidonly</em>, <em>cyrus</em>, <em>dovecot</em>, <em>courier</em></div></blockquote>
 <p><code class="docutils literal"><span class="pre">umask:</span></code> 077</p>
 <blockquote>
 <div>The umask value used by various Cyrus IMAP programs.</div></blockquote>
 <p><code class="docutils literal"><span class="pre">userdeny_db:</span></code> flat</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for the user access list.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>sql</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">userdeny_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
@@ -2995,72 +2734,15 @@ Allowed values: <em>off</em>, <em>userid</em>, <em>on</em></div></blockquote>
 <div>Mail sent to mailboxes which do not exist, will be delivered to
 this user.  NOTE: This must be an existing local user name with an
 INBOX, NOT an email address!</div></blockquote>
-<p><code class="docutils literal"><span class="pre">defaultsearchtier:</span></code> &lt;empty string&gt;</p>
-<blockquote>
-<div>Name of the default tier that messages will be indexed to</div></blockquote>
 <p><code class="docutils literal"><span class="pre">zoneinfo_db:</span></code> twoskip</p>
 <blockquote>
 <div><p>The cyrusdb backend to use for zoneinfo.</p>
-<p>Allowed values: <em>flat</em>, <em>skiplist</em>, <em>twoskip</em></p>
+<p>Allowed values: <em>flat</em>, <em>berkeley</em>, <em>berkeley-hash</em>, <em>skiplist</em>, <em>twoskip</em></p>
 </div></blockquote>
 <p><code class="docutils literal"><span class="pre">zoneinfo_db_path:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div>The absolute path to the zoneinfo db file.  If not specified,
 will be confdir/zoneinfo.db</div></blockquote>
-<p><code class="docutils literal"><span class="pre">object_storage_enabled:</span></code> 0</p>
-<blockquote>
-<div>Is Object storage enabled for this server.  You also need to have
-archiving enabled and archivepartition for the mailbox.
-Only email files will be stored on object Storage archive partition will be
-used to store any other files</div></blockquote>
-<p><code class="docutils literal"><span class="pre">object_storage_dummy_spool:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>Dummy object storage spool; this is for test only.
-Spool where user directory (container) will be created to store all emails
-in a flat structure</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_namespace:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The OpenIO namespace used to store archived email messages. A namespace
-identifies the physical platform cyrus must contact. This directive is used
-by the OpenIO&#8217;s SDK to locate its platform entry point.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_account:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The OpenIO account used to account for stored emails. Accounts are unique
-in their namespace. They provides virtual partitions, with quotas and QoS
-features.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_rawx_timeout:</span></code> 30</p>
-<blockquote>
-<div>The OpenIO timeout to query to the RAWX services (default 30 sec).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_proxy_timeout:</span></code> 5</p>
-<blockquote>
-<div>The OpenIO timeout to query to the PROXY services (default 5 sec).</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_autocreate:</span></code> 0</p>
-<blockquote>
-<div>Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
-on development environments. In production, the container should have been
-provisioned with the mailboxes.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">openio_verbosity:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>Sets the logging verbosity of the OpenIO&#8217;s internal behavior. Admissible
-values are: &#8220;warning&#8221;, &#8220;notice&#8221;, &#8220;info&#8221;, &#8220;debug&#8221;, &#8220;trace&#8221;, &#8220;quiet&#8221;.
-The default verbosity is &#8220;warning&#8221;. Set to &#8220;notice&#8221; for a few lines on a
-per-client basis. Set to &#8220;info&#8221; for a few lines on a per-request basis. Set
-to &#8220;debug&#8221; Set to &#8220;trace&#8221; to activate the underlying libcurl debug
-output. Enabling a verbosity higher to equal than &#8220;debug&#8221; requires
-the cyrus to be set in debug mode. The special &#8220;quiet&#8221; value disables all
-kinds of logging at the GLib level.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">caringo_hostname:</span></code> &lt;none&gt;</p>
-<blockquote>
-<div>The Caringo hostname used to store archived email messages. A hostname
-identifies the physical platform cyrus must contact. This directive is used
-by the Caringo&#8217;s SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP)
-on HTTP 1.1 using a RESTful architecture</div></blockquote>
-<p><code class="docutils literal"><span class="pre">caringo_port:</span></code> 80</p>
-<blockquote>
-<div>The port of the caringo server (caringo_hostname); default is 80.</div></blockquote>
-<p><code class="docutils literal"><span class="pre">fastmailsharing:</span></code> 0</p>
-<blockquote>
-<div>If enabled, use FastMail style sharing (oldschool full server paths)</div></blockquote>
 </div></blockquote>
 </div>
 <div class="section" id="see-also">

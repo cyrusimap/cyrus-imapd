@@ -831,23 +831,19 @@ in <a class="reference external" href="http://www.cyrusimap.org/imap/admin/confi
 <div><blockquote>
 <div><p><code class="docutils literal"><span class="pre">delete_mode:</span></code> delayed</p>
 <blockquote>
-<div><p>The manner in which mailboxes are deleted. In the default
-<em>delayed</em> mode, mailboxes that are being deleted are renamed to
-a special mailbox hierarchy under the <strong>deletedprefix</strong>, to be
-removed later by <strong>cyr_expire(8)</strong>.</p>
-<p>In <em>immediate</em> mode, the mailbox is removed from the filesystem
-immediately.</p>
+<div><p>The manner in which mailboxes are deleted. &#8220;immediate&#8221; mode is the
+default behavior in which mailboxes are removed immediately.  In
+&#8220;delayed&#8221; mode, mailboxes are renamed to a special hiearchy defined
+by the &#8220;deletedprefix&#8221; option to be removed later by cyr_expire.</p>
 <p>Allowed values: <em>immediate</em>, <em>delayed</em></p>
 </div></blockquote>
 </div></blockquote>
 <blockquote>
 <div><p><code class="docutils literal"><span class="pre">deletedprefix:</span></code> DELETED</p>
 <blockquote>
-<div><p>With <strong>delete_mode</strong> set to <em>delayed</em>, the
-<strong>deletedprefix</strong> setting defines the prefix for the hierarchy of
-deleted mailboxes.</p>
-<p>The hierarchy delimiter will be automatically appended.</p>
-</div></blockquote>
+<div>If &#8220;delete_mode&#8221; set to be &#8220;delayed&#8221;, the prefix for the deleted
+mailboxes hierarchy.  The hierarchy delimiter will be automatically
+appended.</div></blockquote>
 </div></blockquote>
 </div></blockquote>
 <div class="admonition seealso">

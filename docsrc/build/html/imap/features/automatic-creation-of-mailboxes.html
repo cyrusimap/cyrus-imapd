@@ -869,18 +869,22 @@ options.</p>
 <div><p><code class="docutils literal"><span class="pre">autocreate_inbox_folders:</span></code> &lt;none&gt;</p>
 <blockquote>
 <div><p>If a user does not have an INBOX already, and the INBOX is to be
-created, create the list of folders in this setting as well.
-<em>autocreate_inbox_folders</em> is a list of INBOX&#8217;s subfolders
+created, create the list of folders in this setting as well.</p>
+<p>INBOX folders are created under both the following conditions:</p>
+<ol class="arabic">
+<li><p class="first">The user logins via the IMAP or the POP3 protocol.
+<em>autocreate_quota</em> option must have a value of zero or greater.
+2.</p>
+<blockquote>
+<div><p>A message arrives for the user through the <em>lmtpd(8)</em>.
+<em>autocreate_post</em> option must be enabled.</p>
+<p><em>autocreate_inbox_folders</em> is a list of INBOX&#8217;s subfolders
 separated by a &#8220;|&#8221;, that are automatically created by the server
-under the following two scenarios. Leading and trailing whitespace is
+under the previous two scenarios. Leading and trailing whitespace is
 stripped, so &#8220;Junk | Trash&#8221; results in two folders: &#8220;Junk&#8221; and
 &#8220;Trash&#8221;.</p>
-<p>INBOX folders are created under both the following conditions:</p>
-<ol class="arabic simple">
-<li>The user logins via the IMAP or the POP3 protocol.
-<em>autocreate_quota</em> option must have a value of zero or greater.</li>
-<li>A message arrives for the user through the <em>lmtpd(8)</em>.
-<em>autocreate_post</em> option must be enabled.</li>
+</div></blockquote>
+</li>
 </ol>
 </div></blockquote>
 </div></blockquote>

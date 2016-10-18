@@ -1,9 +1,0 @@
-===============================
-Cyrus IMAP 2.4.16 Release Notes
-===============================
-
-Changes to the Cyrus IMAP Server since 2.4.15
-
-*   Bug #3651 - 64 bit dirhash breaks existing systems. NOTE this includes a fix to the re-written rehash tool released with 2.4.15
-
-:ref:`imap-release-notes-2.4`
