@@ -177,6 +177,10 @@ const char backup_index_chunk_select_live_sql[] =
     "   JOIN mailbox_message AS mm"
     "   ON m.id = mm.message_id"
     "    AND (mm.expunged IS NULL OR mm.expunged > :since)"
+    "  UNION"
+    "  SELECT last_chunk_id"
+    "   FROM subscription"
+    "   WHERE unsubscribed IS NULL OR unsubscribed > :since"
     " )"
     ";"
 ;
