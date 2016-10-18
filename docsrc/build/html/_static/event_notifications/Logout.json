@@ -1,0 +1,13 @@
+{
+    "clientIP": "::1",
+    "clientPort": 46461,
+    "event": "Logout",
+    "pid": 7629,
+    "serverDomain": "::1",
+    "serverPort": 143,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:47:36.183+01:00",
+    "uri": "imap://imap.example.org",
+    "user": "john@example.org",
+    "vnd.cmu.sessionId": "imap.example.org-7629-1424699256-1-3981462903180119079"
+}

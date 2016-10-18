@@ -1,0 +1,11 @@
+{
+    "event": "MailboxRename",
+    "mailboxID": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "oldMailboxID": "imap://john@example.org@imap.example.org/Testfolder;UIDVALIDITY=1424690388",
+    "pid": 8026,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:56:47.466+01:00",
+    "uri": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "user": "john@example.org",
+    "vnd.cmu.sessionId": "imap.example.org-8026-1424699807-1-3097981731339369225"
+}

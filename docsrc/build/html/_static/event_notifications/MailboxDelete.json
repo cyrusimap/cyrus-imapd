@@ -1,0 +1,10 @@
+{
+    "event": "MailboxDelete",
+    "mailboxID": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "pid": 8070,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:58:37.145+01:00",
+    "uri": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "user": "john@example.org",
+    "vnd.cmu.sessionId": "imap.example.org-8070-1424699917-1-11277155374959916506"
+}

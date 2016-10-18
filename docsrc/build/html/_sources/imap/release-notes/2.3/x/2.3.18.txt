@@ -1,0 +1,7 @@
+===============================
+Cyrus IMAP 2.3.18 Release Notes
+===============================
+
+*   Fix for incomplete authentication checks in nntpd, reported by Secunia as SA46093 - thanks Stefan Cornelius, Secunia Research
+
+:ref:`imap-release-notes-2.3`

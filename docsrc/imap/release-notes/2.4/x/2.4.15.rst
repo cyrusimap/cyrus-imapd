@@ -1,0 +1,16 @@
+===============================
+Cyrus IMAP 2.4.15 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.4.14
+
+*   Bug #3664, #3665 - Sieve filters don't work if mailbox contains dots
+*   Bug #3651 - 64 bit dirhash breaks existing systems. NOTE - this includes a complete rewrite of tools/rehash, making it much simpler and more reliable. Check the usage statement
+*   Bug #1228 - mailbox dumps need to dump quotaroots
+*   Bug #3613 - CATENATE command returns BADURL
+*   Bug #3627 - enabling improved_mboxlist_sort documentation mention subscription files
+*   Bug #3661 - Memory leaks in sync_server, nntpd, popd
+*   Bug #3621 - quota bug involving nested quota roots
+*   Bug #3667 - FLAGS.SILENT needs to return new MODSEQ if QRESYNC enabled
+
+:ref:`imap-release-notes-2.4`

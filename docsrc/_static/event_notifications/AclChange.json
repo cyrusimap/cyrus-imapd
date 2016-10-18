@@ -1,0 +1,12 @@
+{
+    "aclRights": "lrs",
+    "aclSubject": "jane@example.org",
+    "event": "AclChange",
+    "mailboxID": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "pid": 8048,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:57:59.736+01:00",
+    "uri": "imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807",
+    "user": "john@example.org",
+    "vnd.cmu.sessionId": "imap.example.org-8048-1424699879-1-8051832424702584527"
+}

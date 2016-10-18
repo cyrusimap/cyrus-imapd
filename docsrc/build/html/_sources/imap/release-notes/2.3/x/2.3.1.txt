@@ -1,0 +1,11 @@
+==============================
+Cyrus IMAP 2.3.1 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.3.0
+
+*   Updated ACL code to RFC 4314 (separate rights for message delete, mailbox delete, and expunge).
+*   Fixed IDLE to use idled for local mailboxes.
+*   Fixed miscellaneous build issues.
+
+:ref:`imap-release-notes-2.3`

@@ -1,0 +1,22 @@
+{
+    "event":"CalendarAlarm",
+    "pid":3164225,
+    "serverFQDN":"sloti30t15",
+    "alarmTime":"20151119T063000Z",
+    "alarmRecipients":["mailto:mary@example.org"],
+    "userId":"mary@example.org",
+    "calendarName":"Calendar",
+    "uid":"49ba20f5-cb44-4863-aea7-255f37ffc2e7",
+    "action":"email",
+    "summary":"Here's a lovely event.  Remind me",
+    "description":"",
+    "location":"",
+    "timezone":"Australia/Melbourne",
+    "start":"20151119T073000Z",
+    "end":"20151119T083000Z",
+    "allDay":0,
+    "attendeeNames":[],
+    "attendeeEmails":[],
+    "attendeeStatus":[],
+    "organizer":""
+}

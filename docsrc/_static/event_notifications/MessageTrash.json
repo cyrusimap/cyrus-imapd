@@ -1,0 +1,17 @@
+{
+    "event": "MessageTrash",
+    "messages": 1,
+    "modseq": 48,
+    "pid": 7809,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:54:02.616+01:00",
+    "uidnext": 5,
+    "uidset": "4",
+    "uri": "imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682",
+    "user": "john@example.org",
+    "vnd.cmu.midset": [
+        "<4d9618acd0aea6b33683766358351459@example.org>"
+    ],
+    "vnd.cmu.sessionId": "imap.example.org-7809-1424699642-1-2896189896878960640",
+    "vnd.cmu.unseenMessages": 0
+}

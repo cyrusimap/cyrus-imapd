@@ -1,0 +1,19 @@
+{
+    "event": "vnd.cmu.MessageMove",
+    "messages": 2,
+    "modseq": 5,
+    "oldMailboxID": "imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682",
+    "pid": 7685,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:52:41.676+01:00",
+    "uidnext": 4,
+    "uidset": "3",
+    "uri": "imap://john@example.org@imap.example.org/Archive;UIDVALIDITY=1424683684",
+    "user": "john@example.org",
+    "vnd.cmu.midset": [
+        "<4d9618acd0aea6b33683766358351459@example.org>"
+    ],
+    "vnd.cmu.oldUidset": "3",
+    "vnd.cmu.sessionId": "imap.example.org-7685-1424699561-1-7444588115769591371",
+    "vnd.cmu.unseenMessages": 0
+}

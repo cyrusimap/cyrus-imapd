@@ -1,0 +1,17 @@
+==============================
+Cyrus IMAP 2.4.6 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.4.5
+
+*   Fixed Bug #3370 - corruption on OpenBSD and other systems without a reliable mmap
+*   Fixed Bug #3360 - race condition which could lose seen data on XFER with upgrade
+*   Lots of documentation updates
+*   Fixed Bug #3355 - added an option to suppress items from the capability response (and bug #3356 when the first attempt was buggy)
+*   Fixed Bug #3357 - crash when calling ctl_mboxlist on mailboxes with annotations
+*   Fixed Bug #3369 - crash when undumping mailbox during XFER
+*   Fixed Bug #3361 - shared folders not listing in LSUB "" % - only with unixheirsep and altnamespace
+*   Fixed Bug #3362 - "too many open files" when doing XFER of a user with too many sub mailboxes. Makes XFER less "atomic", but now it works, which is good!
+*   Fixed Bug #3313 - md5 library usage. Properly this time!
+
+:ref:`imap-release-notes-2.4`

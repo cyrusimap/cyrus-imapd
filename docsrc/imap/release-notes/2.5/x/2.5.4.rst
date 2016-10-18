@@ -1,0 +1,35 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.4 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.4.tar.gz
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.4.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.4.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.4.tar.gz.sig
+
+.. _relnotes-2.5.4-changes:
+
+Changes Since 2.5.3
+===================
+
+Bug fixes
+---------
+
+* Security fix: handle urlfetch range starting outside message range
+* Fixed bug: better error messages when reading corrupted twoskip databases
+* Fixed bug: treat autocreate_quota_messages:0 as unlimited
+* Fixed :task:`203`: make autocreate_quota:0 work as documented

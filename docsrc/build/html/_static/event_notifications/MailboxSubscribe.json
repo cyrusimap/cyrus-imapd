@@ -1,0 +1,9 @@
+{
+    "event": "MailboxSubscribe",
+    "pid": 3004,
+    "service": "imap",
+    "timestamp": "2015-02-23T18:37:02.344+01:00",
+    "uri": "imap://john@example.org@imap.example.org/Archive",
+    "user": "john@example.org",
+    "vnd.cmu.sessionId": "imap.example.org-3004-1424713022-1-7149274646509524617"
+}

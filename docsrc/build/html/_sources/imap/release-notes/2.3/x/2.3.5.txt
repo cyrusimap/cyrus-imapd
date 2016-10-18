@@ -1,0 +1,9 @@
+==============================
+Cyrus IMAP 2.3.5 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.3.4
+
+*   Fixed append/delivery code so that clients display new messages.
+
+:ref:`imap-release-notes-2.3`

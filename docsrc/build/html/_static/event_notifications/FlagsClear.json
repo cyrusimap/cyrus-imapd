@@ -1,0 +1,18 @@
+{
+    "event": "FlagsClear",
+    "flagNames": "\\Flagged",
+    "messages": 1,
+    "modseq": 43,
+    "pid": 7721,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:50:43.640+01:00",
+    "uidnext": 4,
+    "uidset": "3",
+    "uri": "imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682",
+    "user": "john@example.org",
+    "vnd.cmu.midset": [
+        "<4d9618acd0aea6b33683766358351459@example.org>"
+    ],
+    "vnd.cmu.sessionId": "imap.example.org-7721-1424699443-1-8479002111695998134",
+    "vnd.cmu.unseenMessages": 0
+}

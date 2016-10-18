@@ -1,0 +1,60 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.8 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.8.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.8.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.8.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.8.tar.gz.sig
+
+.. _relnotes-2.5.8-changes:
+
+Changes Since 2.5.7
+===================
+
+Murder changes
+--------------
+
+* Allow replicated backends in a discrete Murder to both actively
+  participate in the Murder.
+* When choosing between ANNOTATEMORE and METADATA, favour what the
+  client used.
+
+Other changes
+-------------
+
+* :cyrusman:`cyr_dbtool(8)` now supports improved_mboxlist_sort (-M)
+
+Bug fixes
+---------
+
+* Fixed: master on pselect systems no longer chokes on repeated interrupts
+  (thanks Jens Erat and team)
+* Fixed: better iOS CalDAV support (don't announce VPOLL)
+* Fixed: backported version detection code to detect future versions
+* Fixed bug #3927: don't break cyrus.index on XFER of mailbox with annotations
+  (thanks Wolfgang Breyha)
+* Fixed: replication/XFER of mailbox names containing '@'
+* Fixed: METADATA and GETMETADATA pattern/list recognition
+* Fixed bug #3862: don't leave behind inconsistent mailboxes when
+  mupdate fails during mailbox rename
+* Fixed compilation with Sun Studio 12 C Compiler (thanks Marty Lee)
+* Fixed bug #3765: :cyrusman:`ctl_cyrusdb(8)` now uses database paths from imapd.conf
+  (thanks Simon Matter)
+* Fixed :task:`227`: service processes no longer crash with '-T 0' argument
+  (thanks Ian Batten and Jens Erat)
+* various build system fixes

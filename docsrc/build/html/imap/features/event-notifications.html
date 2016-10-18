@@ -1,0 +1,1853 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Event Notifications &mdash; Cyrus IMAP and SASL  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../_static/favicon.ico"/>
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/cyrus.css" type="text/css" />
+  
+
+  
+    <link rel="top" title="Cyrus IMAP and SASL  documentation" href="../../index.html"/>
+        <link rel="up" title="IMAP Features" href="../features.html"/>
+        <link rel="next" title="Mail Spool Partitions" href="mail-spool-partitions.html"/>
+        <link rel="prev" title="Server Side Filtering (Sieve)" href="server-side-filtering.html"/> 
+
+  
+  
+  
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  
+  
+<div class="pageheader">
+  <ul>
+    <li><a href="../../index.html">Home</a></li>
+    <li><a href="../installation.html">Download</a></li>
+    <li><a href="../../contribute.html">Contribute</a></li>
+    <li><a href="../../feedback.html">Support</a></li>
+  </ul>
+  <div>
+    <a href="../../index.html">
+      <img src="../../_static/logo.gif" alt="CYRUS" />
+    </a>
+  </div>
+</div>
+<div style="clear: both;"></div>
+
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        
+
+        
+ 
+          <a href="../../index.html">
+ 
+
+  
+          
+          <img src="../../_static/logo.gif"  />
+     
+        </a>
+
+        
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+        
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+          
+          
+              <p class="caption"><span class="caption-text">Welcome to Cyrus</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction to Cyrus IMAP</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../introduction.html#what-is-imap">What is IMAP?</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../features.html">IMAP Features</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../features.html#security-and-authentication">Security and Authentication</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="authentication-kerberos.html">Kerberos Authentication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="authentication-ldap.html">LDAP Authentication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="authentication-sql.html">SQL Authentication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#pre-requisites">Pre-requisites</a></li>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#database-structure">Database structure</a></li>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#pam-configuration-for-use-with-saslauthd">PAM configuration for use with saslauthd</a></li>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#testing-the-sasl-configuration">Testing the SASL configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#create-the-test-mailboxes-within-cyrus">Create the test mailboxes within Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="authentication-sql.html#testing-everything-together">Testing everything together</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="access-control.html">Access Control</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="access-control.html#discretionary-access-control">Discretionary Access Control</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="sealed-system.html">Sealed System Design</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../features.html#mailbox-management">Mailbox Management</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="automatic-creation-of-mailboxes.html">Automatic Creation of Mailboxes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="automatic-creation-of-mailboxes.html#autocreation-of-mailboxes">Autocreation of mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="automatic-creation-of-mailboxes.html#automatic-quota-settings">Automatic quota settings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="automatic-creation-of-mailboxes.html#autocreation-of-sieve-scripts">Autocreation of Sieve scripts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="automatic-creation-of-mailboxes.html#automated-folder-subscriptions">Automated folder subscriptions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="automatic-creation-of-mailboxes.html#autocreation-of-users">Autocreation of users</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="namespaces.html">Mailbox Namespaces</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#namespace-convention-netnews">Namespace Convention: <strong>netnews</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#namespace-convention-not-netnews">Namespace Convention: &#8220;not netnews&#8221;</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#alternate-namespace">Alternate Namespace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#internal-namespace">Internal Namespace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#administrator-namespaces">Administrator Namespaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#imap-features-namespaces-personal">Personal Namespace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#other-users-namespace">Other Users Namespace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="namespaces.html#shared-namespaces">Shared Namespaces</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="mailbox-annotations.html">Mailbox Annotations (METADATA)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mailbox-distribution.html">Mailbox Distribution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="mailbox-distribution.html#partition-selection-mode">Partition Selection Mode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mailbox-distribution.html#backend-selection-mode-cyrus-imap-murder">Backend Selection Mode (Cyrus IMAP Murder)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="reference internal" href="../features.html#message-management">Message Management</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="delayed-delete.html">Delayed Delete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="delayed-delete.html#configuring-cyrus-imap-for-delayed-delete">Configuring Cyrus IMAP for Delayed Delete</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="delayed-expunge.html">Delayed Expunge</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="delayed-expunge.html#configuring-cyrus-imap-for-delayed-expunge">Configuring Cyrus IMAP for Delayed Expunge</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="message-annotations.html">Message Annotations (METADATA)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="duplicate-message-delivery-suppression.html">Duplicate Message Delivery Suppression</a></li>
+<li class="toctree-l3"><a class="reference internal" href="shared-seen-state.html">Shared Seen State</a></li>
+<li class="toctree-l3"><a class="reference internal" href="server-side-filtering.html">Server Side Filtering (Sieve)</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="">Event Notifications</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#available-event-notifications">Available Event Notifications</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#example-event-notifications">Example Event Notifications</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../features.html#storage">Storage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="mail-spool-partitions.html">Mail Spool Partitions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="mail-spool-partitions.html#storage-tiering-with-partitions">Storage Tiering with Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mail-spool-partitions.html#restricting-storage-used-with-partitions">Restricting Storage Used with Partitions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="mailbox-metadata-partitions.html">Mailbox Metadata Partitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="quota.html">Quota</a></li>
+<li class="toctree-l3"><a class="reference internal" href="single-instance-store.html">Single-Instance Store</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../features.html#load-management">Load Management</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="server-aggregation.html">Cyrus IMAP Murder (Server Aggregation)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="server-aggregation.html#use-cases-for-the-cyrus-imap-murder">Use-Cases for the Cyrus IMAP Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="server-aggregation.html#cyrus-imap-murder-topologies">Cyrus IMAP Murder Topologies</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../feedback.html">Support</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../feedback-bugs.html">Reporting Bugs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../feedback-mailing-lists.html">Mailing Lists</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../feedback-mailing-lists.html#archives">Archives</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../feedback-mailing-lists.html#subscribe-unsubscribe">Subscribe/Unsubscribe</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../feedback-mailing-lists.html#digest-lists">Digest Lists</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../feedback-irc.html">IRC Chat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../feedback-meetings.html">Online Meetings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../overview/about_cyrus.html">About</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../overview/what_is_cyrus.html">What is Cyrus</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/what_is_cyrus.html#what-is-cyrus">What is Cyrus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/what_is_cyrus.html#what-is-imap">What is IMAP?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/what_is_cyrus.html#imap-version-4-imap4">IMAP Version 4 (IMAP4)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/what_is_cyrus.html#mime">Mime</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/what_is_cyrus.html#smtp">SMTP</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../overview/who_is_cyrus.html">Who Is Cyrus</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/who_is_cyrus.html#core-contributors">Core Contributors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/who_is_cyrus.html#individual-contributors-and-past-contributors">Individual contributors and past contributors</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../overview/cyrus_roadmap.html">Cyrus Roadmap</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_roadmap.html#high-level-roadmap">High Level Roadmap</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../overview/cyrus_roadmap.html#future">2.6 (Future)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../overview/cyrus_roadmap.html#id2">2.5</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../overview/cyrus_roadmap.html#x">2.4.x</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../overview/cyrus_roadmap.html#x-and-2-3-x">2.2.x and 2.3.x</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../overview/cyrus_roadmap.html#pre-2-2">pre 2.2</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../overview/cyrus_history.html">Cyrus History</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../overview/cyrus_bylaws.html">Cyrus Bylaws</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#i-the-cyrus-governance-board">I. The Cyrus Governance Board</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#ii-the-cyrus-core-developers-group">II. The Cyrus Core Developers Group</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#iii-the-release-engineer">III. The Release Engineer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#iv-the-cyrus-roadmap">IV. The Cyrus Roadmap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#v-development-process">V. Development Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../overview/cyrus_bylaws.html#vi-changes-to-the-bylaws">VI. Changes to the Bylaws</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Administrators</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">IMAP Installation Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#installation-using-packages">Installation Using Packages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/centos.html">CentOS</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../installation/distributions/centos.html#other-versions-of-cyrus-imap">Other Versions of Cyrus IMAP</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/debian.html">Debian</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/fedora.html">Fedora</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../installation/distributions/fedora.html#other-versions-of-cyrus-imap">Other Versions of Cyrus IMAP</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/opensuse.html">openSUSE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/rhel.html">Red Hat Enterprise Linux</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../installation/distributions/rhel.html#other-versions-of-cyrus-imap">Other Versions of Cyrus IMAP</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/distributions/ubuntu.html">Ubuntu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../installation/obs.html">Open Build System Packages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../installation/obs.html#series">2.5 Series</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../installation/obs.html#id2">2.4 Series</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#build-and-install-yourself">Build and Install Yourself</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../installation/diy.html">Do It Yourself</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../installation/diy.html#from-git">From GIT</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../installation/diy.html#from-tarball">From Tarball</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../installation/diy.html#build-dependencies">Build Dependencies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../installation/diy.html#configure-the-build">Configure the Build</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#external-tools">External Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#licensing">Licensing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../deployment.html">IMAP Configuration Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../deployment.html#a-guide-to-planning-a-cyrus-imap-deployment">A Guide to Planning a Cyrus IMAP Deployment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../deployment.html#contents">Contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/overview_and_concepts.html">Overview and Concepts</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#cyrus-imap">Cyrus IMAP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#cyrus-imap-features">Cyrus IMAP Features</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#initial-acls-for-newly-created-mailboxes">Initial ACLs for Newly Created Mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#login-authentication">Login Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#quota">Quota</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/overview_and_concepts.html#html-block-that-was-commented-out-in-xml">HTML Block that was commented out in XML</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/overview_and_concepts.html#partitions">Partitions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/deployment_scenarios.html">Deployment Scenarios</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/deployment_scenarios.html#single-server-deployments">Single Server Deployments</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/deployment_scenarios.html#multi-server-deployments">Multi Server Deployments</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/deployment_scenarios.html#id1">Cyrus IMAP Murder</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/deployment_scenarios.html#the-discrete-murder">The Discrete Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/deployment_scenarios.html#the-unified-murder">The Unified Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/deployment_scenarios.html#the-shared-murder">The Shared Murder</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/deployment_scenarios.html#cyrus-replication">Cyrus Replication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/deployment_scenarios.html#hosted-environments">Hosted Environments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/deployment_scenarios.html#mailbox-creation-distribution">Mailbox Creation Distribution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html">Mailbox Creation Distribution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#selection-mode">Selection Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#usage-convergence">Usage convergence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#computed-weight">Computed weight</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#special-cases">Special cases</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#what-happens-when-two-partitions-are-equal-as-most-fitting">What happens when two partitions are equal as most fitting?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#what-happens-when-two-partitions-point-to-the-same-device">What happens when two partitions point to the same device?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#partitions-exclusion">Partitions Exclusion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#partitions-usage-data-reset">Partitions Usage Data Reset</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#mailbox-creation-distribution-through-murder-frontend">Mailbox Creation Distribution Through <code class="docutils literal"><span class="pre">murder</span> <span class="pre">frontend</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#id1">Selection Mode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#available-selection-modes-on-frontend">Available Selection Modes on Frontend</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#backends-exclusion">Backends Exclusion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/mailbox_creation_distribution.html#backends-usage-data-reset">Backends Usage Data Reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/known_protocol_limitations.html">Known Protocol Limitations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/known_protocol_limitations.html#pop3-and-mailbox-locking">POP3 and Mailbox Locking</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/known_protocol_limitations.html#cyrus-imap-pop3-implementation">Cyrus IMAP POP3 Implementation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/authentication_and_authorization.html">Authentication and Authorization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/authentication_and_authorization.html#client-authentication">Client Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/authentication_and_authorization.html#users-and-mailboxes">Users and Mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/performance_recommendations.html">Performance Recommendations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/performance_recommendations.html#databases-on-temporary-filesystems">Databases on Temporary Filesystems</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/storage.html">Storage Considerations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#general-notes-on-storage">General Notes on Storage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#redundancy">Redundancy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#availability">Availability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#performance">Performance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#scalability">Scalability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#capacity">Capacity</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/storage.html#cost">Cost</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../deployment/supported-platforms.html">Supported Platforms and System Requirements</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/supported-platforms.html#building-cyrus-imap">Building Cyrus IMAP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/supported-platforms.html#required-software-components">Required Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/supported-platforms.html#recommended-software-components">Recommended Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../deployment/supported-platforms.html#recommended-software-components-enabled-by-default">Recommended Software Components Enabled by Default</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../admin.html">IMAP Administrator Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../admin.html#overview">Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer/architecture.html">System Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#high-level-architecture">High Level Architecture</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#cyrus-murder">Cyrus Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#replication">Replication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#invoking-cyrus">Invoking Cyrus</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../admin.html#management">Management</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../admin/murder/murder.html">Cyrus Murder</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/murder/murder-concepts.html">Cyrus Murder: Concepts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/murder/murder-installation.html">Cyrus Murder: Installation and Administration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/murder/murder-mupdate-details.html">Cyrus Murder Mupdate Details</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/murder/murder-failure-modes.html">Cyrus Murder Failure Modes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/murder/murder-mail-delivery.html">Cyrus Murder Mail Delivery</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/access-control.html">Access Control</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/access-control/combining-rights.html">Combining Access Rights</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/access-control/defaults.html">Access Control Defaults</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/access-control/rights-reference.html">Access Control Lists Rights Reference</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/access-control.html#discretionary-access-control">Discretionary Access Control</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/nntp.html">Cyrus NNTP</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/nntp.html#overview">Overview</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/nntp.html#nntp-setup">NNTP Setup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/nntp.html#defining-newsgroups">Defining Newsgroups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/nntp.html#configuration">Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/nntp.html#further-information">Further information</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/protlayer.html">Cyrus Prot Layer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/protlayer.html#events">Events</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/sieve.html">Cyrus Sieve</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#introduction">Introduction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#installing-sieve">Installing Sieve</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#managing-sieve-scripts">Managing Sieve Scripts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#testing-the-sieve-server">Testing the sieve server</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#cyrus-sieve-support">Cyrus Sieve Support</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sieve.html#writing-sieve">Writing Sieve</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/sop.html">Standard Operating Procedures</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/replication.html">Replication: Installation and Administration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/mailbox-operations.html">Mailbox Operations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/reloading.html">Reloading Cyrus IMAP Services</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/altnamespace.html">Alternative Namespace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/databases.html">Database Conversion, Export and Import</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/deleting.html">Deleting and Undeleting Messages and Folders</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/virtual-domains.html">Cyrus Virtual Domains</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/administration-running.html">Running Cyrus IMAP Services on Non-Standard Ports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/reconstructing.html">Reconstructing Mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/squatter.html">Using Squatter for Faster IMAP SEARCH</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/splitting-metadata.html">Splitting Metadata from Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/sop/userdeny.html">Managing user_deny.db</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/eventsource.html">Cyrus Event Source</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#overview">Overview</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#compile-options">Compile options</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#configuration-options">Configuration options</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#event-types">Event Types</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#accessing-events">Accessing events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/eventsource.html#apple-push-service">Apple Push Service</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/config-mailboxdistribution.html">Mailbox Distribution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/config-mailboxdistribution.html#selection-modes">Selection Modes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/config-mailboxdistribution.html#special-cases">Special cases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/config-mailboxdistribution.html#application">Application</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/nginx-proxy.html">HOWTO: Using an NGINX IMAP Proxy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/tweaking.html">Tweaking Cyrus IMAP</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/tweaking.html#storage-tiering">Storage Tiering</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/tweaking.html#synchronous-file-operations">Synchronous File Operations</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../admin.html#references">References</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../admin/commands.html">Administrative Commands &amp; Utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/commands.html#list-of-configuration-files-formats-and-settings">List of Configuration Files, Formats and Settings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/commands.html#list-of-system-command-line-utilities">List of System Command-line Utilities</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/commands.html#list-of-user-command-line-utilities">List of User Command-line Utilities</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/commands.html#work-in-progress">Work-in-Progress</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/pycommands.html">PyCyrus Commands &amp; Utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/pycommands/undelete-mailbox.html"><code class="docutils literal"><span class="pre">undelete-mailbox</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/administration-tools.html">Tools &amp; Utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#arbitron">arbitron</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#arbitronsort-pl">arbitronsort.pl</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#chk-cyrus">chk_cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#convert-sieve-pl">convert-sieve.pl</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#ctl-cyrusdb">ctl_cyrusdb</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#ctl-deliver">ctl_deliver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#ctl-mboxlist">ctl_mboxlist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cvt-cyrusdb">cvt_cyrusdb</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cvt-cyrusdb-all">cvt_cyrusdb_all</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-dbtool">cyr_dbtool</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-df">cyr_df</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyrdump">cyrdump</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-expire">cyr_expire</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#fetchnews">fetchnews</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-sequence">cyr_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-synclog">cyr_synclog</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#cyr-userseen">cyr_userseen</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#masssievec">masssievec</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#mbexamine">mbexamine</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#mbpath">mbpath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#migrate-metadata">migrate-metadata</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#mkimap">mkimap</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#mknewsgroups">mknewsgroups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#rehash">rehash</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#translatesieve">translatesieve</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#undohash">undohash</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../admin/administration-tools.html#upgradesieve">upgradesieve</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../admin/access-control/rights-reference.html">Access Control Lists Rights Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../admin.html#other">Other</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../admin/packagers.html">Notes for Packagers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../admin/packagers.html#services-in-etc-services">Services in <code class="docutils literal"><span class="pre">/etc/services</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">IMAP Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq.html#features">Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/feature-database-backend.html">Which database backend should I use for which databases?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/feature-duplicate-delivery.html">Duplicate Delivery Suppression</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../faq.html#installation-problems">Installation Problems</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/install-compilationerrors.html">Compilation errors about kssl.h and krb5.h on Red Hat Linux/Fedora</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/install-detecting-berkeley.html">Problems detecting Berkley DB on Red Hat Linux</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/install-install-help.html">Help! There must be an easier way to get all this going...</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../faq.html#common-feature-requests">Common Feature Requests</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/r-murder-ha.html">Does the Cyrus Murder support High Availability configurations?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/r-pop3-logging.html">Can I configure pop3d to log amount and size of messages fetched by user?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/r-publicssharedfolders.html">How can I make CyrusSieve work with public shared folders?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/r-subfolders.html">Can I have subfolders not appear under INBOX?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../faq.html#common-operational-questions">Common Operational Questions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-acls.html">How do I view ACLs on a mailbox?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-annotations.html">What annotations are available?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-berkeleydb.html">Why does ctl_cyrusdb -r take so long with Berkeley DB?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-configdir-tempfs.html">Is it safe to put configdir/proc and configdir/lock on a tmpfs filesystem?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-db3-lockers.html">Is the &#8220;db3: x Lockers&#8221; log message harmful?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-delete-mailbox.html">Why can I not delete a mailbox as an admin user?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-deleted-expired-expunged-purged.html">When is What ... Deleted, Expired, Expunged or Purged?</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-deleted-expired-expunged-purged.html#users-and-imap-clients-deleting-messages">Users and IMAP Clients Deleting Messages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-deleted-expired-expunged-purged.html#deleting-folders">Deleting Folders</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-deleted-expired-expunged-purged.html#where-are-the-messages">Where are the Messages?</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-deliverdb-size.html">Why is deliver.db so large?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-freezes.html">I have multiple imapd-SERVICES configured and experience occasional freezes when I try to log in!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-mailbox-doesnotexist.html">Cyrus delivers claims that the mailbox does not exist</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-mixedcase.html">Why is mail being rejected with No Mailbox found due to MiXed CaSe incoming e-mail?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-otherdatabases.html">Can I use MySQL (or another SQL database) as the primary mail store?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-pop3slow.html">Why do POP3 connections take so long, but once the connection is established all is well?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-reconstruct.html">Why does reconstruct -m not work?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-sharedfilesystem-gpfs.html">Shared File Systems GPFS for high availability</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-telemetry.html">How to enable telemetry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-toomanyprocesses.html">The process count keeps growing!</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-toomanyprocesses.html#reuse-count">1. Reuse count</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-toomanyprocesses.html#maximum-child-count">2. Maximum child count</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../faqs/o-toomanyprocesses.html#clean-up-connections-that-are-no-longer-in-use">3. Clean up connections that are no longer in use</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-unable-join-environment.html">&#8220;unable to join environment&#8221; error</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/o-vacation-mailfrom.html">Why does Cyrus set the MAIL FROM address of the sender of vacation responses to &#8216;&lt;&gt;&#8217;?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../faq.html#common-interoperability-problems">Common Interoperability Problems</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/interop-8bit.html">Why does Cyrus reject 8-bit characters in the headers of my messages?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/interop-barenewlines.html">Why does Cyrus reject messages with &#8220;bare newlines&#8221;?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/interop-sieve-exim.html">How do I get Cyrus Sieve to play nice with Exim?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../faqs/interop-slow-delivery.html">Why does mail delivery go slow or hang sometimes?</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../release-notes/index.html">IMAP Release Notes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../release-notes/index.html#currently-stable-version">Currently Stable Version</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../release-notes/index.html#current-development-version">Current Development Version</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../release-notes/index.html#currently-supported-product-series">Currently Supported Product Series</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../release-notes/index.html#series-2-5">Series 2.5</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.5/index.html">Cyrus IMAP 2.5 Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../release-notes/index.html#series-2-4">Series 2.4</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.4/index.html">Cyrus IMAP 2.4 Releases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.4-dav/index.html">Cyrus IMAP 2.4-caldav Releases</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../release-notes/index.html#all-versions-going-back-way-back-when">All Versions Going Back Way Back When</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../release-notes/index.html#series-1">Series 1</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/1/1.x.x.html">Cyrus IMAP 1.x Release Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../release-notes/index.html#series-2-2-0-2-3">Series 2: 2.0 - 2.3</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.0/2.0.x.html">Cyrus IMAP 2.0.x Release Notes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.1/2.1.x.html">Cyrus IMAP 2.1.x Release Notes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.2/2.2.x.html">Cyrus IMAP 2.2.x Release Notes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../release-notes/2.3/index.html">Cyrus IMAP 2.3 Releases</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Developers</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../contribute.html">Contribute</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../contribute.html#contribute-financially">Contribute Financially</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../contribute.html#website-content-contributions">Website Content Contributions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../contribute.html#contribute-code">Contribute Code</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../developer.html">IMAP Developer Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer.html#getting-started">Getting Started</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer/overview.html">Overview of Cyrus development environment</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/overview.html#the-pre-requisites">The pre-requisites</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/overview.html#the-components">The components</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/installguide.html">Developer Environment Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/installguide.html#cyrus">Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/installguide.html#arcanist">Arcanist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/installguide.html#setting-up-syslog">Setting up syslog</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/basicserver.html">Running a basic server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#update-your-system">1. Update your system</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#install-cyrus-3rd-party-dependencies">2. Install Cyrus 3rd party dependencies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#the-cyrus-mail-user">3. The cyrus:mail user</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#setting-up-authentication-with-sasl">4. Setting up authentication with SASL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#enabling-mail-delivery-with-lmtp">5. Enabling mail delivery with LMTP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#protocol-ports">6. Protocol ports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#configuring-cyrus">7. Configuring Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#launch-cyrus">8. Launch Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#optional-setting-up-ssl-certificates">Optional: Setting up SSL certificates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#sending-a-test-email">Sending a test email</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#checking-carddav">Checking carddav</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#checking-caldav">Checking caldav</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/basicserver.html#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/developer-testing.html">Developer Test Environment</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/developer-testing.html#installing-cassandane">Installing Cassandane</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/developer-testing.html#rebuild-cyrus-for-testing">Rebuild Cyrus for Testing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/developer-testing.html#running-the-tests">Running the tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/developer-testing.html#tips-and-tricks">Tips and Tricks</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/process.html">Development Process</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/process.html#coding-style">Coding Style</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/process.html#making-changes">Making changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/process.html#useful-developer-information">Useful Developer Information</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/process.html#community-participation">Community Participation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/architecture.html">System Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#high-level-architecture">High Level Architecture</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#cyrus-murder">Cyrus Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#replication">Replication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/architecture.html#invoking-cyrus">Invoking Cyrus</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/jmap.html">JMAP support</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/jmap.html#cyrus-administration">Cyrus administration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/jmap.html#jmap-client">JMAP client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/jmap.html#jmap-implementation-in-cyrus">JMAP implementation in Cyrus</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/documentation.html">Contributing to documentation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#overview">Overview</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#documentation-tools">Documentation Tools</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#checking-the-files">Checking the files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#submitting-updates">Submitting updates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#special-tags">Special Tags</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/documentation.html#conventions-man-pages">Conventions: Man Pages</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../developer.html#resources">Resources</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer/libraries.html">Developer Libraries</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/libraries.html#list-of-libraries">List of Libraries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/docker.html">Docker Images</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#quick-notes">Quick Notes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#environment-variables">Environment Variables</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#running-the-tests-yourself">Running the Tests Yourself</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#getting-an-interactive-shell">Getting an Interactive Shell</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#functions-for-your-convenience">Functions for Your Convenience</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../developer/docker.html#build-process-steps">Build Process Steps</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../developer.html#continuous-integration">Continuous Integration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer/pre-configure-fails.html">Error Message: Step <code class="docutils literal"><span class="pre">pre-configure</span></code> fails on (...)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/configure-fails.html">Error Message: Step <code class="docutils literal"><span class="pre">configure</span></code> fails on (...)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/make-fails.html">Error Message: Step <code class="docutils literal"><span class="pre">make</span></code> fails on (...)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer/make-check-fails.html">Error Message: Step <code class="docutils literal"><span class="pre">make-check</span></code> fails on (...)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Cyrus SASL</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../sasl/getting_started.html">SASL Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#sasl">SASL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#sasl-authentication-mechanisms">SASL Authentication Mechanisms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#security-layers">Security Layers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#channel-binding">Channel Binding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#realms">Realms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#protocols">Protocols</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#cyrus-sasl">Cyrus SASL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#the-glue-library">The Glue Library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#auxiliary-properties">Auxiliary Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/getting_started.html#plugins">Plugins</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sasl/auxiliary_properties.html">SASL Auxiliary Properties</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#auxiliary-properties-and-the-glue-layer">Auxiliary Properties and the Glue Layer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#passwords-and-other-data">Passwords and other Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#sasldb">sasldb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#ldapdb">ldapdb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#sql">sql</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/auxiliary_properties.html#user-canonicalization">User Canonicalization</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sasl/authentication_mechanisms.html">SASL Authentication Mechanisms</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#external">EXTERNAL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#anonymous">ANONYMOUS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#plain">PLAIN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#login">LOGIN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#cram-md5">CRAM-MD5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#digest-md5">DIGEST-MD5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#scram-sha-1">SCRAM-SHA-1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#gssapi">GSSAPI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#gs2-krb5">GS2-KRB5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#gs2-iakerb">GS2-IAKERB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#ntlm">NTLM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#srp">SRP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#pssdss">PSSDSS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#otp">OTP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/authentication_mechanisms.html#non-sasl-authentication">Non-SASL Authentication</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sasl/pwcheck.html">SASL Pwcheck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#auxprop">Auxprop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#auxprop-hashed">Auxprop-hashed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#saslauthd">Saslauthd</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#authdaemon">Authdaemon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#alwaystrue">Alwaystrue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/pwcheck.html#auto-transition">Auto Transition</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sasl/faq.html">SASL Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/faqs/authorize-vs-authenticate.html">What is the difference between an Authorization ID and a Authentication ID?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/faqs/crammd5-digestmd5.html">Why do CRAM-MD5 and DIGEST-MD5 not work with CyrusSaslauthd?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/faqs/openldap-sasl-gssapi.html">How do I configure OpenLDAP +SASL+GSSAPI?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/faqs/plaintextpasswords.html">Why does CyrusSasl store plaintext passwords in its databases?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sasl/faqs/upgrade-saslv2.html">Why am I having a problem running dbconverter-2 to upgrade from SASLv1 to SASLv2?</a></li>
+</ul>
+</li>
+</ul>
+
+          
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">Cyrus IMAP and SASL</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../features.html">IMAP Features</a> &raquo;</li>
+      
+    <li>Event Notifications</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="event-notifications">
+<span id="imap-features-event-notifications"></span><h1>Event Notifications<a class="headerlink" href="#event-notifications" title="Permalink to this headline">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Cyrus IMAP documentation is a work in progress. The completion of
+this particular part of the documentation is pending the resolution
+of <a class="reference external" href="https://git.cyrus.foundation/T43">Task #43</a>.</p>
+</div>
+<p><a class="reference external" href="http://tools.ietf.org/html/rfc5423">RFC 5423</a> standardizes the emission of message store event
+notifications, and <a class="reference external" href="http://tools.ietf.org/html/rfc5465">RFC 5465</a> outlines the IMAP NOTIFY extensions.</p>
+<div class="versionadded">
+<p><span class="versionmodified">New in version 2.5.0.</span></p>
+</div>
+<div class="section" id="available-event-notifications">
+<h2>Available Event Notifications<a class="headerlink" href="#available-event-notifications" title="Permalink to this headline">¶</a></h2>
+<ul>
+<li><dl class="first docutils">
+<dt>Message Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-messageappend"><span>MessageAppend</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messagecopy"><span>MessageCopy</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messageexpire"><span>MessageExpire</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messageexpunge"><span>MessageExpunge</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messagemove"><span>MessageMove</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messagenew"><span>MessageNew</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Flag Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-flagsclear"><span>FlagsClear</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-flagsset"><span>FlagsSet</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messageread"><span>MessageRead</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-messagetrash"><span>MessageTrash</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Mailbox Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-aclchange"><span>AclChange</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-mailboxcreate"><span>MailboxCreate</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-mailboxdelete"><span>MailboxDelete</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-mailboxrename"><span>MailboxRename</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Subscription Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-mailboxsubscribe"><span>MailboxSubscribe</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-mailboxunsubscribe"><span>MailboxUnSubscribe</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Quota Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-quotaexceed"><span>QuotaExceed</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-quotawithin"><span>QuotaWithin</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-quotachange"><span>QuotaChange</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Calendar Events</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-calendaralarm"><span>CalendarAlarm</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Access Accounting</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-login"><span>Login</span></a></li>
+<li><a class="reference internal" href="#imap-features-event-notifications-logout"><span>Logout</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Apple Push</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#imap-features-event-notifications-applepushservice"><span>ApplePushService</span></a></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+<div class="section" id="example-event-notifications">
+<h2>Example Event Notifications<a class="headerlink" href="#example-event-notifications" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="aclchange">
+<span id="imap-features-event-notifications-aclchange"></span><h3>AclChange<a class="headerlink" href="#aclchange" title="Permalink to this headline">¶</a></h3>
+<p>The ACL Change notification is emitted when a command <code class="docutils literal"><span class="pre">SETACL</span></code> is
+issued.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This event notification is added to Cyrus IMAP outside of any RFC.</p>
+</div>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;aclRights&quot;</span><span class="p">:</span> <span class="s2">&quot;lrs&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;aclSubject&quot;</span><span class="p">:</span> <span class="s2">&quot;jane@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;AclChange&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;mailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8048</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:57:59.736+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-8048-1424699879-1-8051832424702584527&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="flagsclear">
+<span id="imap-features-event-notifications-flagsclear"></span><h3>FlagsClear<a class="headerlink" href="#flagsclear" title="Permalink to this headline">¶</a></h3>
+<p>The FlagsClear notification is emitted when all flags are removed from a
+message.</p>
+<p>This includes <code class="docutils literal"><span class="pre">\Deleted</span></code>, <code class="docutils literal"><span class="pre">\Seen</span></code> and <code class="docutils literal"><span class="pre">\Flagged</span></code>, and as such are,
+in part, the counter-parts to
+<a class="reference internal" href="#imap-features-event-notifications-messagetrash"><span>MessageTrash</span></a>,
+<a class="reference internal" href="#imap-features-event-notifications-messageread"><span>MessageRead</span></a>, and
+<a class="reference internal" href="#imap-features-event-notifications-flagsset"><span>FlagsSet</span></a>.</p>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;FlagsClear&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;flagNames&quot;</span><span class="p">:</span> <span class="s2">&quot;\\Flagged&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">43</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7721</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:50:43.640+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;3&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7721-1424699443-1-8479002111695998134&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="flagsset">
+<span id="imap-features-event-notifications-flagsset"></span><h3>FlagsSet<a class="headerlink" href="#flagsset" title="Permalink to this headline">¶</a></h3>
+<p>The FlagsSet notification is emitted when flags are set on a message,
+but not including the <code class="docutils literal"><span class="pre">\Deleted</span></code> and <code class="docutils literal"><span class="pre">\Seen</span></code> flags, which emit
+<a class="reference internal" href="#imap-features-event-notifications-messagetrash"><span>MessageTrash</span></a> and
+<a class="reference internal" href="#imap-features-event-notifications-messageread"><span>MessageRead</span></a> event notifications
+respectively.</p>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;FlagsSet&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;flagNames&quot;</span><span class="p">:</span> <span class="s2">&quot;\\Flagged&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7649</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:50:21.858+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;3&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7649-1424699421-1-11813528620713894618&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="login">
+<span id="imap-features-event-notifications-login"></span><h3>Login<a class="headerlink" href="#login" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;clientIP&quot;</span><span class="p">:</span> <span class="s2">&quot;::1&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;clientPort&quot;</span><span class="p">:</span> <span class="mi">46461</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;Login&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7629</span><span class="p">,</span>
+    <span class="nt">&quot;serverDomain&quot;</span><span class="p">:</span> <span class="s2">&quot;::1&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;serverPort&quot;</span><span class="p">:</span> <span class="mi">143</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:47:36.097+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://imap.example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7629-1424699256-1-3981462903180119079&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="logout">
+<span id="imap-features-event-notifications-logout"></span><h3>Logout<a class="headerlink" href="#logout" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;clientIP&quot;</span><span class="p">:</span> <span class="s2">&quot;::1&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;clientPort&quot;</span><span class="p">:</span> <span class="mi">46461</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;Logout&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7629</span><span class="p">,</span>
+    <span class="nt">&quot;serverDomain&quot;</span><span class="p">:</span> <span class="s2">&quot;::1&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;serverPort&quot;</span><span class="p">:</span> <span class="mi">143</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:47:36.183+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://imap.example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7629-1424699256-1-3981462903180119079&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="mailboxcreate">
+<span id="imap-features-event-notifications-mailboxcreate"></span><h3>MailboxCreate<a class="headerlink" href="#mailboxcreate" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MailboxCreate&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;mailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder;UIDVALIDITY=1424690388&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7721</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:55:57.621+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder;UIDVALIDITY=1424690388&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7721-1424699757-1-18345110432907898457&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="mailboxdelete">
+<span id="imap-features-event-notifications-mailboxdelete"></span><h3>MailboxDelete<a class="headerlink" href="#mailboxdelete" title="Permalink to this headline">¶</a></h3>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">A mailbox deletion event notification is issued once for each top-
+level mailbox in a hierarchy being deleted.</p>
+</div>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MailboxDelete&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;mailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8070</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:58:37.145+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-8070-1424699917-1-11277155374959916506&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="mailboxrename">
+<span id="imap-features-event-notifications-mailboxrename"></span><h3>MailboxRename<a class="headerlink" href="#mailboxrename" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MailboxRename&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;mailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;oldMailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder;UIDVALIDITY=1424690388&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8026</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:56:47.466+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed;UIDVALIDITY=1424699807&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-8026-1424699807-1-3097981731339369225&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="mailboxsubscribe">
+<span id="imap-features-event-notifications-mailboxsubscribe"></span><h3>MailboxSubscribe<a class="headerlink" href="#mailboxsubscribe" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MailboxSubscribe&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">3004</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T18:37:02.344+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Archive&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-3004-1424713022-1-7149274646509524617&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="mailboxunsubscribe">
+<span id="imap-features-event-notifications-mailboxunsubscribe"></span><h3>MailboxUnSubscribe<a class="headerlink" href="#mailboxunsubscribe" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MailboxUnSubscribe&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">3003</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T18:37:19.482+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Testfolder_renamed&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-3003-1424713039-1-2806700531460584176&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messageappend">
+<span id="imap-features-event-notifications-messageappend"></span><h3>MessageAppend<a class="headerlink" href="#messageappend" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;bodyStructure&quot;</span><span class="p">:</span> <span class="s2">&quot;((\&quot;TEXT\&quot; \&quot;PLAIN\&quot; (\&quot;CHARSET\&quot; \&quot;ISO-8859-1\&quot;) NIL NIL \&quot;QUOTED-PRINTABLE\&quot; 206 4 NIL NIL NIL NIL)(\&quot;APPLICATION\&quot; \&quot;CALENDAR+XML\&quot; (\&quot;CHARSET\&quot; \&quot;UTF-8\&quot; \&quot;NAME\&quot; \&quot;kolab.xml\&quot;) NIL NIL \&quot;8BIT\&quot; 2030 NIL (\&quot;ATTACHMENT\&quot; (\&quot;FILENAME\&quot; \&quot;kolab.xml\&quot; \&quot;SIZE\&quot; \&quot;2030\&quot;)) NIL NIL) \&quot;MIXED\&quot; (\&quot;BOUNDARY\&quot; \&quot;=_d9aa3c2dd73a9166113254d4ebe07bc8\&quot;) NIL NIL NIL)&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageAppend&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messageSize&quot;</span><span class="p">:</span> <span class="mi">2992</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7721</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:51:29.008+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Calendar;UIDVALIDITY=1424683684/;UID=5&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.envelope&quot;</span><span class="p">:</span> <span class="s2">&quot;(\&quot;Mon, 23 Feb 2015 13:51:28 +0000\&quot; \&quot;BBA47B13E4839F49AB1C8047EE7B4FDB-A4BF5BBB9FEAA271\&quot; ((NIL NIL \&quot;john\&quot; \&quot;example.org\&quot;)) ((NIL NIL \&quot;john\&quot; \&quot;example.org\&quot;)) ((NIL NIL \&quot;john\&quot; \&quot;example.org\&quot;)) ((NIL NIL \&quot;john\&quot; \&quot;example.org\&quot;)) NIL NIL NIL NIL)&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;NIL&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7721-1424699488-1-10167054345787041319&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">3</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messagecopy">
+<span id="imap-features-event-notifications-messagecopy"></span><h3>MessageCopy<a class="headerlink" href="#messagecopy" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;vnd.cmu.MessageCopy&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+    <span class="nt">&quot;oldMailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Sent;UIDVALIDITY=1424683683&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8107</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:59:49.717+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;4&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Archive;UIDVALIDITY=1424683684&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.oldUidset&quot;</span><span class="p">:</span> <span class="s2">&quot;2&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-8107-1424699989-1-8439907626481649843&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messageexpire">
+<span id="imap-features-event-notifications-messageexpire"></span><h3>MessageExpire<a class="headerlink" href="#messageexpire" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="messageexpunge">
+<span id="imap-features-event-notifications-messageexpunge"></span><h3>MessageExpunge<a class="headerlink" href="#messageexpunge" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageExpunge&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">53</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7813</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:55:20.562+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;4&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7813-1424699720-1-13590468293654033744&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messagemove">
+<span id="imap-features-event-notifications-messagemove"></span><h3>MessageMove<a class="headerlink" href="#messagemove" title="Permalink to this headline">¶</a></h3>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">The <code class="docutils literal"><span class="pre">MessageMove</span></code> event is an event type not documented in an RFC.</p>
+</div>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;vnd.cmu.MessageMove&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="nt">&quot;oldMailboxID&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7685</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:52:41.676+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;3&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/Archive;UIDVALIDITY=1424683684&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.oldUidset&quot;</span><span class="p">:</span> <span class="s2">&quot;3&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7685-1424699561-1-7444588115769591371&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messagenew">
+<span id="imap-features-event-notifications-messagenew"></span><h3>MessageNew<a class="headerlink" href="#messagenew" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageNew&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messageContent&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&quot;6&quot;</span><span class="p">:</span> <span class="s2">&quot;Return-Path: &lt;john@example.org&gt;\r\nReceived: from imap.example.org ([unix socket])\r\n\t by imap.example.org (Cyrus git2.5+0-Kolab-2.5-67.el6.kolab_3.4) with LMTPA;\r\n\t Mon, 20 Oct 2014 13:34:14 +0200\r\nX-Sieve: CMU Sieve 2.4\r\nX-Virus-Scanned: amavisd-new at example.org\r\nX-Spam-Flag: NO\r\nX-Spam-Score: -0.002\r\nX-Spam-Level: \r\nX-Spam-Status: No, score=-0.002 tagged_above=-10 required=6.2\r\n\ttests=[NO_RECEIVED=-0.001, NO_RELAYS=-0.001] autolearn=ham\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=US-ASCII;\r\n format=flowed\r\nContent-Transfer-Encoding: 7bit\r\nDate: Mon, 20 Oct 2014 13:32:41 +0200\r\nFrom: =?UTF-8?Q?Br=C3=BCederli=2C_Thomas?= &lt;john@example.org&gt;\r\nTo: \&quot;Doe, John\&quot; &lt;john@example.org&gt;\r\nSubject: MessageNew event test\r\nMessage-ID: &lt;a8486f5db6ec207de9b9f069850546ee@example.org&gt;\r\nX-Sender: john@example.org\r\n\r\nThis message should trigger the MessageNew event for john...\r\n...and MessageAppend to /Sent for the sender.\r\n&quot;</span>
+    <span class="p">},</span>
+    <span class="nt">&quot;messageHeaders&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&quot;6&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;Content-Transfer-Encoding&quot;</span><span class="p">:</span> <span class="s2">&quot;7bit&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Content-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;text/plain&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Date&quot;</span><span class="p">:</span> <span class="s2">&quot;2014-10-20T11:32:41Z&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;From&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;Br\u00fcederli, Thomas &lt;john@example.org&gt;&quot;</span>
+            <span class="p">],</span>
+            <span class="nt">&quot;MIME-Version&quot;</span><span class="p">:</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Message-ID&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;a8486f5db6ec207de9b9f069850546ee@example.org&gt;&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Received&quot;</span><span class="p">:</span> <span class="s2">&quot;from imap.example.org ([unix socket])\r\n\t by imap.example.org (Cyrus git2.5+0-Kolab-2.5-67.el6.kolab_3.4) with LMTPA;\r\n\t Mon, 20 Oct 2014 13:34:14 +0200&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Return-Path&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;john@example.org&gt;&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;Subject&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageNew event test&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;To&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;Doe, John &lt;john@example.org&gt;&quot;</span>
+            <span class="p">],</span>
+            <span class="nt">&quot;X-Sender&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Sieve&quot;</span><span class="p">:</span> <span class="s2">&quot;CMU Sieve 2.4&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Spam-Flag&quot;</span><span class="p">:</span> <span class="s2">&quot;NO&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Spam-Level&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Spam-Score&quot;</span><span class="p">:</span> <span class="s2">&quot;-0.002&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Spam-Status&quot;</span><span class="p">:</span> <span class="s2">&quot;No, score=-0.002 tagged_above=-10 required=6.2\r\n\ttests=[NO_RECEIVED=-0.001, NO_RELAYS=-0.001] autolearn=ham&quot;</span><span class="p">,</span>
+            <span class="nt">&quot;X-Virus-Scanned&quot;</span><span class="p">:</span> <span class="s2">&quot;amavisd-new at example.org&quot;</span>
+        <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="nt">&quot;messageSize&quot;</span><span class="p">:</span> <span class="mi">976</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">2340</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;lmtpunix&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2014-10-20T13:34:14.966+02:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;6&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1411487714/;UID=6&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;a8486f5db6ec207de9b9f069850546ee@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-2340-1413804854-1&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">3</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messageread">
+<span id="imap-features-event-notifications-messageread"></span><h3>MessageRead<a class="headerlink" href="#messageread" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageRead&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">47</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7685</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:53:44.476+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;4&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7685-1424699624-1-9701853636551497828&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="messagetrash">
+<span id="imap-features-event-notifications-messagetrash"></span><h3>MessageTrash<a class="headerlink" href="#messagetrash" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;MessageTrash&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="nt">&quot;modseq&quot;</span><span class="p">:</span> <span class="mi">48</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">7809</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imap&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-02-23T14:54:02.616+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uidnext&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="nt">&quot;uidset&quot;</span><span class="p">:</span> <span class="s2">&quot;4&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1424683682&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.midset&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;&lt;4d9618acd0aea6b33683766358351459@example.org&gt;&quot;</span>
+    <span class="p">],</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;imap.example.org-7809-1424699642-1-2896189896878960640&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.unseenMessages&quot;</span><span class="p">:</span> <span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="quotachange">
+<span id="imap-features-event-notifications-quotachange"></span><h3>QuotaChange<a class="headerlink" href="#quotachange" title="Permalink to this headline">¶</a></h3>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This event may be followed by a
+<a class="reference internal" href="#imap-features-event-notifications-quotawithin"><span>QuotaWithin</span></a> event
+notification, if the quota change leads the quota root to allow more
+resources than currently in use.</p>
+</div>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;diskQuota&quot;</span><span class="p">:</span> <span class="mi">123456789</span><span class="p">,</span>
+    <span class="nt">&quot;diskUsed&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;QuotaChange&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;maxMessages&quot;</span><span class="p">:</span> <span class="mi">-1</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8140</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imaps&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-03-10T16:16:19.255+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john.doe@example.org@kolab.example.org/INBOX&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john.doe@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;kolab.example.org-8140-1426000578-1-14068443041501787710&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="quotaexceed">
+<span id="imap-features-event-notifications-quotaexceed"></span><h3>QuotaExceed<a class="headerlink" href="#quotaexceed" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal"><span class="pre">user</span></code> parameter in the event notification is the user to whom the
+quota applies, that is being exceeded, otherwise known as the owner of
+the <a class="reference internal" href="namespaces.html#imap-features-namespaces-personal"><span>Personal Namespace</span></a>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Quota being exceeded on shared folders cannot include an &#8220;owner&#8221; for
+the quota root.</p>
+</div>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;diskQuota&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="nt">&quot;diskUsed&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;QuotaExceed&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;maxMessages&quot;</span><span class="p">:</span> <span class="mi">-1</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8210</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;lmtpunix&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-03-10T16:13:40.218+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john.doe@example.org@kolab.example.org/INBOX&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john.doe@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;kolab.example.org-8210-1426000420-4-9494635035963533515&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="quotawithin">
+<span id="imap-features-event-notifications-quotawithin"></span><h3>QuotaWithin<a class="headerlink" href="#quotawithin" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal"><span class="pre">QuotaWithin</span></code> event typically follows a
+<a class="reference internal" href="#imap-features-event-notifications-mailboxdelete"><span>MailboxDelete</span></a> <a class="footnote-reference" href="#id5" id="id1">[1]</a>,
+<a class="reference internal" href="#imap-features-event-notifications-messageexpunge"><span>MessageExpunge</span></a> <a class="footnote-reference" href="#id6" id="id2">[2]</a>,
+<a class="reference internal" href="#imap-features-event-notifications-messagemove"><span>MessageMove</span></a> <a class="footnote-reference" href="#id7" id="id3">[3]</a>, or
+<a class="reference internal" href="#imap-features-event-notifications-quotachange"><span>QuotaChange</span></a> <a class="footnote-reference" href="#id8" id="id4">[4]</a>.</p>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;diskQuota&quot;</span><span class="p">:</span> <span class="mi">123456789</span><span class="p">,</span>
+    <span class="nt">&quot;diskUsed&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span> <span class="s2">&quot;QuotaWithin&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;maxMessages&quot;</span><span class="p">:</span> <span class="mi">-1</span><span class="p">,</span>
+    <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span> <span class="mi">8140</span><span class="p">,</span>
+    <span class="nt">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;imaps&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s2">&quot;2015-03-10T16:16:19.255+01:00&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;imap://john.doe@example.org@kolab.example.org/INBOX&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;john.doe@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;vnd.cmu.sessionId&quot;</span><span class="p">:</span> <span class="s2">&quot;kolab.example.org-8140-1426000578-1-14068443041501787710&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+<p class="rubric">Footnotes for QuotaWithin</p>
+<table class="docutils footnote" frame="void" id="id5" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>A <code class="docutils literal"><span class="pre">QuotaWithin</span></code> event follows a <code class="docutils literal"><span class="pre">MailboxDelete</span></code> event if the
+mailbox deleted resides inside a quota root, and lowers the
+resources used to below the existing quota thresholds.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>A <code class="docutils literal"><span class="pre">QuotaWithin</span></code> event follows a <code class="docutils literal"><span class="pre">MessageExpunge</span></code> event if the
+messages purged reside inside a quota root, and amount to a number
+or size that lowers the amount of resources used to below the
+existing quota thresholds.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id7" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[3]</a></td><td>A <code class="docutils literal"><span class="pre">QuotaWithin</span></code> event follows a <code class="docutils literal"><span class="pre">MessageMove</span></code> event if the
+source folder of the messages moved resides inside a quota root, and
+the target folder to which the messages have been moved does not
+reside within the same quota root, and the number or size of the
+messages moves lowers the amount of resources used in the quota root
+for the source folder of the messages to below the existing
+quota thresholds.</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id8" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id4">[4]</a></td><td>A <code class="docutils literal"><span class="pre">QuotaWithin</span></code> event follows a <code class="docutils literal"><span class="pre">QuotaChange</span></code> event if the quota
+change raised the threshold on the amount of resources used within
+the quota root to a level higher than the existing amount of
+resources used.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="calendaralarm">
+<span id="imap-features-event-notifications-calendaralarm"></span><h3>CalendarAlarm<a class="headerlink" href="#calendaralarm" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal"><span class="pre">CalendarAlarm</span></code> event occurs when a calendar event triggers an
+alarm.</p>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="nt">&quot;event&quot;</span><span class="p">:</span><span class="s2">&quot;CalendarAlarm&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;pid&quot;</span><span class="p">:</span><span class="mi">3164225</span><span class="p">,</span>
+    <span class="nt">&quot;serverFQDN&quot;</span><span class="p">:</span><span class="s2">&quot;sloti30t15&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;alarmTime&quot;</span><span class="p">:</span><span class="s2">&quot;20151119T063000Z&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;alarmRecipients&quot;</span><span class="p">:[</span><span class="s2">&quot;mailto:mary@example.org&quot;</span><span class="p">],</span>
+    <span class="nt">&quot;userId&quot;</span><span class="p">:</span><span class="s2">&quot;mary@example.org&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;calendarName&quot;</span><span class="p">:</span><span class="s2">&quot;Calendar&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;uid&quot;</span><span class="p">:</span><span class="s2">&quot;49ba20f5-cb44-4863-aea7-255f37ffc2e7&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="s2">&quot;email&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;summary&quot;</span><span class="p">:</span><span class="s2">&quot;Here&#39;s a lovely event.  Remind me&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;location&quot;</span><span class="p">:</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;timezone&quot;</span><span class="p">:</span><span class="s2">&quot;Australia/Melbourne&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;start&quot;</span><span class="p">:</span><span class="s2">&quot;20151119T073000Z&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="s2">&quot;20151119T083000Z&quot;</span><span class="p">,</span>
+    <span class="nt">&quot;allDay&quot;</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span>
+    <span class="nt">&quot;attendeeNames&quot;</span><span class="p">:[],</span>
+    <span class="nt">&quot;attendeeEmails&quot;</span><span class="p">:[],</span>
+    <span class="nt">&quot;attendeeStatus&quot;</span><span class="p">:[],</span>
+    <span class="nt">&quot;organizer&quot;</span><span class="p">:</span><span class="s2">&quot;&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="applepushservice">
+<span id="imap-features-event-notifications-applepushservice"></span><h3>ApplePushService<a class="headerlink" href="#applepushservice" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal"><span class="pre">ApplePushService</span></code> event occurs when</p>
+<div class="highlight-json"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9</pre></div></td><td class="code"><div class="highlight"><pre><span></span>{
+    &quot;event&quot;:&quot;ApplePushService&quot;,
+    &quot;user&quot;: &quot;john@example.org&quot;,
+    &quot;apsVersion&quot;: &quot;&quot;,     # Version of the Apple Push Service this message is compliant with.
+    &quot;apsAccountId&quot;: &quot;&quot;,   # Service Provider&#39;s accountID with the Apple Push Service.
+    &quot;apsDeviceToken&quot;: &quot;&quot;, # Unique identifier for the user&#39;s device registered with Apple
+    &quot;apsSubtopic&quot;: &quot;&quot;,    # 
+    &quot;mailboxes&quot;: &quot;[array of mailboxIDs]&quot;
+}
+</pre></div>
+</td></tr></table></div>
+<p>Back to <a class="reference internal" href="../features.html#imap-features"><span>IMAP Features</span></a></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="mail-spool-partitions.html" class="btn btn-neutral float-right" title="Mail Spool Partitions" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="server-side-filtering.html" class="btn btn-neutral" title="Server Side Filtering (Sieve)" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 1993-2016, The Cyrus Team.
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.6 using a modified <a href="https://readthedocs.org">Read the Docs</a> <a href="https://github.com/snide/sphinx_rtd_theme">theme</a>.
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+<!--      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      }); -->
+  </script>
+  
+ 
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+var _paq = _paq || [];(function(){var u=(("https:" == document.location.protocol) ? "https://noc.kolabsys.com/piwik/" : "https://noc.kolabsys.com/piwik/");_paq.push(["setSiteId", "8"]);_paq.push(["setTrackerUrl", u+"piwik.php"]);_paq.push(["trackPageView"]);_paq.push(["setIgnoreClasses", ["no-tracking","colorbox"]]);_paq.push(["enableLinkTracking"]);var d=document,g=d.createElement("script"),s=d.getElementsByTagName("script")[0];g.type="text/javascript";g.defer=true;g.async=true;g.src=u+"piwik.js";s.parentNode.insertBefore(g,s);})();
+//--><!]]>
+</script>
+
+
+
+</body>
+</html>

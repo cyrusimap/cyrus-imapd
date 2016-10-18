@@ -1,0 +1,15 @@
+============================================
+Cyrus IMAP 2.4.17-caldav-beta7 Release Notes
+============================================
+
+Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta6
+
+*   Plugged several memory leaks found by Valgrind
+*   Less verbose reconnect communication between frontend and backend
+*   GET on calendar-home-set now returns a list of subscribe-able calendars
+*   Auto-provisioning of calendars/addressbooks now works via a frontend proxy
+*   Fixed several conformance bugs detected by CalDAVTester
+*   Added support for optionally adding Content-MD5 header to responses (see httpcontentmd5 option)
+*   Fixed time-based queries for components other than VEVENT
+
+:ref:`imap-release-notes-2.4-dav`

@@ -1,0 +1,17 @@
+============================================
+Cyrus IMAP 2.4.17-caldav-beta8 Release Notes
+============================================
+
+Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta7
+
+*   Added Timzone Service module along with associated admin tools (ctl_zoneinfo, vzic).
+*   Added support for accepting/returning jCal (requires Jansson) and xCal data wherever iCalendar data is allowed.
+*   Proxied responses (including chunked) are now piped to client rather than being buffered and forwarded.
+*   Better handling of COPY/MOVE between backends (including LOCKs).
+*   Fixed "annotation truncation" bug where the largest allowed annotation value was slightly less than 4k (solves problem reading CalDavZAP settings).
+*   GET on ./well-known now returns a list of /.well-known/ URLs on the server.
+*   Added support for X-HTTP-Method-Override header in POST requests.
+*   Added replacement functions for those not present in libxml2 < v2.8.0
+*   Plugged a few more memory leaks found by Valgrind.
+
+:ref:`imap-release-notes-2.4-dav`

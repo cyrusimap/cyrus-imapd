@@ -1,0 +1,20 @@
+===============================
+Cyrus IMAP 2.3.13 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.3.12
+
+*   Added an experimental "sql" backend for cyrusdb. Currently MySQL, PostgreSQL, and SQLite are supported. See the new sql_* options for details.
+*   Added support for IMAP [CAPABILITY] response code to client-side of Murder proxies.
+*   Added support for ManageSieve auto-capability response after STARTTLS and after AUTH with a SASL security layer.
+*   Made MAXWORD and MAXQUOTED sizes configurable via imapd.conf -- courtesy of Fastmail.fm.
+*   Rewrote cyrusdb_quotalegacy.c to use readir() rather than glob.c. This avoids a potential crash due to conflicts between glibc and Heimdal implementations of glob().
+*   Added support for fulldirhash to ctl_mboxlist -v.
+*   More skiplist transaction fixes -- courtesy of Fastmail.fm.
+*   cyr_expire no longer has a default of 0 (zero) for -X and -D. These options must be used explicitly in order to have the desired effect.
+*   Added sieve_utf8fileinto option.
+*   Added sieve_sasl_send_unsolicited_capability and sieve_sasl_expect_unsolicited_capability options.
+*   Several 32/64-bit compatibility fixes.
+*   Fixed miscellaneous bugs and build issues.
+
+:ref:`imap-release-notes-2.3`

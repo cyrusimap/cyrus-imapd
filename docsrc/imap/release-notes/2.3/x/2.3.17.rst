@@ -1,0 +1,9 @@
+===============================
+Cyrus IMAP 2.3.17 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.3.16
+
+*   Fix for CVE-2011-3208, a remotely exploitable buffer overflow in nntpd
+
+:ref:`imap-release-notes-2.3`

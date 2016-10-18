@@ -1,0 +1,32 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.3 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.3.tar.gz
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.3.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.3.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.3.tar.gz.sig
+
+.. _relnotes-2.5.3-changes:
+
+Changes Since 2.5.2
+===================
+
+Bug fixes
+---------
+
+* Fixed :task:`183`: don't crash on login when event notifications are enabled

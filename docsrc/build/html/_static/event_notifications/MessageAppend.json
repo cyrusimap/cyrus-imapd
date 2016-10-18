@@ -1,0 +1,19 @@
+{
+    "bodyStructure": "((\"TEXT\" \"PLAIN\" (\"CHARSET\" \"ISO-8859-1\") NIL NIL \"QUOTED-PRINTABLE\" 206 4 NIL NIL NIL NIL)(\"APPLICATION\" \"CALENDAR+XML\" (\"CHARSET\" \"UTF-8\" \"NAME\" \"kolab.xml\") NIL NIL \"8BIT\" 2030 NIL (\"ATTACHMENT\" (\"FILENAME\" \"kolab.xml\" \"SIZE\" \"2030\")) NIL NIL) \"MIXED\" (\"BOUNDARY\" \"=_d9aa3c2dd73a9166113254d4ebe07bc8\") NIL NIL NIL)",
+    "event": "MessageAppend",
+    "messageSize": 2992,
+    "messages": 3,
+    "modseq": 12,
+    "pid": 7721,
+    "service": "imap",
+    "timestamp": "2015-02-23T14:51:29.008+01:00",
+    "uidnext": 6,
+    "uri": "imap://john@example.org@imap.example.org/Calendar;UIDVALIDITY=1424683684/;UID=5",
+    "user": "john@example.org",
+    "vnd.cmu.envelope": "(\"Mon, 23 Feb 2015 13:51:28 +0000\" \"BBA47B13E4839F49AB1C8047EE7B4FDB-A4BF5BBB9FEAA271\" ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) NIL NIL NIL NIL)",
+    "vnd.cmu.midset": [
+        "NIL"
+    ],
+    "vnd.cmu.sessionId": "imap.example.org-7721-1424699488-1-10167054345787041319",
+    "vnd.cmu.unseenMessages": 3
+}

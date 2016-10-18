@@ -1,0 +1,1050 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Cyrus IMAP 2.5.5 Release Notes &mdash; Cyrus IMAP and SASL  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../../../../../_static/favicon.ico"/>
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../../../../_static/cyrus.css" type="text/css" />
+  
+
+  
+    <link rel="top" title="Cyrus IMAP and SASL  documentation" href="../../../../../index.html"/>
+        <link rel="up" title="Cyrus IMAP 2.5 Releases" href="../index.html"/>
+        <link rel="next" title="Cyrus IMAP 2.5.6 Release Notes" href="2.5.6.html"/>
+        <link rel="prev" title="Cyrus IMAP 2.5.4 Release Notes" href="2.5.4.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        
+
+        
+          <a href="../../../../../index.html" class="icon icon-home"> Cyrus IMAP and SASL
+        
+
+        
+        </a>
+
+        
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+        
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+          
+          
+              <p class="caption"><span class="caption-text">Cyrus IMAP</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quickstart Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../quickstart/introduction.html">Introduction to Cyrus IMAP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../quickstart/introduction.html#what-is-imap">What is IMAP?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../quickstart.html#coming-soon">Coming Soon</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../quickstart.html#quick-install">Quick install</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../quickstart.html#feature-overview">Feature overview</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../../../../download.html">Download</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../installation.html">IMAP Installation Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#installation-using-packages">Installation Using Packages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/centos.html">CentOS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/debian.html">Debian</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/fedora.html">Fedora</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/opensuse.html">openSUSE</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/rhel.html">Red Hat Enterprise Linux</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/ubuntu.html">Ubuntu</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/obs.html">Open Build System Packages</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#build-and-install-yourself">Build and Install Yourself</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/diy.html">Do It Yourself</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/mta/index.html">Supported Mail Transfer Agents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#external-tools">External Tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#licensing">Licensing</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="reference internal" href="../../index.html">IMAP Release Notes</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../../index.html#currently-stable-version">Currently Stable Version</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../index.html#current-development-version">Current Development Version</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../../index.html#currently-supported-product-series">Currently Supported Product Series</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="../../index.html#series-2-5">Series 2.5</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../index.html#series-2-4">Series 2.4</a></li>
+</ul>
+</li>
+<li class="toctree-l3 current"><a class="reference internal" href="../../index.html#all-versions-going-back-way-back-when">All Versions Going Back Way Back When</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="../../index.html#series-1">Series 1</a></li>
+<li class="toctree-l4 current"><a class="reference internal" href="../../index.html#series-2-2-0-2-3">Series 2: 2.0 - 2.3</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../packagers.html">Notes for Packagers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../packagers.html#services-in-etc-services">Services in <code class="docutils literal"><span class="pre">/etc/services</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../concepts.html">Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../concepts/features.html">Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#security-and-authentication">Security and Authentication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-kerberos.html">Kerberos Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-ldap.html">LDAP Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-sql.html">SQL Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/access-control.html">Access Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/sealed-system.html">Sealed System Design</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#mailbox-management">Mailbox Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/automatic-creation-of-mailboxes.html">Automatic Creation of Mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/namespaces.html">Mailbox Namespaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-annotations.html">Mailbox Annotations (METADATA)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-distribution.html">Mailbox Distribution</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#message-management">Message Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/delayed-delete.html">Delayed Delete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/delayed-expunge.html">Delayed Expunge</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/message-annotations.html">Message Annotations (METADATA)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/duplicate-message-delivery-suppression.html">Duplicate Message Delivery Suppression</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/shared-seen-state.html">Shared Seen State</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/server-side-filtering.html">Server Side Filtering (Sieve)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/event-notifications.html">Event Notifications</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#storage">Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mail-spool-partitions.html">Mail Spool Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-metadata-partitions.html">Mailbox Metadata Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/quota.html">Quota</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/single-instance-store.html">Single-Instance Store</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#load-management">Load Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/server-aggregation.html">Cyrus IMAP Murder (Server Aggregation)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html">Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#access-control-lists">Access Control Lists</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#access-rights">Access Rights</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#identifiers">Identifiers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#anonymous-and-anyone"><code class="docutils literal"><span class="pre">anonymous</span></code> and <code class="docutils literal"><span class="pre">anyone</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#kerberos-vs-unix-authorization">Kerberos vs. Unix Authorization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#negative-rights">Negative Rights</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#calculating-the-users-rights">Calculating the Users&#8217; Rights</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#implicit-rights-for-administrators-on-personal-mailboxes">Implicit Rights for Administrators on Personal Mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#initial-acls-for-newly-created-mailboxes">Initial ACLs for Newly Created Mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#login-authentication">Login Authentication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#anonymous-login">Anonymous Login</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#plaintext-authentication">Plaintext Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#kerberos-logins">Kerberos Logins</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#shared-secrets-logins">Shared Secrets Logins</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#quota">Quota</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#supports-quotas-on-storage">Supports Quotas on Storage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#quota-roots">Quota Roots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#mail-delivery-behavior">Mail Delivery Behavior</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#quota-warnings-upon-select-when-user-has-d-rights">Quota Warnings Upon Select When User Has <code class="docutils literal"><span class="pre">d</span></code> Rights</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#quotas-and-partitions">Quotas and Partitions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#new-mail-notification">New Mail Notification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#partitions">Partitions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#specifying-partitions-with-create">Specifying Partitions with &#8220;create&#8221;</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#changing-partitions-with-rename">Changing Partitions with &#8220;rename&#8221;</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#news">News</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#pop3-server">POP3 Server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#the-syslog-facility">The syslog facility</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#mail-directory-recovery">Mail Directory Recovery</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#reconstructing-mailbox-directories">Reconstructing Mailbox Directories</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#reconstructing-the-mailboxes-file">Reconstructing the Mailboxes File</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#reconstructing-quota-roots">Reconstructing Quota Roots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#removing-quota-roots">Removing Quota Roots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#subscriptions">Subscriptions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#configuration-directory">Configuration Directory</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#log-directory">Log Directory</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#proc-directory">Proc Directory</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#message-delivery">Message Delivery</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#local-mail-transfer-protocol-lmtp">Local Mail Transfer Protocol (lmtp)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#single-instance-store">Single Instance Store</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#duplicate-delivery-suppression">Duplicate Delivery Suppression</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#sieve-a-mail-filtering-language">Sieve, a Mail Filtering Language</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/overview_and_concepts.html#cyrus-murder-the-imap-aggregator">Cyrus Murder, the IMAP Aggregator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../concepts/deployment.html">Configuration Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html">Deployment Scenarios</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#single-server-deployments">Single Server Deployments</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#multi-server-deployments">Multi Server Deployments</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#cyrus-murder-server-aggregation">Cyrus Murder: Server aggregation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-discrete-murder">The Discrete Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-unified-murder">The Unified Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-shared-murder">The Shared Murder</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#cyrus-replication">Cyrus Replication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#hosted-environments">Hosted Environments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html">Mailbox Creation Distribution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#selection-mode">Selection Mode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#special-cases">Special cases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#partitions-exclusion">Partitions Exclusion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#partitions-usage-data-reset">Partitions Usage Data Reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#mailbox-creation-distribution-through-murder-frontend">Mailbox Creation Distribution Through <code class="docutils literal"><span class="pre">murder</span> <span class="pre">frontend</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#backends-exclusion">Backends Exclusion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#backends-usage-data-reset">Backends Usage Data Reset</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html">Known Protocol Limitations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html#pop3-and-mailbox-locking">POP3 and Mailbox Locking</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html#cyrus-imap-pop3-implementation">Cyrus IMAP POP3 Implementation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html">Authentication and Authorization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html#client-authentication">Client Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html#users-and-mailboxes">Users and Mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/performance_recommendations.html">Performance Recommendations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/performance_recommendations.html#databases-on-temporary-filesystems">Databases on Temporary Filesystems</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/storage.html">Storage Considerations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#general-notes-on-storage">General Notes on Storage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#redundancy">Redundancy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#availability">Availability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#performance">Performance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#scalability">Scalability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#capacity">Capacity</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#cost">Cost</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html">Supported Platforms and System Requirements</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#building-cyrus-imap">Building Cyrus IMAP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#required-software-components">Required Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#recommended-software-components">Recommended Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#recommended-software-components-enabled-by-default">Recommended Software Components Enabled by Default</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../reference.html">Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/admin.html">Administrator Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/admin.html#architecture">Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/architecture.html">System Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/admin.html#management">Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/murder/murder.html">Cyrus Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/access-control.html">Access Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/nntp.html">Cyrus NNTP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/protlayer.html">Cyrus Prot Layer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/sieve.html">Cyrus Sieve</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/backups.html">Cyrus Backups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/sop.html">Standard Operating Procedures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/eventsource.html">Cyrus Event Source</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/config-mailboxdistribution.html">Mailbox Distribution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/nginx-proxy.html">HOWTO: Using an NGINX IMAP Proxy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/tweaking.html">Tweaking Cyrus IMAP</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/faq.html">Frequently Asked Questions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/faq.html#features">Features</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/feature-database-backend.html">Which database backend should I use for which databases?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/feature-duplicate-delivery.html">Duplicate Delivery Suppression</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/faq.html#installation-problems">Installation Problems</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/install-compilationerrors.html">Compilation errors about kssl.h and krb5.h on Red Hat Linux/Fedora</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/install-detecting-berkeley.html">Problems detecting Berkley DB on Red Hat Linux</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/install-install-help.html">Help! There must be an easier way to get all this going...</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/faq.html#common-feature-requests">Common Feature Requests</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/r-murder-ha.html">Does the Cyrus Murder support High Availability configurations?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/r-pop3-logging.html">Can I configure pop3d to log amount and size of messages fetched by user?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/r-publicssharedfolders.html">How can I make CyrusSieve work with public shared folders?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/r-subfolders.html">Can I have subfolders not appear under INBOX?</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/faq.html#common-operational-questions">Common Operational Questions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-acls.html">How do I view ACLs on a mailbox?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-annotations.html">What annotations are available?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-berkeleydb.html">Why does ctl_cyrusdb -r take so long with Berkeley DB?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-configdir-tempfs.html">Is it safe to put configdir/proc and configdir/lock on a tmpfs filesystem?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-db3-lockers.html">Is the &#8220;db3: x Lockers&#8221; log message harmful?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-delete-mailbox.html">Why can I not delete a mailbox as an admin user?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-deleted-expired-expunged-purged.html">When is What ... Deleted, Expired, Expunged or Purged?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-deliverdb-size.html">Why is deliver.db so large?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-freezes.html">I have multiple imapd-SERVICES configured and experience occasional freezes when I try to log in!</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-mailbox-doesnotexist.html">Cyrus delivers claims that the mailbox does not exist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-mixedcase.html">Why is mail being rejected with No Mailbox found due to MiXed CaSe incoming e-mail?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-otherdatabases.html">Can I use MySQL (or another SQL database) as the primary mail store?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-pop3slow.html">Why do POP3 connections take so long, but once the connection is established all is well?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-reconstruct.html">Why does reconstruct -m not work?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-sharedfilesystem-gpfs.html">Shared File Systems GPFS for high availability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-telemetry.html">How to enable telemetry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-toomanyprocesses.html">The process count keeps growing!</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-unable-join-environment.html">&#8220;unable to join environment&#8221; error</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/o-vacation-mailfrom.html">Why does Cyrus set the MAIL FROM address of the sender of vacation responses to &#8216;&lt;&gt;&#8217;?</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/faq.html#common-interoperability-problems">Common Interoperability Problems</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/interop-8bit.html">Why does Cyrus reject 8-bit characters in the headers of my messages?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/interop-barenewlines.html">Why does Cyrus reject messages with &#8220;bare newlines&#8221;?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/interop-sieve-exim.html">How do I get Cyrus Sieve to play nice with Exim?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/faqs/interop-slow-delivery.html">Why does mail delivery go slow or hang sometimes?</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/manpages/commands.html">Man pages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/manpages/commands.html#configuration-files">(5) Configuration Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/configs/cyrus.conf.html"><strong>cyrus.conf</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/configs/imapd.conf.html">imapd.conf</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/configs/krb.equiv.html"><strong>krb.equiv</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/manpages/commands.html#system-commands">(8) System Commands</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/arbitron.html"><strong>arbitron</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/backupd.html"><strong>backupd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/chk_cyrus.html"><strong>chk_cyrus</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_backups.html"><strong>ctl_backups</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_conversationsdb.html"><strong>ctl_conversationsdb</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_cyrusdb.html"><strong>ctl_cyrusdb</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_deliver.html"><strong>ctl_deliver</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_mboxlist.html"><strong>ctl_mboxlist</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ctl_zoneinfo.html"><strong>ctl_zoneinfo</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cvt_cyrusdb.html"><strong>cvt_cyrusdb</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_backup.html"><strong>cyr_backup</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_buildinfo.html"><strong>cyr_buildinfo</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_dbtool.html"><strong>cyr_dbtool</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_deny.html"><strong>cyr_deny</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_df.html"><strong>cyr_df</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_expire.html"><strong>cyr_expire</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_info.html"><strong>cyr_info</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_sequence.html"><strong>cyr_sequence</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyr_synclog.html"><strong>cyr_synclog</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyradm.html"><strong>cyradm</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/cyrdump.html"><strong>cyrdump</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/deliver.html"><strong>deliver</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/fetchnews.html"><strong>fetchnews</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/fud.html"><strong>fud</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/httpd.html"><strong>httpd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/idled.html"><strong>idled</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/imapd.html"><strong>imapd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ipurge.html"><strong>ipurge</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/lmtpd.html"><strong>lmtpd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/lmtpproxyd.html"><strong>lmtpproxyd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/master.html"><strong>master</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mbexamine.html"><strong>mbexamine</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mbpath.html"><strong>mbpath</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mbtool.html"><strong>mbtool</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mkimap.html"><strong>mkimap</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mupdate.html"><strong>mupdate</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/nntpd.html"><strong>nntpd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/notifyd.html"><strong>notifyd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/pop3d.html"><strong>pop3d</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/pop3proxyd.html"><strong>pop3proxyd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/quota.html"><strong>quota</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/reconstruct.html"><strong>reconstruct</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/restore.html"><strong>restore</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/rmnews.html"><strong>rmnews</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/sievec.html"><strong>sievec</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/sieved.html"><strong>sieved</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/smmapd.html"><strong>smmapd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/squatter.html"><strong>squatter</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/sync_client.html"><strong>sync_client</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/sync_reset.html"><strong>sync_reset</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/sync_server.html"><strong>sync_server</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/timsieved.html"><strong>timsieved</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/tls_prune.html"><strong>tls_prune</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/unexpunge.html"><strong>unexpunge</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/manpages/commands.html#user-commands">(1) User Commands</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/dav_reconstruct.html"><strong>dav_reconstruct</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/imtest.html"><strong>imtest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/installsieve.html"><strong>installsieve</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/lmtptest.html"><strong>lmtptest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/mupdatetest.html"><strong>mupdatetest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/nntptest.html"><strong>nntptest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/pop3test.html"><strong>pop3test</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/sieveshell.html"><strong>sieveshell</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/sivtest.html"><strong>sivtest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/smtptest.html"><strong>smtptest</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/usercommands/synctest.html"><strong>synctest</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/manpages/commands.html#work-in-progress">Work-in-Progress</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ptdump.html"><code class="docutils literal"><span class="pre">ptdump</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ptexpire.html"><code class="docutils literal"><span class="pre">ptexpire</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/ptloader.html"><code class="docutils literal"><span class="pre">ptloader</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/proxyd.html"><strong>proxyd</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/convert-sieve.pl.html"><strong>convert-sieve.pl</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/masssievec.html"><strong>masssievec</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/arbitronsort.pl.html"><strong>arbitronsort.pl</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/mknewsgroups.html"><strong>mknewsgroups</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/translatesieve.html"><strong>translatesieve</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/manpages/systemcommands/template.html"><strong>CMD</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/administration-tools.html">Tools &amp; Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#arbitron">arbitron</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#arbitronsort-pl">arbitronsort.pl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#chk-cyrus">chk_cyrus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#convert-sieve-pl">convert-sieve.pl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#ctl-cyrusdb">ctl_cyrusdb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#ctl-deliver">ctl_deliver</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#ctl-mboxlist">ctl_mboxlist</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cvt-cyrusdb">cvt_cyrusdb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cvt-cyrusdb-all">cvt_cyrusdb_all</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-dbtool">cyr_dbtool</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-df">cyr_df</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyrdump">cyrdump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-expire">cyr_expire</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#fetchnews">fetchnews</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-sequence">cyr_sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-synclog">cyr_synclog</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#cyr-userseen">cyr_userseen</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#masssievec">masssievec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#mbexamine">mbexamine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#mbpath">mbpath</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#migrate-metadata">migrate-metadata</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#mkimap">mkimap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#mknewsgroups">mknewsgroups</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#rehash">rehash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#translatesieve">translatesieve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#undohash">undohash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/administration-tools.html#upgradesieve">upgradesieve</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../developers.html">Developers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../contribute.html">Contribute</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../contribute.html#website-content-contributions">Website Content Contributions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../contribute.html#contribute-code">Contribute Code</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../developer.html">IMAP Developer Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#getting-started">Getting Started</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/process.html">Development Process</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/overview.html">Overview of Cyrus development environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/github-guide.html">GitHub guide</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/installguide.html">Developer Environment Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/basicserver.html">Running a basic server</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/developer-testing.html">Developer Test Environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/jmap.html">JMAP support</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/documentation.html">Contributing to documentation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/developer-tips.html">Tips for Hacking on Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/install-xapian.html">Xapian for searching</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#system-files-and-databases">System files and Databases</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/namespaces.html">Namespaces: a developer view</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#resources">Resources</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/libraries.html">Developer Libraries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../support.html">Support/Community</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../support/feedback.html">Support</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../support/feedback-bugs.html">Reporting Bugs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../support/feedback-mailing-lists.html">Mailing Lists</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../support/feedback-mailing-lists.html#archives">Archives</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../support/feedback-mailing-lists.html#subscribe-unsubscribe">Subscribe/Unsubscribe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../support/feedback-mailing-lists.html#digest-lists">Digest Lists</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../support/feedback-irc.html">IRC Chat</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../support/feedback-meetings.html">Online Meetings</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../overview/about_cyrus.html">About</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html">What is Cyrus</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html#what-is-cyrus">What is Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html#what-is-imap">What is IMAP?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html#imap-version-4-imap4">IMAP Version 4 (IMAP4)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html#mime">Mime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/what_is_cyrus.html#smtp">SMTP</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../overview/who_is_cyrus.html">Who Is Cyrus</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/who_is_cyrus.html#core-contributors">Core Contributors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/who_is_cyrus.html#individual-contributors-and-past-contributors">Individual contributors and past contributors</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../overview/cyrus_roadmap.html">Cyrus Roadmap</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_roadmap.html#high-level-roadmap">High Level Roadmap</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../overview/cyrus_history.html">Cyrus History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html">Cyrus Bylaws</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#i-the-cyrus-governance-board">I. The Cyrus Governance Board</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#ii-the-cyrus-core-developers-group">II. The Cyrus Core Developers Group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#iii-the-release-engineer">III. The Release Engineer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#iv-the-cyrus-roadmap">IV. The Cyrus Roadmap</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#v-development-process">V. Development Process</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../overview/cyrus_bylaws.html#vi-changes-to-the-bylaws">VI. Changes to the Bylaws</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../../../index.html">Cyrus IMAP</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../installation.html">IMAP Installation Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#installation-using-packages">Installation Using Packages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/centos.html">CentOS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/debian.html">Debian</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/fedora.html">Fedora</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/opensuse.html">openSUSE</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/rhel.html">Red Hat Enterprise Linux</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/distributions/ubuntu.html">Ubuntu</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/obs.html">Open Build System Packages</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#build-and-install-yourself">Build and Install Yourself</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/diy.html">Do It Yourself</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../installation/mta/index.html">Supported Mail Transfer Agents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#external-tools">External Tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../installation.html#licensing">Licensing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../quickstart/introduction.html">Introduction to Cyrus IMAP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../quickstart/introduction.html#what-is-imap">What is IMAP?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../concepts/features.html">Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#security-and-authentication">Security and Authentication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-kerberos.html">Kerberos Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-ldap.html">LDAP Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/authentication-sql.html">SQL Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/access-control.html">Access Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/sealed-system.html">Sealed System Design</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#mailbox-management">Mailbox Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/automatic-creation-of-mailboxes.html">Automatic Creation of Mailboxes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/namespaces.html">Mailbox Namespaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-annotations.html">Mailbox Annotations (METADATA)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-distribution.html">Mailbox Distribution</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#message-management">Message Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/delayed-delete.html">Delayed Delete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/delayed-expunge.html">Delayed Expunge</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/message-annotations.html">Message Annotations (METADATA)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/duplicate-message-delivery-suppression.html">Duplicate Message Delivery Suppression</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/shared-seen-state.html">Shared Seen State</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/server-side-filtering.html">Server Side Filtering (Sieve)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/event-notifications.html">Event Notifications</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#storage">Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mail-spool-partitions.html">Mail Spool Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/mailbox-metadata-partitions.html">Mailbox Metadata Partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/quota.html">Quota</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/single-instance-store.html">Single-Instance Store</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/features.html#load-management">Load Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/features/server-aggregation.html">Cyrus IMAP Murder (Server Aggregation)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../concepts/deployment.html">Configuration Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html">Deployment Scenarios</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#single-server-deployments">Single Server Deployments</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#multi-server-deployments">Multi Server Deployments</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#cyrus-murder-server-aggregation">Cyrus Murder: Server aggregation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-discrete-murder">The Discrete Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-unified-murder">The Unified Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#the-shared-murder">The Shared Murder</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#cyrus-replication">Cyrus Replication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/deployment_scenarios.html#hosted-environments">Hosted Environments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html">Mailbox Creation Distribution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#selection-mode">Selection Mode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#special-cases">Special cases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#partitions-exclusion">Partitions Exclusion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#partitions-usage-data-reset">Partitions Usage Data Reset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#mailbox-creation-distribution-through-murder-frontend">Mailbox Creation Distribution Through <code class="docutils literal"><span class="pre">murder</span> <span class="pre">frontend</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#backends-exclusion">Backends Exclusion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/mailbox_creation_distribution.html#backends-usage-data-reset">Backends Usage Data Reset</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html">Known Protocol Limitations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html#pop3-and-mailbox-locking">POP3 and Mailbox Locking</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/known_protocol_limitations.html#cyrus-imap-pop3-implementation">Cyrus IMAP POP3 Implementation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html">Authentication and Authorization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html#client-authentication">Client Authentication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/authentication_and_authorization.html#users-and-mailboxes">Users and Mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/performance_recommendations.html">Performance Recommendations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/performance_recommendations.html#databases-on-temporary-filesystems">Databases on Temporary Filesystems</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/storage.html">Storage Considerations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#general-notes-on-storage">General Notes on Storage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#redundancy">Redundancy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#availability">Availability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#performance">Performance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#scalability">Scalability</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#capacity">Capacity</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/storage.html#cost">Cost</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html">Supported Platforms and System Requirements</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#building-cyrus-imap">Building Cyrus IMAP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#required-software-components">Required Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#recommended-software-components">Recommended Software Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../concepts/deployment/supported-platforms.html#recommended-software-components-enabled-by-default">Recommended Software Components Enabled by Default</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../reference/admin.html">Administrator Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/admin.html#architecture">Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/architecture.html">System Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../reference/admin.html#management">Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/murder/murder.html">Cyrus Murder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/access-control.html">Access Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/nntp.html">Cyrus NNTP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/protlayer.html">Cyrus Prot Layer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/sieve.html">Cyrus Sieve</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/backups.html">Cyrus Backups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/sop.html">Standard Operating Procedures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/eventsource.html">Cyrus Event Source</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/config-mailboxdistribution.html">Mailbox Distribution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/nginx-proxy.html">HOWTO: Using an NGINX IMAP Proxy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../reference/admin/tweaking.html">Tweaking Cyrus IMAP</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../developer.html">IMAP Developer Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#getting-started">Getting Started</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/process.html">Development Process</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/overview.html">Overview of Cyrus development environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/github-guide.html">GitHub guide</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/installguide.html">Developer Environment Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/basicserver.html">Running a basic server</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/developer-testing.html">Developer Test Environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/jmap.html">JMAP support</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/documentation.html">Contributing to documentation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/developer-tips.html">Tips for Hacking on Cyrus</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/install-xapian.html">Xapian for searching</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#system-files-and-databases">System files and Databases</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/namespaces.html">Namespaces: a developer view</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../developer.html#resources">Resources</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../developer/libraries.html">Developer Libraries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="reference internal" href="../../../../index.html#cyrus-imap-release-notes">Cyrus IMAP Release Notes</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="../../index.html">IMAP Release Notes</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="../../index.html#currently-stable-version">Currently Stable Version</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../index.html#current-development-version">Current Development Version</a></li>
+<li class="toctree-l4 current"><a class="reference internal" href="../../index.html#currently-supported-product-series">Currently Supported Product Series</a></li>
+<li class="toctree-l4 current"><a class="reference internal" href="../../index.html#all-versions-going-back-way-back-when">All Versions Going Back Way Back When</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../preface.html">Preface</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../preface.html#about-cyrus">About Cyrus</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../styles.html">Document Conventions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../styles.html#typographic-conventions">Typographic Conventions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../styles.html#mono-spaced-with-non-white-background">Mono-spaced with non-white background</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../styles.html#proportional-bold">Proportional Bold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../styles.html#italic">Italic</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../styles.html#pull-quote-conventions">Pull-quote Conventions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../styles.html#notes-and-warnings">Notes and Warnings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../glossary.html">Glossary</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Cyrus SASL</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#sasl">SASL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#sasl-authentication-mechanisms">SASL Authentication Mechanisms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#security-layers">Security Layers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#channel-binding">Channel Binding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#realms">Realms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#protocols">Protocols</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#cyrus-sasl">Cyrus SASL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#the-glue-library">The Glue Library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#auxiliary-properties">Auxiliary Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/getting_started.html#plugins">Plugins</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html">Auxiliary Properties</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#auxiliary-properties-and-the-glue-layer">Auxiliary Properties and the Glue Layer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#passwords-and-other-data">Passwords and other Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#sasldb">sasldb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#ldapdb">ldapdb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#sql">sql</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#user-canonicalization">User Canonicalization</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html">Authentication Mechanisms</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#external">EXTERNAL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#anonymous">ANONYMOUS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#plain">PLAIN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#login">LOGIN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#cram-md5">CRAM-MD5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#digest-md5">DIGEST-MD5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#scram-sha-1">SCRAM-SHA-1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gssapi">GSSAPI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gs2-krb5">GS2-KRB5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gs2-iakerb">GS2-IAKERB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#ntlm">NTLM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#srp">SRP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#pssdss">PSSDSS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#otp">OTP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#non-sasl-authentication">Non-SASL Authentication</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/pwcheck.html">Pwcheck</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auxprop">Auxprop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auxprop-hashed">Auxprop-hashed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#saslauthd">Saslauthd</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#authdaemon">Authdaemon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#alwaystrue">Alwaystrue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auto-transition">Auto Transition</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/faq.html">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/faqs/authorize-vs-authenticate.html">What is the difference between an Authorization ID and a Authentication ID?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/faqs/crammd5-digestmd5.html">Why do CRAM-MD5 and DIGEST-MD5 not work with CyrusSaslauthd?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/faqs/openldap-sasl-gssapi.html">How do I configure OpenLDAP +SASL+GSSAPI?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/faqs/plaintextpasswords.html">Why does CyrusSasl store plaintext passwords in its databases?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/faqs/upgrade-saslv2.html">Why am I having a problem running dbconverter-2 to upgrade from SASLv1 to SASLv2?</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../rfc-support.html">RFCs Supported by Cyrus IMAP</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../rfc-support.html#ietf-rfc-drafts">IETF RFC Drafts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../rfc-support.html#rfc-wishlist">RFC Wishlist</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../sasl/index.html">Cyrus SASL documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/index.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../sasl/index.html#contents">Contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/getting_started.html">Getting Started</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#sasl">SASL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#sasl-authentication-mechanisms">SASL Authentication Mechanisms</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#security-layers">Security Layers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#channel-binding">Channel Binding</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#realms">Realms</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#protocols">Protocols</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#cyrus-sasl">Cyrus SASL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#the-glue-library">The Glue Library</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#auxiliary-properties">Auxiliary Properties</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/getting_started.html#plugins">Plugins</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html">Auxiliary Properties</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#auxiliary-properties-and-the-glue-layer">Auxiliary Properties and the Glue Layer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#passwords-and-other-data">Passwords and other Data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#sasldb">sasldb</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#ldapdb">ldapdb</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#sql">sql</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/auxiliary_properties.html#user-canonicalization">User Canonicalization</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html">Authentication Mechanisms</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#external">EXTERNAL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#anonymous">ANONYMOUS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#plain">PLAIN</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#login">LOGIN</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#cram-md5">CRAM-MD5</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#digest-md5">DIGEST-MD5</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#scram-sha-1">SCRAM-SHA-1</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gssapi">GSSAPI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gs2-krb5">GS2-KRB5</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#gs2-iakerb">GS2-IAKERB</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#ntlm">NTLM</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#srp">SRP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#pssdss">PSSDSS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#otp">OTP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/authentication_mechanisms.html#non-sasl-authentication">Non-SASL Authentication</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/pwcheck.html">Pwcheck</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auxprop">Auxprop</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auxprop-hashed">Auxprop-hashed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#saslauthd">Saslauthd</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#authdaemon">Authdaemon</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#alwaystrue">Alwaystrue</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/pwcheck.html#auto-transition">Auto Transition</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/faq.html">Frequently Asked Questions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/faqs/authorize-vs-authenticate.html">What is the difference between an Authorization ID and a Authentication ID?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/faqs/crammd5-digestmd5.html">Why do CRAM-MD5 and DIGEST-MD5 not work with CyrusSaslauthd?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/faqs/openldap-sasl-gssapi.html">How do I configure OpenLDAP +SASL+GSSAPI?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/faqs/plaintextpasswords.html">Why does CyrusSasl store plaintext passwords in its databases?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/faqs/upgrade-saslv2.html">Why am I having a problem running dbconverter-2 to upgrade from SASLv1 to SASLv2?</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/sasl_migration.html">Cyrus SASL Migration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../sasl/installation.html">Cyrus SASL Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/installation.html#unix-package-installation">Unix package Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/installation.html#mac-osx-installation">Mac OSX Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/installation.html#windows-installation">Windows Installation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../sasl/installation.html#configuration">Configuration</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../../../index.html">Cyrus IMAP and SASL</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../../../../download.html">Download</a> &raquo;</li>
+      
+          <li><a href="../../index.html">IMAP Release Notes</a> &raquo;</li>
+      
+          <li><a href="../index.html">Cyrus IMAP 2.5 Releases</a> &raquo;</li>
+      
+    <li>Cyrus IMAP 2.5.5 Release Notes</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="cyrus-imap-2-5-5-release-notes">
+<h1>Cyrus IMAP 2.5.5 Release Notes<a class="headerlink" href="#cyrus-imap-2-5-5-release-notes" title="Permalink to this headline">¶</a></h1>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p>This is a bug-fix release in the stable 2.5 series.</p>
+<p class="last">Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+about the 2.5 series, including upgrading instructions.</p>
+</div>
+<p>Download via HTTP:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference external" href="http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz">http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz</a></li>
+<li><a class="reference external" href="http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz.sig">http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz.sig</a></li>
+</ul>
+</div></blockquote>
+<p>Download via FTP:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference external" href="ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz">ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz</a></li>
+<li><a class="reference external" href="ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz.sig">ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz.sig</a></li>
+</ul>
+</div></blockquote>
+<div class="section" id="changes-since-2-5-4">
+<span id="relnotes-2-5-5-changes"></span><h2>Changes Since 2.5.4<a class="headerlink" href="#changes-since-2-5-4" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="bug-fixes">
+<h3>Bug fixes<a class="headerlink" href="#bug-fixes" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>Security fix: compiling with &#8211;enable-autocreate no longer allows arbitrary
+mailbox creation</li>
+<li>Fixed <a class="reference external" href="https://git.cyrus.foundation/T207">Task #207</a>: don&#8217;t segfault on mboxutil -d of MBTYPE_DELETED mailboxes (thanks Chris Stromsoe)</li>
+<li>Fixed lock management over rename (thanks Thomas Jarosch)</li>
+<li>Miscellaneous other fixes (thanks Thomas Jarosch)</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="2.5.6.html" class="btn btn-neutral float-right" title="Cyrus IMAP 2.5.6 Release Notes" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="2.5.4.html" class="btn btn-neutral" title="Cyrus IMAP 2.5.4 Release Notes" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 1993-2016, The Cyrus Team.
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../../../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+  
+ 
+
+
+
+</body>
+</html>

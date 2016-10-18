@@ -1,0 +1,51 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.6 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.6.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.6.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.6.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.6.tar.gz.sig
+
+.. _relnotes-2.5.6-changes:
+
+Changes Since 2.5.5
+===================
+
+New imapd.conf options
+----------------------
+
+* tls_required (default: 0).  Set this to 1 to require a TLS session for ALL
+  authentications, not just plain ones (thanks Carlos Velasco)
+
+New cyradm options
+------------------
+
+* --tlskey keyfile: use certificate with keyfile to authenticate with server
+* --notls: disable StartTLS negotiation
+* --cafile cacertfile: Use CA certificate file to validate server certificate
+* --cadir cacertdirectory: Use CA certificate directory to validate server certificate
+
+Thanks Leena Heino and Carlos Velasco
+
+Bug fixes
+---------
+
+* Fixed: cyr_synclog checks its arguments more strictly to avoid producing junk sync loc entries
+* Fixed: reconstruct no longer segfaults on failure on Solaris 10 (thanks Marty Lee)
+* Fixed: cyradm metadata implementation cleaned up and output made consistent (thanks Leena Heino)
+* Fixed: timsieved no longer discloses name/version if ServerInfo is Off or Min (thanks Carlos Velasco)

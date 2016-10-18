@@ -1,0 +1,37 @@
+==============================
+Cyrus IMAP 2.4.7 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.4.6
+
+*   Fixed Bug #3357 - lmtpd offering STARTTLS in pre-authorized mode.
+*   Fixed Bug #3392 - allowing INBOX.INBOX to be created if the case didn't match
+*   Fixed Bug #3404 - incorrect LIST "" "user" response
+*   Fixed Bug #3417 - crash on zero-byte quota file
+*   Fixed numberous bugs with mailbox upgrades
+*   Fixed replication errors, which have been reported many times on the mailing list, but don't have bug numbers.
+*   Increated "paranoia" about record ordering in mailbox, which would have detected some bad bugs in replication that caused the infinite runaway mailbox filling reported in 2.4.6 and below
+*   Increased syslogging detail about replication issues
+*   Fixed reconstruct crash with zero-byte index file
+*   Fixed cyradm perl library path finding
+*   Fixed incorrect use of LITERAL+ formats in our responses to clients. Unreported, but could be causing wierd hard-to-track-down bugs out there
+*   Fixed append immediately on create
+*   Upgraded Unicode database to version 6.0
+*   Fixed reconstruct crash on folder names with many digits (i.e. ebay auction numbers)
+*   Fixed reconstruct crash with file called '0.'
+*   Made reconstruct '-n' option actually exist, as advertised in the man page
+*   Fixed bug #3423 - STARTTLS plaintext command injection vulnerability
+*   Bug #3382 Added "failedloginpause" config option
+*   Bugs #3383/3385 Removed some obsolete config options
+*   Bug #3389 $confdir/proc not created on the fly
+*   Bug #3394 fix imtest parsing of MECHLIST
+*   Bug #3399 fix with_ldap option default
+*   Bug #3307 fix mbpath crash on remote mailbox
+*   Bug #3420 use getpassphrase on Solaris, now passwords over 8 characters long work with cyrus tools
+*   Bug #3400 and others - lots of bugs with XFER between different versions in murder clusters fixed, including a bug that caused only mailboxes with zero messages to be rejected for upgrade
+*   Bug #3391 fix rename which just moves between partitions
+*   Bug #3103 fix imtest using plain authentication when it must not
+*   Bug #3426 fix TLS on sockets other than stdin
+*   Added support for BDB versions 5 and above
+
+:ref:`imap-release-notes-2.4`

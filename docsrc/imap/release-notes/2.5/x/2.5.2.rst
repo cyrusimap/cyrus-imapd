@@ -1,0 +1,37 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.2 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.2.tar.gz
+    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.2.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.2.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.2.tar.gz.sig
+
+.. _relnotes-2.5.2-changes:
+
+Changes Since 2.5.1
+===================
+
+Bug fixes
+---------
+
+* Fixed :task:`179`: ptloader should no longer crash in ptsmodule_standard_root_dn
+* Improved consistency of event notification parameters
+* Fixed bug: no longer run out of memory in mupdate with twoskip (mmap leak)
+* Fixed bug: no longer crash on ctl_mboxlist -d for remote mailboxes
+* Fixed bug: no longer include RFC 5322 header fields when fetching CALDAV:calendar-data
+* Fixed bug: properly handle same XML namespace used with 2 different prefixes in requests

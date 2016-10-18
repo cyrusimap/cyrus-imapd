@@ -1,0 +1,20 @@
+===============================
+Cyrus IMAP 2.3.16 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.3.15
+
+*   Added user_deny.db to be able to selectively deny users access to Cyrus services.
+*   Added disconnect_on_vanished_mailbox option. See imapd.conf(5) for details
+*   Reworked SQL detection code in configure. See install-upgrade.html for more details.
+*   Added popuseimapflags option which enables setting and obeying IMAP flags in the POP server.
+*   Added optimized method of handling an empty maildrop in pop3d. Requires statuscache to be enabled. (based on work of Cyril Servant <elfejoyeux@gmail.com>)
+*   Added annotation_definitions option for specifying external (third-party) annotations. (courtesy of Thomas Viehmann <tv@beamnet.de>)
+*   Added sync_compress option to compress replication traffic
+*   Added user_folder_limit option to limit the number of folders a non-admin user is allowed to create.
+*   Added -x option to cyr_expire to disable expunge
+*   Track idle state so a shutdown doesn't leave idled killing random other processes on a busy system
+*   Fix missing closedir() - bug #3159 (thanks Simon Matter)
+*   Make Cyrus compile with older GCC (thanks Simon Matter)
+
+:ref:`imap-release-notes-2.3`

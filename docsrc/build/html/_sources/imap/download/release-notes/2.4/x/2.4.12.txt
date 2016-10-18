@@ -1,0 +1,25 @@
+===============================
+Cyrus IMAP 2.4.12 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.4.11
+
+*   Bug #3150 - fix issue with overview and messages without a References header
+*   fixed nntp login with tab and space in password
+*   Bug #3501 - be more relaxed about names of DELETED folders
+*   Bug #3553 - fix QRESYNC passing to murder backend - thanks alec <alec@alec.pl>
+*   Bug #3554 - only show ENABLED response the first time each option is ENABLEd
+*   Lots of cleanup of build process and backporting of APIs
+*   Bug #3502 - make configure.in more portable - thanks OBATA Akio <obata@lins.jp>
+*   Bug #3533 - add missing break statements in sieve - thanks Thomas Jarosch <thomas.jarosch@intra2net.com>
+*   Bug #3550 - support wildcards for ACLS in cyradm - thanks <mark.cave-ayland@siriusit.co.uk>
+*   Bug #3556 - print remote server in mbpath - thanks Wolfgang Breyha <wbreyha@gmx.net>
+*   Bug #3559 - make XFER work with unlimited quota - thanks Wolfgang Breyha <wbreyha@gmx.net>
+*   Bug #3547 - use strconcat() in writefile()
+*   fixed a case where skiplist library could write error messages directly to stdout
+*   Bug #3545 - fix sign extension in squat_decode_64
+*   Bug #3558 - return error if backend doesn't support LIST-EXTENDED
+*   Bug #3565 - clean up in preparation for automake
+*   fixed incomplete authentication checks in nntpd, reported by Secunia as SA46093 - thanks Stefan Cornelius, Secunia Research
+
+:ref:`imap-release-notes-2.4`

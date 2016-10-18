@@ -1,0 +1,32 @@
+{% extends "!layout.html" %}
+{% set css_files = css_files + [ '_static/cyrus.css' ] %}
+
+
+{% block header %}
+<div class="pageheader">
+  <ul>
+    <li><a href="{{ pathto('index') }}">Home</a></li>
+    <li><a href="{{ pathto('imap/installation') }}">Download</a></li>
+    <li><a href="{{ pathto('contribute') }}">Contribute</a></li>
+    <li><a href="{{ pathto('feedback') }}">Support</a></li>
+  </ul>
+  <div>
+    <a href="{{ pathto('index') }}">
+      <img src="{{ pathto('_static/logo.gif', 1) }}" alt="CYRUS" />
+    </a>
+  </div>
+</div>
+<div style="clear: both;"></div>
+{% endblock %}
+
+
+{% block footer %}
+{{ super() }}
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+var _paq = _paq || [];(function(){var u=(("https:" == document.location.protocol) ? "https://noc.kolabsys.com/piwik/" : "https://noc.kolabsys.com/piwik/");_paq.push(["setSiteId", "8"]);_paq.push(["setTrackerUrl", u+"piwik.php"]);_paq.push(["trackPageView"]);_paq.push(["setIgnoreClasses", ["no-tracking","colorbox"]]);_paq.push(["enableLinkTracking"]);var d=document,g=d.createElement("script"),s=d.getElementsByTagName("script")[0];g.type="text/javascript";g.defer=true;g.async=true;g.src=u+"piwik.js";s.parentNode.insertBefore(g,s);})();
+//--><!]]>
+</script>
+
+{% endblock %}
+
