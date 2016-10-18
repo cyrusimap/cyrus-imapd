@@ -451,5 +451,76 @@ sub test_subject_isutf8
 
 }
 
+sub test_noindex_multipartheaders
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $body = ""
+    . "--boundary\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: application/octet-stream\r\n"
+    . "Content-Transfer-Encoding: base64\r\n"
+    . "\r\n"
+    . "SGVsbG8sIFdvcmxkIQ=="
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: message/rfc822\r\n"
+    . "\r\n"
+    . "Return-Path: <bla\@local>\r\n"
+    . "Mime-Version: 1.0\r\n"
+    . "Content-Type: text/plain"
+    . "Content-Transfer-Encoding: 7bit\r\n"
+    . "Subject: baz\r\n"
+    . "From: blu\@local\r\n"
+    . "Message-ID: <fake.12123239947.6507\@local>\r\n"
+    . "Date: Wed, 06 Oct 2016 14:59:07 +1100\r\n"
+    . "To: Test User <test\@local>\r\n"
+    . "\r\n"
+    . "embedded"
+    . "\r\n"
+    . "--boundary--\r\n";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => $body
+    );
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $r;
+
+    $r = $talk->search(
+        "header", "Content-Type", { Quote => "multipart/mixed" }
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+
+    # Don't index the headers of multiparts or embedded RFC822s
+    $r = $talk->search(
+        "header", "Content-Type", { Quote => "text/plain" }
+    ) || die;
+    $self->assert_num_equals(0, scalar @$r);
+    $r = $talk->search(
+        "fuzzy", "body", { Quote => "text/plain" }
+    ) || die;
+    $self->assert_num_equals(0, scalar @$r);
+    $r = $talk->search(
+        "fuzzy", "text", { Quote => "content" }
+    ) || die;
+    $self->assert_num_equals(0, scalar @$r);
+
+    # But index the body of an embedded RFC822
+    $r = $talk->search(
+        "fuzzy", "body", { Quote => "embedded" }
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+}
+
 
 1;
