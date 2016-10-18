@@ -1,0 +1,37 @@
+#!/usr/bin/perl -w
+
+use strict;
+use warnings;
+
+use Pod::POM::View::Restructured;
+
+{
+    no warnings 'redefine';
+    *Pod::POM::View::Restructured::view_for = sub {
+        my ($self, $node) = @_;
+
+        my $fmt = $node->format();
+
+        #print STDERR "got for: fmt='$fmt', text='" . $node->text() . "'\n";
+
+        if ($fmt eq 'pod2rst') {
+            my $text = $node->text();
+            if ($text =~ /\A\s*next-code-block\s*:\s*(\S+)/) {
+                my $lang = $1;
+                $self->{next_code_block} = $lang;
+                return '';
+            }
+
+            return "\n" . $text . "\n";
+        }
+
+        return $self->SUPER::view_for($node);
+    };
+}
+
+my $title = shift || die "Usage: $0 title < in > out";
+
+my $conv = Pod::POM::View::Restructured->new;
+my $output = $conv->convert_file(\*STDIN, "**$title**", \*STDOUT);
+
+

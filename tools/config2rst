@@ -1,0 +1,376 @@
+#!/bin/sh
+#
+# Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any legal
+#    details, please contact
+#      Carnegie Mellon University
+#      Center for Technology Transfer and Enterprise Creation
+#      4615 Forbes Avenue
+#      Suite 302
+#      Pittsburgh, PA  15213
+#      (412) 268-7393, fax: (412) 268-7395
+#      innovation@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+#
+# Copyright (c) 2015 Nic Bernstein, Onlight, Inc.
+#
+
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
+require 5;
+
+package Man2rst;
+use strict;
+use warnings;
+
+my $mode = 0;
+my $save = "";
+my $enums = "";
+our $opt = '';
+
+# Do not change the order of the first four pairs.
+our %ftags = (
+    'R'  => '',     # (1) Times Roman
+    'I'  => '*',        # (2) Times Italic
+    'B'  => '**',       # (3) Times Bold
+    'BI' => '**',   # (4) Times Bold Italic
+    'C'  => '``',       # Courier
+    'CW' => '``',       # constant width
+    'U'  => ''      # unknown font
+    );
+
+our @fstack = ();
+our $tabs = 0;
+our $spaces = 0;
+our $inl = 0;
+our $section = 0;
+
+my $blank = "rst";
+my $version = "\$Revision: 1.6 $blank";
+
+sub print_values {
+    my @values = eval $_[0];
+    my $v;
+    my $sep = ' ';
+
+    my $result = 'Allowed values:';
+    foreach $v (@values) {
+        $result .= "$sep\\fI$v\\fR";
+        $sep = ", ";
+    }
+    print print_man2rst("$result\n");
+}
+
+sub switch_font {
+    my $font = shift;
+    my $tags = "";
+    our %ftags;
+    our @fstack;
+
+    # If font is numeric, convert to letter format
+    if ($font =~ /^\d+$/) {
+        if ($font <= 4) {
+            $font = ("R", "I", "B", "BI")[$font - 1];
+        }
+        else {
+            die("invalid numeric font value, '$font'\n");
+        }
+    }
+
+    # normal font
+    if ($font ne "P") {
+        if (scalar(@fstack) > 0) {
+            # end last font
+            $tags .= $ftags{pop(@fstack)};
+        }
+        if (defined($ftags{$font})) {
+            # start new font, push new font on stack
+            if (length $tags > 0 && $font ne 'R') {
+                $tags .= '\ ';
+            }
+            $tags .= $ftags{$font};
+            push(@fstack, $font);
+        }
+        else {
+            # push unknown font on stack
+            push(@fstack, 'U'); # unknown
+            warn("unknown font '", $font, "'\n");
+        }
+    }
+    # previous font
+    elsif (scalar(@fstack) > 0) {
+        # pop current font off stack, end current font
+        $tags .= $ftags{pop(@fstack)};
+        if ($#fstack >= 0) {
+            # if there was a previous font, start previous font
+            if (length $tags > 0 && $fstack[0] ne 'R') {
+                $tags .= '\ ';
+            }
+            $tags .= $ftags{$fstack[0]};
+        }
+    }
+    return $tags;
+}
+
+sub print_man2rst {
+    $_ = shift;
+    our $tabs;      # How many tabstops to indent this line
+    our $spaces;    # How many spaces we indent this line (plus tabs)
+    our $section;   # Whether we're already in a "Section"
+    our $inl;       # Indent Next Line this many tabstops
+    our $opt;       # The current option
+    our $file;      # The file we're working on
+    my $i = 0;
+    my $prefix = '';
+    my $result = '';
+
+    # If we're already in a section, and tabs is 0, set it to 1
+    if ($section == 1 && $tabs == 0) {
+        $tabs = 1;
+    }
+
+    # We have a hanging indent from the last pass
+    if ($inl > 0) {
+        $tabs = $inl;
+        #$inl--;
+    }
+
+    # Trim leading and trailing whitespace
+    #s/^\s+|\s+$//g;
+
+    # Escape backticks and asterisks
+    s/`/\\`/g;
+    s/\*/\\*/g;
+
+    # Title
+    if (/^\.TH\s+(\S+).*$/) {
+        $file = lc $1;
+        my $headlen = length $file;
+        my $header = "\n\n.. cyrusman:: $file(5)\n\n";
+        $header .= ".. _imap-reference-manpages-configs-$file:\n\n";
+        $header .= '=' x $headlen . "\n$file\n" . '=' x $headlen . "\n";
+        $_ = $header;
+    }
+    # Section Header, zero all of our special indenters
+    elsif (/^\.SH\s*(.*)$/) {
+        if ($1 eq 'NAME') {
+            return;
+        }
+        my $headlen = length $1;
+        $_ = "\n" . $1 . "\n" . '=' x $headlen . "\n";
+        $section = 1;
+        $tabs = 0;
+        $spaces = 0;
+        $inl = 0;
+    }
+    # Clean up the NAME section
+    elsif (/^(\S+)\s+\\\-\s+(.*)/) {
+        if ($1 eq $file) {
+            $_ = $2;
+        }
+    }
+    # New Paragraph
+    elsif (/^\.PP/) {
+        if ($opt eq '') {
+            $tabs--;
+        }
+        $spaces = 0;
+        $inl = 0;
+        $_ = '';
+    }
+    # Indent
+    elsif (/^\s*\.in \+(\d+)/) {
+        $spaces += $1;
+        return;
+    }
+    # Hanging indent with tag and indent value
+    elsif (/^\s*\.IP\s+(\S*)\s+(\d+)/) {
+        $inl = $tabs + int($2/5);
+        $_ = $1;
+    }
+    # Hanging indent with tag
+    elsif (/^\s*\.IP\s+(\S*)/) {
+        $inl = $tabs + 1;
+        $_ = $1;
+    }
+    # Hanging Indent
+    elsif (/^\s*\.IP|\.TP$/) {
+        $inl = $tabs + 1;
+        return;
+    }
+    # Line break
+    elsif (/^\s*\.br|\.sp/) {
+        $_ = '';
+    }
+    # Comment, with text
+    elsif (m|^\s*\.\\"\s*\S+|) {
+        $spaces = 0;
+        $inl = 0;
+        return;
+    }
+    # Bare comments, which may mean blank line
+    elsif (m|^\s*\.\\"$|) {
+        #$spaces = 0;
+        $inl--;
+        $_ = '';
+    }
+    # Relative margin indent start
+    elsif (/^\s*\.RS\s+(\d+)/) {
+        $inl = $tabs +int($1/5);
+        $spaces = 0;
+        return;
+    }
+    # Relative margin indent end
+    elsif (/^\s*\.RE/) {
+        $tabs--;
+        $inl = 0;
+        $spaces = 0;
+        return;
+    }
+    # Traditional Bold/Italic alternating markup.  This is hackish...
+    elsif (/^\s*\.BI\s+(.*)/) {
+        $_ = $1;
+        s/\"//g;
+        s/\\\-(\w)\s+(\w+)/.. option:: -$1    $2/;
+    }
+
+    # Now clean up the font markup...
+    while (/\\f(\w|\(\w\w|\[\S+\])/) {
+        my $font = $1;
+        my $esc = '';
+
+        $font =~ s/^\((\w\w)/$1/;       # \f(xx
+        $font =~ s/^\[(\S+)\]/$1/;      # \f[xxx]
+        s/\\f(\w|\(\w\w|\[\S+\])/&switch_font($font)/e;
+    }
+
+    # Handle the special case of tags getting bunched up with trailing
+    # text
+    s/\`(\d+)/\`\\ $1/g;
+    s/\*(\d+)/\*\\ $1/g;
+
+    # Note RFCs
+    s/RFC\s*(\d+)/:rfc:`$1`/g;
+
+    # Unescape hyphens
+    s/\\-/\-/g;
+
+    for ($i=$tabs;$i>0;$i--) {
+        $prefix .= "    ";
+    }
+    for ($i=$spaces;$i>0;$i--) {
+        $prefix .= ' ';
+    }
+
+    if (/^$/) {
+        $result = "\n";
+    } else {
+        $result = "$prefix$_\n";
+    }
+    $prefix = '';
+    return $result;
+}
+
+$version =~ s/.Revision: (.*) /$1/;
+print ".. auto-generated by config2rst $version\n";
+
+while (<>) {
+    if ($mode == 0) {
+        # look for { option, default, type [enums] }; don't output until we
+        # hit a comment
+        if (m|{\s*\"(.*?)\"\s*,\s*\"?(.*?)\"?\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
+            $opt = $1;
+            my $def = $2 eq "NULL" ? "<none>" : $2;
+            if ($def eq "") { $def = "<empty string>" }
+            # Drop a tag into the output so we can find this section
+            # later, from an include directive.
+            $save = "\n    .. startblob $opt\n\n";
+            $save .= print_man2rst('\fC' . $opt . ':\fR ' . $def . "\n");
+            $enums = $4;
+        }
+
+        # look for single-line comment
+        elsif (m|/\*\s*(.*)\s*\*/|) {
+            print $save; $save = "";
+            if ($opt ne '') { $tabs++; }
+            print print_man2rst("$1\n");
+            if ($enums) { print_values($enums); }
+            print "\n    .. endblob $opt\n";
+            $opt = '';
+            $tabs--;
+        }
+
+        # look for /* to shift into passthrough mode; print current
+        # cached option header if any
+        elsif (m|/\*\s*(.*)|) {
+            print $save; $save = "";
+            if ($opt ne '') { $tabs++; }
+            print print_man2rst($1);
+            $mode = 1;
+        }
+        else {
+            chomp;
+            #print "ignoring '$_'\n";
+        }
+    } elsif ($mode == 1) {
+        # passthru; look for */ to end
+        if (m|\s*(.*)\*/|) {
+            print print_man2rst($1);
+            if ($enums) { print_values($enums); }
+            $mode = 0; # back to search mode
+            if ($opt ne '') {
+                print "\n    .. endblob $opt\n";
+            }
+            $tabs = 0;
+            $opt = '';
+        } elsif (m|\s*(.*)\s*|) {
+            my $stripped = $1;
+	    chomp($stripped);
+            print print_man2rst($stripped);
+        }
+    }
+}
