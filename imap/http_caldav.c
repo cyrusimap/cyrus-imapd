@@ -2925,8 +2925,7 @@ static int caldav_post(struct transaction_t *txn)
     int ret, rights;
 
     /* Get rights for current user */
-    rights = txn->req_tgt.mbentry->acl ?
-        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
 
     if (txn->req_tgt.resource) {
         if (txn->req_tgt.flags) {
@@ -7538,8 +7537,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
     }
 
     /* Check ACL for current user */
-    rights = txn->req_tgt.mbentry->acl ?
-        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_READFB)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;

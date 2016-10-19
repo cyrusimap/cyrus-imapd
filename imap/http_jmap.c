@@ -862,11 +862,16 @@ static json_t *jmap_mailbox_from_mbox(struct mailbox *mbox,
     struct buf specialuse = BUF_INITIALIZER;
     json_t *obj = NULL;
     int rights = 0, parent_rights = 0;
+    mbentry_t mbentry;
 
     /* Determine rights */
-    rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+    mbentry.acl = mbox->acl;
+    mbentry.mbtype = mbox->mbtype;
+    rights = httpd_myrights(req->authstate, &mbentry);
     if (parent && parent->acl) {
-        parent_rights = cyrus_acl_myrights(req->authstate, parent->acl);
+        mbentry.acl = parent->acl;
+        mbentry.mbtype = parent->mbtype;
+        parent_rights = httpd_myrights(req->authstate, &mbentry);
     }
 
     /* Lookup status. */
@@ -990,7 +995,7 @@ int getMailboxes_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Check ACL on mailbox for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry);
     if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
         goto done;
     }
@@ -1360,7 +1365,7 @@ static int jmap_mailbox_write(char **uid,
                     struct mboxlist_entry *mbparent = NULL;
                     r = mboxlist_lookup(newparentname, &mbparent, NULL);
                     if (!r) {
-                        int rights = mbparent->acl ? cyrus_acl_myrights(httpd_authstate, mbparent->acl) : 0;
+                        int rights = httpd_myrights(req->authstate, mbparent);
                         may_create = (rights & (ACL_CREATE)) == ACL_CREATE;
                     }
                     if (mbparent) mboxlist_entry_free(&mbparent);
@@ -7070,6 +7075,7 @@ static int jmap_update_calendar(const char *mboxname,
                                 int isVisible)
 {
     struct mailbox *mbox = NULL;
+    mbentry_t mbentry;
     int rights;
     annotate_state_t *astate = NULL;
     struct buf val = BUF_INITIALIZER;
@@ -7081,7 +7087,9 @@ static int jmap_update_calendar(const char *mboxname,
                 mboxname, error_message(r));
         return r;
     }
-    rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
+    mbentry.acl = mbox->acl;
+    mbentry.mbtype = mbox->mbtype;
+    rights = httpd_myrights(req->authstate, &mbentry);
     if (!(rights & DACL_READ)) {
         r = IMAP_MAILBOX_NONEXISTENT;
     } else if (!(rights & DACL_WRITE)) {
@@ -7156,18 +7164,19 @@ static int jmap_update_calendar(const char *mboxname,
 
 /* Delete the calendar mailbox named mboxname for the userid in req. */
 static int jmap_delete_calendar(const char *mboxname, const struct jmap_req *req) {
-    struct mailbox *mbox = NULL;
-    int r;
+    mbentry_t *mbentry = NULL;
+    int r, rights;
 
-    r = mailbox_open_irl(mboxname, &mbox);
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+        syslog(LOG_ERR, "mboxlist_lookup(%s) failed: %s",
                 mboxname, error_message(r));
         return r;
     }
-    int rights = mbox->acl ? cyrus_acl_myrights(req->authstate, mbox->acl) : 0;
 
-    mailbox_close(&mbox);
+    rights = httpd_myrights(req->authstate, mbentry);
+    mboxlist_entry_free(&mbentry);
+
     if (!(rights & DACL_READ)) {
         return IMAP_NOTFOUND;
     } else if (!(rights & DACL_RMCOL)) {

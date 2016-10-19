@@ -170,8 +170,7 @@ static int meth_get(struct transaction_t *txn,
     if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
 
     /* Check ACL for current user */
-    rights = txn->req_tgt.mbentry->acl ?
-        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
 
     if (txn->req_tgt.mbentry->server) {

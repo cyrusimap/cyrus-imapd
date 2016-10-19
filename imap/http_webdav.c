@@ -524,8 +524,7 @@ static int webdav_get(struct transaction_t *txn,
     unsigned level = 0;
 
     /* Check ACL for current user */
-    int rights = txn->req_tgt.mbentry->acl ?
-        cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
+    int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
