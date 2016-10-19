@@ -430,7 +430,7 @@ static int do_list(const char *name, void *rock)
         r = http_mlookup(name, &mbentry, NULL);
         if (r) return 0;
 
-        rights = httpd_myrights(httpd_authstate, mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, mbentry);
         mboxlist_entry_free(&mbentry);
 
         if ((rights & ACL_READ) != ACL_READ)

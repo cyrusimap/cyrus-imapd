@@ -6927,7 +6927,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
 
     /* ...which are at least readable or visible... */
-    int rights = httpd_myrights(crock->req->authstate, mbentry->acl);
+    int rights = httpd_myrights(crock->req->authstate, mbentry);
     /* XXX - What if just READFB is set? */
     if (!(rights & (DACL_READ|DACL_READFB))) {
         return 0;
@@ -8164,6 +8164,7 @@ static int jmap_write_calendarevent(json_t *event,
     int needrights = DACL_RMRES|DACL_WRITE;
 
     struct caldav_data *cdata = NULL;
+    mbentry_t mbentry;
     struct mailbox *mbox = NULL;
     char *mboxname = NULL;
     struct mailbox *dstmbox = NULL;
@@ -8244,7 +8245,9 @@ static int jmap_write_calendarevent(json_t *event,
     }
 
     /* Check permissions. */
-    rights = httpd_myrights(req->authstate, mbox->acl);
+    mbentry.acl = mbox->acl;
+    mbentry.mbtype = mbox->mbtype;
+    rights = httpd_myrights(req->authstate, &mbentry);
     if (!(rights & needrights)) {
         /* Pretend this mailbox does not exist. */
         json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -8314,7 +8317,9 @@ static int jmap_write_calendarevent(json_t *event,
                 goto done;
             }
             /* Check permissions. */
-            rights = httpd_myrights(req->authstate, dstmbox->acl);
+            mbentry.acl = dstmbox->acl;
+            mbentry.mbtype = dstmbox->mbtype;
+            rights = httpd_myrights(req->authstate, &mbentry);
             if (!(rights & (DACL_WRITE))) {
                 json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
                 json_object_set_new(notWritten, id, err);

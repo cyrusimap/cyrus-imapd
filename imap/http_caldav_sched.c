@@ -1603,7 +1603,7 @@ static void sched_deliver_local(const char *recipient,
         goto done;
     }
 
-    rights = httpd_myrights(authstate, mbentry->acl);
+    rights = httpd_myrights(authstate, mbentry);
     mboxlist_entry_free(&mbentry);
 
     reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
@@ -2533,7 +2533,7 @@ void sched_request(const char *userid, const char *organizer,
                outboxname, error_message(r));
     }
     else {
-        rights = httpd_myrights(httpd_authstate, mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, mbentry);
     }
     free(outboxname);
     mboxlist_entry_free(&mbentry);
@@ -2897,7 +2897,7 @@ void sched_reply(const char *userid, const char *attendee,
                outboxname, error_message(r));
     }
     else {
-        rights = httpd_myrights(httpd_authstate, mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, mbentry);
     }
     free(outboxname);
     mboxlist_entry_free(&mbentry);

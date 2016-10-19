@@ -532,7 +532,7 @@ extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn,
                          const char *etag, time_t lastmod);
 
-extern int httpd_myrights(struct auth_state *authstate, const char *acl);
+extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
 
 extern void tzdist_truncate_vtimezone(icalcomponent *vtz,
                                       icaltimetype *startp, icaltimetype *endp);

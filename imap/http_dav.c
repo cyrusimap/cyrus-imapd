@@ -428,7 +428,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
                    inboxname, error_message(r));
             r = HTTP_NOT_FOUND;
         }
-        else if (!(httpd_myrights(authstate, mbentry->acl) & ACL_LOOKUP)) {
+        else if (!(httpd_myrights(authstate, mbentry) & ACL_LOOKUP)) {
             r = HTTP_NOT_FOUND;
         }
 
@@ -2209,7 +2209,7 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr set;
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
-    rights = httpd_myrights(fctx->authstate, fctx->mailbox->acl);
+    rights = httpd_myrights(fctx->authstate, fctx->mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
         return HTTP_UNAUTHORIZED;
     }
@@ -2265,7 +2265,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 
     /* owner has implicit admin rights */
     if (!mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
-        int rights = httpd_myrights(fctx->authstate, fctx->mailbox->acl);
+        int rights = httpd_myrights(fctx->authstate, fctx->mbentry);
         if (!(rights & DACL_ADMIN))
             return HTTP_UNAUTHORIZED;
     }
@@ -3292,7 +3292,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     if (!mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
         /* Check ACL for current user */
-        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
         if (!(rights & DACL_ADMIN)) {
             /* DAV:need-privileges */
             txn->error.precond = DAV_NEED_PRIVS;
@@ -3764,7 +3764,7 @@ static int dav_move_collection(struct transaction_t *txn,
     }
 
     /* Check ACL for current user on source mailbox */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if ((rights & DACL_UNBIND) != DACL_UNBIND) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -3999,7 +3999,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user on source mailbox */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (((rights & DACL_READ) != DACL_READ) ||
         (meth_move && !(rights & DACL_RMRES))) {
         /* DAV:need-privileges */
@@ -4012,7 +4012,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user on destination */
-    rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry);
     if (!(rights & DACL_ADDRES) || !(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -4382,7 +4382,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     needrights = txn->req_tgt.resource ? DACL_RMRES : DACL_RMCOL;
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
@@ -4588,7 +4588,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -4786,7 +4786,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -5347,7 +5347,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         goto done;
 
     /* Check ACL on mailbox for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, mbentry);
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* We only match known types */
@@ -5484,7 +5484,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         int rights;
 
         /* Check ACL for current user */
-        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
         if ((rights & DACL_READ) != DACL_READ) {
             /* DAV:need-privileges */
             txn->error.precond = DAV_NEED_PRIVS;
@@ -5797,7 +5797,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_PROPCOL)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -6080,7 +6080,7 @@ static int dav_post_share(struct transaction_t *txn,
                                               NULL };
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_ADMIN)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -6347,7 +6347,7 @@ static int dav_post_import(struct transaction_t *txn,
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -6582,7 +6582,7 @@ int meth_patch(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -6820,7 +6820,7 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -7896,7 +7896,7 @@ int meth_report(struct transaction_t *txn, void *params)
         int rights;
 
         /* Check ACL for current user */
-        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
         if ((rights & report->reqd_privs) != report->reqd_privs) {
             if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
             else {
@@ -8120,7 +8120,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     /* Check if current user owns the lock */
     if (strcmp(ddata->lock_ownerid, httpd_userid)) {
         /* Check ACL for current user */
-        int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+        int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
 
         if (!(rights & DACL_ADMIN)) {
             /* DAV:need-privileges */
@@ -9134,7 +9134,7 @@ int notify_post(struct transaction_t *txn)
     xmlChar *comment = NULL, *freeme = NULL;
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (!(rights & DACL_ADMIN)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -9669,7 +9669,7 @@ void xml_add_shareaccess(struct propfind_ctx *fctx,
         xmlNewChild(node, fctx->ns[NS_CS], BAD_CAST "shared", NULL);
     }
     else {
-        int rights = httpd_myrights(httpd_authstate, fctx->mbentry->acl);
+        int rights = httpd_myrights(httpd_authstate, fctx->mbentry);
 
         if ((rights & DACL_SHARERW) == DACL_SHARERW)
             xmlNewChild(node, NULL, BAD_CAST "read-write", NULL);
@@ -9731,7 +9731,7 @@ int propfind_invite(const xmlChar *name, xmlNsPtr ns,
     }
     else {
         struct userid_rights id_rights = 
-            { httpd_myrights(httpd_authstate, fctx->mbentry->acl), 0 /* neg */};
+            { httpd_myrights(httpd_authstate, fctx->mbentry), 0 /* neg */};
 
         irock.owner = "";
         xml_add_sharee(fctx->req_tgt->userid, &id_rights, &irock);

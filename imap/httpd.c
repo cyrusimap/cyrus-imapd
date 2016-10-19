@@ -4588,9 +4588,11 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 }
 
 /* simple wrapper to implicity add READFB if we have the READ ACL */
-EXPORTED int httpd_myrights(struct auth_state *authstate, const char *acl)
+EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry)
 {
-    int rights = acl ? cyrus_acl_myrights(authstate, acl) : 0;
-    if ((rights & DACL_READ) == DACL_READ) rights |= DACL_READFB;
+    int rights = mbentry->acl ? cyrus_acl_myrights(authstate, mbentry->acl) : 0;
+    if (mbentry->mbtype == MBTYPE_CALENDAR && (rights & DACL_READ) == DACL_READ) {
+        rights |= DACL_READFB;
+    }
     return rights;
 }

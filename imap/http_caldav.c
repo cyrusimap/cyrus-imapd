@@ -1564,7 +1564,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
 
     /* Make sure its readable */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, mbentry);
     if ((rights & DACL_READ) != DACL_READ) goto done;
 
     /* Don't list scheduling Inbox/Outbox */
@@ -1761,7 +1761,7 @@ static int list_calendars(struct transaction_t *txn)
     buf_reset(body);
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
 
     if (rights & DACL_MKCOL) {
         /* Add "create" form */
