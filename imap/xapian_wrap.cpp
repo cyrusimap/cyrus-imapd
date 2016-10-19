@@ -845,6 +845,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
     if (!snipgen->mset) {
         buf_reset(snipgen->buf);
         buf_reset(buf);
+        buf_cstring(buf);
         return 0;
     }
 
@@ -862,6 +863,9 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         buf_reset(buf);
         buf_appendcstr(buf, snippet.c_str());
         buf_cstring(buf);
+
+        delete snipgen->mset;
+        snipgen->mset = NULL;
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
