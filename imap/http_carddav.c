@@ -228,6 +228,10 @@ static const struct prop_entry carddav_props[] = {
       PROP_COLLECTION | PROP_RESOURCE,
       propfind_curprin, NULL, NULL },
 
+    /* WebDAV POST (RFC 5995) properties */
+    { "add-member", NS_DAV, PROP_COLLECTION,
+      NULL /* add-member broken at FM */, NULL, NULL },
+
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
