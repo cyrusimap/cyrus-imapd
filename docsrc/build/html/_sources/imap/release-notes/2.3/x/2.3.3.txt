@@ -1,9 +1,0 @@
-==============================
-Cyrus IMAP 2.3.3 Release Notes
-==============================
-
-Changes to the Cyrus IMAP Server since 2.3.2
-
-*   Fixed broken berkeley (btree) backend.
-
-:ref:`imap-release-notes-2.3`
