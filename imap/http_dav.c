@@ -4587,6 +4587,14 @@ int meth_get_head(struct transaction_t *txn, void *params)
         return HTTP_NO_CONTENT;
     }
 
+    if (!txn->req_tgt.resource) {
+        /* Do any collection processing */
+        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
+
+        /* We don't handle GET on a collection */
+        return HTTP_NO_CONTENT;
+    }
+
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
@@ -4595,14 +4603,6 @@ int meth_get_head(struct transaction_t *txn, void *params)
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights = DACL_READ;
         return HTTP_NO_PRIVS;
-    }
-
-    if (!txn->req_tgt.resource) {
-        /* Do any collection processing */
-        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
-
-        /* We don't handle GET on a collection */
-        return HTTP_NO_CONTENT;
     }
 
     if (gparams->mime_types) {
