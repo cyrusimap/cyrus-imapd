@@ -833,7 +833,11 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 {
     int r = 0;
 
-    assert(snipgen->mset);
+    if (!snipgen->mset) {
+        buf_reset(snipgen->buf);
+        buf_reset(buf);
+        return 0;
+    }
 
     try {
         std::string snippet;
