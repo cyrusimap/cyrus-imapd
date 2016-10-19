@@ -123,10 +123,6 @@ int mboxlist_lookup_allow_all(const char *name,
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid);
 
-int mboxlist_parse_entry(mbentry_t **mbentryptr,
-                         const char *name, size_t namelen,
-                         const char *data, size_t datalen);
-
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
