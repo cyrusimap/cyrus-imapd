@@ -820,12 +820,19 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
 
 int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned int context_length)
 {
+    buf_reset(snipgen->buf);
     return 0;
 }
 
 int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
 {
-    buf_insert(snipgen->buf, buf_len(snipgen->buf), part);
+    if (buf_len(snipgen->buf)) {
+        // XXX hackish... the original snippet generator passed down
+        // boundaries using termpos++. But now it's all text, so encode
+        // part gaps using the 'omit' signifier
+        buf_appendcstr(snipgen->buf, "...");
+    }
+    buf_append(snipgen->buf, part);
     return 0;
 }
 
@@ -841,7 +848,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 
     try {
         std::string snippet;
-        std::string text = std::string(buf_cstring(snipgen->buf));
+        std::string text = std::string(buf_cstring(snipgen->buf)); // FIXME buf_base + len
 
         snippet = snipgen->mset->snippet(text,
                 snippet_length,
@@ -851,7 +858,8 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
         buf_reset(buf);
-        buf_setcstr(buf, snippet.c_str());
+        buf_appendcstr(buf, snippet.c_str());
+        buf_cstring(buf);
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
