@@ -2201,7 +2201,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			      known_namespaces[entry->ns].href,
 			      known_namespaces[entry->ns].prefix);
 
-		    nentry->name = BAD_CAST entry->name;
+		    nentry->name = xmlStrdup(BAD_CAST entry->name);
 		    nentry->ns = fctx->ns[entry->ns];
 		    if (allowed) {
 			nentry->flags = entry->flags;
@@ -2289,8 +2289,10 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		 entry++);
 
 	    /* Skip properties already included by allprop */
-	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP))
+	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP)) {
+                xmlFree(name);
 		continue;
+            }
 
 	    nentry = xzmalloc(sizeof(struct propfind_entry_list));
 	    nentry->name = name;
