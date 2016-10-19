@@ -724,6 +724,7 @@ class CharsetStemmer : public Xapian::StemImplementation
 
     virtual std::string operator() (const std::string &word) {
         char *q;
+        std::string res;
 
         // Is this word already in the cache?
         std::map<const std::string, std::string>::iterator it = cache.find(word);
@@ -738,9 +739,10 @@ class CharsetStemmer : public Xapian::StemImplementation
         }
 
         // Store the normalized word in the cache
-        cache[word] = stem(q);
+        res = stem(Xapian::Unicode::tolower(q));
+        cache[word] = res;
         free(q);
-        return cache[word];
+        return res;
     }
 
     virtual std::string get_description () const {
