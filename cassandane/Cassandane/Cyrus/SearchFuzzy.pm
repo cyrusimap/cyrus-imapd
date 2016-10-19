@@ -123,9 +123,10 @@ sub test_stem_verbs
     my $talk = $self->{store}->get_client();
 
     xlog "Select INBOX";
-    $talk->select("INBOX") || die;
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    my $r;
     xlog 'SEARCH for subject "runs"';
     $r = $talk->search('subject', { Quote => "runs" }) || die;
     $self->assert_num_equals(1, scalar @$r);
@@ -133,6 +134,13 @@ sub test_stem_verbs
     xlog 'SEARCH for FUZZY subject "runs"';
     $r = $talk->search('fuzzy', ['subject', { Quote => "runs" }]) || die;
     $self->assert_num_equals(3, scalar @$r);
+
+    xlog 'XSNIPPETS for FUZZY subject "runs"';
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'subject', { Quote => 'runs' }]
+    ) || die;
+    $self->assert_num_equals(3, scalar @{$r->{snippets}});
 }
 
 sub test_stem_any
