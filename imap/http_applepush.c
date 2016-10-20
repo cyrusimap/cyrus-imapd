@@ -134,7 +134,7 @@ static int meth_get_applepush(struct transaction_t *txn,
         goto done;
 
     /* check if auth user has access to mailbox */
-    int myrights = httpd_myrights(httpd_authstate, mbentry->acl);
+    int myrights = httpd_myrights(httpd_authstate, mbentry);
     if (!(myrights & ACL_READ)) {
         syslog(LOG_ERR, "meth_get_applepush: no read access to %s for %s (%s)", mboxname, httpd_userid, mbentry->acl);
         goto done;
