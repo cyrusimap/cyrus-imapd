@@ -1,6 +1,6 @@
-===================
-Cyrus IMAP and SASL
-===================
+===========
+Cyrus IMAP
+===========
 
 Welcome to Cyrus IMAP and SASL.
 
@@ -11,7 +11,8 @@ What is Cyrus IMAP?
 
 Cyrus IMAP is an email, contacts and calendar server.
 
-The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
+The latest stable version of Cyrus IMAP is |imap_current_stable_version|. Looking for other
+:ref:`versions <imap-release-notes>`?
 
 Features
 --------
@@ -41,25 +42,25 @@ This is the highlight reel of Cyrus's full list of features_.
     imap/features
     Support <feedback>
     About <overview/about_cyrus>
-    
+
 .. toctree::
     :maxdepth: 1
     :caption: Administrators
-    
+
     imap/installation
     imap/deployment
     imap/admin
-    imap/faq    
+    imap/faq
     imap/release-notes/index
-    
+
 .. toctree::
-    :maxdepth: 1    
+    :maxdepth: 1
     :caption: Developers
-    
+
     Contribute <contribute>
     imap/developer
 
-    
+
 .. toctree::
     :hidden:
 
@@ -121,4 +122,3 @@ How can we help you?
 :ref:`Administrators <imap-admin>`, looking to install and maintain Cyrus.
 
 :ref:`Contributors <imap-developer>`, looking to add to Cyrus. (We include testers and documenters too!)
-

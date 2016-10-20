@@ -3,9 +3,9 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Turn :cyrusman: links into manpage references to the cyrus imap doc tree
-    
+
     Config: use 'cyrus_man_url_regex' to set the location for generated links. Defaults to http://www.cyrusimap.org/imap/admin/%s/%s.html
-    
+
     If :cyrusman: references are missing the section number, it die with an error.
 
     :version: 0.1
@@ -31,15 +31,15 @@ def make_link_node(rawtext, app, name, manpage_num, options):
     ref = None
     ref = app.config.cyrus_man_url_regex
     if not ref:
-        ref = "http://www.cyrusimap.org/imap/admin/%s/%s.html" % (manpage_section, name)
+        ref = "http://www.cyrusimap.org/stable/imap/admin/%s/%s.html" % (manpage_section, name)
     else:
-        s = Template(ref)     
+        s = Template(ref)
         ref = s.substitute(num=manpage_section, topic=name)
     set_classes(options)
     node = nodes.reference(rawtext, "%s(%s)" % (name, manpage_num), refuri=ref,
                            **options)
     return node
-    
+
 
 def man_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     """Link to an online man page issue.
@@ -47,7 +47,7 @@ def man_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     env = inliner.document.settings.env
     app = env.app
 #   name: alphanumeric including dots, dashes and underscores.
-#   section: Is in brackets, and is a single digit number. There may also be some non-numeric stuff after the number that we don't care about.    
+#   section: Is in brackets, and is a single digit number. There may also be some non-numeric stuff after the number that we don't care about.
     p = re.compile("(?P<name>[a-zA-Z0-9_\.\-_]+)(\((?P<section>\d)(?:[^\d])*\))?")
     m = p.match(text)
     if (m.group('section')):
