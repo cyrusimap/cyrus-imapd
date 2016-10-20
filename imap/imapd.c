@@ -2916,7 +2916,6 @@ static void clear_id() {
 static void cmd_id(char *tag)
 {
     int c = EOF, npair = 0;
-    int is_ios = 0;
     static struct buf arg, field;
 
     /* check if we've already had an ID in non-authenticated state */
@@ -2991,9 +2990,6 @@ static void cmd_id(char *tag)
             }
 
             if (!strcmp(field.s, "os") && !strcmp(arg.s, "iOS")) {
-                is_ios = 1;
-            }
-            if (is_ios && !strcmp(field.s, "os-version") && (arg.s[0] == '7' || arg.s[0] == '8' || arg.s[0] == '9')) {
                 imapd_id.quirks |= QUIRK_SEARCHFUZZY;
             }
 
