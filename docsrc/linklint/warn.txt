@@ -1,9 +1,0 @@
-file: warn.txt
-date: Thu, 08 Sep 2016 09:49:14 (local)
-Linklint version: 2.3.5
-
-#------------------------------------------------------------
-# warn    1 warning
-#------------------------------------------------------------
-// converted to / in https://developer.apple.com/library/ios/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/ApplePushService.html#//apple_ref/doc/uid/TP40008194-CH100-SW9
-

@@ -48,6 +48,7 @@ docsrc/imap/admin/systemcommands/cyradm.rst
 docsrc/imap/reference/manpages/configs/imapd.conf.rst
 docsrc/imap/reference/manpages/systemcommands/cyradm.rst
 docsrc/imap/reference/manpages/usercommands/sieveshell.rst
+*.pyc
 imap/arbitron
 imap/chk_cyrus
 imap/ctl_cyrusdb
