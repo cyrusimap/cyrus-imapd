@@ -131,6 +131,17 @@ const char backup_index_initsql[] = QUOTE(
         seenuids CHAR
     );
     CREATE INDEX IF NOT EXISTS idx_seen_unq ON seen(uniqueid);
+
+    CREATE TABLE sieve(
+        id INTEGER PRIMARY KEY ASC,
+        chunk_id INTEGER NOT NULL REFERENCES chunk(id),
+        last_update INTEGER,
+        filename CHAR NOT NULL,
+        guid CHAR NOT NULL,
+        offset INTEGER,
+        deleted INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_siv_fn ON sieve(filename);
 );
 
 const char backup_index_upgrade_v2[] = QUOTE(
@@ -156,9 +167,23 @@ const char backup_index_upgrade_v3[] = QUOTE(
     CREATE INDEX IF NOT EXISTS idx_seen_unq ON seen(uniqueid);
 );
 
+const char backup_index_upgrade_v4[] = QUOTE(
+    CREATE TABLE sieve(
+        id INTEGER PRIMARY KEY ASC,
+        chunk_id INTEGER NOT NULL REFERENCES chunk(id),
+        last_update INTEGER,
+        filename CHAR NOT NULL,
+        guid CHAR NOT NULL,
+        offset INTEGER,
+        deleted INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_siv_fn ON sieve(filename);
+);
+
 const struct sqldb_upgrade backup_index_upgrade[] = {
     { 2, backup_index_upgrade_v2, NULL },
     { 3, backup_index_upgrade_v3, NULL },
+    { 4, backup_index_upgrade_v4, NULL },
     { 0, NULL, NULL } /* leave me last */
 };
 

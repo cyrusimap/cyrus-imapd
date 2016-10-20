@@ -68,11 +68,23 @@ seen:
     timestamp lastchange
     char seenuids               -> a uid sequence encoded as a string
 
+sieve:
+    int chunk_id
+    timestamp last_update
+    char filename
+    char guid
+    int offset                  -> offset within chunk of the dlist containing this script
+    timestamp deleted           -> time that it was deleted, or NULL if still alive
+
 
 sieve scripts and messages are both identified by a GUID
 but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?
 the GUID in the response to APPLY SIEVE is generated in the process of
 reading the script from disk (sync_sieve_list_generate)
+
+can't activate scripts because only bytecode files are activated, but
+we neither receive bytecode files over sync protocol nor do we compile
+them ourselves.
 
 possibly reduce index size by breaking deleted/expunged values into their
 own tables, such that we only store a deleted value for things that are
