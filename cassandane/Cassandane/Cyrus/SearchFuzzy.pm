@@ -52,8 +52,10 @@ use Cassandane::Util::Log;
 
 sub new
 {
-    my $class = shift;
-    return $class->SUPER::new({}, @_);
+    my ($class, @args) = @_;
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'on');
+    return $class->SUPER::new({ config => $config }, @args);
 }
 
 sub set_up
@@ -530,5 +532,83 @@ sub test_noindex_multipartheaders
     $self->assert_num_equals(1, scalar @$r);
 }
 
+sub test_xapianv2
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    # This is a smallish regression test to check if we break something
+    # obvious by moving Xapian indexing from folder:uid to message guids.
+    #
+    # Apart from the tests in this module, at least also the following
+    # imodules are relevant: Metadata for SORT, Thread for THREAD.
+
+    xlog "Generate message";
+    my $r = $self->make_message("I run", body => "Run, Forrest! Run!" ) || die;
+    my $uid = $r->{attrs}->{uid};
+
+    xlog "Copy message into INBOX";
+    $talk->copy($uid, "INBOX");
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $r = $talk->xconvmultisort(
+        [ qw(reverse arrival) ],
+        [ 'conversations', position => [1,10] ],
+        'utf-8', 'fuzzy', 'text', "run",
+    );
+    $self->assert_num_equals(2, scalar @{$r->{sort}[0]} - 1);
+    $self->assert_num_equals(1, scalar @{$r->{sort}});
+
+    xlog "Create target mailbox";
+    $talk->create("INBOX.target");
+
+    xlog "Copy message into INBOX.target";
+    $talk->copy($uid, "INBOX.target");
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $r = $talk->xconvmultisort(
+        [ qw(reverse arrival) ],
+        [ 'conversations', position => [1,10] ],
+        'utf-8', 'fuzzy', 'text', "run",
+    );
+    $self->assert_num_equals(3, scalar @{$r->{sort}[0]} - 1);
+    $self->assert_num_equals(1, scalar @{$r->{sort}});
+
+    xlog "Generate message";
+    $self->make_message("You run", body => "A running joke" ) || die;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $r = $talk->xconvmultisort(
+        [ qw(reverse arrival) ],
+        [ 'conversations', position => [1,10] ],
+        'utf-8', 'fuzzy', 'text', "run",
+    );
+    $self->assert_num_equals(2, scalar @{$r->{sort}});
+
+    xlog "SEARCH FUZZY";
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", "text", "run",
+    ) || die;
+    $self->assert_num_equals(3, scalar @$r);
+
+    xlog "Select INBOX";
+    $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    xlog "XSNIPPETS";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'body', 'run'],
+    ) || die;
+    $self->assert_num_equals(3, scalar @{$r->{snippets}});
+
+}
 
 1;
