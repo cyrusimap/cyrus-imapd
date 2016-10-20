@@ -9551,7 +9551,7 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
 
     const char *aps_topic = config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_ERR, "aps_topic_%s not configured, can't build CS:push-transports response", fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? "caldav" : "carddav");
+        syslog(LOG_DEBUG, "aps_topic_%s not configured, can't build CS:push-transports response", fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? "caldav" : "carddav");
         return HTTP_NOT_FOUND;
     }
 

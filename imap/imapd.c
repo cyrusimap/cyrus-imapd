@@ -301,9 +301,6 @@ static struct capa_struct base_capabilities[] = {
     { "LITERAL+",              3 },
     { "ID",                    3 },
     { "ENABLE",                3 },
-#ifdef ENABLE_APPLEPUSHSERVICE
-    { "XAPPLEPUSHSERVICE",     3 }, /* apple push service for mail.app */
-#endif
 /* post-auth capabilities */
     { "ACL",                   2 },
     { "RIGHTS=kxten",          2 },
@@ -3304,6 +3301,12 @@ static void capa_response(int flags)
     if (config_mupdate_server) {
         prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
+
+#ifdef ENABLE_APPLEPUSHSERVICE
+    if (config_getstring(IMAPOPT_APS_TOPIC)) {
+        prot_printf(imapd_out, " XAPPLEPUSHSERVICE");
+    }
+#endif
 
     if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
         prot_printf(imapd_out, " STARTTLS");
