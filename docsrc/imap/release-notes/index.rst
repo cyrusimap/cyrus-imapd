@@ -7,13 +7,13 @@ IMAP Release Notes
 Currently Stable Version
 ========================
 
-Latest stable version is |imap_stable_release_notes|.
+Release notes for stable: |imap_stable_release_notes|. `Full documentation for stable release <http://www.cyrusimap.org/stable>`_
 
 
 Current Development Version
 ===========================
 
-Latest development version is |imap_development_release_notes|.
+Release notes for development: |imap_development_release_notes|. `Full documentation for development release <http://www.cyrusimap.org>`_
 
 Currently Supported Product Series
 ==================================

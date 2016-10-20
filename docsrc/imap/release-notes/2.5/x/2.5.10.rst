@@ -6,7 +6,7 @@ Cyrus IMAP 2.5.10 Release Notes
 
 .. IMPORTANT::
 
-    This is a bug-fix release in the stable 2.5 series.
+    This is a bug-fix release in the `stable 2.5 series <http://www.cyrusimap.org/stable>`_.
 
     Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
     about the 2.5 series, including upgrading instructions.
