@@ -190,8 +190,7 @@ sub print_man2rst {
     if (/^\.TH\s+(\S+).*$/) {
         $file = lc $1;
         my $headlen = length $file;
-        my $header = "\n\n.. cyrusman:: $file(5)\n\n";
-        $header .= ".. _imap-reference-manpages-configs-$file:\n\n";
+        my $header .= "\n\n.. _imap-admin-configs-$file:\n\n";
         $header .= '=' x $headlen . "\n$file\n" . '=' x $headlen . "\n";
         $_ = $header;
     }

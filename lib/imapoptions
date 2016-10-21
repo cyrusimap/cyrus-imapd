@@ -63,6 +63,7 @@ Although there is no limit to the length of a line, a ``\\''
 force it to continue on the next one.  No additional whitespace is
 inserted before or after the ``\\''.  Note that a line that is split
 using ``\\'' character(s) is still considered a single line.
+
 For example
 .IP
 \fIoption\fR:\\
@@ -197,6 +198,7 @@ are listed with ``<none>''.
 .PP
 Each line of the file specifies the properties of an annotation and
 has the following form:
+
 .IP
 \fIname\fR, \fIscope\fR, \fIattrib-type\fR, \fIproxy-type\fR,
 \fIattrib-names\fR, \fIacl\fR
@@ -311,6 +313,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .IP 1.
    The user logins via the IMAP or the POP3 protocol.
    \fIautocreate_quota\fR option must have a value of zero or greater.
+.\"
 .IP 2.
    A message arrives for the user through the \fIlmtpd(8)\fR.
    \fIautocreate_post\fR option must be enabled.
@@ -702,7 +705,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not
-   serve any static content. */ 
+   serve any static content. */
 
 { "httpkeepalive", 20, INT }
 /* Set the length of the HTTP server's keepalive heartbeat in seconds.
@@ -725,7 +728,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    sent across the wire. */
 
 { "httptimeout", 5, INT }
-/* Set the length of the HTTP server's inactivity autologout timer,    
+/* Set the length of the HTTP server's inactivity autologout timer,
    in minutes.  The default is 5.  The minimum value is 0, which will
    disable persistent connections. */
 
@@ -1237,12 +1240,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
 The external program will be called with the following
 command line options:
+
 .TP
 .BI \-c " class"
+.\"
 .TP
 .BI \-p " priority"
+.\"
 .TP
 .BI \-u " user"
+.\"
 .TP
 .BI \-m " mailbox"
 .PP
@@ -1263,13 +1270,17 @@ And the notification message will be available on \fIstdin\fR.
 .PP
 .IP \fIrandom\fR 5
 (pseudo-)random selection
+.\"
 .IP \fIfreespace-most\fR 5
 partition with the most free space (KiB)
+.\"
 .IP \fIfreespace-percent-most\fR 5
 partition with the most free space (%)
+.\"
 .IP \fIfreespace-percent-weighted\fR 5
 each partition is weighted according to its free space (%); the more free space
 the partition has, the more chances it has to be selected
+.\"
 .IP \fIfreespace-percent-weighted-delta\fR 5
 each partition is weighted according to its difference of free space (%)
 compared to the most used partition; the more the partition is lagging behind
@@ -1370,7 +1381,7 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "proc_path", NULL, STRING }
 /* Path to proc directory.  Default is NULL - must be an absolute path
-   if specified.  If not specified, the path $confdir/proc/ will be 
+   if specified.  If not specified, the path $confdir/proc/ will be
    used. */
 
 { "proxy_authname", "proxy", STRING }
@@ -1541,7 +1552,7 @@ If all partitions are over that limit, this feature is not used anymore.
 
 # Commented out - used by libsasl
 # { "sasl_option", 0, STRING }
-/* Any SASL option can be set by preceding it with "sasl_".  This
+/* Any SASL option can be set by preceding it with \fBsasl_\fR.  This
    file overrides the SASL configuration file. */
 
 # Commented out - used by libsasl
@@ -1581,13 +1592,17 @@ If all partitions are over that limit, this feature is not used anymore.
 .PP
 .IP \fIrandom\fR 5
 (pseudo-)random selection
+.\"
 .IP \fIfreespace-most\fR 5
 backend with the most (total) free space (KiB)
+.\"
 .IP \fIfreespace-percent-most\fR 5
 backend whose partition has the most free space (%)
+.\"
 .IP \fIfreespace-percent-weighted\fR 5
 same as for partition selection, comparing the free space (%) of the least used
 partition of each backend
+.\"
 .IP \fIfreespace-percent-weighted-delta\fR 5
 same as for partition selection, comparing the free space (%) of the least used
 partition of each backend
@@ -1617,6 +1632,7 @@ If all backends are over that limit, this feature is not used anymore.
 { "serverinfo", "on", ENUM("off", "min", "on") }
 /* The server information to display in the greeting and capability
    responses. Information is displayed as follows:
+
 .IP
    "off" = no server information in the greeting or capabilities
 .br
