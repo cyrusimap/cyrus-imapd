@@ -43,8 +43,6 @@
 
 #include "config.h"
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-
 #include "acl.h"
 #include "httpd.h"
 #include "util.h"
@@ -53,14 +51,16 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
+static void applepush_init(struct buf *serverinfo);
+
 static int meth_get_applepush(struct transaction_t *txn, void *params);
 static int meth_post_applepush(struct transaction_t *txn, void *params);
 
 struct namespace_t namespace_applepush = {
-    URL_NS_APPLEPUSH, /*enabled*/1, "/applepush/subscribe", NULL, 1 /* auth */,
+    URL_NS_APPLEPUSH, /*enabled*/0, "/applepush/subscribe", NULL, 1 /* auth */,
     /*mbtype*/0,
     ALLOW_READ|ALLOW_POST,
-    NULL, NULL, NULL, NULL, NULL,
+    &applepush_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -85,12 +85,22 @@ struct namespace_t namespace_applepush = {
     }
 };
 
+static void applepush_init(struct buf *serverinfo __attribute__((unused)))
+{
+#ifdef ENABLE_APPLEPUSHSERVICE
+    namespace_applepush.enabled =
+        namespace_calendar.enabled || namespace_addressbook.enabled;
+#endif
+}
+
 static int meth_get_applepush(struct transaction_t *txn,
                               void *params __attribute__((unused)))
 {
+#ifdef ENABLE_APPLEPUSHSERVICE
     int rc = HTTP_BAD_REQUEST, r = 0;
     struct strlist *vals = NULL;
-    const char *token = NULL, *key = NULL, *mailbox_userid = NULL, *mailbox_uniqueid = NULL, *aps_topic = NULL;
+    const char *token = NULL, *key = NULL, *aps_topic = NULL;
+    const char *mailbox_userid = NULL, *mailbox_uniqueid = NULL;
     strarray_t *keyparts = NULL;
     char *mboxname = NULL;
     struct mboxlist_entry *mbentry = NULL;
@@ -98,13 +108,11 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* unpack query params */
     vals = hash_lookup("token", &txn->req_qparams);
-    if (!vals)
-        goto done;
+    if (!vals) goto done;
     token = vals->s;
 
     vals = hash_lookup("key", &txn->req_qparams);
-    if (!vals)
-        goto done;
+    if (!vals) goto done;
     key = vals->s;
 
     /* decompose key to userid + mailbox uniqueid */
@@ -117,14 +125,16 @@ static int meth_get_applepush(struct transaction_t *txn,
     /* lookup mailbox */
     mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid);
     if (!mboxname) {
-        syslog(LOG_ERR, "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
+        syslog(LOG_ERR,
+               "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
                mailbox_uniqueid, mailbox_userid);
         goto done;
     }
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r || !mbentry) {
-        syslog(LOG_ERR, "meth_get_applepush: mboxlist_lookup(%s): %s", mboxname, error_message(r));
+        syslog(LOG_ERR, "meth_get_applepush: mboxlist_lookup(%s): %s",
+               mboxname, error_message(r));
         goto done;
     }
 
@@ -136,13 +146,17 @@ static int meth_get_applepush(struct transaction_t *txn,
     /* check if auth user has access to mailbox */
     int myrights = httpd_myrights(httpd_authstate, mbentry);
     if (!(myrights & ACL_READ)) {
-        syslog(LOG_ERR, "meth_get_applepush: no read access to %s for %s (%s)", mboxname, httpd_userid, mbentry->acl);
+        syslog(LOG_ERR, "meth_get_applepush: no read access to %s for %s (%s)",
+               mboxname, httpd_userid, mbentry->acl);
         goto done;
     }
 
-    aps_topic = config_getstring(mbtype == MBTYPE_CALENDAR ? IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
+    aps_topic = config_getstring(mbtype == MBTYPE_CALENDAR ?
+                                 IMAPOPT_APS_TOPIC_CALDAV :
+                                 IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe", mbtype == MBTYPE_CALENDAR ? "caldav" : "carddav");
+        syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe",
+               mbtype == MBTYPE_CALENDAR ? "caldav" : "carddav");
         goto done;
     }
 
@@ -150,7 +164,9 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* notify! */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE_DAV);
-    mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid, mailbox_userid, mailbox_uniqueid, mbtype, 86400); // XXX interval from config
+    mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
+                                       mailbox_userid, mailbox_uniqueid, mbtype,
+                                       86400); // XXX interval from config
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
 
@@ -162,10 +178,18 @@ done:
     if (keyparts) strarray_free(keyparts);
 
     return rc;
+
+#else
+    /* XXX  Should never get here */
+    syslog(LOG_ERR, "meth_get_applepush() called but APNS is disabled");
+
+    txn->error.desc = "Apple Push Notification Service not enabled";
+
+    return HTTP_NOT_FOUND;
+#endif /* ENABLE_APPLEPUSH_SERVICE */
 }
 
-static int meth_post_applepush(struct transaction_t *txn __attribute__((unused)),
-                               void *params __attribute__((unused)))
+static int meth_post_applepush(struct transaction_t *txn, void *params)
 {
 
     /* XXX in theory the arguments could be in the body
@@ -176,5 +200,3 @@ static int meth_post_applepush(struct transaction_t *txn __attribute__((unused))
 
     return meth_get_applepush(txn, params);
 }
-
-#endif /* ENABLE_APPLEPUSHSERVICE */

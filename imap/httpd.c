@@ -674,6 +674,7 @@ struct namespace_t *namespaces[] = {
     &namespace_drive,
     &namespace_principal,       /* MUST be after namespace_cal & addr & drive */
     &namespace_notify,          /* MUST be after namespace_principal */
+    &namespace_applepush,       /* MUST be after namespace_cal & addr */
 #ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,
@@ -682,9 +683,6 @@ struct namespace_t *namespaces[] = {
     &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,
-#ifdef ENABLE_APPLEPUSHSERVICE
-    &namespace_applepush,
-#endif
     &namespace_default,         /* MUST be present and be last!! */
     NULL,
 };

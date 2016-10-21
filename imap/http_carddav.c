@@ -259,14 +259,11 @@ static const struct prop_entry carddav_props[] = {
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, "" },
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-    /* Apple push notifications
-       https://trac.calendarserver.org/browser/CalendarServer/trunk/doc/Extensions/caldav-pubsubdiscovery.txt */
+    /* Apple Push Notifications Service properties */
     { "push-transports", NS_CS, PROP_COLLECTION,
       propfind_push_transports, NULL, (void *) MBTYPE_ADDRESSBOOK },
     { "pushkey", NS_CS, PROP_COLLECTION,
       propfind_pushkey, NULL, NULL },
-#endif
 
     /* Cyrus properties */
     { "address-groups", NS_CYRUS, PROP_RESOURCE,

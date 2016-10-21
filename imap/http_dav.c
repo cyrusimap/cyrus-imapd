@@ -9533,7 +9533,9 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-#ifdef ENABLE_APPLEPUSHSERVICE
+/* Apple push notifications
+   https://github.com/apple/ccs-calendarserver/blob/master/doc/Extensions/caldav-pubsubdiscovery.txt
+*/
 int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop __attribute__((unused)),
@@ -9543,15 +9545,22 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr node, transport, subscription_url;
 
-    assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR || fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
+    assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ||
+           fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
+
+    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
 
     /* Only on home sets */
-    if (fctx->req_tgt->collection)
-        return HTTP_NOT_FOUND;
+    if (fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    const char *aps_topic = config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
+    const char *aps_topic =
+        config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
+                         IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_DEBUG, "aps_topic_%s not configured, can't build CS:push-transports response", fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? "caldav" : "carddav");
+        syslog(LOG_DEBUG, "aps_topic_%s not configured,"
+               " can't build CS:push-transports response",
+               fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
+               "caldav" : "carddav");
         return HTTP_NOT_FOUND;
     }
 
@@ -9561,15 +9570,20 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
     transport = xmlNewChild(node, NULL, BAD_CAST "transport", NULL);
     xmlNewProp(transport, BAD_CAST "type", BAD_CAST "APSD");
 
-    subscription_url = xmlNewChild(transport, NULL, BAD_CAST "subscription-url", NULL);
+    subscription_url =
+        xmlNewChild(transport, NULL, BAD_CAST "subscription-url", NULL);
     xml_add_href(subscription_url, fctx->ns[NS_DAV], "/applepush/subscribe");
 
     xmlNewChild(transport, NULL, BAD_CAST "apsbundleid", BAD_CAST aps_topic);
 
+    // XXX from config, I think?
     ensure_ns(fctx->ns, NS_MOBME, resp->parent, XML_NS_MOBME, "MM");
-    xmlNewChild(transport, fctx->ns[NS_MOBME], BAD_CAST "env", BAD_CAST "PRODUCTION"); // XXX from config, I think?
+    xmlNewChild(transport, fctx->ns[NS_MOBME],
+                BAD_CAST "env", BAD_CAST "PRODUCTION");
 
-    xmlNewChild(transport, NULL, BAD_CAST "refresh-interval", BAD_CAST "86400"); // XXX from config
+    // XXX from config
+    xmlNewChild(transport, NULL,
+                BAD_CAST "refresh-interval", BAD_CAST "86400");
 
     return 0;
 }
@@ -9581,19 +9595,20 @@ int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
                      struct propstat propstat[],
                      void *rock __attribute__((unused)))
 {
+    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
+
     /* Only on collections */
-    if (!fctx->req_tgt->collection)
-        return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     /* key is userid and mailbox uniqueid */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/%s", fctx->req_tgt->userid, fctx->mailbox->uniqueid);
+    buf_printf(&fctx->buf, "%s/%s",
+               fctx->req_tgt->userid, fctx->mailbox->uniqueid);
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
     return 0;
 }
-#endif /* ENABLE_APPLEPUSHSERVICE */
 
 
 struct userid_rights {
