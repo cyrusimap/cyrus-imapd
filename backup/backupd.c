@@ -139,6 +139,8 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
 static int backupd_print_seen(const struct backup_seen *seen,
                               void *rock __attribute__((__unused__)));
 static int backupd_print_subscriptions(struct backup *backup);
+static int backupd_print_sieve(const struct backup_sieve *sieve,
+                               void *rock __attribute__((__unused__)));
 static const char *backupd_response(int r);
 
 static void cmdloop(void);
@@ -1314,6 +1316,28 @@ done:
     return r;
 }
 
+static int backupd_print_sieve(const struct backup_sieve *sieve,
+                               void *rock __attribute__((__unused__)))
+{
+    struct dlist *kl = NULL;
+
+    if (sieve->deleted) return 0;
+
+    kl = dlist_newkvlist(NULL, "SIEVE");
+    dlist_setatom(kl, "FILENAME", sieve->filename);
+    dlist_setdate(kl, "LAST_UPDATE", sieve->last_update);
+    dlist_setatom(kl, "GUID", message_guid_encode(&sieve->guid));
+    dlist_setnum32(kl, "ISACTIVE", 0);
+
+    prot_puts(backupd_out, "* ");
+    dlist_print(kl, 1, backupd_out);
+    prot_puts(backupd_out, "\r\n");
+
+    if (kl) dlist_free(&kl);
+
+    return 0;
+}
+
 static const char *backupd_response(int r)
 {
     switch (r) {
@@ -1384,7 +1408,9 @@ static int cmd_get_meta(struct dlist *dl)
     r = backupd_print_subscriptions(open->backup);
     if (r) goto done;
 
-    /* TODO: sieve */
+    r = backup_sieve_foreach(open->backup, 0,
+                             backupd_print_sieve, NULL);
+    if (r) goto done;
 
 done:
     if (mbname) mbname_free(&mbname);
@@ -1442,6 +1468,10 @@ static void cmd_get(struct dlist *dl)
             if (r) goto done;
 
             r = backupd_print_subscriptions(open->backup);
+            if (r) goto done;
+
+            r = backup_sieve_foreach(open->backup, 0,
+                                     backupd_print_sieve, NULL);
         }
         else {
             r = IMAP_PROTOCOL_BAD_PARAMETERS;

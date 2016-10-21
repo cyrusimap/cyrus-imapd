@@ -560,3 +560,23 @@ const char backup_index_sieve_delete_sql[] = QUOTE(
     WHERE filename = :filename
         AND deleted IS NULL;
 );
+
+#define SIEVE_SELECT_FIELDS QUOTE(                      \
+    sieve.id, sieve.chunk_id, last_update, filename,    \
+    guid, offset, deleted                               \
+)
+
+const char backup_index_sieve_select_all_sql[] =
+    "SELECT " SIEVE_SELECT_FIELDS
+    " FROM sieve AS sieve"
+    " ORDER BY sieve.id"
+    ";"
+;
+
+const char backup_index_sieve_select_chunkid_sql[] =
+    "SELECT " SIEVE_SELECT_FIELDS
+    " FROM sieve AS sieve"
+    " WHERE chunk_id = :chunk_id"
+    " ORDER BY sieve.id"
+    ";"
+;

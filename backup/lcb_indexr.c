@@ -1140,3 +1140,62 @@ EXPORTED void backup_subscription_free(struct backup_subscription **subp)
 
     free(sub);
 }
+
+struct _sieve_row_rock {
+    backup_sieve_foreach_cb proc;
+    void *rock;
+};
+
+static int _sieve_row_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct _sieve_row_rock *srock = (struct _sieve_row_rock *) rock;
+    struct backup_sieve *sieve = xzmalloc(sizeof *sieve);
+    int r = 0;
+
+    int column = 0;
+    sieve->id = _column_int(stmt, column++);
+    sieve->chunk_id = _column_int(stmt, column++);
+    sieve->last_update = _column_int64(stmt, column++);
+    sieve->filename = xstrdupnull(_column_text(stmt, column++));
+    message_guid_decode(&sieve->guid, _column_text(stmt, column++));
+    sieve->offset = _column_int64(stmt, column++);
+    sieve->deleted = _column_int64(stmt, column++);
+
+    if (srock->proc)
+        r = srock->proc(sieve, srock->rock);
+
+    backup_sieve_free(&sieve);
+
+    return r;
+}
+
+EXPORTED int backup_sieve_foreach(struct backup *backup,
+                                  int chunk_id,
+                                  backup_sieve_foreach_cb cb,
+                                  void *rock)
+{
+    struct _sieve_row_rock srock = { cb, rock };
+
+    struct sqldb_bindval bval[] = {
+        { ":chunk_id",  SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_sieve_select_chunkid_sql :
+        backup_index_sieve_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _sieve_row_cb, &srock);
+
+    return r;
+}
+
+EXPORTED void backup_sieve_free(struct backup_sieve **sievep)
+{
+    struct backup_sieve *sieve = *sievep;
+    *sievep = NULL;
+
+    if (sieve->filename) free(sieve->filename);
+
+    free(sieve);
+}

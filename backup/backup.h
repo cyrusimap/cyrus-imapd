@@ -329,6 +329,28 @@ int backup_subscription_foreach(struct backup *backup,
                                 backup_subscription_foreach_cb cb,
                                 void *rock);
 
+
+/* reading backup sieve data */
+struct backup_sieve {
+    int id;
+    int chunk_id;
+    time_t last_update;
+    char *filename;
+    struct message_guid guid;
+    off_t offset;
+    time_t deleted;
+};
+
+void backup_sieve_free(struct backup_sieve **sieve);
+
+typedef int (*backup_sieve_foreach_cb)(const struct backup_sieve *sieve,
+                                       void *rock);
+int backup_sieve_foreach(struct backup *backup,
+                         int chunk_id,
+                         backup_sieve_foreach_cb cb,
+                         void *rock);
+
+
 /* writing backup data */
 enum backup_append_flush {
     BACKUP_APPEND_NOFLUSH = 0,

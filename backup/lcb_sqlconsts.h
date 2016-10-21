@@ -95,5 +95,7 @@ extern const char backup_index_subscription_select_chunkid_sql[];
 
 extern const char backup_index_sieve_insert_sql[];
 extern const char backup_index_sieve_delete_sql[];
+extern const char backup_index_sieve_select_all_sql[];
+extern const char backup_index_sieve_select_chunkid_sql[];
 
 #endif
