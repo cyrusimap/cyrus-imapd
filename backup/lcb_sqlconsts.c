@@ -462,6 +462,26 @@ const char backup_index_seen_insert_sql[] = QUOTE(
     );
 );
 
+#define SEEN_SELECT_FIELDS QUOTE(                       \
+    seen.id, seen.last_chunk_id, uniqueid, lastread,    \
+    lastuid, lastchange, seenuids                       \
+)
+
+const char backup_index_seen_select_all_sql[] =
+    "SELECT " SEEN_SELECT_FIELDS
+    " FROM seen AS seen"
+    " ORDER BY seen.id"
+    ";"
+;
+
+const char backup_index_seen_select_chunkid_sql[] =
+    "SELECT " SEEN_SELECT_FIELDS
+    " FROM seen AS seen"
+    " WHERE last_chunk_id = :last_chunk_id"
+    " ORDER BY seen.id"
+    ";"
+;
+
 const char backup_index_subscription_update_sql[] = QUOTE(
     UPDATE subscription SET
         last_chunk_id = :last_chunk_id,

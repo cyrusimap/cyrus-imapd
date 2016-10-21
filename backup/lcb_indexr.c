@@ -1025,6 +1025,66 @@ EXPORTED void backup_chunk_free(struct backup_chunk **chunkp)
     free(chunk);
 }
 
+struct _seen_row_rock {
+    backup_seen_foreach_cb proc;
+    void *rock;
+};
+
+static int _seen_row_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct _seen_row_rock *seenrock = (struct _seen_row_rock *) rock;
+    struct backup_seen *seen = xzmalloc(sizeof *seen);
+    int r = 0;
+
+    int column = 0;
+    seen->id = _column_int(stmt, column++);
+    seen->last_chunk_id = _column_int(stmt, column++);
+    seen->uniqueid = xstrdupnull(_column_text(stmt, column++));
+    seen->lastread = _column_int64(stmt, column++);
+    seen->lastuid = _column_int(stmt, column++);
+    seen->lastchange = _column_int64(stmt, column++);
+    seen->seenuids = xstrdupnull(_column_text(stmt, column++));
+
+    if (seenrock->proc)
+        r = seenrock->proc(seen, seenrock->rock);
+
+    backup_seen_free(&seen);
+
+    return r;
+}
+
+EXPORTED int backup_seen_foreach(struct backup *backup,
+                                 int chunk_id,
+                                 backup_seen_foreach_cb cb,
+                                 void *rock)
+{
+    struct _seen_row_rock seenrock = { cb, rock };
+
+    struct sqldb_bindval bval[] = {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = chunk_id } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    const char *sql = chunk_id ?
+        backup_index_seen_select_chunkid_sql :
+        backup_index_seen_select_all_sql;
+
+    int r = sqldb_exec(backup->db, sql, bval, _seen_row_cb, &seenrock);
+
+    return r;
+}
+
+EXPORTED void backup_seen_free(struct backup_seen **seenp)
+{
+    struct backup_seen *seen = *seenp;
+    *seenp = NULL;
+
+    if (seen->uniqueid) free(seen->uniqueid);
+    if (seen->seenuids) free(seen->seenuids);
+
+    free(seen);
+}
+
 struct _subscription_row_rock {
     backup_subscription_foreach_cb proc;
     void *rock;

@@ -291,6 +291,27 @@ int backup_message_foreach(struct backup *backup,
                            backup_message_foreach_cb cb, void *rock);
 
 
+/* reading backup seen data */
+struct backup_seen {
+    int id;
+    int last_chunk_id;
+    char *uniqueid;
+    time_t lastread;
+    uint32_t lastuid;
+    time_t lastchange;
+    char *seenuids;
+};
+
+void backup_seen_free(struct backup_seen **seen);
+
+typedef int (*backup_seen_foreach_cb)(const struct backup_seen *seen,
+                                      void *rock);
+int backup_seen_foreach(struct backup *backup,
+                        int chunk_id,
+                        backup_seen_foreach_cb cb,
+                        void *rock);
+
+
 /* reading backup subscription data */
 struct backup_subscription {
     int id;

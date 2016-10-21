@@ -136,6 +136,8 @@ static void open_backups_list_close(struct open_backups_list *list, time_t age);
 
 static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
                                  void *rock __attribute__((__unused__)));
+static int backupd_print_seen(const struct backup_seen *seen,
+                              void *rock __attribute__((__unused__)));
 static int backupd_print_subscriptions(struct backup *backup);
 static const char *backupd_response(int r);
 
@@ -1233,6 +1235,27 @@ static int backupd_print_mailbox(const struct backup_mailbox *mailbox,
     return 0;
 }
 
+static int backupd_print_seen(const struct backup_seen *seen,
+                              void *rock __attribute__((__unused__)))
+{
+    struct dlist *kl = NULL;
+
+    kl = dlist_newkvlist(NULL, "SEEN");
+    dlist_setatom(kl, "UNIQUEID", seen->uniqueid);
+    dlist_setdate(kl, "LASTREAD", seen->lastread);
+    dlist_setnum32(kl, "LASTUID", seen->lastuid);
+    dlist_setdate(kl, "LASTCHANGE", seen->lastchange);
+    dlist_setatom(kl, "SEENUIDS", seen->seenuids);
+
+    prot_puts(backupd_out, "* ");
+    dlist_print(kl, 1, backupd_out);
+    prot_puts(backupd_out, "\r\n");
+
+    if (kl) dlist_free(&kl);
+
+    return 0;
+}
+
 static int _sublist_add(const struct backup_subscription *sub, void *rock)
 {
     strarray_t *list = (strarray_t *) rock;
@@ -1335,7 +1358,9 @@ static int cmd_get_meta(struct dlist *dl)
     r = backupd_open_backup(&open, mbname);
     if (r) goto done;
 
-    /* TODO: seen */
+    r = backup_seen_foreach(open->backup, 0,
+                            backupd_print_seen, NULL);
+    if (r) goto done;
 
     r = backupd_print_subscriptions(open->backup);
     if (r) goto done;
@@ -1391,6 +1416,10 @@ static void cmd_get(struct dlist *dl)
             r = backup_mailbox_foreach(open->backup, 0,
                                        BACKUP_MAILBOX_NO_RECORDS,
                                        backupd_print_mailbox, NULL);
+            if (r) goto done;
+
+            r = backup_seen_foreach(open->backup, 0,
+                                    backupd_print_seen, NULL);
             if (r) goto done;
 
             r = backupd_print_subscriptions(open->backup);
