@@ -96,6 +96,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_sub(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "SIEVE") == 0)
         r = _index_sieve(backup, dlist, ts, start);
+    else if (strcmp(dlist->name, "UNSIEVE") == 0)
+        r = _index_sieve(backup, dlist, ts, start);
     else if (config_debug) {
         struct buf tmp = BUF_INITIALIZER;
         dlist_printbuf(dlist, 1, &tmp);
@@ -630,54 +632,67 @@ static int _index_sieve(struct backup *backup, struct dlist *dl,
     syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
 
     const char *filename;
-    time_t last_update;
-    const char *content;
-    size_t content_len;
-    struct message_guid guid;
     int r;
 
     if (!dlist_getatom(dl, "FILENAME", &filename))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(dl, "LAST_UPDATE", &last_update))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getmap(dl, "CONTENT", &content, &content_len))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-
-    message_guid_generate(&guid, content, content_len);
 
     struct sqldb_bindval bval[] = {
         { ":chunk_id",      SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
-        { ":last_update",   SQLITE_INTEGER, { .i = last_update } },
+        { ":last_update",   SQLITE_NULL,    { .s = NULL } },
         { ":filename",      SQLITE_TEXT,    { .s = filename } },
-        { ":guid",          SQLITE_TEXT,    { .s = message_guid_encode(&guid) } },
+        { ":guid",          SQLITE_NULL,    { .s = NULL } },
         { ":offset",        SQLITE_INTEGER, { .i = dl_offset } },
         { ":deleted",       SQLITE_INTEGER, { .i = ts } },
         { NULL,             SQLITE_NULL,    { .s = NULL } },
     };
 
-    /* mark previous record for this filename as deleted */
+    /* mark previous record(s) for this filename as deleted */
     r = sqldb_exec(backup->db, backup_index_sieve_delete_sql, bval,
                    NULL, NULL);
 
     if (r) {
         syslog(LOG_DEBUG, "%s: something went wrong: %i delete sieve %s",
                __func__, r, filename);
-        return IMAP_INTERNAL;
     }
 
-    /* insert doesn't use :deleted, but clear it still just in case */
-    struct sqldb_bindval *deleted_bval = &bval[5];
-    assert(strcmp(deleted_bval->name, ":deleted") == 0);
-    deleted_bval->type = SQLITE_NULL;
-    deleted_bval->val.s = NULL;
+    if (!r && strcmp(dl->name, "SIEVE") == 0) {
+        time_t last_update;
+        const char *content;
+        size_t content_len;
+        struct message_guid guid;
 
-    /* now insert the new record for this filename */
-    r = sqldb_exec(backup->db, backup_index_sieve_insert_sql, bval,
-                   NULL, NULL);
+        if (!dlist_getdate(dl, "LAST_UPDATE", &last_update))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getmap(dl, "CONTENT", &content, &content_len))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    if (r) {
-        syslog(LOG_DEBUG, "%s: something went wrong: %i insert sieve %s",
-               __func__, r, filename);
+        message_guid_generate(&guid, content, content_len);
+
+        struct sqldb_bindval *last_update_bval = &bval[1];
+        assert(strcmp(last_update_bval->name, ":last_update") == 0);
+        last_update_bval->type = SQLITE_INTEGER;
+        last_update_bval->val.i = last_update;
+
+        struct sqldb_bindval *guid_bval = &bval[3];
+        assert(strcmp(guid_bval->name, ":guid") == 0);
+        guid_bval->type = SQLITE_TEXT;
+        guid_bval->val.s = message_guid_encode(&guid);
+
+        /* insert doesn't use :deleted, but clear it still just in case */
+        struct sqldb_bindval *deleted_bval = &bval[5];
+        assert(strcmp(deleted_bval->name, ":deleted") == 0);
+        deleted_bval->type = SQLITE_NULL;
+        deleted_bval->val.s = NULL;
+
+        /* insert the new record for this filename */
+        r = sqldb_exec(backup->db, backup_index_sieve_insert_sql, bval,
+                    NULL, NULL);
+
+        if (r) {
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert sieve %s",
+                __func__, r, filename);
+        }
     }
 
     return r ? IMAP_INTERNAL : 0;

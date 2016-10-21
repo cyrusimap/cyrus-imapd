@@ -1195,6 +1195,9 @@ static void cmd_apply(struct dlist *dl)
     else if (strcmp(dl->name, "SIEVE") == 0) {
         r = cmd_apply_sieve(dl);
     }
+    else if (strcmp(dl->name, "UNSIEVE") == 0) {
+        r = cmd_apply_sieve(dl);
+    }
     else if (strcmp(dl->name, "ACTIVATE_SIEVE") == 0) {
         /* ignore and succeed */
         r = 0;
