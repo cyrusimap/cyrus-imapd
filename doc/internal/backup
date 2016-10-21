@@ -60,6 +60,15 @@ subscription:
     char mboxname               -> no linkage to mailbox table, users can be sub'd to nonexistent
     timestamp unsubscribed      -> time that it was unsubscribed, or NULL if still alive
 
+seen:
+    int last_chunk_id           -> chunk that knows the current state
+    char uniqueid               -> mailbox (not necessarily ours) this applies to
+    timestamp lastread
+    int lastuid
+    timestamp lastchange
+    char seenuids               -> a uid sequence encoded as a string
+
+
 sieve scripts and messages are both identified by a GUID
 but APPLY SIEVE doesn't take a GUID, it seems to be generated locally?
 the GUID in the response to APPLY SIEVE is generated in the process of
