@@ -66,7 +66,7 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
     time_t now;
     int r;
 
-    if(usetimestamp) {
+    if (usetimestamp) {
         struct timeval tv;
 
         gettimeofday(&tv, NULL);
@@ -75,7 +75,14 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
         snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu.%lu",
                  config_dir, FNAME_LOGDIR, userid, config_ident,
                  (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
-    } else {
+    }
+    else if (config_getswitch(IMAPOPT_TELEMETRY_BYSESSIONID)) {
+        const char *sid = session_id();
+        /* use pid */
+        snprintf(buf, sizeof(buf), "%s%s%s/%s-%s",
+                 config_dir, FNAME_LOGDIR, userid, config_ident, sid);
+    }
+    else {
         /* use pid */
         snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu",
                  config_dir, FNAME_LOGDIR, userid, config_ident,

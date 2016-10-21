@@ -2113,6 +2113,9 @@ product version in the capabilities */
 { "temp_path", "/tmp", STRING }
 /* The pathname to store temporary files in */
 
+{ "telemetry_bysessionid", 0, SWITCH }
+/* If true, log by sessionid instead of PID for telemetry */
+
 { "timeout", 32, INT }
 /* The length of the IMAP server's inactivity autologout timer,
    in minutes.  The minimum value is 30.  The default is 32 to
