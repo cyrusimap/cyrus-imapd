@@ -544,3 +544,19 @@ const char backup_index_subscription_select_chunkid_sql[] =
     " ORDER BY sub.id"
     ";"
 ;
+
+const char backup_index_sieve_insert_sql[] = QUOTE(
+    INSERT INTO sieve (
+        chunk_id, last_update, filename, guid, offset
+    )
+    VALUES (
+        :chunk_id, :last_update, :filename, :guid, :offset
+    );
+);
+
+const char backup_index_sieve_delete_sql[] = QUOTE(
+    UPDATE sieve SET
+        deleted = :deleted
+    WHERE filename = :filename
+        AND deleted IS NULL;
+);
