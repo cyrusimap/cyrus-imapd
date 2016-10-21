@@ -64,6 +64,8 @@ static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len);
 static int _index_rename(struct backup *backup, struct dlist *dl,
                          time_t ts, off_t dl_offset);
+static int _index_seen(struct backup *backup, struct dlist *dl,
+                       time_t ts, off_t dl_offset);
 static int _index_sub(struct backup *backup, struct dlist *dl,
                       time_t ts, off_t dl_offset);
 
@@ -84,6 +86,8 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
         r = _index_rename(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "RESERVE") == 0)
         r = 0; /* nothing to index for a reserve, just return success */
+    else if (strcmp(dlist->name, "SEEN") == 0)
+        r = _index_seen(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "SUB") == 0)
         r = _index_sub(backup, dlist, ts, start);
     else if (strcmp(dlist->name, "UNSUB") == 0)
@@ -512,6 +516,59 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
     if (r) {
         syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
                __func__, r, oldmboxname, newmboxname);
+    }
+
+    return r ? IMAP_INTERNAL : 0;
+}
+
+static int _index_seen(struct backup *backup, struct dlist *dl,
+                       time_t ts, off_t dl_offset)
+{
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+    (void) ts;
+
+    const char *uniqueid;
+    time_t lastread;
+    uint32_t lastuid;
+    time_t lastchange;
+    const char *seenuids;
+    int r;
+
+    if (!dlist_getatom(dl, "UNIQUEID", &uniqueid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getdate(dl, "LASTREAD", &lastread))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum32(dl, "LASTUID", &lastuid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getdate(dl, "LASTCHANGE", &lastchange))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(dl, "SEENUIDS", &seenuids))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    struct sqldb_bindval bval[] =  {
+        { ":last_chunk_id", SQLITE_INTEGER, { .i = backup->append_state->chunk_id } },
+        { ":uniqueid",      SQLITE_TEXT,    { .s = uniqueid } },
+        { ":lastread",      SQLITE_INTEGER, { .i = lastread } },
+        { ":lastuid",       SQLITE_INTEGER, { .i = lastuid } },
+        { ":lastchange",    SQLITE_INTEGER, { .i = lastchange } },
+        { ":seenuids",      SQLITE_TEXT,    { .s = seenuids } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    r = sqldb_exec(backup->db, backup_index_seen_update_sql, bval,
+                   NULL, NULL);
+
+    if (!r && sqldb_changes(backup->db) == 0) {
+        r = sqldb_exec(backup->db, backup_index_seen_insert_sql, bval,
+                       NULL, NULL);
+        if (r) {
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert seen %s\n",
+                   __func__, r, uniqueid);
+        }
+    }
+    else if (r) {
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update seen %s",
+               __func__, r, uniqueid);
     }
 
     return r ? IMAP_INTERNAL : 0;

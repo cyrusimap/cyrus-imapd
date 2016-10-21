@@ -443,6 +443,25 @@ const char backup_index_message_select_live_chunkid_sql[] =
     ";"
 ;
 
+const char backup_index_seen_update_sql[] = QUOTE(
+    UPDATE seen SET
+        last_chunk_id = :last_chunk_id,
+        lastread = :lastread,
+        lastuid = :lastuid,
+        lastchange = :lastchange,
+        seenuids = :seenuids
+    WHERE uniqueid = :uniqueid;
+);
+
+const char backup_index_seen_insert_sql[] = QUOTE(
+    INSERT INTO seen (
+        last_chunk_id, uniqueid, lastread, lastuid, lastchange, seenuids
+    )
+    VALUES (
+        :last_chunk_id, :uniqueid, :lastread, :lastuid, :lastchange, :seenuids
+    );
+);
+
 const char backup_index_subscription_update_sql[] = QUOTE(
     UPDATE subscription SET
         last_chunk_id = :last_chunk_id,

@@ -1100,6 +1100,26 @@ static int cmd_apply_rename(struct dlist *dl)
     return r;
 }
 
+static int cmd_apply_seen(struct dlist *dl)
+{
+    const char *userid = NULL;
+    mbname_t *mbname = NULL;
+    struct open_backup *open = NULL;
+    int r;
+
+    if (!dlist_getatom(dl, "USERID", &userid)) return IMAP_PROTOCOL_ERROR;
+
+    mbname = mbname_from_userid(userid);
+    r = backupd_open_backup(&open, mbname);
+    mbname_free(&mbname);
+
+    if (r) return r;
+
+    r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
+
+    return r;
+}
+
 static int cmd_apply_sub(struct dlist *dl)
 {
     const char *userid = NULL;
@@ -1146,8 +1166,7 @@ static void cmd_apply(struct dlist *dl)
         r = cmd_apply_reserve(dl);
     }
     else if (strcmp(dl->name, "SEEN") == 0) {
-        /* ignore and succeed */
-        r = 0;
+        r = cmd_apply_seen(dl);
     }
     else if (strcmp(dl->name, "SIEVE") == 0) {
         /* ignore and succeed */
