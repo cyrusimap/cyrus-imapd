@@ -1202,6 +1202,10 @@ static void cmd_apply(struct dlist *dl)
         /* ignore and succeed */
         r = 0;
     }
+    else if (strcmp(dl->name, "UNACTIVATE_SIEVE") == 0) {
+        /* ignore and succeed */
+        r = 0;
+    }
     else if (strcmp(dl->name, "SUB") == 0) {
         r = cmd_apply_sub(dl);
     }
