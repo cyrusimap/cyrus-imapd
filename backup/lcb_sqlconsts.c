@@ -206,6 +206,9 @@ const char backup_index_chunk_select_live_sql[] =
     "  SELECT last_chunk_id"
     "   FROM subscription"
     "   WHERE unsubscribed IS NULL OR unsubscribed > :since"
+    "  UNION"
+    "  SELECT last_chunk_id"
+    "   FROM seen"
     " )"
     ";"
 ;
