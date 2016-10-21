@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    =
+SPHINXOPTS    = -n
 SPHINXBUILD   = sphinx-build
 PAPER         =
 SOURCEDIR     = .
@@ -55,7 +55,7 @@ help:
 
 clean:
 	rm -rf $(BUILDDIR)/*
-    
+
 init: ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "creating imap/admin/systemcommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/imap/admin/systemcommands/cyradm.rst
