@@ -407,8 +407,13 @@ static int cmd_list_chunks(struct backup *backup,
 {
     struct backup_chunk_list *chunk_list = NULL;
     struct backup_chunk *chunk;
+    struct stat data_stat_buf;
+    int r;
 
     (void) options;
+
+    r = backup_stat(backup, &data_stat_buf, NULL);
+    if (r) return r;
 
     chunk_list = backup_get_chunks(backup);
     if (!chunk_list) return -1;
@@ -429,8 +434,7 @@ static int cmd_list_chunks(struct backup *backup,
             ratio = 100.0 * (chunk->next->offset - chunk->offset) / chunk->length;
         }
         else {
-            // FIXME need to stat the underlying file to see disk size of last chunk
-            ratio = 0.0;
+            ratio = 100.0 * (data_stat_buf.st_size - chunk->offset) / chunk->length;
         }
 
         fprintf(stdout, "%7d " OFF_T_FMT "\t" SIZE_T_FMT "\t%6.1f\t%s  %s\n",
