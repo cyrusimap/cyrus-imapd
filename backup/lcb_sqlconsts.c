@@ -234,6 +234,10 @@ const char backup_index_chunk_select_live_sql[] =
     "  UNION"
     "  SELECT last_chunk_id"
     "   FROM seen"
+    "  UNION"
+    "  SELECT chunk_id"
+    "   FROM sieve"
+    "   WHERE deleted IS NULL or deleted > :since"
     " )"
     ";"
 ;
