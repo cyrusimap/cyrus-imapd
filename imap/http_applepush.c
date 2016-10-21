@@ -191,12 +191,29 @@ done:
 
 static int meth_post_applepush(struct transaction_t *txn, void *params)
 {
+    /* Check Content-Type */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
 
-    /* XXX in theory the arguments could be in the body
-     *     (x-www-form-urlencoded), which we don't support (cyrus has no parser
-     *     for that arg style). POST has been seen with URL params, so for now
-     *     we just call the GET handler
-     */
+    if (hdr && is_mediatype("application/x-www-form-urlencoded", hdr[0])) {
+        /* Read body */
+        txn->req_body.flags |= BODY_DECODE;
+
+        int r = http_read_body(httpd_in, httpd_out,
+                               txn->req_hdrs, &txn->req_body, &txn->error.desc);
+        if (r) {
+            txn->flags.conn = CONN_CLOSE;
+            return r;
+        }
+
+        /* x-www-form-urlencoded is essentially a URI query component
+           with SP replaced with '+' */
+        buf_replace_char(&txn->req_body.payload, '+', ' ');
+        parse_query_params(txn, buf_cstring(&txn->req_body.payload));
+    }
+    else {
+        /* POST has been seen with URL params,
+           so for now we just call the GET handler */
+    }
 
     return meth_get_applepush(txn, params);
 }
