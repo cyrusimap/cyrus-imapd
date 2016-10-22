@@ -9572,7 +9572,7 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
 
     subscription_url =
         xmlNewChild(transport, NULL, BAD_CAST "subscription-url", NULL);
-    xml_add_href(subscription_url, fctx->ns[NS_DAV], "/applepush/subscribe");
+    xml_add_href(subscription_url, fctx->ns[NS_DAV], namespace_applepush.prefix);
 
     xmlNewChild(transport, NULL, BAD_CAST "apsbundleid", BAD_CAST aps_topic);
 
