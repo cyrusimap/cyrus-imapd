@@ -1365,16 +1365,6 @@ AC_ARG_ENABLE(event-notification,
 
 if test "$enable_event_notification" != "no"; then
     AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])
-
-    dnl support for Apple Push Service registration
-    dnl disabled by default
-    AC_ARG_ENABLE(apple-push-service,
-            [AS_HELP_STRING([--enable-apple-push-service], [enable support for Apple Push Service (requires event notifications])],,
-            [enable_apple_push_service="no";])
-
-    if test "$enable_apple_push_service" != "no"; then
-        AC_DEFINE(ENABLE_APPLEPUSHSERVICE,[],[Build with support for Apple Push Service])
-    fi
 fi
 
 dnl

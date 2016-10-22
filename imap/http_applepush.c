@@ -87,16 +87,14 @@ struct namespace_t namespace_applepush = {
 
 static void applepush_init(struct buf *serverinfo __attribute__((unused)))
 {
-#ifdef ENABLE_APPLEPUSHSERVICE
-    namespace_applepush.enabled =
-        namespace_calendar.enabled || namespace_addressbook.enabled;
-#endif
+    namespace_applepush.enabled = apns_enabled &&
+        ((namespace_calendar.enabled && config_getstring(IMAPOPT_APS_TOPIC_CALDAV)) ||
+         (namespace_addressbook.enabled && config_getstring(IMAPOPT_APS_TOPIC_CARDDAV)));
 }
 
 static int meth_get_applepush(struct transaction_t *txn,
                               void *params __attribute__((unused)))
 {
-#ifdef ENABLE_APPLEPUSHSERVICE
     int rc = HTTP_BAD_REQUEST, r = 0;
     struct strlist *vals = NULL;
     const char *token = NULL, *key = NULL, *aps_topic = NULL;
@@ -178,15 +176,6 @@ done:
     if (keyparts) strarray_free(keyparts);
 
     return rc;
-
-#else
-    /* XXX  Should never get here */
-    syslog(LOG_ERR, "meth_get_applepush() called but APNS is disabled");
-
-    txn->error.desc = "Apple Push Notification Service not enabled";
-
-    return HTTP_NOT_FOUND;
-#endif /* ENABLE_APPLEPUSH_SERVICE */
 }
 
 static int meth_post_applepush(struct transaction_t *txn, void *params)

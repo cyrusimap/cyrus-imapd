@@ -98,11 +98,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "event_notification", json_false());
 #endif
-#ifdef ENABLE_APPLEPUSHSERVICE
-    json_object_set_new(component, "apple_push_service", json_true());
-#else
-    json_object_set_new(component, "apple_push_service", json_false());
-#endif
 #ifdef HAVE_GSSAPI_H
     json_object_set_new(component, "gssapi", json_true());
 #else

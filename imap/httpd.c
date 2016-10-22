@@ -156,6 +156,7 @@ static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 
 int ignorequota = 0;
+int apns_enabled = 0;
 
 #ifdef HAVE_NGHTTP2
 
@@ -799,7 +800,8 @@ int service_init(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
-    int r, opt, i, allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);
+    int r, events, opt, i;
+    int allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);
 
     LIBXML_TEST_VERSION
 
@@ -840,7 +842,8 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* open the mboxevent system */
-    mboxevent_init();
+    events = mboxevent_init();
+    apns_enabled = (events & EVENT_APPLEPUSHSERVICE_DAV);
 
     mboxevent_setnamespace(&httpd_namespace);
 

@@ -134,6 +134,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
+static int apns_enabled = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -413,9 +414,8 @@ static int do_xconvfetch(struct dlist *cidlist,
 static void cmd_xsnippets(char *tag);
 static void cmd_xstats(char *tag, int c);
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs);
-#endif
+static void cmd_xapplepushservice(const char *tag,
+                                  struct applepushserviceargs *applepushserviceargs);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -832,7 +832,7 @@ static void imapd_reset(void)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int opt;
+    int opt, events;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
@@ -860,7 +860,9 @@ int service_init(int argc, char **argv, char **envp)
     idle_init();
 
     /* setup for mailbox event notifications */
-    mboxevent_init();
+    events = mboxevent_init();
+    apns_enabled =
+      (events & EVENT_APPLEPUSHSERVICE) && config_getstring(IMAPOPT_APS_TOPIC);
 
     search_attr_init();
 
@@ -1219,9 +1221,7 @@ static void cmdloop(void)
     double commandmintimerd = 0.0;
     struct sync_reserve_list *reserve_list =
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
-#ifdef ENABLE_APPLEPUSHSERVICE
     struct applepushserviceargs applepushserviceargs;
-#endif
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -2332,8 +2332,7 @@ static void cmdloop(void)
                 cmd_xmeid(tag.s, arg1.s);
             }
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-            else if (!strcmp(cmd.s, "Xapplepushservice")) {
+            else if (apns_enabled && !strcmp(cmd.s, "Xapplepushservice")) {
                 if (c != ' ') goto missingargs;
 
                 memset(&applepushserviceargs, 0, sizeof(struct applepushserviceargs));
@@ -2386,7 +2385,6 @@ static void cmdloop(void)
 
                 cmd_xapplepushservice(tag.s, &applepushserviceargs);
             }
-#endif
 
             else goto badcmd;
             break;
@@ -2417,42 +2415,44 @@ static void cmdloop(void)
         continue;
 
     nomailbox:
-        prot_printf(imapd_out, "%s BAD Please select a mailbox first\r\n", tag.s);
+        prot_printf(imapd_out,
+                    "%s BAD Please select a mailbox first\r\n", tag.s);
         eatline(imapd_in, c);
         continue;
 
-#ifdef ENABLE_APPLEPUSHSERVICE
     aps_missingargs:
         buf_free(&applepushserviceargs.aps_account_id);
         buf_free(&applepushserviceargs.aps_device_token);
         buf_free(&applepushserviceargs.aps_subtopic);
         strarray_fini(&applepushserviceargs.mailboxes);
-#endif
+
     missingargs:
-        prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
+        prot_printf(imapd_out,
+                    "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
 
-#ifdef ENABLE_APPLEPUSHSERVICE
     aps_extraargs:
         buf_free(&applepushserviceargs.aps_account_id);
         buf_free(&applepushserviceargs.aps_device_token);
         buf_free(&applepushserviceargs.aps_subtopic);
         strarray_fini(&applepushserviceargs.mailboxes);
-#endif
+
     extraargs:
-        prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
+        prot_printf(imapd_out,
+                    "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
 
     badsequence:
-        prot_printf(imapd_out, "%s BAD Invalid sequence in %s\r\n", tag.s, cmd.s);
+        prot_printf(imapd_out,
+                    "%s BAD Invalid sequence in %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
 
     badpartition:
-        prot_printf(imapd_out, "%s BAD Invalid partition name in %s\r\n",
-               tag.s, cmd.s);
+        prot_printf(imapd_out,
+                    "%s BAD Invalid partition name in %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
     }
@@ -3298,11 +3298,9 @@ static void capa_response(int flags)
         prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-    if (config_getstring(IMAPOPT_APS_TOPIC)) {
+    if (apns_enabled) {
         prot_printf(imapd_out, " XAPPLEPUSHSERVICE");
     }
-#endif
 
     if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
         prot_printf(imapd_out, " STARTTLS");
@@ -13791,8 +13789,8 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     prot_resettimeout(imapd_in);
 }
 
-#ifdef ENABLE_APPLEPUSHSERVICE
-static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *applepushserviceargs)
+static void cmd_xapplepushservice(const char *tag,
+                                  struct applepushserviceargs *applepushserviceargs)
 {
     int r = 0;
     strarray_t notif_mailboxes = STRARRAY_INITIALIZER;
@@ -13801,7 +13799,8 @@ static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *
 
     const char *aps_topic = config_getstring(IMAPOPT_APS_TOPIC);
     if (!aps_topic) {
-        syslog(LOG_ERR, "aps_topic not configured, can't complete XAPPLEPUSHSERVICE response");
+        syslog(LOG_ERR,
+               "aps_topic not configured, can't complete XAPPLEPUSHSERVICE response");
         prot_printf(imapd_out, "%s NO Server configuration error\r\n", tag);
         return;
     }
@@ -13832,7 +13831,8 @@ static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *
 
     for (i = 0; i < strarray_size(&applepushserviceargs->mailboxes); i++) {
         const char *name = strarray_nth(&applepushserviceargs->mailboxes, i);
-        char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+        char *intname =
+            mboxname_from_external(name, &imapd_namespace, imapd_userid);
         r = mlookup(tag, name, intname, &mbentry);
         if (!r && mbentry->mbtype == 0) {
             strarray_push(&notif_mailboxes, name);
@@ -13846,11 +13846,14 @@ static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *
         free(intname);
     }
 
-    prot_printf(imapd_out, "* XAPPLEPUSHSERVICE \"aps-version\" \"%d\" \"aps-topic\" \"%s\"\r\n", applepushserviceargs->aps_version, aps_topic);
+    prot_printf(imapd_out,
+                "* XAPPLEPUSHSERVICE \"aps-version\" \"%d\" \"aps-topic\" \"%s\"\r\n",
+                applepushserviceargs->aps_version, aps_topic);
     prot_printf(imapd_out, "%s OK XAPPLEPUSHSERVICE completed.\r\n", tag);
 
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE);
-    mboxevent_set_applepushservice(mboxevent, applepushserviceargs, &notif_mailboxes, imapd_userid);
+    mboxevent_set_applepushservice(mboxevent, applepushserviceargs,
+                                   &notif_mailboxes, imapd_userid);
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
 
@@ -13860,4 +13863,3 @@ static void cmd_xapplepushservice(const char *tag, struct applepushserviceargs *
     strarray_fini(&applepushserviceargs->mailboxes);
     strarray_fini(&notif_mailboxes);
 }
-#endif

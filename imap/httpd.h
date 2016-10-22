@@ -502,6 +502,7 @@ extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
 
 extern int ignorequota;
+extern int apns_enabled;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);

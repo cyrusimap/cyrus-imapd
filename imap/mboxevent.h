@@ -81,13 +81,10 @@ enum event_type {
     EVENT_MAILBOX_UNSUBSCRIBE = (1<<19),
     EVENT_ACL_CHANGE          = (1<<20),
     EVENT_CALENDAR            = (1<<21),
-    EVENT_CALENDAR_ALARM      = (1<<22)
+    EVENT_CALENDAR_ALARM      = (1<<22),
     /* Other */
-#ifdef ENABLE_APPLEPUSHSERVICE
-    ,
     EVENT_APPLEPUSHSERVICE     = (1<<23),
     EVENT_APPLEPUSHSERVICE_DAV = (1<<24)
-#endif
 };
 
 /*
@@ -153,7 +150,6 @@ enum event_param {
     EVENT_CALENDAR_ATTENDEE_EMAILS,
     EVENT_CALENDAR_ATTENDEE_STATUS,
     EVENT_CALENDAR_ORGANIZER,
-#ifdef ENABLE_APPLEPUSHSERVICE
     EVENT_APPLEPUSHSERVICE_VERSION,
     EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,
     EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN,
@@ -164,7 +160,6 @@ enum event_param {
     EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER,
     EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID,
     EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,
-#endif
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
@@ -219,7 +214,7 @@ struct mboxevent {
 /*
  * Call this initializer once only at start
  */
-void mboxevent_init();
+int mboxevent_init();
 
 /*
  * Set the namespace to translate internal mailbox name to external name
@@ -351,7 +346,6 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
  */
 void mboxevent_set_client_id(const char *);
 
-#ifdef ENABLE_APPLEPUSHSERVICE
 /* Arguments to XAPPLEPUSHSERVICE */
 struct applepushserviceargs {
     unsigned int aps_version;
@@ -380,6 +374,5 @@ void mboxevent_set_applepushservice_dav(struct mboxevent *event,
                                         const char *mailbox_uniqueid,
                                         int mbtype,
                                         unsigned int expiry);
-#endif
 
 #endif /* _MBOXEVENT_H */
