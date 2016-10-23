@@ -170,48 +170,94 @@ struct namespace_t namespace_tzdist = {
 #ifdef HAVE_SHAPELIB
 #include <shapefil.h>
 
-static SHPHandle shp = NULL;
-static DBFHandle dbf = NULL;
-static int npoly = 0;
+struct tz_shape_t {
+    int valid;
+    SHPHandle shp;
+    DBFHandle dbf;
+};
+
+static struct tz_shape_t tz_world = { 0, NULL, NULL };
+static struct tz_shape_t tz_aq    = { 0, NULL, NULL };
 
 static void open_shape_file(struct buf *serverinfo)
 {
     char buf[1024];
-    int shapetype;
+    int nrecords, shapetype;
     double minbound[4], maxbound[4];
     DBFFieldType fieldtype;
 
     buf_printf(serverinfo, " ShapeLib/%s", SHAPELIB_VERSION);
 
+    /* Open the tz_world shape files */
     snprintf(buf, sizeof(buf), "%s%s%s",
-             config_dir, FNAME_ZONEINFODIR, FNAME_SHAPEFILE);
-    if (!(shp = SHPOpen(buf, "rb"))) {
+             config_dir, FNAME_ZONEINFODIR, FNAME_WORLD_SHAPEFILE);
+    if (!(tz_world.shp = SHPOpen(buf, "rb"))) {
         syslog(LOG_ERR, "Failed to open file %s", buf);
         return;
     }
 
-    if (!(dbf = DBFOpen(buf, "rb"))) {
+    if (!(tz_world.dbf = DBFOpen(buf, "rb"))) {
         syslog(LOG_ERR, "Failed to open file %s", buf);
         return;
     }
 
     /* Sanity check the shape files */
-    SHPGetInfo(shp, &npoly, &shapetype, minbound, maxbound);
-    if (!npoly || shapetype != SHPT_POLYGON ||          /* polygons */
+    SHPGetInfo(tz_world.shp, &nrecords, &shapetype, minbound, maxbound);
+    if (!nrecords || shapetype != SHPT_POLYGON ||       /* polygons */
         minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
-        minbound[1] < -90.0  || maxbound[1] > 90.0 ||   /* latitude range */
-        npoly != DBFGetRecordCount(dbf)) return;        /* record counts */
+        minbound[1] <  -90.0 || maxbound[1] >  90.0 ||  /* latitude range */
+        nrecords != DBFGetRecordCount(tz_world.dbf)) {  /* record counts */
+        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        return;
+    }
 
-    fieldtype = DBFGetFieldInfo(dbf, 0, buf, NULL, NULL);
-    if (fieldtype != FTString || strcasecmp(buf, "TZID")) return;  /* TZIDs */
+    fieldtype = DBFGetFieldInfo(tz_world.dbf, 0 /* column 1 */, buf, NULL, NULL);
+    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {   /* TZIDs */
+        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        return;
+    }
 
-    geo_enabled = 1;
+    geo_enabled = tz_world.valid = 1;
+
+    /* Open the tz_antarctica shape files (optional) */
+    snprintf(buf, sizeof(buf), "%s%s%s",
+             config_dir, FNAME_ZONEINFODIR, FNAME_AQ_SHAPEFILE);
+    if (!(tz_aq.shp = SHPOpen(buf, "rb"))) {
+        syslog(LOG_NOTICE, "Failed to open file %s", buf);
+        return;
+    }
+
+    if (!(tz_aq.dbf = DBFOpen(buf, "rb"))) {
+        syslog(LOG_NOTICE, "Failed to open file %s", buf);
+        SHPClose(tz_aq.shp);
+        return;
+    }
+
+    /* Sanity check the shape files */
+    SHPGetInfo(tz_aq.shp, &nrecords, &shapetype, minbound, maxbound);
+    if (!nrecords || shapetype != SHPT_POINT ||         /* points */
+        minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
+        minbound[1] <  -90.0 || maxbound[1] > -60.0 ||  /* latitude range */
+        nrecords != DBFGetRecordCount(tz_aq.dbf)) {     /* record counts */
+        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        return;
+    }
+
+    fieldtype = DBFGetFieldInfo(tz_aq.dbf, 1 /* column 2 */, buf, NULL, NULL);
+    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {  /* TZIDs */
+        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        return;
+    }
+
+    tz_aq.valid = 1;
 }
 
 static void close_shape_file()
 {
-    if (dbf) DBFClose(dbf);
-    if (shp) SHPClose(shp);
+    if (tz_world.dbf) DBFClose(tz_world.dbf);
+    if (tz_world.shp) SHPClose(tz_world.shp);
+    if (tz_aq.dbf) DBFClose(tz_aq.dbf);
+    if (tz_aq.shp) SHPClose(tz_aq.shp);
 }
 
 static int pt_in_poly(int nvert, double *vx, double *vy, double px, double py)
@@ -331,40 +377,187 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                                  double uncertainty)
 {
     strarray_t *tzids = strarray_new();
-    struct vector p;
-    int i;
+    const char *tzid;
+    struct vector p, a;
+    int i, npoly;
+    double minbound[4], maxbound[4];
 
-    if (uncertainty) {
-        /* using unit vectors */
-        geo2vec(latitude, longitude, &p);
-        uncertainty /= M_EARTH_RADIUS;
+    /* using unit vectors */
+    uncertainty /= M_EARTH_RADIUS;
+    geo2vec(latitude, longitude, &p);  /* vector for point */
+    geo2vec(-60, longitude, &a);       /* perpendicular vector to Antarctic */
+
+    if (tz_aq.valid &&
+        /* Check if point is within or near Antarctic region */
+        (latitude <= -60 || (uncertainty && vec_diff(&p, &a) <= uncertainty))) {
+
+        /* check if point is near an Antarctic base */
+        double dist = uncertainty;
+
+        if (!dist) {
+            /* default to 10km radius */
+            dist = 10000 / M_EARTH_RADIUS;
+        }
+
+        for (i = 0; i < tz_aq.shp->nRecords; i++) {
+            SHPObject *base = SHPReadObject(tz_aq.shp, i);
+            struct vector b;
+
+            geo2vec(base->padfY[0], base->padfX[0], &b);  /* vector for base */
+
+            if (vec_diff(&p, &b) <= dist) {
+                /* Point is near a base, check if it has a known time zone */
+                tzid = DBFReadStringAttribute(tz_aq.dbf, i, 1 /* column 2 */);
+                if (strcmp(tzid, "unknown")) strarray_append(tzids, tzid);
+            }
+
+            SHPDestroyObject(base);
+
+            keepalive_response(txn);
+        }
     }
 
-    for (i = 0; i < npoly; i++) {
-        SHPObject *poly = SHPReadObject(shp, i);
+    /* Check if point is within or near bounding box of tz_world */
+    SHPGetInfo(tz_world.shp, &npoly, NULL, minbound, maxbound);
 
-        int r = pt_in_poly(poly->nVertices, poly->padfX, poly->padfY,
-                           longitude, latitude);
+    double WbbX[5] =
+        { minbound[0], minbound[0], maxbound[0], maxbound[0], minbound[0] };
+    double WbbY[5] =
+        { minbound[1], maxbound[1], maxbound[1], minbound[1], minbound[1] };
 
-        if (!r && uncertainty) {
-            r = pt_near_poly(poly->nVertices, poly->padfX, poly->padfY,
-                             &p, uncertainty);
+    if (pt_in_poly(5, WbbX, WbbY, longitude, latitude) ||
+        (uncertainty && pt_near_poly(5, WbbX, WbbY, &p, uncertainty))) {
+        /* Check if point is within or near a time zone boundary */
+
+        for (i = 0; i < npoly; i++) {
+            SHPObject *poly = SHPReadObject(tz_world.shp, i);
+            double bbX[5] = { poly->dfXMin, poly->dfXMin,
+                              poly->dfXMax, poly->dfXMax, poly->dfXMin };
+            double bbY[5] = { poly->dfYMin, poly->dfYMax,
+                              poly->dfYMax, poly->dfYMin, poly->dfYMin };
+
+            /* Check if point is within or near bounding box of boundary */
+            int within = pt_in_poly(5, bbX, bbY, longitude, latitude);
+            int near = uncertainty && pt_near_poly(5, bbX, bbY, &p, uncertainty);
+            int r = 0;
+
+            if (within || near) {
+                if (within) {
+                    /* Check if point is within boundary */
+                    r = pt_in_poly(poly->nVertices, poly->padfX, poly->padfY,
+                                   longitude, latitude);
+                }
+
+                if (!r && uncertainty) {
+                    /* Check if point is near boundary */
+                    r = pt_near_poly(poly->nVertices, poly->padfX, poly->padfY,
+                                     &p, uncertainty);
+                }
+            }
+
+            if (r) {
+                tzid = DBFReadStringAttribute(tz_world.dbf, i, 0 /* column 1 */);
+                strarray_append(tzids, tzid);
+            }
+
+            SHPDestroyObject(poly);
+
+            keepalive_response(txn);
         }
-        SHPDestroyObject(poly);
-
-        if (r) strarray_append(tzids, DBFReadStringAttribute(dbf, i, 0));
-
-        keepalive_response(txn);
     }
 
     if (!strarray_size(tzids)) {
-        /* Calculate offset from GMT based on longitude */
-        /* XXX  Which offset does an exact multiple of +/- 7.5
-           and +/- 180 degrees belong to? */
-        char tzid[11];
+        /* No tzids found in shapefile(s) */
+        char tzid_buf[11];
 
-        sprintf(tzid, "Etc/GMT%+d",
-                (int) (longitude + copysign(1.0, longitude) * 7.5) / 15);
+        if (latitude <= -60) {
+            /* Antarctic region - guess-timate offset from GMT based on:
+
+               https://en.wikipedia.org/wiki/Time_in_Antarctica
+               https://en.wikipedia.org/wiki/Territorial_claims_in_Antarctica
+               https://en.wikipedia.org/wiki/Australian_Antarctic_Territory
+               https://en.wikipedia.org/wiki/Queen_Maud_Land
+               https://en.wikipedia.org/wiki/Princess_Martha_Coast
+               https://en.wikipedia.org/wiki/Princess_Astrid_Coast
+               https://en.wikipedia.org/wiki/Princess_Ragnhild_Coast
+               https://en.wikipedia.org/wiki/Prince_Harald_Coast
+               https://en.wikipedia.org/wiki/Prince_Olav_Coast
+            */
+            if (latitude <= -89 || (longitude >= 160 || longitude <= -150)) {
+                /* South Pole and New Zealand Claim (Ross Dependency) */
+                tzid = "Antarctica/South_Pole";
+            }
+            else if (longitude >= -20 && latitude <= -80) {
+                /* Uninhabited */
+                tzid = "Etc/GMT";
+            }
+            else if (longitude >= 142.033333) {     /* 142*  2' */
+                /* Australian Claim (George V / Oates Lands) */
+                tzid = "Etc/GMT+10";
+            }
+            else if (longitude >= 136.183333) {     /* 136* 11' */
+                /* French Claim (Adelie Land) */
+                tzid = "Etc/GMT+10";
+            }
+            else if (longitude >= 44.633333) {      /*  44* 38' */
+                /* Australian Claim */
+                if (longitude >= 100.5) {           /* 100* 30' */
+                    /* Wilkes Land */
+                    tzid = "Etc/GMT+8";
+                }
+                else if (longitude >= 72.583333) {  /*  72* 35' */
+                    /* Princess Elizabeth / Kaiser Wilhelm II / Queen Mary Lands */
+                    tzid = "Etc/GMT+7";
+                }
+                else {
+                    /* Enderby / Kemp / Mac. Robertson Lands */
+                    tzid = "Etc/GMT+6";
+                }
+            }
+            else if (longitude >= -20) {
+                /* Norwegian Claim (Queen Maud Land) */
+                if (longitude >= 20) {
+                    /* Princess Ragnhild / Prince Harald / Prince Olav Coasts */
+                    tzid = "Etc/GMT+3";
+                }
+                else {
+                    /* Princess Martha / Princess Astrid Coasts */
+                    tzid = "Etc/GMT";
+                }
+            }
+            else if (longitude >= -90) {
+                /* British / Argentine / Chilean Claims */
+                if (longitude >= -74) {
+                    /* Argentine / British Claims */
+                    tzid = "Etc/GMT-3";
+                }
+                /* XXX  Is there a GMT-4 + DST region? */
+                else {
+                    /* Chilean / British Claims */
+                    tzid = "Etc/GMT-4";
+                }
+            }
+            else {
+                /* Unclaimed */
+                if (latitude <= -80) {
+                    /* Uninhabited */
+                    tzid = "Etc/GMT";
+                }
+                else tzid = "Etc/GMT-6";
+            }
+        }
+        else {
+            /* Assume international waters - 
+               calculate offset from GMT based on longitude
+
+               XXX  Which offset does an exact multiple of +/- 7.5
+               and +/- 180 degrees belong to?
+            */
+            sprintf(tzid_buf, "Etc/GMT%+d",
+                    (int) (longitude + copysign(1.0, longitude) * 7.5) / 15);
+            tzid = tzid_buf;
+        }
+
         strarray_append(tzids, tzid);
     }
 
