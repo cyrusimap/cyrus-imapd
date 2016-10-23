@@ -3683,10 +3683,13 @@ static void auth_success(struct transaction_t *txn)
         off_t end = lseek(httpd_logfd, 0, SEEK_END);
 
         ftruncate(httpd_logfd, end - buf_len(&txn->buf));
-    }
 
-    /* Close existing telemetry log */
-    close(httpd_logfd);
+        /* Log credential-redacted request */
+        write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
+
+        /* Close existing telemetry log */
+        close(httpd_logfd);
+    }
 
     prot_setlog(httpd_in, PROT_NO_FD);
     prot_setlog(httpd_out, PROT_NO_FD);
