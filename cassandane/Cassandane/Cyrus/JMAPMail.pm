@@ -634,11 +634,7 @@ sub test_setmailboxes_parent
 
     my $jmap = $self->{jmap};
 
-    # Unfortunately, we can't create reshuffle mailbox and their parents in one
-    # big request, since Perl might reorder our map keys. This makes the JMAP
-    # requests non-deterministic. */
-    #
-    # Create mailbxoes, foo, foo.bar, foo.bar.baz one by one..
+    # Create mailboxes
     xlog "create mailbox foo";
     my $res = $jmap->Request([['setMailboxes', { create => {
                         "1" => { name => "foo", parentId => undef, role => undef }
