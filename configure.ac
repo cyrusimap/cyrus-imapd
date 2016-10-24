@@ -2155,7 +2155,6 @@ echo "
 Cyrus Server configured components
 
    event notification: $enable_event_notification
-   apple push service: $enable_apple_push_service
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
