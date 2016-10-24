@@ -14,6 +14,8 @@ Before compiling Cyrus with the ``--enable-Xapian`` option, Xapian must first be
 The version of Xapian used to build the search support into Cyrus was
 2.2, and the patches in the cyrus-imapd repository are against that version.
 
+Thie version of Xapian requires gcc 4.9 or later.
+
 To build the library:
 
 .. code-block:: bash
@@ -34,7 +36,7 @@ To build the library:
     make
     make install
 
-Then follow on with the Cyrus :ref:`compilation instructions <imapinstallguide>`, adding ``--enable-xapian`` to the flags to ``./configure``    
+Then follow on with the Cyrus :ref:`compilation instructions <imapinstallguide>`, adding ``--enable-xapian`` to the flags to ``./configure``
 
 Configuring Xapian
 ==================
@@ -61,5 +63,3 @@ And then you'll need to arrange for a rolling squatter to run on startup. In :cy
 If you want to do more complex search tiers and repacking, you'll  want to read:
 
 http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html
-
-

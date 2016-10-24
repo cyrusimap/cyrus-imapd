@@ -19,7 +19,7 @@ Extract the tarball:
 .. parsed-literal::
 
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
-	
+
 .. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
@@ -79,7 +79,7 @@ distributions:
 
     from http://flex.sourceforge.net/
 
-**gcc**
+**gcc** version 4.9 or higher
 
     from http://gcc.gnu.org
 
