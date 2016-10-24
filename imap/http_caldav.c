@@ -5215,14 +5215,9 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
                             void *rock __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
-    xmlNodePtr node;
+    int rc = HTTP_NOT_FOUND;
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
-
-    if (propstat) {
-        if (!fctx->record || !fctx->mailbox) return HTTP_NOT_FOUND;
-
+    if (propstat && fctx->mailbox && fctx->record) {
         message_t *m = message_new_from_record(fctx->mailbox, fctx->record);
 
         message_get_field(m, "x-schedule-user-address",
@@ -5232,6 +5227,9 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
     }
 
     if (buf.len) {
+        rc = 0;
+        xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                                       name, ns, NULL, 0);
         buf_reset(&fctx->buf);
         buf_printf(&fctx->buf, "mailto:%s", buf_cstring(&buf));
         xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
@@ -5239,7 +5237,7 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
 
     buf_free(&buf);
 
-    return 0;
+    return rc;
 }
 
 /* Callback to prescreen/fetch CALDAV:calendar-data */
