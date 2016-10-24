@@ -562,7 +562,9 @@ static const char *squat_strerror(int err)
 /* Cyrus passes the text to index in here, after it has canonicalized
    the text. We figure out what source document the text belongs to,
    and update the index. */
-static void begin_message(search_text_receiver_t *rx, uint32_t uid)
+static void begin_message(search_text_receiver_t *rx,
+                          const struct message_guid *guid __attribute__((unused)),
+                          uint32_t uid)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
 

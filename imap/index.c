@@ -2238,6 +2238,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     query->need_ids = 1;
     query->need_expunge = 1;
     query->sortcrit = sortcrit;
+
     r = search_query_run(query);
     if (r) return r;
 
@@ -2488,7 +2489,7 @@ EXPORTED int index_snippets(struct index_state *state,
             if (r) continue;
 
             msg = message_new_from_record(mailbox, &record);
-            index_getsearchtext(msg, rx, /*snippet*/1);
+            index_getsearchtext(msg, rx, &record.guid, /*snippet*/1);
             message_unref(&msg);
         }
 
@@ -4658,8 +4659,9 @@ static void append_alnum(struct buf *buf, const char *ss)
 }
 
 EXPORTED int index_getsearchtext(message_t *msg,
-                         search_text_receiver_t *receiver,
-                         int snippet)
+                                 search_text_receiver_t *receiver,
+                                 const struct message_guid *guid,
+                                 int snippet)
 {
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
@@ -4670,7 +4672,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
     int r;
 
     message_get_uid(msg, &uid);
-    receiver->begin_message(receiver, uid);
+    receiver->begin_message(receiver, guid, uid);
 
     str.receiver = receiver;
     str.indexed_headers = 0;

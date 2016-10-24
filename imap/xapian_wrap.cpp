@@ -231,6 +231,7 @@ struct xapian_dbw
     Xapian::Document *document;
     Xapian::Stopper *stopper;
     int stem_version;
+    char *cyrusid;
 };
 
 int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
@@ -294,6 +295,7 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         delete dbw->stemmer;
         delete dbw->stopper;
         delete dbw->document;
+        if (dbw->cyrusid) free(dbw->cyrusid);
         free(dbw);
     }
     catch (const Xapian::Error &err) {
@@ -355,6 +357,7 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid)
         }
         dbw->document = new Xapian::Document();
         dbw->document->add_value(SLOT_CYRUSID, cyrusid);
+        dbw->cyrusid = xstrdup(cyrusid);
         dbw->term_generator->set_document(*dbw->document);
         dbw->term_generator->set_termpos(1);
     }
@@ -397,8 +400,11 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
     int r = 0;
     try {
         dbw->database->add_document(*dbw->document);
+        dbw->database->set_metadata("cyrusid." + std::string(dbw->cyrusid), "1");
         delete dbw->document;
         dbw->document = 0;
+        if (dbw->cyrusid) free(dbw->cyrusid);
+        dbw->cyrusid = NULL;
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
@@ -406,6 +412,12 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
         r = IMAP_IOERROR;
     }
     return r;
+}
+
+int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const char *cyrusid)
+{
+    std::string key = "cyrusid." + std::string(cyrusid);
+    return dbw->database->get_metadata(key).empty() ? 0 : 1;
 }
 
 /* ====================================================================== */
@@ -851,7 +863,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 
     try {
         std::string snippet;
-        std::string text = std::string(buf_cstring(snipgen->buf)); // FIXME buf_base + len
+        std::string text = std::string(buf_cstring(snipgen->buf));
 
         snippet = snipgen->mset->snippet(text,
                 snippet_length,

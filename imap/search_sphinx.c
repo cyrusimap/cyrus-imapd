@@ -1895,7 +1895,9 @@ out:
     return r;
 }
 
-static void begin_message(search_text_receiver_t *rx, uint32_t uid)
+static void begin_message(search_text_receiver_t *rx,
+                          const struct message_guid *guid __attribute__((unused)),
+                          uint32_t uid)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int i;

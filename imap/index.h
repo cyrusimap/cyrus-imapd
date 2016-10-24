@@ -243,7 +243,8 @@ extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
-extern int index_convmultisort(struct index_state *state, struct sortcrit *sortcrit,
+extern int index_convmultisort(struct index_state *state,
+                               struct sortcrit *sortcrit,
                                struct searchargs *searchargs,
                                const struct windowargs * windowargs);
 extern int index_snippets(struct index_state *state,
@@ -322,9 +323,10 @@ int index_search_evaluate(struct index_state *state, const search_expr_t *e, uin
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);
 
-extern int index_getsearchtext(struct message *,
-                                struct search_text_receiver *receiver,
-                                int snippet);
+extern int index_getsearchtext(struct message*,
+                               struct search_text_receiver *receiver,
+                               const struct message_guid *guid,
+                               int snippet);
 
 extern int index_getuidsequence(struct index_state *state,
                                 struct searchargs *searchargs,

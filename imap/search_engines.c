@@ -147,6 +147,11 @@ static int search_batch_size(void)
             config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
 }
 
+struct batch_entry {
+    struct message_guid guid;
+    message_t *msg;
+};
+
 /*
  * Flush a batch of messages to the search engine's indexer code.  We
  * drop the index lock during the presumably CPU and IO heavy parts of
@@ -166,10 +171,10 @@ static int flush_batch(search_text_receiver_t *rx,
 
     /* prefetch files */
     for (i = 0 ; i < batch->count ; i++) {
-        message_t *msg = ptrarray_nth(batch, i);
+        struct batch_entry *entry = ptrarray_nth(batch, i);
         const char *fname;
 
-        r = message_get_fname(msg, &fname);
+        r = message_get_fname(entry->msg, &fname);
         if (r) return r;
         r = warmup_file(fname, 0, 0);
         if (r) return r; /* means we failed to open a file,
@@ -177,10 +182,11 @@ static int flush_batch(search_text_receiver_t *rx,
     }
 
     for (i = 0 ; i < batch->count ; i++) {
-        message_t *msg = ptrarray_nth(batch, i);
+        struct batch_entry *entry = ptrarray_nth(batch, i);
         if (!r)
-            r = index_getsearchtext(msg, rx, 0);
-        message_unref(&msg);
+            r = index_getsearchtext(entry->msg, rx, &entry->guid, 0);
+        message_unref(&entry->msg);
+        free(entry);
     }
     ptrarray_truncate(batch, 0);
 
@@ -213,8 +219,22 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
     while ((record = mailbox_iter_step(iter))) {
+        struct batch_entry *entry;
+
+        /* Skip known UIDs */
         if (rx->is_indexed(rx, record->uid))
             continue;
+
+        /* Skip known GUIDs but index UID, if backends support it */
+        if (rx->index_uid) {
+            r = rx->index_uid(rx, &record->guid, record->uid);
+            if (r && r != IMAP_NOTFOUND) {
+                goto done;
+            }
+            if (!r) {
+                continue;
+            }
+        }
 
         if (incremental && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
@@ -223,7 +243,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
             break;
         }
 
-        ptrarray_append(&batch, message_new_from_record(mailbox, record));
+        entry = xzmalloc(sizeof(struct batch_entry));
+        entry->msg = message_new_from_record(mailbox, record);
+        message_guid_copy(&entry->guid, &record->guid);
+        ptrarray_append(&batch, entry);
     }
     mailbox_iter_done(&iter);
 

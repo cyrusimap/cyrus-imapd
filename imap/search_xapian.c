@@ -645,10 +645,11 @@ out:
 
 /* ====================================================================== */
 
-static int parse_cyrusid(const char *cyrusid,
-                         const char **mboxnamep,
-                         unsigned int *uidvalidityp,
-                         unsigned int *uidp)
+/* FIXME remove when legacy cyrusid are deprecated */
+static int parse_legacy_cyrusid(const char *cyrusid,
+                                const char **mboxnamep,
+                                unsigned int *uidvalidityp,
+                                unsigned int *uidp)
 {
     // user.cassandane.1320711192.196715
     static struct buf buf = BUF_INITIALIZER;
@@ -674,15 +675,12 @@ static int parse_cyrusid(const char *cyrusid,
     return 1;
 }
 
-static const char *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
+static const char *make_cyrusid(const struct message_guid *guid)
 {
     static struct buf buf = BUF_INITIALIZER;
-    // user.cassandane.1320711192.196715
-    buf_reset(&buf);
-    buf_printf(&buf, "%s.%u.%u",
-                     mailbox->name,
-                     mailbox->i.uidvalidity,
-                     uid);
+    // *G*<encoded message guid>
+    buf_setcstr(&buf, "*G*");
+    buf_appendcstr(&buf, message_guid_encode(guid));
     return buf_cstring(&buf);
 }
 
@@ -856,29 +854,69 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
     return qq;
 }
 
-static int xapian_run_cb(const char *cyrusid, void *rock)
+static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
-    int r;
-    const char *mboxname;
-    unsigned int uidvalidity;
-    unsigned int uid;
 
-    r = parse_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid);
-    if (!r) {
-        syslog(LOG_ERR, "IOERROR: Cannot parse \"%s\" as cyrusid", cyrusid);
-        return IMAP_IOERROR;
+    unsigned int uidvalidity = mboxname_readuidvalidity(rec->mboxname);
+    if (!uidvalidity) {
+        return IMAP_INTERNAL;
     }
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
-        if (strcmp(mboxname, bb->mailbox->name))
-            return 0;
-        if (uidvalidity != bb->mailbox->i.uidvalidity)
+        if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
     }
 
     xstats_inc(SPHINX_RESULT);
-    return bb->proc(mboxname, uidvalidity, uid, bb->rock);
+    return bb->proc(rec->mboxname, uidvalidity, rec->uid, bb->rock);
+}
+
+static int xapian_run_cb(const char *cyrusid, void *rock)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)rock;
+
+    if (!strncmp(cyrusid, "*G*", 3)) {
+        /* Current cyrus ids: *G*<encoded message guid> */
+        struct conversations_state *cstate;
+        const char *guid = cyrusid + 3;
+        int r;
+
+        cstate = mailbox_get_cstate(bb->mailbox);
+        if (!cstate) {
+            syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                    bb->mailbox->name);
+            return IMAP_NOTFOUND;
+        }
+
+        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, bb);
+        return r;
+
+    } else {
+        /* FIXME remove block when legacy cyrusid are deprecated */
+        /* Legacy cyrus ids: user.cassandane.1320711192.196715 */
+        const char *mboxname;
+        unsigned int uidvalidity;
+        unsigned int uid;
+        int r;
+
+        r = parse_legacy_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid);
+        if (!r) {
+            syslog(LOG_ERR, "IOERROR: Cannot parse \"%s\" as cyrusid", cyrusid);
+            return IMAP_IOERROR;
+        }
+
+        if (!(bb->opts & SEARCH_MULTIPLE)) {
+            if (strcmp(mboxname, bb->mailbox->name))
+                return 0;
+            if (uidvalidity != bb->mailbox->i.uidvalidity)
+                return 0;
+        }
+
+        xstats_inc(SPHINX_RESULT);
+        r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
+        return r;
+    }
 }
 
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
@@ -890,11 +928,14 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     if (bb->db == NULL)
         return IMAP_NOTFOUND;       /* there's no index for this user */
 
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        syslog(LOG_ERR, "Xapian search requires enabled conversations");
+        return IMAP_NOTFOUND;
+    }
+
     optimise_nodes(NULL, bb->root);
     qq = opnode_to_query(bb->db, bb->root);
-
-    if (!qq)
-        return IMAP_INTERNAL;
+    if (!qq) goto out;
 
     bb->proc = proc;
     bb->rock = rock;
@@ -1059,6 +1100,7 @@ struct xapian_receiver
     search_text_receiver_t super;
     int verbose;
     struct mailbox *mailbox;
+    struct message_guid guid;
     uint32_t uid;
     int part;
     unsigned int parts_total;
@@ -1245,10 +1287,12 @@ static void free_segments(xapian_receiver_t *tr)
     ptrarray_truncate(&tr->segs, 0);
 }
 
-static void begin_message(search_text_receiver_t *rx, uint32_t uid)
+static void begin_message(search_text_receiver_t *rx,
+                          const struct message_guid *guid, uint32_t uid)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
+    message_guid_copy(&tr->guid, guid);
     tr->uid = uid;
     free_segments(tr);
     tr->parts_total = 0;
@@ -1322,6 +1366,27 @@ static int compare_segs(const void **v1, const void **v2)
     return r;
 }
 
+static int index_uid(search_text_receiver_t *rx,
+                     const struct message_guid *guid,
+                     uint32_t uid)
+{
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+
+    /* Don't lookup the guid index for the current guid */
+    if (message_guid_cmp(&tr->super.guid, guid)) {
+        if (!xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)))
+            return IMAP_NOTFOUND;
+    }
+
+    /* track that this UID was indexed.  Use SEQ_MERGE to avoid a bitty sequence
+     * with lots of holes in it if messages have been expunged meanwhile. */
+    if (!tr->indexed) {
+        tr->indexed = seqset_init(0, SEQ_MERGE);
+    }
+    seqset_add(tr->indexed, uid, 1);
+    return 0;
+}
+
 static int end_message_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
@@ -1331,7 +1396,7 @@ static int end_message_update(search_text_receiver_t *rx)
 
     if (!tr->dbw) return IMAP_INTERNAL;
 
-    r = xapian_dbw_begin_doc(tr->dbw, make_cyrusid(tr->super.mailbox, tr->super.uid));
+    r = xapian_dbw_begin_doc(tr->dbw, make_cyrusid(&tr->super.guid));
     if (r) goto out;
 
     ptrarray_sort(&tr->super.segs, compare_segs);
@@ -1348,16 +1413,14 @@ static int end_message_update(search_text_receiver_t *rx)
     }
     r = xapian_dbw_end_doc(tr->dbw);
     if (r) goto out;
+
     ++tr->uncommitted;
-    /* track that this UID was indexed.  Use SEQ_MERGE to avoid a bitty sequence
-     * with lots of holes in it if messages have been expunged meanwhile. */
-    if (!tr->indexed) {
-        tr->indexed = seqset_init(0, SEQ_MERGE);
-    }
-    seqset_add(tr->indexed, tr->super.uid, 1);
+
+    index_uid(rx, &tr->super.guid, tr->super.uid);
 
 out:
     tr->super.uid = 0;
+    message_guid_set_null(&tr->super.guid);
     return r;
 }
 
@@ -1519,6 +1582,8 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.flush = flush;
 
     tr->super.verbose = verbose;
+
+    tr->super.super.index_uid = index_uid;
 
     return &tr->super.super;
 }
@@ -1889,7 +1954,7 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
     struct mbdata *data;
     int res = 0;
 
-    if (!parse_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid))
+    if (!parse_legacy_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid))
         goto out; /* failed to parse -> not exists */
 
     data = (struct mbdata *)hash_lookup(mboxname, &filter->mboxes);
@@ -2047,6 +2112,10 @@ static int reindex_mb(void *rock,
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
+    struct batch_entry {
+        struct message_guid guid;
+        message_t *msg;
+    } *entry;
     const struct index_record *record;
     int verbose = SEARCH_VERBOSE(filter->flags);
     int r = 0;
@@ -2076,8 +2145,12 @@ static int reindex_mb(void *rock,
         if (!seqset_ismember(seq, record->uid))
             continue;
 
+        entry = xzmalloc(sizeof(struct batch_entry));
+        entry->msg = message_new_from_record(mailbox, record);
+        message_guid_copy(&entry->guid, &record->guid);
+
         /* add the record to the list */
-        ptrarray_append(&batch, message_new_from_record(mailbox, record));
+        ptrarray_append(&batch, entry);
     }
 
     mailbox_iter_done(&iter);
@@ -2094,10 +2167,10 @@ static int reindex_mb(void *rock,
 
         /* preload */
         for (i = 0 ; i < batch.count ; i++) {
-            message_t *msg = ptrarray_nth(&batch, i);
+            entry = ptrarray_nth(&batch, i);
             const char *fname;
 
-            r = message_get_fname(msg, &fname);
+            r = message_get_fname(entry->msg, &fname);
             if (r) goto done;
             r = warmup_file(fname, 0, 0);
             if (r) goto done; /* means we failed to open a file,
@@ -2106,9 +2179,10 @@ static int reindex_mb(void *rock,
 
         /* index the messages */
         for (i = 0 ; i < batch.count ; i++) {
-            message_t *msg = ptrarray_nth(&batch, i);
-            r = index_getsearchtext(msg, &tr->super.super, 0);
-            message_unref(&msg);
+            entry = ptrarray_nth(&batch, i);
+            r = index_getsearchtext(entry->msg, &tr->super.super, &entry->guid, 0);
+            message_unref(&entry->msg);
+            free(entry);
         }
         if (r) goto done;
         if (tr->uncommitted) {
