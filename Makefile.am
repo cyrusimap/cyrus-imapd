@@ -367,42 +367,9 @@ EXTRA_DIST += \
 	imap/rfc822_header.st \
 	imap/tz_err.et \
 	lib/charset/aliases.txt \
-	lib/charset/big5.t \
-	lib/charset/gb2312.t \
-	lib/charset/iso-2022-jp.t \
-	lib/charset/iso-2022-kr.t \
-	lib/charset/iso-8859-10.t \
-	lib/charset/iso-8859-11.t \
-	lib/charset/iso-8859-13.t \
-	lib/charset/iso-8859-14.t \
-	lib/charset/iso-8859-15.t \
-	lib/charset/iso-8859-16.t \
-	lib/charset/iso-8859-1.t \
-	lib/charset/iso-8859-2.t \
-	lib/charset/iso-8859-3.t \
-	lib/charset/iso-8859-4.t \
-	lib/charset/iso-8859-5.t \
-	lib/charset/iso-8859-6.t \
-	lib/charset/iso-8859-7.t \
-	lib/charset/iso-8859-8.t \
-	lib/charset/iso-8859-9.t \
-	lib/charset/koi8-r.t \
-	lib/charset/koi8-u.t \
-	lib/charset/msdos-latin1.t \
 	lib/charset/UnicodeData.txt \
 	lib/charset/unifix.txt \
 	lib/charset/us-ascii.t \
-	lib/charset/windows-1250.t \
-	lib/charset/windows-1251.t \
-	lib/charset/windows-1252.t \
-	lib/charset/windows-1254.t \
-	lib/charset/windows-1255.t \
-	lib/charset/windows-1256.t \
-	lib/charset/windows-1257.t \
-	lib/charset/windows-1258.t \
-	lib/charset/windows-31j.t \
-	lib/charset/windows-874.t \
-	lib/charset/windows-936.t \
 	lib/htmlchar.st \
 	lib/imapoptions \
 	lib/test/cyrusdb.c \
