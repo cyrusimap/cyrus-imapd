@@ -82,6 +82,7 @@ typedef struct conversation conversation_t;
 typedef struct conv_folder  conv_folder_t;
 typedef struct conv_sender  conv_sender_t;
 typedef struct conv_status  conv_status_t;
+typedef struct conv_guidrec conv_guidrec_t;
 
 #define MAX_CONVERSATION_FLAGS 256
 
@@ -93,6 +94,11 @@ struct conv_folder {
     uint32_t        exists;
     uint32_t        unseen;
     uint32_t        prev_exists;
+};
+
+struct conv_guidrec {
+    const char*     mboxname;
+    uint32_t        uid;
 };
 
 struct conv_sender {
@@ -163,9 +169,10 @@ extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
 extern const strarray_t *conversations_get_folders(struct conversations_state *state);
-extern strarray_t *conversations_get_guid(struct conversations_state *state,
-                                          const char *guidrep);
-
+extern int conversations_guid_foreach(struct conversations_state *state,
+                                      const char *guidrep,
+                                      int(*cb)(const conv_guidrec_t*,void*),
+                                      void *rock);
 
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,

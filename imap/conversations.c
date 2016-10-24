@@ -1447,18 +1447,66 @@ EXPORTED const strarray_t *conversations_get_folders(struct conversations_state 
     return state->folder_names;
 }
 
-EXPORTED strarray_t *conversations_get_guid(struct conversations_state *state,
-                                            const char *guidrep)
+EXPORTED int conversations_guid_foreach(struct conversations_state *state,
+                                        const char *guidrep,
+                                        int(*cb)(const conv_guidrec_t*,void*),
+                                        void *rock)
 {
     char *key = strconcat("G", guidrep, (char *)NULL);
-    strarray_t *res = NULL;
+    strarray_t *recs = NULL;
     size_t datalen = 0;
     const char *data;
+    int i, r;
 
-    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
-    if (!r) res = strarray_nsplit(data, datalen, ",", /*flags*/0);
+    r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
+    if (r == CYRUSDB_NOTFOUND) {
+        return 0;
+    } else if (r) {
+        return r;
+    }
 
-    return res;
+    recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
+
+    for (i = 0; i < recs->count; i++) {
+        const char *p, *s, *err;
+        conv_guidrec_t rec;
+        uint32_t res;
+
+        /* foldernumber:uid */
+        s = strarray_nth(recs, i);
+        p = strchr(s, ':');
+        if (!p) {
+            r = IMAP_INTERNAL;
+            break;
+        }
+
+        /* mboxname */
+        r = parseuint32(s, &err, &res);
+        if (r || err != p) {
+            r = IMAP_INTERNAL;
+            break;
+        }
+        rec.mboxname = strarray_safenth(state->folder_names, res);
+        if (!rec.mboxname) {
+            r = IMAP_INTERNAL;
+            break;
+        }
+
+        /* uid */
+        r = parseuint32(p + 1, &err, &res);
+        if (r || *err) {
+            r = IMAP_INTERNAL;
+            break;
+        }
+        rec.uid = res;
+
+        r = cb(&rec, rock);
+        if (r) break;
+    }
+
+    if (recs) strarray_free(recs);
+    free(key);
+    return r;
 }
 
 static int conversations_set_guid(struct conversations_state *state,
