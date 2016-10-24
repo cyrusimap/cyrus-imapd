@@ -737,12 +737,13 @@ sub test_getmessages
     $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
     $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
 
-    my $now = DateTime->now();
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => -10));
 
     xlog "Generate a message in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
-        date => $now,
+        date => $maildate,
         from => Cassandane::Address->new(
             name => "Sally Sender",
             localpart => "sally",
@@ -813,8 +814,8 @@ sub test_getmessages
     $self->assert_null($msg->{replyTo});
     $self->assert_str_equals($msg->{subject}, "Message A");
 
-    my $datestr = $now->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($msg->{date}, $datestr);
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+    $self->assert_str_equals($datestr, $msg->{date});
     $self->assert_not_null($msg->{size});
 }
 
