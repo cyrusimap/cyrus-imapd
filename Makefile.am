@@ -64,7 +64,7 @@ if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
-AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS) -lm
+AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 BUILT_SOURCES = \
 	xversion.h \
 	imap/imap_err.c \
