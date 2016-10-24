@@ -47,7 +47,6 @@
 #include <unistd.h>
 #endif
 #include <ctype.h>
-#include <math.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -531,7 +530,7 @@ encode_base64_jmap(json_t *src, const char *type)
     /* base64 encode JSON */
     dump = json_dumps(src, JSON_COMPACT);
     len = strlen(dump);
-    len64 = (4 * ((size_t) ceil(len / 3.0))) + 1;
+    len64 = (4 * ((len + 3) / 3)) + 1;
     buf64 = xzmalloc(len64);
     sasl_encode64(dump, len, buf64, len64, NULL);
     make_data_uri(&buf, type, buf64);
