@@ -818,6 +818,42 @@ sub test_getmessages
     $self->assert_not_null($msg->{size});
 }
 
+sub test_getmessages_multimailboxes
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $now = DateTime->now();
+
+    xlog "Generate a message in INBOX via IMAP";
+    my $res = $self->make_message("foo") || die;
+    my $uid = $res->{attrs}->{uid};
+    my $msg;
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessageList', {fetchMessages => JSON::true}, "R1"]]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{messageIds}});
+    $self->assert_num_equals(1, scalar @{$msg->{mailboxIds}});
+
+    xlog "Create target mailbox";
+    $talk->create("INBOX.target");
+
+    xlog "Copy message into INBOX.target";
+    $talk->copy($uid, "INBOX.target");
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessageList', {fetchMessages => JSON::true}, "R1"]]);
+    $msg = $res->[1][1]{list}[0];
+    xlog Dumper($res);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{messageIds}});
+    $self->assert_num_equals(2, scalar @{$msg->{mailboxIds}});
+}
+
 
 sub test_getmessages_body_both
     :min_version_3_0
