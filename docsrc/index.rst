@@ -43,14 +43,6 @@ This is the highlight reel of Cyrus's full list of :ref:`features <imap-features
     developers
     support
 
-.. toctree::
-    :hidden:
-
-    imap/index
-    preface
-    styles
-    glossary
-
 --------
 
 What is Cyrus SASL?
@@ -79,12 +71,6 @@ Cyrus IMAP uses Cyrus SASL to provide authentication support to the mail server,
     sasl/authentication_mechanisms
     sasl/pwcheck
     sasl/faq
-
-.. toctree::
-    :hidden:
-
-    imap/rfc-support
-    sasl/index
 
 --------
 

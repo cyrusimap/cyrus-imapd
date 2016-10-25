@@ -1,3 +1,5 @@
+:orphan:
+
 Document Conventions
 ====================
 
@@ -47,11 +49,11 @@ The addition of italics indicates replaceable or variable text. Italics denotes 
 
     The ``mount -o remount *file-system*`` command remountes the named file system. For example, to remount the ``/home`` file system, the command is ``mount -o remount /home``.
 
-    To see the version of a currently installed package, use the ``rpm -q *package*`` command. It will return a result as follows: *package-version-release*. 
+    To see the version of a currently installed package, use the ``rpm -q *package*`` command. It will return a result as follows: *package-version-release*.
 
 Note the words in bold italics above — username, domain.name, file-system, package, version and release. Each word is a placeholder, either for text you enter when issuing a command or for text displayed by the system.
 
-Aside from standard usage for presenting the title of a work, italics denotes the first use of a new and important term. For example: 
+Aside from standard usage for presenting the title of a work, italics denotes the first use of a new and important term. For example:
 
     Publican is a *DocBook* publishing system.
 
@@ -84,4 +86,3 @@ Finally, we use three visual styles to draw attention to information that might 
 
 .. todo::
    To-do sections mean that someone hasn't yet written this section, or maybe there is some information missing or potentially inaccurate. It will probably be worth reading the to-do note.
-

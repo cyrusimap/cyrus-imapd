@@ -1,6 +1,8 @@
+:orphan:
+
 .. Cyrus SASL guide documentation master file, created by
    sphinx-quickstart on Sun May 18 01:11:31 2014.
-.. _sasl:   
+.. _sasl:
 
 Cyrus SASL documentation
 ========================
@@ -20,16 +22,16 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-    
+
    getting_started
    auxiliary_properties
    authentication_mechanisms
    pwcheck
    faq
    sasl_migration
-   
+
 
 .. toctree::
    :hidden:
-   
+
    installation

@@ -1,33 +1,35 @@
+:orphan:
+
 ========
 Glossary
 ========
 
 .. glossary::
     :sorted:
-    
+
     HBA
     Host Bus Adapter
-     
-       A Host Bus Adapter is a device to connect a computer to a storage device. 
-       
+
+       A Host Bus Adapter is a device to connect a computer to a storage device.
+
        .. seealso::
-       
-        * `Host adapter <https://en.wikipedia.org/wiki/Host_adapter>`_ 
-        
+
+        * `Host adapter <https://en.wikipedia.org/wiki/Host_adapter>`_
+
     backend
-  
+
        The part of a Cyrus configuration which contains the data.
-       
+
        .. seealso::
-       
+
         * :term:`frontend`
-    
+
     frontend
-  
+
        The part of a Cyrus configuration which contains the components which talk to clients.
-       
+
        .. seealso::
-       
+
         * :term:`frontend`
 
     authorization realm
