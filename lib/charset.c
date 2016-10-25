@@ -2429,7 +2429,9 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
     input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
-    input = canon_init(flags, input);
+    if (!(flags & CHARSET_NO_CANONIFY)) {
+        input = canon_init(flags, input);
+    }
 
     if (!strcmpsafe(subtype, "HTML")) {
         if ((flags & CHARSET_SKIPHTML)) {

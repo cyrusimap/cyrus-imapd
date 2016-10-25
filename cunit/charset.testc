@@ -910,6 +910,12 @@ static void test_extract(void)
 
     /* &nonesuch; is most definitely not defined */
     TESTCASE("A&nonesuch;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
+
+    /* HTML: skip html but don't canonify */
+    flags |= CHARSET_NO_CANONIFY;
+    TESTCASE("<b>Photo</b> <em>booth</em>",
+        "us-ascii", ENCODING_NONE, "HTML",
+        "Photo booth");
 }
 #undef TESTCASE
 
