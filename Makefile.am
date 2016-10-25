@@ -1204,6 +1204,7 @@ imap_httpd_SOURCES = \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
 	imap/jmapical.c \
+	imap/jmapical.h \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
