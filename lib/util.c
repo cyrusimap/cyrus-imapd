@@ -48,7 +48,6 @@
 #include <grp.h>
 #include <limits.h>
 #include <pwd.h>
-#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -656,11 +655,8 @@ double timeval_get_double(const struct timeval *tv)
 
 EXPORTED void timeval_set_double(struct timeval *tv, double d)
 {
-    double sec;
-    double subsec = modf(d, &sec);
-
-    tv->tv_sec = sec;
-    tv->tv_usec = 1000000.0*subsec;
+    tv->tv_sec = (long) d;
+    tv->tv_usec = (long) (1000000 * (d - tv->tv_sec));
 }
 
 EXPORTED void timeval_add_double(struct timeval *tv, double delta)
