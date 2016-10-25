@@ -952,7 +952,7 @@ sub test_getmessages_body_html
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
-    my $body = "<html><body><p>An html message.</p></body></html>";
+    my $body = "<html><body> <p>A HTML message.</p> </body></html>";
     $exp_sub{A} = $self->make_message("foo",
         mime_type => "text/html",
         body => $body
@@ -965,8 +965,8 @@ sub test_getmessages_body_html
     $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($msg->{textBody}, '   AN HTML MESSAGE.   ');
-    $self->assert_str_equals($msg->{htmlBody}, '<html><body><p>An html message.</p></body></html>');
+    $self->assert_str_equals('A HTML message.', $msg->{textBody});
+    $self->assert_str_equals($body, $msg->{htmlBody});
 }
 
 sub test_getmessages_preview
