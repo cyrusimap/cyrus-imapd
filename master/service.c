@@ -522,7 +522,7 @@ int main(int argc, char **argv, char **envp)
                 if (fd < 0) {
                     switch (errno) {
                     case EINTR:
-            signals_poll();
+                        signals_poll();
                     case ENETDOWN:
 #ifdef EPROTO
                     case EPROTO:
@@ -535,6 +535,7 @@ int main(int argc, char **argv, char **envp)
                     case EHOSTUNREACH:
                     case EOPNOTSUPP:
                     case ENETUNREACH:
+                    case ECONNABORTED:
                     case EAGAIN:
                         break;
 
