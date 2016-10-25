@@ -54,7 +54,6 @@
 #endif
 #include <signal.h>
 #include <fcntl.h>
-#include <math.h>
 
 #include "global.h"
 #include "xmalloc.h"
@@ -181,7 +180,7 @@ int main(int argc, char **argv)
         signals_poll();
 
         totaltime = timesub(&start, &end);
-        tosleep = 10 - round(totaltime);
+        tosleep = 10 - (int) (totaltime + 0.5); /* round to nearest int */
         if (tosleep > 0)
             sleep(tosleep);
     }
