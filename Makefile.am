@@ -267,7 +267,6 @@ EXTRA_DIST += \
 
 if !HTTPD
 EXTRA_DIST += \
-	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -359,6 +358,7 @@ EXTRA_DIST += \
 	doc \
 	docsrc \
 	imap/dav_util.h \
+	imap/http_caldav_js.h \
 	imap/http_caldav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
