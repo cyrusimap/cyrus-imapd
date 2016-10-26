@@ -1297,45 +1297,76 @@ sub test_setmessages_update
 }
 
 sub test_setmessages_destroy
-    :min_version_3_0
-{
+  : min_version_3_0 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "create drafts mailbox";
-    my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
-                            name => "drafts",
+    xlog "create mailboxes";
+    my $res = $jmap->Request(
+        [
+            [
+                'setMailboxes',
+                {
+                    create => {
+                        "#1" => {
+                            name     => "drafts",
                             parentId => undef,
-                            role => "drafts"
-             }}}, "R1"]
-    ]);
-    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_not_null($res->[0][1]{created});
-    my $drafts = $res->[0][1]{created}{"#1"}{id};
-
-    my $draft =  {
-        mailboxIds => [$drafts],
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
-        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
-        subject => "created",
-        textBody => "Oh!!! I *hate* that Rabbit.",
-    };
+                            role     => "drafts"
+                        },
+                        "#2" => {
+                            name     => "foo",
+                            parentId => undef,
+                        },
+                        "#3" => {
+                            name     => "bar",
+                            parentId => undef,
+                        },
+                    }
+                },
+                "R1"
+            ]
+        ]
+    );
+    $self->assert_str_equals( $res->[0][0], 'mailboxesSet' );
+    $self->assert_str_equals( $res->[0][2], 'R1' );
+    $self->assert_not_null( $res->[0][1]{created} );
+    my $mailboxids = [
+        $res->[0][1]{created}{"#1"}{id},
+        $res->[0][1]{created}{"#2"}{id},
+        $res->[0][1]{created}{"#3"}{id},
+    ];
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $draft = {
+        mailboxIds => $mailboxids,
+        from       => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        to         => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
+        subject    => "created",
+        textBody   => "Oh!!! I *hate* that Rabbit.",
+    };
+    $res = $jmap->Request(
+        [ [ 'setMessages', { create => { "1" => $draft } }, "R1" ] ],
+    );
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
 
+    xlog "Get draft $id";
+    $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{list}[0]{mailboxIds}});
+
     xlog "Destroy draft $id";
-    $res = $jmap->Request([['setMessages', { destroy => [ $id, "foo" ]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
-    $self->assert_str_equals($res->[0][1]{notDestroyed}{foo}{type}, "notFound");
+    $res = $jmap->Request(
+        [ [ 'setMessages', { destroy => [ $id ] }, "R1" ] ],
+    );
+    $self->assert_str_equals( $res->[0][1]{destroyed}[0], $id );
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]->{notFound}[0], $id);
+    $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ]);
+    $self->assert_str_equals( $res->[0][1]->{notFound}[0], $id );
+
+    xlog "Get messages";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
 }
 
 1;
