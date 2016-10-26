@@ -872,36 +872,42 @@ sub test_getmessages_body_both
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
+    my $htmlBody = "<html><body><p>This is the html part.</p></body></html>";
+    my $textBody = "This is the plain text part.";
+
     my $body = "--047d7b33dd729737fe04d3bde348\r\n";
     $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $body .= "\r\n";
-    $body .= "This is the plain text part.";
+    $body .= $textBody;
     $body .= "\r\n";
     $body .= "--047d7b33dd729737fe04d3bde348\r\n";
     $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
     $body .= "\r\n";
-    $body .= "<html>";
-    $body .= "<body>";
-    $body .= "<p>This is the html part.</p>";
-    $body .= "</body>";
-    $body .= "</html>";
+    $body .= $htmlBody;
     $body .= "\r\n";
     $body .= "--047d7b33dd729737fe04d3bde348--";
     $exp_sub{A} = $self->make_message("foo",
-        mime_type => "multipart/mixed",
+        mime_type => "multipart/alternative",
         mime_boundary => "047d7b33dd729737fe04d3bde348",
         body => $body
     );
 
     xlog "get message list";
     my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
 
-    xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($msg->{textBody}, 'This is the plain text part.');
-    $self->assert_str_equals($msg->{htmlBody}, '<html><body><p>This is the html part.</p></body></html>');
+    $self->assert_str_equals($textBody, $msg->{textBody});
+    $self->assert_str_equals($htmlBody, $msg->{htmlBody});
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
+    $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($htmlBody, $msg->{body});
 }
 
 sub test_getmessages_body_plain
@@ -927,13 +933,20 @@ sub test_getmessages_body_plain
 
     xlog "get message list";
     my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
 
     xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($msg->{textBody}, 'A plain text message.');
-    $self->assert_str_equals($msg->{htmlBody}, 'A plain text message.');
+    $self->assert_str_equals($body, $msg->{textBody});
+    $self->assert_str_equals($body, $msg->{htmlBody});
+
+    xlog "get messages";
+    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
+    $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals($body, $msg->{body});
 }
 
 sub test_getmessages_body_html
@@ -960,13 +973,21 @@ sub test_getmessages_body_html
 
     xlog "get message list";
     my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
 
-    xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals('A HTML message.', $msg->{textBody});
     $self->assert_str_equals($body, $msg->{htmlBody});
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', {
+        ids => $ids, properties => ["body"],
+    }, "R1"]]);
+    $msg = $res->[0][1]{list}[0];
+    $self->assert_str_equals($body, $msg->{body});
 }
 
 sub test_getmessages_preview
