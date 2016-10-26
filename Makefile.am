@@ -1651,7 +1651,7 @@ sieve_libcyrus_sieve_lex_la_SOURCES = \
 	sieve/addr-lex.l \
 	sieve/sieve-lex.l
 sieve_libcyrus_sieve_lex_la_LIBADD =
-sieve_libcyrus_sieve_lex_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) -Wno-sign-compare
+sieve_libcyrus_sieve_lex_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(NOWARN_SIGN_COMPARE)
 
 nodist_sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/sieve_err.c \
