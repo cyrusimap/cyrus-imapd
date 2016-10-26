@@ -56,6 +56,20 @@ use Cassandane::Util::Log;
 
 use charnames ':full';
 
+sub getinbox
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $self->assert_not_null($res);
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    return $m{"Inbox"};
+}
+
 sub test_getmailboxes
     :min_version_3_0
 {
@@ -1039,10 +1053,10 @@ sub test_setmessages_draft
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $drafts = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
 
     my $draft =  {
-        mailboxIds => [$drafts],
+        mailboxIds => [$draftsmbox],
         from => { name => "Yosemite Sam", email => "sam\@acme.local" },
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -1167,6 +1181,69 @@ sub test_setmessages_invalid_mailaddr
     $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
     $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
     $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'header[To]');
+}
+
+sub test_setmessages_mailboxids
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+    $self->assert_not_null($inboxid);
+
+    my $res = $jmap->Request([
+        ['setMailboxes', { create => {
+            "#1" => { name => "outbox", parentId => undef, role => "outbox" },
+            "#2" => { name => "drafts", parentId => undef, role => "drafts" },
+        }}, "R1"]
+    ]);
+    my $outboxid = $res->[0][1]{created}{"#1"}{id};
+    my $draftsid = $res->[0][1]{created}{"#2"}{id};
+    $self->assert_not_null($outboxid);
+    $self->assert_not_null($draftsid);
+
+    my $msg =  {
+        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+    };
+
+    # Not OK some mailbox must be specified
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+    $msg->{mailboxIds} = [];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    # Not OK, either outbox or drafts must be in mailboxIds
+    $msg->{mailboxIds} = [$inboxid];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    # OK, save draft
+    $msg->{mailboxIds} = [$outboxid];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+
+    # OK, send immediately
+    $msg->{mailboxIds} = [$outboxid];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+
+    # Weird, but OK
+    $msg->{mailboxIds} = [$inboxid, $outboxid];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+
+    # Also weird, but OK
+    $msg->{mailboxIds} = [$draftsid, $outboxid];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
 }
 
 sub test_setmessages_update
