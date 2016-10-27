@@ -11835,24 +11835,28 @@ static int list_data_remote(char *tag, struct listargs *listargs)
     if (listargs->cmd & LIST_CMD_LSUB) {
 	prot_printf(backend_inbox->out, "%s Lsub ", tag);
     } else {
-	const char *select_opts[] = {
-	    /* XXX  MUST be in same order as LIST_SEL_* bitmask */
-	    "subscribed", "remote", "recursivematch",
-	    "special-use", NULL
-	};
-	char c = '(';
-	int i;
-
 	prot_printf(backend_inbox->out, "%s List ", tag);
-	for (i = 0; select_opts[i]; i++) {
-	    unsigned opt = (1 << i);
 
-	    if (!(listargs->sel & opt)) continue;
+	/* print list selection options */
+	if (listargs->sel) {
+	    const char *select_opts[] = {
+		/* XXX  MUST be in same order as LIST_SEL_* bitmask */
+		"subscribed", "remote", "recursivematch",
+		"special-use", NULL
+	    };
+	    char c = '(';
+	    int i;
 
-	    prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
-	    c = ' ';
+	    for (i = 0; select_opts[i]; i++) {
+		unsigned opt = (1 << i);
+
+		if (!(listargs->sel & opt)) continue;
+
+		prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
+		c = ' ';
+	    }
+	    prot_puts(backend_inbox->out, ") ");
 	}
-	prot_puts(backend_inbox->out, ") ");
     }
 
     /* print reference argument */
