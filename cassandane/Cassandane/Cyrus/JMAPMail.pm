@@ -1210,7 +1210,7 @@ sub test_setmessages_mailboxids
         textBody => "I'm givin' ya one last chance ta surrenda!",
     };
 
-    # Not OK some mailbox must be specified
+    # Not: OK at least one mailbox must be specified
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
@@ -1244,6 +1244,60 @@ sub test_setmessages_mailboxids
     $msg->{mailboxIds} = [$draftsid, $outboxid];
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+}
+
+sub test_setmessages_move
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Create test mailboxes";
+    my $res = $jmap->Request([
+        ['setMailboxes', { create => {
+            "#a" => { name => "a", parentId => undef },
+            "#b" => { name => "b", parentId => undef },
+            "#c" => { name => "c", parentId => undef },
+            "#d" => { name => "d", parentId => undef },
+        }}, "R1"]
+    ]);
+    $self->assert_num_equals( 4, scalar keys $res->[0][1]{created} );
+    my $a = $res->[0][1]{created}{"#a"}{id};
+    my $b = $res->[0][1]{created}{"#b"}{id};
+    my $c = $res->[0][1]{created}{"#c"}{id};
+    my $d = $res->[0][1]{created}{"#d"}{id};
+
+    xlog "Generate a message via IMAP";
+    my %exp_sub;
+    $exp_sub{A} = $self->make_message(
+        "foo", body => "a message",
+    );
+
+    xlog "get message id";
+    $res = $jmap->Request( [ [ 'getMessageList', {}, "R1" ] ] );
+    my $id = $res->[0][1]->{messageIds}[0];
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+    my @mboxids = $msg->{mailboxIds};
+    $self->assert_num_equals(1, scalar @mboxids);
+
+    xlog "move message from $inbox to mailboxes $a and $b";
+    $msg->{mailboxIds} = [$a, $b];
+    $res = $jmap->Request([['setMessages', { update => { $id => $msg }}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $msg = $res->[0][1]->{list}[0];
+    xlog Dumper($res);
+    $self->assert_deep_equals(sort [$a, $b], sort $msg->{mailboxIds});
+
+    # FIXME - continue from here
 }
 
 sub test_setmessages_update
