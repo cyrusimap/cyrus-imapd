@@ -7,6 +7,20 @@
 #include "imap/mailbox.h"
 #include "imap/global.h"
 
+/* This structure encapsulates all the variables which affect
+ * namespace translation in one place */
+static struct
+{
+    const char *userid;
+    int isadmin;
+    int altnamespace;
+    int virtdomains;
+    const char *defdomain;
+    const char *userprefix;
+    const char *sharedprefix;
+    int unixhierarchysep;
+} conf;
+
 static void test_dir_hash_c(void)
 {
     static const char FRED[] = "fred";
@@ -252,20 +266,6 @@ static void test_parts_same_userid_domain(void)
     mboxname_free_parts(&parts1);
     mboxname_free_parts(&parts2);
 }
-
-/* This structure encapsulates all the variables which affect
- * namespace translation in one place */
-static struct
-{
-    const char *userid;
-    int isadmin;
-    int altnamespace;
-    int virtdomains;
-    const char *defdomain;
-    const char *userprefix;
-    const char *sharedprefix;
-    int unixhierarchysep;
-} conf;
 
 static void toexternal_helper(const char *intname,
 			      const char *extname_expected)
