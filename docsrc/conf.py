@@ -1224,7 +1224,7 @@ extlinks = {
         'task':('https://git.cyrus.foundation/T%s', 'Task #'),
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
         'cyrus-stable':('http://www.cyrusimap.org/stable%s',None),
-        'cyrus-dev':('http://www.cyrusimap.org%s',None),
+        'cyrus-dev':('http://www.cyrusimap.org/dev%s',None),
     }
 
 # Change this to whatever your output root is
