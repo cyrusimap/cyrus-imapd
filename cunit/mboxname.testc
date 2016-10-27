@@ -7,6 +7,20 @@
 #include "imap/mailbox.h"
 #include "imap/global.h"
 
+/* This structure encapsulates all the variables which affect
+ * namespace translation in one place */
+static struct
+{
+    const char *userid;
+    int isadmin;
+    int altnamespace;
+    int virtdomains;
+    const char *defdomain;
+    const char *userprefix;
+    const char *sharedprefix;
+    int unixhierarchysep;
+} conf;
+
 static void test_dir_hash_c(void)
 {
     static const char FRED[] = "fred";
@@ -91,6 +105,7 @@ static void test_to_userid(void)
 {
     static const char SAM_DRAFTS[] = "user.sam.Drafts";
     static const char BETTYAT_SENT[] = "boop.com!user.betty.Sent";
+    static const char JOHNDOE_SENT[] = "example.org!user.john^doe.Sent";
     static const char SHARED[] = "shared.Gossip";
     static const char SHAREDAT[] = "foonly.com!shared.Tattle";
     const char *r;
@@ -101,12 +116,49 @@ static void test_to_userid(void)
     r = mboxname_to_userid(BETTYAT_SENT);
     CU_ASSERT_STRING_EQUAL(r, "betty@boop.com");
 
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = 1;
+    r = mboxname_to_userid(JOHNDOE_SENT);
+    CU_ASSERT_STRING_EQUAL(r, "john.doe@example.org");
+
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = 0;
     r = mboxname_to_userid(SHARED);
     CU_ASSERT_PTR_NULL(r);
 
     r = mboxname_to_userid(SHAREDAT);
     CU_ASSERT_PTR_NULL(r);
 }
+
+static void test_to_userid_unixhiersep(void)
+{
+    int orig;
+    orig = imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b;
+
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = 1;
+
+    static const char SAM_DRAFTS[] = "user.sam.Drafts";
+    static const char BETTYAT_SENT[] = "boop.com!user.betty.Sent";
+    static const char JOHNDOE_SENT[] = "example.org!user.john^doe.Sent";
+    static const char SHARED[] = "shared.Gossip";
+    static const char SHAREDAT[] = "foonly.com!shared.Tattle";
+    const char *r;
+
+    r = mboxname_to_userid(SAM_DRAFTS);
+    CU_ASSERT_STRING_EQUAL(r, "sam");
+
+    r = mboxname_to_userid(BETTYAT_SENT);
+    CU_ASSERT_STRING_EQUAL(r, "betty@boop.com");
+
+    r = mboxname_to_userid(JOHNDOE_SENT);
+    CU_ASSERT_STRING_EQUAL(r, "john.doe@example.org");
+
+    r = mboxname_to_userid(SHARED);
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_to_userid(SHAREDAT);
+    CU_ASSERT_PTR_NULL(r);
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = orig;
+}
+
 
 static void test_to_usermbox(void)
 {
@@ -142,7 +194,6 @@ static void test_to_usermbox(void)
     CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty.sub.deep.stuff");
     free(r);
 }
-
 
 static void test_same_userid(void)
 {
@@ -253,20 +304,6 @@ static void test_parts_same_userid_domain(void)
     mboxname_free_parts(&parts2);
 }
 
-/* This structure encapsulates all the variables which affect
- * namespace translation in one place */
-static struct
-{
-    const char *userid;
-    int isadmin;
-    int altnamespace;
-    int virtdomains;
-    const char *defdomain;
-    const char *userprefix;
-    const char *sharedprefix;
-    int unixhierarchysep;
-} conf;
-
 static void toexternal_helper(const char *intname,
 			      const char *extname_expected)
 {
@@ -349,6 +386,47 @@ static void test_toexternal_alt(void)
     toexternal_helper("user.jane.baz", "Uvvers.jane.baz");
     toexternal_helper("shared.quux", "Chaired.shared.quux");
 }
+
+static void test_to_usermbox_althiersep(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.altnamespace = 1;
+    conf.unixhierarchysep = 1;
+    conf.virtdomains = 1;
+    conf.isadmin = 1;
+
+    config_virtdomains = conf.virtdomains;
+    config_defdomain = conf.defdomain;
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;
+    imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;
+    imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;
+    imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;
+
+    char *r;
+    int i;
+    struct namespace ns;
+
+    i = mboxname_init_namespace(&ns, conf.isadmin);
+    CU_ASSERT_EQUAL_FATAL(i, 0);
+
+    r = mboxname_user_mbox("john.doe@example.org", NULL);
+    CU_ASSERT_STRING_EQUAL(r, "example.org!user.john^doe");
+    free(r);
+
+    r = mboxname_user_mbox("john.doe@example.org", "Sent");
+    CU_ASSERT_STRING_EQUAL(r, "example.org!user.john^doe.Sent");
+    free(r);
+
+    r = mboxname_user_mbox("john.doe@example.org", "Sent/Sub");
+    CU_ASSERT_STRING_EQUAL(r, "example.org!user.john^doe.Sent.Sub");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", NULL);
+    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty");
+    free(r);
+
+}
+
 
 static enum enum_value old_config_virtdomains;
 

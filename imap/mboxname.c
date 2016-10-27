@@ -331,6 +331,7 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 		snprintf(result, MAX_MAILBOX_BUFFER, "%s!", cp+1);
 	    }
 	}
+
 	if ((cp = strrchr(name, '@'))) {
 	    /* mailbox specified as mbox@domain */
 	    namelen = cp - name;
@@ -379,7 +380,7 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 		 "user.%.*s%.*s", userlen, userid, namelen-5, name+5);
 
 	/* Translate any separators in userid+mailbox */
-	mboxname_hiersep_tointernal(namespace, mbresult+5+userlen, 0);
+	mboxname_hiersep_tointernal(namespace, mbresult+5, 0);
     }
 
     else {
@@ -458,6 +459,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 
     /* Shared namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED]);
+
     if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
 
     if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
@@ -476,6 +478,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(namespace, result, 0);
+
 	return 0;
     }
 
@@ -992,6 +995,9 @@ EXPORTED const char *mboxname_to_userid(const char *mboxname)
     static char userid[MAX_MAILBOX_BUFFER];
     char *ret;
     struct mboxname_parts parts;
+    int unixsep;
+
+    unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
     if (mboxname_to_parts(mboxname, &parts))
 	return NULL;
@@ -999,6 +1005,12 @@ EXPORTED const char *mboxname_to_userid(const char *mboxname)
     if (parts.userid == NULL) {
 	ret = NULL;
     } else {
+	char *p;
+
+	if (unixsep && (p = strchr(parts.userid, DOTCHAR))) {
+	    *p = '.';
+	}
+
 	if (parts.domain)
 	    snprintf(userid, sizeof(userid), "%s@%s", parts.userid, parts.domain);
 	else
@@ -1013,24 +1025,24 @@ EXPORTED const char *mboxname_to_userid(const char *mboxname)
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     struct buf mbox = BUF_INITIALIZER;
+    char result[MAX_MAILBOX_BUFFER];
+
+    static struct namespace ns;
+    mboxname_init_namespace(&ns, /*is_admin*/1);
 
     if (!userid) return NULL;
 
     if (config_virtdomains) {
-	const char *atp;
-	atp = strchr(userid, '@');
-	if (atp) {
-	    buf_printf(&mbox, "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
-	    goto userdone;
-	}
+	ns.mboxname_tointernal(&ns, "INBOX", userid, result);
+	buf_printf(&mbox, "%s", result);
+	goto userdone;
     }
 
-    /* otherwise it's simple */
-    buf_printf(&mbox, "user.%s", userid);
-
- userdone:
-    if (subfolder)
-	buf_printf(&mbox, ".%s", subfolder);
+userdone:
+    if (subfolder) {
+	ns.mboxname_tointernal(&ns, subfolder, NULL, result);
+	buf_printf(&mbox, ".%s", result);
+    }
 
     return buf_release(&mbox);
 }
