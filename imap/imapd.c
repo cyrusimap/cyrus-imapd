@@ -12821,41 +12821,45 @@ static int list_data_remote(char *tag, struct listargs *listargs)
     if (listargs->cmd & LIST_CMD_LSUB) {
         prot_printf(backend_inbox->out, "%s Lsub ", tag);
     } else {
-        const char *select_opts[] = {
-            /* XXX  MUST be in same order as LIST_SEL_* bitmask */
-            "subscribed", "remote", "recursivematch",
-            "special-use", "vendor.cmu-dav", "metadata", NULL
-        };
-        char c = '(';
-        int i;
-
         prot_printf(backend_inbox->out, "%s List ", tag);
-        for (i = 0; select_opts[i]; i++) {
-            unsigned opt = (1 << i);
 
-            if (!(listargs->sel & opt)) continue;
+        /* print list selection options */
+        if (listargs->sel) {
+            const char *select_opts[] = {
+                /* XXX  MUST be in same order as LIST_SEL_* bitmask */
+                "subscribed", "remote", "recursivematch",
+                "special-use", "vendor.cmu-dav", "metadata", NULL
+            };
+            char c = '(';
+            int i;
 
-            prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
-            c = ' ';
+            for (i = 0; select_opts[i]; i++) {
+                unsigned opt = (1 << i);
 
-            if (opt == LIST_SEL_METADATA) {
-                /* print metadata options */
-                prot_puts(backend_inbox->out, " (depth ");
-                if (listargs->metaopts.depth < 0) {
-                    prot_puts(backend_inbox->out, "infinity");
+                if (!(listargs->sel & opt)) continue;
+
+                prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
+                c = ' ';
+
+                if (opt == LIST_SEL_METADATA) {
+                    /* print metadata options */
+                    prot_puts(backend_inbox->out, " (depth ");
+                    if (listargs->metaopts.depth < 0) {
+                        prot_puts(backend_inbox->out, "infinity");
+                    }
+                    else {
+                        prot_printf(backend_inbox->out, "%d",
+                                    listargs->metaopts.depth);
+                    }
+                    if (listargs->metaopts.maxsize) {
+                        prot_printf(backend_inbox->out, " maxsize %zu",
+                                    listargs->metaopts.maxsize);
+                    }
+                    (void)prot_putc(')', backend_inbox->out);
                 }
-                else {
-                    prot_printf(backend_inbox->out, "%d",
-                                listargs->metaopts.depth);
-                }
-                if (listargs->metaopts.maxsize) {
-                    prot_printf(backend_inbox->out, " maxsize %zu",
-                                listargs->metaopts.maxsize);
-                }
-                (void)prot_putc(')', backend_inbox->out);
             }
+            prot_puts(backend_inbox->out, ") ");
         }
-        prot_puts(backend_inbox->out, ") ");
     }
 
     /* print reference argument */
