@@ -1375,6 +1375,25 @@ EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
 }
 
 /*
+ * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
+{
+    if (mbtype & MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
  * If (internal) mailbox 'name' is a user's "Notes" mailbox
  * returns boolean
  */

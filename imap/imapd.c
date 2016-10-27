@@ -12502,6 +12502,7 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
             if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) return 0;
             if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) return 0;
             if (mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype)) return 0;
+            if (mboxname_isdavnotificationsmailbox(mbentry->name, mbentry->mbtype)) return 0;
         }
     }
 

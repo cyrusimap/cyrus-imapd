@@ -166,6 +166,12 @@ int mboxname_isaddressbookmailbox(const char *name, int mbtype);
  */
 int mboxname_isdavdrivemailbox(const char *name, int mbtype);
 
+/*
+ * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
+ * returns boolean
+ */
+int mboxname_isdavnotificationsmailbox(const char *name, int mbtype);
+
 /* If (internal) mailbox is a user's top-level Notes mailbox,
  * returns boolean
  */
