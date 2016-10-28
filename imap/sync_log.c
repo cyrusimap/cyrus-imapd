@@ -150,9 +150,6 @@ static void sync_log_base(const char *channel, const char *string)
     int retries = 0;
     const char *fname;
 
-    /* are we being supressed? */
-    if (!sync_log_enabled(channel)) return;
-
     fname = sync_log_fname(channel);
 
     while (retries++ < SYNC_LOG_RETRIES) {
@@ -302,8 +299,11 @@ EXPORTED void sync_log(const char *fmt, ...)
     val = va_format(fmt, ap);
     va_end(ap);
 
-    for (i = 0 ; i < channels->count ; i++)
-        sync_log_base(channels->data[i], val);
+    for (i = 0 ; i < channels->count ; i++) {
+        const char *channel = channels->data[i];
+        if (sync_log_enabled(channel))
+            sync_log_base(channel, val);
+    }
 }
 
 EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
