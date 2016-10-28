@@ -588,7 +588,7 @@ static int parse_connection(struct transaction_t *txn);
 static int parse_ranges(const char *hdr, unsigned long len,
                         struct range **ranges);
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
-static void auth_success(struct transaction_t *txn);
+static void auth_success(struct transaction_t *txn, const char *userid);
 static int http_auth(const char *creds, struct transaction_t *txn);
 
 static int meth_get(struct transaction_t *txn, void *params);
@@ -1675,8 +1675,7 @@ static int examine_request(struct transaction_t *txn)
             ret = HTTP_UNAUTHORIZED;
         }
         else {
-            httpd_userid = xstrdup(authzid);
-            auth_success(txn);
+            auth_success(txn, authzid);
         }
     }
 
@@ -3653,11 +3652,12 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
 }
 
 
-static void auth_success(struct transaction_t *txn)
+static void auth_success(struct transaction_t *txn, const char *userid)
 {
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
     int i;
 
+    httpd_userid = xstrdup(userid);
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
@@ -3683,9 +3683,6 @@ static void auth_success(struct transaction_t *txn)
         off_t end = lseek(httpd_logfd, 0, SEEK_END);
 
         ftruncate(httpd_logfd, end - buf_len(&txn->buf));
-
-        /* Log credential-redacted request */
-        write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
 
         /* Close existing telemetry log */
         close(httpd_logfd);
@@ -3963,9 +3960,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (status) return status;
     }
 
-    httpd_userid = xstrdup(user);
-
-    auth_success(txn);
+    auth_success(txn, user);
 
     return status;
 }
