@@ -773,7 +773,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
                         else {
                             /* Open new mailbox */
                             r = mailbox_open_irl(tag_tgt.mbentry->name,
-                                                     &my_mailbox);
+                                                 &my_mailbox);
                             if (r) {
                                 syslog(LOG_NOTICE,
                                        "failed to open mailbox '%s'"
@@ -4135,6 +4135,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
     else {
         /* Unmapped URL (empty resource) */
+        src_rec.uid = 0;
+        src_rec.recno = ddata->rowid;
         etag = NULL;
         lastmod = ddata->creationdate;
     }
@@ -4157,11 +4159,18 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    /* Load message containing the resource and parse data */
-    mailbox_map_record(src_mbox, &src_rec, &msg_buf);
-    buf_init_ro(&body_buf, buf_base(&msg_buf) + src_rec.header_size,
-                buf_len(&msg_buf) - src_rec.header_size);
-    obj = cparams->mime_types[0].to_object(&body_buf);
+    if (src_rec.uid) {
+        /* Mapped URL - Load message containing the resource and parse data */
+        mailbox_map_record(src_mbox, &src_rec, &msg_buf);
+        buf_init_ro(&body_buf, buf_base(&msg_buf) + src_rec.header_size,
+                    buf_len(&msg_buf) - src_rec.header_size);
+        obj = cparams->mime_types[0].to_object(&body_buf);
+    }
+    else {
+        /* Unmapped URL (empty resource) */
+        buf_init_ro_cstr(&body_buf, "");
+        obj = &body_buf;
+    }
 
     if (dest_mbox != src_mbox) {
         if (!meth_move) {
@@ -4212,13 +4221,20 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     case HTTP_NO_CONTENT:
         if (meth_move) {
             /* Expunge the source message */
-            src_rec.system_flags |= FLAG_EXPUNGED;
-            if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-                syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-                       txn->req_tgt.mbentry->name, error_message(r));
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
+            if (src_rec.uid) {
+                /* Mapped URL */
+                src_rec.system_flags |= FLAG_EXPUNGED;
+                if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
+                    syslog(LOG_ERR, "expunging src record (%s) failed: %s",
+                           txn->req_tgt.mbentry->name, error_message(r));
+                    txn->error.desc = error_message(r);
+                    ret = HTTP_SERVER_ERROR;
+                    goto done;
+                }
+            }
+            else {
+                /* Unmapped URL (empty resource) */
+                cparams->davdb.delete_resourceLOCKONLY(src_davdb, src_rec.recno);
             }
         }
     }
