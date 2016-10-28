@@ -727,8 +727,9 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
 }
 
 static int eval_if(const char *hdr, struct meth_params *params,
-                   struct mailbox *tgt_mailbox, const char *tgt_etag,
-                   const char *tgt_lock_token, unsigned *locked)
+                   struct mailbox *tgt_mailbox, const char *tgt_resource,
+                   const char *tgt_etag, const char *tgt_lock_token,
+                   unsigned *locked)
 {
     unsigned ret = 0;
     tok_t tok;
@@ -783,7 +784,12 @@ static int eval_if(const char *hdr, struct meth_params *params,
                             mailbox = my_mailbox;
                         }
                         if (mailbox) {
-                            if (tag_tgt.resource) {
+                            if (!strcmpnull(tgt_resource, tag_tgt.resource)) {
+                                /* Tag IS target resource */
+                                etag = tgt_etag;
+                                lock_token = tgt_lock_token;
+                            }
+                            else if (tag_tgt.resource) {
                                 /* Open DAV DB corresponding to the mailbox */
                                 davdb = params->davdb.open_db(mailbox);
 
@@ -917,7 +923,8 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
        Per RFC 7232, LOCK errors supercede preconditions */
     if ((hdr = spool_getheader(hdrcache, "If"))) {
         /* State tokens (sync-token, lock-token) and Etags */
-        if (!eval_if(hdr[0], params, mailbox, etag, lock_token, &locked))
+        if (!eval_if(hdr[0], params, mailbox, txn->req_tgt.resource,
+                     etag, lock_token, &locked))
             return HTTP_PRECOND_FAILED;
     }
 
