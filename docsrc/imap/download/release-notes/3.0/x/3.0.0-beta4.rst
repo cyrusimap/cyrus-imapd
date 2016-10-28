@@ -100,15 +100,19 @@ Major changes since the 2.5.x series
     pages and html/text documentation, which are pre-generated for inclusion in release tarballs.
     If you wish to rebuild these, or are building from a git clone in which they are not
     pregenerated, you will need to install ``sphinx-build``, and the perl module
-    ``Pod::POM::View::Restructured``.  The top level Makefile now has ``man`` and ``doc`` targets.
+    ``Pod::POM::View::Restructured``.  The top level Makefile now has ``man`` and ``doc`` targets
     for building these.
 
-*   Added support for OpenSSL 1.1.0-pre5.
+*   Added support for OpenSSL 1.1.0.
 
-*   Updates to default configuration:
-    *   unixhierarchysep (``/``) is now on by default (instead of netnews style ``.``)
-    *   altnamespace is now ``on`` by default (was ``off``)
-    *   virtdomains is now ``userid`` by default (was ``off``)
+Updates to default configuration
+================================
+
+*   ``unixhierarchysep`` (``/``) is now ``on`` by default (instead of netnews style ``.``)
+
+*   ``altnamespace`` is now ``on`` by default (was ``off``)
+
+*   ``virtdomains`` is now ``userid`` by default (was ``off``)
 
 Significant bugfixes
 ====================
