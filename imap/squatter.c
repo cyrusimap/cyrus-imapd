@@ -708,7 +708,7 @@ static void do_rolling(const char *channel)
                 r = index_one(mboxname, /*blocking*/0);
                 if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
                     /* XXX: alternative, just append to strarray_t *folders ... */
-                    sync_log_channel(channel, "APPEND %s", mboxname);
+                    sync_log_channel_append(channel, mboxname);
                 }
                 if (sleepmicroseconds)
                     usleep(sleepmicroseconds);
