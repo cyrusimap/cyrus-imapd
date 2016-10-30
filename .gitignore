@@ -179,6 +179,8 @@ sieve/test
 sieve/tests/
 stamp-h1
 timsieved/timsieved
+tools/vzic/test-output/
+tools/vzic/test-vzic
 tools/vzic/vzic
 xversion.h
 ylwrap
