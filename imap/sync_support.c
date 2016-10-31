@@ -3669,26 +3669,42 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
     return 0;
 }
 
-static modseq_t calculate_intermediate_modseq(struct mailbox *mailbox,
-                                              uint32_t fromuid,
-                                              modseq_t frommodseq)
+static int calculate_intermediate_state(struct mailbox *mailbox,
+                                        modseq_t frommodseq,
+                                        uint32_t fromuid,
+                                        uint32_t batchsize,
+                                        uint32_t *touidp,
+                                        modseq_t *tomodseqp)
 {
-    modseq_t res = mailbox->i.highestmodseq;
+    modseq_t tomodseq = mailbox->i.highestmodseq;
+    uint32_t touid = fromuid;
+    uint32_t seen = 0;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const struct index_record *record = NULL;
     mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
     while ((record = mailbox_iter_step(iter))) {
-        if (record->modseq <= res)
-            res = record->modseq - 1;
+        if (seen < batchsize) {
+            touid = record->uid;
+        }
+        else if (record->modseq <= tomodseq)
+            tomodseq = record->modseq - 1;
+        seen++;
     }
     mailbox_iter_done(&iter);
+
+    /* no need to batch if there are fewer than batchsize records */
+    if (seen <= batchsize)
+        return 0;
 
     /* must have found at least one record past the end to do a partial batch,
      * and we need a highestmodseq at least one less than that records so that
      * it can successfully sync */
-    if (res > frommodseq && res < mailbox->i.highestmodseq)
-        return res;
+    if (tomodseq > frommodseq && tomodseq < mailbox->i.highestmodseq) {
+        *tomodseqp = tomodseq;
+        *touidp = touid;
+        return 1;
+    }
 
     /* can't find an intermediate modseq */
     return 0;
@@ -3744,22 +3760,19 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
         uint32_t fromuid = rfolder ? rfolder->last_uid : 0;
         uint32_t touid = mailbox->i.last_uid;
-        modseq_t modseq = mailbox->i.highestmodseq;
+        modseq_t tomodseq = mailbox->i.highestmodseq;
         int ispartial = 0;
 
         if (batchsize && touid - fromuid > batchsize) {
+            /* see if we actually need to calculate an intermediate state */
             modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
-            uint32_t intermediateuid = fromuid + batchsize;
-            modseq_t intermediatemodseq = calculate_intermediate_modseq(mailbox, intermediateuid, frommodseq);
-            /* is there an intermediate modseq available?  If not, we can't
-             * generate a legitimate intermediate state */
-            if (intermediatemodseq) {
-                touid = intermediateuid;
-                modseq = intermediatemodseq;
-                ispartial = 1;
+            /* is there an intermediate modseq available and enough records to make a batch? */
+            ispartial = calculate_intermediate_state(mailbox, frommodseq, fromuid,
+                                                     batchsize, &touid, &tomodseq);
+            if (ispartial) {
                 syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) (%llu/%llu/%llu)",
                        mailbox->name, fromuid, touid, mailbox->i.last_uid,
-                       frommodseq, intermediatemodseq, mailbox->i.highestmodseq);
+                       frommodseq, tomodseq, mailbox->i.highestmodseq);
             }
         }
 
@@ -3767,7 +3780,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->mbtype,
                              mailbox->part, mailbox->acl, mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
-                             modseq, mailbox->i.synccrcs,
+                             tomodseq, mailbox->i.synccrcs,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
