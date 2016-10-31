@@ -1514,6 +1514,7 @@ static int sync_send_file(struct mailbox *mailbox,
 }
 
 static int sync_prepare_dlists(struct mailbox *mailbox,
+                               struct sync_folder *local,
                                struct sync_folder *remote,
                                const char *topart,
                                struct sync_msgid_list *part_list,
@@ -1521,10 +1522,10 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                                int printrecords)
 {
     struct sync_annot_list *annots = NULL;
-    struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
     struct mailbox_iter *iter = NULL;
     modseq_t xconvmodseq = 0;
     int r = 0;
+    int ispartial = local ? local->ispartial : 0;
 
     if (!topart) topart = mailbox->part;
 
@@ -1532,26 +1533,42 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
     if (mailbox->mbtype)
         dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mailbox->mbtype));
-    dlist_setnum32(kl, "LAST_UID", mailbox->i.last_uid);
-    dlist_setnum64(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
-    dlist_setnum32(kl, "RECENTUID", mailbox->i.recentuid);
-    dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime);
-    dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
-    dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
-    dlist_setdate(kl, "POP3_SHOW_AFTER", mailbox->i.pop3_show_after);
+    if (ispartial) {
+        /* calculated partial values */
+        dlist_setnum32(kl, "LAST_UID", local->last_uid);
+        dlist_setnum64(kl, "HIGHESTMODSEQ", local->highestmodseq);
+        /* create synthetic values for the other fields */
+        dlist_setnum32(kl, "RECENTUID", remote ? remote->recentuid : 0);
+        dlist_setdate(kl, "RECENTTIME", remote ? remote->recenttime : 0);
+        dlist_setdate(kl, "LAST_APPENDDATE", 0);
+        dlist_setdate(kl, "POP3_LAST_LOGIN", remote ? remote->pop3_last_login : 0);
+        dlist_setdate(kl, "POP3_SHOW_AFTER", remote ? remote->pop3_show_after : 0);
+        if (remote->xconvmodseq)
+            dlist_setnum64(kl, "XCONVMODSEQ", remote->xconvmodseq);
+    }
+    else {
+        struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
+        dlist_setnum32(kl, "SYNC_CRC", synccrcs.basic);
+        dlist_setnum32(kl, "SYNC_CRC_ANNOT", synccrcs.annot);
+        dlist_setnum32(kl, "LAST_UID", mailbox->i.last_uid);
+        dlist_setnum64(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
+        dlist_setnum32(kl, "RECENTUID", mailbox->i.recentuid);
+        dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime);
+        dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
+        dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
+        dlist_setdate(kl, "POP3_SHOW_AFTER", mailbox->i.pop3_show_after);
+        if (mailbox_has_conversations(mailbox)) {
+            r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+            if (!r && xconvmodseq)
+                dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
+        }
+    }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
     dlist_setatom(kl, "ACL", mailbox->acl);
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_setnum32(kl, "SYNC_CRC", synccrcs.basic);
-    dlist_setnum32(kl, "SYNC_CRC_ANNOT", synccrcs.annot);
     if (mailbox->quotaroot)
         dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
-    if (mailbox_has_conversations(mailbox)) {
-        r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
-        if (!r && xconvmodseq)
-            dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
-    }
 
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots);
@@ -1567,6 +1584,21 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
         iter = mailbox_iter_init(mailbox, modseq, 0);
         while ((record = mailbox_iter_step(iter))) {
+            /* stop early for partial sync */
+            modseq_t mymodseq = record->modseq;
+            if (ispartial) {
+                if (record->uid > local->last_uid)
+                    break;
+                /* something from past the modseq that we're sending now */
+                if (mymodseq > local->highestmodseq) {
+                    /* we will send this one later */
+                    if (remote && record->uid <= remote->last_uid)
+                        continue;
+                    /* falsify modseq for now, we will resync this message later */
+                    mymodseq = local->highestmodseq;
+                }
+            }
+
             /* start off thinking we're sending the file too */
             int send_file = 1;
 
@@ -1590,7 +1622,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
             struct dlist *il = dlist_newkvlist(rl, "RECORD");
             dlist_setnum32(il, "UID", record->uid);
-            dlist_setnum64(il, "MODSEQ", record->modseq);
+            dlist_setnum64(il, "MODSEQ", mymodseq);
             dlist_setdate(il, "LAST_UPDATED", record->last_updated);
             sync_print_flags(il, mailbox, record);
             dlist_setdate(il, "INTERNALDATE", record->internaldate);
@@ -2750,7 +2782,7 @@ static int mailbox_byname(const char *name, void *rock)
          !sync_name_lookup(qrl, mailbox->quotaroot))
         sync_name_list_add(qrl, mailbox->quotaroot);
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, kl, NULL, 0);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0);
     if (!r) sync_send_response(kl, mrock->pout);
 
 out:
@@ -2778,7 +2810,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, kl, NULL, 1);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1);
     if (r) goto out;
 
     sync_send_response(kl, sstate->pout);
@@ -5098,7 +5130,7 @@ static int update_mailbox_once(struct sync_folder *local,
 
     if (!topart) topart = mailbox->part;
     part_list = sync_reserve_partlist(reserve_list, topart);
-    r = sync_prepare_dlists(mailbox, remote, topart, part_list, kl, kupload, 1);
+    r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl, kupload, 1);
     if (r) goto done;
 
     /* keep the mailbox locked for shorter time! Unlock the index now
