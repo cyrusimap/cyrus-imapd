@@ -239,7 +239,7 @@ static const struct mbox_name_attribute {
     { MBOX_ATTRIBUTE_MARKED,        "\\Marked"        },
     { MBOX_ATTRIBUTE_UNMARKED,      "\\Unmarked"      },
 
-    /* from draft-ietf-imapext-list-extensions-18.txt */
+    /* from RFC 5258 */
     { MBOX_ATTRIBUTE_NONEXISTENT,   "\\NonExistent"   },
     { MBOX_ATTRIBUTE_SUBSCRIBED,    "\\Subscribed"    },
     { MBOX_ATTRIBUTE_REMOTE,        "\\Remote"        },
@@ -321,7 +321,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT",                  2 },
     { "SORT=MODSEQ",           2 },
     { "SORT=DISPLAY",          2 },
-    { "SORT=UID",              2 },  /* not standard */
+    { "SORT=UID",              2 }, /* not standard */
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
     { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
@@ -335,9 +335,9 @@ static struct capa_struct base_capabilities[] = {
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
-    { "XLIST",                 2 },
-    { "XMOVE",                 2 },
-    { "MOVE",                  2 }, /* draft */
+    { "XLIST",                 2 }, /* not standard */
+    { "XMOVE",                 2 }, /* not standard */
+    { "MOVE",                  2 },
     { "SPECIAL-USE",           2 },
     { "CREATE-SPECIAL-USE",    2 },
     { "DIGEST=SHA1",           2 }, /* not standard */
@@ -487,7 +487,8 @@ static void canonical_list_patterns(const char *reference,
 static int list_cb(struct findall_data *data, void *rock);
 static int subscribed_cb(struct findall_data *data, void *rock);
 static void list_data(struct listargs *listargs);
-static int list_data_remote(char *tag, struct listargs *listargs);
+static int list_data_remote(struct backend *be,
+                            char *tag, struct listargs *listargs);
 
 static void clear_id();
 
@@ -7599,7 +7600,7 @@ static void cmd_list(char *tag, struct listargs *listargs)
            mailboxes locally (frontend) and the subscriptions remotely
            (INBOX backend).  We can only pass the buck to the INBOX backend
            if its running a unified config */
-        if (list_data_remote(tag, listargs))
+        if (list_data_remote(backend_inbox, tag, listargs))
             return;
     } else {
         list_data(listargs);
@@ -12231,6 +12232,43 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     const char *cmd;
     struct statusdata sdata = STATUSDATA_INIT;
 
+    if ((mbentry->mbtype & MBTYPE_REMOTE) &&
+        (listargs->scan ||
+         (listargs->ret & (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA)))) {
+        if (!hash_lookup(mbentry->server, &listargs->server_table)) {
+            /* remote mailbox that we haven't proxied to yet */
+            struct backend *s;
+
+            hash_insert(mbentry->server,
+                        (void *)0xDEADBEEF, &listargs->server_table);
+            s = proxy_findserver(mbentry->server, &imap_protocol,
+                                 proxy_userid, &backend_cached,
+                                 &backend_current, &backend_inbox, imapd_in);
+            if (s) {
+                char mytag[128];
+                proxy_gentag(mytag, sizeof(mytag));
+
+                if (listargs->scan) {
+                    /* Send SCAN command to backend */
+                    prot_printf(s->out, "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s"
+                                " {%tu+}\r\n%s\r\n",
+                                mytag, strlen(listargs->ref), listargs->ref,
+                                strlen(listargs->pat.data[0]),
+                                listargs->pat.data[0],
+                                strlen(listargs->scan), listargs->scan);
+
+                    r = pipe_until_tag(s, mytag, 0);
+                }
+                else {
+                    /* Send LIST command to backend */
+                    r = list_data_remote(s, mytag, listargs);
+                }
+            }
+        }
+
+        return;
+    }
+
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
         if (!(listargs->cmd & LIST_CMD_EXTENDED)) {
             attributes |= MBOX_ATTRIBUTE_NOSELECT;
@@ -12241,34 +12279,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     else if (listargs->scan) {
         /* SCAN mailbox for content */
 
-        if ((mbentry->mbtype & MBTYPE_REMOTE) &&
-            !hash_lookup(mbentry->partition, &listargs->server_table)) {
-            /* remote mailbox that we haven't proxied to yet */
-            struct backend *s;
-
-            hash_insert(mbentry->server, (void *)0xDEADBEEF, &listargs->server_table);
-            s = proxy_findserver(mbentry->server, &imap_protocol,
-                                 proxy_userid, &backend_cached,
-                                 &backend_current, &backend_inbox, imapd_in);
-            if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-            if (!r) {
-                char mytag[128];
-                proxy_gentag(mytag, sizeof(mytag));
-
-                prot_printf(s->out,
-                            "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s {%tu+}\r\n%s\r\n",
-                            mytag,
-                            strlen(listargs->ref), listargs->ref,
-                            strlen(listargs->pat.data[0]), listargs->pat.data[0],
-                            strlen(listargs->scan), listargs->scan);
-
-                r = pipe_until_tag(s, mytag, 0);
-            }
-
-            return;
-        }
-        else if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
+        if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
             /* currently selected mailbox */
             if (!index_scan(imapd_index, listargs->scan))
                 return; /* no matching messages */
@@ -12789,7 +12800,7 @@ static void list_data(struct listargs *listargs)
             mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
         } else {
-            if (listargs->scan) {
+            if (config_mupdate_server) {
                 construct_hash_table(&listargs->server_table, 10, 1);
             }
 
@@ -12800,7 +12811,7 @@ static void list_data(struct listargs *listargs)
             mboxlist_findallmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
                                   imapd_userid, imapd_authstate, list_cb, &rock);
 
-            if (listargs->scan)
+            if (listargs->server_table.size)
                 free_hash_table(&listargs->server_table, NULL);
             if (rock.subs)
                 strarray_free(rock.subs);
@@ -12814,10 +12825,11 @@ static void list_data(struct listargs *listargs)
  * Retrieves the data and prints the untagged responses for a LIST command in
  * the case of a remote inbox.
  */
-static int list_data_remote(char *tag, struct listargs *listargs)
+static int list_data_remote(struct backend *be,
+                            char *tag, struct listargs *listargs)
 {
     if ((listargs->cmd & LIST_CMD_EXTENDED) &&
-        !CAPA(backend_inbox, CAPA_LISTEXTENDED)) {
+        !CAPA(be, CAPA_LISTEXTENDED)) {
         /* client wants to use extended list command but backend doesn't
          * support it */
         prot_printf(imapd_out,
@@ -12828,9 +12840,9 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 
     /* print tag, command and list selection options */
     if (listargs->cmd & LIST_CMD_LSUB) {
-        prot_printf(backend_inbox->out, "%s Lsub ", tag);
+        prot_printf(be->out, "%s Lsub ", tag);
     } else {
-        prot_printf(backend_inbox->out, "%s List ", tag);
+        prot_printf(be->out, "%s List ", tag);
 
         /* print list selection options */
         if (listargs->sel) {
@@ -12847,32 +12859,32 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 
                 if (!(listargs->sel & opt)) continue;
 
-                prot_printf(backend_inbox->out, "%c%s", c, select_opts[i]);
+                prot_printf(be->out, "%c%s", c, select_opts[i]);
                 c = ' ';
 
                 if (opt == LIST_SEL_METADATA) {
                     /* print metadata options */
-                    prot_puts(backend_inbox->out, " (depth ");
+                    prot_puts(be->out, " (depth ");
                     if (listargs->metaopts.depth < 0) {
-                        prot_puts(backend_inbox->out, "infinity");
+                        prot_puts(be->out, "infinity");
                     }
                     else {
-                        prot_printf(backend_inbox->out, "%d",
+                        prot_printf(be->out, "%d",
                                     listargs->metaopts.depth);
                     }
                     if (listargs->metaopts.maxsize) {
-                        prot_printf(backend_inbox->out, " maxsize %zu",
+                        prot_printf(be->out, " maxsize %zu",
                                     listargs->metaopts.maxsize);
                     }
-                    (void)prot_putc(')', backend_inbox->out);
+                    (void)prot_putc(')', be->out);
                 }
             }
-            prot_puts(backend_inbox->out, ") ");
+            prot_puts(be->out, ") ");
         }
     }
 
     /* print reference argument */
-    prot_printf(backend_inbox->out,
+    prot_printf(be->out,
                 "{%tu+}\r\n%s ", strlen(listargs->ref), listargs->ref);
 
     /* print mailbox pattern(s) */
@@ -12881,14 +12893,14 @@ static int list_data_remote(char *tag, struct listargs *listargs)
         char c = '(';
 
         for (p = listargs->pat.data ; *p ; p++) {
-            prot_printf(backend_inbox->out,
+            prot_printf(be->out,
                         "%c{%tu+}\r\n%s", c, strlen(*p), *p);
             c = ' ';
         }
-        (void)prot_putc(')', backend_inbox->out);
+        (void)prot_putc(')', be->out);
     } else {
-        prot_printf(backend_inbox->out,
-                    "{%tu+}\r\n%s", strlen(listargs->pat.data[0]), listargs->pat.data[0]);
+        prot_printf(be->out, "{%tu+}\r\n%s",
+                    strlen(listargs->pat.data[0]), listargs->pat.data[0]);
     }
 
     /* print list return options */
@@ -12901,13 +12913,13 @@ static int list_data_remote(char *tag, struct listargs *listargs)
         char c = '(';
         int i, j;
 
-        prot_puts(backend_inbox->out, " return ");
+        prot_puts(be->out, " return ");
         for (i = 0; return_opts[i]; i++) {
             unsigned opt = (1 << i);
 
             if (!(listargs->ret & opt)) continue;
 
-            prot_printf(backend_inbox->out, "%c%s", c, return_opts[i]);
+            prot_printf(be->out, "%c%s", c, return_opts[i]);
             c = ' ';
 
             if (opt == LIST_RET_STATUS) {
@@ -12923,11 +12935,10 @@ static int list_data_remote(char *tag, struct listargs *listargs)
                 for (j = 0; status_items[j]; j++) {
                     if (!(listargs->statusitems & (1 << j))) continue;
 
-                    prot_printf(backend_inbox->out, "%c%s", c,
-                                status_items[j]);
+                    prot_printf(be->out, "%c%s", c, status_items[j]);
                     c = ' ';
                 }
-                (void)prot_putc(')', backend_inbox->out);
+                (void)prot_putc(')', be->out);
             }
             else if (opt == LIST_RET_METADATA) {
                 /* print metadata items */
@@ -12935,18 +12946,18 @@ static int list_data_remote(char *tag, struct listargs *listargs)
 
                 c = '(';
                 for (j = 0; j < n; j++) {
-                    prot_printf(backend_inbox->out, "%c\"%s\"", c,
+                    prot_printf(be->out, "%c\"%s\"", c,
                                 strarray_nth(&listargs->metaitems, j));
                     c = ' ';
                 }
-                (void)prot_putc(')', backend_inbox->out);
+                (void)prot_putc(')', be->out);
             }
         }
-        (void)prot_putc(')', backend_inbox->out);
+        (void)prot_putc(')', be->out);
     }
 
-    prot_printf(backend_inbox->out, "\r\n");
-    pipe_lsub(backend_inbox, imapd_userid, tag, 0,
+    prot_printf(be->out, "\r\n");
+    pipe_lsub(be, imapd_userid, tag, 0,
               (listargs->cmd & LIST_CMD_LSUB) ? "LSUB" : "LIST");
 
     return 0;
