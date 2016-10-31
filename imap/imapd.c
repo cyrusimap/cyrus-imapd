@@ -12596,11 +12596,16 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
 
     list_callback_calls++;
 
-    if (last_name_is_ancestor || (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
+    if (last_name_is_ancestor ||
+        (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     if (data->mbname) { /* exact match */
-        perform_output(extname, data->mbentry, rock);
+        mbentry_t *mbentry = NULL;
+        mboxlist_lookup(mbname_intname(data->mbname), &mbentry, NULL);
+        perform_output(extname, mbentry, rock);
+        mboxlist_entry_free(&mbentry);
+
         rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
         if (mboxlist_lookup(mbname_intname(data->mbname), NULL, NULL))
             rock->last_attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
