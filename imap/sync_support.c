@@ -3639,7 +3639,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                             const char *topart,
                             struct sync_folder_list *master_folders,
                             struct sync_folder_list *replica_folders,
-                            struct sync_reserve_list *reserve_list)
+                            struct sync_reserve_list *reserve_list,
+                            int batchsize)
 {
     struct sync_name *mbox;
     struct sync_folder *rfolder;
@@ -3686,6 +3687,17 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         uint32_t touid = mailbox->i.last_uid;
         modseq_t modseq = mailbox->i.highestmodseq;
         int ispartial = 0;
+
+        if (batchsize && touid - fromuid > batchsize) {
+            modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
+            /* is there an intermediate modseq available?  If not, we can't
+             * generate a legitimate intermediate state */
+            if (modseq - frommodseq > 1) {
+                touid = fromuid + batchsize;
+                modseq = frommodseq + 1;
+                ispartial = 1;
+            }
+        }
 
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
                              mailbox->mbtype,
@@ -3807,13 +3819,14 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
                             struct sync_folder_list *master_folders,
                             struct sync_folder_list *replica_folders,
                             struct sync_reserve_list *reserve_list,
-                            struct backend *sync_be)
+                            struct backend *sync_be,
+                            int batchsize)
 {
     struct sync_reserve *reserve;
     int r;
 
     r = find_reserve_all(mboxname_list, topart, master_folders,
-                         replica_folders, reserve_list);
+                         replica_folders, reserve_list, batchsize);
     if (r) return r;
 
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
@@ -5344,6 +5357,7 @@ bail:
 static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       struct sync_folder_list *replica_folders,
                       struct backend *sync_be,
+                      const char **channelp,
                       unsigned flags)
 {
     int r;
@@ -5352,13 +5366,18 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
     const char *part;
+    int batchsize = 0;
+
+    if (channelp && (flags & SYNC_FLAG_ALLOWPARTIAL)) {
+        batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
+    }
 
     master_folders = sync_folder_list_create();
     rename_folders = sync_rename_list_create();
     reserve_list = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
     r = reserve_messages(mboxname_list, topart, master_folders,
-                         replica_folders, reserve_list, sync_be);
+                         replica_folders, reserve_list, sync_be, batchsize);
     if (r) {
         syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
         goto bail;
@@ -5450,6 +5469,9 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                    mfolder->name, error_message(r));
             goto bail;
         }
+        if (channelp && mfolder->ispartial) {
+            sync_log_channel_mailbox(*channelp, mfolder->name);
+        }
     }
 
  bail:
@@ -5460,7 +5482,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 }
 
 int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
-                      struct backend *sync_be, unsigned flags)
+                      struct backend *sync_be, const char **channelp, unsigned flags)
 
 {
     struct sync_name *mbox;
@@ -5500,7 +5522,7 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     if (!r) {
         flags &= ~SYNC_FLAG_DELETE_REMOTE;
         r = do_folders(mboxname_list, topart,
-                       replica_folders, sync_be, flags);
+                       replica_folders, sync_be, channelp, flags);
     }
 
     sync_folder_list_free(&replica_folders);
@@ -5582,6 +5604,7 @@ static int do_user_main(const char *user, const char *topart,
                         struct sync_folder_list *replica_folders,
                         struct sync_quota_list *replica_quota,
                         struct backend *sync_be,
+                        const char **channelp,
                         unsigned flags)
 {
     int r = 0;
@@ -5597,7 +5620,7 @@ static int do_user_main(const char *user, const char *topart,
      * real tombstones */
     flags |= SYNC_FLAG_DELETE_REMOTE;
     if (!r) r = do_folders(info.mboxlist, topart,
-                           replica_folders, sync_be, flags);
+                           replica_folders, sync_be, channelp, flags);
     if (!r) r = sync_do_user_quota(info.quotalist, replica_quota,
                                    sync_be, flags);
 
@@ -5776,7 +5799,7 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
 }
 
 int sync_do_user(char *userid, const char *topart,
-                 struct backend *sync_be, unsigned flags)
+                 struct backend *sync_be, const char **channelp, unsigned flags)
 {
     int r = 0;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
@@ -5818,7 +5841,7 @@ int sync_do_user(char *userid, const char *topart,
     /* we don't hold locks while sending commands */
     mailbox_close(&mailbox);
     r = do_user_main(userid, topart, replica_folders, replica_quota,
-                     sync_be, flags);
+                     sync_be, channelp, flags);
     if (r) goto done;
     r = sync_do_user_sub(userid, replica_subs, sync_be, flags);
     if (r) goto done;

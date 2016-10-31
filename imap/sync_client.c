@@ -246,7 +246,7 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
     int r = 0;
 
     if (mboxname_list->count) {
-        r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
+        r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, channelp, flags);
         if (channelp && r == IMAP_MAILBOX_LOCKED) {
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 if (mbox->mark) continue;
@@ -511,7 +511,7 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
     for (action = user_list->head; action; action = action->next) {
         if (!action->active)
             continue;
-        r = sync_do_user(action->user, NULL, sync_backend, flags);
+        r = sync_do_user(action->user, NULL, sync_backend, channelp, flags);
         if (channelp && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_user(*channelp, action->user);
             report_verbose("  Deferred: USER %s\n", action->user);
@@ -845,23 +845,24 @@ static void do_daemon(const char *channel, const char *sync_shutdown_file,
     }
 }
 
-static int do_mailbox(const char *mboxname, unsigned flags)
+static int do_mailbox(const char *mboxname, const char **channelp, unsigned flags)
 {
     struct sync_name_list *list = sync_name_list_create();
     int r;
 
     sync_name_list_add(list, mboxname);
 
-    r = sync_do_mailboxes(list, NULL, sync_backend, flags);
+    r = sync_do_mailboxes(list, NULL, sync_backend, channelp, flags);
 
     sync_name_list_free(&list);
 
     return r;
 }
 
-static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
+    const char **channelp = (const char **)rock;
 
     char *userid = mboxname_to_userid(mbentry->name);
 
@@ -873,7 +874,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
         /* only sync if we haven't just done the user */
         if (strcmpsafe(userid, prev_userid)) {
-            r = sync_do_user(userid, NULL, sync_backend, flags);
+            r = sync_do_user(userid, NULL, sync_backend, channelp, flags);
             if (r) {
                 if (verbose)
                     fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
@@ -888,7 +889,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
     else {
         /* all shared mailboxes, including DELETED ones, sync alone */
         /* XXX: batch in hundreds? */
-        r = do_mailbox(mbentry->name, flags);
+        r = do_mailbox(mbentry->name, channelp, flags);
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
@@ -1129,7 +1130,7 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                if (sync_do_user(buf, partition, sync_backend, flags)) {
+                if (sync_do_user(buf, partition, sync_backend, &channel, flags)) {
                     if (verbose)
                         fprintf(stderr,
                                 "Error from sync_do_user(%s): bailing out!\n",
@@ -1141,7 +1142,7 @@ int main(int argc, char **argv)
             }
             fclose(file);
         } else for (i = optind; !r && i < argc; i++) {
-            if (sync_do_user(argv[i], partition, sync_backend, flags)) {
+            if (sync_do_user(argv[i], partition, sync_backend, &channel, flags)) {
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
                             argv[i]);
@@ -1157,7 +1158,7 @@ int main(int argc, char **argv)
         /* Open up connection to server */
         replica_connect(channel);
 
-        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, NULL, 0))
+        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
             exit_rc = 1;
 
         replica_disconnect();
@@ -1194,7 +1195,7 @@ int main(int argc, char **argv)
             free(intname);
         }
 
-        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, flags)) {
+        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, &channel, flags)) {
             if (verbose) {
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");

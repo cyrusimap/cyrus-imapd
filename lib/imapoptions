@@ -2030,6 +2030,11 @@ product version in the capabilities */
 /* The authentication name to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
+{ "sync_batchsize", 8192, INT }
+/* the number of messages to upload in a single mailbox replication.
+   Default is 8192.  If there are more than this many messages appended
+   to the mailbox, generate a synthetic partial state and send that. */
+
 { "sync_host", NULL, STRING }
 /* Name of the host (replica running sync_server(8)) to which
    replication actions will be sent by sync_client(8).

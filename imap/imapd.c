@@ -10891,13 +10891,15 @@ static int xfer_initialsync(struct xfer_header *xfer)
 
         syslog(LOG_INFO, "XFER: initial sync of user %s", xfer->userid);
 
-        r = sync_do_user(xfer->userid, xfer->topart, xfer->be, flags);
+        r = sync_do_user(xfer->userid, xfer->topart, xfer->be,
+                         /*channelp*/NULL, flags);
         if (r) return r;
 
         /* User moves may take a while, do another non-blocking sync */
         syslog(LOG_INFO, "XFER: second sync of user %s", xfer->userid);
 
-        r = sync_do_user(xfer->userid, xfer->topart, xfer->be, flags);
+        r = sync_do_user(xfer->userid, xfer->topart, xfer->be,
+                         /*channelp*/NULL, flags);
         if (r) return r;
 
         /* User may have renamed/deleted a mailbox while syncing,
@@ -10919,7 +10921,8 @@ static int xfer_initialsync(struct xfer_header *xfer)
                xfer->items->mbentry->name);
 
         sync_name_list_add(mboxname_list, xfer->items->mbentry->name);
-        r = sync_do_mailboxes(mboxname_list, xfer->topart, xfer->be, flags);
+        r = sync_do_mailboxes(mboxname_list, xfer->topart, xfer->be,
+                              /*channelp*/NULL, flags);
         sync_name_list_free(&mboxname_list);
     }
 

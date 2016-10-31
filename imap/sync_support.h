@@ -500,16 +500,17 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_LOCALONLY (1<<2)
 #define SYNC_FLAG_DELETE_REMOTE (1<<3)
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
+#define SYNC_FLAG_ALLOWPARTIAL (1<<5)
 
 int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
                  unsigned flags);
 int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
 int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
 int sync_do_mailboxes(struct sync_name_list *mboxname_list,
-                      const char *topart,
-                      struct backend *sync_be, unsigned flags);
+                      const char *topart, struct backend *sync_be,
+                      const char **channelp, unsigned flags);
 int sync_do_user(char *userid, const char *topart,
-                 struct backend *sync_be, unsigned flags);
+                 struct backend *sync_be, const char **channelp, unsigned flags);
 int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags);
 int sync_set_sub(const char *userid, const char *mboxname, int add,
                  struct backend *sync_be, unsigned flags);
