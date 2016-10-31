@@ -2043,14 +2043,17 @@ static void reserve_folder(const char *part, const char *mboxname,
     int r;
     struct sync_msgid *item;
     const char *mailbox_msg_path, *stage_msg_path;
+    int num_reserved;
+
+redo:
+
+    num_reserved = 0;
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) return;
 
-    /* XXX - this is just on the replica, but still - we shouldn't hold
-     * the lock for so long */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     while ((record = mailbox_iter_step(iter))) {
         /* do we need it? */
@@ -2092,9 +2095,17 @@ static void reserve_folder(const char *part, const char *mboxname,
         item->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
         item->need_upload = 0;
         part_list->toupload--;
+        num_reserved++;
 
         /* already found everything, drop out */
         if (!part_list->toupload) break;
+
+        /* arbitrary batch size */
+        if (num_reserved >= 1024) {
+            mailbox_iter_done(&iter);
+            mailbox_close(&mailbox);
+            goto redo;
+        }
     }
 
     mailbox_iter_done(&iter);
