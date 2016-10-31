@@ -1534,6 +1534,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     if (mailbox->mbtype)
         dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mailbox->mbtype));
     if (ispartial) {
+        /* send a zero to make older Cyrus happy */
+        dlist_setnum32(kl, "SYNC_CRC", 0);
         /* calculated partial values */
         dlist_setnum32(kl, "LAST_UID", local->last_uid);
         dlist_setnum64(kl, "HIGHESTMODSEQ", local->highestmodseq);
