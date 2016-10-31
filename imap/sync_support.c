@@ -3728,6 +3728,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                 touid = fromuid + batchsize;
                 modseq = frommodseq + 1;
                 ispartial = 1;
+                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u)",
+                       mailbox->name, fromuid, touid, mailbox->i.last_uid);
             }
         }
 
@@ -5400,7 +5402,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     const char *part;
     int batchsize = 0;
 
-    if (channelp && (flags & SYNC_FLAG_ALLOWPARTIAL)) {
+    if (channelp) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
     }
 
