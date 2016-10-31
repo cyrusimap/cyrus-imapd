@@ -68,7 +68,6 @@
 #include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
-#include "xversion.h"
 
 /* global */
 time_t timenow;
@@ -140,7 +139,7 @@ int main(int argc, char *argv[])
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
            (int)expire_time, (int)timenow);
-    syslog(LOG_DEBUG, "%s", "ptexpire.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
+    syslog(LOG_DEBUG, "ptexpire.c %s", PACKAGE_VERSION);
 
     /* open database */
     strcpy(fnamebuf, config_dir);

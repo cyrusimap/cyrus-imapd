@@ -52,7 +52,6 @@
 #endif
 
 #include <string.h>
-#include "../xversion.h"
 #include "version.h"
 #include "map.h"
 #include "cyr_lock.h"
@@ -72,9 +71,9 @@ static char id_resp_arguments[MAXIDVALUELEN] = "";
  */
 
 #ifdef EXTRA_IDENT
-#define CYRUS_VERSION _CYRUS_VERSION "-" EXTRA_IDENT
+#define CYRUS_VERSION PACKAGE_VERSION "-" EXTRA_IDENT
 #else
-#define CYRUS_VERSION _CYRUS_VERSION
+#define CYRUS_VERSION PACKAGE_VERSION
 #endif
 
 EXPORTED const char *cyrus_version(void)
@@ -108,10 +107,10 @@ EXPORTED void id_response(struct protstream *pout)
 
     prot_printf(pout, "* ID ("
                 "\"name\" \"Cyrus IMAPD\""
-                " \"version\" \"%s %s\""
+                " \"version\" \"%s\""
                 " \"vendor\" \"Project Cyrus\""
                 " \"support-url\" \"http://www.cyrusimap.org\"",
-                CYRUS_VERSION, CYRUS_GITVERSION);
+                CYRUS_VERSION);
 
     /* add the os info */
     if (uname(&os) != -1)

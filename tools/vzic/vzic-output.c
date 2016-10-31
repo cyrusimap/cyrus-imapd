@@ -52,6 +52,7 @@
  * use RDATEs.
  */
 
+#include <config.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -65,8 +66,6 @@
 #include "vzic-output.h"
 
 #include "vzic-dump.h"
-
-#include "xversion.h"
 
 
 /* These come from the Makefile. See the comments there. */
@@ -564,7 +563,7 @@ output_zone                     (char           *directory,
   }
 
   fprintf (fp, "BEGIN:VCALENDAR\r\nPRODID:");
-  fprintf (fp, ProductID, _CYRUS_VERSION);
+  fprintf (fp, ProductID, PACKAGE_VERSION);
   fprintf (fp, "\r\nVERSION:2.0\r\n");
 
 

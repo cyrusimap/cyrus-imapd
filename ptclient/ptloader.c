@@ -63,7 +63,6 @@
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"
-#include "xversion.h"
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -139,7 +138,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: ptloader.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
+    syslog(LOG_NOTICE, "starting: ptloader.c %s", PACKAGE_VERSION);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
         switch (opt) {

@@ -66,7 +66,6 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 BUILT_SOURCES = \
-	xversion.h \
 	imap/imap_err.c \
 	lib/imapopts.c \
 	lib/imapopts.h
@@ -314,7 +313,6 @@ EXTRA_DIST += \
 	COPYING \
 	README.md \
 	SMakefile \
-	xversion.h \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -1717,10 +1715,6 @@ snapshot::
 	@echo "Creating snapshot $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
 	@$(MKDIR_P) snapshot
 	@git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ HEAD | tar -C snapshot/ -x -f -
-	@echo "/* $(PACKAGE_NAME) $(PACKAGE_VERSION) */" > snapshot/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	@echo "#define _CYRUS_VERSION \"$(PACKAGE_VERSION)\"" >> snapshot/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	@touch snapshot/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion
 	@echo "creating tarfile"
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(PACKAGE_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(PACKAGE_VERSION).tar.gz
 	@rm -rf snapshot
@@ -1875,18 +1869,7 @@ distgit:
 	$(MKDIR_P) dist
 	@echo "checking out the distribution from tag $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
-	echo "/* Release $(PACKAGE_NAME)-$(PACKAGE_VERSION) */" > dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	echo "#define _CYRUS_VERSION \"v$(PACKAGE_VERSION)\"" >> dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
-	touch dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion
 	touch distgit
-
-xversion xversion.h:
-	@echo "/* Development version */" > xversion.h.tmp
-	@echo "#define _CYRUS_VERSION \"$(PACKAGE_VERSION)\"" >> xversion.h.tmp
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
-	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
-	@rm -f xversion.h.tmp
 
 dist-hook:
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete

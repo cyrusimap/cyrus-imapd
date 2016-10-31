@@ -51,7 +51,6 @@
 #include "cyrusMasterMIB.h"
 
 #include "master.h"
-#include "../xversion.h"
 
 /*
  * cyrusMasterMIB_variables_oid:
@@ -153,7 +152,7 @@ var_cyrusMasterMIB(struct variable *vp,
         return (unsigned char *) string;
 
     case CYRUSMASTERINFOVERS:
-        strlcpy(string, _CYRUS_VERSION, sizeof(string));
+        strlcpy(string, PACKAGE_VERSION, sizeof(string));
         *var_len = strlen(string);
         return (unsigned char *) string;
 
