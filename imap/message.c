@@ -423,7 +423,7 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 
     message_guid_generate(&body->guid, msg_base, msg_len);
 
-    if ((int)body->filesize != (int)(body->header_size + body->content_size)) {
+    if (body->filesize != body->header_size + body->content_size) {
         syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%d, %d)",
                message_guid_encode(&body->guid), (int)body->filesize,
                (int)(body->header_size + body->content_size));
@@ -522,7 +522,7 @@ static void message_find_part(struct body *body, const char *section,
 
     if (match) {
         /* matching part, sanity check the size against the mmap'd file */
-        if ((unsigned long) body->content_offset + body->content_size > msg_len) {
+        if (body->content_offset + body->content_size > msg_len) {
             syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
             fatal("body part exceeds size of message file", EC_OSFILE);
         }
@@ -702,7 +702,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
     char *next;
     int len;
     int sawboundary = 0;
-    int maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
+    uint32_t maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
     const char *value;
 
@@ -2037,12 +2037,12 @@ HIDDEN void message_write_body(struct buf *buf, const struct body *body,
     buf_putc(buf, ' ');
     message_write_nstring(buf, body->encoding ? body->encoding : "7BIT");
     buf_putc(buf, ' ');
-    buf_printf(buf, "%lu", body->content_size);
+    buf_printf(buf, "%u", body->content_size);
 
     if (strcmp(body->type, "TEXT") == 0) {
         /* Text types get a line count */
         buf_putc(buf, ' ');
-        buf_printf(buf, "%lu", body->content_lines);
+        buf_printf(buf, "%u", body->content_lines);
     }
     else if (strcmp(body->type, "MESSAGE") == 0
              && strcmp(body->subtype, "RFC822") == 0) {
@@ -2052,7 +2052,7 @@ HIDDEN void message_write_body(struct buf *buf, const struct body *body,
         buf_putc(buf, ' ');
         message_write_body(buf, body->subpart, newformat);
         buf_putc(buf, ' ');
-        buf_printf(buf, "%lu", body->content_lines);
+        buf_printf(buf, "%u", body->content_lines);
     }
 
     if (newformat) {
@@ -2099,7 +2099,7 @@ HIDDEN void message_write_body(struct buf *buf, const struct body *body,
 
         if (newformat > 1 && !body->numparts) {
             /* even newer extension fields for annotation callout */
-            buf_printf(buf, " (OFFSET %lu HEADERSIZE %lu)",
+            buf_printf(buf, " (OFFSET %u HEADERSIZE %u)",
                        body->content_offset,
                        body->header_size);
         }
@@ -2863,7 +2863,7 @@ static int message_read_body(struct protstream *strm, struct body *body)
         c = message_read_nstring(strm, &body->encoding, 1);
 
         /* body size */
-        c = getint32(strm, (int32_t *) &body->content_size);
+        c = getuint32(strm, &body->content_size);
 
         if (!strcmp(body->type, "TEXT")) {
             /* body lines */

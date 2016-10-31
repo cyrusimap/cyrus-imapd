@@ -79,19 +79,19 @@ struct body {
     char *charset_id;           /* charset in binary bodystructure */
 
     /* Location/size information */
-    long header_offset;
-    long header_size;
-    long header_lines;
-    long content_offset;
-    long content_size;
-    long content_lines;
-    long boundary_size;         /* Size of terminating boundary */
-    long boundary_lines;
+    uint32_t header_offset;
+    uint32_t header_size;
+    uint32_t header_lines;
+    uint32_t content_offset;
+    uint32_t content_size;
+    uint32_t content_lines;
+    uint32_t boundary_size;         /* Size of terminating boundary */
+    uint32_t boundary_lines;
 
     int numparts;               /* For multipart types */
     struct body *subpart;       /* For message/rfc822 and multipart types */
 
-    size_t filesize;            /* to make sure that things match up! */
+    uint32_t filesize;          /* to make sure that things match up! */
 
     /*
      * Other header information.

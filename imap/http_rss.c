@@ -1250,7 +1250,7 @@ static void display_part(struct transaction_t *txn,
             /* Create text for link or alternative text for image */
             if (param) buf_printf(buf, "%s", param->value);
             else {
-                buf_printf(buf, "[%s/%s %lu bytes]",
+                buf_printf(buf, "[%s/%s %u bytes]",
                            body->type, body->subtype, body->content_size);
             }
 
