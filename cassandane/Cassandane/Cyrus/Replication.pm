@@ -404,7 +404,10 @@ sub assert_sieve_noactive
 
     my $sieve_dir = $instance->get_sieve_script_dir($user);
 
-    $self->assert(( ! -e "$sieve_dir/defaultbc" ));
+    $self->assert(( ! -e "$sieve_dir/defaultbc" ),
+		  "$sieve_dir/defaultbc exists");
+    $self->assert(( ! -l "$sieve_dir/defaultbc" ),
+		  "dangling $sieve_dir/defaultbc symlink exists");
 }
 
 sub assert_sieve_matches
@@ -641,7 +644,50 @@ EOF
 				$scriptnewcontent);
 }
 
-sub slurp_file {
+sub test_sieve_replication_delete_unactivate
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    # first, verify that sieve script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install sieve script on replica only
+    $self->{replica}->install_sieve_script($scriptcontent, name=>$scriptname);
+
+    # then, verify that sieve script exists on replica only
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+
+    # then, run replication,
+    $self->run_replication();
+
+    # then, verify that sieve script no longer exists on either
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user, $scriptname);
+}
+
+sub slurp_file
+{
     my ($filename) = @_;
 
     local $/;
