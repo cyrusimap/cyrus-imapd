@@ -3973,13 +3973,13 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
             if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
             if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
-            if (!dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic)) goto parse_err;
             if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
             if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
             if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
             /* optional */
             dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
             dlist_getatom(kl, "MBOXTYPE", &mboxtype);
+            dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic);
             dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
 
