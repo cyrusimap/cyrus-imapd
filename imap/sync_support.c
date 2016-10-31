@@ -577,7 +577,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          time_t pop3_last_login,
                                          time_t pop3_show_after,
                                          struct sync_annot_list *annots,
-                                         modseq_t xconvmodseq)
+                                         modseq_t xconvmodseq,
+                                         int ispartial)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -607,6 +608,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->pop3_show_after = pop3_show_after;
     result->annots = annots; /* NOTE: not a copy! */
     result->xconvmodseq = xconvmodseq;
+    result->ispartial = ispartial;
 
     result->mark     = 0;
     result->reserve  = 0;
@@ -3682,15 +3684,18 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
         uint32_t fromuid = rfolder ? rfolder->last_uid : 0;
         uint32_t touid = mailbox->i.last_uid;
+        modseq_t modseq = mailbox->i.highestmodseq;
+        int ispartial = 0;
 
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
                              mailbox->mbtype,
                              mailbox->part, mailbox->acl, mailbox->i.options,
-                             mailbox->i.uidvalidity, mailbox->i.last_uid,
-                             mailbox->i.highestmodseq, mailbox->i.synccrcs,
+                             mailbox->i.uidvalidity, touid,
+                             modseq, mailbox->i.synccrcs,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
-                             mailbox->i.pop3_show_after, NULL, xconvmodseq);
+                             mailbox->i.pop3_show_after, NULL, xconvmodseq,
+                             ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox->part);
@@ -3944,7 +3949,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
                                  recentuid, recenttime,
                                  pop3_last_login,
                                  pop3_show_after, annots,
-                                 xconvmodseq);
+                                 xconvmodseq, /*ispartial*/0);
         }
         else
             goto parse_err;

@@ -10984,7 +10984,8 @@ static int sync_mailbox(struct mailbox *mailbox,
                          mailbox->i.pop3_last_login,
                          mailbox->i.pop3_show_after,
                          annots,
-                         xconvmodseq);
+                         xconvmodseq,
+                         /* ispartial */0);
     annots = NULL; /* list took ownership */
 
     mfolder = master_folders->head;
