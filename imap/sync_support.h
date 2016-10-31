@@ -518,7 +518,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
                         struct sync_seen_list *seen_list,
                         struct sync_quota_list *quota_list);
 int sync_find_reserve_messages(struct mailbox *mailbox,
-                               unsigned last_uid,
+                               uint32_t fromuid, uint32_t touid,
                                struct sync_msgid_list *part_list);
 int sync_reserve_partition(char *partition,
                            struct sync_folder_list *replica_folders,

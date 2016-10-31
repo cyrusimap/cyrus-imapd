@@ -10992,6 +10992,7 @@ static int sync_mailbox(struct mailbox *mailbox,
      * than obtaining its own (short-lived) locks */
     mfolder->mailbox = mailbox;
 
+    uint32_t fromuid = 0;
     rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
     if (rfolder) {
         rfolder->mark = 1;
@@ -11007,10 +11008,9 @@ static int sync_mailbox(struct mailbox *mailbox,
             r = IMAP_AGAIN;
             goto cleanup;
         }
-
-        sync_find_reserve_messages(mailbox, rfolder->last_uid, part_list);
+        fromuid = rfolder->last_uid;
     }
-    else sync_find_reserve_messages(mailbox, 0, part_list);
+    sync_find_reserve_messages(mailbox, fromuid, mailbox->i.last_uid, part_list);
 
     reserve = reserve_guids->head;
     r = sync_reserve_partition(reserve->part, replica_folders,

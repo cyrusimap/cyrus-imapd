@@ -3616,19 +3616,21 @@ static const char *sync_response(int r)
  * flag messages that are already available at the server end */
 
 int sync_find_reserve_messages(struct mailbox *mailbox,
-                               unsigned last_uid,
+                               uint32_t fromuid,
+                               uint32_t touid,
                                struct sync_msgid_list *part_list)
 {
     const struct index_record *record;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    mailbox_iter_startuid(iter, last_uid+1); /* only read new records */
+    mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
     while ((record = mailbox_iter_step(iter))) {
         sync_msgid_insert(part_list, &record->guid);
+        if (record->uid >= touid) break;
     }
     mailbox_iter_done(&iter);
 
-    return(0);
+    return 0;
 }
 
 static int find_reserve_all(struct sync_name_list *mboxname_list,
@@ -3641,7 +3643,6 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
-    modseq_t xconvmodseq;
     int r = 0;
 
     /* Find messages we want to upload that are available on server */
@@ -3666,7 +3667,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
             goto bail;
         }
 
-        xconvmodseq = 0;
+        modseq_t xconvmodseq = 0;
         if (mailbox_has_conversations(mailbox)) {
             r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
             if (r) {
@@ -3678,8 +3679,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         /* mailbox is open from here, no exiting without closing it! */
 
-        part_list = sync_reserve_partlist(reserve_list,
-                                          topart ? topart : mailbox->part);
+        rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
+        uint32_t fromuid = rfolder ? rfolder->last_uid : 0;
+        uint32_t touid = mailbox->i.last_uid;
 
         sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
                              mailbox->mbtype,
@@ -3690,12 +3692,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq);
 
-        rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
-        if (rfolder)
-            sync_find_reserve_messages(mailbox, rfolder->last_uid, part_list);
-        else
-            sync_find_reserve_messages(mailbox, 0, part_list);
 
+        part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox->part);
+        sync_find_reserve_messages(mailbox, fromuid, touid, part_list);
         mailbox_close(&mailbox);
     }
 
