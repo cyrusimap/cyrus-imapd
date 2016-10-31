@@ -1485,6 +1485,10 @@ dnl
                         icalrecur_freq_to_string, icalrecur_weekday_to_string],
                 [], [], [[#include <libical/ical.h>]])
 
+        AC_CHECK_LIB(ical, icalproperty_new_acknowledged,
+                AC_DEFINE(HAVE_VALARM_EXT_PROPS,[],
+                        [Do we have built-in support for VALARM extensions props?]))
+
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
                 AC_DEFINE(HAVE_IANA_PARAMS,[],
                         [Do we have support for IANA params?])

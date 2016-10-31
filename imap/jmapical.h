@@ -89,7 +89,7 @@ typedef struct {
  * props: optional JSON object whose keys name the properties to be converted
  * err:   optional error receiver
  */
-json_t* jmapical_tojmap(icalcomponent *ical, struct json_t *props, jmapical_err_t *err);
+json_t* jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err);
 
 /* Convert the JMAP object obj to iCalendar.
  *

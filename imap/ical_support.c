@@ -543,6 +543,20 @@ icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
     return dtp.time;
 }
 
+
+icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
+                                                   const char *name)
+{
+    icalproperty *prop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+         prop && strcmp(icalproperty_get_x_name(prop), name);
+         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY));
+
+    return prop;
+}
+
+
 #ifndef HAVE_TZDIST_PROPS
 
 /* Functions to replace those not available in libical < v2.0 */
@@ -562,6 +576,30 @@ icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
 }
 
 #endif /* HAVE_TZDIST_PROPS */
+
+
+#ifndef HAVE_VALARM_EXT_PROPS
+
+/* Functions to replace those not available in libical < v1.0 */
+
+icalproperty *icalproperty_new_acknowledged(struct icaltimetype v)
+{
+    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
+    icalproperty_set_x_name(prop, "ACKNOWLEDGED");
+    return prop;
+}
+
+void icalproperty_set_acknowledged(icalproperty *prop, struct icaltimetype v)
+{
+    icalproperty_set_x(prop, icaltime_as_ical_string(v));
+}
+
+struct icaltimetype icalproperty_get_acknowledged(const icalproperty *prop)
+{
+    return icaltime_from_string(icalproperty_get_x(prop));
+}
+
+#endif /* HAVE_VALARM_EXT_PROPS */
 
 
 #ifdef HAVE_IANA_PARAMS

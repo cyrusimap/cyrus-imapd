@@ -2670,7 +2670,7 @@ static struct buf *_icaltimezone_as_tzfile(icalcomponent* ical,
         buf_append(tzfile, &posix);
     }
     else if (!eternal_dst &&
-             !icalcomponent_get_first_property(vtz, ICAL_TZUNTIL_PROPERTY)) {
+             !icalcomponent_get_tzuntil_property(vtz)) {
         /* Use last observance as fixed offset */
         obs = icalarray_element_at(obsarray, obsarray->num_elements - 1);
 

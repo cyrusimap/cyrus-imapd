@@ -277,7 +277,7 @@ static void diff_object(json_t *diff, struct buf *buf, json_t *a, json_t *b)
     }
 }
 
-static context_t *context_new(struct json_t *wantprops,
+static context_t *context_new(json_t *wantprops,
                               jmapical_err_t *err,
                               int mode)
 {
@@ -354,7 +354,7 @@ static void beginprop_idx(context_t *ctx, const char *name, size_t idx)
     }
 
     buf_appendcstr(buf, "/");
-    buf_printf(buf, "%ld", idx);
+    buf_printf(buf, "%zu", idx);
 
     strarray_push(str, buf_cstring(buf));
     buf_reset(buf);
@@ -907,6 +907,7 @@ recurrence_from_ical(context_t *ctx, icalcomponent *comp)
         json_object_set_new(recur, "interval", json_pack("i", rrule.interval));
     }
 
+#ifdef HAVE_RSCALE
     /* rscale */
     if (rrule.rscale) {
         s = xstrdup(rrule.rscale);
@@ -929,6 +930,7 @@ recurrence_from_ical(context_t *ctx, icalcomponent *comp)
             s = NULL;
     }
     if (s) json_object_set_new(recur, "skip", json_string(s));
+#endif
 
     /* firstDayOfWeek */
     s = xstrdup(icalrecur_weekday_to_string(rrule.week_start));
@@ -1370,7 +1372,7 @@ static json_t *alertaction_from_ical(context_t *ctx, hash_table *snoozes,
     }
 
     /* acknowledged */
-    if ((prop = icalcomponent_get_first_property(alarm, ICAL_ACKNOWLEDGED_PROPERTY))) {
+    if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
         icaltimetype t = icalproperty_get_acknowledged(prop);
         if (icaltime_is_valid_time(t)) {
             char *val = utcdate_from_icaltime_r(t);
@@ -1886,7 +1888,7 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
 
         /* size */
         json_int_t size = -1;
-        param = icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER);
+        param = icalproperty_get_size_parameter(prop);
         if (param) {
             if ((s = icalparameter_get_size(param))) {
                 char *ptr;
@@ -2403,7 +2405,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 }
 
 json_t*
-jmapical_tojmap(icalcomponent *ical, struct json_t *props, jmapical_err_t *err)
+jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err)
 {
     icalcomponent* comp;
     json_t *obj = NULL;
@@ -3276,8 +3278,7 @@ alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
     if (pe > 0) {
         icaltimetype t;
         if (utcdate_to_icaltime(s, &t)) {
-            prop = icalproperty_new(ICAL_ACKNOWLEDGED_PROPERTY);
-            icalproperty_set_acknowledged(prop, t);
+            prop = icalproperty_new_acknowledged(t);
             icalcomponent_add_property(alarm, prop);
         } else {
             invalidprop(ctx, "acknowledged");
@@ -3351,7 +3352,7 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
         }
 
         /* action */
-        int is_unknown_action;
+        int is_unknown_action = 0;
         if (readprop(ctx, alert, "action", 1, "o", &action) > 0) {
             beginprop(ctx, "action");
             alertaction_to_ical(ctx, comp, alarm, action, &is_unknown_action);
