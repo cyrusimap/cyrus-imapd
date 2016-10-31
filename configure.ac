@@ -862,7 +862,7 @@ if test "$with_clamav" != "no"; then
 fi
 
 AC_SUBST(LIB_CLAMAV)
-AM_CONDITIONAL([HAVE_CLAMAV], [test "$with_clamav" = "yes"])
+AM_CONDITIONAL([HAVE_CLAMAV], [test "$with_clamav" != "no"])
 
 AC_ARG_ENABLE(server,
 	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
