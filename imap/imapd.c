@@ -11943,6 +11943,7 @@ static int getlistselopts(char *tag, struct listargs *args)
 
         if (!strcmp(buf.s, "subscribed")) {
             args->sel |= LIST_SEL_SUBSCRIBED;
+            args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
             args->sel |= LIST_SEL_DAV;
         } else if (!strcmp(buf.s, "remote")) {
@@ -11951,9 +11952,12 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->sel |= LIST_SEL_RECURSIVEMATCH;
         } else if (!strcmp(buf.s, "special-use")) {
             args->sel |= LIST_SEL_SPECIALUSE;
+            args->ret |= LIST_RET_SPECIALUSE;
         } else if (!strcmp(buf.s, "metadata")) {
             struct getmetadata_options opts = OPTS_INITIALIZER;
             args->sel |= LIST_SEL_METADATA;
+            args->ret |= LIST_RET_METADATA;
+
             strarray_t options = STRARRAY_INITIALIZER;
             c = parse_metadata_string_or_list(tag, &options, NULL);
             parse_getmetadata_options(&options, &opts);
