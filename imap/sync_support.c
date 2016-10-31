@@ -3669,6 +3669,31 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
     return 0;
 }
 
+static modseq_t calculate_intermediate_modseq(struct mailbox *mailbox,
+                                              uint32_t fromuid,
+                                              modseq_t frommodseq)
+{
+    modseq_t res = mailbox->i.highestmodseq;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    const struct index_record *record = NULL;
+    mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
+    while ((record = mailbox_iter_step(iter))) {
+        if (record->modseq <= res)
+            res = record->modseq - 1;
+    }
+    mailbox_iter_done(&iter);
+
+    /* must have found at least one record past the end to do a partial batch,
+     * and we need a highestmodseq at least one less than that records so that
+     * it can successfully sync */
+    if (res > frommodseq && res < mailbox->i.highestmodseq)
+        return res;
+
+    /* can't find an intermediate modseq */
+    return 0;
+}
+
 static int find_reserve_all(struct sync_name_list *mboxname_list,
                             const char *topart,
                             struct sync_folder_list *master_folders,
@@ -3724,14 +3749,17 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         if (batchsize && touid - fromuid > batchsize) {
             modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
+            uint32_t intermediateuid = fromuid + batchsize;
+            modseq_t intermediatemodseq = calculate_intermediate_modseq(mailbox, intermediateuid, frommodseq);
             /* is there an intermediate modseq available?  If not, we can't
              * generate a legitimate intermediate state */
-            if (modseq - frommodseq > 1) {
-                touid = fromuid + batchsize;
-                modseq = frommodseq + 1;
+            if (intermediatemodseq) {
+                touid = intermediateuid;
+                modseq = intermediatemodseq;
                 ispartial = 1;
-                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u)",
-                       mailbox->name, fromuid, touid, mailbox->i.last_uid);
+                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) (%llu/%llu/%llu)",
+                       mailbox->name, fromuid, touid, mailbox->i.last_uid,
+                       frommodseq, intermediatemodseq, mailbox->i.highestmodseq);
             }
         }
 
@@ -5188,7 +5216,7 @@ int sync_update_mailbox(struct sync_folder *local,
     flags |= SYNC_FLAG_ISREPEAT;
 
     if (r == IMAP_AGAIN) {
-        local->batchsize = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
+        local->ispartial = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
         r = mailbox_full_update(local, reserve_list, sync_be, flags);
         if (!r) r = update_mailbox_once(local, remote, topart,
                                         reserve_list, sync_be, flags);
