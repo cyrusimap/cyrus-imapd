@@ -3672,7 +3672,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                             struct sync_folder_list *master_folders,
                             struct sync_folder_list *replica_folders,
                             struct sync_reserve_list *reserve_list,
-                            int batchsize)
+                            uint32_t batchsize)
 {
     struct sync_name *mbox;
     struct sync_folder *rfolder;
@@ -3854,7 +3854,7 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
                             struct sync_folder_list *replica_folders,
                             struct sync_reserve_list *reserve_list,
                             struct backend *sync_be,
-                            int batchsize)
+                            uint32_t batchsize)
 {
     struct sync_reserve *reserve;
     int r;
@@ -5400,7 +5400,7 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
     const char *part;
-    int batchsize = 0;
+    uint32_t batchsize = 0;
 
     if (channelp) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
