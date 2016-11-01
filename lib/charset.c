@@ -723,7 +723,7 @@ struct convert_rock *search_init(const char *substr, comp_pat *pat) {
     s->substr = (unsigned char *)substr;
 
     /* allocate tracking space and initialise to "no match" */
-    s->starts = xmalloc(s->max_start * sizeof(int));
+    s->starts = xmalloc(s->max_start * sizeof(s->starts[0]));
     for (i = 0; i < s->max_start; i++) {
 	s->starts[i] = -1;
     }
