@@ -64,6 +64,12 @@
  *   supplied by caller. This is similar to the inner workings of the
  *   skiplist and twoskip backends.
  *
+ * - Callbacks within foreach might update the currently seeked data
+ *   item. To protect the database from corruption, the cursor is
+ *   invalidated and reseeked after the operation, causing foreach()
+ *   performance degrade to O(m*log n), where m denotes the iteration
+ *   count and n the number of items in the database.
+ *
  * - LMDB transactions operate on database environments and database
  *   environments may contain multiple databases. A single writer
  *   locks all other operations within this environment. To avoid
@@ -99,12 +105,13 @@ struct txn {
 };
 
 struct dbengine {
-    MDB_env *env;    /* mdb environment, one per database */
-    char *fname;     /* external filename of the database */
-    int flags;       /* create flags */
-    void *data;      /* allocated buffer for fetched data */
-    size_t datalen;  /* bytes allocated in data */
-    struct txn *tid; /* master transaction, if any. See begin_txn. */
+    MDB_env *env;     /* mdb environment, one per database */
+    char *fname;      /* external filename of the database */
+    int flags;        /* create flags */
+    void *data;       /* allocated buffer for fetched data */
+    size_t datalen;   /* bytes allocated in data */
+    struct txn *tid;  /* master transaction, if any. See begin_txn. */
+    MDB_cursor *mcur; /* current cursor of foreach(), if any */
 };
 
 struct dblist {
@@ -197,7 +204,6 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
 {
     int mr;
 
-    PDEBUG("cyrusdb_lmdb(%s):     commit_txn %p", db->fname, tid);
     assert(db && tid);
 
     mr = mdb_txn_commit(tid->mtxn);
@@ -210,7 +216,6 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
 
 static int abort_txn(struct dbengine *db, struct txn *tid)
 {
-    PDEBUG("cyrusdb_lmdb(%s):     abort_txn %p", db->fname, tid);
     assert(db && tid);
 
     mdb_txn_abort(tid->mtxn);
@@ -251,8 +256,6 @@ static int begin_txn(struct dbengine *db, struct txn **tidptr, int readonly)
     mr = mdb_txn_begin(db->env, parent, readonly ? MDB_RDONLY : 0, &tid->mtxn);
     if (mr) goto fail;
 
-    PDEBUG("cyrusdb_lmdb(%s):     begin_txn (%p)%p", db->fname, db->tid, tid);
-
     /* Open the database */
     mflags = db->flags & CYRUSDB_CREATE ? MDB_CREATE : 0;
     mr = mdb_dbi_open(tid->mtxn, NULL /*name*/, mflags, &tid->dbi);
@@ -289,8 +292,6 @@ static int getorset_txn(struct dbengine *db,
     struct txn *tid;
     int r;
 
-    PDEBUG("cyrusdb_lmdb(%s):   getorset_txn tid=%p(%p)", db->fname,
-            tidptr, tidptr ? *tidptr : NULL);
     assert(_tidptr);
     tid = *_tidptr;
 
@@ -416,8 +417,10 @@ fail:
 static void close_db(struct dbengine *db)
 {
     assert(db);
+
     if (db->tid) {
-        syslog(LOG_ERR, "cyrusdb_lmdb(%s): stray transaction %p",db->fname, db->tid);
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): stray transaction %p",
+                db->fname, db->tid);
         abort_txn(db, db->tid);
     }
     if (db->env) {
@@ -433,6 +436,12 @@ static void close_db(struct dbengine *db)
 static int myclose(struct dbengine *db)
 {
     assert(db);
+
+    if (db->mcur) {
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): close within foreach", db->fname);
+        return CYRUSDB_INTERNAL;
+    }
+
     PDEBUG("cyrusdb_lmdb(%s): close", db->fname);
     close_db(db);
     unregister_db(db);
@@ -442,11 +451,11 @@ static int myclose(struct dbengine *db)
 static int fetch(struct dbengine *db, const char *key, size_t keylen,
                  const char **data, size_t *datalen, struct txn **tidptr)
 {
-    MDB_val mkey, mdata;
+    MDB_val mkey, mval;
     struct txn *tid;
     int r, r2 = 0, mr;
 
-    PDEBUG("cyrusdb_lmdb(%s): fetch", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s): fetch %.*s", db->fname, (int) keylen, key);
     assert(db && key);
 
     mkey.mv_data = (void*) key;
@@ -456,7 +465,7 @@ static int fetch(struct dbengine *db, const char *key, size_t keylen,
     r = getorset_txn(db, tidptr, &tid, !tidptr /*readonly*/);
     if (r) goto fail;
 
-    mr = mdb_get(tid->mtxn, tid->dbi, &mkey, &mdata);
+    mr = mdb_get(tid->mtxn, tid->dbi, &mkey, &mval);
     if (mr == MDB_NOTFOUND) {
         /* That's not an error */
         r = CYRUSDB_NOTFOUND;
@@ -469,7 +478,7 @@ static int fetch(struct dbengine *db, const char *key, size_t keylen,
         goto fail;
     } else if (data && datalen) {
         /* Cache the fetched data from LMDB memory in own buffer */
-        r = bufferval(db, mdata, data, datalen);
+        r = bufferval(db, mval, data, datalen);
         if (r) goto fail;
     }
 
@@ -494,46 +503,73 @@ static int foreach(struct dbengine *db, const char *prefix, size_t prefixlen,
 {
     int r, r2, mr = 0;
     struct txn *tid = NULL;
-    MDB_cursor *cur = NULL;
-    MDB_val key, val;
+    MDB_val mkey, mval;
+    enum MDB_cursor_op op;
+    struct buf cur = BUF_INITIALIZER;
 
-    PDEBUG("cyrusdb_lmdb(%s): foreach", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s): foreach %.*s", db->fname, (int) prefixlen, prefix);
     assert(db);
 
     /* Open or reuse transaction */
     r = getorset_txn(db, tidptr, &tid, 0);
     if (r) goto fail;
 
-    mr = mdb_cursor_open(tid->mtxn, tid->dbi, &cur);
+    mr = mdb_cursor_open(tid->mtxn, tid->dbi, &db->mcur);
     if (mr) goto fail;
 
     /* Normalize and set prefix for search */
     if (prefix && !prefixlen) {
         prefix = NULL;
     }
-    key.mv_data = (void*) prefix;
-    key.mv_size = prefix ? prefixlen : 0;
-    mr = mdb_cursor_get(cur, &key, &val, prefix ? MDB_SET_RANGE : MDB_FIRST);
+
+    /* Initialize cursor */
+    mkey.mv_data = (void*) prefix;
+    mkey.mv_size = prefix ? prefixlen : 0;
+    op = prefix ? MDB_SET_RANGE : MDB_FIRST;
+    mr = mdb_cursor_get(db->mcur, &mkey, &mval, op);
 
     /* Iterate cursor until no records or out of range */
     while (!mr) {
-        if (prefix && (key.mv_size < prefixlen || memcmp(key.mv_data, prefix, prefixlen)))
+        if (prefixlen && (mkey.mv_size < prefixlen))
             break;
 
-        if (!p || p(rock, key.mv_data, key.mv_size, val.mv_data, val.mv_size)) {
-            r = cb(rock, key.mv_data, key.mv_size, val.mv_data, val.mv_size);
+        if (prefix && memcmp(mkey.mv_data, prefix, prefixlen))
+            break;
+
+        /* Cache the current position in local memory */
+        buf_setmap(&cur, mkey.mv_data, mkey.mv_size);
+
+        if (!p || p(rock, cur.s, cur.len, mval.mv_data, mval.mv_size)) {
+            r = cb(rock, cur.s, cur.len, mval.mv_data, mval.mv_size);
             if (r) break;
         }
 
-        key.mv_data = (void*) prefix;
-        key.mv_size = prefix ? prefixlen : 0;
-        mr = mdb_cursor_get(cur, &key, &val, MDB_NEXT);
+        if (db->mcur == NULL) {
+            /* An update has invalidated the cursor. Reseek cursor. */
+            mr = mdb_cursor_open(tid->mtxn, tid->dbi, &db->mcur);
+            if (mr) break;
+
+            mkey.mv_data = cur.s;
+            mkey.mv_size = cur.len;
+            mr = mdb_cursor_get(db->mcur, &mkey, &mval, MDB_SET_RANGE);
+            if (mr) break;
+
+            if (mkey.mv_size != cur.len || memcmp(mkey.mv_data, cur.s, cur.len))
+                continue;
+        }
+
+        /* Advance cursor */
+        mr = mdb_cursor_get(db->mcur, &mkey, &mval, MDB_NEXT);
     }
 
     if (mr && mr != MDB_NOTFOUND)
         goto fail;
 
-    mdb_cursor_close(cur);
+    if (db->mcur) {
+        mdb_cursor_close(db->mcur);
+        db->mcur = NULL;
+    }
+    buf_free(&cur);
 
     /* Export or commit transaction */
     r2 = tidptr ? CYRUSDB_OK : commit_txn(db, tid);
@@ -541,8 +577,12 @@ static int foreach(struct dbengine *db, const char *prefix, size_t prefixlen,
     return r ? r : r2;
 
 fail:
-    if (cur)
-        mdb_cursor_close(cur);
+    if (db->mcur) {
+        mdb_cursor_close(db->mcur);
+        db->mcur = NULL;
+    }
+    buf_free(&cur);
+
     if (tid && (!tidptr || !*tidptr))
         abort_txn(db, tid);
     if (mr) {
@@ -555,20 +595,26 @@ fail:
 static int put(struct dbengine *db, const char *key, size_t keylen,
                const char *data, size_t datalen, struct txn **tidptr, int mflags)
 {
-    MDB_val mkey, mdata;
+    MDB_val mkey, mval;
     struct txn *tid;
     int r, mr;
 
     mkey.mv_data = (void*) key;
     mkey.mv_size = keylen;
-    mdata.mv_data = (void*) data;
-    mdata.mv_size = datalen;
+    mval.mv_data = (void*) data;
+    mval.mv_size = datalen;
+
+    /* Invalidate cursor */
+    if (db->mcur) {
+        mdb_cursor_close(db->mcur);
+        db->mcur = NULL;
+    }
 
     /* Open or reuse transaction */
     r = getorset_txn(db, tidptr, &tid, 0);
     if (r) goto fail;
 
-    mr = mdb_put(tid->mtxn, tid->dbi, &mkey, &mdata, mflags);
+    mr = mdb_put(tid->mtxn, tid->dbi, &mkey, &mval, mflags);
     if (mr) {
         /* Return the appropriate error code for existing key overwrites */
         syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
@@ -595,14 +641,16 @@ fail:
 static int create(struct dbengine *db, const char *key, size_t keylen,
                   const char *data, size_t datalen, struct txn **tidptr)
 {
-    PDEBUG("cyrusdb_lmdb(%s): create", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s): create %.*s => %.*s", db->fname,
+            (int) keylen, key, (int) datalen, data);
     return put(db, key, keylen, data, datalen, tidptr, MDB_NOOVERWRITE);
 }
 
 static int store(struct dbengine *db, const char *key, size_t keylen,
                   const char *data, size_t datalen, struct txn **tidptr)
 {
-    PDEBUG("cyrusdb_lmdb(%s): store", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s): store %.*s => %.*s", db->fname,
+            (int) keylen, key, (int) datalen, data);
     return put(db, key, keylen, data, datalen, tidptr, 0);
 }
 
@@ -613,10 +661,16 @@ static int delete(struct dbengine *db, const char *key, size_t keylen,
     struct txn *tid;
     int r, mr;
 
-    PDEBUG("cyrusdb_lmdb(%s): delete", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s): delete %.*s", db->fname, (int) keylen, key);
 
     mkey.mv_data = (void*) key;
     mkey.mv_size = keylen;
+
+    /* Invalidate cursor */
+    if (db->mcur) {
+        mdb_cursor_close(db->mcur);
+        db->mcur = NULL;
+    }
 
     /* Open or reuse transaction */
     r = getorset_txn(db, tidptr, &tid, 0);

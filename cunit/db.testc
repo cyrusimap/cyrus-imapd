@@ -1585,4 +1585,69 @@ static int tear_down(void)
     return r;
 }
 
+struct replace_data {
+    struct db *db;
+    struct txn *txn;
+};
+
+static int replacer(void *rock,
+                    const char *key, size_t keylen,
+                    const char *data, size_t datalen)
+{
+    struct db *db = ((struct replace_data*) rock)->db;
+    struct txn *txn = ((struct replace_data*) rock)->txn;
+    int r;
+
+    CU_ASSERT(data != NULL);
+    CU_ASSERT(datalen);
+
+    CANSTORE(key, keylen, "bogus", 5);
+    return 0;
+}
+
+static void test_foreach_replace(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct replace_data data;
+
+    if (skiptest() || !strcmp(backend, "flat"))
+        return;
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    CANSTORE("01", 2, "one", 3);
+    CANSTORE("02", 2, "two", 3);
+    CANSTORE("03", 2, "thr", 3);
+
+    CANCOMMIT();
+    CANREOPEN();
+
+    CANFETCH("01", 2, "one", 3);
+    CANFETCH("02", 2, "two", 3);
+    CANFETCH("03", 2, "thr", 3);
+
+    data.db = db;
+    data.txn = txn;
+
+    r = cyrusdb_foreach(db, NULL, 0, NULL, replacer, &data, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    CANCOMMIT();
+    CANREOPEN();
+
+    CANFETCH("01", 2, "bogus", 5);
+    CANFETCH("02", 2, "bogus", 5);
+    CANFETCH("03", 2, "bogus", 5);
+
+    CANCOMMIT();
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+
 /* vim: set ft=c: */

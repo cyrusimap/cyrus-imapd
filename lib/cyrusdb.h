@@ -179,7 +179,9 @@ struct cyrusdb_backend {
        to all db calls during the life of foreach()
 
         The callbacks will never be called with data=NULL.  For a zero
-        length record, data will point to a zero length buffer.  */
+        length record, data will point to a zero length buffer.
+        Calling store, create or delete within a callback may invalidate
+        the memory pointed to by the data parameter. */
     int (*foreach)(struct dbengine *mydb,
                    const char *prefix, size_t prefixlen,
                    foreach_p *p,
