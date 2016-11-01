@@ -665,7 +665,7 @@ static struct sync_folder_list *restore_make_reserve_folder_list(
             /* we only care about mboxname here */
             sync_folder_list_add(folder_list, NULL, iter->mboxname,
                                 0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                                0, 0, 0, 0, NULL, 0);
+                                0, 0, 0, 0, NULL, 0, 0);
         }
 
         backup_mailbox_list_empty(mailboxes);
