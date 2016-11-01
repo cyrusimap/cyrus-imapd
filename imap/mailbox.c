@@ -1791,21 +1791,22 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
     /* audit logging */
     if (config_auditlog) {
         if (change->flags & CHANGE_ISAPPEND)
-            syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
+            syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
+                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> sysflags=<%u> guid=<%s>",
                 session_id(), mailbox->name, mailbox->uniqueid, record->uid,
-                message_guid_encode(&record->guid));
+                record->modseq, record->system_flags, message_guid_encode(&record->guid));
 
         if ((record->system_flags & FLAG_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
-                session_id(), mailbox->name, mailbox->uniqueid,
-                record->uid, message_guid_encode(&record->guid));
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> sysflags=<%u> guid=<%s>",
+                session_id(), mailbox->name, mailbox->uniqueid, record->uid,
+                record->modseq, record->system_flags, message_guid_encode(&record->guid));
 
         if ((record->system_flags & FLAG_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-                   session_id(), mailbox->name, mailbox->uniqueid,
-                   record->uid);
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> sysflags=<%u> guid=<%s>",
+                session_id(), mailbox->name, mailbox->uniqueid, record->uid,
+                record->modseq, record->system_flags, message_guid_encode(&record->guid));
     }
 
     return 0;
