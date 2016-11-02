@@ -4163,6 +4163,14 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
     return 0;
 }
 
+EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *guidp = &m->record.guid;
+    return 0;
+}
+
 EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)
 {
     int r = message_need(m, M_RECORD);
