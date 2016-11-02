@@ -12236,7 +12236,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     const char *cmd;
     struct statusdata sdata = STATUSDATA_INIT;
 
-    if ((mbentry->mbtype & MBTYPE_REMOTE) &&
+    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE) &&
         (listargs->scan ||
          (listargs->ret & (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA)))) {
         if (!hash_lookup(mbentry->server, &listargs->server_table)) {
