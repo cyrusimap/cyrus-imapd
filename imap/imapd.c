@@ -12708,6 +12708,7 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
     if (!list_info) {
         list_info = xzmalloc(sizeof(int));
         hash_insert(extname, list_info, &rock->table);
+        rock->count++;
     }
 
     if (data->mbname) { /* exact match */
@@ -12716,8 +12717,6 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
     else {
         *list_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
     }
-
-    rock->count++;
 
     return 0;
 }
