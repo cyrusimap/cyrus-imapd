@@ -4664,19 +4664,14 @@ EXPORTED int index_getsearchtext(message_t *msg,
 {
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
-    uint32_t uid = 0;
-    const struct message_guid *guid = NULL;
     int format = MESSAGE_SEARCH;
     strarray_t types = STRARRAY_INITIALIZER;
     int i;
     int r;
 
-    r = message_get_uid(msg, &uid);
+    r = receiver->begin_message(receiver, msg);
+    if (r == IMAP_EXISTS) return 0;
     if (r) return r;
-    r = message_get_guid(msg, &guid);
-    if (r) return r;
-
-    receiver->begin_message(receiver, guid, uid);
 
     str.receiver = receiver;
     str.indexed_headers = 0;
@@ -4741,6 +4736,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
     r = receiver->end_message(receiver);
     buf_free(&buf);
     strarray_fini(&types);
+
     return r;
 }
 

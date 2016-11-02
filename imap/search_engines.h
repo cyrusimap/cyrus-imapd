@@ -72,7 +72,7 @@ struct search_builder {
 
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
-       begin_message(<guid>, <uid>)
+       begin_message(message_t)
        receiver->begin_part(<part1>)
        receiver->append_text(<text>)     (1 or more times)
        receiver->end_part(<part1>)
@@ -85,19 +85,14 @@ struct search_builder {
    The parts need not arrive in any particular order, but each part
    can only participate in one begin_part ... append_text ... end_part
    sequence, and the sequences for different parts cannot be interleaved.
-
-   The optional index_uid function adds uid to the index for a given guid.
-   It returns 0 on success, IMAP_NOTFOUND if guid is not indexed, or any
-   other value on error.
 */
 typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
     int (*begin_mailbox)(search_text_receiver_t *,
                          struct mailbox *, int incremental);
     uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
-    int (*is_indexed)(search_text_receiver_t *, uint32_t uid);
-    void (*begin_message)(search_text_receiver_t *,
-                          const struct message_guid *guid, uint32_t uid);
+    int (*is_indexed)(search_text_receiver_t *, message_t *msg);
+    int (*begin_message)(search_text_receiver_t *, message_t *msg);
     void (*begin_part)(search_text_receiver_t *, int part);
     void (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
@@ -105,8 +100,6 @@ struct search_text_receiver {
     int (*end_mailbox)(search_text_receiver_t *,
                        struct mailbox *);
     int (*flush)(search_text_receiver_t *);
-    int (*index_uid)(search_text_receiver_t*,
-                     const struct message_guid*, uint32_t uid);
 };
 
 #define SEARCH_FLAG_CAN_BATCH   (1<<0)

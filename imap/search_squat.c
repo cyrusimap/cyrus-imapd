@@ -562,19 +562,20 @@ static const char *squat_strerror(int err)
 /* Cyrus passes the text to index in here, after it has canonicalized
    the text. We figure out what source document the text belongs to,
    and update the index. */
-static void begin_message(search_text_receiver_t *rx,
-                          const struct message_guid *guid __attribute__((unused)),
-                          uint32_t uid)
+static int begin_message(search_text_receiver_t *rx,
+                          message_t *msg)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
 
-    d->uid = uid;
+    message_get_uid(msg, &d->uid);
     d->doc_is_open = 0;
     d->doc_name[0] = '\0';
     buf_init(&d->pending_text);
 
     d->mailbox_stats.indexed_messages++;
     d->total_stats.indexed_messages++;
+
+    return 0;
 }
 
 static void begin_part(search_text_receiver_t *rx, int part)
@@ -886,9 +887,11 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx
     return 1;
 }
 
-static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
+static int is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
+    uint32_t uid = 0;
+    message_get_uid(msg, &uid);
 
     return bv_isset(&d->indexed, uid);
 }

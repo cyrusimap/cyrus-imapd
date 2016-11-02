@@ -356,15 +356,6 @@ static int index_single_message(const char *mboxname, uint32_t uid)
     r = mailbox_find_index_record(mailbox, uid, &record);
     if (r) goto out;
 
-    /* Skip known UIDs */
-    if (rx->is_indexed(rx, uid)) goto out;
-
-    /* Skip known GUIDs but index UID, if backends support it */
-    if (rx->index_uid) {
-        r = rx->index_uid(rx, &record.guid, uid);
-        if (!r || r != IMAP_NOTFOUND) goto out;
-    }
-
     if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED)) goto out;
 
     msg = message_new_from_record(mailbox, &record);

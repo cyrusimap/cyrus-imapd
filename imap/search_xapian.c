@@ -1287,16 +1287,24 @@ static void free_segments(xapian_receiver_t *tr)
     ptrarray_truncate(&tr->segs, 0);
 }
 
-static void begin_message(search_text_receiver_t *rx,
-                          const struct message_guid *guid, uint32_t uid)
+static int begin_message(search_text_receiver_t *rx, message_t *msg)
 {
-    xapian_receiver_t *tr = (xapian_receiver_t *)rx;
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    message_guid_copy(&tr->guid, guid);
-    tr->uid = uid;
-    free_segments(tr);
-    tr->parts_total = 0;
-    tr->truncate_warning = 0;
+    message_get_uid(msg, &tr->super.uid);
+
+    int is_indexed = rx->is_indexed(rx, msg);
+    if (!tr->indexed) tr->indexed = seqset_init(0, SEQ_MERGE);
+    seqset_add(tr->indexed, tr->super.uid, 1);
+    if (is_indexed) return IMAP_EXISTS;
+
+    const struct message_guid *guid = NULL;
+    message_get_guid(msg, &guid);
+    message_guid_copy(&tr->super.guid, guid);
+    free_segments((xapian_receiver_t *)tr);
+    tr->super.parts_total = 0;
+    tr->super.truncate_warning = 0;
+    return 0;
 }
 
 static void begin_part(search_text_receiver_t *rx, int part)
@@ -1366,27 +1374,6 @@ static int compare_segs(const void **v1, const void **v2)
     return r;
 }
 
-static int index_uid(search_text_receiver_t *rx,
-                     const struct message_guid *guid,
-                     uint32_t uid)
-{
-    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-
-    /* Don't lookup the guid index for the current guid */
-    if (message_guid_cmp(&tr->super.guid, guid)) {
-        if (!xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)))
-            return IMAP_NOTFOUND;
-    }
-
-    /* track that this UID was indexed.  Use SEQ_MERGE to avoid a bitty sequence
-     * with lots of holes in it if messages have been expunged meanwhile. */
-    if (!tr->indexed) {
-        tr->indexed = seqset_init(0, SEQ_MERGE);
-    }
-    seqset_add(tr->indexed, uid, 1);
-    return 0;
-}
-
 static int end_message_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
@@ -1415,8 +1402,6 @@ static int end_message_update(search_text_receiver_t *rx)
     if (r) goto out;
 
     ++tr->uncommitted;
-
-    index_uid(rx, &tr->super.guid, tr->super.uid);
 
 out:
     tr->super.uid = 0;
@@ -1515,11 +1500,20 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
     return seqset_firstnonmember(tr->oldindexed);
 }
 
-static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
+static int is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    return (seqset_ismember(tr->oldindexed, uid) || seqset_ismember(tr->indexed, uid));
+    uint32_t uid = 0;
+    message_get_uid(msg, &uid);
+
+    if (seqset_ismember(tr->oldindexed, uid)) return 1;
+    if (seqset_ismember(tr->indexed, uid)) return 1;
+
+    const struct message_guid *guid = NULL;
+    message_get_guid(msg, &guid);
+
+    return xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid));
 }
 
 static int end_mailbox_update(search_text_receiver_t *rx,
@@ -1582,8 +1576,6 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.flush = flush;
 
     tr->super.verbose = verbose;
-
-    tr->super.super.index_uid = index_uid;
 
     return &tr->super.super;
 }
@@ -2161,10 +2153,9 @@ static int reindex_mb(void *rock,
 
         /* preload */
         for (i = 0 ; i < batch.count ; i++) {
-            /* we can't actually const this, because the interface doesn't yet do fake consting */
-            /*const*/message_t *msg = ptrarray_nth(&batch, i);
-            const char *fname;
+            message_t *msg = ptrarray_nth(&batch, i);
 
+            const char *fname;
             r = message_get_fname(msg, &fname);
             if (r) goto done;
             r = warmup_file(fname, 0, 0);

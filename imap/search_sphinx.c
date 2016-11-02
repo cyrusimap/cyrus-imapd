@@ -1895,14 +1895,12 @@ out:
     return r;
 }
 
-static void begin_message(search_text_receiver_t *rx,
-                          const struct message_guid *guid __attribute__((unused)),
-                          uint32_t uid)
+static int begin_message(search_text_receiver_t *rx, message_t *msg)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int i;
 
-    tr->uid = uid;
+    message_get_uid(msg, &tr->uid);
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
         buf_reset(&tr->parts[i]);
     tr->parts_total = 0;
