@@ -323,9 +323,8 @@ int index_search_evaluate(struct index_state *state, const search_expr_t *e, uin
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);
 
-extern int index_getsearchtext(struct message*,
+extern int index_getsearchtext(struct message *msg,
                                struct search_text_receiver *receiver,
-                               const struct message_guid *guid,
                                int snippet);
 
 extern int index_getuidsequence(struct index_state *state,

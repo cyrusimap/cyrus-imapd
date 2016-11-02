@@ -2489,7 +2489,7 @@ EXPORTED int index_snippets(struct index_state *state,
             if (r) continue;
 
             msg = message_new_from_record(mailbox, &record);
-            index_getsearchtext(msg, rx, &record.guid, /*snippet*/1);
+            index_getsearchtext(msg, rx, /*snippet*/1);
             message_unref(&msg);
         }
 
@@ -4660,18 +4660,22 @@ static void append_alnum(struct buf *buf, const char *ss)
 
 EXPORTED int index_getsearchtext(message_t *msg,
                                  search_text_receiver_t *receiver,
-                                 const struct message_guid *guid,
                                  int snippet)
 {
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
+    const struct message_guid *guid = NULL;
     int format = MESSAGE_SEARCH;
     strarray_t types = STRARRAY_INITIALIZER;
     int i;
     int r;
 
-    message_get_uid(msg, &uid);
+    r = message_get_uid(msg, &uid);
+    if (r) return r;
+    r = message_get_guid(msg, &guid);
+    if (r) return r;
+
     receiver->begin_message(receiver, guid, uid);
 
     str.receiver = receiver;

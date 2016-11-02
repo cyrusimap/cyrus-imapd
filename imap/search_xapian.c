@@ -2112,10 +2112,6 @@ static int reindex_mb(void *rock,
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
-    struct batch_entry {
-        struct message_guid guid;
-        message_t *msg;
-    } *entry;
     const struct index_record *record;
     int verbose = SEARCH_VERBOSE(filter->flags);
     int r = 0;
@@ -2145,12 +2141,10 @@ static int reindex_mb(void *rock,
         if (!seqset_ismember(seq, record->uid))
             continue;
 
-        entry = xzmalloc(sizeof(struct batch_entry));
-        entry->msg = message_new_from_record(mailbox, record);
-        message_guid_copy(&entry->guid, &record->guid);
+        message_t *msg = message_new_from_record(mailbox, record);
 
         /* add the record to the list */
-        ptrarray_append(&batch, entry);
+        ptrarray_append(&batch, msg);
     }
 
     mailbox_iter_done(&iter);
@@ -2167,10 +2161,11 @@ static int reindex_mb(void *rock,
 
         /* preload */
         for (i = 0 ; i < batch.count ; i++) {
-            entry = ptrarray_nth(&batch, i);
+            /* we can't actually const this, because the interface doesn't yet do fake consting */
+            /*const*/message_t *msg = ptrarray_nth(&batch, i);
             const char *fname;
 
-            r = message_get_fname(entry->msg, &fname);
+            r = message_get_fname(msg, &fname);
             if (r) goto done;
             r = warmup_file(fname, 0, 0);
             if (r) goto done; /* means we failed to open a file,
@@ -2179,12 +2174,11 @@ static int reindex_mb(void *rock,
 
         /* index the messages */
         for (i = 0 ; i < batch.count ; i++) {
-            entry = ptrarray_nth(&batch, i);
-            r = index_getsearchtext(entry->msg, &tr->super.super, &entry->guid, 0);
-            message_unref(&entry->msg);
-            free(entry);
+            message_t *msg = ptrarray_nth(&batch, i);
+            r = index_getsearchtext(msg, &tr->super.super, 0);
+            if (r) goto done;
+            message_unref(&msg);
         }
-        if (r) goto done;
         if (tr->uncommitted) {
             r = xapian_dbw_commit_txn(tr->dbw);
             if (r) goto done;

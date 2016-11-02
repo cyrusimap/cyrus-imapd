@@ -373,7 +373,7 @@ static int index_single_message(const char *mboxname, uint32_t uid)
     if (verbose) fprintf(stderr, "squatter: indexing mailbox:%s uid:%u\n",
                          mboxname, uid);
 
-    r = index_getsearchtext(msg, rx, &record.guid, 0);
+    r = index_getsearchtext(msg, rx, 0);
 
 out:
     if (begun) {

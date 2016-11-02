@@ -147,11 +147,6 @@ static int search_batch_size(void)
             config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
 }
 
-struct batch_entry {
-    struct message_guid guid;
-    message_t *msg;
-};
-
 /*
  * Flush a batch of messages to the search engine's indexer code.  We
  * drop the index lock during the presumably CPU and IO heavy parts of
@@ -171,10 +166,10 @@ static int flush_batch(search_text_receiver_t *rx,
 
     /* prefetch files */
     for (i = 0 ; i < batch->count ; i++) {
-        struct batch_entry *entry = ptrarray_nth(batch, i);
+        message_t *msg = ptrarray_nth(batch, i);
         const char *fname;
 
-        r = message_get_fname(entry->msg, &fname);
+        r = message_get_fname(msg, &fname);
         if (r) return r;
         r = warmup_file(fname, 0, 0);
         if (r) return r; /* means we failed to open a file,
@@ -182,11 +177,9 @@ static int flush_batch(search_text_receiver_t *rx,
     }
 
     for (i = 0 ; i < batch->count ; i++) {
-        struct batch_entry *entry = ptrarray_nth(batch, i);
-        if (!r)
-            r = index_getsearchtext(entry->msg, rx, &entry->guid, 0);
-        message_unref(&entry->msg);
-        free(entry);
+        message_t *msg = ptrarray_nth(batch, i);
+        if (!r) r = index_getsearchtext(msg, rx, 0);
+        message_unref(&msg);
     }
     ptrarray_truncate(batch, 0);
 
@@ -243,10 +236,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
             break;
         }
 
-        entry = xzmalloc(sizeof(struct batch_entry));
-        entry->msg = message_new_from_record(mailbox, record);
-        message_guid_copy(&entry->guid, &record->guid);
-        ptrarray_append(&batch, entry);
+        message_t *msg = message_new_from_record(mailbox, record);
+        ptrarray_append(&batch, msg);
     }
     mailbox_iter_done(&iter);
 
