@@ -5373,16 +5373,16 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     int mbtype = 0;
     const char *partition = NULL;
     const char *server = NULL;
+    const char *uniqueid = NULL;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
 
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
+    dlist_getatom(extargs, "UNIQUEID", &uniqueid);
 
     const char *type = NULL;
 
-    dlist_getatom(extargs, "PARTITION", &partition);
-    dlist_getatom(extargs, "SERVER", &server);
     if (dlist_getatom(extargs, "TYPE", &type)) {
 	if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
 	else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
@@ -5414,15 +5414,21 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
     // A non-admin is not allowed to specify the server nor partition on which
-    // to create the mailbox.
+    // to create the mailbox, and not the uniqueid with which to create the
+    // mailbox either.
     //
-    // However, this only applies to frontends. If we're a backend, a frontend will
-    // proxy the partition it wishes to create the mailbox on.
-    if ((server || partition) && !imapd_userisadmin) {
+    // However, this only applies to frontends. If we're a backend, a frontend
+    // will proxy the partition it wishes to create the mailbox on.
+    if ((server || partition || uniqueid) && !imapd_userisadmin) {
 	if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
 	    config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 
 	    if (!config_getstring(IMAPOPT_PROXYSERVERS)) {
+		r = IMAP_PERMISSION_DENIED;
+		goto err;
+	    }
+
+	    if (uniqueid && !localonly) {
 		r = IMAP_PERMISSION_DENIED;
 		goto err;
 	    }
@@ -5622,6 +5628,14 @@ localcreate:
 	    1,							// int notify
 	    NULL						// struct mailbox mailboxptr
 	);
+
+    if (!r && uniqueid && localonly) {
+	mbentry_t *mbentry = NULL;
+	r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+	mbentry->uniqueid = xstrdupnull(uniqueid);
+	r = mboxlist_update(mbentry, localonly);
+	mboxlist_entry_free(&mbentry);
+    }
 
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
@@ -10158,10 +10172,11 @@ static int xfer_localcreate(struct xfer_header *xfer)
 	    prot_printf(
 		    xfer->be->out,
 		    "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
-		    "%s (PARTITION %s)\r\n",
+		    "%s (PARTITION %s UNIQUEID %s)\r\n",
 		    strlen(item->extname),
 		    item->extname,
-		    xfer->topart
+		    xfer->topart,
+		    item->mbentry->uniqueid
 		);
 
 	// Compare the mbentry's partition to the default partition.
@@ -10173,10 +10188,11 @@ static int xfer_localcreate(struct xfer_header *xfer)
 		prot_printf(
 			xfer->be->out,
 			"LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
-			"%s (PARTITION %s)\r\n",
+			"%s (PARTITION %s UNIQUEID %s)\r\n",
 			strlen(item->extname),
 			item->extname,
-			item->mbentry->partition
+			item->mbentry->partition,
+			item->mbentry->uniqueid
 		    );
 
 	    } else {
@@ -10185,9 +10201,10 @@ static int xfer_localcreate(struct xfer_header *xfer)
 		prot_printf(
 			xfer->be->out,
 			"LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
-			"%s\r\n",
+			"%s (UNIQUEID %s)\r\n",
 			strlen(item->extname),
-			item->extname
+			item->extname,
+			item->mbentry->uniqueid
 		    );
 	    }
 
@@ -10196,9 +10213,10 @@ static int xfer_localcreate(struct xfer_header *xfer)
 	    prot_printf(
 		    xfer->be->out,
 		    "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
-		    "%s\r\n",
+		    "%s (UNIQUEID %s)\r\n",
 		    strlen(item->extname),
-		    item->extname
+		    item->extname,
+		    item->mbentry->uniqueid
 		);
 	}
 
