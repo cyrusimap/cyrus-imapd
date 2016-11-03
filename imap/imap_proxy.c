@@ -435,28 +435,18 @@ int pipe_command(struct backend *s, int optimistic_literal)
 /* This handles piping of the LSUB command, because we have to figure out
  * what mailboxes actually exist before passing them to the end user.
  *
- * It is also needed if we are doing a FIND MAILBOXES, for that we do an
- * LSUB on the backend anyway, because the semantics of FIND do not allow
- * it to return nonexistant mailboxes (RFC1176), but we need to really dumb
- * down the response when this is the case.
+ * It is also needed if we are doing a LIST-EXTENDED, to capture subscriptions
+ * and/or return data that can only be obtained from the backends.
  */
 int pipe_lsub(struct backend *s, const char *userid, const char *tag,
-              int force_notfatal, const char *resp)
+              int force_notfatal, struct listargs *listargs, strarray_t *subs)
 {
     int taglen = strlen(tag);
     int c;
     int r = PROXY_OK;
     int exist_r;
-    static struct buf tagb, cmd, sep, name;
-    struct buf flags = BUF_INITIALIZER;
-
-    const char *end_strip_flags[] = { " \\NonExistent)", "\\NonExistent)",
-                                      " \\Noselect)", "\\Noselect)",
-                                      NULL };
-    const char *mid_strip_flags[] = { "\\NonExistent ",
-                                      "\\Noselect ",
-                                      NULL
-                                    };
+    static struct buf tagb, cmd, sep, name, ext;
+    int send = 1;
 
     assert(s);
     assert(s->timeout);
@@ -520,28 +510,52 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
         }
 
         if(strncasecmp("LSUB", cmd.s, 4) && strncasecmp("LIST", cmd.s, 4)) {
-            prot_printf(imapd_out, "%s %s ", tagb.s, cmd.s);
-            r = pipe_to_end_of_response(s, force_notfatal);
-            if (r != PROXY_OK)
-                goto out;
+            if (!send &&
+                (((listargs->ret & LIST_RET_STATUS) &&
+                  !strncasecmp("STATUS", cmd.s, 6)) ||
+                 ((listargs->ret & LIST_RET_MYRIGHTS) &&
+                  !strncasecmp("MYRIGHTS", cmd.s, 8)) ||
+                 ((listargs->ret & LIST_RET_METADATA) &&
+                  !strncasecmp("METADATA", cmd.s, 8)))) {
+                /* skip return data for this mailbox */
+                eatline(s->in, c);
+            }
+            else {
+                prot_printf(imapd_out, "%s %s ", tagb.s, cmd.s);
+                r = pipe_to_end_of_response(s, force_notfatal);
+                if (r != PROXY_OK)
+                    goto out;
+            }
         } else {
             /* build up the response bit by bit */
-            int i;
+            const struct mbox_name_attribute *attr;
+            uint32_t flags = 0;
 
-            buf_reset(&flags);
+            /* By default, send responses for LSUB or LIST (SUBSCRIBED).
+               LIST (SUBSCRIBED) w/o RETURN (SUBSCRIBED) is used to signal
+               that the proxy is only fetching the subscriptions and
+               does NOT want any LIST responses sent to the client */
+            send = (listargs->cmd == LIST_CMD_LSUB) ||
+                !(listargs->sel & LIST_SEL_SUBSCRIBED) ||
+                (listargs->ret & LIST_RET_SUBSCRIBED);
+
+            /* Get flags */
             c = prot_getc(s->in);
-            while(c != ')' && c != EOF) {
-                buf_putc(&flags, c);
-                c = prot_getc(s->in);
-            }
+            if (c == '(') {
+                do {
+                    c = getword(s->in, &name);
+                    for (attr = mbox_name_attributes; attr->id; attr++) {
+                        if (!strcasecmp(name.s, attr->id)) {
+                            flags |= attr->flag;
+                            break;
+                        }
+                    }
+                } while (c == ' ');
 
-            if(c != EOF) {
-                /* terminate string */
-                buf_putc(&flags, ')');
-                buf_cstring(&flags);
-
-                /* get the next character */
-                c = prot_getc(s->in);
+                if (c == ')') {
+                    /* end of flags - get the next character */
+                    c = prot_getc(s->in);
+                }
             }
 
             if(c != ' ') {
@@ -552,14 +566,6 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                 r = PROXY_NOCONNECTION;
                 goto out;
             }
-
-            /* Check for flags that we should remove
-             * (e.g. Noselect, NonExistent) */
-            for(i=0; end_strip_flags[i]; i++)
-                buf_replace_all(&flags, end_strip_flags[i], ")");
-
-            for (i=0; mid_strip_flags[i]; i++)
-                buf_replace_all(&flags, mid_strip_flags[i], NULL);
 
             /* Get separator */
             c = getastring(s->in, s->out, &sep);
@@ -576,6 +582,16 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             /* Get name */
             c = getastring(s->in, s->out, &name);
 
+            /* Get extension(s) */
+            buf_reset(&ext);
+            if (c == ' ') {
+                do {
+                    buf_putc(&ext, c);
+                    c = prot_getc(s->in);
+                } while (c != '\r' && c != '\n' && c != EOF);
+            }
+            buf_cstring(&ext);
+
             if(c == '\r') c = prot_getc(s->in);
             if(c != '\n') {
                 if(s == backend_current && !force_notfatal)
@@ -591,36 +607,105 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             char *intname = mboxname_from_external(name.s, &imapd_namespace, userid);
             mbentry_t *mbentry = NULL;
             exist_r = mboxlist_lookup(intname, &mbentry, NULL);
-            free(intname);
             if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
                 exist_r = IMAP_MAILBOX_RESERVED;
+
+            if (!exist_r) {
+                /* we need to remove \Noselect if it's in our mailboxes.db */
+                flags &= ~(MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_NONEXISTENT);
+
+                if (subs) {
+                    /* handle subscriptions: either build a list from the backend
+                       OR filter by subscriptions and/or add \\Subscribed flag */
+                    if (s == backend_inbox) {
+                        if (listargs->sel & LIST_SEL_SUBSCRIBED) {
+                            /* building list of subscriptions -
+                               add those not being sent to client */
+                            if (!send ||
+                                strcmp(mbentry->server, backend_inbox->hostname)) {
+                                if (flags & MBOX_ATTRIBUTE_SUBSCRIBED) {
+                                    /* mailbox is subscribed */
+                                    strarray_appendm(subs, intname);
+                                    intname = NULL;
+                                }
+                                else {
+                                    /* some child of mailbox is subscribed */
+                                    size_t len = strlen(intname);
+                                    char *childname = xstrndup(intname, len+1);
+
+                                    childname[len] = '.';
+                                    strarray_appendm(subs, childname);
+                                }
+                                send = 0;
+                            }
+                        }
+                    }
+                    else if (listargs->ret & LIST_RET_SUBSCRIBED) {
+                        int i, namelen = strlen(intname);
+
+                        /* add subscription flags where needed */
+                        for (i = 0; i < subs->count; i++) {
+                            const char *name = strarray_nth(subs, i);
+
+                            if (strncmp(intname, name, namelen)) continue;
+                            else if (!name[namelen]) { /* exact match */
+                                flags |= MBOX_ATTRIBUTE_SUBSCRIBED;
+                                break;
+                            }
+                            else if (name[namelen] == '.' &&
+                                     (listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
+                                flags |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+                                break;
+                            }
+                        }
+
+                        /* check if we need to filter out this mailbox */
+                        if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
+                            !(flags & (MBOX_ATTRIBUTE_SUBSCRIBED
+                                       | MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED))) {
+                            send = 0;
+                        }
+                    }
+                }
+            }
+
+            free(intname);
             mboxlist_entry_free(&mbentry);
 
-            /* send our response */
-            /* we need to set \Noselect if it's not in our mailboxes.db */
-            if (resp[0] == 'L') {
-                if(!exist_r) {
-                    prot_printf(imapd_out, "* %s %s \"%s\" ",
-                                resp, flags.s, sep.s);
-                } else {
-                    prot_printf(imapd_out, "* %s (\\Noselect) \"%s\" ",
-                                resp, sep.s);
+            if (send) {
+                /* send our response */
+                const char *flagsep = "";
+
+                prot_printf(imapd_out, "* %s (",
+                            (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST");
+                for (attr = mbox_name_attributes; attr->id; attr++) {
+                    if (flags & attr->flag) {
+                        prot_printf(imapd_out, "%s%s", flagsep, attr->id);
+                        flagsep = " ";
+                    }
                 }
+                prot_printf(imapd_out, ") \"%s\" ", sep.s);
 
                 prot_printstring(imapd_out, name.s);
-                prot_printf(imapd_out, "\r\n");
 
-            } else if(resp[0] == 'M' && !exist_r) {
-                /* Note that it has to exist for a find response */
-                prot_printf(imapd_out, "* %s ", resp);
-                prot_printastring(imapd_out, name.s);
-                prot_printf(imapd_out, "\r\n");
+                if (flags & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
+                    prot_printf(imapd_out, " (CHILDINFO (");
+                    /* RFC 5258:
+                     *     ; Note 2: The selection options are always returned
+                     *     ; quoted, unlike their specification in
+                     *     ; the extended LIST command.
+                     */
+                    if (flags & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
+                        prot_printf(imapd_out, "\"SUBSCRIBED\"");
+                    prot_printf(imapd_out, "))");
+                }
+
+                prot_printf(imapd_out, "%s\r\n", ext.s);
             }
         }
     } /* while(1) */
 
 out:
-    buf_free(&flags);
     return r;
 }
 

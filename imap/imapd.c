@@ -229,10 +229,7 @@ struct namespace imapd_namespace;
 /* track if we're idling */
 static int idling = 0;
 
-static const struct mbox_name_attribute {
-    int flag;
-    const char *id;
-} mbox_name_attributes[] = {
+const struct mbox_name_attribute mbox_name_attributes[] = {
     /* from RFC 3501 */
     { MBOX_ATTRIBUTE_NOINFERIORS,   "\\Noinferiors"   },
     { MBOX_ATTRIBUTE_NOSELECT,      "\\Noselect"      },
@@ -245,6 +242,15 @@ static const struct mbox_name_attribute {
     { MBOX_ATTRIBUTE_REMOTE,        "\\Remote"        },
     { MBOX_ATTRIBUTE_HASCHILDREN,   "\\HasChildren"   },
     { MBOX_ATTRIBUTE_HASNOCHILDREN, "\\HasNoChildren" },
+
+    /* from RFC 6154 */
+    { MBOX_ATTRIBUTE_ALL,           "\\All"           },
+    { MBOX_ATTRIBUTE_ARCHIVE,       "\\Archive"       },
+    { MBOX_ATTRIBUTE_DRAFTS,        "\\Drafts"        },
+    { MBOX_ATTRIBUTE_FLAGGED,       "\\Flagged"       },
+    { MBOX_ATTRIBUTE_JUNK,          "\\Junk"          },
+    { MBOX_ATTRIBUTE_SENT,          "\\Sent"          },
+    { MBOX_ATTRIBUTE_TRASH,         "\\Trash"         },
 
     { 0, NULL }
 };
@@ -265,14 +271,15 @@ struct list_rock {
     strarray_t *subs;
     char *last_name;
     mbentry_t *last_mbentry;
-    int last_attributes;
+    uint32_t last_attributes;
     int last_category;
+    hash_table server_table;    /* for proxying */
 };
 
 /* Information about one mailbox name that LIST returns */
 struct list_entry {
     const char *name;
-    int attributes; /* bitmap of MBOX_ATTRIBUTE_* */
+    uint32_t attributes; /* bitmap of MBOX_ATTRIBUTE_* */
 };
 
 /* structure that list_data_recursivematch passes its callbacks */
@@ -486,8 +493,8 @@ static void canonical_list_patterns(const char *reference,
 static int list_cb(struct findall_data *data, void *rock);
 static int subscribed_cb(struct findall_data *data, void *rock);
 static void list_data(struct listargs *listargs);
-static int list_data_remote(struct backend *be,
-                            char *tag, struct listargs *listargs);
+static int list_data_remote(struct backend *be, char *tag,
+                            struct listargs *listargs, strarray_t *subs);
 
 static void clear_id();
 
@@ -7572,17 +7579,10 @@ static void cmd_list(char *tag, struct listargs *listargs)
         /* special case: query top-level hierarchy separator */
         prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
                     imapd_namespace.hier_sep);
-    } else if (((listargs->sel & LIST_SEL_SUBSCRIBED) ||
-                (listargs->ret & LIST_RET_SUBSCRIBED)) &&
+    } else if ((listargs->cmd == LIST_CMD_LSUB) &&
                (backend_inbox || (backend_inbox = proxy_findinboxserver(imapd_userid)))) {
         /* remote inbox */
-
-        /* XXX   If we are in a standard Murder, and are given
-           LIST () RETURN (SUBSCRIBED), we need to get the matching
-           mailboxes locally (frontend) and the subscriptions remotely
-           (INBOX backend).  We can only pass the buck to the INBOX backend
-           if its running a unified config */
-        if (list_data_remote(backend_inbox, tag, listargs))
+        if (list_data_remote(backend_inbox, tag, listargs, NULL))
             return;
     } else {
         list_data(listargs);
@@ -12147,7 +12147,7 @@ static void freefieldlist(struct fieldlist *l)
 
 static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)), void *rock)
 {
-    int *attributes = (int *)rock;
+    uint32_t *attributes = (uint32_t *)rock;
     list_callback_calls++;
     *attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
     return CYRUSDB_DONE;
@@ -12205,50 +12205,13 @@ done:
 
 /* Print LIST or LSUB untagged response */
 static void list_response(const char *extname, const mbentry_t *mbentry,
-                          int attributes, struct listargs *listargs)
+                          uint32_t attributes, struct listargs *listargs)
 {
     const struct mbox_name_attribute *attr;
     int r;
     const char *sep;
     const char *cmd;
     struct statusdata sdata = STATUSDATA_INIT;
-
-    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE) &&
-        (listargs->scan ||
-         (listargs->ret & (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA)))) {
-        if (!hash_lookup(mbentry->server, &listargs->server_table)) {
-            /* remote mailbox that we haven't proxied to yet */
-            struct backend *s;
-
-            hash_insert(mbentry->server,
-                        (void *)0xDEADBEEF, &listargs->server_table);
-            s = proxy_findserver(mbentry->server, &imap_protocol,
-                                 proxy_userid, &backend_cached,
-                                 &backend_current, &backend_inbox, imapd_in);
-            if (s) {
-                char mytag[128];
-                proxy_gentag(mytag, sizeof(mytag));
-
-                if (listargs->scan) {
-                    /* Send SCAN command to backend */
-                    prot_printf(s->out, "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s"
-                                " {%tu+}\r\n%s\r\n",
-                                mytag, strlen(listargs->ref), listargs->ref,
-                                strlen(listargs->pat.data[0]),
-                                listargs->pat.data[0],
-                                strlen(listargs->scan), listargs->scan);
-
-                    r = pipe_until_tag(s, mytag, 0);
-                }
-                else {
-                    /* Send LIST command to backend */
-                    r = list_data_remote(s, mytag, listargs);
-                }
-            }
-        }
-
-        return;
-    }
 
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
         if (!(listargs->cmd == LIST_CMD_EXTENDED)) {
@@ -12301,7 +12264,8 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     /* figure out \Has(No)Children if necessary
        This is mainly used for LIST (SUBSCRIBED) RETURN (CHILDREN)
     */
-    int have_childinfo = MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_HASNOCHILDREN;
+    uint32_t have_childinfo =
+        MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_HASNOCHILDREN;
     if ((listargs->ret & LIST_RET_CHILDREN) && !(attributes & have_childinfo)) {
         if (imapd_namespace.isalt && !strcmp(extname, "INBOX")) {
             /* don't look inside INBOX under altnamespace, its children aren't children */
@@ -12441,17 +12405,18 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     if ((listargs->ret & LIST_RET_STATUS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
         /* output the status line now, per rfc 5819 */
-        print_statusline(extname, listargs->statusitems, &sdata);
+        if (mbentry) print_statusline(extname, listargs->statusitems, &sdata);
     }
 
     if ((listargs->ret & LIST_RET_MYRIGHTS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        /*ignore result*/printmyrights(extname, mbentry);
+        if (mbentry) printmyrights(extname, mbentry);
     }
 
     if ((listargs->ret & LIST_RET_METADATA) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
-        printmetadata(mbentry, &listargs->metaitems, &listargs->metaopts);
+        if (mbentry)
+            printmetadata(mbentry, &listargs->metaitems, &listargs->metaopts);
     }
 }
 
@@ -12490,6 +12455,47 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
         }
     }
 
+    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
+        struct listargs *listargs = rock->listargs;
+
+        if (hash_lookup(mbentry->server, &rock->server_table)) return 0;
+        if (listargs->scan ||
+            (listargs->ret &
+             (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA))) {
+            /* remote mailbox that we haven't proxied to yet */
+            struct backend *s;
+
+            hash_insert(mbentry->server,
+                        (void *)0xDEADBEEF, &rock->server_table);
+            s = proxy_findserver(mbentry->server, &imap_protocol,
+                                 proxy_userid, &backend_cached,
+                                 &backend_current, &backend_inbox, imapd_in);
+            if (s) {
+                char mytag[128];
+
+                proxy_gentag(mytag, sizeof(mytag));
+
+                if (listargs->scan) {
+                    /* Send SCAN command to backend */
+                    prot_printf(s->out, "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s"
+                                " {%tu+}\r\n%s\r\n",
+                                mytag, strlen(listargs->ref), listargs->ref,
+                                strlen(listargs->pat.data[0]),
+                                listargs->pat.data[0],
+                                strlen(listargs->scan), listargs->scan);
+
+                    pipe_until_tag(s, mytag, 0);
+                }
+                else {
+                    /* Send LIST command to backend */
+                    list_data_remote(s, mytag, listargs, rock->subs);
+                }
+            }
+
+            return 0;
+        }
+    }
+
     if (rock->last_name) {
         if (extname) {
             /* same again */
@@ -12501,7 +12507,13 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
                 return 0; /* skip duplicate or reversed calls */
         }
         _addsubs(rock);
-        list_response(rock->last_name, rock->last_mbentry, rock->last_attributes, rock->listargs);
+        /* check if we need to filter out this mailbox */
+        if (!(rock->listargs->sel & LIST_SEL_SUBSCRIBED) ||
+            (rock->last_attributes &
+             (MBOX_ATTRIBUTE_SUBSCRIBED | MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED))) {
+            list_response(rock->last_name, rock->last_mbentry,
+                          rock->last_attributes, rock->listargs);
+        }
         free(rock->last_name);
         rock->last_name = NULL;
         mboxlist_entry_free(&rock->last_mbentry);
@@ -12690,9 +12702,9 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
         if (r) return 0;
     }
 
-    int *list_info = hash_lookup(extname, &rock->table);
+    uint32_t *list_info = hash_lookup(extname, &rock->table);
     if (!list_info) {
-        list_info = xzmalloc(sizeof(int));
+        list_info = xzmalloc(sizeof(uint32_t));
         hash_insert(extname, list_info, &rock->table);
         rock->count++;
     }
@@ -12710,7 +12722,7 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
 /* callback for hash_enumerate */
 static void copy_to_array(const char *key, void *data, void *void_rock)
 {
-    int *attributes = (int *)data;
+    uint32_t *attributes = (uint32_t *)data;
     struct list_rock_recursivematch *rock =
         (struct list_rock_recursivematch *)void_rock;
     assert(rock->count > 0);
@@ -12769,6 +12781,15 @@ static void list_data_recursivematch(struct listargs *listargs) {
 /* Retrieves the data and prints the untagged responses for a LIST command. */
 static void list_data(struct listargs *listargs)
 {
+    struct list_rock rock;
+
+    memset(&rock, 0, sizeof(struct list_rock));
+    rock.listargs = listargs;
+
+    if (config_mupdate_server) {
+        construct_hash_table(&rock.server_table, 10, 1);
+    }
+
     canonical_list_patterns(listargs->ref, &listargs->pat);
 
     /* Check to see if we should only list the personal namespace */
@@ -12778,44 +12799,72 @@ static void list_data(struct listargs *listargs)
         strarray_set(&listargs->pat, 0, "INBOX*");
     }
 
-    if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
-        list_data_recursivematch(listargs);
-    } else {
-        struct list_rock rock;
-        memset(&rock, 0, sizeof(struct list_rock));
-        rock.listargs = listargs;
+    if ((listargs->ret & LIST_RET_SUBSCRIBED) &&
+        (backend_inbox || (backend_inbox = proxy_findinboxserver(imapd_userid)))) {
+        /* Need to fetch subscription list from backend_inbox */
+        char mytag[128];
 
-        if (listargs->sel & LIST_SEL_SUBSCRIBED) {
-            mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
-                                  imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-        } else {
-            if (config_mupdate_server) {
-                construct_hash_table(&listargs->server_table, 10, 1);
-            }
+        rock.subs = strarray_new();
 
-            /* XXX: is there a cheaper way to figure out \Subscribed? */
-            if (listargs->ret & LIST_RET_SUBSCRIBED)
-                rock.subs = mboxlist_sublist(imapd_userid);
-
-            mboxlist_findallmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin,
-                                  imapd_userid, imapd_authstate, list_cb, &rock);
-
-            if (listargs->server_table.size)
-                free_hash_table(&listargs->server_table, NULL);
-            if (rock.subs)
-                strarray_free(rock.subs);
-            if (rock.last_name)
-                free(rock.last_name);
+        if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
+            !(listargs->sel & (LIST_SEL_SPECIALUSE | LIST_SEL_METADATA))) {
+            /* responses from backend_inbox will be sent to client
+               so don't proxy to it again */
+            hash_insert(backend_inbox->hostname,
+                        (void *)0xDEADBEEF, &rock.server_table);
         }
+        else {
+            /* create special listargs to just fetch subscriptions
+               without sending responses to client */
+            static struct listargs myargs;
+
+            memcpy(&myargs, listargs, sizeof(struct listargs));
+            myargs.sel = LIST_SEL_SUBSCRIBED;
+            myargs.ret = 0;
+
+            listargs = &myargs;
+        }
+
+        proxy_gentag(mytag, sizeof(mytag));
+        list_data_remote(backend_inbox, mytag, listargs, rock.subs);
+
+        mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
+                              imapd_userisadmin, imapd_userid,
+                              imapd_authstate, list_cb, &rock);
     }
+    else if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
+        list_data_recursivematch(listargs);
+    }
+    else if (listargs->sel & LIST_SEL_SUBSCRIBED) {
+        mboxlist_findsubmulti(&imapd_namespace, &listargs->pat,
+                              imapd_userisadmin, imapd_userid,
+                              imapd_authstate, subscribed_cb, &rock, 1);
+    }
+    else {
+        /* XXX: is there a cheaper way to figure out \Subscribed? */
+        if (listargs->ret & LIST_RET_SUBSCRIBED) {
+            rock.subs = mboxlist_sublist(imapd_userid);
+        }
+
+        mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
+                              imapd_userisadmin, imapd_userid,
+                              imapd_authstate, list_cb, &rock);
+    }
+
+    if (rock.server_table.size)
+        free_hash_table(&rock.server_table, NULL);
+    if (rock.subs)
+        strarray_free(rock.subs);
+    if (rock.last_name)
+        free(rock.last_name);
 }
 
 /*
  * Retrieves the data and prints the untagged responses for a LIST command in
  * the case of a remote inbox.
  */
-static int list_data_remote(struct backend *be,
-                            char *tag, struct listargs *listargs)
+static int list_data_remote(struct backend *be, char *tag,
+                            struct listargs *listargs, strarray_t *subs)
 {
     if ((listargs->cmd == LIST_CMD_EXTENDED) &&
         !CAPA(be, CAPA_LISTEXTENDED)) {
@@ -12833,8 +12882,15 @@ static int list_data_remote(struct backend *be,
     } else {
         prot_printf(be->out, "%s List ", tag);
 
+        uint32_t select_mask = listargs->sel;
+
+        if (be != backend_inbox) {
+            /* don't send subscribed selection options to non-Inbox backend */
+            select_mask &= ~(LIST_SEL_SUBSCRIBED | LIST_SEL_RECURSIVEMATCH);
+        }
+
         /* print list selection options */
-        if (listargs->sel) {
+        if (select_mask) {
             const char *select_opts[] = {
                 /* XXX  MUST be in same order as LIST_SEL_* bitmask */
                 "subscribed", "remote", "recursivematch",
@@ -12846,7 +12902,7 @@ static int list_data_remote(struct backend *be,
             for (i = 0; select_opts[i]; i++) {
                 unsigned opt = (1 << i);
 
-                if (!(listargs->sel & opt)) continue;
+                if (!(select_mask & opt)) continue;
 
                 prot_printf(be->out, "%c%s", c, select_opts[i]);
                 c = ' ';
@@ -12946,8 +13002,7 @@ static int list_data_remote(struct backend *be,
     }
 
     prot_printf(be->out, "\r\n");
-    pipe_lsub(be, imapd_userid, tag, 0,
-              (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST");
+    pipe_lsub(be, imapd_userid, tag, 0, listargs, subs);
 
     return 0;
 }

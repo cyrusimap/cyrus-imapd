@@ -77,7 +77,7 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_command(struct backend *s, int optimistic_literal);
 int pipe_lsub(struct backend *s, const char *userid, const char *tag,
-              int force_notfatal, const char *resp);
+              int force_notfatal, struct listargs *listargs, strarray_t *subs);
 
 void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 int usinguid, struct backend *s);
