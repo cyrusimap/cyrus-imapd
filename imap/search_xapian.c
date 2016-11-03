@@ -1825,9 +1825,9 @@ struct mbdata {
 
 struct mbfilter {
     hash_table mboxes;
-    struct db *indexed;
+    struct db *indexeddb;
     struct txn **tid;
-    char *destpath;
+    const strarray_t *destpaths;
     int flags;
 };
 
@@ -1839,7 +1839,7 @@ static int copyindexed_cb(void *rock,
     struct seqset *seq = parse_indexed(data, datalen);
     int r = 0;
     if (seq) {
-        r = store_indexed(filter->indexed, filter->tid, key, keylen, seq);
+        r = store_indexed(filter->indexeddb, filter->tid, key, keylen, seq);
         seqset_free(seq);
     }
     return r;
@@ -1874,7 +1874,7 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
 
     buf_printf(&key, "%s.%u", mboxname, mailbox->i.uidvalidity);
 
-    r = cyrusdb_fetch(filter->indexed,
+    r = cyrusdb_fetch(filter->indexeddb,
                       key.s, key.len,
                       &data, &datalen,
                       (struct txn **)NULL);
@@ -1933,9 +1933,8 @@ static int build_mbfilter(const char *userid, struct mbfilter *filter)
 static void free_mbfilter(struct mbfilter *filter)
 {
     free_hash_table(&filter->mboxes, free_mbdata);
-    if (filter->tid) cyrusdb_abort(filter->indexed, *filter->tid);
-    cyrusdb_close(filter->indexed);
-    free(filter->destpath);
+    if (filter->tid) cyrusdb_abort(filter->indexeddb, *filter->tid);
+    cyrusdb_close(filter->indexeddb);
 }
 
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
@@ -2015,7 +2014,7 @@ static void notify_missing_messages(struct mbfilter *filter)
     hash_enumerate(&filter->mboxes, notify_filter_cb, filter);
 }
 
-static int create_filter(const strarray_t *srcpaths, const char *destpath,
+static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths,
                          int flags, struct mbfilter *filter)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -2024,14 +2023,14 @@ static int create_filter(const strarray_t *srcpaths, const char *destpath,
 
     memset(filter, 0, sizeof(struct mbfilter));
     filter->flags = flags;
-    filter->destpath = xstrdup(destpath);
+    filter->destpaths = destpaths;
 
     /* build the cyrus.indexed.db from the contents of the source dirs */
 
     buf_reset(&buf);
-    buf_printf(&buf, "%s%s", destpath, INDEXEDDB_FNAME);
+    buf_printf(&buf, "%s%s", strarray_nth(destpaths, 0), INDEXEDDB_FNAME);
     r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
-                     buf_cstring(&buf), CYRUSDB_CREATE, &filter->indexed);
+                     buf_cstring(&buf), CYRUSDB_CREATE, &filter->indexeddb);
     if (r) {
         printf("ERROR: failed to open indexed %s\n", buf_cstring(&buf));
         goto done;
@@ -2053,9 +2052,9 @@ static int create_filter(const strarray_t *srcpaths, const char *destpath,
             goto done;
         }
     }
-    if (filter->tid) r = cyrusdb_commit(filter->indexed, *filter->tid);
+    if (filter->tid) r = cyrusdb_commit(filter->indexeddb, *filter->tid);
     if (r) {
-        printf("ERROR: failed to commit indexed %s\n", destpath);
+        printf("ERROR: failed to commit indexed %s\n", strarray_nth(destpaths, 0));
         goto done;
     }
 
@@ -2064,13 +2063,13 @@ done:
 }
 
 static int search_filter(const char *userid, const strarray_t *srcpaths,
-                         const char *destpath, int flags)
+                         const strarray_t *destpaths, int flags)
 {
     struct mbfilter filter;
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpath, flags, &filter);
+    r = create_filter(srcpaths, destpaths, flags, &filter);
     if (r) goto done;
 
     if (verbose)
@@ -2079,14 +2078,14 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
     if (r) goto done;
 
     if (verbose)
-        printf("Filtering database %s\n", destpath);
+        printf("Filtering database %s\n", strarray_nth(destpaths, 0));
 
-    r = xapian_filter(destpath, (const char **)srcpaths->data,
+    r = xapian_filter(strarray_nth(destpaths, 0), (const char **)srcpaths->data,
                       mbdata_exists_cb, &filter);
     if (r) goto done;
 
     if (verbose)
-        printf("done %s\n", destpath);
+        printf("done %s\n", strarray_nth(destpaths, 0));
 
     if (flags & SEARCH_COMPACT_AUDIT)
         notify_missing_messages(&filter);
@@ -2149,8 +2148,7 @@ static int reindex_mb(void *rock,
         /* game on */
         mailbox_unlock_index(mailbox, NULL);
         /* open the DB */
-        const char *paths[] = { filter->destpath, NULL };
-        r = xapian_dbw_open(paths, &tr->dbw);
+        r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw);
         if (r) goto done;
         tr->super.mailbox = mailbox;
 
@@ -2193,27 +2191,27 @@ done:
 }
 
 static int search_reindex(const char *userid, const strarray_t *srcpaths,
-                          const char *destpath, int flags)
+                          const strarray_t *destpaths, int flags)
 {
     struct buf buf = BUF_INITIALIZER;
     struct mbfilter filter;
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpath, flags, &filter);
+    r = create_filter(srcpaths, destpaths, flags, &filter);
     if (r) goto done;
 
     if (verbose)
         printf("Reindexing messages for %s\n", userid);
 
-    r = cyrusdb_foreach(filter.indexed, "", 0, NULL, reindex_mb, &filter, NULL);
+    r = cyrusdb_foreach(filter.indexeddb, "", 0, NULL, reindex_mb, &filter, NULL);
     if (r) {
-        printf("ERROR: failed to reindex to %s\n", destpath);
+        printf("ERROR: failed to reindex to %s\n", strarray_nth(destpaths, 0));
         goto done;
     }
 
     if (verbose)
-        printf("done %s\n", destpath);
+        printf("done %s\n", strarray_nth(destpaths, 0));
 
 done:
     free_mbfilter(&filter);
@@ -2222,27 +2220,27 @@ done:
 }
 
 static int search_compress(const char *userid, const strarray_t *srcpaths,
-                           const char *destpath, int flags)
+                           const strarray_t *destpaths, int flags)
 {
     struct buf buf = BUF_INITIALIZER;
     struct mbfilter filter;
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpath, flags, &filter);
+    r = create_filter(srcpaths, destpaths, flags, &filter);
     if (r) goto done;
 
     if (verbose)
         printf("Compressing messages for %s\n", userid);
 
-    r = xapian_compact_dbs(destpath, (const char **)srcpaths->data);
+    r = xapian_compact_dbs(strarray_nth(destpaths, 0), (const char **)srcpaths->data);
     if (r) {
-        printf("ERROR: failed to compress to %s\n", destpath);
+        printf("ERROR: failed to compress to %s\n", strarray_nth(destpaths, 0));
         goto done;
     }
 
     if (verbose)
-        printf("done %s\n", destpath);
+        printf("done %s\n", strarray_nth(destpaths, 0));
 
 done:
     free_mbfilter(&filter);
@@ -2259,10 +2257,10 @@ static int compact_dbs(const char *userid, const char *tempdir,
     strarray_t *dirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
+    strarray_t *orig = NULL;
     char *newdest = NULL;
     char *destdir = NULL;
     char *tempdestdir = NULL;
-    char *activestr = NULL;
     struct buf mytempdir = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     int verbose = SEARCH_VERBOSE(flags);
@@ -2286,7 +2284,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);
     if (!active || !active->count) goto out;
 
-    activestr = strarray_join(active, ",");
+    orig = strarray_dup(active);
 
     /* read the activefile file, taking down the names of all paths with a
      * level less than or equal to that requested */
@@ -2315,7 +2313,9 @@ static int compact_dbs(const char *userid, const char *tempdir,
 
     if (verbose) {
         char *target = strarray_join(tochange, ",");
+        char *activestr = strarray_join(orig, ",");
         printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, activestr);
+        free(activestr);
         free(target);
     }
 
@@ -2382,27 +2382,33 @@ static int compact_dbs(const char *userid, const char *tempdir,
         if (verbose) {
             printf("compacting databases\n");
         }
+        strarray_t *existing = strarray_dup(orig);
+        for (i = 0; i < tochange->count; i++)
+            strarray_remove_all(existing, strarray_nth(tochange, i));
+        strarray_t *newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1);
+        strarray_free(existing);
+        strarray_unshift(newdirs, buf_cstring(&mytempdir));
         if (flags & SEARCH_COMPACT_FILTER) {
-            r = search_filter(userid, dirs, buf_cstring(&mytempdir), flags);
+            r = search_filter(userid, dirs, newdirs, flags);
             if (r) {
                 printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
-                goto out;
             }
         }
         else if (flags & SEARCH_COMPACT_REINDEX) {
-            r = search_reindex(userid, dirs, buf_cstring(&mytempdir), flags);
+            /* calculate the existing databases that we also need to check for duplicates */
+            r = search_reindex(userid, dirs, newdirs, flags);
             if (r) {
                 printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
-                goto out;
             }
         }
         else {
-            r = search_compress(userid, dirs, buf_cstring(&mytempdir), flags);
+            r = search_compress(userid, dirs, newdirs, flags);
             if (r) {
                 printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
-                goto out;
             }
         }
+        strarray_free(newdirs);
+        if (r) goto out;
 
         /* move the tmpfs files to a temporary name in our target directory */
         if (tempdir) {
@@ -2487,10 +2493,10 @@ out:
     strarray_free(dirs);
     strarray_free(active);
     strarray_free(tochange);
+    strarray_free(orig);
     buf_free(&mytempdir);
     buf_free(&buf);
     free(newdest);
-    free(activestr);
     free(destdir);
     free(tempdestdir);
     mappedfile_unlock(activefile);
