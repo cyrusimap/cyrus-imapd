@@ -3988,6 +3988,17 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 	}
     }
 
+    // Ensure the directory hierarchy is created, especially for empty mailbox
+    // spool directories (split metadata). Fake the UID as 1 to ensure it is
+    // the mailbox created, not the parent mailbox (trailing slash parsing in
+    // cyrus_mkdir).
+    xstrncpy(newbuf, mboxname_datapath(newpart, newname, 1), MAX_MAILBOX_PATH);
+
+    if (cyrus_mkdir(newbuf, 0755) == -1) {
+       syslog(LOG_ERR, "Could not create directory for '%s'", newbuf);
+       return IMAP_IOERROR;
+    }
+
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) return r;
