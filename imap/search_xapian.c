@@ -2407,7 +2407,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
                 printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
             }
         }
-        if (flags & SEARCH_COMPACT_FILTER) {
+        else if (flags & SEARCH_COMPACT_FILTER) {
             r = search_filter(userid, dirs, newdirs, flags);
             if (r) {
                 printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
