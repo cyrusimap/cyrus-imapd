@@ -7,6 +7,8 @@ PREFIX=/usr/local/$NAME
 MAKEOPTS="-j 8"
 
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LDFLAGS="-Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib/x86_64-linux-gnu"
+export PATH=$PREFIX/bin:$PATH
 
 git submodule init
 git submodule update
@@ -15,7 +17,7 @@ git submodule update
   cd icu4c
   git clean -f -x -d
   cd source
-  ./configure --with-data-packaging=archive --prefix=$PREFIX LDFLAGS=-Wl,-rpath,$PREFIX/lib
+  ./configure --with-data-packaging=archive --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
 )
@@ -44,9 +46,8 @@ git submodule update
   git clean -f -x -d
   mkdir build
   cd build
-  LDFLAGS=-Wl,-rpath,$PREFIX/lib:$PREFIX/lib/x86_64-linux-gnu \
-    cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX \
-          -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
+  cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX \
+        -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
   make $MAKEOPTS
   sudo make install
 )
