@@ -12251,7 +12251,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     }
 
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
-        if (!(listargs->cmd & LIST_CMD_EXTENDED)) {
+        if (!(listargs->cmd == LIST_CMD_EXTENDED)) {
             attributes |= MBOX_ATTRIBUTE_NOSELECT;
             attributes &= ~MBOX_ATTRIBUTE_NONEXISTENT;
         }
@@ -12326,11 +12326,11 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
         int keep = 0;
         /* extended get told everything */
-        if (listargs->cmd & LIST_CMD_EXTENDED) {
+        if (listargs->cmd == LIST_CMD_EXTENDED) {
             keep = 1;
         }
         /* we have to mention this, it has children */
-        if (listargs->cmd & LIST_CMD_LSUB) {
+        if (listargs->cmd == LIST_CMD_LSUB) {
             /* subscribed children need a mention */
             if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
                 keep = 1;
@@ -12347,7 +12347,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         if (!keep) return;
     }
 
-    if (listargs->cmd & LIST_CMD_LSUB) {
+    if (listargs->cmd == LIST_CMD_LSUB) {
         /* \Noselect has a special second meaning with (R)LSUB */
         if ( !(attributes & MBOX_ATTRIBUTE_SUBSCRIBED)
              && attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
@@ -12370,7 +12370,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         attributes &= ~MBOX_ATTRIBUTE_HASNOCHILDREN;
 
     /* remove redundant flags */
-    if (listargs->cmd & LIST_CMD_EXTENDED) {
+    if (listargs->cmd == LIST_CMD_EXTENDED) {
         /* \NoInferiors implies \HasNoChildren */
         if (attributes & MBOX_ATTRIBUTE_NOINFERIORS)
             attributes &= ~MBOX_ATTRIBUTE_HASNOCHILDREN;
@@ -12423,7 +12423,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
 
     prot_printastring(imapd_out, extname);
 
-    if (listargs->cmd & LIST_CMD_EXTENDED &&
+    if (listargs->cmd == LIST_CMD_EXTENDED &&
         attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
         prot_printf(imapd_out, " (CHILDINFO (");
         /* RFC 5258:
@@ -12596,7 +12596,7 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
         if (data->mb_category == MBNAME_ALTINBOX)
             rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
     }
-    else if (rock->listargs->cmd & LIST_CMD_LSUB) {
+    else if (rock->listargs->cmd == LIST_CMD_LSUB) {
         /* special case: for LSUB,
          * mailbox names that match the pattern but aren't subscribed
          * must also be returned if they have a child mailbox that is
@@ -12772,7 +12772,7 @@ static void list_data(struct listargs *listargs)
     canonical_list_patterns(listargs->ref, &listargs->pat);
 
     /* Check to see if we should only list the personal namespace */
-    if (!(listargs->cmd & LIST_CMD_EXTENDED)
+    if (!(listargs->cmd == LIST_CMD_EXTENDED)
             && !strcmp(listargs->pat.data[0], "*")
             && config_getswitch(IMAPOPT_FOOLSTUPIDCLIENTS)) {
         strarray_set(&listargs->pat, 0, "INBOX*");
@@ -12817,7 +12817,7 @@ static void list_data(struct listargs *listargs)
 static int list_data_remote(struct backend *be,
                             char *tag, struct listargs *listargs)
 {
-    if ((listargs->cmd & LIST_CMD_EXTENDED) &&
+    if ((listargs->cmd == LIST_CMD_EXTENDED) &&
         !CAPA(be, CAPA_LISTEXTENDED)) {
         /* client wants to use extended list command but backend doesn't
          * support it */
@@ -12828,7 +12828,7 @@ static int list_data_remote(struct backend *be,
     }
 
     /* print tag, command and list selection options */
-    if (listargs->cmd & LIST_CMD_LSUB) {
+    if (listargs->cmd == LIST_CMD_LSUB) {
         prot_printf(be->out, "%s Lsub ", tag);
     } else {
         prot_printf(be->out, "%s List ", tag);
@@ -12947,7 +12947,7 @@ static int list_data_remote(struct backend *be,
 
     prot_printf(be->out, "\r\n");
     pipe_lsub(be, imapd_userid, tag, 0,
-              (listargs->cmd & LIST_CMD_LSUB) ? "LSUB" : "LIST");
+              (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST");
 
     return 0;
 }
