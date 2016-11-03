@@ -335,7 +335,6 @@ static struct capa_struct base_capabilities[] = {
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
-    { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
     { "MOVE",                  2 },
     { "SPECIAL-USE",           2 },
@@ -2265,19 +2264,6 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Xconvmeta")) {
                 cmd_xconvmeta(tag.s);
-            }
-            else if (!strcmp(cmd.s, "Xlist")) {
-                struct listargs listargs;
-
-                if (c != ' ') goto missingargs;
-
-                memset(&listargs, 0, sizeof(struct listargs));
-                listargs.cmd = LIST_CMD_XLIST;
-                listargs.ret = LIST_RET_CHILDREN | LIST_RET_SPECIALUSE;
-                getlistargs(tag.s, &listargs);
-                if (listargs.pat.count) cmd_list(tag.s, &listargs);
-
-                snmp_increment(LIST_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xmove")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
@@ -7586,10 +7572,6 @@ static void cmd_list(char *tag, struct listargs *listargs)
         /* special case: query top-level hierarchy separator */
         prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
                     imapd_namespace.hier_sep);
-    } else if (listargs->pat.count && !*(listargs->pat.data[0]) && (listargs->cmd == LIST_CMD_XLIST)) {
-        /* special case: query top-level hierarchy separator */
-        prot_printf(imapd_out, "* XLIST (\\Noselect) \"%c\" \"\"\r\n",
-                    imapd_namespace.hier_sep);
     } else if (((listargs->sel & LIST_SEL_SUBSCRIBED) ||
                 (listargs->ret & LIST_RET_SUBSCRIBED)) &&
                (backend_inbox || (backend_inbox = proxy_findinboxserver(imapd_userid)))) {
@@ -12171,8 +12153,7 @@ static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)), voi
     return CYRUSDB_DONE;
 }
 
-static void specialuse_flags(const mbentry_t *mbentry, const char *sep,
-                             int isxlist)
+static void specialuse_flags(const mbentry_t *mbentry, const char *sep)
 {
     if (!mbentry) return;
 
@@ -12185,12 +12166,8 @@ static void specialuse_flags(const mbentry_t *mbentry, const char *sep,
         return;
     }
 
-    /* inbox - only print if command is XLIST */
-    if (mbentry->name[inboxlen] == '\0') {
-        if (isxlist) prot_printf(imapd_out, "%s\\Inbox", sep);
-    }
     /* subdir */
-    else if (mbentry->name[inboxlen] == '.') {
+    if (mbentry->name[inboxlen] == '.') {
         struct buf attrib = BUF_INITIALIZER;
         /* check if there's a special use flag set */
         if (!annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib)) {
@@ -12425,17 +12402,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         }
     }
 
-    switch (listargs->cmd) {
-    case LIST_CMD_LSUB:
-        cmd = "LSUB";
-        break;
-    case LIST_CMD_XLIST:
-        cmd = "XLIST";
-        break;
-    default:
-        cmd = "LIST";
-        break;
-    }
+    cmd = (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST";
 
     prot_printf(imapd_out, "* %s (", cmd);
     for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
@@ -12446,10 +12413,8 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     }
 
     if (config_getswitch(IMAPOPT_SPECIALUSEALWAYS) ||
-        listargs->cmd == LIST_CMD_XLIST ||
-        listargs->ret & LIST_RET_SPECIALUSE ||
-        listargs->sel & LIST_SEL_SPECIALUSE) {
-        specialuse_flags(mbentry, sep, listargs->cmd == LIST_CMD_XLIST);
+        listargs->ret & LIST_RET_SPECIALUSE) {
+        specialuse_flags(mbentry, sep);
     }
 
     prot_printf(imapd_out, ") ");
