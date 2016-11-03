@@ -102,7 +102,7 @@ int xapian_compact_dbs(const char *dest, const char **sources)
 
 #define XAPIAN_STEM_VERSIONS_NUM 2
 #define XAPIAN_STEM_CURRENT_VERSION (XAPIAN_STEM_VERSIONS_NUM-1)
-#define XAPIAN_STEM_VERSION_KEY "cyrus.stem.version"
+#define XAPIAN_STEM_VERSION_KEY "cyrus.stem-version"
 
 static const char * const
 stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
@@ -256,7 +256,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
         } catch (Xapian::DatabaseOpeningError &e) {
             /* It's OK not to atomically create or open, since we can assume
              * the xapianactive file items to be locked. */
-            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE|Xapian::DB_BACKEND_CHERT);
+            dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS);
             dbw->stem_version = XAPIAN_STEM_CURRENT_VERSION;
             stem_version_set(dbw->database, dbw->stem_version);
         }
@@ -481,10 +481,12 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             }
             if (!db->stem_versions)
                 db->stem_versions = new std::set<int>();
-            // always both for now
-            // db->stem_versions->insert(stem_version);
-            db->stem_versions->insert(0);
-            db->stem_versions->insert(1);
+            db->stem_versions->insert(stem_version);
+            /* we have some mixed version databases, but only Chert, so we've
+             * just made them return zero for the version, and we'll add 1 to
+             * the set for them as well */
+            if (!stem_version)
+                db->stem_versions->insert(1);
             db->database->add_database(database);
             db->paths->append(thispath);
             db->paths->append(" ");
@@ -927,7 +929,7 @@ int xapian_filter(const char *dest, const char **sources,
 
     try {
         /* create a destination database */
-        Xapian::WritableDatabase destdb = Xapian::WritableDatabase(dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_CHERT);
+        Xapian::WritableDatabase destdb = Xapian::WritableDatabase(dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS);
 
         /* With multiple databases as above, the docids are interleaved, so it
          * might be worth trying to open each source and copy its documents to

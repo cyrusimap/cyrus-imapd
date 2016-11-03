@@ -2382,23 +2382,35 @@ static int compact_dbs(const char *userid, const char *tempdir,
         if (verbose) {
             printf("compacting databases\n");
         }
+
+        /* calculate the existing databases that we also need to check for duplicates */
         strarray_t *existing = strarray_dup(orig);
         for (i = 0; i < tochange->count; i++)
             strarray_remove_all(existing, strarray_nth(tochange, i));
         strarray_t *newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1);
         strarray_free(existing);
         strarray_unshift(newdirs, buf_cstring(&mytempdir));
+
+        /* check if one of the source databases is not glass (forcing recalculation) */
+        int must_reindex = 0;
+        for (i = 0; i < dirs->count; i++) {
+            struct stat sbuf;
+            char *path = strconcat(strarray_nth(dirs, i), "/iamglass");
+            if (stat(path, &sbuf))
+                must_reindex = 1;
+            free(path);
+        }
+
+        if (must_reindex || (flags & SEARCH_COMPACT_REINDEX)) {
+            r = search_reindex(userid, dirs, newdirs, flags);
+            if (r) {
+                printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
+            }
+        }
         if (flags & SEARCH_COMPACT_FILTER) {
             r = search_filter(userid, dirs, newdirs, flags);
             if (r) {
                 printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
-            }
-        }
-        else if (flags & SEARCH_COMPACT_REINDEX) {
-            /* calculate the existing databases that we also need to check for duplicates */
-            r = search_reindex(userid, dirs, newdirs, flags);
-            if (r) {
-                printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
             }
         }
         else {
