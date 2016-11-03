@@ -2395,7 +2395,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         int must_reindex = 0;
         for (i = 0; i < dirs->count; i++) {
             struct stat sbuf;
-            char *path = strconcat(strarray_nth(dirs, i), "/iamglass");
+            char *path = strconcat(strarray_nth(dirs, i), "/iamglass", (char *)NULL);
             if (stat(path, &sbuf))
                 must_reindex = 1;
             free(path);
