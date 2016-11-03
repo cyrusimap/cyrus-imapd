@@ -1291,15 +1291,21 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    message_get_uid(msg, &tr->super.uid);
+    uint32_t uid = 0;
+    const struct message_guid *guid = NULL;
+    message_get_uid(msg, &uid);
+    message_get_guid(msg, &guid);
 
     int is_indexed = rx->is_indexed(rx, msg);
     if (!tr->indexed) tr->indexed = seqset_init(0, SEQ_MERGE);
-    seqset_add(tr->indexed, tr->super.uid, 1);
-    if (is_indexed) return IMAP_EXISTS;
+    seqset_add(tr->indexed, uid, 1);
+    if (is_indexed) {
+        syslog(LOG_DEBUG, "xapian: not indexing %u already seen (%s)", uid, message_guid_encode(guid));
+        return IMAP_EXISTS;
+    }
+    syslog(LOG_DEBUG, "xapian: indexing %u unseen (%s)", uid, message_guid_encode(guid));
 
-    const struct message_guid *guid = NULL;
-    message_get_guid(msg, &guid);
+    tr->super.uid = uid;
     message_guid_copy(&tr->super.guid, guid);
     free_segments((xapian_receiver_t *)tr);
     tr->super.parts_total = 0;
