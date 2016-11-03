@@ -1286,32 +1286,26 @@ sub test_setmessages_move
     my @mboxids = $msg->{mailboxIds};
     $self->assert_num_equals(1, scalar @mboxids);
 
-    xlog "move message to [$a,$b]";
-    $msg->{mailboxIds} = [$a, $b];
-    $res = $jmap->Request([['setMessages', { update => { $id => $msg }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    local *assert_move = sub {
+        my ($moveto) = (@_);
 
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
-    $msg = $res->[0][1]->{list}[0];
-    $self->assert_deep_equals(sort [$a, $b], sort $msg->{mailboxIds});
+        xlog "move message to " . Dumper($moveto);
+        $msg->{mailboxIds} = $moveto;
+        $res = $jmap->Request(
+            [ [ 'setMessages', { update => { $id => $msg } }, "R1" ] ] );
+        $self->assert_str_equals( $res->[0][1]{updated}[0], $id );
 
-    xlog "move message to [$a,$b,$c]";
-    $msg->{mailboxIds} = [$a, $b, $c];
-    $res = $jmap->Request([['setMessages', { update => { $id => $msg }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+        $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ] );
+        $msg = $res->[0][1]->{list}[0];
 
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
-    $msg = $res->[0][1]->{list}[0];
-    $self->assert_deep_equals(sort [$a, $b, $c], sort $msg->{mailboxIds});
+        my @want = sort @$moveto;
+        my @got  = sort @{ $msg->{mailboxIds} };
+        $self->assert_deep_equals( \@want, \@got );
+    };
 
-    xlog "move message to [$d]";
-    $msg->{mailboxIds} = [$d];
-    $res = $jmap->Request([['setMessages', { update => { $id => $msg }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
-
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
-    $msg = $res->[0][1]->{list}[0];
-    $self->assert_deep_equals(sort [$d], sort $msg->{mailboxIds});
+    assert_move([$a, $b]);
+    assert_move([$a, $b, $c]);
+    assert_move([$d]);
 }
 
 sub test_setmessages_update
