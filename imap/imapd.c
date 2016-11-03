@@ -10106,7 +10106,11 @@ static int xfer_init(const char *toserver, const char *topart,
     xfer->remoteversion = backend_version(xfer->be);
 
     xfer->toserver = xstrdup(toserver);
-    xfer->topart = xstrdup(topart);
+
+    // Only use a global target partition if it has been explicitly specified.
+    if (topart)
+	xfer->topart = xstrdup(topart);
+
     xfer->seendb = NULL;
 
     /* connect to mupdate server if configured */
@@ -10145,15 +10149,59 @@ static int xfer_localcreate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
+    // Note that the mailbox name needs to be sent as an atom in order to
+    // prevent having to escape space characters.
+
     for (item = xfer->items; item; item = item->next) {
+	// The target partition has been specified explicitly.
 	if (xfer->topart) {
-	    /* need to send partition as an atom */
-	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
-			strlen(item->extname), item->extname, xfer->topart);
+	    prot_printf(
+		    xfer->be->out,
+		    "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
+		    "%s (PARTITION %s)\r\n",
+		    strlen(item->extname),
+		    item->extname,
+		    xfer->topart
+		);
+
+	// Compare the mbentry's partition to the default partition.
+	} else if (item->mbentry->partition) {
+	    // If the default partition and the mbentry partition are
+	    // different, then push the mailbox on the remote end's equivalent
+	    // non-default partition.
+	    if (strcmp(config_defpartition, item->mbentry->partition)) {
+		prot_printf(
+			xfer->be->out,
+			"LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
+			"%s (PARTITION %s)\r\n",
+			strlen(item->extname),
+			item->extname,
+			item->mbentry->partition
+		    );
+
+	    } else {
+		// Same partition, we don't care where it ends up, whatever is
+		// the default on the remote end.
+		prot_printf(
+			xfer->be->out,
+			"LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
+			"%s\r\n",
+			strlen(item->extname),
+			item->extname
+		    );
+	    }
+
+	// No partition specified, no partition on the entry, just go ahead
 	} else {
-	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(item->extname), item->extname);
+	    prot_printf(
+		    xfer->be->out,
+		    "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n"
+		    "%s\r\n",
+		    strlen(item->extname),
+		    item->extname
+		);
 	}
+
 	r = getresult(xfer->be->in, "LC1");
 	if (r) {
 	    syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
@@ -10594,7 +10642,6 @@ static void cmd_xfer(const char *tag, const char *name,
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
     if (r) goto done;
 
-    if (!topart) topart = mbentry->partition;
     r = xfer_init(toserver, topart, &xfer);
     if (r) goto done;
 
