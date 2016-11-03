@@ -1247,28 +1247,30 @@ static int flush(search_text_receiver_t *rx)
     int r = 0;
     struct timeval start, end;
 
-    if (!tr->uncommitted) return 0;
+    if (tr->uncommitted) {
+        assert(tr->dbw);
 
-    assert(tr->dbw);
+        gettimeofday(&start, NULL);
+        r = xapian_dbw_commit_txn(tr->dbw);
+        if (r) goto out;
+        gettimeofday(&end, NULL);
 
-    gettimeofday(&start, NULL);
-    r = xapian_dbw_commit_txn(tr->dbw);
-    if (r) goto out;
-    gettimeofday(&end, NULL);
+        syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
+                    tr->uncommitted, timesub(&start, &end));
 
-    syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
-                tr->uncommitted, timesub(&start, &end));
+        tr->uncommitted = 0;
+        tr->commits++;
+    }
 
     /* We write out the indexed list for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
      * there are unindexed messages should we fail to index */
-    r = write_indexed(strarray_nth(tr->activedirs, 0),
-                      tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
-                      tr->indexed, tr->super.verbose);
-    if (r) goto out;
-
-    tr->uncommitted = 0;
-    tr->commits++;
+    if (tr->indexed) {
+        r = write_indexed(strarray_nth(tr->activedirs, 0),
+                          tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
+                          tr->indexed, tr->super.verbose);
+        if (r) goto out;
+    }
 
 out:
     return r;
