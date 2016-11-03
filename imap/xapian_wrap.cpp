@@ -15,6 +15,7 @@ extern "C" {
 #include "xmalloc.h"
 #include "xapian_wrap.h"
 #include "charset.h"
+#include "ptrarray.h"
 
 
 /* generated headers are not necessarily in current directory */
@@ -230,15 +231,17 @@ struct xapian_dbw
     Xapian::TermGenerator *term_generator;
     Xapian::Document *document;
     Xapian::Stopper *stopper;
+    ptrarray_t otherdbs;
     int stem_version;
     char *cyrusid;
 };
 
-int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
+int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
 
+    const char *path = *paths++;
     try {
         /* Determine the sterm version of an existing database, or create a
          * new one with the latest one. Never implicitly upgrade. */
@@ -278,10 +281,18 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
         r = IMAP_IOERROR;
     }
 
-    if (r)
+    if (r) {
         xapian_dbw_close(dbw);
-    else
-        *dbwp = dbw;
+        return r;
+    }
+
+    /* open the read-only databases */
+    while (*paths) {
+        Xapian::Database *database = new Xapian::Database(*paths++);
+        ptrarray_append(&dbw->otherdbs, database);
+    }
+
+    *dbwp = dbw;
 
     return r;
 }
@@ -295,6 +306,11 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         delete dbw->stemmer;
         delete dbw->stopper;
         delete dbw->document;
+        for (int i = 0; i < dbw->otherdbs.count; i++) {
+            Xapian::Database *database = (Xapian::Database *)ptrarray_nth(&dbw->otherdbs, i);
+            delete database;
+        }
+        ptrarray_fini(&dbw->otherdbs);
         if (dbw->cyrusid) free(dbw->cyrusid);
         free(dbw);
     }
@@ -417,7 +433,19 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
 int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const char *cyrusid)
 {
     std::string key = "cyrusid." + std::string(cyrusid);
-    return dbw->database->get_metadata(key).empty() ? 0 : 1;
+
+    /* indexed in the current DB? */
+    if (!dbw->database->get_metadata(key).empty())
+        return 1;
+
+    /* indexed in other DBs? */
+    for (int i = 0; i < dbw->otherdbs.count; i++) {
+        Xapian::Database *database = (Xapian::Database *)ptrarray_nth(&dbw->otherdbs, i);
+        if (!database->get_metadata(key).empty()) return 1;
+    }
+
+    /* nup */
+    return 0;
 }
 
 /* ====================================================================== */

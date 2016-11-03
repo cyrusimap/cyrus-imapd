@@ -1474,7 +1474,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (r) goto out;
 
     /* open the DB */
-    r = xapian_dbw_open(strarray_nth(tr->activedirs, 0), &tr->dbw);
+    r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw);
     if (r) goto out;
 
     /* read the indexed data from every directory so know what still needs indexing */
@@ -2153,7 +2153,8 @@ static int reindex_mb(void *rock,
         /* game on */
         mailbox_unlock_index(mailbox, NULL);
         /* open the DB */
-        r = xapian_dbw_open(filter->destpath, &tr->dbw);
+        const char *paths[] = { filter->destpath, NULL };
+        r = xapian_dbw_open(paths, &tr->dbw);
         if (r) goto done;
         tr->super.mailbox = mailbox;
 
