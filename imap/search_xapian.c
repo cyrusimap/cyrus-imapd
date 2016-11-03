@@ -1298,15 +1298,6 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
     message_get_uid(msg, &uid);
     message_get_guid(msg, &guid);
 
-    int is_indexed = rx->is_indexed(rx, msg);
-    if (!tr->indexed) tr->indexed = seqset_init(0, SEQ_MERGE);
-    seqset_add(tr->indexed, uid, 1);
-    if (is_indexed) {
-        syslog(LOG_DEBUG, "xapian: not indexing %u already seen (%s)", uid, message_guid_encode(guid));
-        return IMAP_EXISTS;
-    }
-    syslog(LOG_DEBUG, "xapian: indexing %u unseen (%s)", uid, message_guid_encode(guid));
-
     tr->super.uid = uid;
     message_guid_copy(&tr->super.guid, guid);
     free_segments((xapian_receiver_t *)tr);
@@ -1515,13 +1506,16 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     uint32_t uid = 0;
     message_get_uid(msg, &uid);
 
-    if (seqset_ismember(tr->oldindexed, uid)) return 1;
-    if (seqset_ismember(tr->indexed, uid)) return 1;
+    if (seqset_ismember(tr->indexed, uid)) return 3;
+    if (seqset_ismember(tr->oldindexed, uid)) return 2;
+
+    if (!tr->indexed) tr->indexed = seqset_init(0, SEQ_MERGE);
+    seqset_add(tr->indexed, uid, 1);
 
     const struct message_guid *guid = NULL;
     message_get_guid(msg, &guid);
 
-    return xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid));
+    return xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)) ? 1 : 0;
 }
 
 static int end_mailbox_update(search_text_receiver_t *rx,

@@ -361,6 +361,9 @@ static int index_single_message(const char *mboxname, uint32_t uid)
     msg = message_new_from_record(mailbox, &record);
     if (!msg) goto out;
 
+    if (rx->is_indexed(rx, msg))
+        goto out;
+
     if (verbose) fprintf(stderr, "squatter: indexing mailbox:%s uid:%u\n",
                          mboxname, uid);
 

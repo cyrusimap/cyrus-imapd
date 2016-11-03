@@ -168,10 +168,6 @@ static int flush_batch(search_text_receiver_t *rx,
     for (i = 0 ; i < batch->count ; i++) {
         message_t *msg = ptrarray_nth(batch, i);
 
-        /* Skip known messages */
-        if (rx->is_indexed(rx, msg))
-            continue;
-
         const char *fname;
         r = message_get_fname(msg, &fname);
         if (r) return r;
@@ -224,7 +220,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         }
 
         message_t *msg = message_new_from_record(mailbox, record);
-        ptrarray_append(&batch, msg);
+
+        if (!rx->is_indexed(rx, msg))
+            ptrarray_append(&batch, msg);
     }
     mailbox_iter_done(&iter);
 
