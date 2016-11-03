@@ -806,7 +806,7 @@ sub test_getmessages
     my $hdrs = $msg->{headers};
     $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
     $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
-    $self->assert_deep_equals($msg->{from}, {
+    $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
     });
@@ -1056,7 +1056,7 @@ sub test_setmessages_draft
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
             { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
@@ -1159,7 +1159,7 @@ sub test_setmessages_invalid_mailaddr
     xlog "Send a message with invalid replyTo property";
     my $draft =  {
         mailboxIds => [$outbox],
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         replyTo => { name => "", email => "a\@bad\@address\@acme.local" },
         subject => "Memo",
@@ -1172,7 +1172,7 @@ sub test_setmessages_invalid_mailaddr
     xlog "Send a message with invalid To header";
     $draft =  {
         mailboxIds => [$outbox],
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         headers => { "To" => "bugs\@acme.local, a\@bad\@address\@acme.local" },
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
@@ -1203,7 +1203,7 @@ sub test_setmessages_mailboxids
     $self->assert_not_null($draftsid);
 
     my $msg =  {
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
@@ -1335,7 +1335,7 @@ sub test_setmessages_update
 
     my $draft =  {
         mailboxIds => [$drafts],
-        from => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
         cc => [ { name => "Elmer Fudd", email => "elmer\@acme.local" } ],
         subject => "created",
@@ -1407,7 +1407,7 @@ sub test_setmessages_destroy
     xlog "Create a draft";
     my $draft = {
         mailboxIds => $mailboxids,
-        from       => { name => "Yosemite Sam", email => "sam\@acme.local" },
+        from       => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to         => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
         subject    => "created",
         textBody   => "Oh!!! I *hate* that Rabbit.",
