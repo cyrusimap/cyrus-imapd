@@ -470,6 +470,72 @@ void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
     prot_puts(imapd_out, "\r\n");
 }
 
+/* add subscription flags or filter out non-subscribed mailboxes */
+static int check_subs(mbentry_t *mbentry, strarray_t *subs,
+                      struct listargs *listargs, uint32_t *flags)
+{
+    int i, namelen = strlen(mbentry->name);
+
+    for (i = 0; i < subs->count; i++) {
+        const char *name = strarray_nth(subs, i);
+
+        if (strncmp(mbentry->name, name, namelen)) continue;
+        else if (!name[namelen]) { /* exact match */
+            *flags |= MBOX_ATTRIBUTE_SUBSCRIBED;
+            break;
+        }
+        else if (name[namelen] == '.' &&
+                 (listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
+            *flags |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+            break;
+        }
+    }
+
+    /* check if we need to filter out this mailbox */
+    return (!(listargs->sel & LIST_SEL_SUBSCRIBED) ||
+            (*flags & (MBOX_ATTRIBUTE_SUBSCRIBED |
+                       MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)));
+}
+
+/* add subscribed mailbox or ancestor of subscribed mailbox to our list */
+static void add_sub(strarray_t *subs, mbentry_t *mbentry, uint32_t attributes)
+{
+    if (attributes & MBOX_ATTRIBUTE_SUBSCRIBED) {
+        /* mailbox is subscribed */
+        strarray_append(subs, mbentry->name);
+    }
+    else {
+        /* a decendent of mailbox is subscribed */
+        struct buf child = BUF_INITIALIZER;
+
+        buf_printf(&child, "%s.", mbentry->name);
+        strarray_appendm(subs, buf_release(&child));
+    }
+}
+
+static int is_extended_resp(const char *cmd, struct listargs *listargs)
+{
+    if (!(listargs->ret &&
+          (LIST_RET_STATUS | LIST_RET_MYRIGHTS | LIST_RET_METADATA))) {
+        /* backend won't be sending extended response data */
+        return 0;
+    }
+    else if ((listargs->ret & LIST_RET_STATUS) &&
+             !strncasecmp("STATUS", cmd, 6)) {
+        return 1;
+    }
+    else if ((listargs->ret & LIST_RET_MYRIGHTS) &&
+             !strncasecmp("MYRIGHTS", cmd, 8)) {
+        return 1;
+    }
+    else if ((listargs->ret & LIST_RET_METADATA) &&
+             !strncasecmp("METADATA", cmd, 8)) {
+        return 1;
+    }
+
+    return 0;
+}
+
 /* This handles piping of the LSUB command, because we have to figure out
  * what mailboxes actually exist before passing them to the end user.
  *
@@ -485,7 +551,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int exist_r;
     static struct buf tagb, cmd, sep, name, ext;
     struct buf extraflags = BUF_INITIALIZER;
-    int send = 1;
+    int build_list_only = subs && !(listargs->ret & LIST_RET_SUBSCRIBED);
+    int suppress_resp = 0;
 
     assert(s);
     assert(s->timeout);
@@ -549,13 +616,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
         }
 
         if(strncasecmp("LSUB", cmd.s, 4) && strncasecmp("LIST", cmd.s, 4)) {
-            if (!send &&
-                (((listargs->ret & LIST_RET_STATUS) &&
-                  !strncasecmp("STATUS", cmd.s, 6)) ||
-                 ((listargs->ret & LIST_RET_MYRIGHTS) &&
-                  !strncasecmp("MYRIGHTS", cmd.s, 8)) ||
-                 ((listargs->ret & LIST_RET_METADATA) &&
-                  !strncasecmp("METADATA", cmd.s, 8)))) {
+            if (suppress_resp && is_extended_resp(cmd.s, listargs)) {
                 /* skip return data for this mailbox */
                 eatline(s->in, c);
             }
@@ -569,14 +630,6 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             /* build up the response bit by bit */
             const struct mbox_name_attribute *attr;
             uint32_t attributes = 0;
-
-            /* By default, send responses for LSUB or LIST (SUBSCRIBED).
-               LIST (SUBSCRIBED) w/o RETURN (SUBSCRIBED) is used to signal
-               that the proxy is only fetching the subscriptions and
-               does NOT want any LIST responses sent to the client */
-            send = (listargs->cmd == LIST_CMD_LSUB) ||
-                !(listargs->sel & LIST_SEL_SUBSCRIBED) ||
-                (listargs->ret & LIST_RET_SUBSCRIBED);
 
             /* Get flags */
             buf_reset(&extraflags);
@@ -653,8 +706,12 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                 mboxname_from_external(name.s, &imapd_namespace, userid);
             mbentry_t *mbentry = NULL;
             exist_r = mboxlist_lookup(intname, &mbentry, NULL);
+            free(intname);
             if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
                 exist_r = IMAP_MAILBOX_RESERVED;
+
+            /* suppress responses to client if we're just building subs list */
+            suppress_resp = build_list_only;
 
             if (!exist_r) {
                 /* we need to remove \Noselect if it's in our mailboxes.db */
@@ -662,64 +719,32 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                     ~(MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_NONEXISTENT);
 
                 if (subs) {
-                    /* handle subscriptions: either build a list from the backend
-                       OR filter by subscriptions and/or add \\Subscribed flag */
-                    if (s == backend_inbox) {
-                        if (listargs->sel & LIST_SEL_SUBSCRIBED) {
-                            /* building list of subscriptions -
-                               add those not being sent to client */
-                            if (!send ||
-                                strcmp(mbentry->server, backend_inbox->hostname)) {
-                                if (attributes & MBOX_ATTRIBUTE_SUBSCRIBED) {
-                                    /* mailbox is subscribed */
-                                    strarray_appendm(subs, intname);
-                                    intname = NULL;
-                                }
-                                else {
-                                    /* some child of mailbox is subscribed */
-                                    size_t len = strlen(intname);
-                                    char *childname = xstrndup(intname, len+1);
-
-                                    childname[len] = '.';
-                                    strarray_appendm(subs, childname);
-                                }
-                                send = 0;
-                            }
+                    /* process subscriptions */
+                    if (s != backend_inbox) {
+                        /* backend server wonn't have subs info -
+                           add sub flags or filter out non-sub mailboxes */
+                        if (!check_subs(mbentry, subs, listargs, &attributes)) {
+                            /* only want subscriptions - suppress response */
+                            suppress_resp = 1;
                         }
                     }
-                    else if (listargs->ret & LIST_RET_SUBSCRIBED) {
-                        int i, namelen = strlen(intname);
-
-                        /* add subscription flags where needed */
-                        for (i = 0; i < subs->count; i++) {
-                            const char *name = strarray_nth(subs, i);
-
-                            if (strncmp(intname, name, namelen)) continue;
-                            else if (!name[namelen]) { /* exact match */
-                                attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
-                                break;
-                            }
-                            else if (name[namelen] == '.' &&
-                                     (listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
-                                attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
-                                break;
-                            }
-                        }
-
-                        /* check if we need to filter out this mailbox */
-                        if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
-                            !(attributes & (MBOX_ATTRIBUTE_SUBSCRIBED
-                                       | MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED))) {
-                            send = 0;
+                    else if (listargs->sel & LIST_SEL_SUBSCRIBED) {
+                        /* If we're just building subs list,
+                           we want ALL subscriptions added to list.
+                           Otherwise just add those NOT on Inbox server.
+                           In either case we want to suppress the response. */
+                        if (build_list_only ||
+                            strcmp(mbentry->server, backend_inbox->hostname)) {
+                            add_sub(subs, mbentry, attributes);
+                            suppress_resp = 1;
                         }
                     }
                 }
             }
 
-            free(intname);
             mboxlist_entry_free(&mbentry);
 
-            if (send) {
+            if (!suppress_resp) {
                 /* send our response */
                 print_listresponse(listargs->cmd, name.s, sep.s[0],
                                    attributes, &extraflags);
