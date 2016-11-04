@@ -243,6 +243,7 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
             }
         }
         mailbox_iter_done(&iter);
+        seqset_free(seq);
 
         /* we've calculated the correct values for both */
         c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
