@@ -116,6 +116,21 @@ sub create_testmessages
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 }
 
+sub test_copy_messages
+{
+    my ($self) = @_;
+
+    $self->create_testmessages();
+
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.foo");
+    $talk->select("INBOX");
+    $talk->copy("1:*", "INBOX.foo");
+
+    xlog "Run squatter again";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+}
+
 sub test_stem_verbs
 {
     my ($self) = @_;
