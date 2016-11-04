@@ -2245,8 +2245,10 @@ static int compact_dbs(const char *userid, const char *tempdir,
         for (i = 0; i < dirs->count; i++) {
             struct stat sbuf;
             char *path = strconcat(strarray_nth(dirs, i), "/iamglass", (char *)NULL);
-            if (stat(path, &sbuf))
+            if (stat(path, &sbuf)) {
+                syslog(LOG_NOTICE, "missing glass file %s, must reindex", path);
                 must_reindex = 1;
+            }
             free(path);
         }
 
