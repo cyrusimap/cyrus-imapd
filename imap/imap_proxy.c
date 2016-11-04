@@ -617,7 +617,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
         if(strncasecmp("LSUB", cmd.s, 4) && strncasecmp("LIST", cmd.s, 4)) {
             if (suppress_resp && is_extended_resp(cmd.s, listargs)) {
-                /* skip return data for this mailbox */
+                /* suppress extended return data for this mailbox */
                 eatline(s->in, c);
             }
             else {
@@ -721,21 +721,22 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                 if (subs) {
                     /* process subscriptions */
                     if (s != backend_inbox) {
-                        /* backend server wonn't have subs info -
+                        /* backend server won't have subs info -
                            add sub flags or filter out non-sub mailboxes */
                         if (!check_subs(mbentry, subs, listargs, &attributes)) {
-                            /* only want subscriptions - suppress response */
+                            /* unsubscribed and we only want subscriptions */
                             suppress_resp = 1;
                         }
                     }
                     else if (listargs->sel & LIST_SEL_SUBSCRIBED) {
                         /* If we're just building subs list,
                            we want ALL subscriptions added to list.
-                           Otherwise just add those NOT on Inbox server.
-                           In either case we want to suppress the response. */
+                           Otherwise just add those NOT on Inbox server. */
                         if (build_list_only ||
                             strcmp(mbentry->server, backend_inbox->hostname)) {
                             add_sub(subs, mbentry, attributes);
+                            /* suppress the response - those NOT added to the
+                               list are sent to client in subsequent requests */
                             suppress_resp = 1;
                         }
                     }
@@ -745,7 +746,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             mboxlist_entry_free(&mbentry);
 
             if (!suppress_resp) {
-                /* send our response */
+                /* send response to the client */
                 print_listresponse(listargs->cmd, name.s, sep.s[0],
                                    attributes, &extraflags);
             }
