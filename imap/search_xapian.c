@@ -1991,6 +1991,8 @@ static int reindex_mb(void *rock,
         /* add the record to the list */
         if (!is_indexed((search_text_receiver_t *)tr, msg))
             ptrarray_append(&batch, msg);
+        else
+            message_unref(&msg);
     }
 
     mailbox_iter_done(&iter);

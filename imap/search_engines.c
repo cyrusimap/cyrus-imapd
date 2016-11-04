@@ -223,6 +223,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
         if (!rx->is_indexed(rx, msg))
             ptrarray_append(&batch, msg);
+        else
+            message_unref(&msg);
     }
     mailbox_iter_done(&iter);
 
