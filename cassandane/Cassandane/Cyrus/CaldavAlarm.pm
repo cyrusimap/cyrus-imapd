@@ -554,7 +554,7 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $tz});
     $self->assert_not_null($CalendarId);
 
     my $now = DateTime->now();
@@ -639,7 +639,7 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $tz});
     $self->assert_not_null($CalendarId);
 
     my $now = DateTime->now();
@@ -1051,7 +1051,7 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timezone => $tz});
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $tz});
     $self->assert_not_null($CalendarId);
 
     my $now = DateTime->now();
