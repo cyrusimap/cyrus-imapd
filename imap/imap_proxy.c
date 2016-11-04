@@ -432,6 +432,44 @@ int pipe_command(struct backend *s, int optimistic_literal)
     }
 }
 
+void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
+                        uint32_t attributes, struct buf *extraflags)
+{
+    const struct mbox_name_attribute *attr;
+    const char *sep;
+
+    prot_printf(imapd_out, "* %s (", cmd == LIST_CMD_LSUB ? "LSUB" : "LIST");
+
+    for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
+        if (attributes & attr->flag) {
+            prot_printf(imapd_out, "%s%s", sep, attr->id);
+            sep = " ";
+        }
+    }
+
+    if (extraflags && buf_len(extraflags)) {
+        prot_printf(imapd_out, "%s%s", sep, buf_cstring(extraflags));
+    }
+
+    prot_printf(imapd_out, ") \"%c\" ", hier_sep);
+
+    prot_printastring(imapd_out, extname);
+
+    if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
+        prot_puts(imapd_out, " (CHILDINFO (");
+        /* RFC 5258:
+         *     ; Note 2: The selection options are always returned
+         *     ; quoted, unlike their specification in
+         *     ; the extended LIST command.
+         */
+        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
+            prot_puts(imapd_out, "\"SUBSCRIBED\"");
+        prot_puts(imapd_out, "))");
+    }
+
+    prot_puts(imapd_out, "\r\n");
+}
+
 /* This handles piping of the LSUB command, because we have to figure out
  * what mailboxes actually exist before passing them to the end user.
  *
@@ -446,6 +484,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int r = PROXY_OK;
     int exist_r;
     static struct buf tagb, cmd, sep, name, ext;
+    struct buf extraflags = BUF_INITIALIZER;
     int send = 1;
 
     assert(s);
@@ -529,7 +568,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
         } else {
             /* build up the response bit by bit */
             const struct mbox_name_attribute *attr;
-            uint32_t flags = 0;
+            uint32_t attributes = 0;
 
             /* By default, send responses for LSUB or LIST (SUBSCRIBED).
                LIST (SUBSCRIBED) w/o RETURN (SUBSCRIBED) is used to signal
@@ -540,15 +579,18 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                 (listargs->ret & LIST_RET_SUBSCRIBED);
 
             /* Get flags */
+            buf_reset(&extraflags);
             c = prot_getc(s->in);
             if (c == '(') {
                 do {
                     c = getword(s->in, &name);
-                    for (attr = mbox_name_attributes; attr->id; attr++) {
-                        if (!strcasecmp(name.s, attr->id)) {
-                            flags |= attr->flag;
-                            break;
-                        }
+                    for (attr = mbox_name_attributes;
+                         attr->id && strcasecmp(name.s, attr->id); attr++);
+
+                    if (attr->id) attributes |= attr->flag;
+                    else {
+                        if (buf_len(&extraflags)) buf_putc(&extraflags, ' ');
+                        buf_appendcstr(&extraflags, name.s);
                     }
                 } while (c == ' ');
 
@@ -589,6 +631,9 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                     buf_putc(&ext, c);
                     c = prot_getc(s->in);
                 } while (c != '\r' && c != '\n' && c != EOF);
+
+                /* XXX  Currently there are no other documented extensions */
+                attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
             }
             buf_cstring(&ext);
 
@@ -604,7 +649,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             /* lookup name */
             exist_r = 1;
-            char *intname = mboxname_from_external(name.s, &imapd_namespace, userid);
+            char *intname =
+                mboxname_from_external(name.s, &imapd_namespace, userid);
             mbentry_t *mbentry = NULL;
             exist_r = mboxlist_lookup(intname, &mbentry, NULL);
             if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
@@ -612,7 +658,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             if (!exist_r) {
                 /* we need to remove \Noselect if it's in our mailboxes.db */
-                flags &= ~(MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_NONEXISTENT);
+                attributes &=
+                    ~(MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_NONEXISTENT);
 
                 if (subs) {
                     /* handle subscriptions: either build a list from the backend
@@ -623,7 +670,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                                add those not being sent to client */
                             if (!send ||
                                 strcmp(mbentry->server, backend_inbox->hostname)) {
-                                if (flags & MBOX_ATTRIBUTE_SUBSCRIBED) {
+                                if (attributes & MBOX_ATTRIBUTE_SUBSCRIBED) {
                                     /* mailbox is subscribed */
                                     strarray_appendm(subs, intname);
                                     intname = NULL;
@@ -649,19 +696,19 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
                             if (strncmp(intname, name, namelen)) continue;
                             else if (!name[namelen]) { /* exact match */
-                                flags |= MBOX_ATTRIBUTE_SUBSCRIBED;
+                                attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
                                 break;
                             }
                             else if (name[namelen] == '.' &&
                                      (listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
-                                flags |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+                                attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
                                 break;
                             }
                         }
 
                         /* check if we need to filter out this mailbox */
                         if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
-                            !(flags & (MBOX_ATTRIBUTE_SUBSCRIBED
+                            !(attributes & (MBOX_ATTRIBUTE_SUBSCRIBED
                                        | MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED))) {
                             send = 0;
                         }
@@ -674,38 +721,14 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             if (send) {
                 /* send our response */
-                const char *flagsep = "";
-
-                prot_printf(imapd_out, "* %s (",
-                            (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST");
-                for (attr = mbox_name_attributes; attr->id; attr++) {
-                    if (flags & attr->flag) {
-                        prot_printf(imapd_out, "%s%s", flagsep, attr->id);
-                        flagsep = " ";
-                    }
-                }
-                prot_printf(imapd_out, ") \"%s\" ", sep.s);
-
-                prot_printstring(imapd_out, name.s);
-
-                if (flags & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
-                    prot_printf(imapd_out, " (CHILDINFO (");
-                    /* RFC 5258:
-                     *     ; Note 2: The selection options are always returned
-                     *     ; quoted, unlike their specification in
-                     *     ; the extended LIST command.
-                     */
-                    if (flags & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-                        prot_printf(imapd_out, "\"SUBSCRIBED\"");
-                    prot_printf(imapd_out, "))");
-                }
-
-                prot_printf(imapd_out, "%s\r\n", ext.s);
+                print_listresponse(listargs->cmd, name.s, sep.s[0],
+                                   attributes, &extraflags);
             }
         }
     } /* while(1) */
 
 out:
+    buf_free(&extraflags);
     return r;
 }
 

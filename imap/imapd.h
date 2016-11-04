@@ -390,15 +390,6 @@ enum {
     MBOX_ATTRIBUTE_HASCHILDREN =        (1<<7),
     MBOX_ATTRIBUTE_HASNOCHILDREN =      (1<<8),
     MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED=(1<<9),
-
-    /* from RFC 6154 */
-    MBOX_ATTRIBUTE_ALL =                (1<<10),    
-    MBOX_ATTRIBUTE_ARCHIVE =            (1<<11),
-    MBOX_ATTRIBUTE_DRAFTS =             (1<<12), 
-    MBOX_ATTRIBUTE_FLAGGED =            (1<<13),
-    MBOX_ATTRIBUTE_JUNK =               (1<<14),   
-    MBOX_ATTRIBUTE_SENT =               (1<<15),   
-    MBOX_ATTRIBUTE_TRASH =              (1<<16)
 };
 
 struct mbox_name_attribute {

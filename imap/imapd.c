@@ -243,15 +243,6 @@ const struct mbox_name_attribute mbox_name_attributes[] = {
     { MBOX_ATTRIBUTE_HASCHILDREN,   "\\HasChildren"   },
     { MBOX_ATTRIBUTE_HASNOCHILDREN, "\\HasNoChildren" },
 
-    /* from RFC 6154 */
-    { MBOX_ATTRIBUTE_ALL,           "\\All"           },
-    { MBOX_ATTRIBUTE_ARCHIVE,       "\\Archive"       },
-    { MBOX_ATTRIBUTE_DRAFTS,        "\\Drafts"        },
-    { MBOX_ATTRIBUTE_FLAGGED,       "\\Flagged"       },
-    { MBOX_ATTRIBUTE_JUNK,          "\\Junk"          },
-    { MBOX_ATTRIBUTE_SENT,          "\\Sent"          },
-    { MBOX_ATTRIBUTE_TRASH,         "\\Trash"         },
-
     { 0, NULL }
 };
 
@@ -12145,7 +12136,8 @@ static void freefieldlist(struct fieldlist *l)
     }
 }
 
-static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)), void *rock)
+static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)),
+                           void *rock)
 {
     uint32_t *attributes = (uint32_t *)rock;
     list_callback_calls++;
@@ -12153,7 +12145,7 @@ static int set_haschildren(const mbentry_t *mbentry __attribute__((unused)), voi
     return CYRUSDB_DONE;
 }
 
-static void specialuse_flags(const mbentry_t *mbentry, const char *sep)
+static void specialuse_flags(const mbentry_t *mbentry, struct buf *attrib)
 {
     if (!mbentry) return;
 
@@ -12168,13 +12160,8 @@ static void specialuse_flags(const mbentry_t *mbentry, const char *sep)
 
     /* subdir */
     if (mbentry->name[inboxlen] == '.') {
-        struct buf attrib = BUF_INITIALIZER;
         /* check if there's a special use flag set */
-        if (!annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib)) {
-            if (attrib.len)
-                prot_printf(imapd_out, "%s%s", sep, buf_cstring(&attrib));
-        }
-        buf_free(&attrib);
+        annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, attrib);
     }
     free(inbox);
     /* otherwise it's actually another user who matches for
@@ -12207,11 +12194,9 @@ done:
 static void list_response(const char *extname, const mbentry_t *mbentry,
                           uint32_t attributes, struct listargs *listargs)
 {
-    const struct mbox_name_attribute *attr;
     int r;
-    const char *sep;
-    const char *cmd;
     struct statusdata sdata = STATUSDATA_INIT;
+    struct buf specialuse = BUF_INITIALIZER;
 
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
         if (!(listargs->cmd == LIST_CMD_EXTENDED)) {
@@ -12330,7 +12315,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         attributes &= ~MBOX_ATTRIBUTE_HASCHILDREN;
 
     /* you can't have both!  If it's had children, it has children */
-    if ((attributes & MBOX_ATTRIBUTE_HASCHILDREN) && (attributes & MBOX_ATTRIBUTE_HASNOCHILDREN))
+    if (attributes & MBOX_ATTRIBUTE_HASCHILDREN)
         attributes &= ~MBOX_ATTRIBUTE_HASNOCHILDREN;
 
     /* remove redundant flags */
@@ -12343,17 +12328,14 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
             attributes &= ~MBOX_ATTRIBUTE_NOSELECT;
     }
 
+    if (config_getswitch(IMAPOPT_SPECIALUSEALWAYS) ||
+        listargs->ret & LIST_RET_SPECIALUSE) {
+        specialuse_flags(mbentry, &specialuse);
+    }
+
     if (listargs->sel & LIST_SEL_SPECIALUSE) {
-        if (!mbentry) return;
-        struct buf attrib = BUF_INITIALIZER;
         /* check that this IS a specialuse folder */
-        if (annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib))
-            return;
-        if (!attrib.len) {
-            buf_free(&attrib);
-            return;
-        }
-        buf_free(&attrib);
+        if (!buf_len(&specialuse)) return;
     }
 
     /* can we read the status data ? */
@@ -12366,41 +12348,9 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         }
     }
 
-    cmd = (listargs->cmd == LIST_CMD_LSUB) ? "LSUB" : "LIST";
-
-    prot_printf(imapd_out, "* %s (", cmd);
-    for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
-        if (attributes & attr->flag) {
-            prot_printf(imapd_out, "%s%s", sep, attr->id);
-            sep = " ";
-        }
-    }
-
-    if (config_getswitch(IMAPOPT_SPECIALUSEALWAYS) ||
-        listargs->ret & LIST_RET_SPECIALUSE) {
-        specialuse_flags(mbentry, sep);
-    }
-
-    prot_printf(imapd_out, ") ");
-
-    prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
-
-    prot_printastring(imapd_out, extname);
-
-    if (listargs->cmd == LIST_CMD_EXTENDED &&
-        attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
-        prot_printf(imapd_out, " (CHILDINFO (");
-        /* RFC 5258:
-         *     ; Note 2: The selection options are always returned
-         *     ; quoted, unlike their specification in
-         *     ; the extended LIST command.
-         */
-        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-            prot_printf(imapd_out, "\"SUBSCRIBED\"");
-        prot_printf(imapd_out, "))");
-    }
-
-    prot_printf(imapd_out, "\r\n");
+    print_listresponse(listargs->cmd, extname,
+                       imapd_namespace.hier_sep, attributes, &specialuse);
+    buf_free(&specialuse);
 
     if ((listargs->ret & LIST_RET_STATUS) &&
         !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {

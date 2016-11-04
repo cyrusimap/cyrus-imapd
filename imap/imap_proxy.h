@@ -79,6 +79,9 @@ int pipe_command(struct backend *s, int optimistic_literal);
 int pipe_lsub(struct backend *s, const char *userid, const char *tag,
               int force_notfatal, struct listargs *listargs, strarray_t *subs);
 
+void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
+                        uint32_t attributes, struct buf *extraflags);
+
 void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 int usinguid, struct backend *s);
 
