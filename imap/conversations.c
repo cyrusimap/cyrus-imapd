@@ -1447,6 +1447,21 @@ EXPORTED const strarray_t *conversations_get_folders(struct conversations_state 
     return state->folder_names;
 }
 
+EXPORTED int conversations_guid_exists(struct conversations_state *state,
+                                       const char *guidrep)
+{
+    char *key = strconcat("G", guidrep, (char *)NULL);
+    size_t datalen = 0;
+    const char *data;
+
+    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
+    free(key);
+
+    if (r || !datalen)
+        return 0;
+    return 1;
+}
+
 EXPORTED int conversations_guid_foreach(struct conversations_state *state,
                                         const char *guidrep,
                                         int(*cb)(const conv_guidrec_t*,void*),
