@@ -316,6 +316,91 @@ sub test_normalize_snippets
     }
 }
 
+sub test_snippets_termcover
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    my $body =
+    "The 'charset' portion of an 'encoded-word' specifies the character ".
+    "set associated with the unencoded text.  A 'charset' can be any of ".
+    "the character set names allowed in an MIME \"charset\" parameter of a ".
+    "\"text/plain\" body part, or any character set name registered with ".
+    "IANA for use with the MIME text/plain content-type. ".
+    "".
+    # Attempt to trick the snippet generator into picking the next two lines
+    "Here is a line with favourite but not without that other search word ".
+    "Here is another line with a favourite word but not the other one ".
+    "".
+    "Some character sets use code-switching techniques to switch between ".
+    "\"ASCII mode\" and other modes.  If unencoded text in an 'encoded-word' ".
+    "contains a sequence which causes the charset interpreter to switch ".
+    "out of ASCII mode, it MUST contain additional control codes such that ".
+    "ASCII mode is again selected at the end of the 'encoded-word'.  (This ".
+    "rule applies separately to each 'encoded-word', including adjacent ".
+    "encoded-word's within a single header field.) ".
+    "When there is a possibility of using more than one character set to ".
+    "represent the text in an 'encoded-word', and in the absence of ".
+    "private agreements between sender and recipients of a message, it is ".
+    "recommended that members of the ISO-8859-* series be used in ".
+    "preference to other character sets.".
+    "".
+    # This is the line we want to get as a snippet
+    "I don't have a favourite cereal. My favourite breakfast is oat meal.";
+
+    xlog "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("1", %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+    my $want = "<b>favourite</b> <b>cereal</b>";
+
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [
+           'fuzzy', 'text', 'favourite',
+           'fuzzy', 'text', 'cereal',
+           'fuzzy', 'text', { Quote => 'bogus gnarly' }
+        ]
+    ) || die;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
+
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [
+           'fuzzy', 'text', 'favourite cereal'
+        ]
+    ) || die;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
+
+    # Regression - a phrase is treated as a loose term
+    $r = $talk->xsnippets( [ [ 'INBOX', $uidvalidity, $uids ] ],
+       'utf-8', [
+           'fuzzy', 'text', { Quote => 'favourite nope cereal' },
+           'fuzzy', 'text', { Quote => 'bogus gnarly' }
+        ]
+    ) || die;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
+
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [
+           'fuzzy', 'text', { Quote => 'favourite cereal' }
+        ]
+    ) || die;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
+
+
+}
+
 sub test_cjk_words
 {
     my ($self) = @_;
