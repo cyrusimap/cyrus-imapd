@@ -116,8 +116,7 @@ struct search_engine {
 #define SEARCH_COMPACT_COPYONE  (1<<5)  /* if only one source, just copy */
 #define SEARCH_COMPACT_FILTER   (1<<6)  /* filter resulting DB for
                                          * expunged records */
-#define SEARCH_COMPACT_AUDIT    (1<<7)  /* check DB for missing records */
-#define SEARCH_COMPACT_REINDEX  (1<<8)  /* re-index all matching messages */
+#define SEARCH_COMPACT_REINDEX  (1<<7)  /* re-index all matching messages */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);

@@ -800,14 +800,10 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RAXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
-            break;
-
-        case 'A':
-            compact_flags |= SEARCH_COMPACT_AUDIT;
             break;
 
         case 'F':

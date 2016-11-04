@@ -1824,12 +1824,20 @@ struct mbdata {
 };
 
 struct mbfilter {
-    hash_table mboxes;
+    const char *userid;
+    struct conversations_state *cstate;
     struct db *indexeddb;
     struct txn **tid;
     const strarray_t *destpaths;
     int flags;
 };
+
+static void free_mbfilter(struct mbfilter *filter)
+{
+    if (filter->tid) cyrusdb_abort(filter->indexeddb, *filter->tid);
+    cyrusdb_close(filter->indexeddb);
+    conversations_commit(&filter->cstate);
+}
 
 static int copyindexed_cb(void *rock,
                          const char *key, size_t keylen,
@@ -1845,185 +1853,31 @@ static int copyindexed_cb(void *rock,
     return r;
 }
 
-static void free_mbdata(void *rock)
-{
-    struct mbdata *data = (struct mbdata *)rock;
-    if (!data) return;
-    bv_free(&data->uids);
-    free(data);
-}
-
-static int mbox_vector(const char *mboxname, struct mbfilter *filter)
-{
-    struct mbdata *mbdata = xzmalloc(sizeof(struct mbdata));
-    struct buf key = BUF_INITIALIZER;
-    const char *data = NULL;
-    size_t datalen = 0;
-    struct seqset *seq = NULL;
-    struct mailbox *mailbox = NULL;
-    const struct index_record *record;
-    int verbose = SEARCH_VERBOSE(filter->flags);
-    int r;
-
-    r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) {
-        /* XXX - this is just a workaround for bugs in mboxlist_allusermbox */
-        if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
-        goto done;
-    }
-
-    buf_printf(&key, "%s.%u", mboxname, mailbox->i.uidvalidity);
-
-    r = cyrusdb_fetch(filter->indexeddb,
-                      key.s, key.len,
-                      &data, &datalen,
-                      (struct txn **)NULL);
-
-    if (r == CYRUSDB_NOTFOUND) {
-        r = 0;
-        goto done;
-    }
-    if (r) goto done;
-
-    seq = parse_indexed(data, datalen);
-    if (!seq) goto done;
-
-    mbdata->uidvalidity = mailbox->i.uidvalidity;
-    bv_setsize(&mbdata->uids, mailbox->i.last_uid);
-
-    if (verbose)
-        printf("Vectoring %s\n", mboxname);
-
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-
-    while ((record = mailbox_iter_step(iter))) {
-        /* we don't expect it to be in this index, don't check for it */
-        if (!seqset_ismember(seq, record->uid))
-            continue;
-
-        bv_set(&mbdata->uids, record->uid);
-    }
-
-    mailbox_iter_done(&iter);
-
-    /* yay, we have succeeded */
-    hash_insert(mboxname, mbdata, &filter->mboxes);
-    mbdata = NULL;
-
-done:
-    buf_free(&key);
-    if (seq) seqset_free(seq);
-    if (mailbox) mailbox_close(&mailbox);
-    if (mbdata) free_mbdata(mbdata);
-    return r;
-}
-
-static int mbox_vector_cb(const mbentry_t *mbentry, void *rock)
-{
-    struct mbfilter *filter = (struct mbfilter *)rock;
-    return mbox_vector(mbentry->name, filter);
-}
-
-static int build_mbfilter(const char *userid, struct mbfilter *filter)
-{
-    construct_hash_table(&filter->mboxes, 1024, 0);
-    return mboxlist_usermboxtree(userid, mbox_vector_cb, filter, 0);
-}
-
-static void free_mbfilter(struct mbfilter *filter)
-{
-    free_hash_table(&filter->mboxes, free_mbdata);
-    if (filter->tid) cyrusdb_abort(filter->indexeddb, *filter->tid);
-    cyrusdb_close(filter->indexeddb);
-}
-
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
-    int verbose = SEARCH_VERBOSE(filter->flags);
-    const char *mboxname;
-    unsigned int uidvalidity;
-    unsigned int uid;
-    struct mbdata *data;
-    int res = 0;
 
-    if (!parse_legacy_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid))
-        goto out; /* failed to parse -> not exists */
+    /* we can't get here without GUID keys */
+    assert(!strncmp(cyrusid, "*G*", 3));
 
-    data = (struct mbdata *)hash_lookup(mboxname, &filter->mboxes);
+    /* only open when needed */
+    if (!filter->cstate)
+        assert(!conversations_open_user(filter->userid, &filter->cstate));
 
-    /* is it an identical mailbox? */
-    if (!data) goto out;
-    if (data->uidvalidity != uidvalidity) goto out;
-
-    /* then check if the UID exists */
-    res = bv_isset(&data->uids, uid);
-
-    if (res) {
-        /* if we find it again, then we don't need a second copy */
-        bv_clear(&data->uids, uid);
-    }
-
-out:
-    if (res) {
-        if (verbose > 2)
-            printf("filter check %s: EXISTS\n", cyrusid);
-    }
-    else {
-        if (verbose > 1)
-            printf("filter check %s: MISSING\n", cyrusid);
-    }
-
-    if (filter->flags & SEARCH_COMPACT_FILTER)
-        return res;
-
-    /* don't delete anything */
-    return 1;
-}
-
-static void notify_filter_cb(const char *mboxname, void *data, void *rock)
-{
-    struct mbdata *mbdata = (struct mbdata *)data;
-    struct mbfilter *filter = (struct mbfilter *)rock;
-    struct seqset *seq = seqset_init(0, SEQ_SPARSE);
-    int verbose = SEARCH_VERBOSE(filter->flags);
-    int uid;
-
-    if (verbose)
-        printf("checking for unindexed messages in %s\n", mboxname);
-
-    /* now we just read the bitvector and look for trouble! */
-    for (uid = bv_next_set(&mbdata->uids, 0) ;
-         uid != -1 ;
-         uid = bv_next_set(&mbdata->uids, uid+1))
-        seqset_add(seq, uid, 1);
-
-    if (seq->len) {
-        char *seqstr = seqset_cstring(seq);
-        syslog(LOG_ERR, "IOERROR: unindexed messages in %s: %s", mboxname, seqstr);
-        if (verbose)
-            printf("IOERROR: unindexed messages in %s: %s\n", mboxname, seqstr);
-        free(seqstr);
-    }
-
-    seqset_free(seq);
-}
-
-static void notify_missing_messages(struct mbfilter *filter)
-{
-    hash_enumerate(&filter->mboxes, notify_filter_cb, filter);
+    return conversations_guid_exists(filter->cstate, cyrusid+3);
 }
 
 static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths,
-                         int flags, struct mbfilter *filter)
+                         const char *userid, int flags, struct mbfilter *filter)
 {
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
     int i;
 
     memset(filter, 0, sizeof(struct mbfilter));
-    filter->flags = flags;
     filter->destpaths = destpaths;
+    filter->userid = userid;
+    filter->flags = flags;
 
     /* build the cyrus.indexed.db from the contents of the source dirs */
 
@@ -2069,12 +1923,7 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, flags, &filter);
-    if (r) goto done;
-
-    if (verbose)
-        printf("Building vector table for %s\n", userid);
-    r = build_mbfilter(userid, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
     if (r) goto done;
 
     if (verbose)
@@ -2086,9 +1935,6 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
 
     if (verbose)
         printf("done %s\n", strarray_nth(destpaths, 0));
-
-    if (flags & SEARCH_COMPACT_AUDIT)
-        notify_missing_messages(&filter);
 
 done:
     free_mbfilter(&filter);
@@ -2201,7 +2047,7 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, flags, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
     if (r) goto done;
 
     if (verbose)
@@ -2230,7 +2076,7 @@ static int search_compress(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, flags, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
     if (r) goto done;
 
     if (verbose)
