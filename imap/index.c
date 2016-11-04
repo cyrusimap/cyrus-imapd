@@ -4670,7 +4670,6 @@ EXPORTED int index_getsearchtext(message_t *msg,
     int r;
 
     r = receiver->begin_message(receiver, msg);
-    if (r == IMAP_EXISTS) return 0;
     if (r) return r;
 
     str.receiver = receiver;

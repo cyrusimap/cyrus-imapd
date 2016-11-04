@@ -257,9 +257,4 @@ ec IMAP_BYE_LOGOUT,
 ec IMAP_OK_COMPLETED,
    "Completed"
 
-# used for search when re-indexing
-
-ec IMAP_EXISTS,
-    "Item already exists"
-
 end
