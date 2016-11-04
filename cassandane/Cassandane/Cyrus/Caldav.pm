@@ -2653,7 +2653,7 @@ sub _safeeq {
 
 
 sub test_netcaldavtalktests_fromical
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -2694,7 +2694,7 @@ sub test_netcaldavtalktests_fromical
 }
 
 sub test_netcaldavtalktests_fromje
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
 
