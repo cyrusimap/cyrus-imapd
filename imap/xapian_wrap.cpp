@@ -895,10 +895,14 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         std::string snippet;
         std::string text = std::string(buf_cstring(snipgen->buf));
 
+        unsigned flags = Xapian::MSet::SNIPPET_TERMCOVER|
+                         Xapian::MSet::SNIPPET_EMPTY_NOMATCH|
+                         Xapian::MSet::SNIPPET_EXHAUSTIVE;
+
         snippet = snipgen->mset->snippet(text,
                 snippet_length,
                 *snipgen->stemmer,
-                Xapian::MSet::SNIPPET_TERMCOVER|Xapian::MSet::SNIPPET_EMPTY_NOMATCH,
+                flags,
                 "<b>", "</b>", "...",
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
