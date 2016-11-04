@@ -2127,6 +2127,12 @@ static int reindex_mb(void *rock,
 
     if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
 
+    /* open the DB */
+    tr = (xapian_update_receiver_t *)begin_update(verbose);
+    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw);
+    if (r) goto done;
+    tr->super.mailbox = mailbox;
+
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
     while ((record = mailbox_iter_step(iter))) {
@@ -2137,20 +2143,17 @@ static int reindex_mb(void *rock,
         message_t *msg = message_new_from_record(mailbox, record);
 
         /* add the record to the list */
-        ptrarray_append(&batch, msg);
+        if (!is_indexed((search_text_receiver_t *)tr, msg))
+            ptrarray_append(&batch, msg);
     }
 
     mailbox_iter_done(&iter);
 
+    mailbox_unlock_index(mailbox, NULL);
+
     if (batch.count) {
-        tr = (xapian_update_receiver_t *)begin_update(verbose);
         /* XXX - errors here could leak... */
         /* game on */
-        mailbox_unlock_index(mailbox, NULL);
-        /* open the DB */
-        r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw);
-        if (r) goto done;
-        tr->super.mailbox = mailbox;
 
         /* preload */
         for (i = 0 ; i < batch.count ; i++) {
