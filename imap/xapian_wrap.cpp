@@ -747,8 +747,8 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
 struct xapian_snipgen
 {
     Xapian::Stem *stemmer;
-    Xapian::MSet *mset;
     Xapian::Database *db;
+    std::vector<std::string> *matches;
     struct buf *buf;
 };
 
@@ -809,14 +809,13 @@ void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
     snipgen->db->close();
     delete snipgen->stemmer;
-    delete snipgen->mset;
+    delete snipgen->matches;
     delete snipgen->db;
     buf_destroy(snipgen->buf);
     free(snipgen);
 }
 
-Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, 
-                                         const std::string &match)
+Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
 {
     std::vector<std::string> terms;
     Xapian::TermGenerator term_generator;
@@ -825,7 +824,16 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen,
     term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
             ~Xapian::TermGenerator::FLAG_CJK_WORDS);
 
-    term_generator.index_text(Xapian::Utf8Iterator(match));
+
+    for(size_t i = 0; i < snipgen->matches->size(); ++i)
+    {
+        std::string match = snipgen->matches->at(i);
+        /* An entry in matches might consist of multiple space-separated
+         * words, which would require them to be parsed as phrases. But
+         * neither the former nor the current snippet generator support
+         * termcover for phrases. So split them into loose terms. */
+        term_generator.index_text(Xapian::Utf8Iterator(match.c_str()));
+    }
 
     const Xapian::Document & doc = term_generator.get_document();
 
@@ -848,16 +856,10 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
 {
     int r = 0;
 
-    try {
-        Xapian::Enquire enquire(*snipgen->db);
-        enquire.set_query(xapian_snipgen_build_query(snipgen, match));
-        snipgen->mset = new Xapian::MSet(enquire.get_mset(0, 0));
-
-    } catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                err.get_context().c_str(), err.get_description().c_str());
-        r = IMAP_IOERROR;
+    if (!snipgen->matches) {
+        snipgen->matches = new std::vector<std::string>();
     }
+    snipgen->matches->push_back(std::string(match));
 
     return r;
 }
@@ -884,7 +886,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 {
     int r = 0;
 
-    if (!snipgen->mset) {
+    if (!snipgen->matches) {
         buf_reset(snipgen->buf);
         buf_reset(buf);
         buf_cstring(buf);
@@ -894,15 +896,15 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
     try {
         std::string snippet;
         std::string text = std::string(buf_cstring(snipgen->buf));
+        Xapian::Enquire enquire(*snipgen->db);
+        enquire.set_query(xapian_snipgen_build_query(snipgen));
 
-        unsigned flags = Xapian::MSet::SNIPPET_TERMCOVER|
-                         Xapian::MSet::SNIPPET_EMPTY_NOMATCH|
-                         Xapian::MSet::SNIPPET_EXHAUSTIVE;
-
-        snippet = snipgen->mset->snippet(text,
+        snippet = enquire.get_mset(0, 0).snippet(text,
                 snippet_length,
                 *snipgen->stemmer,
-                flags,
+                Xapian::MSet::SNIPPET_TERMCOVER|
+                Xapian::MSet::SNIPPET_EMPTY_NOMATCH|
+                Xapian::MSet::SNIPPET_EXHAUSTIVE,
                 "<b>", "</b>", "...",
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
@@ -910,8 +912,8 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         buf_appendcstr(buf, snippet.c_str());
         buf_cstring(buf);
 
-        delete snipgen->mset;
-        snipgen->mset = NULL;
+        delete snipgen->matches;
+        snipgen->matches = NULL;
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
