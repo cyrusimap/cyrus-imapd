@@ -114,8 +114,6 @@ user_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 CLEANFILES =
-EXTRA_DIST = \
-	$(wildcard tools/vzic/*)
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -218,24 +216,6 @@ if SIEVE
 check_PROGRAMS += notifyd/notifytest
 service_PROGRAMS += notifyd/notifyd
 endif # SIEVE
-
-else # SERVER
-EXTRA_DIST += \
-    imap/mupdate_err.c \
-    imap/nntp_err.c \
-    imap/lmtpstats.c \
-    imap/pushstats.c \
-    imap/rfc822_header.c \
-    imap/rfc822_header.h
-
-if !HTTPD
-EXTRA_DIST += \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-endif # HTTPD
-
 endif # SERVER
 
 if CMULOCAL
@@ -273,7 +253,7 @@ endif # SERVER
 
 endif # SIEVE
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	COPYING \
 	INSTALL \
 	README.andrew \
@@ -320,7 +300,6 @@ EXTRA_DIST += \
 	doc/murder.png \
 	doc/netnews.png \
 	doc \
-	imap/dav_util.h \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
@@ -492,6 +471,7 @@ EXTRA_DIST += \
 	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
 	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
 	sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	$(wildcard tools/vzic/*) \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -846,13 +826,6 @@ imap_imapd_LDADD += $(LD_SERVER_ADD)
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libcyrus_imap_la_SOURCES = \
-	imap/imap_err.c \
-	imap/mupdate_err.c \
-	imap/mupdate_err.h
-
-dist_imap_libcyrus_imap_la_SOURCES =
-
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
 	imap/annotate.h \
@@ -873,6 +846,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/idlemsg.c \
 	imap/idlemsg.h \
 	imap/imapparse.c \
+	imap/imap_err.c \
+	imap/imap_err.h \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
@@ -893,6 +868,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/message.h \
 	imap/mupdate-client.c \
 	imap/mupdate-client.h \
+	imap/mupdate_err.c \
+	imap/mupdate_err.h \
 	imap/mutex.h \
 	imap/notify.c \
 	imap/notify.h \
@@ -981,11 +958,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/xcal.h \
 	imap/zoneinfo_db.c \
 	imap/zoneinfo_db.h
-
-nodist_imap_libcyrus_imap_la_SOURCES += \
-	imap/http_err.c \
-	imap/tz_err.c
-
 endif # HTTPD
 
 imap_lmtpd_SOURCES = \
@@ -1039,12 +1011,11 @@ imap_mupdate_SOURCES = \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
-nodist_imap_nntpd_SOURCES = \
-	imap/nntp_err.c \
-	imap/nntp_err.h
 imap_nntpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/nntpd.c \
+	imap/nntp_err.c \
+	imap/nntp_err.h \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/smtpclient.h \
@@ -1052,12 +1023,6 @@ imap_nntpd_SOURCES = \
 	imap/spool.h \
 	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
-
-nodist_imap_httpd_SOURCES = \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
 
 imap_httpd_SOURCES = \
 	imap/caldav_db.c \
@@ -1070,6 +1035,8 @@ imap_httpd_SOURCES = \
 	imap/http_client.c \
 	imap/http_dav.c \
 	imap/http_dblookup.c \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/http_ischedule.c \
 	imap/http_proxy.c \
 	imap/http_rss.c \
@@ -1081,6 +1048,8 @@ imap_httpd_SOURCES = \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
+	imap/tz_err.c \
+	imap/tz_err.h \
 	imap/xcal.c \
 	imap/zoneinfo_db.c \
 	master/service.c
