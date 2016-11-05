@@ -1440,7 +1440,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 	    body->subpart[body->numparts-1].boundary_size == 0) {
 	    /* hit the end of the message, therefore end all pending
 	       multiparts */
-	    boundaries->count = 0;
+	    strarray_truncate(boundaries, 0);
 	}
     }
 
