@@ -1022,6 +1022,7 @@ envelope_err:
 	content_types = bc_makeArray(bc, &typesi);
 	if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
 	    res = SIEVE_RUN_ERROR;
+	    free(content_types);
 	    break;
 	}
 	free(content_types);
