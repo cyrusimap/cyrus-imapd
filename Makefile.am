@@ -189,11 +189,6 @@ if SQUATTER
 sbin_PROGRAMS += imap/squatter
 endif
 
-if NNTPD
-libexec_PROGRAMS += imap/nntpd
-sbin_PROGRAMS += imap/fetchnews
-endif # NNTPD
-
 libexec_PROGRAMS += imap/fud
 
 if IDLED
@@ -206,6 +201,7 @@ endif # MURDER
 
 if NNTPD
 libexec_PROGRAMS += imap/nntpd
+sbin_PROGRAMS += imap/fetchnews
 endif
 
 if CALALARMD
@@ -298,12 +294,8 @@ EXTRA_DIST = \
 	com_err/et/test1.et \
 	com_err/et/test2.et \
 	com_err/et/test_et.c \
-	contrib/drac_auth.patch \
-	contrib/sieve-spamasssassin \
-	contrib/fud-client.c \
-	contrib/deliver-notify-zephyr.patch \
-	contrib/add-cyrus-user \
 	contrib/README \
+	contrib/add-cyrus-user \
 	contrib/cyrus-graphtools.1.0 \
 	contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl \
 	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl \
@@ -316,15 +308,28 @@ EXTRA_DIST = \
 	contrib/cyrus-graphtools.1.0/script/run \
 	contrib/cyrus-graphtools.1.0/script/cyrusrc \
 	contrib/cyrusv2.mc \
+	contrib/deliver-notify-zephyr.patch \
 	contrib/dkim_canon_ischedule.patch \
+	contrib/drac_auth.patch \
+	contrib/drydock.sh \
+	contrib/drydock-functions.sh \
+	contrib/drydock-tests \
+	contrib/drydock-tests/D16.sh \
+	contrib/drydock-tests/D7.sh \
+	contrib/drydock-tests/enable-all.sh \
+	contrib/drydock-tests/test-make-dist.sh \
+	contrib/drydock-tests/D12.sh \
+	contrib/fud-client.c \
+	contrib/mupdate-test.pl \
 	contrib/notify_unix/notify \
 	contrib/notify_unix/net-server-prefork-0.01.tgz \
 	contrib/notify_unix/README \
 	contrib/notify_unix/sql_notify.pl \
 	contrib/notify_unix/simple_notify.pl \
+	contrib/sieve-spamasssassin \
 	contrib/squatrunner.pl \
-	contrib/mupdate-test.pl \
 	contrib/squatrunner.txt \
+	contrib/xapian_quilt.tar \
 	cunit/cacert.pem \
 	cunit/cert.pem \
 	cunit/cunit.pl \
@@ -342,6 +347,21 @@ EXTRA_DIST = \
 	imap/nntp_err.et \
 	imap/rfc822_header.st \
 	imap/tz_err.et \
+	languages/stopwords/danish.list \
+	languages/stopwords/swedish.list \
+	languages/stopwords/french.list \
+	languages/stopwords/portuguese.list \
+	languages/stopwords/dutch.list \
+	languages/stopwords/hungarian.list \
+	languages/stopwords/LICENSE \
+	languages/stopwords/english.list \
+	languages/stopwords/arabic.list \
+	languages/stopwords/spanish.list \
+	languages/stopwords/russian.list \
+	languages/stopwords/finnish.list \
+	languages/stopwords/norwegian.list \
+	languages/stopwords/german.list \
+	languages/stopwords/italian.list \
 	lib/charset/aliases.txt \
 	lib/charset/UnicodeData.txt \
 	lib/charset/unifix.txt \
@@ -383,9 +403,13 @@ EXTRA_DIST = \
 	perl/imap/Changes \
 	perl/imap/cyradm.sh \
 	perl/imap/cyrperl.h \
+	perl/imap/Cyrus/IndexFile.pm \
+	perl/imap/Cyrus/CacheFile.pm \
+	perl/imap/Cyrus/HeaderFile.pm \
 	perl/imap/examples/auditmbox.pl \
 	perl/imap/examples/imapcollate.pl \
 	perl/imap/examples/imapdu.pl \
+	perl/imap/examples/index_uids.pl \
 	perl/imap/examples/test-imsp.pl \
 	perl/imap/IMAP/Admin.pm \
 	perl/imap/IMAP/IMSP.pm \
@@ -412,6 +436,12 @@ EXTRA_DIST = \
 	ptclient/README \
 	ptclient/test.c \
 	ptclient/test2.c \
+	ptclient/test3.c \
+	sieve/ChangeLog \
+	sieve/NEWS \
+	sieve/README \
+	sieve/COPYING \
+	sieve/AUTHORS \
 	sieve/addr.h \
 	sieve/sieve.h \
 	sieve/sieve_err.et \
@@ -492,6 +522,8 @@ EXTRA_DIST = \
 	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
 	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
 	sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	tools/build-with-cyruslibs.sh \
+	tools/perl2rst \
 	tools/vzic/ChangeLog \
 	tools/vzic/Makefile \
 	tools/vzic/README \
