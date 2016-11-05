@@ -248,7 +248,7 @@ EXPORTED int cyrusdb_delete(struct db *db,
 	      const char *key, size_t keylen,
 	      struct txn **tid, int force)
 {
-    return db->backend->delete(db->engine, key, keylen, tid, force);
+    return db->backend->delete_(db->engine, key, keylen, tid, force);
 }
 
 EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)

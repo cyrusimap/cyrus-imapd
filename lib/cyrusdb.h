@@ -193,7 +193,7 @@ struct cyrusdb_backend {
 		 struct txn **tid);
 
     /* Remove entrys from the database */
-    int (*delete)(struct dbengine *db, 
+    int (*delete_)(struct dbengine *db,
 		  const char *key, size_t keylen,
 		  struct txn **tid,
 		  int force); /* 1 = ignore not found errors */
