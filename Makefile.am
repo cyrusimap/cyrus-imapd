@@ -837,6 +837,9 @@ imap_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
+imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
+
 imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
@@ -875,9 +878,6 @@ imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
-
-imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
-imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
