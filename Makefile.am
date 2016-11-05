@@ -762,6 +762,7 @@ include_HEADERS = \
 	lib/sysexits.h \
 	lib/times.h \
 	lib/tok.h \
+	lib/util.h \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h
@@ -779,7 +780,6 @@ noinst_HEADERS += \
 	lib/md5.h \
 	lib/prot.h \
 	lib/ptrarray.h \
-	lib/util.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
