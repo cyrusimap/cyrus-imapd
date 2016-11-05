@@ -918,32 +918,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_db.h \
 	imap/dav_util.c \
 	imap/dav_util.h \
-	imap/http_caldav.c \
-	imap/http_caldav_sched.h \
-	imap/http_carddav.c \
-	imap/http_client.c \
-	imap/http_client.h \
-	imap/http_dav.c \
-	imap/http_dav.h \
-	imap/http_dblookup.c \
-	imap/http_ischedule.c \
-	imap/http_proxy.c \
-	imap/http_proxy.h \
-	imap/http_rss.c \
-	imap/http_timezone.c \
-	imap/httpd.c \
-	imap/httpd.h \
-	imap/jcal.c \
-	imap/jcal.h \
-	imap/json_support.h \
-	imap/proxy.c \
-	imap/proxy.h \
-	imap/smtpclient.c \
-	imap/smtpclient.h \
-	imap/spool.c \
-	imap/spool.h \
-	imap/xcal.c \
-	imap/xcal.h \
 	imap/zoneinfo_db.c \
 	imap/zoneinfo_db.h
 endif # HTTPD
@@ -1013,33 +987,36 @@ imap_nntpd_SOURCES = \
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 imap_httpd_SOURCES = \
-	imap/caldav_db.c \
-	imap/carddav_db.c \
-	imap/carddav_db.h \
-	imap/dav_db.c \
-	imap/dav_util.c \
 	imap/http_caldav.c \
+	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
+	imap/http_client.h \
 	imap/http_client.c \
 	imap/http_dav.c \
+	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/http_ischedule.c \
 	imap/http_proxy.c \
+	imap/http_proxy.h \
 	imap/http_rss.c \
 	imap/http_timezone.c \
 	imap/httpd.c \
+	imap/httpd.h \
 	imap/jcal.c \
+	imap/jcal.h \
 	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
+	imap/smtpclient.h \
 	imap/spool.c \
+	imap/spool.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	imap/xcal.c \
-	imap/zoneinfo_db.c \
+	imap/xcal.h \
 	master/service.c
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
