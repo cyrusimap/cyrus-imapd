@@ -603,32 +603,36 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
                 address_itr_init(&ai, val[y]);
 
-                while (!res && (a = address_itr_next(&ai)) != NULL) {
+                while (!res && (val[y][0] == '\0' || (a = address_itr_next(&ai)) != NULL)) {
 #if VERBOSE
                     printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
-                    /*find the part of the address that we want*/
-                    switch(apart)
-                    {
-                    case B_ALL:
-                        addr = address_get_all(a, /*canon_domain*/0);
-                        break;
-                    case B_LOCALPART:
-                        addr = address_get_localpart(a);
-                        break;
-                    case B_DOMAIN:
-                        addr = address_get_domain(a, /*canon_domain*/0);
-                        break;
-                    case B_USER:
-                        addr = address_get_user(a);
-                        break;
-                    case B_DETAIL:
-                        addr = address_get_detail(a);
-                        break;
-                    default:
-                        /* this shouldn't happen with correct bytecode */
-                        res = SIEVE_RUN_ERROR;
-                        goto envelope_err;
+                    if (val[y][0] == '\0') {
+                        addr = "";
+                    } else {
+                        /*find the part of the address that we want*/
+                        switch(apart)
+                        {
+                        case B_ALL:
+                            addr = address_get_all(a, /*canon_domain*/0);
+                            break;
+                        case B_LOCALPART:
+                            addr = address_get_localpart(a);
+                            break;
+                        case B_DOMAIN:
+                            addr = address_get_domain(a, /*canon_domain*/0);
+                            break;
+                        case B_USER:
+                            addr = address_get_user(a);
+                            break;
+                        case B_DETAIL:
+                            addr = address_get_detail(a);
+                            break;
+                        default:
+                            /* this shouldn't happen with correct bytecode */
+                            res = SIEVE_RUN_ERROR;
+                            goto envelope_err;
+                        }
                     }
 
                     if (!addr) addr = xstrdup("");
@@ -667,6 +671,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                             }
                         } /* For each data */
                     }
+                    if (val[y][0] == '\0') break;
                     free(addr);
                 } /* For each address */
 
