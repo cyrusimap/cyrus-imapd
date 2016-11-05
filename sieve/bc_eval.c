@@ -1029,45 +1029,48 @@ envelope_err:
 	
 	/* bodypart(s) exist, now to test them */
 	    
-	for (y = 0; val && val[y] && !res; y++) {
+	if (val) {
+	    for (y = 0; val[y]; y++) {
 
-	    if (match == B_COUNT) {
-		count++;
-	    } else if (val[y]->decoded_body) {
-		const char *content = val[y]->decoded_body;
+		if (!res) {
+		    if (match == B_COUNT) {
+			count++;
+		    } else if (val[y]->decoded_body) {
+			const char *content = val[y]->decoded_body;
 
-		/* search through all the data */ 
-		currd=datai+2;
-		for (z=0; z<numdata && !res; z++)
-		{
-		    const char *data_val;
+			/* search through all the data */
+			currd=datai+2;
+			for (z=0; z<numdata && !res; z++)
+			{
+			    const char *data_val;
 			    
-		    currd = unwrap_string(bc, currd, &data_val, NULL);
+			    currd = unwrap_string(bc, currd, &data_val, NULL);
 
-		    if (isReg) {
-			reg = bc_compile_regex(data_val, ctag,
+			    if (isReg) {
+				reg = bc_compile_regex(data_val, ctag,
 					       errbuf, sizeof(errbuf));
-			if (!reg) {
-			    /* Oops */
-			    res=-1;
-			    goto alldone;
-			}
+				if (!reg) {
+				    /* Oops */
+				    res=-1;
+				    goto alldone;
+				}
 
-			res |= comp(content, strlen(content), (const char *)reg, comprock);
-			free(reg);
-		    } else {
-			res |= comp(content, strlen(content), data_val, comprock);
+				res |= comp(content, strlen(content), (const char *)reg, comprock);
+				free(reg);
+			    } else {
+				res |= comp(content, strlen(content), data_val, comprock);
+			    }
+			} /* For each data */
 		    }
-		} /* For each data */
-	    }
+		} /* if (!res) */
 
-	    /* free the bodypart */
-	    free(val[y]);
+		/* free the bodypart */
+		free(val[y]);
 
-	} /* For each body part */
-
-	/* free the bodypart array */
-	if (val) free(val);
+	    } /* For each body part */
+	    /* free the bodypart array */
+	    free(val);
+	} /* if (val) */
 
 	if  (match == B_COUNT)
 	{
