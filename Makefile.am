@@ -114,15 +114,12 @@ SUBDIRS = .
 DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
-EXTRA_PROGRAMS =
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-EXTRA_DIST = \
-	VERSION
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -259,14 +256,6 @@ if SIEVE
 check_PROGRAMS += notifyd/notifytest
 libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
-
-else # SERVER
-EXTRA_DIST += \
-    imap/promdata.c \
-    imap/promdata.h \
-    imap/rfc822_header.c \
-    imap/rfc822_header.h \
-    imap/mailbox_header_cache.h
 endif # SERVER
 
 if CMULOCAL
@@ -304,9 +293,10 @@ endif # SERVER
 
 endif # SIEVE
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	COPYING \
 	README.md \
+	VERSION \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -344,13 +334,11 @@ EXTRA_DIST += \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
+	doc/ \
 	doc/legacy/murder.png \
 	doc/legacy/netnews.png \
-	doc \
-	docsrc \
-	imap/http_caldav_js.h \
+	docsrc/ \
 	imap/http_caldav.js \
-	imap/http_carddav_js.h \
 	imap/http_carddav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
@@ -359,6 +347,7 @@ EXTRA_DIST += \
 	imap/mailbox_header_cache.gperf \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
+	imap/promdata.p \
 	imap/rfc822_header.st \
 	imap/tz_err.et \
 	lib/charset/aliases.txt \
@@ -955,8 +944,6 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/promdata.c \
 	imap/promdata.h
 
-dist_imap_libcyrus_imap_la_SOURCES =
-
 imap_libcyrus_imap_la_LIBADD = \
     $(COM_ERR_LIBS) \
     $(LIB_UUID) \
@@ -1020,7 +1007,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
-	imap/promdata.p \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
@@ -1201,10 +1187,12 @@ imap_httpd_SOURCES = \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
 	imap/http_caldav.h \
+	imap/http_caldav_js.h \
 	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_carddav.h \
+	imap/http_carddav_js.h \
 	imap/http_cgi.c \
 	imap/http_client.c \
 	imap/http_client.h \
