@@ -523,13 +523,9 @@ dnl
 dnl Search engines - Sphinx
 dnl
 
-enable_sphinx=no
 AC_ARG_ENABLE(sphinx,
-        [  --enable-sphinx         disable Sphinx support],[
-            enable_sphinx=$enableval
-        ],[
-            enable_sphinx=no
-        ])
+        [AS_HELP_STRING([--enable-sphinx], [enable Sphinx support])],,
+        [enable_sphinx=no])
 if test "x$enable_sphinx" != xno ; then
     AC_DEFINE(USE_SPHINX,[],[Build in Sphinx support?])
 fi
@@ -547,11 +543,8 @@ dnl Search engines - Xapian
 dnl
 
 AC_ARG_ENABLE(xapian,
-        [  --enable-xapian         enable Xapian support],[
-            enable_xapian=$enableval
-        ],[
-            enable_xapian=no
-        ])
+        [AS_HELP_STRING([--enable-xapian], [enable Xapian support])],,
+        [enable_xapian=no])
 if test "x$enable_xapian" != xno ; then
     AC_ARG_VAR(XAPIAN_CONFIG, [Location of xapian-config])
     AC_PATH_PROG(XAPIAN_CONFIG, xapian-config, [])
