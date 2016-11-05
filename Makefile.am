@@ -349,6 +349,10 @@ EXTRA_DIST = \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
 	lib/test/testglob2.c \
+	man/ctl_zoneinfo.8 \
+	man/fetchnews.8 \
+	man/httpd.8 \
+	man/nntpd.8 \
 	master/CYRUS-MASTER.mib \
 	master/conf/cmu-backend.conf \
 	master/conf/cmu-frontend.conf \
@@ -1234,6 +1238,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 @SET_MAKE@
 
+man_MANS =
 dist_man_MANS = \
 	man/imtest.1 \
 	man/installsieve.1 \
@@ -1284,27 +1289,15 @@ dist_man_MANS = \
 	man/unexpunge.8
 
 if NNTPD
-dist_man_MANS += \
+man_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
-
-else # NNTPD
-EXTRA_DIST += \
-	man/fetchnews.8 \
-	man/nntpd.8
-
 endif # NNTPD
 
 if HTTPD
-dist_man_MANS += \
+man_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
-
-else # HTTPD
-EXTRA_DIST += \
-	man/ctl_zoneinfo.8 \
-	man/httpd.8
-
 endif # HTTPD
 
 master_master_SOURCES = \
