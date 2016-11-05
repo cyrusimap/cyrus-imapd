@@ -335,7 +335,6 @@ EXTRA_DIST = \
 	doc/legacy/netnews.png \
 	doc \
 	docsrc \
-	imap/dav_util.h \
 	imap/http_caldav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
@@ -1162,7 +1161,6 @@ imap_nntpd_SOURCES = \
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 imap_httpd_SOURCES = \
-	imap/caldav_db.c \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
@@ -1182,13 +1180,6 @@ imap_httpd_SOURCES = \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
-	imap/jmap_common.c \
-	imap/jmap_common.h \
-	imap/jmap_mail.c \
-	imap/jmap_contact.c \
-	imap/jmap_calendar.c \
-	imap/jmap_ical.c \
-	imap/jmap_ical.h \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
@@ -1196,9 +1187,15 @@ imap_httpd_SOURCES = \
 	imap/http_webdav.c \
 	imap/httpd.c \
 	imap/httpd.h \
-	imap/ical_support.c \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/jmap_common.c \
+	imap/jmap_common.h \
+	imap/jmap_mail.c \
+	imap/jmap_contact.c \
+	imap/jmap_calendar.c \
+	imap/jmap_ical.c \
+	imap/jmap_ical.h \
 	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
@@ -1206,7 +1203,6 @@ imap_httpd_SOURCES = \
 	imap/spool.c \
 	imap/tz_err.c \
 	imap/tz_err.h \
-	imap/vcard_support.c \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \
