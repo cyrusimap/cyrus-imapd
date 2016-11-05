@@ -114,8 +114,6 @@ sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-EXTRA_DIST = \
-	$(wildcard tools/vzic/*)
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -254,24 +252,6 @@ if SIEVE
 check_PROGRAMS += notifyd/notifytest
 libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
-
-else # SERVER
-EXTRA_DIST += \
-    imap/mupdate_err.c \
-    imap/nntp_err.c \
-    imap/lmtpstats.c \
-    imap/pushstats.c \
-    imap/rfc822_header.c \
-    imap/rfc822_header.h
-
-if !HTTPD
-EXTRA_DIST += \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-endif # HTTPD
-
 endif # SERVER
 
 if CMULOCAL
@@ -309,7 +289,7 @@ endif # SERVER
 
 endif # SIEVE
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	COPYING \
 	README.md \
 	SMakefile \
@@ -356,7 +336,6 @@ EXTRA_DIST += \
 	doc \
 	docsrc \
 	imap/dav_util.h \
-	imap/http_caldav_js.h \
 	imap/http_caldav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
@@ -379,6 +358,14 @@ EXTRA_DIST += \
 	lib/test/cyrusdbtxn.OUTPUT \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
+	man/ctl_zoneinfo.8 \
+	man/fetchnews.8 \
+	man/httpd.8 \
+	man/nntpd.8 \
+	man/squatter.8 \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8 \
 	master/CYRUS-MASTER.mib \
 	master/conf/cmu-backend.conf \
 	master/conf/cmu-frontend.conf \
@@ -506,6 +493,7 @@ EXTRA_DIST += \
 	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
 	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
 	sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	$(wildcard tools/vzic/*) \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -938,13 +926,6 @@ imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libcyrus_imap_la_SOURCES = \
-	imap/imap_err.c \
-	imap/mupdate_err.c \
-	imap/mupdate_err.h
-
-dist_imap_libcyrus_imap_la_SOURCES =
-
 imap_libcyrus_imap_la_LIBADD = \
     $(COM_ERR_LIBS) \
     $(LIB_UUID) \
@@ -979,6 +960,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/idlemsg.h \
 	imap/imapparse.c \
 	imap/imapparse.h \
+	imap/imap_err.c \
+	imap/imap_err.h \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
@@ -1000,6 +983,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/message_priv.h \
 	imap/mupdate-client.c \
 	imap/mupdate-client.h \
+	imap/mupdate_err.c \
+	imap/mupdate_err.h \
 	imap/mutex.h \
 	imap/notify.c \
 	imap/notify.h \
@@ -1099,7 +1084,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/vcard_support.h \
 	imap/webdav_db.c \
 	imap/webdav_db.h
-
 endif # HTTPD
 
 if USE_XAPIAN
@@ -1164,12 +1148,11 @@ imap_mupdate_SOURCES = \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
-nodist_imap_nntpd_SOURCES = \
-	imap/nntp_err.c \
-	imap/nntp_err.h
 imap_nntpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/nntpd.c \
+	imap/nntp_err.c \
+	imap/nntp_err.h \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/smtpclient.h \
@@ -1178,19 +1161,13 @@ imap_nntpd_SOURCES = \
 	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
-nodist_imap_httpd_SOURCES = \
-	imap/http_caldav_js.h \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-
 imap_httpd_SOURCES = \
 	imap/caldav_db.c \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
 	imap/http_caldav.h \
+	imap/http_caldav_js.h \
 	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
@@ -1200,6 +1177,8 @@ imap_httpd_SOURCES = \
 	imap/http_dav.c \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
@@ -1225,6 +1204,8 @@ imap_httpd_SOURCES = \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
+	imap/tz_err.c \
+	imap/tz_err.h \
 	imap/vcard_support.c \
 	imap/xcal.c \
 	imap/xcal.h \
@@ -1478,6 +1459,7 @@ dist_man5_MANS = \
 	man/imapd.conf.5 \
 	man/krb.equiv.5
 
+man8_MANS =
 dist_man8_MANS = \
 	man/arbitron.8 \
 	man/backupd.8 \
@@ -1517,51 +1499,27 @@ dist_man8_MANS = \
 	man/unexpunge.8
 
 if USE_SQUAT
-dist_man8_MANS += \
+man8_MANS += \
 	man/squatter.8
-
-else
-EXTRA_DIST += \
-	man/squatter.8
-
 endif # USE_SQUAT
 
 if NNTPD
-dist_man8_MANS += \
+man8_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
-
-else # NNTPD
-EXTRA_DIST += \
-	man/fetchnews.8 \
-	man/nntpd.8
-
 endif # NNTPD
 
 if HTTPD
-dist_man8_MANS += \
+man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
-
-else # HTTPD
-EXTRA_DIST += \
-	man/ctl_zoneinfo.8 \
-	man/httpd.8
-
 endif # HTTPD
 
 if REPLICATION
-dist_man8_MANS += \
+man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
-
-else
-EXTRA_DIST += \
-	man/sync_client.8 \
-	man/sync_reset.8 \
-	man/sync_server.8
-
 endif
 
 master_master_SOURCES = \
