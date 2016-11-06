@@ -276,8 +276,8 @@ struct list_entry {
 /* structure that list_data_recursivematch passes its callbacks */
 struct list_rock_recursivematch {
     struct listargs *listargs;
-    struct hash_table table;    /* maps mailbox names to attributes (int *) */
-    int count;                  /* # of entries in table */
+    struct hash_table table;  /* maps mailbox names to attributes (uint32_t *) */
+    int count;                /* # of entries in table */
     struct list_entry *array;
 };
 
@@ -12408,11 +12408,14 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
         struct listargs *listargs = rock->listargs;
 
-        if (hash_lookup(mbentry->server, &rock->server_table)) return 0;
+        if (hash_lookup(mbentry->server, &rock->server_table)) {
+            /* already proxied to this backend server */
+            return 0;
+        }
         if (listargs->scan ||
             (listargs->ret &
              (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA))) {
-            /* remote mailbox that we haven't proxied to yet */
+            /* remote mailbox that we need to fetch metadata from */
             struct backend *s;
 
             hash_insert(mbentry->server,
@@ -12620,6 +12623,62 @@ static void canonical_list_patterns(const char *reference,
     }
 }
 
+static void list_data_remotesubscriptions(struct listargs *listargs)
+{
+    /* Need to fetch subscription list from backend_inbox */
+    struct list_rock rock;
+    char mytag[128];
+
+    memset(&rock, 0, sizeof(struct list_rock));
+    rock.listargs = listargs;
+    rock.subs = strarray_new();
+    construct_hash_table(&rock.server_table, 10, 1);
+
+    proxy_gentag(mytag, sizeof(mytag));
+
+    if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
+        !(listargs->sel & (LIST_SEL_SPECIALUSE | LIST_SEL_METADATA))) {
+        /* Subscriptions are the only selection criteria.
+
+           Send client request as-is to backend_inbox.
+           Responses will be piped to the client as we build subs list.
+        */
+        list_data_remote(backend_inbox, mytag, listargs, rock.subs);
+
+        /* Don't proxy to backend_inbox again */
+        hash_insert(backend_inbox->hostname,
+                    (void *)0xDEADBEEF, &rock.server_table);
+    }
+    else {
+        /* Multiple selection criteria or need to return subscription info.
+
+           Just fetch subscriptions without piping responses to the client.
+           If we send entire client request, subscribed mailboxes on
+           non-Inbox servers might be filtered out due to lack of metadata
+           to meet the selection criteria.
+
+           Note that we end up sending two requests to backend_inbox,
+           but there doesn't appear to be any way around this.
+        */
+        struct listargs myargs;
+
+        memcpy(&myargs, listargs, sizeof(struct listargs));
+        myargs.sel = LIST_SEL_SUBSCRIBED;
+        myargs.ret = 0;
+
+        list_data_remote(backend_inbox, mytag, &myargs, rock.subs);
+    }
+
+    /* find */
+    mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
+                          imapd_userisadmin, imapd_userid,
+                          imapd_authstate, list_cb, &rock);
+
+    strarray_free(rock.subs);
+    free_hash_table(&rock.server_table, NULL);
+    if (rock.last_name) free(rock.last_name);
+}
+
 /* callback for mboxlist_findsub
  * used by list_data_recursivematch */
 static int recursivematch_cb(struct findall_data *data, void *rockp)
@@ -12731,15 +12790,6 @@ static void list_data_recursivematch(struct listargs *listargs) {
 /* Retrieves the data and prints the untagged responses for a LIST command. */
 static void list_data(struct listargs *listargs)
 {
-    struct list_rock rock;
-
-    memset(&rock, 0, sizeof(struct list_rock));
-    rock.listargs = listargs;
-
-    if (config_mupdate_server) {
-        construct_hash_table(&rock.server_table, 10, 1);
-    }
-
     canonical_list_patterns(listargs->ref, &listargs->pat);
 
     /* Check to see if we should only list the personal namespace */
@@ -12751,62 +12801,43 @@ static void list_data(struct listargs *listargs)
 
     if ((listargs->ret & LIST_RET_SUBSCRIBED) &&
         (backend_inbox || (backend_inbox = proxy_findinboxserver(imapd_userid)))) {
-        /* Need to fetch subscription list from backend_inbox */
-        char mytag[128];
-
-        rock.subs = strarray_new();
-
-        if ((listargs->sel & LIST_SEL_SUBSCRIBED) &&
-            !(listargs->sel & (LIST_SEL_SPECIALUSE | LIST_SEL_METADATA))) {
-            /* responses from backend_inbox will be sent to client
-               so don't proxy to it again */
-            hash_insert(backend_inbox->hostname,
-                        (void *)0xDEADBEEF, &rock.server_table);
-        }
-        else {
-            /* create special listargs to just fetch subscriptions
-               without sending responses to client */
-            static struct listargs myargs;
-
-            memcpy(&myargs, listargs, sizeof(struct listargs));
-            myargs.sel = LIST_SEL_SUBSCRIBED;
-            myargs.ret = 0;
-
-            listargs = &myargs;
-        }
-
-        proxy_gentag(mytag, sizeof(mytag));
-        list_data_remote(backend_inbox, mytag, listargs, rock.subs);
-
-        mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
-                              imapd_userisadmin, imapd_userid,
-                              imapd_authstate, list_cb, &rock);
+        list_data_remotesubscriptions(listargs);
     }
     else if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
         list_data_recursivematch(listargs);
     }
-    else if (listargs->sel & LIST_SEL_SUBSCRIBED) {
-        mboxlist_findsubmulti(&imapd_namespace, &listargs->pat,
-                              imapd_userisadmin, imapd_userid,
-                              imapd_authstate, subscribed_cb, &rock, 1);
-    }
     else {
-        /* XXX: is there a cheaper way to figure out \Subscribed? */
-        if (listargs->ret & LIST_RET_SUBSCRIBED) {
-            rock.subs = mboxlist_sublist(imapd_userid);
+        struct list_rock rock;
+        memset(&rock, 0, sizeof(struct list_rock));
+        rock.listargs = listargs;
+
+        if (listargs->sel & LIST_SEL_SUBSCRIBED) {
+            mboxlist_findsubmulti(&imapd_namespace, &listargs->pat,
+                                  imapd_userisadmin, imapd_userid,
+                                  imapd_authstate, subscribed_cb, &rock, 1);
+        }
+        else {
+            if (config_mupdate_server) {
+                /* In case we proxy to backends due to select/return criteria */
+                construct_hash_table(&rock.server_table, 10, 1);
+            }
+
+            /* XXX: is there a cheaper way to figure out \Subscribed? */
+            if (listargs->ret & LIST_RET_SUBSCRIBED) {
+                rock.subs = mboxlist_sublist(imapd_userid);
+            }
+
+            mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
+                                  imapd_userisadmin, imapd_userid,
+                                  imapd_authstate, list_cb, &rock);
+
+            if (rock.subs) strarray_free(rock.subs);
+            if (rock.server_table.size)
+                free_hash_table(&rock.server_table, NULL);
         }
 
-        mboxlist_findallmulti(&imapd_namespace, &listargs->pat,
-                              imapd_userisadmin, imapd_userid,
-                              imapd_authstate, list_cb, &rock);
+        if (rock.last_name) free(rock.last_name);
     }
-
-    if (rock.server_table.size)
-        free_hash_table(&rock.server_table, NULL);
-    if (rock.subs)
-        strarray_free(rock.subs);
-    if (rock.last_name)
-        free(rock.last_name);
 }
 
 /*
