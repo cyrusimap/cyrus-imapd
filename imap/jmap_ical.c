@@ -1148,7 +1148,7 @@ static void localizations_to_icalprop(context_t *ctx, const char *name,
 
     remove_icalxparam(prop, JMAPICAL_XPARAM_LOCALIZATION);
 
-    if (ctx->localizations == json_null())
+    if (json_is_null(ctx->localizations))
         return;
 
     encname = encodeprop(ctx, name);
@@ -2676,7 +2676,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* Read new timezone */
-    if (json_object_get(event, "timeZone") != json_null()) {
+    if (!json_is_null(json_object_get(event, "timeZone"))) {
         pe = readprop(ctx, event, "timeZone", is_create && !ctx->is_allday, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
@@ -2708,7 +2708,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     /* Read new end timezone */
     endzoneid = NULL;
     locations = json_object_get(event, "locations");
-    if (locations && locations != json_null()) {
+    if (locations && !json_is_null(locations)) {
         json_t *loc;
         const char *id;
 
@@ -2725,7 +2725,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
             beginprop_key(ctx, "locations", id);
 
             timeZone = json_object_get(loc, "timeZone");
-            if (timeZone != json_null()) {
+            if (!json_is_null(timeZone)) {
                 tzid = json_string_value(json_object_get(loc, "timeZone"));
                 if (tzid) {
                     ctx->tzend = tz_from_tzid(tzid);
@@ -2749,7 +2749,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
             endprop(ctx);
             break;
         }
-    } else if (locations == json_null()) {
+    } else if (json_is_null(locations)) {
         ctx->tzend = NULL;
     } else {
         ctx->tzend = ctx->tzend_old;
@@ -2888,7 +2888,7 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     }
 
     /* locationId */
-    if (json_object_get(p, "locationId") != json_null()) {
+    if (!json_is_null(json_object_get(p, "locationId"))) {
         if ((pe = readprop(ctx, p, "locationId", 0, "s", &s)) > 0) {
             set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID, s, 1);
         }
@@ -2952,7 +2952,7 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     set_icalxparam(prop, "X-DTSTART", icaltime_as_ical_string(now), 1);
 
     /* memberOf */
-    if (json_object_get(p, "memberOf") != json_null()) {
+    if (!json_is_null(json_object_get(p, "memberOf"))) {
         json_t *members;
         pe = readprop(ctx, p, "memberOf", 0, "o", &members);
         if (pe > 0 && json_array_size(members)) {
@@ -3979,7 +3979,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
         free(t);
     }
 
-    if (overrides == json_null()) {
+    if (json_is_null(overrides)) {
         free_hash_table(&recurs, (void (*)(void *))icalcomponent_free);
         return;
     }
@@ -4008,7 +4008,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             continue;
         }
 
-        if (override == json_null()) {
+        if (json_is_null(override)) {
             /* Add EXDATE */
             dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_EXDATE_PROPERTY);
         } else if (!json_object_size(override)) {
@@ -4094,7 +4094,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
 
     /* Initialize localizations */
     ctx->localizations = json_object_get(event, "localizations");
-    if (ctx->localizations == json_null()) {
+    if (json_is_null(ctx->localizations)) {
         /* Remove any localizations from the current component */
         for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
              prop;
@@ -4119,7 +4119,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *relatedTo = NULL;
     pe = readprop(ctx, event, "relatedTo", 0, "o", &relatedTo);
     if (pe > 0) {
-        if (relatedTo == json_null() || json_array_size(relatedTo)) {
+        if (json_is_null(relatedTo) || json_array_size(relatedTo)) {
             relatedto_to_ical(ctx, comp, relatedTo);
         } else {
             invalidprop(ctx, "relatedTo");
@@ -4128,7 +4128,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
 
     /* prodId */
     val = NULL;
-    if (json_object_get(event, "prodId") != json_null()) {
+    if (!json_is_null(json_object_get(event, "prodId"))) {
         pe = readprop(ctx, event, "prodId", 0, "s", &val);
         if (pe > 0 || is_create) {
             struct buf buf = BUF_INITIALIZER;
@@ -4183,7 +4183,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *links = NULL;
     pe = readprop(ctx, event, "links", 0, "o", &links);
     if (pe > 0) {
-        if (links == json_null() || json_object_size(links)) {
+        if (json_is_null(links) || json_object_size(links)) {
             links_to_ical(ctx, comp, links);
         } else {
             invalidprop(ctx, "links");
@@ -4191,7 +4191,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     }
 
     /* locale */
-    if (json_object_get(event, "locale") != json_null()) {
+    if (!json_is_null(json_object_get(event, "locale"))) {
         pe = readprop(ctx, event, "locale", 0, "s", &val);
         if (pe > 0) {
             set_language_icalprop(comp, ICAL_SUMMARY_PROPERTY, NULL);
@@ -4209,7 +4209,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *locations = NULL;
     pe = readprop(ctx, event, "locations", 0, "o", &locations);
     if (pe > 0) {
-        if (locations == json_null() || json_object_size(locations)) {
+        if (json_is_null(locations) || json_object_size(locations)) {
             locations_to_ical(ctx, comp, locations);
         } else {
             invalidprop(ctx, "locations");
@@ -4260,7 +4260,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *participants = NULL;
     pe = readprop(ctx, event, "participants", 0, "o", &participants);
     if (pe > 0) {
-        if (participants == json_null() || json_object_size(participants)) {
+        if (json_is_null(participants) || json_object_size(participants)) {
             participants_to_ical(ctx, comp, participants);
         } else {
             invalidprop(ctx, "participants");
@@ -4269,7 +4269,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
 
     /* replyTo */
     json_t *replyto;
-    if (json_object_get(event, "replyTo") != json_null()) {
+    if (!json_is_null(json_object_get(event, "replyTo"))) {
         pe = readprop(ctx, event, "replyTo", 0, "o", &replyto);
         if (pe > 0) {
             replyto_to_ical(ctx, comp, replyto);
@@ -4298,7 +4298,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *alerts = NULL;
     pe = readprop(ctx, event, "alerts", 0, "o", &alerts);
     if (pe > 0) {
-        if (alerts == json_null() || json_object_size(alerts)) {
+        if (json_is_null(alerts) || json_object_size(alerts)) {
             alerts_to_ical(ctx, comp, alerts);
         } else {
             invalidprop(ctx, "alerts");
