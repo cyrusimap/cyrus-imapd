@@ -1661,9 +1661,11 @@ static void buffer_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
-static void dont_free(struct convert_rock *rock __attribute__((unused)))
+static void dont_free(struct convert_rock *rock)
 {
-    /* Dummy free to avoid pipeline calling basic_free for NULL cleanup */
+    /* NULL out state owned by caller, so we won't free in basic_free */
+    if (rock) rock->state = NULL;
+    basic_free(rock);
 }
 
 static void striphtml_free(struct convert_rock *rock)
