@@ -743,13 +743,29 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
                 }
             }
 
-            mboxlist_entry_free(&mbentry);
-
             if (!suppress_resp) {
                 /* send response to the client */
                 print_listresponse(listargs->cmd, name.s, sep.s[0],
                                    attributes, &extraflags);
+
+                /* send any PROXY_ONLY metadata items */
+                for (c = 0; c < listargs->metaitems.count; c++) {
+                    const char *entry = strarray_nth(&listargs->metaitems, c);
+
+                    if (mbentry &&
+                        !strcmp(entry, "/shared" IMAP_ANNOT_NS "server")) {
+                        prot_puts(imapd_out, "* METADATA ");
+                        prot_printastring(imapd_out, name.s);
+                        prot_puts(imapd_out, " (");
+                        prot_printstring(imapd_out, entry);
+                        prot_puts(imapd_out, " ");
+                        prot_printstring(imapd_out, mbentry->server);
+                        prot_puts(imapd_out, ")\r\n");
+                    }
+                }
             }
+
+            mboxlist_entry_free(&mbentry);
         }
     } /* while(1) */
 
