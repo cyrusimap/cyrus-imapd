@@ -524,7 +524,7 @@ sub test_subject_isutf8
     my %searches;
 
     my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
-    if ($skipdiacrit && !($skipdiacrit eq "false")) {
+    if (!($skipdiacrit eq "false")) {
         # Diacritics are stripped before indexing and search. That's a sane
         # choice as long as there is no language-specific stemming applied
         # during indexing and search.
@@ -552,7 +552,7 @@ sub test_subject_isutf8
     }
 
     while (my($term, $expectedCnt) = each %searches) {
-        xlog "SEARCH for FUZZY body \"$term\"";
+        xlog "SEARCH for FUZZY text \"$term\"";
         $r = $talk->search(
             "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
         ) || die;
