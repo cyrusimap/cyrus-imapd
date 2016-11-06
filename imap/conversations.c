@@ -1475,8 +1475,10 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
 
     r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
     if (r == CYRUSDB_NOTFOUND) {
+        free(key);
         return 0;
     } else if (r) {
+        free(key);
         return r;
     }
 
