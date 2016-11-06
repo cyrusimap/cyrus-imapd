@@ -1798,7 +1798,7 @@ static void extract_plain_cb(const struct buf *buf, void *rock)
     /* Just merge multiple space into one. That's similar to
      * charset_extract's MERGE_SPACE but since we don't want
      * it to canonify the text into search form */
-    for (p = buf_base(buf); p && *p; p++) {
+    for (p = buf_base(buf); p < buf_base(buf) + buf_len(buf) && *p; p++) {
         if (*p == ' ') {
             if (seenspace) continue;
             seenspace = 1;
@@ -2298,6 +2298,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 json_object_set_new(att, pname, buf_len(&buf) ?
                         json_integer(str2uint64(buf_cstring(&buf))) :
                         json_null());
+                free(annot);
             }
 
             charset_free(&ascii);
@@ -3568,6 +3569,7 @@ static int getMessageUpdates(jmap_req_t *req)
         json_array_append_new(invalid, json_string("sinceState"));
     }
     /* maxChanges */
+    memset(&window, 0, sizeof(struct getmsglist_window));
     readprop(req->args, "maxChanges", 0, invalid, "i", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
@@ -3660,6 +3662,7 @@ static int getThreadUpdates(jmap_req_t *req)
         json_array_append_new(invalid, json_string("sinceState"));
     }
     /* maxChanges */
+    memset(&window, 0, sizeof(struct getmsglist_window));
     readprop(req->args, "maxChanges", 0, invalid, "i", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
@@ -3686,6 +3689,8 @@ static int getThreadUpdates(jmap_req_t *req)
     removed = NULL;
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
+    json_decref(filter);
+    json_decref(sort);
     if (r) goto done;
 
     /* Split the collapsed threads into changed and removed */
@@ -4109,7 +4114,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         for (mi = 0; mi < msgs->count; mi++) {
             msg = ptrarray_nth(msgs, mi);
             msgid = json_string_value(json_object_get(msg, "id"));
-            json_array_append(ids, json_string(msgid));
+            json_array_append_new(ids, json_string(msgid));
 
             /* Add any drafts that reply to msg, sorted by date */
             if ((l = json_object_get(drafts, msgid))) {
@@ -6073,6 +6078,7 @@ static int setMessages(jmap_req_t *req)
                 continue;
             }
             json_array_append_new(updated, json_string(id));
+            json_decref(invalid);
         }
 
         if (json_array_size(updated)) {
@@ -6216,6 +6222,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 done:
     free_hash_table(&props, NULL);
     buf_free(&data.msg_buf);
+    if (msgid) free(msgid);
     if (mbox) _closembox(req, &mbox);
     if (record) free(record);
     if (body) message_free_body(body);
