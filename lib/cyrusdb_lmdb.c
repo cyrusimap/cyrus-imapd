@@ -415,6 +415,7 @@ fail:
         syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
     if (db->env)
         mdb_env_close(db->env);
+    free(db->fname);
     free(db);
     return r;
 }
