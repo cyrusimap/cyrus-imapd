@@ -256,7 +256,7 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
         r = -1;
     } else if (jval) {
         json_error_t err;
-        if (!mandatory && jval == json_null()) {
+        if (!mandatory && json_is_null(jval)) {
             /* XXX not all non-mandatory properties are nullable */
             r = 0;
         }
@@ -3501,13 +3501,13 @@ static int getMessageList(jmap_req_t *req)
     /* Prepare response. */
     res = json_pack("{}");
     json_object_set_new(res, "accountId", json_string(req->userid));
-    json_object_set_new(res, "filter", filter);
-    json_object_set_new(res, "sort", sort);
     json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
     json_object_set_new(res, "state", jmapmsg_getstate(req));
     json_object_set_new(res, "canCalculateUpdates", json_false()); /* TODO getMessageListUpdates */
     json_object_set_new(res, "position", json_integer(window.position));
     json_object_set_new(res, "total", json_integer(total));
+    json_object_set(res, "filter", filter);
+    json_object_set(res, "sort", sort);
     json_object_set(res, "messageIds", messageids);
     json_object_set(res, "threadIds", threadids);
 
@@ -3985,9 +3985,9 @@ static int getSearchSnippets(jmap_req_t *req)
     /* Prepare response. */
     res = json_pack("{}");
     json_object_set_new(res, "accountId", json_string(req->userid));
-    json_object_set_new(res, "filter", filter);
     json_object_set_new(res, "list", snippets);
     json_object_set_new(res, "notFound", notfound);
+    json_object_set(res, "filter", filter);
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("searchSnippets"));
