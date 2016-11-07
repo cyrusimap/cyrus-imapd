@@ -4417,3 +4417,45 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 
     return 0;
 }
+
+EXPORTED int message_foreach_header(message_t *m,
+                                    int(*cb)(const char*, const char*, void*),
+                                    void *rock)
+{
+    char *headers, *key;
+    int r;
+
+    r = message_need(m, M_MAP|M_CACHEBODY);
+    if (r) return r;
+
+    headers = charset_unfold(m->map.s + m->body->header_offset,
+                             m->body->header_size, 0);
+    if (!headers) return IMAP_INTERNAL;
+
+    key = headers;
+    while (*key) {
+        /* Look for the key-value separator. */
+        char *val = strchr(key, ':');
+        if (!val || val == key) {
+            break;
+        }
+        *val++ = '\0';
+
+        /* Look for end of header. */
+        char *eol = strchr(val, '\r');
+        while (eol && (*++eol != '\n'))
+            eol = strchr(eol, '\r');
+        if (eol) {
+            *(eol-1) = '\0';
+            ++eol;
+        }
+
+        r = cb(key, val, rock);
+        if (r) break;
+
+        key = eol;
+    }
+
+    free(headers);
+    return r;
+}

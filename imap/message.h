@@ -289,6 +289,9 @@ extern int message_foreach_text_section(message_t *m,
                    int (*proc)(int isbody, charset_t charset, int encoding,
                                const char *subtype, struct buf *data, void *rock),
                    void *rock);
+extern int message_foreach_header(message_t *m,
+                   int (*proc)(const char *key, const char *val, void *rock),
+                   void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
