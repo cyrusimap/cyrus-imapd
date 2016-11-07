@@ -2206,7 +2206,9 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
     input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
-    input = canon_init(flags, input);
+    if (!(flags & CHARSET_NO_CANONIFY)) {
+        input = canon_init(flags, input);
+    }
 
     mimeheader_cat(input, s, flags);
 
