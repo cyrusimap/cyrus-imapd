@@ -436,9 +436,21 @@ void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
                         uint32_t attributes, struct buf *extraflags)
 {
     const struct mbox_name_attribute *attr;
-    const char *sep;
+    const char *resp, *sep;
 
-    prot_printf(imapd_out, "* %s (", cmd == LIST_CMD_LSUB ? "LSUB" : "LIST");
+    switch (cmd) {
+    case LIST_CMD_LSUB:
+        resp = "LSUB";
+        break;
+    case LIST_CMD_XLIST:
+        resp = "XLIST";
+        break;
+    default:
+        resp = "LIST";
+        break;
+    }
+
+    prot_printf(imapd_out, "* %s (", resp);
 
     for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
         if (attributes & attr->flag) {

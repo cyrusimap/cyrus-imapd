@@ -1968,7 +1968,7 @@ product version in the capabilities */
 
 { "specialusealways", 0, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
-   the extended LIST "special-use" flags */
+   the XLIST "special-use" flags */
 
 { "sphinx_text_excludes_odd_headers", 0, SWITCH }
 /* If enabled, Sphinx will perform a TEXT search as if it matches
@@ -2018,7 +2018,7 @@ product version in the capabilities */
 { "suppress_capabilities", NULL, STRING }
 /* Suppress the named capabilities from any capability response.  Use the
    exact case as it appears in the response, e.g.
-   "suppress_capabilities: ESEARCH QRESYNC WITHIN LIST-EXTENDED"
+   "suppress_capabilities: ESEARCH QRESYNC WITHIN XLIST LIST-EXTENDED"
    if you have a murder with 2.3.x backends and don't want clients being
    confused by new capabilities that some backends don't support. */
 
