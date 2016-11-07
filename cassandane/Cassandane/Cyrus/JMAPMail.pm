@@ -1003,6 +1003,140 @@ sub test_getmessages_body_html
     $self->assert_str_equals($body, $msg->{body});
 }
 
+sub test_getmessages_body_multi
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "".
+    "--sub\r\n".
+    "Content-Type: text/plain; charset=UTF-8\r\n".
+    "Content-Disposition: inline\r\n".
+    "\r\n".
+    "Short text". # Exactly 10 byte long body
+    "\r\n--sub\r\n".
+    "Content-Type: multipart/mixed; boundary=subsub\r\n".
+        "\r\n--subsub\r\n".
+        "Content-Type: multipart/alternative; boundary=subsubsub\r\n".
+            "\r\n--subsubsub\r\n".
+            "Content-Type: multipart/mixed; boundary=subsubsubsub\r\n".
+                "\r\n--subsubsubsub\r\n".
+                "Content-Type: text/plain\r\n".
+                "\r\n" .
+                "Be that the best text that we'll find".
+                "\r\n--subsubsubsub\r\n".
+                "Content-Type: image/jpeg\r\n".
+                "Content-Transfer-Encoding: base64\r\n".
+                "\r\n" .
+                "beefc0de==".
+                "\r\n--subsubsubsub\r\n".
+                "Content-Type: text/plain\r\n".
+                "\r\n".
+                "Don't expect this to be the text body, even if it's longer".
+                "\r\n--subsubsubsub--\r\n".
+            "\r\n--subsubsub\r\n".
+            "Content-Type: multipart/related; boundary=subsubsubsub\r\n".
+                "\r\n--subsubsubsub\r\n".
+                "Content-Type: text/html\r\n".
+                "\r\n" .
+                "<html>Expect this to be the html body</html>".
+                "\r\n--subsubsubsub\r\n".
+                "Content-Type: image/png\r\n".
+                "Content-Transfer-Encoding: base64\r\n".
+                "\r\n" .
+                "f00bae==".
+                "\r\n--subsubsubsub--\r\n".
+            "\r\n--subsubsub\r\n".
+            "Content-Type: image/tiff\r\n".
+            "Content-Transfer-Encoding: base64\r\n".
+            "\r\n" .
+            "beefc0de==".
+            "\r\n--subsubsub\r\n".
+            "Content-Type: application/x-excel\r\n".
+            "Content-Transfer-Encoding: base64\r\n".
+            "\r\n" .
+            "012312312313==".
+            "\r\n--subsubsub\r\n".
+            "Content-Type: message/rfc822\r\n".
+            "\r\n" .
+            "Return-Path: <Ava.Nguyen\@local>\r\n".
+            "Mime-Version: 1.0\r\n".
+            "Content-Type: text/plain\r\n".
+            "Content-Transfer-Encoding: 7bit\r\n".
+            "Subject: bar\r\n".
+            "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n".
+            "Message-ID: <fake.1475639947.6507\@local>\r\n".
+            "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n".
+            "To: Test User <test\@local>\r\n".
+            "\r\n".
+            "Jeez....an embedded message".
+            "\r\n--subsubsub--\r\n".
+        "\r\n--subsub\r\n".
+        "Content-Type: text/plain\r\n".
+        "\r\n".
+        "The Kenosha Kid".
+        "\r\n--subsub--\r\n".
+    "\r\n--sub--";
+
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals("Be that the best text that we'll find", $msg->{textBody});
+
+    $self->assert_equals(JSON::true, $msg->{hasAttachment});
+
+    # Assert embedded message support
+    $self->assert_num_equals(1, scalar keys $msg->{attachedMessages});
+    my $submsg = (values $msg->{attachedMessages})[0];
+
+    $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'Message-ID'});
+    $self->assert_deep_equals({
+            name => "Ava T. Nguyen",
+            email => "Ava.Nguyen\@local"
+    }, $submsg->{from}[0]);
+    $self->assert_deep_equals({
+            name => "Test User",
+            email => "test\@local"
+    }, $submsg->{to}[0]);
+    $self->assert_null($submsg->{cc});
+    $self->assert_null($submsg->{bcc});
+    $self->assert_null($submsg->{replyTo});
+    $self->assert_str_equals("bar", $submsg->{subject});
+    $self->assert_str_equals("2016-10-05T03:59:07Z", $submsg->{date});
+    $self->assert_str_equals("Jeez....an embedded message", $submsg->{textBody});
+    $self->assert_null($submsg->{mailboxIds});
+    $self->assert_null($submsg->{isUnread});
+    $self->assert_null($submsg->{isFlagged});
+    $self->assert_null($submsg->{isAnswered});
+    $self->assert_null($submsg->{isDraft});
+    $self->assert_null($submsg->{size});
+
+    # Assert attachments
+    $self->assert_num_equals(4, scalar keys $msg->{attachments});
+}
+
 sub test_getmessages_preview
     :min_version_3_0
 {
