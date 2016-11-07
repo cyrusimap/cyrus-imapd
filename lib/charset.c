@@ -192,7 +192,7 @@ static void icu_free(struct convert_rock *rock);
 static void table_reset(struct convert_rock *rock, int to_uni);
 static void table_free(struct convert_rock *rock);
 
-typedef void convertproc_t(struct convert_rock *rock, int c);
+typedef void convertproc_t(struct convert_rock *rock, uint32_t c);
 typedef void freeconvert_t(struct convert_rock *rock);
 typedef void flushproc_t(struct convert_rock *rock);
 
@@ -302,10 +302,10 @@ static void convert_flush(struct convert_rock *rock)
     }
 }
 
-static inline void convert_putc(struct convert_rock *rock, int c)
+static inline void convert_putc(struct convert_rock *rock, uint32_t c)
 {
     if (charset_debug) {
-        if ((unsigned)c < 0xff)
+        if (c < 0xff)
             fprintf(stderr, "%s(0x%x = '%c')\n", convert_name(rock), c, c);
         else
             fprintf(stderr, "%s(0x%x)\n", convert_name(rock), c);
@@ -385,7 +385,7 @@ static void qp_flush(struct convert_rock *rock)
     qp_flushline(rock, 0);
 }
 
-static void qp2byte(struct convert_rock *rock, int c)
+static void qp2byte(struct convert_rock *rock, uint32_t c)
 {
     struct qp_state *s = (struct qp_state *)rock->state;
 
@@ -408,7 +408,7 @@ static void qp2byte(struct convert_rock *rock, int c)
     }
 }
 
-static void b64_2byte(struct convert_rock *rock, int c)
+static void b64_2byte(struct convert_rock *rock, uint32_t c)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
     char b = CHAR64(c);
@@ -447,7 +447,7 @@ static void b64_2byte(struct convert_rock *rock, int c)
  * the search engine is term-based, i.e. uses whitespace and punctuation
  * to find indexing terms.
  */
-static void unfold2uni(struct convert_rock *rock, int c)
+static void unfold2uni(struct convert_rock *rock, uint32_t c)
 {
     struct unfold_state *s = (struct unfold_state *)rock->state;
 
@@ -486,7 +486,7 @@ static void unfold2uni(struct convert_rock *rock, int c)
  * decomposition, like U+2026 HORIZONTAL ELLIPSIS to the three
  * characters U+2E U+2E U+2E).
  */
-static void uni2searchform(struct convert_rock *rock, int c)
+static void uni2searchform(struct convert_rock *rock, uint32_t c)
 {
     struct canon_state *s = (struct canon_state *)rock->state;
     int i;
@@ -569,7 +569,7 @@ static void uni2searchform(struct convert_rock *rock, int c)
  * Given a Unicode codepoint, emit one or more Unicode codepoints in
  * HTML form, suitable for generating search snippets.
  */
-static void uni2html(struct convert_rock *rock, int c)
+static void uni2html(struct convert_rock *rock, uint32_t c)
 {
     struct canon_state *s = (struct canon_state *)rock->state;
 
@@ -611,7 +611,7 @@ static void uni2html(struct convert_rock *rock, int c)
     convert_putc(rock->next, c);
 }
 
-static void byte2search(struct convert_rock *rock, int c)
+static void byte2search(struct convert_rock *rock, uint32_t c)
 {
     struct search_state *s = (struct search_state *)rock->state;
     int i, cur;
@@ -659,7 +659,7 @@ static void byte2search(struct convert_rock *rock, int c)
 }
 
 /* Given an octet, append it to a buffer */
-static void byte2buffer(struct convert_rock *rock, int c)
+static void byte2buffer(struct convert_rock *rock, uint32_t c)
 {
     struct buf *buf = (struct buf *)rock->state;
 
@@ -669,7 +669,7 @@ static void byte2buffer(struct convert_rock *rock, int c)
 /* Given an octet c and an icu converter, convert c to
  * its Unicode codepoint. During a flush, c is ignored.
  */
-static void icu2uni(struct convert_rock *rock, int c)
+static void icu2uni(struct convert_rock *rock, uint32_t c)
 {
     struct charset_converter *s = (struct charset_converter*) rock->state;
     UErrorCode err;
@@ -737,7 +737,7 @@ static void icu2uni(struct convert_rock *rock, int c)
 
 /* Given Unicode codepoint c and an icu converter, convert c and emit
  * its octets. During a flush, c is ignored. */
-static void uni2icu(struct convert_rock *rock, int c)
+static void uni2icu(struct convert_rock *rock, uint32_t c)
 {
     struct charset_converter *s = (struct charset_converter*) rock->state;
     UErrorCode err;
@@ -797,7 +797,7 @@ static void uni2icu(struct convert_rock *rock, int c)
 
 /* Given an octet in a UTF-8 encoded string, possibly emit a Unicode
  * code point */
-static void utf8_2uni(struct convert_rock *rock, int c)
+static void utf8_2uni(struct convert_rock *rock, uint32_t c)
 {
     struct charset_converter *s = (struct charset_converter *)rock->state;
 
@@ -889,7 +889,7 @@ emit_replacement:
 }
 
 /* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
-static void uni2utf8(struct convert_rock *rock, int c)
+static void uni2utf8(struct convert_rock *rock, uint32_t c)
 {
     if (!unicode_isvalid(c))
         c = U_REPLACEMENT;
@@ -921,7 +921,7 @@ static void uni2utf8(struct convert_rock *rock, int c)
 /* Given an octet which is a codepoint in some 7bit or 8bit character
  * set, or the Unicode replacement character, emit the corresponding
  * Unicode codepoint. */
-static void table2uni(struct convert_rock *rock, int c)
+static void table2uni(struct convert_rock *rock, uint32_t c)
 {
     struct charset_converter *s = (struct charset_converter *)rock->state;
     struct charmap *map;
@@ -944,7 +944,7 @@ static void table2uni(struct convert_rock *rock, int c)
  * cannot be generated using &#nnn; numerical character references,
  * and should generate a parse error.  This function detects them.
  */
-static int html_uiserror(int c)
+static int html_uiserror(uint32_t c)
 {
     static const struct {
         unsigned int mask, lo, hi;
@@ -1187,7 +1187,7 @@ static void html_saw_tag(struct convert_rock *rock)
 #define html_isspace(c) \
     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
 
-void striphtml2uni(struct convert_rock *rock, int c)
+void striphtml2uni(struct convert_rock *rock, uint32_t c)
 {
     struct striphtml_state *s = (struct striphtml_state *)rock->state;
 
