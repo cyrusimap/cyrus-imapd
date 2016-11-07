@@ -85,7 +85,7 @@ struct qp_state {
     int isheader;
     int len;
     int sawcr;
-    char buf[80];
+    unsigned char buf[1000];
 };
 
 struct b64_state {
@@ -401,8 +401,8 @@ static void qp2byte(struct convert_rock *rock, uint32_t c)
         break;
     default:
         s->buf[s->len++] = c;
-        /* overlength line? just flush now */
-        if (s->len > 76)
+        /* really overlength line? just flush now */
+        if (s->len > 998)
             qp_flushline(rock, 0);
         break;
     }
