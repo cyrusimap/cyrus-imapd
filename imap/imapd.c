@@ -12303,9 +12303,10 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
             attributes |= MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_HASCHILDREN;
         attributes &= ~MBOX_ATTRIBUTE_SUBSCRIBED;
     }
+
     /* As CHILDINFO extended data item is not allowed if the
      * RECURSIVEMATCH selection option is not specified */
-    else if (!(listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
+    if (!(listargs->sel & LIST_SEL_RECURSIVEMATCH)) {
         attributes &= ~MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 
