@@ -4639,7 +4639,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     struct buf msg_buf = BUF_INITIALIZER;
     const char *blob_id, *type, *cid, *name;
     strarray_t headers = STRARRAY_INITIALIZER;
-    char *freeme = NULL;
+    char *ctenc = NULL;
     int r;
 
     type = json_string_value(json_object_get(att, "type"));
@@ -4663,18 +4663,22 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     if (type) {
         JMAPMSG_HEADER_TO_MIME("Content-Type", type);
     } else {
+        char *ctype;
         strarray_add(&headers, "Content-Type");
-        freeme = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-        message_pruneheader(freeme, &headers, NULL);
-        fwrite(freeme, 1, strlen(freeme), out);
+        ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+        message_pruneheader(ctype, &headers, NULL);
+        fwrite(ctype, 1, strlen(ctype), out);
         strarray_truncate(&headers, 0);
+        free(ctype);
     }
 
     strarray_add(&headers, "Content-Transfer-Encoding");
-    freeme = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-    message_pruneheader(freeme, &headers, NULL);
-    fwrite(freeme, 1, strlen(freeme), out);
+    ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+    message_pruneheader(ctenc, &headers, NULL);
+    fwrite(ctenc, 1, strlen(ctenc), out);
     strarray_truncate(&headers, 0);
+    free(ctenc);
+    ctenc = NULL;
 
     if (cid) {
         JMAPMSG_HEADER_TO_MIME("Content-ID", cid);
@@ -4695,8 +4699,11 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
 done:
     if (mbox) _closembox(req, &mbox);
     if (record) free(record);
-    if (body) message_free_body(body);
-    if (freeme) free(freeme);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    free(ctenc);
     buf_free(&msg_buf);
     strarray_fini(&headers);
     return r;
@@ -4705,46 +4712,52 @@ done:
 static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
                              const char *boundary, FILE *out)
 {
-    const char *text, *html;
     char *freeme = NULL, *myboundary = NULL;
     size_t i;
     struct buf buf = BUF_INITIALIZER;
     int r;
-    json_t *atts, *cids, *msgs, *val;
+    json_t *attachments = NULL, *cid_attachments = NULL, *attached_msgs = NULL;
+    json_t *val = NULL, *text = NULL, *html = NULL, *mymsg = NULL;
+
+    /* Make. a shallow copy of msg as scratchpad. */
+    mymsg = json_copy(msg);
 
     /* Determine text bodies */
-    text = json_string_value(json_object_get(msg, "textBody"));
-    html = json_string_value(json_object_get(msg, "htmlBody"));
+    text = json_object_get(mymsg, "textBody");
+    html = json_object_get(mymsg, "htmlBody");
+    json_incref(text);
+    json_incref(html);
 
     /* Determine attached messages */
-    msgs = json_object_get(msg, "attachedMessages");
+    attached_msgs = json_object_get(mymsg, "attachedMessages");
+    json_incref(attached_msgs);
 
     /* Split attachments into ones with and without cid. If there's no
      * htmlBody defined, all attachments end up in a multipart. */
-    cids = json_pack("[]");
-    atts = json_pack("[]");
-    json_array_foreach(json_object_get(msg, "attachments"), i, val) {
+    cid_attachments = json_pack("[]");
+    attachments = json_pack("[]");
+    json_array_foreach(json_object_get(mymsg, "attachments"), i, val) {
         if (html && JNOTNULL(json_object_get(val, "cid")) &&
                     json_object_get(val, "isInline") == json_true()) {
-            json_array_append(cids, val);
+            json_array_append(cid_attachments, val);
         } else {
-            json_array_append(atts, val);
+            json_array_append(attachments, val);
         }
     }
-    if (!json_array_size(cids)) {
-        json_decref(cids);
-        cids = NULL;
+    if (!json_array_size(cid_attachments)) {
+        json_decref(cid_attachments);
+        cid_attachments = NULL;
     }
-    if (!json_array_size(atts)) {
-        json_decref(atts);
-        atts = NULL;
+    if (!json_array_size(attachments)) {
+        json_decref(attachments);
+        attachments = NULL;
     }
 
     if (boundary) {
         fprintf(out, "\r\n--%s\r\n", boundary);
     }
 
-    if (json_array_size(atts) || json_object_size(msgs)) {
+    if (json_array_size(attachments) || json_object_size(attached_msgs)) {
         /* Content-Type is multipart/mixed */
         json_t *submsg;
         const char *subid;
@@ -4756,25 +4769,27 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
 
         /* Remove any non-cid attachments and attached messages. We'll
          * write them after the trimmed down message is serialised. */
-        if (cids) {
-            json_object_set_new(msg, "attachments", cids);
-            cids = NULL;
-        } else {
-            json_object_del(msg, "attachments");
-        }
-        json_object_del(msg, "attachedMessages");
+        json_object_del(mymsg, "attachments");
+        json_object_del(mymsg, "attachedMessages");
 
-        r = jmapmsg_to_mimebody(req, msg, myboundary, out);
+        /* If there's attachments with CIDs pass them on so the
+         * htmlBody can be serialised together with is attachments. */
+        if (cid_attachments) {
+            json_object_set(mymsg, "attachments", cid_attachments);
+        }
+
+        /* Write any remaining message bodies before the attachments */
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
-        json_array_foreach(atts, i, val) {
+        json_array_foreach(attachments, i, val) {
             r = writeattach(req, val, myboundary, out);
             if (r) goto done;
         }
 
         /* Write embedded RFC822 messages */
-        json_object_foreach(msgs, subid, submsg) {
+        json_object_foreach(attached_msgs, subid, submsg) {
             fprintf(out, "\r\n--%s\r\n", myboundary);
             fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
             r = jmapmsg_to_mime(req, out, submsg);
@@ -4783,7 +4798,7 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
 
         fprintf(out, "\r\n--%s--\r\n", myboundary);
     }
-    else if (text && html) {
+    else if (JNOTNULL(text) && JNOTNULL(html)) {
         /* Content-Type is multipart/alternative */
         myboundary = _make_boundary();
 
@@ -4791,31 +4806,27 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
         buf_appendcstr(&buf, myboundary);
         JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&buf));
 
-        /* Remove the html body. We'll write it after the plain text body */
-        val = json_object_get(msg, "htmlBody");
-        json_incref(val);
-        json_object_del(msg, "htmlBody");
-        atts = json_object_get(msg, "attachments");
-        json_incref(atts);
-        json_object_del(msg, "attachments");
+        /* Remove the html body and any attachments it refers to. We'll write
+         * them after the plain text body has been serialised. */
+        json_object_del(mymsg, "htmlBody");
+        json_object_del(mymsg, "attachments");
 
         /* Write the plain text body */
-        r = jmapmsg_to_mimebody(req, msg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write the html body, including any of its related attachments */
-        json_object_del(msg, "textBody");
-        json_object_set_new(msg, "htmlBody", val);
-        if (json_array_size(atts)) {
-            json_object_set_new(msg, "attachments", atts);
-            atts = NULL;
+        json_object_del(mymsg, "textBody");
+        json_object_set(mymsg, "htmlBody", html);
+        if (json_array_size(cid_attachments)) {
+            json_object_set(mymsg, "attachments", cid_attachments);
         }
-        r = jmapmsg_to_mimebody(req, msg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         fprintf(out, "\r\n--%s--\r\n", myboundary);
     }
-    else if (html && json_array_size(cids)) {
+    else if (html && json_array_size(cid_attachments)) {
         /* Content-Type is multipart/related */
         myboundary = _make_boundary();
 
@@ -4824,12 +4835,12 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
         JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&buf));
 
         /* Remove the attachments to serialise the html body */
-        json_object_del(msg, "attachments");
-        r = jmapmsg_to_mimebody(req, msg, myboundary, out);
+        json_object_del(mymsg, "attachments");
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
-        json_array_foreach(cids, i, val) {
+        json_array_foreach(cid_attachments, i, val) {
             r = writeattach(req, val, myboundary, out);
             if (r) goto done;
         }
@@ -4837,17 +4848,17 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
         fprintf(out, "\r\n--%s--\r\n", myboundary);
 
     }
-    else if (html) {
+    else if (JNOTNULL(html)) {
         /* Content-Type is text/html */
         JMAPMSG_HEADER_TO_MIME("Content-Type", "text/html;charset=UTF-8");
         fputs("\r\n", out);
-        writetext(html, out, split_html);
+        writetext(json_string_value(html), out, split_html);
     }
-    else if (text) {
+    else if (JNOTNULL(text)) {
         /* Content-Type is text/plain */
         JMAPMSG_HEADER_TO_MIME("Content-Type", "text/plain;charset=UTF-8");
         fputs("\r\n", out);
-        writetext(text, out, split_plain);
+        writetext(json_string_value(text), out, split_plain);
     }
 
     /* All done */
@@ -4856,8 +4867,12 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
 done:
     if (myboundary) free(myboundary);
     if (freeme) free(freeme);
-    json_decref(atts);
-    json_decref(cids);
+    json_decref(attachments);
+    json_decref(cid_attachments);
+    json_decref(attached_msgs);
+    json_decref(text);
+    json_decref(html);
+    json_decref(mymsg);
     buf_free(&buf);
     if (r) r = HTTP_SERVER_ERROR;
     return r;
