@@ -6198,6 +6198,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     blobid = json_string_value(json_object_get(msg, "blobId"));
 
     r = findblob(req, blobid, &mbox, &record, &body, &data.part);
+    if (r) goto done;
 
     r = mailbox_map_record(mbox, record, &data.msg_buf);
     if (r) goto done;
@@ -6246,7 +6247,10 @@ done:
     if (msgid) free(msgid);
     if (mbox) _closembox(req, &mbox);
     if (record) free(record);
-    if (body) message_free_body(body);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
     if (mboxname) free(mboxname);
     return r;
 }
