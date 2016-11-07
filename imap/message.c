@@ -1925,8 +1925,8 @@ static void message_write_envelope(struct buf *buf, const struct body *body)
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
  * (if 'newformat' is nonzero) for 'body' to 'buf'.
  */
-HIDDEN void message_write_body(struct buf *buf, const struct body *body,
-                               int newformat)
+EXPORTED void message_write_body(struct buf *buf, const struct body *body,
+                                 int newformat)
 {
     struct param *param;
 

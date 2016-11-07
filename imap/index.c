@@ -4278,30 +4278,59 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         size = section_size;
     }
 
-    /* Handle extended URLFETCH parameters */
+    if (is_binary) {
+        int encoding = body->charset_enc & 0xff;
+
+        data = charset_decode_mimebody(data, size, encoding,
+                                       &decbuf, &size);
+
+        /* update the encoding of this part per RFC5524:3.2 */
+        if (data && encoding) {
+            domain = data_domain(data, size);
+            free(body->encoding);
+            switch (domain) {
+            case DOMAIN_BINARY:
+                body->encoding = xstrdup("BINARY");
+                break;
+            case DOMAIN_8BIT:
+                body->encoding = xstrdup("8BIT");
+                break;
+            default:
+                body->encoding = NULL; // will output 7BIT
+                break;
+            }
+            body->content_size = size;
+            body->content_lines = 0;
+        }
+    }
+
     if (params & URLFETCH_BODYPARTSTRUCTURE) {
-        prot_printf(pout, " (BODYPARTSTRUCTURE");
-        /* XXX Calculate body part structure */
-        prot_printf(pout, " NIL");
-        prot_printf(pout, ")");
+        struct buf buf = BUF_INITIALIZER;
+        message_write_body(&buf, body, 1);
+        prot_puts(pout, " (BODYPARTSTRUCTURE ");
+        if (buf_len(&buf))
+            prot_putbuf(pout, &buf);
+        else
+            prot_puts(pout, "NIL");
+        prot_puts(pout, ")");
+        buf_free(&buf);
     }
 
     if (params & URLFETCH_BODY) {
         prot_printf(pout, " (BODY");
     }
     else if (params & URLFETCH_BINARY) {
-        int encoding = body->charset_enc & 0xff;
-
         prot_printf(pout, " (BINARY");
-
-        data = charset_decode_mimebody(data, size, encoding,
-                                       &decbuf, &size);
         if (!data) {
             /* failed to decode */
             prot_printf(pout, " NIL)");
             r = 0;
             goto done;
         }
+    }
+    else if (params) {
+        r = 0;
+        goto done;
     }
 
     /* Handle PARTIAL request */
@@ -4340,7 +4369,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
 
     /* Complete extended URLFETCH response */
-    if (params & (URLFETCH_BODY | URLFETCH_BINARY)) prot_printf(pout, ")");
+    if (params) prot_printf(pout, ")");
 
     r = 0;
 
