@@ -7,9 +7,10 @@
 export LDFLAGS="-L$LIBSDIR/lib/x86_64-linux-gnu -L$LIBSDIR/lib -Wl,-rpath,$LIBSDIR/lib/x86_64-linux-gnu -Wl,-rpath,$LIBSDIR/lib"
 export PKG_CONFIG_PATH="$LIBSDIR/lib/x86_64-linux-gnu/pkgconfig:$LIBSDIR/lib/pkgconfig:\$PKG_CONFIG_PATH"
 export CFLAGS="-g -fPIC -W -Wall -Wextra"
+export PATH="$LIBSDIR/bin:$PATH"
 autoreconf -v -i
-echo "./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.3"
-./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.3
+echo "./configure --prefix=$TARGET $CONFIGOPTS"
+./configure --prefix=$TARGET $CONFIGOPTS
 make lex-fix
 make -j 8
 make -j 8 check
