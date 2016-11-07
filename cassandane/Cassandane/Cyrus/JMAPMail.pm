@@ -1196,6 +1196,7 @@ sub test_setmessages_draft
     my $draft =  {
         mailboxIds => [$draftsmbox],
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        sender => { name => "Marvin the Martian", email => "marvin\@acme.local" },
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
             { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
@@ -1226,6 +1227,7 @@ sub test_setmessages_draft
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
     $self->assert_deep_equals($msg->{from}, $draft->{from});
+    $self->assert_deep_equals($msg->{sender}, $draft->{sender});
     $self->assert_deep_equals($msg->{to}, $draft->{to});
     $self->assert_deep_equals($msg->{cc}, $draft->{cc});
     $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
