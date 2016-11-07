@@ -4220,6 +4220,8 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     data = buf.s;
     size = buf.len;
 
+    int is_binary = params & URLFETCH_BINARY;
+
     /* Special-case BODY[] */
     if (!section || !*section) {
         /* whole message, no further parsing */
@@ -4231,17 +4233,20 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
         while (*p) {
             switch(*p) {
             case 'H':
+                if (is_binary) goto badpart;
                 if (!body_is_rfc822(body)) goto badpart;
                 body = body->subpart;
                 p += 6;
                 wantheader = 1;
                 goto getoffset;
             case 'T':
+                if (is_binary) goto badpart;
                 if (!body_is_rfc822(body)) goto badpart;
                 body = body->subpart;
                 p += 4;
                 goto getoffset;
             case 'M':
+                if (is_binary) goto badpart;
                 if (top == body) goto badpart;
                 p += 4;
                 wantheader = 1;
