@@ -3059,13 +3059,15 @@ enum {
 
 static int data_domain(const char *p, size_t n)
 {
+    int r = DOMAIN_7BIT;
+
     while (n--) {
         if (!*p) return DOMAIN_BINARY;
-        if (*p & 0x80) return DOMAIN_8BIT;
+        if (*p & 0x80) r = DOMAIN_8BIT;
         p++;
     }
 
-    return DOMAIN_7BIT;
+    return r;
 }
 
 /*
