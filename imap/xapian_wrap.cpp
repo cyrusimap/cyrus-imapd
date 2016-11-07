@@ -908,7 +908,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 
     try {
         std::string snippet;
-        std::string text = std::string(buf_cstring(snipgen->buf));
+        std::string text = std::string(snipgen->buf->s, snipgen->buf->len);
         Xapian::Enquire enquire(*snipgen->db);
         enquire.set_query(xapian_snipgen_build_query(snipgen));
 
