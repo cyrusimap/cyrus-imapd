@@ -83,8 +83,9 @@ char QPSAFECHAR[256] = {
 
 struct qp_state {
     int isheader;
-    int bytesleft;
-    unsigned char lastoctet;
+    int len;
+    int sawcr;
+    char buf[80];
 };
 
 struct b64_state {
@@ -331,67 +332,80 @@ static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
 }
 
 /* convertproc_t conversion functions */
+static void qp_flushline(struct convert_rock *rock, int endline)
+{
+    struct qp_state *s = (struct qp_state *)rock->state;
+    int i;
+
+    /* strip trailing whitespace: RFC2405 transport-padding */
+    while (s->len && (s->buf[s->len-1] == ' ' || s->buf[s->len-1] == '\t'))
+        s->len--;
+
+    for (i = 0; i < s->len; i++) {
+        switch(s->buf[i]) {
+        case '=':
+            if (i + 1 >= s->len) {
+                /* soft linebreak */
+                endline = 0;
+                break;
+            }
+            if (i + 2 < s->len) {
+                int val1 = HEXCHAR(s->buf[i+1]);
+                int val2 = HEXCHAR(s->buf[i+2]);
+                if (val1 != XX && val2 != XX) {
+                    convert_putc(rock->next, (val1<<4) + val2);
+                    i += 2;
+                    break;
+                }
+            }
+            /* otherwise too close to the end or invalid, just eject
+             * a literal '=' and keep going */
+            convert_putc(rock->next, '=');
+            break;
+        case '_':
+            /* underscores are space in headers */
+            convert_putc(rock->next, s->isheader ? ' ' : '_');
+            break;
+        default:
+            convert_putc(rock->next, s->buf[i]);
+            break;
+        }
+    }
+
+    if (endline) {
+        convert_putc(rock->next, '\r');
+        convert_putc(rock->next, '\n');
+    }
+
+    s->len = 0;
+}
+
+static void qp_flush(struct convert_rock *rock)
+{
+    qp_flushline(rock, 0);
+}
 
 static void qp2byte(struct convert_rock *rock, int c)
 {
     struct qp_state *s = (struct qp_state *)rock->state;
-    int val;
 
     assert(c == U_REPLACEMENT || (unsigned)c <= 0xff);
 
-    if (s->bytesleft) {
-        s->bytesleft--;
-
-         /* the replacement char is not part of a valid sequence */
-        if (c == U_REPLACEMENT) {
-invalid:
-            /* RFC2045 says "...A reasonable approach by a robust
-             * implementation might be to include the "=" character
-             * and the following character in the decoded data without
-             * any transformation..." */
-            convert_putc(rock->next, '=');
-            if (!s->bytesleft)
-                convert_putc(rock->next, s->lastoctet);
-            convert_putc(rock->next, c);
-            s->bytesleft = 0;
-            return;
-        }
-
-        /* detect and swallow soft line breaks */
-        if (s->bytesleft == 1 && c == '\r') {
-            s->lastoctet = c;
-            return;
-        }
-        if (s->bytesleft == 0 && s->lastoctet == '\r') {
-            if (c == '\n')
-                return;
-            goto invalid;
-        }
-
-        val = HEXCHAR(c);
-        if (val == XX)
-            goto invalid;
-        /* if we got this far, we have two valid hex chars */
-        if (!s->bytesleft) {
-            val |= (HEXCHAR(s->lastoctet) << 4);
-            assert((unsigned)val <= 0xff);
-            convert_putc(rock->next, val);
-        }
-        s->lastoctet = c;
-        return;
+    switch(c) {
+    case U_REPLACEMENT: /* just skip invalid characters */
+        break;
+    case '\r': // XXX - handle \r embedded in lines?
+        break;
+    case '\n':
+        qp_flushline(rock, 1);
+        break;
+    default:
+        s->buf[s->len++] = c;
+        /* overlength line? just flush now */
+        if (s->len > 76)
+            qp_flushline(rock, 0);
+        break;
     }
-
-    /* start an encoded byte */
-    if (c == '=') {
-        s->bytesleft = 2;
-        s->lastoctet = 0;
-        return;
-    }
-
-    /* underscores are space in headers */
-    if (s->isheader && c == '_') c = ' ';
-
-    convert_putc(rock->next, c);
 }
 
 static void b64_2byte(struct convert_rock *rock, int c)
@@ -1677,6 +1691,7 @@ static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
     s->isheader = isheader;
     rock->state = (void *)s;
     rock->f = qp2byte;
+    rock->flush = qp_flush;
     rock->next = next;
     return rock;
 }
