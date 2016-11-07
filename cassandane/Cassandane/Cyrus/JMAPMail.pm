@@ -780,7 +780,8 @@ sub test_getmessages
         ),
         messageid => 'fake.123456789@local',
         extra_headers => [
-            ['X-Tra', "foo bar\r\n baz"]
+            ['X-Tra', "foo bar\r\n baz"],
+            ['Sender', "Bla <blu\@local>"],
         ],
         body => $body
     );
@@ -826,6 +827,10 @@ sub test_getmessages
     });
     $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
     $self->assert_null($msg->{replyTo});
+    $self->assert_deep_equals($msg->{sender}, {
+            name => "Bla",
+            email => "blu\@local"
+    });
     $self->assert_str_equals($msg->{subject}, "Message A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
