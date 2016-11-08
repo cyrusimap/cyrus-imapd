@@ -76,7 +76,7 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
-#include "jmapical.h"
+#include "jmap_ical.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "map.h"
