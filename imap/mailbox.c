@@ -1058,15 +1058,16 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
 
-    if (mailbox->modseq_dirty)
-        return mailbox->i.highestmodseq;
+    if (!mailbox->modseq_dirty) {
+        mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name,
+                                   mailbox->i.highestmodseq,
+                                   mailbox->mbtype, /*dofolder*/0);
+        mailbox->last_updated = time(0);
+        mailbox->modseq_dirty = 1;
+        mailbox_index_dirty(mailbox);
+    }
 
-    mailbox->i.highestmodseq = mboxname_nextmodseq(mailbox->name,
-                               mailbox->i.highestmodseq,
-                               mailbox->mbtype, /*dofolder*/0);
-    mailbox->last_updated = time(0);
-    mailbox->modseq_dirty = 1;
-    mailbox_index_dirty(mailbox);
+    mailbox->i.highestmodseq++;
 
     return mailbox->i.highestmodseq;
 }
@@ -2487,6 +2488,10 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 
     if (!mailbox->i.dirty)
         return 0;
+
+    mboxname_setmodseq(mailbox->name,
+                       mailbox->i.highestmodseq,
+                       mailbox->mbtype, /*dofolder*/0);
 
     assert(mailbox_index_islocked(mailbox, 1));
 
