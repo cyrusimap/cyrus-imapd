@@ -7409,6 +7409,21 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* If we are just stripping VTIMEZONEs from resource, flag it */
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
 
+    /* Create and cache RFC 5322 header fields for resource */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+        organizer = icalproperty_get_organizer(prop);
+        if (organizer) {
+            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, "<%s>", organizer);
+            mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+                                                buf_len(&txn->buf));
+            spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
+            buf_reset(&txn->buf);
+        }
+    }
+
     /* Set Schedule-Tag, if any */
     if (flags & NEW_STAG) {
         if (oldrecord) sched_tag = message_guid_encode(&oldrecord->guid);
@@ -7416,18 +7431,6 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
     else if (organizer) sched_tag = cdata->sched_tag;
     else sched_tag = cdata->sched_tag = NULL;
-
-    /* Create and cache RFC 5322 header fields for resource */
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) {
-        organizer = icalproperty_get_organizer(prop)+7;
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "<%s>", organizer);
-        mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
-                                            buf_len(&txn->buf));
-        spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
-        buf_reset(&txn->buf);
-    }
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     if (prop) {
