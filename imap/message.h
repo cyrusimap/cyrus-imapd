@@ -184,6 +184,10 @@ extern void message_read_bodystructure(const struct index_record *record,
 
 extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);
 
+extern int message_foreach_header(const char *headers, size_t len,
+                   int (*proc)(const char *key, const char *val, void *rock),
+                   void *rock);
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 /* New message API */
 
@@ -288,9 +292,6 @@ extern int message_get_fname(message_t *m, const char **fnamep);
 extern int message_foreach_text_section(message_t *m,
                    int (*proc)(int isbody, charset_t charset, int encoding,
                                const char *subtype, struct buf *data, void *rock),
-                   void *rock);
-extern int message_foreach_header(message_t *m,
-                   int (*proc)(const char *key, const char *val, void *rock),
                    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
 

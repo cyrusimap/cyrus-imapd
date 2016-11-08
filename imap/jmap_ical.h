@@ -1,4 +1,4 @@
-/* jmapical.h --Routines to convert JMAP calendar events and iCalendar
+/* jmap_ical.h --Routines to convert JMAP calendar events and iCalendar
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *

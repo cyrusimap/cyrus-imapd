@@ -4418,21 +4418,17 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     return 0;
 }
 
-EXPORTED int message_foreach_header(message_t *m,
+EXPORTED int message_foreach_header(const char *headers, size_t len,
                                     int(*cb)(const char*, const char*, void*),
                                     void *rock)
 {
-    char *headers, *key;
+    char *tmp, *key;
     int r;
 
-    r = message_need(m, M_MAP|M_CACHEBODY);
-    if (r) return r;
+    tmp = charset_unfold(headers, len, 0);
+    if (!tmp) return IMAP_INTERNAL;
 
-    headers = charset_unfold(m->map.s + m->body->header_offset,
-                             m->body->header_size, 0);
-    if (!headers) return IMAP_INTERNAL;
-
-    key = headers;
+    key = tmp;
     while (*key) {
         /* Look for the key-value separator. */
         char *val = strchr(key, ':');
@@ -4456,6 +4452,6 @@ EXPORTED int message_foreach_header(message_t *m,
         key = eol;
     }
 
-    free(headers);
+    free(tmp);
     return r;
 }

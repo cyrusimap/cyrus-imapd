@@ -1,4 +1,4 @@
-/* jmapical.c --Routines to convert calendar events between JMAP and iCalendar
+/* jmap_ical.c --Routines to convert calendar events between JMAP and iCalendar
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
@@ -92,7 +92,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#include "jmapical.h"
+#include "jmap_ical.h"
 
 #define JMAPICAL_READ_MODE       0
 #define JMAPICAL_WRITE_MODE      (1<<0)
