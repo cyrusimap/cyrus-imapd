@@ -1240,6 +1240,53 @@ sub test_setmessages_draft
     $self->assert_equals($msg->{isFlagged}, JSON::false);
 }
 
+sub test_setmessages_inreplytoid
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog "Create message to reply to";
+    $self->make_message("foo") || die;
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
+    my $msgid = $res->[0][1]->{messageIds}[0];
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
+    my $draft =  {
+        mailboxIds => [$draftsmbox],
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+        inReplyToMessageId => $msgid,
+    };
+
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+    $self->assert_str_equals($msg->{inReplyToMessageId}, $msgid);
+}
+
 sub test_setmessages_attachedmessages
     :min_version_3_0
 {
