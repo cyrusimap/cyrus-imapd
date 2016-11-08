@@ -266,18 +266,21 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
         return NULL;
 
     folder = query_get_folder(query, mboxname);
-
-    if (uidvalidity < folder->uidvalidity) {
-        /* these are uids are too old, forget them */
-        return NULL;
-    }
-    if (uidvalidity > folder->uidvalidity) {
-        /* these uids are newer than what we have,
-         * forget the old ones; or none at all and
-         * remember the uidvalidity for later */
-        bv_clearall(&folder->uids);
-        bv_clearall(&folder->unchecked_uids);
-        folder->uidvalidity = uidvalidity;
+    if (uidvalidity) {
+        if (uidvalidity < folder->uidvalidity) {
+            /* these are uids are too old, forget them */
+            return NULL;
+        }
+        if (uidvalidity > folder->uidvalidity) {
+            /* these uids are newer than what we have,
+            * forget the old ones; or none at all and
+            * remember the uidvalidity for later */
+            if (folder->uidvalidity) {
+                bv_clearall(&folder->uids);
+                bv_clearall(&folder->unchecked_uids);
+            }
+            folder->uidvalidity = uidvalidity;
+        }
     }
 
     return folder;

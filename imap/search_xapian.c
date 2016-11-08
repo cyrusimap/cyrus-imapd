@@ -858,18 +858,13 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
 
-    unsigned int uidvalidity = mboxname_readuidvalidity(rec->mboxname);
-    if (!uidvalidity) {
-        return IMAP_INTERNAL;
-    }
-
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
     }
 
     xstats_inc(SPHINX_RESULT);
-    return bb->proc(rec->mboxname, uidvalidity, rec->uid, bb->rock);
+    return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, bb->rock);
 }
 
 static int xapian_run_cb(const char *cyrusid, void *rock)
