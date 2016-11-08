@@ -288,8 +288,14 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
 
     /* open the read-only databases */
     while (*paths) {
-        Xapian::Database *database = new Xapian::Database(*paths++);
-        ptrarray_append(&dbw->otherdbs, database);
+        try {
+            Xapian::Database *database = new Xapian::Database(*paths++);
+            ptrarray_append(&dbw->otherdbs, database);
+        }
+        catch (const Xapian::Error &err) {
+            syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+                        err.get_context().c_str(), err.get_description().c_str());
+        }
     }
 
     *dbwp = dbw;
