@@ -536,26 +536,28 @@ static int foreach(struct dbengine *db, const char *prefix, size_t prefixlen,
         if (prefix && memcmp(mkey.mv_data, prefix, prefixlen))
             break;
 
-        /* Cache the current position in local memory */
-        buf_setmap(&cur, mkey.mv_data, mkey.mv_size);
-
         if (!p || p(rock, cur.s, cur.len, mval.mv_data, mval.mv_size)) {
+            /* Cache the current position in local memory */
+            buf_setmap(&cur, mkey.mv_data, mkey.mv_size);
+
             r = cb(rock, cur.s, cur.len, mval.mv_data, mval.mv_size);
             if (r) break;
-        }
 
-        if (db->mcur == NULL) {
-            /* An update has invalidated the cursor. Reseek cursor. */
-            mr = mdb_cursor_open(tid->mtxn, tid->dbi, &db->mcur);
-            if (mr) break;
+            if (db->mcur == NULL) {
+                /* An update has invalidated the cursor. Reseek cursor. */
+                mr = mdb_cursor_open(tid->mtxn, tid->dbi, &db->mcur);
+                if (mr) break;
 
-            mkey.mv_data = cur.s;
-            mkey.mv_size = cur.len;
-            mr = mdb_cursor_get(db->mcur, &mkey, &mval, MDB_SET_RANGE);
-            if (mr) break;
+                mkey.mv_data = cur.s;
+                mkey.mv_size = cur.len;
+                mr = mdb_cursor_get(db->mcur, &mkey, &mval, MDB_SET_RANGE);
+                if (mr) break;
 
-            if (mkey.mv_size != cur.len || memcmp(mkey.mv_data, cur.s, cur.len))
-                continue;
+                if (mkey.mv_size != cur.len || memcmp(mkey.mv_data, cur.s, cur.len)) {
+                    /* The current position has been deleted. */
+                    continue;
+                }
+            }
         }
 
         /* Advance cursor */
