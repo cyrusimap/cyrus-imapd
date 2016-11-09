@@ -2391,19 +2391,22 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     return r;
 }
 
-EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
+static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder, int add)
 {
     struct mboxname_counters counters;
+    struct mboxname_counters oldcounters;
     modseq_t *typemodseqp = NULL;
     modseq_t *foldersmodseqp = NULL;
     int fd = -1;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return last + 1;
+        return last + add;
 
     /* XXX error handling */
     if (mboxname_load_counters(mboxname, &counters, &fd))
-        return last + 1;
+        return last + add;
+
+    oldcounters = counters;
 
     if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
         typemodseqp = &counters.carddavmodseq;
@@ -2425,70 +2428,27 @@ EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int m
     if (counters.highestmodseq < last)
         counters.highestmodseq = last;
 
-    counters.highestmodseq++;
+    counters.highestmodseq += add;
 
     if (typemodseqp) *typemodseqp = counters.highestmodseq;
     if (dofolder && foldersmodseqp) *foldersmodseqp = counters.highestmodseq;
 
-    /* always set, because we always increased */
-    mboxname_set_counters(mboxname, &counters, fd);
-
-    return counters.highestmodseq;
-}
-
-EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int dofolder)
-{
-    struct mboxname_counters counters;
-    modseq_t *typemodseqp = NULL;
-    modseq_t *foldersmodseqp = NULL;
-    int fd = -1;
-    int dirty = 0;
-
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return val;
-
-    /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return val;
-
-    if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.carddavmodseq;
-        foldersmodseqp = &counters.carddavfoldersmodseq;
-    }
-    else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.caldavmodseq;
-        foldersmodseqp = &counters.caldavfoldersmodseq;
-    }
-    else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.notesmodseq;
-        foldersmodseqp = &counters.notesfoldersmodseq;
-    }
-    else {
-        typemodseqp = &counters.mailmodseq;
-        foldersmodseqp = &counters.mailfoldersmodseq;
-    }
-
-    if (counters.highestmodseq < val) {
-        counters.highestmodseq = val;
-        dirty = 1;
-    }
-
-    if (typemodseqp && *typemodseqp < val) {
-        *typemodseqp = val;
-        dirty = 1;
-    }
-
-    if (dofolder && foldersmodseqp && *foldersmodseqp < val) {
-        *foldersmodseqp = val;
-        dirty = 1;
-    }
-
-    if (dirty)
+    if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
         mboxname_set_counters(mboxname, &counters, fd);
     else
         mboxname_unload_counters(fd);
 
-    return val;
+    return counters.highestmodseq;
+}
+
+EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
+{
+    return mboxname_domodseq(mboxname, last, mbtype, dofolder, 1);
+}
+
+EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
+{
+    return mboxname_domodseq(mboxname, last, mbtype, dofolder, 0);
 }
 
 EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
