@@ -1545,7 +1545,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setdate(kl, "LAST_APPENDDATE", 0);
         dlist_setdate(kl, "POP3_LAST_LOGIN", remote ? remote->pop3_last_login : 0);
         dlist_setdate(kl, "POP3_SHOW_AFTER", remote ? remote->pop3_show_after : 0);
-        if (remote->xconvmodseq)
+        if (remote && remote->xconvmodseq)
             dlist_setnum64(kl, "XCONVMODSEQ", remote->xconvmodseq);
     }
     else {
