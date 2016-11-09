@@ -288,7 +288,6 @@ sub _create_instances
 		# tell sync_client how to login
 		sync_authname => 'repluser',
 		sync_password => 'replpass',
-		sasl_mech_list => 'PLAIN',
 		# Ensure sync_server gives sync_client enough privileges
 		admins => 'admin repluser',
 	    );
@@ -311,7 +310,6 @@ sub _create_instances
 		mupdate_password => 'mupdpass',
 		proxyservers => 'mailproxy',
 		lmtp_admins => 'mailproxy',
-		sasl_mech_list => 'PLAIN',
 	    );
 	}
 
@@ -371,7 +369,6 @@ sub _create_instances
 		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
-		sasl_mech_list => 'PLAIN',
 	    );
 
 	    my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');

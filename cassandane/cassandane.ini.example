@@ -123,7 +123,7 @@
 #  cyrus_prefix: cyrus path
 #  prefix: working directory
 [config]
-##sasl_mech_list = PLAIN LOGIN DIGEST-MD5
+##sasl_mech_list = PLAIN LOGIN
 ##debug_command = @prefix@/utils/gdbtramp %s %d
 
 # This section describes how Cassandane interacts with the Net::CalDAVTalk

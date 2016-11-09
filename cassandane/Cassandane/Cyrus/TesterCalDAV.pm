@@ -1482,7 +1482,6 @@ sub new
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpmodules => 'caldav');
     $config->set(httpallowcompress => 'no');
-    $config->set(sasl_mech_list => 'PLAIN LOGIN');
 
     return $class->SUPER::new({
         config => $config,

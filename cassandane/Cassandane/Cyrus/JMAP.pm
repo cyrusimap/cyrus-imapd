@@ -65,7 +65,6 @@ sub new
     $config->set(conversations => 'yes');
     $config->set(httpmodules => 'carddav caldav jmap');
     $config->set(httpallowcompress => 'no');
-    $config->set(sasl_mech_list => 'PLAIN LOGIN');
     return $class->SUPER::new({
 	config => $config,
 	services => ['imap', 'http'],
