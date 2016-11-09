@@ -346,7 +346,6 @@ static int myopen(const char *fname, int flags, struct dbengine **ret,
                   struct txn **tidptr)
 {
     struct dbengine *db;
-    struct txn *tid = NULL;
     int r, mr = 0;
 
     PDEBUG("cyrusdb_lmdb(%s): open (create=%d)", fname, flags & CYRUSDB_CREATE);
@@ -386,16 +385,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret,
         goto fail;
     }
 
-    /* Touch the unnamend database in the environment */
-    r = begin_txn(db, &tid, 0);
-    if (r) goto fail;
-
-    /* Commit or export the transaction */
-    if (!tidptr) {
-        r = commit_txn(db, tid);
+    /* Lock the database, if requested */
+    if (tidptr) {
+        r = begin_txn(db, tidptr, 0);
         if (r) goto fail;
-    } else {
-        *tidptr = tid;
     }
 
     /* Keep database for internal bookkeeping */
