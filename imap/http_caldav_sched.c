@@ -207,7 +207,7 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
 
     const char *address = icalproperty_get_address(prop);
     if (!address) return;
-    if (!strcasecmp(address, "mailto:", 7))
+    if (!strncasecmp(address, "mailto:", 7))
         address += 7;
 
     new->addr = address;
