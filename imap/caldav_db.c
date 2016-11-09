@@ -798,8 +798,13 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
 
     /* Get organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) cdata->organizer = icalproperty_get_organizer(prop)+7;
-    else cdata->organizer = NULL;
+    if (prop) {
+        cdata->organizer = icalproperty_get_organizer(prop;
+        if (cdata->organizer && !strncasecmp(cdata->organizer, "mailto:", 7))
+            cdata->organizer += 7;
+    }
+    else
+        cdata->organizer = NULL;
 
     /* Get transparency */
     prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);

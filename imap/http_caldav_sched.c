@@ -205,7 +205,12 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
     struct address_t *new = xzmalloc(sizeof(struct address_t));
     icalparameter *param;
 
-    new->addr = icalproperty_get_address(prop) + 7;
+    const char *address = icalproperty_get_address(prop);
+    if (!address) return;
+    if (!strcasecmp(address, "mailto:", 7))
+        address += 7;
+
+    new->addr = address;
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
     if (param) {
         new->name = icalparameter_get_cn(param);
