@@ -371,6 +371,7 @@ sub _create_instances
 		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
+		sasl_mech_list => 'PLAIN',
 	    );
 
 	    my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
