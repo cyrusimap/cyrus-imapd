@@ -274,6 +274,8 @@ extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,
                       struct index_state **stateptr);
+extern int index_open_mailbox(struct mailbox *mailbox, struct index_init *init,
+                              struct index_state **stateptr);
 extern int index_refresh(struct index_state *state);
 extern void index_checkflags(struct index_state *state, int print, int dirty);
 extern void index_select(struct index_state *state, struct index_init *init);

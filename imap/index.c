@@ -289,32 +289,26 @@ EXPORTED void index_close(struct index_state **stateptr)
 }
 
 /*
- * A new mailbox has been selected, map it into memory and do the
- * initial CHECK.
+ * A new mailbox has been selected and already opened, map it into
+ * memory and do the initial CHECK.
  */
-EXPORTED int index_open(const char *name, struct index_init *init,
-               struct index_state **stateptr)
+EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init,
+                                struct index_state **stateptr)
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
 
+    state->mailbox = mailbox;
+
     if (init) {
         state->authstate = init->authstate;
         state->examining = init->examine_mode;
-        state->mboxname = xstrdup(name);
+        state->mboxname = xstrdup(mailbox->name);
         state->out = init->out;
         state->userid = xstrdupnull(init->userid);
         state->want_dav = init->want_dav;
         state->want_expunged = init->want_expunged;
 
-        if (state->examining) {
-            r = mailbox_open_irl(state->mboxname, &state->mailbox);
-            if (r) goto fail;
-        }
-        else {
-            r = mailbox_open_iwl(state->mboxname, &state->mailbox);
-            if (r) goto fail;
-        }
         state->myrights = cyrus_acl_myrights(init->authstate,
                                              state->mailbox->acl);
         if (state->examining)
@@ -322,10 +316,6 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 
         state->internalseen = mailbox_internal_seen(state->mailbox,
                                                     state->userid);
-    }
-    else {
-        r = mailbox_open_iwl(name, &state->mailbox);
-        if (r) goto fail;
     }
 
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
@@ -352,10 +342,29 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     return 0;
 
 fail:
-    mailbox_close(&state->mailbox);
     free(state->mboxname);
     free(state->userid);
     free(state);
+    return r;
+}
+
+/*
+ * A new mailbox has been selected, map it into memory and do the
+ * initial CHECK.
+ */
+EXPORTED int index_open(const char *name, struct index_init *init,
+                        struct index_state **stateptr)
+{
+    int r;
+    struct mailbox *mailbox = NULL;
+
+    r = init && init->examine_mode ? mailbox_open_irl(name, &mailbox) :
+                                     mailbox_open_iwl(name, &mailbox);
+    if (r) return r;
+
+    r = index_open_mailbox(mailbox, init, stateptr);
+    if (r) mailbox_close(&mailbox);
+
     return r;
 }
 
