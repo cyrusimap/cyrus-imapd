@@ -1113,8 +1113,8 @@ sub test_getmessages_body_multi
     $self->assert_equals(JSON::true, $msg->{hasAttachment});
 
     # Assert embedded message support
-    $self->assert_num_equals(1, scalar keys $msg->{attachedMessages});
-    my $submsg = (values $msg->{attachedMessages})[0];
+    $self->assert_num_equals(1, scalar keys %{$msg->{attachedMessages}});
+    my $submsg = (values %{$msg->{attachedMessages}})[0];
 
     $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'Message-ID'});
     $self->assert_deep_equals({
@@ -1139,7 +1139,7 @@ sub test_getmessages_body_multi
     $self->assert_null($submsg->{size});
 
     # Assert attachments
-    $self->assert_num_equals(4, scalar keys $msg->{attachments});
+    $self->assert_num_equals(4, scalar keys %{$msg->{attachments}});
 }
 
 sub test_getmessages_preview
@@ -1339,7 +1339,7 @@ sub test_setmessages_attachedmessages
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
 
-    my $got = (values $msg->{attachedMessages})[0];
+    my $got = (values %{$msg->{attachedMessages}})[0];
     my $want = $draft->{attachedMessages}->{1};
     $self->assert_deep_equals($got->{from}, $want->{from});
     $self->assert_deep_equals($got->{to}, $want->{to});
@@ -1512,7 +1512,7 @@ sub test_setmessages_move
             "#d" => { name => "d", parentId => undef },
         }}, "R1"]
     ]);
-    $self->assert_num_equals( 4, scalar keys $res->[0][1]{created} );
+    $self->assert_num_equals( 4, scalar keys %{$res->[0][1]{created}} );
     my $a = $res->[0][1]{created}{"#a"}{id};
     my $b = $res->[0][1]{created}{"#b"}{id};
     my $c = $res->[0][1]{created}{"#c"}{id};
