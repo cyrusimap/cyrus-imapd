@@ -184,7 +184,7 @@ static int _openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, 
 static void _closembox(jmap_req_t *req, struct mailbox **mboxp)
 {
     ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
-    struct _mboxcache_rec *rec;
+    struct _mboxcache_rec *rec = NULL;
     int i;
 
     if (*mboxp == req->inbox) {
