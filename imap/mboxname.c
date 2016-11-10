@@ -2391,7 +2391,7 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     return r;
 }
 
-static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder, int add)
+static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder, modseq_t add)
 {
     struct mboxname_counters counters;
     struct mboxname_counters oldcounters;
@@ -2425,13 +2425,20 @@ static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtyp
         foldersmodseqp = &counters.mailfoldersmodseq;
     }
 
+    /* make sure all counters are at least the old value */
     if (counters.highestmodseq < last)
         counters.highestmodseq = last;
+    if (*typemodseqp < last)
+        *typemodseqp = last;
+    if (dofolder && *foldersmodseqp < last)
+        *foldersmodseqp = last;
 
-    counters.highestmodseq += add;
-
-    if (typemodseqp) *typemodseqp = counters.highestmodseq;
-    if (dofolder && foldersmodseqp) *foldersmodseqp = counters.highestmodseq;
+    /* if adding, bring all counters up to the overall highest modseq */
+    if (add) {
+        counters.highestmodseq += add;
+        *typemodseqp = counters.highestmodseq;
+        if (dofolder) *foldersmodseqp = counters.highestmodseq;
+    }
 
     if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
         mboxname_set_counters(mboxname, &counters, fd);
