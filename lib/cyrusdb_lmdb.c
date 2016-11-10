@@ -206,6 +206,8 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
 
     assert(db && tid);
 
+    PDEBUG("cyrusdb_lmdb(%s)[commit_txn] tid=%p", db->fname, tid);
+
     mr = mdb_txn_commit(tid->mtxn);
     free(tid);
     if (tid == db->tid) db->tid = NULL;
@@ -217,6 +219,8 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
 static int abort_txn(struct dbengine *db, struct txn *tid)
 {
     assert(db && tid);
+
+    PDEBUG("cyrusdb_lmdb(%s)[abort_txn] tid=%p", db->fname, tid);
 
     mdb_txn_abort(tid->mtxn);
     free(tid);
@@ -232,6 +236,9 @@ static int begin_txn(struct dbengine *db, struct txn **tidptr, int readonly)
     struct MDB_txn *parent = NULL;
 
     assert(db && tidptr);
+
+    PDEBUG("cyrusdb_lmdb(%s)[begin_txn] readonly=%d tidptr=%p *tidptr=%p",
+            db->fname, readonly, tidptr, tidptr ? *tidptr : NULL);
 
     /* Read-only transactions may only be master transactions and do
      * not allow nested transactions. */
@@ -311,6 +318,10 @@ static int getorset_txn(struct dbengine *db,
     }
     /* Return the transaction */
     *_tidptr = tid;
+
+    PDEBUG("cyrusdb_lmdb(%s)[getorset_txn] tidptr=%p *tidptr=%p _tidptr=%p *_tidptr=%p ",
+            db->fname, tidptr, tidptr ? *tidptr : NULL, _tidptr, _tidptr ? *_tidptr : NULL);
+
     return CYRUSDB_OK;
 }
 
@@ -348,7 +359,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret,
     struct dbengine *db;
     int r, mr = 0;
 
-    PDEBUG("cyrusdb_lmdb(%s): open (create=%d)", fname, flags & CYRUSDB_CREATE);
+    PDEBUG("cyrusdb_lmdb(%s)[open] flags=0x%x tidptr=%p *tidptr=%p",
+            fname, flags, tidptr, tidptr ? *tidptr : NULL);
     assert(fname && ret);
 
     /* Create a new database engine */
@@ -435,7 +447,7 @@ static int myclose(struct dbengine *db)
         return CYRUSDB_INTERNAL;
     }
 
-    PDEBUG("cyrusdb_lmdb(%s): close", db->fname);
+    PDEBUG("cyrusdb_lmdb(%s)[close]", db->fname);
     close_db(db);
     unregister_db(db);
     return CYRUSDB_OK;
@@ -448,7 +460,8 @@ static int fetch(struct dbengine *db, const char *key, size_t keylen,
     struct txn *tid;
     int r, r2 = 0, mr;
 
-    PDEBUG("cyrusdb_lmdb(%s): fetch %.*s", db->fname, (int) keylen, key);
+    PDEBUG("cyrusdb_lmdb(%s)[fetch] tidptr=%p *tidptr=%p key='%.*s'",
+            db->fname, tidptr, tidptr ? *tidptr : NULL, (int) keylen, key);
     assert(db && key);
 
     mkey.mv_data = (void*) key;
@@ -500,7 +513,8 @@ static int foreach(struct dbengine *db, const char *prefix, size_t prefixlen,
     enum MDB_cursor_op op;
     struct buf cur = BUF_INITIALIZER;
 
-    PDEBUG("cyrusdb_lmdb(%s): foreach %.*s", db->fname, (int) prefixlen, prefix);
+    PDEBUG("cyrusdb_lmdb(%s)[foreach] tidptr=%p *tidptr=%p prefix='%.*s'",
+            db->fname, tidptr, tidptr ? *tidptr : NULL, (int) prefixlen, prefix);
     assert(db);
 
     /* Open or reuse transaction */
@@ -636,7 +650,9 @@ fail:
 static int create(struct dbengine *db, const char *key, size_t keylen,
                   const char *data, size_t datalen, struct txn **tidptr)
 {
-    PDEBUG("cyrusdb_lmdb(%s): create %.*s => %.*s", db->fname,
+
+    PDEBUG("cyrusdb_lmdb(%s)[create] tidptr=%p *tidptr=%p key='%.*s' data='%.*s'",
+            db->fname, tidptr, tidptr ? *tidptr : NULL,
             (int) keylen, key, (int) datalen, data);
     return put(db, key, keylen, data, datalen, tidptr, MDB_NOOVERWRITE);
 }
@@ -644,7 +660,8 @@ static int create(struct dbengine *db, const char *key, size_t keylen,
 static int store(struct dbengine *db, const char *key, size_t keylen,
                   const char *data, size_t datalen, struct txn **tidptr)
 {
-    PDEBUG("cyrusdb_lmdb(%s): store %.*s => %.*s", db->fname,
+    PDEBUG("cyrusdb_lmdb(%s)[store] tidptr=%p *tidptr=%p key='%.*s' data='%.*s'",
+            db->fname, tidptr, tidptr ? *tidptr : NULL,
             (int) keylen, key, (int) datalen, data);
     return put(db, key, keylen, data, datalen, tidptr, 0);
 }
@@ -656,7 +673,8 @@ static int delete(struct dbengine *db, const char *key, size_t keylen,
     struct txn *tid;
     int r, mr;
 
-    PDEBUG("cyrusdb_lmdb(%s): delete %.*s", db->fname, (int) keylen, key);
+    PDEBUG("cyrusdb_lmdb(%s)[delete] tidptr=%p *tidptr=%p",
+            db->fname, tidptr, tidptr ? *tidptr : NULL);
 
     mkey.mv_data = (void*) key;
     mkey.mv_size = keylen;
@@ -733,7 +751,8 @@ static int mycompar(struct dbengine *db, const char *a, int alen,
 static int init(const char *dbdir __attribute__((unused)),
                 int myflags __attribute__((unused)))
 {
-    PDEBUG("cyrusdb_lmdb(%s): init", dbdir);
+    PDEBUG("cyrusdb_lmdb(%s)[init]", dbdir);
+
     char *val = getenv("CYRUSDB_LMDB_MAXSIZE");
     int pagesize;
 
@@ -784,7 +803,7 @@ static int done(void)
 {
     struct dblist *l;
 
-    PDEBUG("cyrusdb_lmdb: done");
+    PDEBUG("cyrusdb_lmdb[done]");
     l = dbs;
     while (l) {
         struct dblist *tmp;
@@ -805,7 +824,7 @@ static int mysync(void)
 
     r = CYRUSDB_OK;
     for (l = dbs; l; l = l->next) {
-        PDEBUG("cyrusdb_lmdb(%s): sync", l->db->fname);
+        PDEBUG("cyrusdb_lmdb(%s)[sync]", l->db->fname);
         mr = mdb_env_sync(l->db->env, 1 /*force*/);
         if (mr) {
             syslog(LOG_ERR, "cyrusdb_lmdb(%s): sync: %s", l->db->fname, mdb_strerror(mr));
@@ -823,6 +842,8 @@ static int archive(const strarray_t *fnames, const char *dirname)
     char dstname[1024], *dp;
     size_t length, rest, n;
     int i, r, init = 1;
+
+    PDEBUG("cyrusdb_lmdb[archive]");
 
     if (!strarray_size(fnames))
         return 0;
