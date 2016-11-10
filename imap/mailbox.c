@@ -1058,6 +1058,9 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
 
+    if (mailbox->silentchanges)
+        return mailbox->i.highestmodseq;
+
     if (!mailbox->modseq_dirty) {
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name,
                                    mailbox->i.highestmodseq,

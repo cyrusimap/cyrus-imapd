@@ -263,6 +263,7 @@ struct mailbox {
 #endif
 
     /* change management */
+    int silentchanges;
     int modseq_dirty;
     int header_dirty;
     int quota_dirty;

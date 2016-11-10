@@ -2615,6 +2615,10 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* now we're committed to writing something no matter what happens! */
 
+    mailbox_index_dirty(mailbox);
+
+    mailbox->silentchanges = 1;
+
     /* always take the ACL from the master, it's not versioned */
     if (strcmp(mailbox->acl, acl)) {
         mailbox_set_acl(mailbox, acl, 0);
@@ -2642,7 +2646,6 @@ int sync_apply_mailbox(struct dlist *kin,
         return r;
     }
 
-    mailbox_index_dirty(mailbox);
     if (!opt_force) {
         assert(mailbox->i.last_uid <= last_uid);
     }
