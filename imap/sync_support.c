@@ -2651,6 +2651,7 @@ int sync_apply_mailbox(struct dlist *kin,
     }
     mailbox->i.last_uid = last_uid;
     mailbox->i.recentuid = recentuid;
+    mailbox->i.highestmodseq = highestmodseq;
     mailbox->i.recenttime = recenttime;
     mailbox->i.last_appenddate = last_appenddate;
     mailbox->i.pop3_last_login = pop3_last_login;
@@ -2659,10 +2660,8 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
                          (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
-    /* this happens all the time! */
-    if (mailbox->i.highestmodseq != highestmodseq) {
-        mailbox->i.highestmodseq = mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*dofolder*/0);
-    }
+    /* always set the highestmodseq */
+    mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype, /*dofolder*/0);
 
     /* this happens rarely, so let us know */
     if (mailbox->i.uidvalidity != uidvalidity) {
