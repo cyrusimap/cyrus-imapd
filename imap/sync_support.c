@@ -4871,6 +4871,7 @@ static int mailbox_full_update(struct sync_folder *local,
     int remote_modseq_was_higher = 0;
     modseq_t xconvmodseq = 0;
     struct sync_msgid_list *part_list;
+    annotate_state_t *astate = NULL;
 
     if (flags & SYNC_FLAG_VERBOSE)
         printf("%s %s\n", cmd, local->name);
@@ -4956,6 +4957,12 @@ static int mailbox_full_update(struct sync_folder *local,
         mailbox_modseq_dirty(mailbox);
         remote_modseq_was_higher = 1;
     }
+
+    /* hold the annotate state open */
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto done;
+
+    annotate_state_begin(astate);
 
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
                             highestmodseq, NULL, part_list, sync_be);
