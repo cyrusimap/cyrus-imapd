@@ -529,7 +529,7 @@ static int foreach(struct dbengine *db, const char *prefix, size_t prefixlen,
         if (prefix && memcmp(mkey.mv_data, prefix, prefixlen))
             break;
 
-        if (!p || p(rock, cur.s, cur.len, mval.mv_data, mval.mv_size)) {
+        if (!p || p(rock, mkey.mv_data, mkey.mv_size, mval.mv_data, mval.mv_size)) {
             /* Cache the current position in local memory */
             buf_setmap(&cur, mkey.mv_data, mkey.mv_size);
 
