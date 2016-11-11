@@ -315,13 +315,23 @@ static int xapstat(const char *path)
     r = stat(glass, &sbuf);
     free(glass);
 
+    /* zero byte file is the same as no database */
+    if (!r && !sbuf.st_size) {
+         r = -1;
+         errno = ENOENT;
+    }
     if (!r) return 0;
-    if (errno != ENOENT) return r;
 
     /* check for old chert file */
     char *chert = strconcat(path, "/iamchert", (char *)NULL);
     r = stat(chert, &sbuf);
     free(chert);
+
+    /* zero byte file is the same as no database */
+    if (!r && !sbuf.st_size) {
+         r = -1;
+         errno = ENOENT;
+    }
 
     return r;
 }
