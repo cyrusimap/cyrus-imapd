@@ -51,13 +51,19 @@ use Data::Dumper;
 use Storable 'dclone';
 
 use lib '.';
-use base qw(Cassandane::Cyrus::JMAP);
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 use charnames ':full';
 
+sub new
+{
+    my ($class, @args) = @_;
+    return $class->SUPER::new({}, @args);
+}
+
 sub test_setcontacts_multicontact
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -105,7 +111,7 @@ sub test_setcontacts_multicontact
 }
 
 sub test_getcontactupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -228,7 +234,7 @@ sub test_getcontactupdates
 }
 
 sub test_setcontactgroups
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
 
     my ($self) = @_;
@@ -294,7 +300,7 @@ sub test_setcontactgroups
 }
 
 sub test_getcontactlist
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -466,7 +472,7 @@ sub test_getcontactlist
 }
 
 sub test_getcontactgroupupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -599,7 +605,7 @@ sub test_getcontactgroupupdates
 }
 
 sub test_setcontacts
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -914,7 +920,7 @@ sub test_setcontacts
 
 
 sub test_setcontacts_state
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -981,7 +987,7 @@ sub test_setcontacts_state
 }
 
 sub test_setcontacts_importance_later
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1016,7 +1022,7 @@ sub test_setcontacts_importance_later
 }
 
 sub test_setcontacts_importance_upfront
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1051,7 +1057,7 @@ sub test_setcontacts_importance_upfront
 }
 
 sub test_setcontacts_importance_multiedit
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1086,7 +1092,7 @@ sub test_setcontacts_importance_multiedit
 }
 
 sub test_setcontacts_importance_zero_multi
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1121,7 +1127,7 @@ sub test_setcontacts_importance_zero_multi
 }
 
 sub test_setcontacts_importance_zero_byself
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 

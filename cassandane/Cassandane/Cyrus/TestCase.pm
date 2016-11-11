@@ -43,6 +43,9 @@ package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
 use attributes;
+use Mail::JMAPTalk;
+use Net::CalDAVTalk 0.09;
+use Net::CardDAVTalk 0.03;
 use Scalar::Util qw(refaddr);
 
 use lib '.';
@@ -219,6 +222,16 @@ magic(MagicPlus => sub {
 });
 magic(FastMailSharing => sub {
     shift->config_set('fastmailsharing' => 'true');
+});
+magic(JMAP => sub {
+    my $self = shift;
+    $self->want('jmap');
+    $self->want('adminstore');
+    $self->want('services' => [ 'imap', 'http' ]);
+    $self->config_set(caldav_realm => 'Cassandane');
+    $self->config_set(conversations => 'yes');
+    $self->config_set(httpmodules => 'carddav caldav jmap');
+    $self->config_set(httpallowcompress => 'no');
 });
 
 
@@ -404,6 +417,48 @@ sub _create_instances
     }
 }
 
+sub _jmap_setup
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGJMAP} = 1;
+    eval {
+	$self->{carddav} = Net::CardDAVTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/',
+	    expandurl => 1,
+	);
+	$self->{caldav} = Net::CalDAVTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/',
+	    expandurl => 1,
+	);
+	$self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
+	$self->{jmap} = Mail::JMAPTalk->new(
+	    user => 'cassandane',
+	    password => 'pass',
+	    host => $service->host(),
+	    port => $service->port(),
+	    scheme => 'http',
+	    url => '/jmap',
+	);
+    };
+    if ($@) {
+	my $e = $@;
+	$self->tear_down();
+	die $e;
+    }
+}
+
 sub set_up
 {
     my ($self) = @_;
@@ -413,6 +468,8 @@ sub set_up
     $self->_create_instances();
     $self->_start_instances()
 	if $self->{_want}->{start_instances};
+    $self->_jmap_setup()
+	if $self->{_want}->{jmap};
     xlog "Calling test function";
 }
 

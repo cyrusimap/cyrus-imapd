@@ -52,13 +52,19 @@ use Storable 'dclone';
 use Cwd qw(abs_path);
 
 use lib '.';
-use base qw(Cassandane::Cyrus::JMAP);
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 use charnames ':full';
 
+sub new
+{
+    my ($class, @args) = @_;
+    return $class->SUPER::new({}, @args);
+}
+
 sub test_getcalendars
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -100,7 +106,7 @@ sub test_getcalendars
 }
 
 sub test_getcalendars_default
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -115,7 +121,7 @@ sub test_getcalendars_default
 }
 
 sub test_setcalendars
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -178,7 +184,7 @@ sub test_setcalendars
 }
 
 sub test_setcalendars_state
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -280,7 +286,7 @@ sub test_setcalendars_state
 
 
 sub test_getcalendarupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -384,7 +390,7 @@ sub test_getcalendarupdates
 }
 
 sub test_setcalendars_error
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -473,7 +479,7 @@ sub test_setcalendars_error
 }
 
 sub test_setcalendars_badname
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -497,7 +503,7 @@ sub test_setcalendars_badname
 }
 
 sub test_setcalendars_destroydefault
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -628,7 +634,7 @@ sub icalfile
 }
 
 sub test_getcalendarevents_simple
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -653,7 +659,7 @@ sub test_getcalendarevents_simple
 }
 
 sub test_getcalendarevents_links
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -676,7 +682,7 @@ sub test_getcalendarevents_links
 
 
 sub test_getcalendarevents_rscale
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -693,7 +699,7 @@ sub test_getcalendarevents_rscale
 }
 
 sub test_getcalendarevents_endtimezone
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -712,7 +718,7 @@ sub test_getcalendarevents_endtimezone
 }
 
 sub test_getcalendarevents_participants
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -751,7 +757,7 @@ sub test_getcalendarevents_participants
 }
 
 sub test_getcalendarevents_recurrence
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -784,7 +790,7 @@ sub test_getcalendarevents_recurrence
 }
 
 sub test_getcalendarevents_rdate_period
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -800,7 +806,7 @@ sub test_getcalendarevents_rdate_period
 
 
 sub test_getcalendarevents_recurrenceoverrides
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -830,7 +836,7 @@ sub test_getcalendarevents_recurrenceoverrides
 }
 
 sub test_getcalendarevents_alerts
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -879,7 +885,7 @@ sub test_getcalendarevents_alerts
 }
 
 sub test_getcalendarevents_locations
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -892,7 +898,7 @@ sub test_getcalendarevents_locations
 }
 
 sub test_getcalendarevents_locations_uri
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -906,7 +912,7 @@ sub test_getcalendarevents_locations_uri
 }
 
 sub test_getcalendarevents_locations_geo
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -919,7 +925,7 @@ sub test_getcalendarevents_locations_geo
 }
 
 sub test_getcalendarevents_locations_apple
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -933,7 +939,7 @@ sub test_getcalendarevents_locations_apple
 }
 
 sub test_getcalendarevents_localizations
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -956,7 +962,7 @@ sub test_getcalendarevents_localizations
 }
 
 sub test_getcalendarevents_infinite_delegates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1041,7 +1047,7 @@ sub createcalendar
 
 
 sub test_setcalendarevents_simple
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1072,7 +1078,7 @@ sub test_setcalendarevents_simple
 }
 
 sub test_setcalendarevents_prodid
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1103,7 +1109,7 @@ sub test_setcalendarevents_prodid
 }
 
 sub test_setcalendarevents_endtimezone
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1144,7 +1150,7 @@ sub test_setcalendarevents_endtimezone
 }
 
 sub test_setcalendarevents_endtimezone_recurrence
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1186,7 +1192,7 @@ sub test_setcalendarevents_endtimezone_recurrence
 }
 
 sub test_setcalendarevents_links
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1226,7 +1232,7 @@ sub test_setcalendarevents_links
 }
 
 sub test_setcalendarevents_localizations
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1295,7 +1301,7 @@ sub test_setcalendarevents_localizations
 }
 
 sub test_setcalendarevents_locations
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1345,7 +1351,7 @@ sub test_setcalendarevents_locations
 }
 
 sub test_setcalendarevents_recurrence
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1384,7 +1390,7 @@ sub test_setcalendarevents_recurrence
 }
 
 sub test_setcalendarevents_recurrenceoverrides
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1457,7 +1463,7 @@ sub test_setcalendarevents_recurrenceoverrides
 }
 
 sub test_setcalendarevents_participants
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1503,7 +1509,7 @@ sub test_setcalendarevents_participants
 }
 
 sub test_setcalendarevents_alerts
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1556,7 +1562,7 @@ sub test_setcalendarevents_alerts
 }
 
 sub test_setcalendarevents_participantid
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1603,7 +1609,7 @@ sub test_setcalendarevents_participantid
 
 
 sub test_setcalendarevents_isallday
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1655,7 +1661,7 @@ sub test_setcalendarevents_isallday
 }
 
 sub test_setcalendarevents_move
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1729,7 +1735,7 @@ sub test_setcalendarevents_move
 }
 
 sub test_getcalendareventupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1900,7 +1906,7 @@ sub test_getcalendareventupdates
 }
 
 sub test_getcalendareventlist
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1987,7 +1993,7 @@ sub test_getcalendareventlist
 }
 
 sub test_getcalendareventlist_datetime
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2092,7 +2098,7 @@ sub test_getcalendareventlist_datetime
 }
 
 sub test_getcalendareventlist_date
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2219,7 +2225,7 @@ sub test_getcalendareventlist_date
 }
 
 sub test_setcalendarevents_caldav
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2347,7 +2353,7 @@ EOF
 }
 
 sub test_setcalendarevents_schedule_request
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2399,7 +2405,7 @@ sub test_setcalendarevents_schedule_request
 }
 
 sub test_setcalendarevents_schedule_reply
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2461,7 +2467,7 @@ sub test_setcalendarevents_schedule_reply
 }
 
 sub test_setcalendarevents_schedule_cancel
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 

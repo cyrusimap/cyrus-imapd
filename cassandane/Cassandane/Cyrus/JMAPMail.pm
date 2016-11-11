@@ -51,10 +51,16 @@ use Data::Dumper;
 use Storable 'dclone';
 
 use lib '.';
-use base qw(Cassandane::Cyrus::JMAP);
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 use charnames ':full';
+
+sub new
+{
+    my ($class, @args) = @_;
+    return $class->SUPER::new({}, @args);
+}
 
 sub uniq {
   my %seen;
@@ -76,7 +82,7 @@ sub getinbox
 }
 
 sub test_getmailboxes
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -154,7 +160,7 @@ sub test_getmailboxes
 }
 
 sub test_getmailboxes_specialuse
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -202,7 +208,7 @@ sub test_getmailboxes_specialuse
 }
 
 sub test_getmailboxes_properties
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -230,7 +236,7 @@ sub test_getmailboxes_properties
 }
 
 sub test_getmailboxes_ids
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -268,7 +274,7 @@ sub test_getmailboxes_ids
 }
 
 sub test_getmailboxes_nocalendars
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -300,7 +306,7 @@ sub test_getmailboxes_nocalendars
 }
 
 sub test_setmailboxes
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -383,7 +389,7 @@ sub test_setmailboxes
 }
 
 sub test_setmailboxes_name_collision
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -457,7 +463,7 @@ sub test_setmailboxes_name_collision
 }
 
 sub test_setmailboxes_name_interop
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -513,7 +519,7 @@ sub test_setmailboxes_name_interop
 }
 
 sub test_setmailboxes_role
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -647,7 +653,7 @@ sub test_setmailboxes_role
 }
 
 sub test_setmailboxes_parent
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -741,7 +747,7 @@ sub test_setmailboxes_parent
 }
 
 sub test_getmailboxupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
 
@@ -876,7 +882,7 @@ sub test_getmailboxupdates
 }
 
 sub test_getmessages
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -994,7 +1000,7 @@ sub test_getmessages
 }
 
 sub test_getmessages_mimeencode
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1053,7 +1059,7 @@ sub test_getmessages_mimeencode
 }
 
 sub test_getmessages_fetchmessages
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1176,7 +1182,7 @@ sub test_getmessages_fetchmessages
 }
 
 sub test_getmessages_threads
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1285,7 +1291,7 @@ sub test_getmessages_threads
 }
 
 sub test_getmessages_multimailboxes
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1321,7 +1327,7 @@ sub test_getmessages_multimailboxes
 
 
 sub test_getmessages_body_both
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1375,7 +1381,7 @@ sub test_getmessages_body_both
 }
 
 sub test_getmessages_body_plain
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1414,7 +1420,7 @@ sub test_getmessages_body_plain
 }
 
 sub test_getmessages_body_html
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1455,7 +1461,7 @@ sub test_getmessages_body_html
 }
 
 sub test_getmessages_body_multi
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1613,7 +1619,7 @@ sub test_getmessages_body_multi
 }
 
 sub test_getmessages_preview
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1645,7 +1651,7 @@ sub test_getmessages_preview
 }
 
 sub test_setmessages_draft
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1711,7 +1717,7 @@ sub test_setmessages_draft
 }
 
 sub test_setmessages_inreplytoid
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1758,7 +1764,7 @@ sub test_setmessages_inreplytoid
 }
 
 sub test_setmessages_attachedmessages
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1818,7 +1824,7 @@ sub test_setmessages_attachedmessages
 }
 
 sub test_setmessages_attachments
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1924,7 +1930,7 @@ sub test_setmessages_attachments
 }
 
 sub test_setmessages_flagged
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1961,7 +1967,7 @@ sub test_setmessages_flagged
 }
 
 sub test_setmessages_invalid_mailaddr
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2007,7 +2013,7 @@ sub test_setmessages_invalid_mailaddr
 }
 
 sub test_setmessages_mailboxids
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2070,7 +2076,7 @@ sub test_setmessages_mailboxids
 }
 
 sub test_setmessages_move
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2133,7 +2139,7 @@ sub test_setmessages_move
 }
 
 sub test_setmessages_update
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2183,7 +2189,8 @@ sub test_setmessages_update
 }
 
 sub test_setmessages_destroy
-  : min_version_3_0 {
+    :JMAP :min_version_3_0
+{
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
@@ -2256,7 +2263,7 @@ sub test_setmessages_destroy
 }
 
 sub test_acl
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2345,7 +2352,7 @@ sub test_acl
 }
 
 sub test_getmessagelist
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2605,6 +2612,7 @@ sub test_getmessagelist
 }
 
 sub test_getmessagelist_collapse
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -2641,6 +2649,7 @@ sub test_getmessagelist_collapse
 }
 
 sub test_getmessagelist_window
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -2725,7 +2734,7 @@ sub test_getmessagelist_window
 }
 
 sub test_getsearchsnippets
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2832,6 +2841,7 @@ sub test_getsearchsnippets
 }
 
 sub test_getmessagelist_snippets
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -2862,6 +2872,7 @@ sub test_getmessagelist_snippets
 }
 
 sub test_getthreads
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -2954,7 +2965,7 @@ sub test_getthreads
 }
 
 sub test_getidentities
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2978,7 +2989,7 @@ sub test_getidentities
 }
 
 sub test_getmessageupdates
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3131,6 +3142,7 @@ sub test_getmessageupdates
 }
 
 sub test_getthreadupdates
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -3330,7 +3342,7 @@ sub test_getthreadupdates
 }
 
 sub test_importmessages
-    :min_version_3_0
+    :JMAP :min_version_3_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
