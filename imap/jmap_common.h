@@ -52,6 +52,7 @@
 #include "mboxname.h"
 
 #include "http_jmap.h"
+#include "json_support.h"
 
 /* Manage the state of mailboxes of type mbtype for req's userid */
 extern json_t* jmap_getstate(int mbtype, struct jmap_req *req);
