@@ -305,6 +305,27 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
     return activefile_read(*activefile);
 }
 
+static int xapstat(const char *path)
+{
+    struct stat sbuf;
+    int r;
+
+    /* is there a glass file? */
+    char *glass = strconcat(path, "/iamglass", (char *)NULL);
+    r = stat(glass, &sbuf);
+    free(glass);
+
+    if (!r) return 0;
+    if (errno != ENOENT) return r;
+
+    /* check for old chert file */
+    char *chert = strconcat(path, "/iamchert", (char *)NULL);
+    r = stat(chert, &sbuf);
+    free(chert);
+
+    return r;
+}
+
 /* given an item from the activefile file, and the mboxname and partition
  * to calculate the user, find the path.  If dostat is true, also stat the
  * path and return NULL if it doesn't exist (used for filtering databases
@@ -327,8 +348,7 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
     dest = buf_release(&buf);
 
     if (dostat) {
-        struct stat sbuf;
-        if (stat(dest, &sbuf)) {
+        if (xapstat(dest)) {
             if (errno != ENOENT)
                 syslog(LOG_ERR, "IOERROR: can't read %s for search, check permissions: %m", dest);
             free(dest);
@@ -337,6 +357,7 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
     }
 
 out:
+    buf_free(&buf);
     activeitem_free(ai);
     return dest;
 }
@@ -350,7 +371,8 @@ static strarray_t *activefile_resolve(const char *mboxname, const char *part,
     int i;
 
     for (i = 0; i < items->count; i++) {
-        char *dir = activefile_path(mboxname, part, strarray_nth(items, i), dostat);
+        int statthis = (dostat == 1 || (dostat == 2 && i));
+        char *dir = activefile_path(mboxname, part, strarray_nth(items, i), statthis);
         if (dir) strarray_appendm(result, dir);
     }
 
@@ -1454,7 +1476,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (!active || !active->count) goto out;
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it */
-    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
+    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2);
     if (!tr->activedirs || !tr->activedirs->count) goto out;
 
     /* create the directory if needed */
