@@ -1853,6 +1853,7 @@ struct mbdata {
 struct mbfilter {
     const char *userid;
     struct conversations_state *cstate;
+    int batchcount;
     struct db *indexeddb;
     struct txn **tid;
     const strarray_t *destpaths;
@@ -1886,6 +1887,12 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
 
     /* we can't get here without GUID keys */
     assert(!strncmp(cyrusid, "*G*", 3));
+
+    /* release the conversations DB every 1024 records */
+    if (filter->cstate && filter->batchcount > 1024)
+        conversations_commit(&filter->cstate);
+
+    filter->batchcount++;
 
     /* only open when needed */
     if (!filter->cstate)
