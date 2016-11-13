@@ -1977,19 +1977,19 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
         do {
             str = icalproperty_get_value_as_string(oldprop);
-            old_crc ^= crc32_cstring(str);
+            if (str) old_crc ^= crc32_cstring(str);
         } while ((oldprop = icalcomponent_get_next_property(oldical, kind)));
 
         do {
             str = icalproperty_get_value_as_string(newprop);
-            new_crc ^= crc32_cstring(str);
+            if (str) new_crc ^= crc32_cstring(str);
         } while ((newprop = icalcomponent_get_next_property(newical, kind)));
 
         return (old_crc != new_crc);
     }
     else {
-        return (strcmp(icalproperty_get_value_as_string(oldprop),
-                       icalproperty_get_value_as_string(newprop)) != 0);
+        return (strcmpsafe(icalproperty_get_value_as_string(oldprop),
+                           icalproperty_get_value_as_string(newprop)) != 0);
     }
 }
 
