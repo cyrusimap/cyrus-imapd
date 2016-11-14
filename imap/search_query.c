@@ -639,7 +639,7 @@ static int subquery_run_one_folder(search_query_t *query,
     if (query->sortcrit && query->verbose) {
         char *s = sortcrit_as_string(query->sortcrit);
         syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
-                folder->mboxname, s);
+                mboxname, s);
         free(s);
     }
 
