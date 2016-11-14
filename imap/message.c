@@ -626,6 +626,18 @@ message_header_lookup(const char *buf, const char **valp)
 }
 
 
+static void body_add_content_guid(const char *base, struct body *body)
+{
+    int encoding = ENCODING_NONE;
+    char *decbuf = NULL;
+    size_t len = body->content_size;
+    message_parse_charset(body, &encoding, NULL);
+    base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+    if (base) message_guid_generate(&body->content_guid, base, len);
+    free(decbuf);
+}
+
+
 /*
  * Parse a body-part
  */
@@ -658,6 +670,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     }
     else if (strcmp(body->type, "MESSAGE") == 0 &&
         strcmp(body->subtype, "RFC822") == 0) {
+        const char *base = msg->base + msg->offset;
         body->subpart = (struct body *)xmalloc(sizeof(struct body));
 
         if (sawboundary) {
@@ -677,6 +690,10 @@ static int message_parse_body(struct msg *msg, struct body *body,
             /* Move any enclosing boundary information up to our level */
             body->boundary_size = body->subpart->boundary_size;
             body->boundary_lines = body->subpart->boundary_lines;
+
+            /* it's nice to have a GUID for the message/rfc822 itself */
+            body_add_content_guid(base, body);
+
         }
     }
     else {
@@ -1729,6 +1746,8 @@ static void message_parse_content(struct msg *msg, struct body *body,
         body->content_size = b64_size;
         body->content_lines += b64_lines;
     }
+
+    body_add_content_guid(msg->base + s_offset, body);
 }
 
 static void message_parse_received_date(const char *hdr, char **hdrp)
@@ -2216,6 +2235,16 @@ static void message_write_text_lcase(struct buf *buf, const char *s)
     for (p = s; *p; p++) buf_putc(buf, TOLOWER(*p));
 }
 
+static void message_write_nocharset(struct buf *buf, const struct body *body)
+{
+    buf_appendbit32(buf, 0x0000ffff);
+
+    unsigned char guidbuf[MESSAGE_GUID_SIZE];
+    if (body) message_guid_export(&body->content_guid, guidbuf);
+    else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
+    buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
+}
+
 /*
  * Write out the FETCH BODY[section] location/size information to 'buf'.
  */
@@ -2236,7 +2265,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, 0x0000ffff);
+            message_write_nocharset(buf, body->subpart);
             for (part = 0; part < body->subpart->numparts; part++) {
                 buf_appendbit32(buf, body->subpart->subpart[part].header_offset);
                 buf_appendbit32(buf, body->subpart->subpart[part].header_size);
@@ -2266,14 +2295,14 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             buf_appendbit32(buf, body->subpart->content_size);
-            buf_appendbit32(buf, 0x0000ffff);
+            message_write_nocharset(buf, body->subpart);
             buf_appendbit32(buf, body->subpart->header_offset);
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, 0x0000ffff);
+                message_write_nocharset(buf, NULL);
             }
             else {
                 buf_appendbit32(buf, body->subpart->content_size);
@@ -2292,7 +2321,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
         buf_appendbit32(buf, -1);
         buf_appendbit32(buf, 0);
         buf_appendbit32(buf, -1);
-        buf_appendbit32(buf, 0x0000ffff);
+        message_write_nocharset(buf, NULL);
         for (part = 0; part < body->numparts; part++) {
             buf_appendbit32(buf, body->subpart[part].header_offset);
             buf_appendbit32(buf, body->subpart[part].header_size);
@@ -2301,7 +2330,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
                 strcmp(body->subpart[part].type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
-                buf_appendbit32(buf, 0x0000ffff);
+                message_write_nocharset(buf, &body->subpart[part]);
             }
             else {
                 buf_appendbit32(buf, body->subpart[part].content_size);
@@ -2346,9 +2375,10 @@ static void message_write_charset(struct buf *buf, const struct body *body)
         len = ((len / itemsize) + 1) * itemsize;
         if (len > 0xffff) len = 0;
     }
-    /* we store 0x100 to say that this is the newer version so that parsers
-     * can tell even without knowing what version of cache record this is */
-    buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff)|0x100);
+    /* we stored 0x100 here to say that it was a version 4 cache with the
+     * charset length stored, which is all very well and nice, but it's
+     * useless once we added sha1, so it's been removed again */
+    buf_appendbit32(buf, ((len & 0xffff) << 16)|(encoding & 0xff));
 
     /* write charset identifier */
     if (len) {
@@ -2358,6 +2388,11 @@ static void message_write_charset(struct buf *buf, const struct body *body)
         free(tmp);
     }
     charset_free(&charset);
+
+    unsigned char guidbuf[MESSAGE_GUID_SIZE];
+    if (body) message_guid_export(&body->content_guid, guidbuf);
+    else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
+    buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
 }
 
 /*
@@ -2962,6 +2997,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
     if (!body) {
         /* skip header part */
         p += 5 * CACHE_ITEM_SIZE_SKIP;
+        if (cache_version >= 5)
+            p += MESSAGE_GUID_SIZE;
     }
     else {
         /* read header part */
@@ -2991,6 +3028,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
                 p += len;
             }
         }
+        if (cache_version >= 5)
+            p = message_guid_import(&body->content_guid, p);
     }
 
     /* read body parts */
@@ -3021,6 +3060,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
                 p += len;
             }
         }
+        if (cache_version >= 5)
+            p = message_guid_import(&subpart[i].content_guid, p);
     }
 
     /* read sub-parts */
@@ -3797,6 +3838,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
     nsubparts = CACHE_ITEM_BIT32(*cachestrp);
     *cachestrp += 4;
 
+    /* XXX - this size needs increasing for charset sizes and sha1s depending on version,
+     * it won't crash, but it may overrun while reading */
     if (*cachestrp + 4*5*nsubparts > cacheend)
         return IMAP_MAILBOX_BADFORMAT;
 
@@ -3817,10 +3860,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
             body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
             body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-            *cachestrp += 4*4;
+            // skip cte
+            *cachestrp += 5*4;
 
-            /* Skip 0x0000ffff */
-            *cachestrp += 1*4;
+            if (cache_version >= 5)
+                *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
 
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
@@ -3828,17 +3872,19 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 this->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
                 this->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
                 this->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-                *cachestrp += 4*4;
+                cte = CACHE_ITEM_BIT32(*cachestrp+4*4);
+                *cachestrp += 5*4;
 
-                /* Skip charset/encoding identifiers. */
-                cte = CACHE_ITEM_BIT32(*cachestrp);
-                *cachestrp += 1*4;
                 /* XXX CACHE_MINOR_VERSION 4 replaces numeric charset
                  * identifiers with variable-length strings. Remove
                  * this conditional once cache versions <= 3 are
                  * deprecated */
                 if (cache_version >= 4)
                     *cachestrp += (cte >> 16) & 0xffff;
+
+                /* CACHE_MINOR_VERSION 5 adds a sha1 after the charset */
+                if (cache_version >= 5)
+                    *cachestrp = message_guid_import(&this->content_guid, *cachestrp);
             }
 
             /* and parse subparts */
@@ -3863,7 +3909,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
             body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
             body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
-            *cachestrp += 9*4;
+            // skip cte
+            *cachestrp += 5*4;
+            if (cache_version >= 5)
+                *cachestrp += MESSAGE_GUID_SIZE;
+            *cachestrp += 4*4;
 
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
@@ -3880,6 +3930,9 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 if (cache_version >= 4)
                     *cachestrp += (cte >> 16) & 0xffff;
             }
+            /* CACHE_MINOR_VERSION 5 adds a sha1 after the charset */
+            if (cache_version >= 5)
+                *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
 
             /* and parse subpart */
             if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version))
@@ -3894,6 +3947,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         if (body->numparts + 1 != nsubparts)
             return IMAP_MAILBOX_BADFORMAT;
         *cachestrp += 5*4;
+        if (cache_version >= 5)
+            *cachestrp += MESSAGE_GUID_SIZE;
         for (part = 0; part < body->numparts; part++) {
             this = &body->subpart[part];
             this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
@@ -3905,6 +3960,9 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
             if (cache_version >= 4)
                 *cachestrp += (cte >> 16) & 0xffff;
+
+            if (cache_version >= 5)
+                *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
         }
 
         for (part = 0; part < body->numparts; part++) {

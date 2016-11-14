@@ -88,6 +88,9 @@ struct body {
     uint32_t boundary_size;         /* Size of terminating boundary */
     uint32_t boundary_lines;
 
+    /* Content guid - sha1 of binary content */
+    struct message_guid content_guid;
+
     int numparts;               /* For multipart types */
     struct body *subpart;       /* For message/rfc822 and multipart types */
 
