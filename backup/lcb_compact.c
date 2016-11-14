@@ -275,7 +275,9 @@ static int compact_required(struct backup_chunk_list *all_chunks,
     return 0;
 }
 
-static int want_append(struct dlist *dlist,
+static int want_append(struct backup *orig_backup,
+                       int orig_chunk_id,
+                       struct dlist *dlist,
                        struct sync_msgid_list *keep_message_guids)
 {
     if (strcmp(dlist->name, "MESSAGE") == 0) {
@@ -307,6 +309,43 @@ static int want_append(struct dlist *dlist,
         syslog(LOG_DEBUG, "%s: MESSAGE line has no more messages", __func__);
         return 0;
     }
+    else if (strcmp(dlist->name, "MAILBOX") == 0) {
+        struct dlist *record = NULL;
+        const char *uniqueid = NULL;
+        struct backup_mailbox *mailbox = NULL;
+        int mailbox_last_chunk_id = 0;
+
+        dlist_getlist(dlist, "RECORD", &record);
+        if (record && record->head) {
+            /* contains records: better just keep it for now */
+            /* TODO: check for records whose last_chunk_id is this chunk */
+            syslog(LOG_DEBUG, "%s: keeping MAILBOX line containing records", __func__);
+            return 1;
+        }
+
+        dlist_getatom(dlist, "UNIQUEID", &uniqueid);
+        mailbox = backup_get_mailbox_by_uniqueid(orig_backup, uniqueid,
+                                                 BACKUP_MAILBOX_NO_RECORDS);
+        if (!mailbox) {
+            /* what? */
+            syslog(LOG_DEBUG, "%s: couldn't find mailbox entry for uniqueid %s", __func__, uniqueid);
+            return 1; /* better keep it for now */
+        }
+
+        mailbox_last_chunk_id = mailbox->last_chunk_id;
+        backup_mailbox_free(&mailbox);
+
+        if (mailbox_last_chunk_id == orig_chunk_id) {
+            /* keep all mailbox lines from the chunk recorded as its last */
+            syslog(LOG_DEBUG, "%s: keeping MAILBOX line from its last known chunk", __func__);
+            return 1;
+        }
+
+        syslog(LOG_DEBUG, "%s: discarding stale MAILBOX line (chunk %d, last %d, uniqueid %s)",
+                          __func__, orig_chunk_id, mailbox_last_chunk_id, uniqueid);
+        return 0;
+    }
+    /* FIXME detect other stale data types */
     else {
         return 1;
     }
@@ -441,7 +480,7 @@ EXPORTED int backup_compact(const char *name,
             }
 
             // XXX if this line is worth keeping
-            if (want_append(dl, keep_message_guids)) {
+            if (want_append(original, chunk->id, dl, keep_message_guids)) {
                 // FIXME if message is removed due to unneeded chunk,
                 // subsequent mailbox lines for it will fail here
                 // so we need to be able to tell which lines apply to messages we don't want anymore
