@@ -56,6 +56,11 @@ use Cassandane::Util::Log;
 
 use charnames ':full';
 
+sub uniq {
+  my %seen;
+  return grep { !$seen{$_}++ } @_;
+}
+
 sub getinbox
 {
     my ($self) = @_;
@@ -1937,6 +1942,45 @@ sub test_getmessagelist
     }, "R1"]]);
     @ids = reverse sort ($foo, $bar);
     $self->assert_deep_equals(\@ids, $res->[0][1]->{messageIds});
+}
+
+sub test_getmessagelist_collapse
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message C referencing A";
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    $imaptalk->select("INBOX");
+    $imaptalk->fetch("1:*", "(CID UID FLAGS)");
+
+    xlog "list uncollapsed threads";
+    $res = $jmap->Request([['getMessageList', { }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{threadIds}});
+    $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
+
+    $res = $jmap->Request([['getMessageList', { collapseThreads => JSON::true }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
+    $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
 }
 
 1;
