@@ -2396,6 +2396,20 @@ EXPORTED void search_attr_init(void)
             search_string_duplicate,
             search_string_free,
             (void *)0       /* skipheader flag */
+        },{
+            "date",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_uint32_serialise,
+            search_uint32_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_date
         }
     };
 
