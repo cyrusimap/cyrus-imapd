@@ -134,28 +134,43 @@ my %runners =
     },
 );
 
+become_cyrus();
+
 eval
 {
     require Cassandane::Unit::RunnerXML;
+
+    if ( ! -d $output_dir )
+    {
+	mkdir($output_dir)
+	    or die "Cannot make output directory \"$output_dir\": $!\n";
+    }
+
+    if (! -w $output_dir )
+    {
+	die "Cannot write to output directory \"$output_dir\"\n";
+    }
 
     $runners{xml} = sub
     {
 	my ($plan, $fh) = @_;
 
-	if ( ! -d $output_dir )
-	{
-	    mkdir($output_dir)
-		or die "Cannot make output directory \"$output_dir\": $!";
-	}
 	my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
 	$runner->filter('x', 'skip_version');
 	$runner->start($plan);
 	return $runner->all_tests_passed();
     };
-    $format = 'xml';
-} or print STDERR "Sorry, XML output format not available.\n";
 
-become_cyrus();
+    $format = 'xml';
+};
+if ($@) {
+    my $eval_err = $@;
+    $runners{xml} = sub
+    {
+	print STDERR "Sorry, XML output format not available due to:\n=> $eval_err";
+	return 0;
+    };
+}
 
 sub usage
 {
