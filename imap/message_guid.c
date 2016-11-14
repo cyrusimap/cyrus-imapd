@@ -197,12 +197,13 @@ EXPORTED void message_guid_export(const struct message_guid *guid, unsigned char
  *
  ************************************************************************/
 
-EXPORTED void message_guid_import(struct message_guid *guid,
+EXPORTED const unsigned char *message_guid_import(struct message_guid *guid,
                          const unsigned char *buf)
 {
     assert(guid);
     guid->status = GUID_UNKNOWN;
     memcpy(guid->value, buf, MESSAGE_GUID_SIZE);
+    return buf + MESSAGE_GUID_SIZE;
 }
 
 
