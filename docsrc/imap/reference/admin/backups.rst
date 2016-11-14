@@ -49,19 +49,22 @@ must be massaged through manually (with care):
 
 -  reconstruct of backups.db from backup files
 
-The following types of information are currently backed up
+The following types of information are currently backed up and recoverable
 
 -  mailbox state and annotations
 -  messages
 -  mailbox message records, flags, and annotations
 
+The following types of information are currently backed up, but tools to
+recover them don't yet exist:
+
+-  sieve scripts (but not active script status)
+-  subscriptions
+-  seen data
+
 The following types of information are not currently backed up
 
--  sieve scripts
--  subscriptions
 -  quota information
--  seen data (?) other than the basic \\Seen flag attached to a mailbox
-   message record
 
 Architecture
 ============
@@ -110,7 +113,7 @@ Cyrus Backups server
     backup\_retention\_days: 7
         Number of days for which backup data (messages etc) should be kept
         within the backup storage after the corresponding item has been 
-        eleted/expunged from the Cyrus IMAP server.
+        deleted/expunged from the Cyrus IMAP server.
     backuppartition-\ *name*: /path/to/this/partition
         You need at least one backuppartition-\ *name* to store backup data.
         These work similarly to regular/archive IMAP partitions, but note that
