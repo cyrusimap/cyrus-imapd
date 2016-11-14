@@ -1724,7 +1724,8 @@ static void message_parse_content(struct msg *msg, struct body *body,
         msg->len += delta;
 
         /* Adjust body structure to account for encoding */
-        strcpy(body->encoding, "BASE64");
+        free(body->encoding);
+        body->encoding = xstrdup("BASE64");
         body->content_size = b64_size;
         body->content_lines += b64_lines;
     }
