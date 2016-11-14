@@ -4859,6 +4859,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 
         cur->uid = record.uid;
         cur->cid = record.cid;
+        message_guid_copy(&cur->guid, &record.guid);
         if (found_anchor && record.uid == anchor)
             *found_anchor = 1;
 
@@ -5379,6 +5380,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_RELEVANCY:
             ret = 0;        /* for now all messages have relevancy=100 */
+            break;
+        case SORT_GUID:
+            ret = message_guid_cmp(&md1->guid, &md2->guid);
             break;
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);

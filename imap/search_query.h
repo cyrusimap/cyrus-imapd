@@ -149,7 +149,7 @@ struct search_query {
      * sort results as an array of MsgData*.  The MsgData objects might
      * be "fake" ones if the results were retrieved from the cache DB,
      * but the following fields are guaranteed to be usable: uid, cid,
-     * folder.
+     * folder, guid.
      */
     ptrarray_t merged_msgdata;
 };

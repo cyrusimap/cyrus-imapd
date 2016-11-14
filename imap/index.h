@@ -154,6 +154,7 @@ typedef struct msgdata {
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
     bit32 hasflag;              /* hasflag values (up to 32 of them) */
+    struct message_guid guid;   /* message guid */
 
     /* items from the conversations database */
     modseq_t convmodseq;        /* modseq of conversation */
