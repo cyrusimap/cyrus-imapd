@@ -531,7 +531,7 @@ out:
     if (r) query->error = r;
 }
 
-void build_query(search_builder_t *bx, search_expr_t *e)
+EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 {
     search_expr_t *child;
     int bop = -1;
@@ -564,7 +564,7 @@ void build_query(search_builder_t *bx, search_expr_t *e)
         assert(bop != -1);
         bx->begin_boolean(bx, bop);
         for (child = e->children ; child ; child = child->next)
-            build_query(bx, child);
+            search_build_query(bx, child);
         bx->end_boolean(bx, bop);
     }
 }
@@ -606,7 +606,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         r = IMAP_INTERNAL;
         goto out;
     }
-    build_query(bx, sub->indexed);
+    search_build_query(bx, sub->indexed);
     r = bx->run(bx, add_unchecked_uid, query);
     search_end_search(bx);
     if (r) goto out;
