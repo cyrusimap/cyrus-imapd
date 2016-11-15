@@ -72,6 +72,7 @@ enum search_op {
 };
 
 union search_value {
+    time_t t;
     uint64_t u;
     char *s;
     struct searchannot *annot;

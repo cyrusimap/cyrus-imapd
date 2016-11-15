@@ -1462,6 +1462,62 @@ static int search_keyword_match(message_t *m,
 
 /* ====================================================================== */
 
+static int search_time_t_cmp(message_t *m, const union search_value *v,
+                             void *internalised __attribute__((unused)),
+                             void *data1)
+{
+    int r;
+    time_t t;
+    int (*getter)(message_t *, time_t *) = (int(*)(message_t *, time_t *))data1;
+
+    r = getter(m, &t);
+    if (!r) {
+        if (t < v->t)
+            r = -1;
+        else if (t == v->t)
+            r = 0;
+        else
+            r = 1;
+    }
+    else
+        r = 0;
+    return r;
+}
+
+static int search_time_t_match(message_t *m, const union search_value *v,
+                               void *internalised __attribute__((unused)),
+                               void *data1)
+{
+    int r;
+    time_t t;
+    int (*getter)(message_t *, time_t *) = (int(*)(message_t *, time_t *))data1;
+
+    r = getter(m, &t);
+    if (!r)
+        r = (v->t == t);
+    else
+        r = 0;
+
+    return r;
+}
+
+static void search_time_t_serialise(struct buf *b, const union search_value *v)
+{
+    buf_printf(b, "%lld", (long long)v->t);
+}
+
+static int search_time_t_unserialise(struct protstream *prot, union search_value *v)
+{
+    int c;
+    char tmp[32];
+
+    c = getseword(prot, tmp, sizeof(tmp));
+    v->t = strtoll(tmp, NULL, 10);
+    return c;
+}
+
+/* ====================================================================== */
+
 static int search_uint64_cmp(message_t *m, const union search_value *v,
                              void *internalised __attribute__((unused)),
                              void *data1)
@@ -2276,10 +2332,10 @@ EXPORTED void search_attr_init(void)
             SEARCH_PART_NONE,
             SEARCH_COST_INDEX,
             /*internalise*/NULL,
-            search_uint32_cmp,
-            search_uint32_match,
-            search_uint32_serialise,
-            search_uint32_unserialise,
+            search_time_t_cmp,
+            search_time_t_match,
+            search_time_t_serialise,
+            search_time_t_unserialise,
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
@@ -2290,10 +2346,10 @@ EXPORTED void search_attr_init(void)
             SEARCH_PART_NONE,
             SEARCH_COST_INDEX,
             /*internalise*/NULL,
-            search_uint32_cmp,
-            search_uint32_match,
-            search_uint32_serialise,
-            search_uint32_unserialise,
+            search_time_t_cmp,
+            search_time_t_match,
+            search_time_t_serialise,
+            search_time_t_unserialise,
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
