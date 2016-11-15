@@ -3119,6 +3119,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     json_t *val;
     size_t i;
     char *mboxname = NULL;
+    static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
 
     *snippets = json_pack("[]");
     *notfound = json_pack("[]");
@@ -3158,8 +3159,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
 
     /* Set up snippet callback context */
     snippet = json_pack("{}");
-    rx = search_begin_snippets(intquery, 0/*verbose*/, &default_snippet_markup,
-                               makesnippet, snippet);
+    rx = search_begin_snippets(intquery, 0, &markup, makesnippet, snippet);
     if (!rx) {
         r = IMAP_INTERNAL;
         goto done;
@@ -3193,6 +3193,8 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
         msg = message_new_from_record(mbox, &record);
 
         json_object_set_new(snippet, "messageId", json_string(msgid));
+        json_object_set_new(snippet, "subject", json_null());
+        json_object_set_new(snippet, "preview", json_null());
         index_getsearchtext(msg, rx, /*snippet*/1);
         json_array_append_new(*snippets, json_deep_copy(snippet));
         json_object_clear(snippet);
