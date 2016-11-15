@@ -62,6 +62,7 @@
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "parseaddr.h"
+#include "search_query.h"
 #include "statuscache.h"
 #include "stristr.h"
 #include "sync_log.h"
@@ -79,19 +80,22 @@ static int setMailboxes(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
+
+/* XXX getSearchSnippets */
+
+/* XXX getThreads */
 /* XXX getMessageUpdates */
 /* XXX importMessages */
-/* XXX copyMessages */
-/* XXX reportMessages */
+/* XXX getThreadUpdates */
 /* XXX getIdentities */
-/* XXX getIdentityUpdates */
-/* XXX setIdentities */
-/* XXX getSearchSnippets */
+
+/* NOT IMPL */
+/* XXX copyMessages */
 /* XXX getVacationResponse */
 /* XXX setVacationResponse */
-/* XXX getThreads */
-/* XXX getThreadUpdates */
-
+/* XXX getIdentityUpdates */
+/* XXX setIdentities */
+/* XXX reportMessages */
 
 jmap_msg_t jmap_mail_messages[] = {
     { "getMailboxes",           &getMailboxes },
@@ -224,7 +228,11 @@ static void _addprop(jmap_req_t *req, const char *name)
     hash_insert(name, (void *)1, ctx->props);
 }
 
-/* FIXME DUPLICATE START */
+static hash_table *_getprops(jmap_req_t *req)
+{
+    struct _req_context *ctx = (struct _req_context *) req->rock;
+    return ctx->props;
+}
 
 static int JNOTNULL(json_t *item)
 {
@@ -233,20 +241,8 @@ static int JNOTNULL(json_t *item)
    return 1;
 }
 
-/* Read the property named name into dst, formatted according to the json
- * unpack format fmt.
- *
- * If unpacking failed, or name is mandatory and not found in root, append
- * name (prefixed by any non-NULL prefix) to invalid.
- *
- * Return a negative value for a missing or invalid property.
- * Return a positive value if a property was read, zero otherwise. */
-static int readprop_full(json_t *root,
-                         const char *prefix,
-                         const char *name,
-                         int mandatory,
-                         json_t *invalid,
-                         const char *fmt,
+static int readprop_full(json_t *root, const char *prefix, const char *name,
+                         int mandatory, json_t *invalid, const char *fmt,
                          void *dst)
 {
     int r = 0;
@@ -255,9 +251,14 @@ static int readprop_full(json_t *root,
         r = -1;
     } else if (jval) {
         json_error_t err;
-        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
+        if (!mandatory && jval == json_null()) {
+            /* FIXME not all non-mandatory properties are nullable */
+            r = 0;
+        }
+        else if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
             r = -2;
-        } else {
+        }
+        else {
             r = 1;
         }
     }
@@ -274,63 +275,6 @@ static int readprop_full(json_t *root,
 
 #define readprop(root, name,  mandatory, invalid, fmt, dst) \
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
-
-static int _match_text(const char *haystack, const char *needle) {
-    /* XXX This is just a very crude text matcher. */
-    return stristr(haystack, needle) != NULL;
-}
-
-/* Return true if text matches the value of arg's property named name. If 
- * name is NULL, match text to any JSON string property of arg or those of
- * its enclosed JSON objects and arrays. */
-static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) {
-    if (name) {
-        json_t *val = json_object_get(arg, name);
-        if (json_typeof(val) != JSON_STRING) {
-            return 0;
-        }
-        return _match_text(json_string_value(val), text);
-    } else {
-        const char *key;
-        json_t *val;
-        int m = 0;
-        size_t i;
-        json_t *entry;
-
-        json_object_foreach(arg, key, val) {
-            switch json_typeof(val) {
-                case JSON_STRING:
-                    m = _match_text(json_string_value(val), text);
-                    break;
-                case JSON_OBJECT:
-                    m = jmap_match_jsonprop(val, NULL, text);
-                    break;
-                case JSON_ARRAY:
-                    json_array_foreach(val, i, entry) {
-                        switch json_typeof(entry) {
-                            case JSON_STRING:
-                                m = _match_text(json_string_value(entry), text);
-                                break;
-                            case JSON_OBJECT:
-                                m = jmap_match_jsonprop(entry, NULL, text);
-                                break;
-                            default:
-                                /* do nothing */
-                                ;
-                        }
-                        if (m) break;
-                    }
-                default:
-                    /* do nothing */
-                    ;
-            }
-            if (m) return m;
-        }
-    }
-    return 0;
-}
-
-/* FIXME DUPLICATE END */
 
 char *jmapmbox_role(jmap_req_t *req, const char *mboxname)
 {
@@ -2210,182 +2154,350 @@ static int jmapmsg_from_record(jmap_req_t *req, struct mailbox *mbox,
     return r;
 }
 
-
-typedef struct jmapmsg_filter {
-    hash_table *inMailboxes;
-    hash_table *notInMailboxes;
-    time_t before;
-    time_t after;
-    uint32_t minSize;
-    uint32_t maxSize;
-    json_t *isFlagged;
-    json_t *isUnread;
-    json_t *isAnswered;
-    json_t *isDraft;
-    json_t *hasAttachment;
-    char *text;
-    char *from;
-    char *to;
-    char *cc;
-    char *bcc;
-    char *subject;
-    char *body;
-    char *header;
-    char *header_value;
-} jmapmsg_filter_t;
-
-static int jmapmsg_filter_match(void *vf, void *rock)
+static void match_string(search_expr_t *parent, const char *s, const char *name)
 {
-    jmapmsg_filter_t *f = (struct jmapmsg_filter *) vf;
-    json_t *msg = (json_t *) rock;
+    charset_t utf8 = charset_lookupname("utf-8");
+    search_expr_t *e;
+    const search_attr_t *attr = search_attr_find(name);
+    enum search_op op;
 
-    /* The following XXXs (and possibly also the boolean flags might be good
-     * candidates to filter while only looking at the message's index record,
-     * not fetching its headers and body. */
-    /* XXX check inMailboxes and notInMailboxes before */
-    /* XXX inMailboxes */
-    /* XXX notInMailboxes */
-    /* XXX before */
-    /* XXX after */
-    /* XXX minSize */
-    /* XXX maxSize */
+    op = search_attr_is_fuzzable(attr) ? SEOP_FUZZYMATCH : SEOP_MATCH;
 
-    /* isFlagged */
-    if (f->isFlagged && f->isFlagged != json_object_get(msg, "isFlagged")) {
-        return 0;
-    }
-    /* isUnread */
-    if (f->isUnread && f->isUnread != json_object_get(msg, "isUnread")) {
-        return 0;
-    }
-    /* isAnswered */
-    if (f->isAnswered && f->isAnswered != json_object_get(msg, "isAnswered")) {
-        return 0;
-    }
-    /* isDraft */
-    if (f->isDraft && f->isDraft != json_object_get(msg, "isDraft")) {
-        return 0;
-    }
-    /* hasAttachment */
-    if (f->hasAttachment && f->hasAttachment != json_object_get(msg, "hasAttachment")) {
-        return 0;
+    e = search_expr_new(parent, op);
+    e->attr = attr;
+    e->value.s = charset_convert(s, utf8, charset_flags);
+    if (!e->value.s) {
+        e->op = SEOP_FALSE;
+        e->attr = NULL;
     }
 
-    if (f->text && !jmap_match_jsonprop(msg, NULL, f->text)) {
-        return 0;
-    }
-    /*  from */
-    if (f->from && !jmap_match_jsonprop(msg, "from", f->from)) {
-        return 0;
-    }
-    /*  to */
-    if (f->to && !jmap_match_jsonprop(msg, "to", f->to)) {
-        return 0;
-    }
-    /*  cc */
-    if (f->cc && !jmap_match_jsonprop(msg, "cc", f->cc)) {
-        return 0;
-    }
-    /*  bcc */
-    if (f->bcc && !jmap_match_jsonprop(msg, "bcc", f->bcc)) {
-        return 0;
-    }
-    /*  subject */
-    if (f->subject && !jmap_match_jsonprop(msg, "subject", f->subject)) {
-        return 0;
-    }
-    /*  body */
-    if (f->body && !jmap_match_jsonprop(msg, "textBody", f->body)
-                && !jmap_match_jsonprop(msg, "htmlBody", f->body)) {
-        return 0;
-    }
-    /* header */
-    /* header_value */
-    if (f->header) {
-        json_t *val = json_object_get(msg, f->header);
-        if (!val) {
-            return 0;
-        }
-        if (f->header_value && !_match_text(json_string_value(val), f->header_value)) {
-            return 0;
-        }
-    }
-    return 1;
+    charset_free(&utf8);
 }
 
-static void jmapmsg_filter_free(void *vf)
+static void match_mailboxes(search_expr_t *parent, json_t *mailboxes,
+                            const char *userid)
 {
-    jmapmsg_filter_t *f = (jmapmsg_filter_t*) vf;
-    if (f->inMailboxes) {
-        free_hash_table(f->inMailboxes, NULL);
-        free(f->inMailboxes);
-    }
-    if (f->notInMailboxes) {
-        free_hash_table(f->notInMailboxes, NULL);
-        free(f->notInMailboxes);
-    }
-    free(f);
-}
-
-static void* jmapmsg_filter_parse(json_t *arg,
-                                  const char *prefix,
-                                  json_t *invalid)
-{
-
-    jmapmsg_filter_t *f = (jmapmsg_filter_t*) xzmalloc(sizeof(struct jmapmsg_filter));
-    struct buf buf = BUF_INITIALIZER;
-    json_int_t i;
+    json_t *val;
+    search_expr_t *e, *p;
+    char *mboxname;
     const char *s;
-    json_t *j;
+    size_t i;
 
-    /* inMailboxes */
-    json_t *inMailboxes = json_object_get(arg, "inMailboxes");
-    if (inMailboxes && json_typeof(inMailboxes) != JSON_ARRAY) {
-        buf_printf(&buf, "%s.inMailboxes", prefix);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-    } else if (inMailboxes) {
-        f->inMailboxes = xmalloc(sizeof(struct hash_table));
-        construct_hash_table(f->inMailboxes, json_array_size(inMailboxes)+1, 0);
-        size_t i;
-        json_t *val;
-        json_array_foreach(inMailboxes, i, val) {
-            buf_printf(&buf, "%s.inMailboxes[%zu]", prefix, i);
-            const char *id;
-            if (json_unpack(val, "s", &id) != -1) {
-                hash_insert(id, (void*)1, f->inMailboxes);
+    e = search_expr_new(parent, SEOP_OR);
+    json_array_foreach(mailboxes, i, val) {
+        s = json_string_value(val);
+        mboxname = mboxlist_find_uniqueid(s, userid);
+        if (!mboxname) continue;
+
+        p = search_expr_new(e, SEOP_MATCH);
+        p->attr = search_attr_find("folder");
+        p->value.s = mboxname;
+    }
+}
+
+static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
+                                  search_expr_t *parent,
+                                  json_t *matchprops)
+{
+    search_expr_t *this, *e;
+    json_t *val;
+    const char *s;
+    size_t i;
+    time_t t;
+
+    if (!JNOTNULL(filter)) {
+        return search_expr_new(parent, SEOP_TRUE);
+    }
+
+    if ((s = json_string_value(json_object_get(filter, "operator")))) {
+        enum search_op op = SEOP_UNKNOWN;
+
+        if (!strcmp("AND", s)) {
+            op = SEOP_AND;
+        } else if (!strcmp("OR", s)) {
+            op = SEOP_OR;
+        } else if (!strcmp("NOT", s)) {
+            op = SEOP_NOT;
+        }
+
+        this = search_expr_new(parent, op);
+        e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
+
+        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            buildsearch(req, val, e, matchprops);
+        }
+    } else {
+        this = search_expr_new(parent, SEOP_AND);
+
+        /* zero properties evaluate to true */
+        search_expr_new(this, SEOP_TRUE);
+
+        if ((val = json_object_get(filter, "inMailboxes"))) {
+            match_mailboxes(this, val, req->userid);
+            json_object_set(matchprops, "mailboxIds", json_true());
+        }
+
+        if ((val = json_object_get(filter, "notInMailboxes"))) {
+            match_mailboxes(search_expr_new(this, SEOP_NOT), val, req->userid);
+            json_object_set(matchprops, "mailboxIds", json_true());
+        }
+
+        if ((s = json_string_value(json_object_get(filter, "before")))) {
+            time_from_iso8601(s, &t);
+            e = search_expr_new(this, SEOP_LE);
+            e->attr = search_attr_find("date");
+            e->value.u = t;
+        }
+
+        if ((s = json_string_value(json_object_get(filter, "after")))) {
+            time_from_iso8601(s, &t);
+            e = search_expr_new(this, SEOP_GE);
+            e->attr = search_attr_find("date");
+            e->value.u = t;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "minSize")))) {
+            e = search_expr_new(this, SEOP_GE);
+            e->attr = search_attr_find("size");
+            e->value.u = json_integer_value(val);
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
+            e = search_expr_new(this, SEOP_LE);
+            e->attr = search_attr_find("size");
+            e->value.u = json_integer_value(val);
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "threadIsFlagged")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("convflags");
+            e->value.s = xstrdup("\\flagged");
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "threadIsUnread")))) {
+            e = val == json_true() ? search_expr_new(this, SEOP_NOT): this;
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("convflags");
+            e->value.s = xstrdup("\\seen");
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "isFlagged")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_FLAGGED;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "isUnread")))) {
+            e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("indexflags");
+            e->value.u = MESSAGE_SEEN;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_ANSWERED;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "isDraft")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_DRAFT;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
+            e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
+            match_string(e, "text", "contenttype");
+            json_object_set(matchprops, "hasAttachment", json_true());
+        }
+
+        if ((s = json_string_value(json_object_get(filter, "text")))) {
+            match_string(this, s, "text");
+        }
+        if ((s = json_string_value(json_object_get(filter, "from")))) {
+            match_string(this, s, "from");
+        }
+        if ((s = json_string_value(json_object_get(filter, "to")))) {
+            match_string(this, s, "to");
+        }
+        if ((s = json_string_value(json_object_get(filter, "cc")))) {
+            match_string(this, s, "cc");
+        }
+        if ((s = json_string_value(json_object_get(filter, "subject")))) {
+            match_string(this, s, "subject");
+        }
+        if ((s = json_string_value(json_object_get(filter, "body")))) {
+            match_string(this, s, "body");
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "header")))) {
+            const char *k, *v;
+            charset_t utf8 = charset_lookupname("utf-8");
+            search_expr_t *e;
+
+            if (json_array_size(val) == 2) {
+                k = json_string_value(json_array_get(val, 0));
+                v = json_string_value(json_array_get(val, 1));
             } else {
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                k = json_string_value(json_array_get(val, 0));
+                v = ""; /* Empty string matches any value */
             }
-            buf_reset(&buf);
+
+            e = search_expr_new(this, SEOP_MATCH);
+            e->attr = search_attr_find_field(k);
+            e->value.s = charset_convert(v, utf8, charset_flags);
+            if (!e->value.s) {
+                e->op = SEOP_FALSE;
+                e->attr = NULL;
+            }
+            charset_free(&utf8);
         }
     }
 
-    /* notInMailboxes */
-    json_t *notInMailboxes = json_object_get(arg, "notInMailboxes");
-    if (notInMailboxes && json_typeof(notInMailboxes) != JSON_ARRAY) {
-        buf_printf(&buf, "%s.notInMailboxes", prefix);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-    } else if (notInMailboxes) {
-        f->notInMailboxes = xmalloc(sizeof(struct hash_table));
-        construct_hash_table(f->notInMailboxes, json_array_size(notInMailboxes)+1, 0);
-        size_t i;
-        json_t *val;
-        json_array_foreach(notInMailboxes, i, val) {
-            buf_printf(&buf, "%s.notInMailboxes[%zu]", prefix, i);
-            const char *id;
-            if (json_unpack(val, "s", &id) != -1) {
-                hash_insert(id, (void*)1, f->notInMailboxes);
-            } else {
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            }
-            buf_reset(&buf);
+    return this;
+}
+
+static int filtermsg(jmap_req_t *req, json_t *msg, json_t *filter)
+{
+    json_t *val;
+    const char *s;
+    size_t i;
+
+    /* Apply a filter to a JMAP message. Only covers properties that require
+     * special postprocessing. Use buildsearch for general search filters */
+
+    if ((s = json_string_value(json_object_get(filter, "operator")))) {
+        enum search_op op = SEOP_UNKNOWN;
+
+        if (!strcmp("AND", s)) {
+            op = SEOP_AND;
+        } else if (!strcmp("OR", s)) {
+            op = SEOP_OR;
+        } else if (!strcmp("NOT", s)) {
+            op = SEOP_NOT;
         }
+
+        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            int matches = filtermsg(req, msg, val);
+
+            if (matches && op == SEOP_OR)
+                return 1;
+            else if (matches && op == SEOP_NOT)
+                return 0;
+            else if (!matches && op == SEOP_AND)
+                return 0;
+        }
+        return op == SEOP_AND;
+    } else {
+        if ((val = json_object_get(filter, "inMailboxes"))) {
+            size_t i, j;
+            const char *a, *b;
+            json_t *mailboxids = json_object_get(msg, "mailboxIds");
+
+            /* Check that inMailboxes is a subset of mailboxIds */
+            for (i = 0; i < json_array_size(val); i++) {
+                a = json_string_value(json_array_get(val, i));
+                b = NULL;
+                for (j = 0; j < json_array_size(mailboxids); j++) {
+                    b = json_string_value(json_array_get(mailboxids, j));
+                    if (!strcmp(a, b)) break;
+                    b = NULL;
+                }
+                if (!b) return 0;
+            }
+            return 1;
+        }
+        if ((val = json_object_get(filter, "notInMailboxes"))) {
+            size_t i, j;
+            const char *a, *b;
+            json_t *mailboxids = json_object_get(msg, "mailboxIds");
+
+            /* Check that mailboxIds doesn't overlap notInMailboxes */
+            for (i = 0; i < json_array_size(mailboxids); i++) {
+                a = json_string_value(json_array_get(mailboxids, i));
+                for (j = 0; j < json_array_size(val); j++) {
+                    b = json_string_value(json_array_get(val, j));
+                    if (!strcmp(a, b)) return 0;
+                }
+            }
+            return 1;
+        }
+        if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
+            return json_object_get(msg, "hasAttachment") == val;
+        }
+
+        return 1;
+    }
+}
+
+static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *arg, *val;
+    const char *s;
+    json_int_t num;
+    int b;
+    size_t i;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        json_array_append_new(invalid, json_string(prefix));
     }
 
-    /* before */
-    if (JNOTNULL(json_object_get(arg, "before"))) {
+    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
+        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
+            buf_printf(&buf, "%s.%s", prefix, "operator");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        arg = json_object_get(filter, "conditions");
+        if (!json_array_size(arg)) {
+            buf_printf(&buf, "%s.conditions", prefix);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+        json_array_foreach(arg, i, val) {
+            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
+            validatefilter(val, buf_cstring(&buf), invalid);
+            buf_reset(&buf);
+        }
+
+    } else {
+        arg = json_object_get(filter, "inMailboxes");
+        if (JNOTNULL(arg) && !json_array_size(arg)) {
+            buf_printf(&buf, "%s.inMailboxes", prefix);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+        json_array_foreach(arg, i, val) {
+            s = json_string_value(val);
+            if (!s || !strlen(s)) {
+                buf_printf(&buf, "%s.inMailboxes[%zu]", prefix, i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+
+        arg = json_object_get(filter, "notInMailboxes");
+        if (JNOTNULL(arg) && !json_array_size(arg)) {
+            buf_printf(&buf, "%s.notInMailboxes", prefix);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+        json_array_foreach(arg, i, val) {
+            s = json_string_value(val);
+            if (!s || !strlen(s)) {
+                buf_printf(&buf, "%s.notInMailboxes[%zu]", prefix, i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+
         if (readprop_full(arg, prefix, "before", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
@@ -2394,11 +2506,8 @@ static void* jmapmsg_filter_parse(json_t *arg,
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
-            f->before = mktime(&tm);
         }
-    }
-    /* after */
-    if (JNOTNULL(json_object_get(arg, "after"))) {
+
         if (readprop_full(arg, prefix, "after", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
@@ -2407,224 +2516,437 @@ static void* jmapmsg_filter_parse(json_t *arg,
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
-            f->after = mktime(&tm);
         }
-    }
-    /* minSize */
-    if (JNOTNULL(json_object_get(arg, "minSize"))) {
-        if (readprop_full(arg, prefix, "minSize", 0, invalid, "i", &i) > 0) {
-            if (i < 0) {
-                buf_printf(&buf, "%s.minSize", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            } else if (i > UINT32_MAX) {
-                /* Can't store this in an uint32_t. Ignore. */
-                i = 0;
+
+        readprop_full(filter, prefix, "minSize", 0, invalid, "i", &num);
+        readprop_full(filter, prefix, "maxSize", 0, invalid, "i", &num);
+        readprop_full(filter, prefix, "threadIsFlagged", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "threadIsUnread", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "isFlagged", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "isUnread", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "isAnswered", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "isDraft", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "text", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "from", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "to", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "cc", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "bcc", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "subject", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
+
+        arg = json_object_get(filter, "header");
+        if (JNOTNULL(arg)) {
+            switch (json_array_size(arg)) {
+                case 2:
+                    s = json_string_value(json_array_get(arg, 1));
+                    if (!s || !strlen(s)) {
+                        buf_printf(&buf, "%s.header[1]", prefix);
+                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                        buf_reset(&buf);
+                    }
+                    /* fallthrough */
+                case 1:
+                    s = json_string_value(json_array_get(arg, 0));
+                    if (!s || !strlen(s)) {
+                        buf_printf(&buf, "%s.header[0]", prefix);
+                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                        buf_reset(&buf);
+                    }
+                    break;
+                default:
+                    buf_printf(&buf, "%s.header", prefix);
+                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                    buf_reset(&buf);
             }
-            f->minSize = i;
         }
     }
-    /* maxSize */
-    if (JNOTNULL(json_object_get(arg, "maxSize"))) {
-        if (readprop_full(arg, prefix, "maxSize", 0, invalid, "i", &i) > 0) {
-            if (i < 0) {
-                buf_printf(&buf, "%s.maxSize", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            } else if (i > UINT32_MAX) {
-                /* Can't store this in an uint32_t. Ignore. */
-                i = 0;
-            }
-            f->maxSize = i;
+}
+
+static struct sortcrit *buildsort(json_t *sort)
+{
+    json_t *val;
+    const char *s, *p;
+    size_t i;
+    struct sortcrit *sortcrit;
+    struct buf prop = BUF_INITIALIZER;
+
+    if (!JNOTNULL(sort) || json_array_size(sort) == 0) {
+        sortcrit = xzmalloc(2 * sizeof(struct sortcrit));
+        sortcrit[0].flags |= SORT_REVERSE;
+        sortcrit[0].key = SORT_ARRIVAL;
+        sortcrit[1].key = SORT_SEQUENCE;
+        return sortcrit;
+    }
+
+    sortcrit = xzmalloc((json_array_size(sort) + 1) * sizeof(struct sortcrit));
+
+    json_array_foreach(sort, i, val) {
+        s = json_string_value(val);
+        p = strchr(s, ' ');
+        buf_setmap(&prop, s, p - s);
+        buf_cstring(&prop);
+
+        if (!strcmp(p + 1, "desc")) {
+            sortcrit[i].flags |= SORT_REVERSE;
+        }
+
+        /* Note: add any new sort criteria also to validatesort() */
+
+        if (!strcmp(prop.s, "date")) {
+            sortcrit[i].key = SORT_DATE;
+        }
+        if (!strcmp(prop.s, "from")) {
+            sortcrit[i].key = SORT_FROM;
+        }
+        if (!strcmp(prop.s, "id")) {
+            sortcrit[i].key = SORT_GUID;
+        }
+        if (!strcmp(prop.s, "isFlagged")) {
+            sortcrit[i].key = SORT_HASFLAG;
+            sortcrit[i].args.flag.name = xstrdup("\\flagged");
+        }
+        if (!strcmp(prop.s, "isUnread")) {
+            sortcrit[i].key = SORT_HASFLAG;
+            sortcrit[i].args.flag.name = xstrdup("\\seen");
+            sortcrit[i].flags ^= SORT_REVERSE;
+        }
+        if (!strcmp(prop.s, "size")) {
+            sortcrit[i].key = SORT_SIZE;
+        }
+        if (!strcmp(prop.s, "subject")) {
+            sortcrit[i].key = SORT_SUBJECT;
+        }
+        if (!strcmp(prop.s, "threadIsFlagged")) {
+            sortcrit[i].key = SORT_HASCONVFLAG;
+            sortcrit[i].args.flag.name = xstrdup("\\flagged");
+        }
+        if (!strcmp(prop.s, "threadIsUnread")) {
+            sortcrit[i].key = SORT_HASCONVFLAG;
+            sortcrit[i].args.flag.name = xstrdup("\\seen");
+            sortcrit[i].flags ^= SORT_REVERSE;
+        }
+        if (!strcmp(prop.s, "to")) {
+            sortcrit[i].key = SORT_TO;
         }
     }
-    /* isFlagged */
-    j = json_object_get(arg, "isFlagged");
-    if (JNOTNULL(j)) {
-        short b;
-        if (readprop_full(arg, prefix, "isFlagged", 0, invalid, "b", &b) > 0) {
-            f->isFlagged = j;
-        }
+
+    sortcrit[json_array_size(sort)].key = SORT_SEQUENCE;
+
+    buf_free(&prop);
+    return sortcrit;
+}
+
+static void validatesort(json_t *sort, json_t *invalid, json_t *unsupported)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct buf prop = BUF_INITIALIZER;
+    json_t *val;
+    const char *s, *p;
+    size_t i;
+
+    if (!JNOTNULL(sort)) {
+        return;
     }
-    /* isUnread */
-    j = json_object_get(arg, "isUnread");
-    if (JNOTNULL(j)) {
-        short b;
-        if (readprop_full(arg, prefix, "isUnread", 0, invalid, "b", &b) > 0) {
-            f->isUnread = j;
-        }
+
+    if (json_typeof(sort) != JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("sort"));
+        return;
     }
-    /* isAnswered */
-    j = json_object_get(arg, "isAnswered");
-    if (JNOTNULL(j)) {
-        short b;
-        if (readprop_full(arg, prefix, "isAnswered", 0, invalid, "b", &b) > 0) {
-            f->isAnswered = j;
-        }
-    }
-    /* isDraft */
-    j = json_object_get(arg, "isDraft");
-    if (JNOTNULL(j)) {
-        short b;
-        if (readprop_full(arg, prefix, "isDraft", 0, invalid, "b", &b) > 0) {
-            f->isDraft = j;
-        }
-    }
-    /* hasAttachment */
-    j = json_object_get(arg, "hasAttachment");
-    if (JNOTNULL(j)) {
-        short b;
-        if (readprop_full(arg, prefix, "hasAttachment", 0, invalid, "b", &b) > 0) {
-            f->hasAttachment = j;
-        }
-    }
-    /* text */
-    if (JNOTNULL(json_object_get(arg, "text"))) {
-        readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
-    }
-    /* from */
-    if (JNOTNULL(json_object_get(arg, "from"))) {
-        readprop_full(arg, prefix, "from", 0, invalid, "s", &f->from);
-    }
-    /* to */
-    if (JNOTNULL(json_object_get(arg, "to"))) {
-        readprop_full(arg, prefix, "to", 0, invalid, "s", &f->to);
-    }
-    /* cc */
-    if (JNOTNULL(json_object_get(arg, "cc"))) {
-        readprop_full(arg, prefix, "cc", 0, invalid, "s", &f->cc);
-    }
-    /* bcc */
-    if (JNOTNULL(json_object_get(arg, "bcc"))) {
-        readprop_full(arg, prefix, "bcc", 0, invalid, "s", &f->bcc);
-    }
-    /* subject */
-    if (JNOTNULL(json_object_get(arg, "subject"))) {
-        readprop_full(arg, prefix, "subject", 0, invalid, "s", &f->subject);
-    }
-    /* body */
-    if (JNOTNULL(json_object_get(arg, "body"))) {
-        readprop_full(arg, prefix, "body", 0, invalid, "s", &f->body);
-    }
-    /* header */
-    j = json_object_get(arg, "header");
-    if (JNOTNULL(j)) {
-        short iserr = 0;
-        switch (json_array_size(j)) {
-            case 2:
-                iserr = json_unpack(json_array_get(j, 1), "s", &f->header_value);
-                /* fallthrough */
-            case 1:
-                if (!iserr) iserr = json_unpack(json_array_get(j, 0), "s", &f->header);
-                break;
-            default:
-                iserr = 1;
-        }
-        if (iserr) {
-            buf_printf(&buf, "%s.header", prefix);
+
+    json_array_foreach(sort, i, val) {
+        buf_reset(&buf);
+        buf_printf(&buf, "sort[%zu]", i);
+
+        if ((s = json_string_value(val)) == NULL) {
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+            continue;
         }
+
+        p = strchr(s, ' ');
+        if (!p || (strcmp(p + 1, "asc") && strcmp(p + 1, "desc"))) {
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            continue;
+        }
+
+        buf_setmap(&prop, s, p - s);
+        buf_cstring(&prop);
+
+        if (!strcmp(prop.s, "date"))
+            continue;
+        if (!strcmp(prop.s, "from"))
+            continue;
+        if (!strcmp(prop.s, "id"))
+            continue;
+        if (!strcmp(prop.s, "isFlagged"))
+            continue;
+        if (!strcmp(prop.s, "isUnread"))
+            continue;
+        if (!strcmp(prop.s, "size"))
+            continue;
+        if (!strcmp(prop.s, "subject"))
+            continue;
+        if (!strcmp(prop.s, "threadIsFlagged"))
+            continue;
+        if (!strcmp(prop.s, "threadIsUnread"))
+            continue;
+        if (!strcmp(prop.s, "to"))
+            continue;
+
+        json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
     }
 
     buf_free(&buf);
-    return f;
+    buf_free(&prop);
 }
 
-struct getmessagelist_data {
-    jmap_req_t *req;
-    json_t *messageIds;
+struct getmsglist_window {
+    /* arguments */
+    int collapse;
     size_t position;
+    const char *anchor;
+    int anchor_off;
     size_t limit;
-    size_t total;
-    jmap_filter *filter;
+
+    /* internal state */
+    size_t mdcount;
+    size_t anchor_pos;
+    hash_table ids;
+    hashu64_table cids;
 };
 
-static int getmessagelist(struct mailbox *mbox, struct getmessagelist_data *d) {
-    struct mailbox_iter *mbiter;
-    const struct index_record *record;
-    int r = 0;
-
-    mbiter = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
-    if (!mbiter) {
-        syslog(LOG_ERR, "mailbox_iter_init(%s) returned NULL", mbox->name);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-    while ((record = mailbox_iter_step(mbiter))) {
-        if (record->system_flags & FLAG_EXPUNGED) {
-            continue;
-        }
-        const char *id = message_guid_encode(&record->guid);
-        if (!id) {
-            /* huh? */
-            continue;
-        }
-        if (json_object_get(d->messageIds, id)) {
-            /* Already seen this one */
-            continue;
-        }
-        /* Match against filter. */
-        if (d->filter) {
-            json_t *msg;
-            r = jmapmsg_from_record(d->req, mbox, record, &msg);
-            if (r || !jmap_filter_match(d->filter, &jmapmsg_filter_match, msg)) {
-                if (msg) json_decref(msg);
-                continue;
-            }
-            if (msg) json_decref(msg);
-        }
-        json_object_set_new(d->messageIds, id, json_null());
-    }
-    mailbox_iter_done(&mbiter);
-done:
-    return r;
-}
-
-int getmessagelist_cb(const mbentry_t *mbentry, void *rock) {
-    struct mailbox *mbox = NULL;
-    struct getmessagelist_data *d = (struct getmessagelist_data*) rock;
-    int r;
-
-    r = _openmbox(d->req, mbentry->name, &mbox, 0);
-    if (r) goto done;
-    r = getmessagelist(mbox, d);
-    _closembox(d->req, &mbox);
-
-done:
-    return r;
-}
-
-static json_t *_json_keys(json_t *object)
+static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
+                          struct getmsglist_window *window,
+                          size_t *total,
+                          json_t **messageids, json_t **threadids)
 {
-    const char *id;
-    json_t *val, *keys = json_pack("[]");
-    json_object_foreach(object, id, val) {
-        json_array_append_new(keys, json_string(id));
+    struct index_state *state = NULL;
+    search_query_t *query = NULL;
+    struct searchargs *searchargs = NULL;
+    struct index_init init;
+    struct mailbox *mbox = NULL;
+    const char *msgid;
+    json_t *matchprops;
+    int i, r;
+    void *iter;
+
+    *total = 0;
+    *messageids = json_pack("[]");
+    *threadids = json_pack("[]");
+
+    /* Build searchargs */
+    matchprops = json_pack("{}");
+    searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
+                                &jmap_namespace, req->userid, req->authstate, 0);
+    searchargs->root = buildsearch(req, filter, NULL, matchprops);
+
+    /* Add required JMAP properties to the property context */
+    iter = json_object_iter(matchprops);
+    while (iter) {
+        _addprop(req, json_object_iter_key(iter));
+        iter = json_object_iter_next(matchprops, iter);
     }
-    return keys;
+
+    /* Run the search query */
+    memset(&init, 0, sizeof(init));
+    init.userid = req->userid;
+    init.authstate = req->authstate;
+
+    r = index_open_mailbox(req->inbox, &init, &state);
+    if (r) goto done;
+
+    query = search_query_new(state, searchargs);
+    query->sortcrit = buildsort(sort);
+    query->multiple = 1;
+    query->need_ids = 1;
+    query->verbose = 1; /* FIXME for debugging */
+    r = search_query_run(query);
+    if (r) return r;
+
+    /* Initialize window state */
+    window->mdcount = query->merged_msgdata.count;
+    window->anchor_pos = (size_t)-1;
+
+    memset(&window->ids, 0, sizeof(hash_table));
+    construct_hash_table(&window->ids, window->mdcount + 1, 0);
+
+    memset(&window->cids, 0, sizeof(hashu64_table));
+    construct_hashu64_table(&window->cids, window->mdcount/4+4,0);
+
+    for (i = 0 ; i < query->merged_msgdata.count ; i++) {
+        MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+        struct index_record record;
+        json_t *msg = NULL;
+        const char *cid;
+        size_t idcount = json_array_size(*messageids);
+
+        if (!folder) continue;
+
+        /* Find message */
+        r = _openmbox(req, folder->mboxname, &mbox, 0);
+        if (r) goto done;
+
+        r = mailbox_find_index_record(mbox, md->uid, &record);
+        if (r == IMAP_NOTFOUND) {
+            _closembox(req, &mbox);
+            continue;
+        }
+        if (r) goto done;
+
+        msgid = message_guid_encode(&record.guid);
+
+        /* Have we seen this message already? */
+        if (hash_lookup(msgid, &window->ids))
+            goto doneloop;
+
+        if (_getprops(req)) {
+            /* Match the filter to the JMAP message */
+            if ((r = jmapmsg_from_record(req, mbox, &record, &msg))) {
+                syslog(LOG_ERR, "jmapmsg_search: could not convert %s:%d: %s",
+                        mbox->name, record.uid, error_message(r));
+                r = 0;
+                goto doneloop;
+            }
+            if (!filtermsg(req, msg, filter))
+                goto doneloop;
+        }
+
+        /* Collapse threads, if requested */
+        if (window->collapse && hashu64_lookup(md->cid, &window->cids))
+            goto doneloop;
+
+        /* OK, that's a legit message */
+        (*total)++;
+
+        /* Check if the message is in the search window */
+        if (window->anchor) {
+            if (!strcmp(msgid, window->anchor)) {
+                /* This message is the anchor. Recalculate the search result */
+                json_t *anchored_ids = json_pack("[]");
+                json_t *anchored_cids = json_pack("[]");
+                size_t j;
+
+                /* Set countdown to enter the anchor window */
+                if (window->anchor_off < 0) {
+                    window->anchor_pos = -window->anchor_off;
+                } else {
+                    window->anchor_pos = 0;
+                }
+
+                /* Readjust the message and thread list */
+                for (j = idcount - window->anchor_off; j < idcount; j++) {
+                    json_array_append(anchored_ids, json_array_get(*messageids, j));
+                    json_array_append(anchored_cids, json_array_get(*threadids, j));
+                }
+
+                json_decref(*messageids);
+                *messageids = anchored_ids;
+                json_decref(*threadids);
+                *threadids = anchored_cids;
+
+                /* Purge the caches for message and thread ids */
+                free_hash_table(&window->ids, NULL);
+                construct_hash_table(&window->ids, window->mdcount + 1, 0);
+
+                free_hashu64_table(&window->cids, NULL);
+                construct_hashu64_table(&window->cids, window->mdcount/4+4,0);
+
+                /* Reset message counter */
+                idcount = json_array_size(*messageids);
+            }
+            if (window->anchor_pos != (size_t)-1 && window->anchor_pos) {
+                /* Found the anchor but haven't yet entered its window */
+                window->anchor_pos--;
+                goto doneloop;
+            }
+        }
+        else if (window->position && *total < window->position + 1) {
+            goto doneloop;
+        }
+        if (window->limit && idcount && window->limit <= idcount)
+            goto doneloop;
+
+        /* Add the message the list of reported messages */
+        hash_insert(msgid, (void*)1, &window->ids);
+        json_array_append_new(*messageids, json_string(msgid));
+
+        /* Add the thread id */
+        if (window->collapse)
+            hashu64_insert(md->cid, (void*)1, &window->cids);
+        cid = conversation_id_encode(md->cid);
+        json_array_append_new(*threadids, json_string(cid));
+
+doneloop:
+        if (msg) json_decref(msg);
+        _closembox(req, &mbox);
+    }
+
+done:
+    if (mbox) _closembox(req, &mbox);
+    free_hash_table(&window->ids, NULL);
+    free_hashu64_table(&window->cids, NULL);
+    search_query_free(query);
+    state->mailbox = NULL; /* FIXME keep index_close from closing inbox */
+    index_close(&state);
+    freesearchargs(searchargs);
+    if (r) {
+        json_decref(*messageids);
+        *messageids = NULL;
+        json_decref(*threadids);
+        *threadids = NULL;
+    }
+    return r;
 }
 
 static int getMessageList(jmap_req_t *req)
 {
     int r;
     int dofetch = 0;
-    struct getmessagelist_data rock;
-    memset(&rock, 0, sizeof(struct getmessagelist_data));
-    rock.messageIds = json_pack("{}");
-    rock.req = req;
-    json_t *filter;
+    json_t *filter, *sort;
+    json_t *messageids = NULL, *threadids = NULL;
+    struct getmsglist_window window;
+    json_int_t i = 0;
+    size_t total;
 
     _initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
-    /* FIXME lots of other arguments */
+    json_t *unsupported = json_pack("[]");
+
+    /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        rock.filter = jmap_filter_parse(filter, "filter", invalid, jmapmsg_filter_parse);
+        validatefilter(filter, "filter", invalid);
     }
+
+    /* sort */
+    sort = json_object_get(req->args, "sort");
+    if (JNOTNULL(sort)) {
+        validatesort(sort, invalid, unsupported);
+    }
+
+    /* windowing */
+    memset(&window, 0, sizeof(struct getmsglist_window));
+    readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
+    readprop(req->args, "anchor", 0, invalid, "s", &window.anchor);
+    readprop(req->args, "anchorOffset", 0, invalid, "i", &window.anchor_off);
+
+    if (readprop(req->args, "position", 0, invalid, "i", &i) > 0) {
+        if (i < 0) json_array_append_new(invalid, json_string("position"));
+        window.position = i;
+    }
+
+    if (readprop(req->args, "limit", 0, invalid, "i", &i) > 0) {
+        if (i < 0) json_array_append_new(invalid, json_string("limit"));
+        window.limit = i;
+    }
+
+    /* fetchMessages */
     readprop(req->args, "fetchMessages", 0, invalid, "b", &dofetch);
+
+    /* Bail out for argument errors */
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
@@ -2633,37 +2955,46 @@ static int getMessageList(jmap_req_t *req)
     }
     json_decref(invalid);
 
-    /* Inspect messages of INBOX. */
-    r = getmessagelist((struct mailbox*) req->inbox, &rock);
-    if (r && r != CYRUSDB_DONE) goto done;
-    /* Inspect any other mailboxes. */
-    r = mboxlist_usermboxtree(req->userid, getmessagelist_cb, &rock, MBOXTREE_SKIP_ROOT);
-    if (r && r != CYRUSDB_DONE) goto done;
-    r = 0;
+    if (json_array_size(unsupported)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(unsupported);
+
+    r = jmapmsg_search(req, filter, sort, &window, &total, &messageids, &threadids);
+    if (r) goto done;
 
     /* Prepare response. */
-    json_t *msgList = json_pack("{}");
-    json_object_set_new(msgList, "accountId", json_string(req->userid));
-    json_object_set_new(msgList, "state", jmap_getstate(0 /* MBTYPE */, req));
-    json_object_set_new(msgList, "messageIds", _json_keys(rock.messageIds));
+    json_t *msglist = json_pack("{}");
+    json_object_set_new(msglist, "accountId", json_string(req->userid));
+    json_object_set_new(msglist, "filter", filter);
+    json_object_set_new(msglist, "sort", sort);
+    json_object_set_new(msglist, "collapseThreads", json_boolean(window.collapse));
+    json_object_set_new(msglist, "state", jmap_getstate(0 /* MBTYPE */, req));
+    json_object_set_new(msglist, "canCalculateUpdates", json_false()); /* FIXME */
+    json_object_set_new(msglist, "position", json_integer(window.position));
+    json_object_set_new(msglist, "total", json_integer(total));
+    json_object_set(msglist, "messageIds", messageids);
+    json_object_set(msglist, "threadIds", threadids);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("messageList"));
-    json_array_append_new(item, msgList);
+    json_array_append_new(item, msglist);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
     if (dofetch) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
-        json_object_set_new(subreq.args, "ids", _json_keys(rock.messageIds));
+        json_object_set(subreq.args, "ids", messageids);
         r = getMessages(&subreq);
         json_decref(subreq.args);
     }
 
 done:
-    json_decref(rock.messageIds);
-    if (rock.filter) jmap_filter_free(rock.filter, jmapmsg_filter_free);
+    if (messageids) json_decref(messageids);
     _finireq(req);
     return r;
 }
@@ -3804,6 +4135,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **uid,
         append_removestage(stage);
         goto done;
     }
+    /* FIXME calculate qdiffs for all mailboxes? */
     qdiffs[QUOTA_MESSAGE] = 1;
 
     /* Append the message to the mailbox */
@@ -3947,6 +4279,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         json_object_del(oldmailboxes, id);
     }
     if (json_object_size(newmailboxes)) {
+        /* FIXME don't calculate quota for updates, only for creates */
         char foundroot[MAX_MAILBOX_BUFFER];
         json_t *deltas = json_pack("{}");
         const char *mbname;
