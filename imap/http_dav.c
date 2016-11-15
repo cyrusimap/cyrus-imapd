@@ -1869,7 +1869,7 @@ int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 
         if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
             /* Return properties for this URL */
-            expand_property(prop, fctx, buf_cstring(&fctx->buf),
+            expand_property(prop, fctx, &namespace_principal, buf_cstring(&fctx->buf),
                             &principal_parse_path, principal_props, node, 0);
         }
         else {
@@ -3026,17 +3026,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
                 if (namespace) {
                     ns_href = (const char *) namespace;
-
-                    /* Look for this namespace in hash table */
-                    ns = hash_lookup(ns_href, fctx->ns_table);
-                    if (!ns) {
-                        char prefix[6];
-                        snprintf(prefix, sizeof(prefix),
-                                 "X%X", strhash(ns_href) & 0xffff);
-                        ns = xmlNewNs(fctx->root,
-                                      BAD_CAST ns_href, BAD_CAST prefix);
-                        hash_insert(ns_href, ns, fctx->ns_table);
-                    }
+                    ns = NULL;
                 }
             }
             else {
@@ -3055,7 +3045,21 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
                 }
             }
 
-            if (namespace) xmlFree(namespace);
+            if (namespace) {
+                if (!ns) {
+                    /* Look for namespace in hash table */
+                    ns = hash_lookup(ns_href, fctx->ns_table);
+                    if (!ns) {
+                        char prefix[6];
+                        snprintf(prefix, sizeof(prefix),
+                                 "X%X", strhash(ns_href) & 0xffff);
+                        ns = xmlNewNs(fctx->root,
+                                      BAD_CAST ns_href, BAD_CAST prefix);
+                        hash_insert(ns_href, ns, fctx->ns_table);
+                    }
+                }
+                xmlFree(namespace);
+            }
 
             /* Look for a match against our known properties */
             for (entry = fctx->lprops;
@@ -7430,8 +7434,8 @@ int report_sync_col(struct transaction_t *txn,
 
 
 int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
-                    const char *href, parse_path_t parse_path,
-                    const struct prop_entry *lprops,
+                    struct namespace_t *namespace, const char *href,
+                    parse_path_t parse_path, const struct prop_entry *lprops,
                     xmlNodePtr root, int depth)
 {
     int ret = 0, r;
@@ -7445,6 +7449,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     fctx->prefer &= ~PREFER_NOROOT;
     if (href) {
         /* Parse the URL */
+        req_tgt.namespace = namespace;
         parse_path(href, &req_tgt, &fctx->txn->error.desc);
 
         fctx->req_tgt = &req_tgt;
@@ -7553,8 +7558,8 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
                        struct meth_params *rparams __attribute__((unused)),
                        xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = expand_property(inroot, fctx, NULL, NULL, fctx->lprops,
-                              fctx->root, fctx->depth);
+    int ret = expand_property(inroot, fctx, NULL, NULL, NULL,
+                              fctx->lprops, fctx->root, fctx->depth);
 
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
@@ -9543,7 +9548,7 @@ static int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */
-        expand_property(prop, fctx, buf_cstring(&fctx->buf),
+        expand_property(prop, fctx, &namespace_notify, buf_cstring(&fctx->buf),
                         &notify_parse_path, notify_props, node, 0);
 
     }

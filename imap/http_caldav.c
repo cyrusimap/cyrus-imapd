@@ -5458,7 +5458,7 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */
-        expand_property(prop, fctx, buf_cstring(&fctx->buf),
+        expand_property(prop, fctx, &namespace_calendar, buf_cstring(&fctx->buf),
                         &caldav_parse_path, caldav_props, node, cal ? 1 : 0);
     }
     else {
