@@ -3543,7 +3543,10 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         else if (config_serverinfo != IMAP_ENUM_SERVERINFO_OFF) {
             host = config_servername;
         }
-        if (!port) port = strchr(saslprops.iplocalport, ';')+1;
+        if (!port) {
+            port = (saslprops.iplocalport) ?
+                strchr(saslprops.iplocalport, ';')+1 : "";
+        }
 
         buf_printf_markup(html, level, HTML_DOCTYPE);
         buf_printf_markup(html, level++, "<html>");
