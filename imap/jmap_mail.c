@@ -3158,7 +3158,8 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
 
     /* Set up snippet callback context */
     snippet = json_pack("{}");
-    rx = search_begin_snippets(intquery, 0/*verbose*/, makesnippet, snippet);
+    rx = search_begin_snippets(intquery, 0/*verbose*/, &default_snippet_markup,
+                               makesnippet, snippet);
     if (!rx) {
         r = IMAP_INTERNAL;
         goto done;

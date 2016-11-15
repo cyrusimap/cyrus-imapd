@@ -2325,6 +2325,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 
 static search_text_receiver_t *begin_snippets(void *internalised,
                                               int verbose,
+                                              search_snippet_markup_t *m __attribute__((unused)),
                                               search_snippet_cb_t proc,
                                               void *rock)
 {

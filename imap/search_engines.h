@@ -70,6 +70,14 @@ struct search_builder {
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
 };
 
+typedef struct search_snippet_markup {
+    const char *hi_start;
+    const char *hi_end;
+    const char *omit;
+} search_snippet_markup_t;
+
+extern search_snippet_markup_t default_snippet_markup;
+
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)
@@ -123,6 +131,7 @@ struct search_engine {
     int (*end_update)(search_text_receiver_t *);
     search_text_receiver_t *(*begin_snippets)(void *internalised,
                                               int verbose,
+                                              search_snippet_markup_t *markup,
                                               search_snippet_cb_t,
                                               void *rock);
     int (*end_snippets)(search_text_receiver_t *);
@@ -156,6 +165,7 @@ int search_update_mailbox(search_text_receiver_t *rx,
 int search_end_update(search_text_receiver_t *rx);
 search_text_receiver_t *search_begin_snippets(void *internalised,
                                               int verbose,
+                                              search_snippet_markup_t *markup,
                                               search_snippet_cb_t proc,
                                               void *rock);
 int search_end_snippets(search_text_receiver_t *rx);

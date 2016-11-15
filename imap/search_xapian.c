@@ -1745,6 +1745,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 
 static search_text_receiver_t *begin_snippets(void *internalised,
                                               int verbose,
+                                              search_snippet_markup_t *m,
                                               search_snippet_cb_t proc,
                                               void *rock)
 {
@@ -1763,7 +1764,7 @@ static search_text_receiver_t *begin_snippets(void *internalised,
 
     tr->super.verbose = verbose;
     tr->root = (struct opnode *)internalised;
-    tr->snipgen = xapian_snipgen_new();
+    tr->snipgen = xapian_snipgen_new(m->hi_start, m->hi_end, m->omit);
     tr->proc = proc;
     tr->rock = rock;
 

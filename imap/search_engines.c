@@ -107,6 +107,10 @@ static const struct search_engine *engine(void)
     }
 }
 
+EXPORTED search_snippet_markup_t default_snippet_markup = {
+    "<b>", "</b>", "..."
+};
+
 EXPORTED const char *search_part_as_string(int part)
 {
     static const char *names[SEARCH_NUM_PARTS] = {
@@ -250,12 +254,13 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
 
 EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
                                                        int verbose,
+                                                       search_snippet_markup_t *markup,
                                                        search_snippet_cb_t proc,
                                                        void *rock)
 {
     const struct search_engine *se = engine();
     return (se->begin_snippets ? se->begin_snippets(internalised,
-                                    verbose, proc, rock) : NULL);
+                                    verbose, markup, proc, rock) : NULL);
 }
 
 EXPORTED int search_end_snippets(search_text_receiver_t *rx)

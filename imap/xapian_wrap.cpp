@@ -756,6 +756,9 @@ struct xapian_snipgen
     Xapian::Database *db;
     std::vector<std::string> *matches;
     struct buf *buf;
+    const char *hi_start;
+    const char *hi_end;
+    const char *omit;
 };
 
 class CharsetStemmer : public Xapian::StemImplementation
@@ -798,7 +801,8 @@ class CharsetStemmer : public Xapian::StemImplementation
     }
 };
 
-xapian_snipgen_t *xapian_snipgen_new(void)
+xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end,
+                                     const char *omit)
 {
     xapian_snipgen_t *snipgen = NULL;
     CharsetStemmer *stem = new CharsetStemmer(Xapian::Stem("en"));
@@ -807,6 +811,9 @@ xapian_snipgen_t *xapian_snipgen_new(void)
     snipgen->stemmer = new Xapian::Stem(stem);
     snipgen->db = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
     snipgen->buf = buf_new();
+    snipgen->hi_start = hi_start;
+    snipgen->hi_end = hi_end;
+    snipgen->omit = omit;
 
     return snipgen;
 }
@@ -879,10 +886,10 @@ int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned int context_len
 int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
 {
     if (buf_len(snipgen->buf)) {
-        // XXX hackish... the original snippet generator passed down
+        // XXX hackish: the original snippet generator passed down
         // boundaries using termpos++. But now it's all text, so encode
         // part gaps using the 'omit' signifier
-        buf_appendcstr(snipgen->buf, "...");
+        buf_appendcstr(snipgen->buf, snipgen->omit);
     }
     buf_append(snipgen->buf, part);
     return 0;
@@ -911,7 +918,9 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 Xapian::MSet::SNIPPET_TERMCOVER|
                 Xapian::MSet::SNIPPET_EMPTY_NOMATCH|
                 Xapian::MSet::SNIPPET_EXHAUSTIVE,
-                "<b>", "</b>", "...",
+                snipgen->hi_start,
+                snipgen->hi_end,
+                snipgen->omit,
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
         buf_reset(buf);

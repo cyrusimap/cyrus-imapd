@@ -2465,7 +2465,7 @@ EXPORTED int index_snippets(struct index_state *state,
     srock.out = state->out;
     srock.namespace = searchargs->namespace;
     srock.userid = searchargs->userid;
-    rx = search_begin_snippets(intquery, 0/*verbose*/,
+    rx = search_begin_snippets(intquery, 0/*verbose*/, &default_snippet_markup,
                                emit_snippet, &srock);
     if (!rx) goto out;
 

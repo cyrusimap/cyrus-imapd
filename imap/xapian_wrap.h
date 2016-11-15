@@ -77,7 +77,7 @@ extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
                             int (*cb)(const char *cyrusid, void *rock), void *rock);
 
 /* snippets interface */
-extern xapian_snipgen_t *xapian_snipgen_new(void);
+extern xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end, const char *omit);
 extern void xapian_snipgen_free(xapian_snipgen_t *);
 extern int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match);
 extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned context_length);
