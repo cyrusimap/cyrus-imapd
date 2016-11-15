@@ -80,8 +80,7 @@ static int setMailboxes(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
-
-/* XXX getSearchSnippets */
+static int getSearchSnippets(jmap_req_t *req);
 
 /* XXX getThreads */
 /* XXX getMessageUpdates */
@@ -103,6 +102,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "getMessageList",         &getMessageList },
     { "getMessages",            &getMessages },
     { "setMessages",            &setMessages },
+    { "getSearchSnippets",      &getSearchSnippets },
     { NULL,                     NULL}
 };
 
@@ -181,6 +181,26 @@ static int _openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, 
     rec->refcount = 1;
     rec->rw = rw;
     ptrarray_add(cache, rec);
+
+    return 0;
+}
+
+static int _mboxisopen(jmap_req_t *req, const char *name)
+{
+
+    int i;
+    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
+    struct _mboxcache_rec *rec;
+
+    if (!strcmp(name, req->inbox->name)) {
+        return 1;
+    }
+
+    for (i = 0; i < cache->count; i++) {
+        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
+        if (!strcmp(name, rec->mbox->name))
+            return 1;
+    }
 
     return 0;
 }
@@ -2131,6 +2151,67 @@ done:
     return r;
 }
 
+struct jmapmsg_find_data {
+    jmap_req_t *req;
+    char *mboxname;
+    uint32_t uid;
+};
+
+static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct jmapmsg_find_data *d = (struct jmapmsg_find_data*) rock;
+    jmap_req_t *req = d->req;
+    int r = 0;
+
+    if (!d->mboxname || _mboxisopen(req, rec->mboxname)) {
+        struct index_record record;
+        struct mailbox *mbox = NULL;
+
+        /* Prefer to use messages in already opened mailboxes */
+
+        r = _openmbox(req, rec->mboxname, &mbox, 0);
+        if (r) return r;
+
+        r = mailbox_find_index_record(mbox, rec->uid, &record);
+        if (!r && !(record.system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+            if (d->mboxname) {
+                free(d->mboxname);
+                r = IMAP_OK_COMPLETED;
+            }
+            d->mboxname = xstrdup(rec->mboxname);
+            d->uid = rec->uid;
+        }
+
+        _closembox(req, &mbox);
+    }
+
+    return r;
+}
+
+static int jmapmsg_find(jmap_req_t *req, const char *id,
+                        char **mboxnameptr, uint32_t *uid)
+{
+    struct jmapmsg_find_data data = { req, NULL, 0 };
+    struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
+    int r;
+
+    if (!cstate) {
+        syslog(LOG_INFO, "findmessage: cannot open conversations db");
+        return IMAP_NOTFOUND;
+    }
+
+    r = conversations_guid_foreach(cstate, id, jmapmsg_find_cb, &data);
+    if (r == IMAP_OK_COMPLETED) {
+        r = 0;
+    } else if (!data.mboxname) {
+        r = IMAP_NOTFOUND;
+    }
+    *mboxnameptr = data.mboxname;
+    *uid = data.uid;
+    return r;
+}
+
+
 static int jmapmsg_from_record(jmap_req_t *req, struct mailbox *mbox,
                                const struct index_record *record,
                                json_t **msgp)
@@ -2904,7 +2985,7 @@ static int getMessageList(jmap_req_t *req)
     int r;
     int dofetch = 0;
     json_t *filter, *sort;
-    json_t *messageids = NULL, *threadids = NULL;
+    json_t *messageids = NULL, *threadids = NULL, *msglist, *item;
     struct getmsglist_window window;
     json_int_t i = 0;
     size_t total;
@@ -2967,7 +3048,7 @@ static int getMessageList(jmap_req_t *req)
     if (r) goto done;
 
     /* Prepare response. */
-    json_t *msglist = json_pack("{}");
+    msglist = json_pack("{}");
     json_object_set_new(msglist, "accountId", json_string(req->userid));
     json_object_set_new(msglist, "filter", filter);
     json_object_set_new(msglist, "sort", sort);
@@ -2979,7 +3060,7 @@ static int getMessageList(jmap_req_t *req)
     json_object_set(msglist, "messageIds", messageids);
     json_object_set(msglist, "threadIds", threadids);
 
-    json_t *item = json_pack("[]");
+    item = json_pack("[]");
     json_array_append_new(item, json_string("messageList"));
     json_array_append_new(item, msglist);
     json_array_append_new(item, json_string(req->tag));
@@ -2995,65 +3076,219 @@ static int getMessageList(jmap_req_t *req)
 
 done:
     if (messageids) json_decref(messageids);
+    if (threadids) json_decref(threadids);
     _finireq(req);
     return r;
 }
 
-struct jmapmsg_find_data {
-    jmap_req_t *req;
-    char *mboxname;
-    uint32_t uid;
-};
-
-static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
+static int makesnippet(struct mailbox *mbox __attribute__((unused)),
+                       uint32_t uid __attribute__((unused)),
+                       int part, const char *s, void *rock)
 {
-    struct jmapmsg_find_data *d = (struct jmapmsg_find_data*) rock;
-    jmap_req_t *req = d->req;
+    const char *propname = NULL;
+    json_t *snippet = rock;
+
+
+    if (part == SEARCH_PART_SUBJECT) {
+        propname = "subject";
+    }
+    else if (part == SEARCH_PART_BODY) {
+        propname = "preview";
+    }
+
+    if (propname) {
+        json_object_set_new(snippet, propname, json_string(s));
+    }
+
+    return 0;
+}
+
+static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
+                            json_t **snippets, json_t **notfound)
+{
+    struct index_state *state = NULL;
+    void *intquery = NULL;
+    search_builder_t *bx = NULL;
+    search_text_receiver_t *rx = NULL;
+    struct mailbox *mbox = NULL;
+    struct searchargs *searchargs = NULL;
+    struct index_init init;
+    const char *msgid;
+    json_t *matchprops, *snippet = NULL;
     int r = 0;
+    json_t *val;
+    size_t i;
+    char *mboxname = NULL;
 
-    if (!d->mboxname || !strcmp(rec->mboxname, req->inbox->name)) {
+    *snippets = json_pack("[]");
+    *notfound = json_pack("[]");
+
+    /* Build searchargs */
+    matchprops = json_pack("{}");
+    searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
+                                &jmap_namespace, req->userid, req->authstate, 0);
+    searchargs->root = buildsearch(req, filter, NULL, matchprops);
+    json_decref(matchprops);
+
+    /* Build the search query */
+    memset(&init, 0, sizeof(init));
+    init.userid = req->userid;
+    init.authstate = req->authstate;
+
+    r = index_open_mailbox(req->inbox, &init, &state);
+    if (r) goto done;
+
+    bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
+    if (!bx) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    search_build_query(bx, searchargs->root);
+    if (!bx->get_internalised) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    intquery = bx->get_internalised(bx);
+    search_end_search(bx);
+    if (!intquery) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Set up snippet callback context */
+    snippet = json_pack("{}");
+    rx = search_begin_snippets(intquery, 0/*verbose*/, makesnippet, snippet);
+    if (!rx) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Convert the snippets */
+    json_array_foreach(messageids, i, val) {
         struct index_record record;
-        struct mailbox *mbox = NULL;
+        message_t *msg;
+        uint32_t uid;
 
-        r = _openmbox(req, rec->mboxname, &mbox, 0);
-        if (r) return r;
+        msgid = json_string_value(val);
 
-        r = mailbox_find_index_record(mbox, rec->uid, &record);
-        if (!r && !(record.system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-            if (d->mboxname) {
-                free(d->mboxname);
-                r = IMAP_OK_COMPLETED;
+        r = jmapmsg_find(req, msgid, &mboxname, &uid);
+        if (r) {
+            if (r == IMAP_NOTFOUND) {
+                json_array_append_new(*notfound, json_string(msgid));
             }
-            d->mboxname = xstrdup(rec->mboxname);
-            d->uid = rec->uid;
+            r = 0;
+            continue;
         }
 
+        r = _openmbox(req, mboxname, &mbox, 0);
+        if (r) goto done;
+
+        r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
+
+        r = mailbox_find_index_record(mbox, uid, &record);
+        if (r) continue;
+
+        msg = message_new_from_record(mbox, &record);
+
+        json_object_set_new(snippet, "messageId", json_string(msgid));
+        index_getsearchtext(msg, rx, /*snippet*/1);
+        json_array_append_new(*snippets, json_deep_copy(snippet));
+        json_object_clear(snippet);
+
+        message_unref(&msg);
+
+        r = rx->end_mailbox(rx, mbox);
+        if (r) goto done;
+
         _closembox(req, &mbox);
+        free(mboxname);
+        mboxname = NULL;
+    }
+
+    if (!json_array_size(*notfound)) {
+        json_decref(*notfound);
+        *notfound = json_null();
+    }
+
+done:
+    if (rx) search_end_snippets(rx);
+    if (snippet) json_decref(snippet);
+    if (intquery) search_free_internalised(intquery);
+    if (mboxname) free(mboxname);
+    if (mbox) _closembox(req, &mbox);
+    if (searchargs) freesearchargs(searchargs);
+    if (state) {
+        state->mailbox = NULL; /* FIXME keep index_close from closing inbox */
+        index_close(&state);
     }
 
     return r;
 }
 
-static int jmapmsg_find(jmap_req_t *req, const char *id,
-                        char **mboxnameptr, uint32_t *uid)
+static int getSearchSnippets(jmap_req_t *req)
 {
-    struct jmapmsg_find_data data = { req, NULL, 0 };
-    struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
     int r;
+    json_t *filter, *messageids, *val, *snippets, *notfound, *res, *item;
+    const char *s;
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
 
-    if (!cstate) {
-        syslog(LOG_INFO, "findmessage: cannot open conversations db");
-        return IMAP_NOTFOUND;
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* filter */
+    filter = json_object_get(req->args, "filter");
+    if (JNOTNULL(filter)) {
+        validatefilter(filter, "filter", invalid);
+    } else {
+        json_array_append_new(invalid, json_string("filter"));
     }
 
-    r = conversations_guid_foreach(cstate, id, jmapmsg_find_cb, &data);
-    if (r == IMAP_OK_COMPLETED) {
+    /* messageIds */
+    messageids = json_object_get(req->args, "messageIds");
+    json_array_foreach(messageids, i, val) {
+        if (!(s = json_string_value(val)) || !strlen(s)) {
+            buf_printf(&buf, "messageIds[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    if (json_array_size(messageids) == 0) {
+        json_array_append_new(invalid, json_string("messageIds"));
+    }
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
-    } else if (!data.mboxname) {
-        r = IMAP_NOTFOUND;
+        goto done;
     }
-    *mboxnameptr = data.mboxname;
-    *uid = data.uid;
+    json_decref(invalid);
+
+    /* Render snippets */
+    r = jmapmsg_snippets(req, filter, messageids, &snippets, &notfound);
+    if (r) goto done;
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "filter", filter);
+    json_object_set_new(res, "list", snippets);
+    json_object_set_new(res, "notFound", notfound);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("searchSnippets"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    buf_free(&buf);
+    _finireq(req);
     return r;
 }
 
