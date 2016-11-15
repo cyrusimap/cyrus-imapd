@@ -1968,9 +1968,6 @@ sub test_getmessagelist_collapse
     $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
-    $imaptalk->select("INBOX");
-    $imaptalk->fetch("1:*", "(CID UID FLAGS)");
-
     xlog "list uncollapsed threads";
     $res = $jmap->Request([['getMessageList', { }, "R1"]]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{messageIds}});
@@ -1981,6 +1978,90 @@ sub test_getmessagelist_collapse
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
     $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
+}
+
+sub test_getmessagelist_window
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message C referencing A";
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "generating message D";
+    $exp{D} = $self->make_message("Message D");
+    $exp{D}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "list all messages";
+    $res = $jmap->Request([['getMessageList', { }, "R1"]]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    my $ids = $res->[0][1]->{messageIds};
+    my @subids;
+
+    xlog "list messages from position 1";
+    $res = $jmap->Request([['getMessageList', { position => 1 }, "R1"]]);
+    @subids = @{$ids}[1..3];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "list messages from position 4";
+    $res = $jmap->Request([['getMessageList', { position => 4 }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "limit messages from position 1 to one message";
+    $res = $jmap->Request([['getMessageList', { position => 1, limit => 1 }, "R1"]]);
+    @subids = @{$ids}[1..1];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "anchor at 2nd message";
+    $res = $jmap->Request([['getMessageList', { anchor => @{$ids}[1] }, "R1"]]);
+    @subids = @{$ids}[1..3];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "anchor at 2nd message and offset -1";
+    $res = $jmap->Request([['getMessageList', {
+        anchor => @{$ids}[1], anchorOffset => -1,
+    }, "R1"]]);
+    @subids = @{$ids}[2..3];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "anchor at 3rd message and offset 1";
+    $res = $jmap->Request([['getMessageList', {
+        anchor => @{$ids}[2], anchorOffset => 1,
+    }, "R1"]]);
+    @subids = @{$ids}[1..3];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+
+    xlog "anchor at 1st message offset -1 and limit 2";
+    $res = $jmap->Request([['getMessageList', {
+        anchor => @{$ids}[0], anchorOffset => -1, limit => 2
+    }, "R1"]]);
+    @subids = @{$ids}[1..2];
+    $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
+    $self->assert_num_equals(4, $res->[0][1]->{total});
 }
 
 1;
