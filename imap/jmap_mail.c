@@ -4384,10 +4384,40 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **uid,
         append_removestage(stage);
         goto done;
     }
-    /* FIXME calculate qdiffs for all mailboxes? */
-    qdiffs[QUOTA_MESSAGE] = 1;
+
+    /* Make sure there is enough quota for all mailboxes */
+    if (json_object_size(mailboxes) > 1) {
+        char foundroot[MAX_MAILBOX_BUFFER];
+        json_t *deltas = json_pack("{}");
+        const char *mbname;
+
+        /* Count message delta for each quota root */
+        json_object_foreach(mailboxes, id, val) {
+            mbname = json_string_value(val);
+            if (quota_findroot(foundroot, sizeof(foundroot), mbname)) {
+                json_t *delta = json_object_get(deltas, mbname);
+                delta = json_integer(json_integer_value(delta) + 1);
+                json_object_set_new(deltas, mbname, delta);
+            }
+        }
+
+        /* Check quota for each quota root. */
+        json_object_foreach(deltas, mbname, val) {
+            struct quota quota;
+            quota_t delta = json_integer_value(val);
+
+            quota_init(&quota, mbname);
+            r = quota_check(&quota, QUOTA_STORAGE, delta * qdiffs[QUOTA_STORAGE]);
+            if (!r) r = quota_check(&quota, QUOTA_MESSAGE, delta);
+            quota_free(&quota);
+            if (r) break;
+        }
+        json_decref(deltas);
+        if (r) goto done;
+    }
 
     /* Append the message to the mailbox */
+    qdiffs[QUOTA_MESSAGE] = 1;
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
@@ -4466,7 +4496,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     json_t *srcmailboxes = NULL; /* current mailboxes */
     json_t *oldmailboxes = NULL; /* current mailboxes that are kept */
     json_t *newmailboxes = NULL; /* mailboxes to add the message to */
-    json_t *delmailboxes = NULL; /* mailboxes to remote the mesage from */
+    json_t *delmailboxes = NULL; /* mailboxes to delete the message from */
 
     if (!strlen(msgid) || *msgid == '#') {
         return IMAP_NOTFOUND;
@@ -4526,37 +4556,6 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
     json_object_foreach(delmailboxes, id, val) {
         json_object_del(oldmailboxes, id);
-    }
-    if (json_object_size(newmailboxes)) {
-        /* FIXME don't calculate quota for updates, only for creates */
-        char foundroot[MAX_MAILBOX_BUFFER];
-        json_t *deltas = json_pack("{}");
-        const char *mbname;
-
-        /* Find the quota delta for each quota root */
-        json_object_foreach(newmailboxes, id, val) {
-            mbname = json_string_value(val);
-            if (quota_findroot(foundroot, sizeof(foundroot), mbname)) {
-                json_t *delta = json_object_get(deltas, mbname);
-                delta = json_integer(json_integer_value(delta) + 1);
-                json_object_set_new(deltas, mbname, delta);
-            }
-        }
-
-        /* FIXME deduct quota for deleted messages? */
-
-        /* Check quota for each quota root. */
-        json_object_foreach(deltas, mbname, val) {
-            struct quota quota;
-            quota_t delta = json_integer_value(val);
-
-            quota_init(&quota, mbname);
-            r = quota_check(&quota, QUOTA_MESSAGE, delta);
-            quota_free(&quota);
-            if (r) break;
-        }
-        json_decref(deltas);
-        if (r) goto done;
     }
 
     /* Update index record system flags. */
