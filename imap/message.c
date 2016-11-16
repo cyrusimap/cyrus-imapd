@@ -2239,7 +2239,7 @@ static void message_write_nocharset(struct buf *buf, const struct body *body)
 {
     buf_appendbit32(buf, 0x0000ffff);
 
-    unsigned char guidbuf[MESSAGE_GUID_SIZE];
+    char guidbuf[MESSAGE_GUID_SIZE];
     if (body) message_guid_export(&body->content_guid, guidbuf);
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
@@ -2389,7 +2389,7 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     }
     charset_free(&charset);
 
-    unsigned char guidbuf[MESSAGE_GUID_SIZE];
+    char guidbuf[MESSAGE_GUID_SIZE];
     if (body) message_guid_export(&body->content_guid, guidbuf);
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);

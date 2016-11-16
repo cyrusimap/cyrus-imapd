@@ -185,7 +185,7 @@ EXPORTED int message_guid_isnull(const struct message_guid *guid)
  *
  ************************************************************************/
 
-EXPORTED void message_guid_export(const struct message_guid *guid, unsigned char *buf)
+EXPORTED void message_guid_export(const struct message_guid *guid, char *buf)
 {
     memcpy(buf, guid->value, MESSAGE_GUID_SIZE);
 }
@@ -197,8 +197,8 @@ EXPORTED void message_guid_export(const struct message_guid *guid, unsigned char
  *
  ************************************************************************/
 
-EXPORTED const unsigned char *message_guid_import(struct message_guid *guid,
-                         const unsigned char *buf)
+EXPORTED const char *message_guid_import(struct message_guid *guid,
+                                         const char *buf)
 {
     assert(guid);
     guid->status = GUID_UNKNOWN;

@@ -85,13 +85,13 @@ int message_guid_isnull(const struct message_guid *guid);
 /* Export Message GUID as byte sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-void message_guid_export(const struct message_guid *guid, unsigned char *buf);
+void message_guid_export(const struct message_guid *guid, char *buf);
 
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-const unsigned char *message_guid_import(struct message_guid *guid,
-                                         const unsigned char *buf);
+const char *message_guid_import(struct message_guid *guid,
+                                const char *buf);
 
 
 /* Routines for manipulating text value */

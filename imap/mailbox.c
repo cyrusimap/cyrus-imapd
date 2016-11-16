@@ -1703,7 +1703,7 @@ static int mailbox_buf_to_index_record(const char *buf,
         return 0;
     }
 
-    message_guid_import(&record->guid, (unsigned char *)buf+OFFSET_MESSAGE_GUID);
+    message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
     record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
     if (version < 12)
         return 0;
@@ -2577,7 +2577,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
     }
 
     /* otherwise we have the GUID and MODSEQ in their current place */
-    message_guid_export(&record->guid, buf+OFFSET_MESSAGE_GUID);
+    message_guid_export(&record->guid, (char *)buf+OFFSET_MESSAGE_GUID);
     *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
 
     /* version 12 added the CACHE_CRC and RECORD_CRC, but at a lower point */
