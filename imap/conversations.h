@@ -97,8 +97,9 @@ struct conv_folder {
 };
 
 struct conv_guidrec {
-    const char*     mboxname;
+    const char      *mboxname;
     uint32_t        uid;
+    const char      *part;
 };
 
 struct conv_sender {

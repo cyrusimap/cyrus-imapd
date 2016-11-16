@@ -1515,7 +1515,20 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
         }
         rec.uid = res;
 
+        rec.part = NULL;
+        p = strchr(p + 1, '[');
+        char *freeme = NULL;
+        if (p) {
+            const char *end = strchr(p+1, ']');
+            if (!end) {
+                r = IMAP_INTERNAL;
+                break;
+            }
+            rec.part = freeme = xstrndup(p+1, end-p-1);
+        }
+
         r = cb(&rec, rock);
+        free(freeme);
         if (r) break;
     }
 
@@ -1524,45 +1537,131 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
     return r;
 }
 
-static int conversations_set_guid(struct conversations_state *state,
-                                 struct mailbox *mailbox,
-                                 const struct index_record *record,
-                                 int add)
+static int conversations_guid_setitem(struct conversations_state *state, const char *guidrep,
+                                      const char *item, int add)
 {
-    int folder = folder_number(state, mailbox->name, /*create*/1);
-    struct buf item = BUF_INITIALIZER;
-    char *key = strconcat("G", message_guid_encode(&record->guid), (char *)NULL);
+    char *key = strconcat("G", guidrep, (char *)NULL);
     size_t datalen = 0;
     const char *data;
     strarray_t *old = NULL;
 
     int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
-    if (!r) old = strarray_nsplit(data, datalen, ",", /*flags*/0);
+    if (!r && datalen) old = strarray_nsplit(data, datalen, ",", /*flags*/0);
     if (!old) old = strarray_new();
 
-    buf_printf(&item, "%d:%u", folder, record->uid);
-
     if (add) {
-        strarray_add(old, buf_cstring(&item));
+        /* XXX - could do with an API like:
+         * strarray_add_sorted(old, item, cmpstringp_raw) */
+        strarray_add(old, item);
         strarray_sort(old, cmpstringp_raw);
     }
     else {
-        strarray_remove_all(old, buf_cstring(&item));
+        strarray_remove_all(old, item);
         /* stays sorted :) */
     }
 
     char *new = strarray_join(old, ",");
 
-    if (new)
+    if (new && strlen(new))
         r = cyrusdb_store(state->db, key, strlen(key), new, strlen(new), &state->txn);
     else
         r = cyrusdb_delete(state->db, key, strlen(key), &state->txn, /*force*/1);
 
-    buf_free(&item);
     strarray_free(old);
     free(new);
     free(key);
 
+    return r;
+}
+
+static int body_is_rfc822(struct body *body)
+{
+    return body &&
+        !strcasecmpsafe(body->type, "MESSAGE") &&
+        !strcasecmpsafe(body->subtype, "RFC822");
+}
+
+/* interface message_read_bodystructure which makes sure the cache record
+ * exists and adds the MESSAGE/RFC822 wrapper to make fetch BODY[*]
+ * work consistently */
+static void loadbody(struct mailbox *mailbox, const struct index_record *record,
+                     struct body **bodyp)
+{
+    if (*bodyp) return;
+    if (mailbox_cacherecord(mailbox, record)) return;
+    struct body *body = xzmalloc(sizeof(struct body));
+    message_read_bodystructure(record, &body->subpart);
+    body->type = xstrdup("MESSAGE");
+    body->subtype = xstrdup("RFC822");
+    body->header_offset = 0;
+    body->header_size = 0;
+    body->content_offset = 0;
+    body->content_offset = record->size;
+    body->content_guid = record->guid;
+    *bodyp = body;
+}
+
+static int _guid_addbody(struct conversations_state *state, struct body *body,
+                         const char *base, const char *part, int add)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+    if (!body) return 0;
+
+    if (!message_guid_isnull(&body->content_guid)) {
+        buf_setcstr(&buf, base);
+        if (part) buf_printf(&buf, "[%s]", part);
+        const char *guidrep = message_guid_encode(&body->content_guid);
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), add);
+        if (r) goto done;
+    }
+
+    if (body_is_rfc822(body))
+        body = body->subpart;
+    else if (!body->numparts)
+        goto done;
+
+    if (body->numparts) {
+        int i;
+        for (i = 0; i < body->numparts; i++) {
+            buf_reset(&buf);
+            if (part) buf_printf(&buf, "%s.", part);
+            buf_printf(&buf, "%d", i+1);
+            _guid_addbody(state, &body->subpart[i], base, buf_cstring(&buf), add);
+        }
+    }
+    else {
+        buf_reset(&buf);
+        if (part) buf_printf(&buf, "%s.", part);
+        buf_printf(&buf, "%d", 1);
+        _guid_addbody(state, body, base, buf_cstring(&buf), add);
+    }
+
+ done:
+    buf_free(&buf);
+    return r;
+}
+
+static int conversations_set_guid(struct conversations_state *state,
+                                  struct mailbox *mailbox,
+                                  const struct index_record *record,
+                                  int add)
+{
+    int folder = folder_number(state, mailbox->name, /*create*/1);
+    struct buf item = BUF_INITIALIZER;
+    struct body *body = NULL;
+    int r = 0;
+
+    /* process the GUID of the full message itself */
+    buf_printf(&item, "%d:%u", folder, record->uid);
+    const char *base = buf_cstring(&item);
+
+    loadbody(mailbox, record, &body);
+
+    r = _guid_addbody(state, body, base, NULL, add);
+
+    message_free_body(body);
+    buf_free(&item);
     return r;
 }
 

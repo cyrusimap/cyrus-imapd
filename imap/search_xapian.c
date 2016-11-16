@@ -890,6 +890,9 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
 
+    /* we only want full message matches here */
+    if (rec->part) return 0;
+
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
