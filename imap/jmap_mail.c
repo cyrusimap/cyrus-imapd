@@ -2982,7 +2982,7 @@ done:
 static int getMessageList(jmap_req_t *req)
 {
     int r;
-    int dofetch = 0;
+    int fetchmsgs = 0, fetchsnippets = 0;
     json_t *filter, *sort;
     json_t *messageids = NULL, *threadids = NULL, *msglist, *item;
     struct getmsglist_window window;
@@ -3023,8 +3023,9 @@ static int getMessageList(jmap_req_t *req)
         window.limit = i;
     }
 
-    /* fetchMessages */
-    readprop(req->args, "fetchMessages", 0, invalid, "b", &dofetch);
+    readprop(req->args, "fetchMessages", 0, invalid, "b", &fetchmsgs);
+    readprop(req->args, "fetchSearchSnippets", 0, invalid, "b", &fetchsnippets);
+
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -3065,12 +3066,23 @@ static int getMessageList(jmap_req_t *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
-    if (dofetch) {
+    if (fetchmsgs) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", messageids);
         r = getMessages(&subreq);
         json_decref(subreq.args);
+        if (r) goto done;
+    }
+
+    if (fetchsnippets) {
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "messageIds", messageids);
+        json_object_set(subreq.args, "filter", filter);
+        r = getSearchSnippets(&subreq);
+        json_decref(subreq.args);
+        if (r) goto done;
     }
 
 done:
