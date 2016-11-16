@@ -2840,7 +2840,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     query->sortcrit = buildsort(sort);
     query->multiple = 1;
     query->need_ids = 1;
-    query->verbose = 1; /* FIXME for debugging */
     r = search_query_run(query);
     if (r) return r;
 
@@ -2968,7 +2967,7 @@ done:
     free_hash_table(&window->ids, NULL);
     free_hashu64_table(&window->cids, NULL);
     search_query_free(query);
-    state->mailbox = NULL; /* FIXME keep index_close from closing inbox */
+    state->mailbox = NULL;
     index_close(&state);
     freesearchargs(searchargs);
     if (r) {
@@ -3222,7 +3221,7 @@ done:
     if (mbox) _closembox(req, &mbox);
     if (searchargs) freesearchargs(searchargs);
     if (state) {
-        state->mailbox = NULL; /* FIXME keep index_close from closing inbox */
+        state->mailbox = NULL;
         index_close(&state);
     }
 
