@@ -37,12 +37,13 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.mathjax',
     'sphinx.ext.todo',
+    'sphinx.ext.intersphinx',
 ]
 
 extensions.append('sphinxlocal.builders.manpage')
 extensions.append('sphinxlocal.roles.cyrusman')
 
-intersphinx_mapping = {'cyrussasl': ('https://www.cyrusimap.org/sasl', None)}
+intersphinx_mapping = {'cyrussasl': ('http://www.cyrusimap.org/sasl', None)}
 
 mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
 
