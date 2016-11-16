@@ -5,7 +5,7 @@ static void test_guid(void)
 {
     static const char TEXT[] = "lorem ipsum dolor sit amet, "
                                "consectetur adipisicing elit\n";
-    static const unsigned char SHA1[20] = {
+    static const char SHA1[20] = {
         0xd1,0xb0,0x52,0xa0,0x12,0xcb,0xec,0xd5,0x42,0x5b,
         0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
     };
@@ -38,12 +38,12 @@ static void test_guid(void)
 
 static void test_import(void)
 {
-    static const unsigned char SHA1[20] = {
+    static const char SHA1[20] = {
         0xd1,0xb0,0x52,0xa0,0x12,0xcb,0xec,0xd5,0x42,0x5b,
         0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
     };
     struct message_guid guid;
-    unsigned char buf[MESSAGE_GUID_SIZE];
+    char buf[MESSAGE_GUID_SIZE];
     int r;
 
     memset(&guid, 0x45, sizeof(guid));
