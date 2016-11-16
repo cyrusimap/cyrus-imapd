@@ -84,7 +84,6 @@ char QPSAFECHAR[256] = {
 struct qp_state {
     int isheader;
     int len;
-    int sawcr;
     unsigned char buf[1000];
 };
 
