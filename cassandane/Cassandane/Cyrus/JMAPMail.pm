@@ -2171,4 +2171,34 @@ sub test_getsearchsnippets
     $self->assert_null($res->[0][1]->{list}[0]->{preview});
 }
 
+sub test_getmessagelist_snippets
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "fetch message and snippet";
+    $res = $jmap->Request([['getMessageList', {
+        filter => { text => "message" },
+        fetchSearchSnippets => JSON::true,
+    }, "R1"]]);
+
+    my $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Message</mark> A"));
+}
+
 1;
