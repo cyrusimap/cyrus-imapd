@@ -160,6 +160,9 @@ struct charset_converter {
     /* An open ICU converter for ICU backed converters. Or NULL.  */
     UConverter *conv;
 
+    /* The charset name for this converter. Might differ from ICU name. */
+    char *name;
+
     /* The numeric charset identifier for table converters. Or -1 */
     int num;
 
@@ -1850,6 +1853,9 @@ EXPORTED const char *charset_name(charset_t charset)
 {
     const char *name;
 
+    if (charset->name)
+        return charset->name;
+
     if (charset->conv) {
         UErrorCode err = U_ZERO_ERROR;
         name = ucnv_getName(charset->conv, &err);
@@ -1879,8 +1885,10 @@ EXPORTED charset_t charset_lookupname(const char *name)
 
     /* translate to canonical name */
     for (i = 0; charset_aliases[i].name; i++) {
-        if (!strcasecmp(name, charset_aliases[i].name)) {
+        if (!strcasecmp(name, charset_aliases[i].name) ||
+            !strcasecmp(name, charset_aliases[i].canon_name)) {
             name = charset_aliases[i].canon_name;
+            s->name = xstrdup(name);
             break;
         }
     }
@@ -1916,6 +1924,7 @@ EXPORTED void charset_free(charset_t *charsetp)
         if (s->conv) ucnv_close(s->conv);
         /* Free up memory. */
         if (s->buf) free(s->buf);
+        if (s->name) free(s->name);
         /* Release the converter */
         free(s);
         *charsetp = CHARSET_UNKNOWN_CHARSET;

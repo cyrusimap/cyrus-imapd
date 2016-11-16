@@ -42,6 +42,27 @@ static void test_lookupname(void)
     cs = charset_lookupname("iso-8859-1");
     CU_ASSERT_PTR_NOT_NULL(cs);
     charset_free(&cs);
+
+    /*
+     * Assert that ICU-backed charsets return the Cyrus-canonical name. E.g:
+     * ICU names windows-1252 as ibm-5348_P100-1997 but we don't want that.
+     */
+    cs = charset_lookupname("windows-1252");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    charset_free(&cs);
+
+    cs = charset_lookupname("1252");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    charset_free(&cs);
+
+    /* But still use the ICU name if there's no good alias for it */
+    cs = charset_lookupname("ebcdic-ar");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL(charset_name(cs), "ibm-16804_X110-1999");
+    charset_free(&cs);
+
 }
 
 static void test_to_utf8(void)

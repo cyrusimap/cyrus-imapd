@@ -1100,7 +1100,7 @@ static void test_cache_simple(void)
     message_read_bodystructure(&record, &body);
     CU_ASSERT_PTR_NOT_NULL_FATAL(body);
 
-    CU_ASSERT_STRING_EQUAL(body->charset_id, "ISO-8859-1");
+    CU_ASSERT_STRING_EQUAL(body->charset_id, "iso-8859-1");
 
     message_free_body(body);
     free(body);
