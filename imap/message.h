@@ -274,7 +274,7 @@ extern int message_get_bcc(message_t *m, struct buf *buf);
 extern int message_get_inreplyto(message_t *m, struct buf *buf);
 extern int message_get_references(message_t *m, struct buf *buf);
 extern int message_get_subject(message_t *m, struct buf *buf);
-extern int message_get_date(message_t *m, time_t *tp);
+extern int message_get_gmtime(message_t *m, time_t *tp);
 extern int message_get_mailbox(message_t *m, struct mailbox **);
 extern int message_get_uid(message_t *m, uint32_t *uidp);
 extern int message_get_cid(message_t *m, conversation_id_t *cidp);

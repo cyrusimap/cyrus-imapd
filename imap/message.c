@@ -4206,11 +4206,11 @@ EXPORTED int message_get_sentdate(message_t *m, time_t *datep)
     return 0;
 }
 
-EXPORTED int message_get_date(message_t *m, time_t *datep)
+EXPORTED int message_get_gmtime(message_t *m, time_t *tp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *datep = m->record.gmtime;
+    *tp = m->record.gmtime;
     return 0;
 }
 
