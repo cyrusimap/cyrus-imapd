@@ -1974,7 +1974,7 @@ static void cmdloop(struct http_connection *conn)
 
 
 #ifdef HAVE_NGHTTP2
-        /* Check for HTTP/2 client connecton preface */
+        /* Check for HTTP/2 client connection preface */
         if (http2_callbacks &&
             !strncmp(NGHTTP2_CLIENT_MAGIC,
                      req_line->buf, strlen(req_line->buf))) {
