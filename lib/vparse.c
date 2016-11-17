@@ -803,7 +803,13 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt, int is_m
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
-        _checkwrap(*value, tgt);
+        /* never wrap just a single character by itself.  This is partially
+         * a workaround for an OSX 10.10 bug with parsing this:
+         * PRODID:+//IDN bitfire.at//DAVdroid/1.2.2-gplay vcard4android ez-vcard/0.9.1
+         *  0
+         * UID:[...]
+         * which is totally valid, but it was barfing and saying there was no UID */
+        if (value[1]) _checkwrap(*value, tgt);
         switch (*value) {
         case '\r':
             break;

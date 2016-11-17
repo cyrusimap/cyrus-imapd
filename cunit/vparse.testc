@@ -12,6 +12,30 @@ static void test_double_end(void)
     CU_ASSERT_EQUAL(vr, PE_MISMATCHED_CARD);
 }
 
+static void test_wrap_onechar(void)
+{
+    char card[] = "BEGIN:VCARD\n"
+                  "PRODID:+//IDN bitfire.at//DAVdroid/1.2.2-gplay vcard4android ez-vcard/0.9.1\n"
+                  " 0\n"
+                  "UID:abc\n"
+                  "END:VCARD";
+    char wantbuf[] = "BEGIN:VCARD\r\n"
+                  "PRODID:+//IDN bitfire.at//DAVdroid/1.2.2-gplay vcard4android ez-vcard/0.9.10\r\n"
+                  "UID:abc\r\n"
+                  "END:VCARD\r\n";
+    struct vparse_state vparser;
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = card;
+    int vr = vparse_parse(&vparser, 0);
+    CU_ASSERT_EQUAL(vr, 0);
+    struct buf *buf = buf_new(); \
+    vparse_tobuf(vparser.card, buf); \
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+    vparse_free(&vparser);
+
+    // XXX test value
+}
+
 static void test_control_chars(void)
 {
 #define TESTCASE(in, flag, wanterr) \
