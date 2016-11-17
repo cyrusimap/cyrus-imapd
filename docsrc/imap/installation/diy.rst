@@ -21,7 +21,7 @@ Clone the GIT repository:
 
 .. parsed-literal::
 
-    $ :command:`git clone https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git`
+    $ :command:`git clone github.com/cyrusimap/cyrus-imapd.git`
 
 Check out the desired branch or revision:
 
@@ -47,7 +47,7 @@ Extract the tarball:
 .. parsed-literal::
 
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
-	
+
 .. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
