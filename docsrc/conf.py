@@ -125,6 +125,15 @@ html_theme = 'cyrus'
 # documentation.
 #html_theme_options = {}
 
+html_context = {
+  "display_github": True, # Add 'Edit on Github' link instead of 'View page source'
+  "github_user": "cyrusimap",
+  "github_repo": "cyrus-imapd",
+  "github_version": "cyrus-imapd-2.5",
+  "conf_py_path": "/docsrc/",
+  "source_suffix": source_suffix,
+}
+
 
 # Add any paths that contain custom themes here, relative to this directory.
 html_theme_path = ["exts/themes"]
@@ -180,7 +189,7 @@ html_sidebars = {'**' : ['localtoc.html', 'searchbox.html']}
 #html_split_index = False
 
 # If true, links to the reST sources are added to the pages.
-html_show_sourcelink = False
+html_show_sourcelink = True
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 #html_show_sphinx = True
