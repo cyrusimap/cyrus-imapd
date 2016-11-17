@@ -247,6 +247,11 @@ void backup_mailbox_free(struct backup_mailbox **mailboxp);
 struct backup_mailbox_message_list *backup_get_mailbox_messages(struct backup *backup,
                                                                 int chunk_id);
 
+struct backup_mailbox_message *backup_get_mailbox_message(
+                                    struct backup *backup,
+                                    const char *uniqueid,
+                                    const char *guid);
+
 struct backup_mailbox_message *backup_mailbox_message_clone(
                                     const struct backup_mailbox_message *orig);
 

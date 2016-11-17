@@ -425,6 +425,14 @@ const char backup_index_mailbox_message_select_all_sql[] =
     ";"
 ;
 
+const char backup_index_mailbox_message_select_one_sql[] =
+    "SELECT " MAILBOX_MESSAGE_SELECT_FIELDS
+    " FROM " MAILBOX_MESSAGE_SELECT_JOIN
+    " WHERE mb.uniqueid = :uniqueid"
+    "  AND m.guid = :guid"
+    ";"
+;
+
 const char backup_index_mailbox_message_expunge_sql[] = QUOTE(
     UPDATE mailbox_message
     SET expunged = :expunged

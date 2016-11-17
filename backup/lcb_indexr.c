@@ -240,6 +240,7 @@ EXPORTED void backup_mailbox_list_empty(struct backup_mailbox_list *list)
 struct _mailbox_message_row_rock {
     struct message_guid *match_guid;
     struct backup_mailbox_message_list *save_list;
+    struct backup_mailbox_message **save_one;
 };
 
 static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
@@ -278,6 +279,10 @@ static int _mailbox_message_row_cb(sqlite3_stmt *stmt, void *rock)
             mailbox_message = NULL;
         }
     }
+    else if (mbrrock->save_one) {
+        *mbrrock->save_one = mailbox_message;
+        mailbox_message = NULL;
+    }
 
     if (mailbox_message)
         backup_mailbox_message_free(&mailbox_message);
@@ -304,6 +309,7 @@ EXPORTED struct backup_mailbox_message_list *backup_get_mailbox_messages(
     struct _mailbox_message_row_rock mbrrock = {
         NULL,
         mailbox_message_list,
+        NULL,
     };
 
     int r = sqldb_exec(backup->db, sql, bval, _mailbox_message_row_cb,
@@ -316,6 +322,34 @@ EXPORTED struct backup_mailbox_message_list *backup_get_mailbox_messages(
     }
 
     return mailbox_message_list;
+}
+
+EXPORTED struct backup_mailbox_message *backup_get_mailbox_message(
+    struct backup *backup,
+    const char *uniqueid,
+    const char *guid)
+{
+    struct backup_mailbox_message *mailbox_message = NULL;
+
+    struct sqldb_bindval bval[] = {
+        { ":uniqueid",      SQLITE_TEXT,    { .s = uniqueid } },
+        { ":guid",          SQLITE_TEXT,    { .s = guid } },
+        { NULL,             SQLITE_NULL,    { .s = NULL } },
+    };
+
+    struct _mailbox_message_row_rock mbrrock = {
+        NULL, NULL, &mailbox_message,
+    };
+
+    int r = sqldb_exec(backup->db, backup_index_mailbox_message_select_one_sql,
+                       bval, _mailbox_message_row_cb, &mbrrock);
+
+    if (r) {
+        syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s",
+                          __func__, r, uniqueid, guid);
+    }
+
+    return mailbox_message;
 }
 
 struct _mailbox_row_rock {
@@ -375,6 +409,7 @@ static int _mailbox_row_cb(sqlite3_stmt *stmt, void *rock)
         struct _mailbox_message_row_rock mbrrock = {
             mbrock->match_guid,
             mailbox->records,
+            NULL,
         };
 
         r = sqldb_exec(mbrock->db,
