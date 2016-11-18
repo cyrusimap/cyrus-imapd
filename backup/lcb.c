@@ -113,7 +113,7 @@ EXPORTED void backup_cleanup_staging_path(void)
  *  - backupd needs to be able to append to data stream and update index (exclusive)
  *  - backupd maybe needs to create a new backup from scratch (exclusive)
  *  - reindex needs to gzuc data stream and rewrite index (exclusive)
- *  - compress needs to rewrite data stream and index (exclusive)
+ *  - compact needs to rewrite data stream and index (exclusive)
  *  - restore needs to read data stream and index (shared)
  *
  * with only one shared case, might as well always lock exclusively...
@@ -147,13 +147,19 @@ HIDDEN int backup_real_open(struct backup **backupp,
                       open_flags,
                       S_IRUSR | S_IWUSR);
         if (fd < 0) {
-            if (errno == EEXIST) {
+            switch (errno) {
+            case EEXIST:
                 r = IMAP_MAILBOX_EXISTS;
-            }
-            else {
+                break;
+            case ENOENT:
+                r = IMAP_MAILBOX_NONEXISTENT;
+                break;
+            default:
                 syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
                 r = IMAP_IOERROR;
+                break;
             }
+
             goto error;
         }
 
@@ -370,7 +376,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
         syslog(LOG_DEBUG, "%s not found in backups.db, creating new record", userid);
         backup_path = _make_path(mbname, NULL);
         if (!backup_path) {
-            r = IMAP_INTERNAL; /* FIXME ?? */
+            r = CYRUSDB_INTERNAL;
             goto done;
         }
         path_len = strlen(backup_path);
@@ -395,7 +401,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
         syslog(LOG_DEBUG,
                "unexpectedly got zero length backup path for user %s",
                userid);
-        r = IMAP_INTERNAL; /* FIXME ?? */
+        r = CYRUSDB_INTERNAL;
         goto done;
     }
 

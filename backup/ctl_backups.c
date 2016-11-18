@@ -51,6 +51,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "lib/cyrusdb.h"
@@ -510,21 +511,27 @@ int main(int argc, char **argv)
             buf_reset(&fname);
             mbname_t *mbname = NULL;
 
-            // FIXME error checking in here
-
             if (options.mode == CTLBU_MODE_USERNAME)
                 mbname = mbname_from_userid(argv[i]);
             else if (options.mode == CTLBU_MODE_MBOXNAME)
                 mbname = mbname_from_intname(argv[i]);
 
             if (mbname) {
-                backup_get_paths(mbname, &fname, NULL, BACKUP_OPEN_NOCREATE);
+                r = backup_get_paths(mbname, &fname, NULL, BACKUP_OPEN_NOCREATE);
+                if (r) {
+                    /* XXX this should print cyrusdb_strerror(r), except that
+                     * just returns "cyrusdb error", unhelpfully */
+                    fprintf(stderr, "%s: not found in backups.db\n", argv[i]);
+                    syslog(LOG_DEBUG, "ctl_backups '%s': %s (%d)", argv[i], cyrusdb_strerror(r), r);
+                    mbname_free(&mbname);
+                    continue;
+                }
                 buf_setcstr(&userid, mbname_userid(mbname));
             }
             else
                 buf_setcstr(&fname, argv[i]);
 
-            if (cmd_func[cmd])
+            if (!r && cmd_func[cmd])
                 r = cmd_func[cmd](&options,
                                   buf_cstring(&userid),
                                   buf_len(&userid),
