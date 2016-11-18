@@ -1275,6 +1275,50 @@ static int manage_attachments(struct transaction_t *txn,
 }
 
 
+static void get_schedule_addresses(struct transaction_t *txn,
+                                   strarray_t *addresses)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    /* allow override of schedule-address per-message (FM specific) */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
+
+    if (hdr) strarray_append(addresses, hdr[0]);
+    else {
+        /* find schedule address based on the destination calendar's user */
+
+        /* check calendar-user-address-set for target user */
+        const char *annotname =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        char *mailboxname = caldav_mboxname(txn->req_tgt.userid, NULL);
+        int r = annotatemore_lookupmask(mailboxname, annotname,
+                                        txn->req_tgt.userid, &buf);
+        free(mailboxname);
+        if (!r && buf.len > 7 &&
+            !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
+            strarray_append(addresses, buf_cstring(&buf) + 7);
+        }
+        else if (strchr(txn->req_tgt.userid, '@')) {
+            /* userid corresponding to target */
+            strarray_append(addresses, txn->req_tgt.userid);
+        }
+        else {
+            /* append fully qualified userids */
+            struct strlist *domains;
+
+            for (domains = cua_domains; domains; domains = domains->next) {
+                buf_reset(&buf);
+                buf_printf(&buf, "%s@%s", txn->req_tgt.userid, domains->s);
+
+                strarray_appendm(addresses, buf_release(&buf));
+            }
+        }
+    }
+
+    buf_free(&buf);
+}
+
+
 /* Perform scheduling actions for a DELETE request */
 static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
@@ -1298,6 +1342,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
 
     if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
         /* Scheduling object resource */
+        strarray_t schedule_addresses = STRARRAY_INITIALIZER;
         const char **hdr;
 
         /* XXX - check date range? - don't send in the past */
@@ -1313,40 +1358,28 @@ static int caldav_delete_cal(struct transaction_t *txn,
         }
 
         if (!schedule_address) {
-            const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
-            if (hdr) schedule_address = xstrdup(hdr[0]);
+            get_schedule_addresses(txn, &schedule_addresses);
+        }
+        else {
+            strarray_appendm(&schedule_addresses, schedule_address);
+            schedule_address = NULL;
         }
 
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
-        if (!schedule_address) {
-            /* userid corresponding to target */
-            schedule_address = xstrdup(txn->req_tgt.userid);
-
-            /* or overridden address-set for target user */
-            const char *annotname =
-                DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-            char *mailboxname = caldav_mboxname(schedule_address, NULL);
-            int r = annotatemore_lookupmask(mailboxname, annotname,
-                                            schedule_address, &buf);
-            free(mailboxname);
-            if (!r && buf.len > 7 &&
-                !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
-                free(schedule_address);
-                schedule_address = xstrdup(buf_cstring(&buf) + 7);
-            }
-        }
 
         const char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-        if (!strcasecmpsafe(cdata->organizer, schedule_address)) {
+        if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            sched_request(userid, schedule_address, ical, NULL);
+            sched_request(userid, cdata->organizer, ical, NULL);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
-            sched_reply(userid, schedule_address, ical, NULL);
+            sched_reply(userid, strarray_nth(&schedule_addresses, 0), ical, NULL);
         }
+
+        strarray_fini(&schedule_addresses);
     }
 
   done:
@@ -4009,6 +4042,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* XXX  Hack for Outlook */
             icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
+            strarray_t schedule_addresses = STRARRAY_INITIALIZER;
             int r;
 
             syslog(LOG_DEBUG,
@@ -4043,62 +4077,44 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = record_to_ical(mailbox, &record, &schedule_address);
             }
 
-            /* allow override of schedule-address per-message (FM specific) */
             if (!schedule_address) {
-                const char **hdr =
-                    spool_getheader(txn->req_hdrs, "Schedule-Address");
-                if (hdr) schedule_address = xstrdup(hdr[0]);
+                get_schedule_addresses(txn, &schedule_addresses);
             }
-
-            /* find schedule address based on the destination calendar's user */
-            if (!schedule_address) {
-                /* userid corresponding to target */
-                schedule_address = xstrdup(txn->req_tgt.userid);
-
-                /* or overridden address-set for target user */
-                const char *annotname =
-                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-                char *mailboxname = caldav_mboxname(schedule_address, NULL);
-                int r = annotatemore_lookupmask(mailboxname, annotname,
-                                                schedule_address, &buf);
-                free(mailboxname);
-                if (!r && buf.len > 7 &&
-                    !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
-                    free(schedule_address);
-                    schedule_address = xstrdup(buf_cstring(&buf) + 7);
-                }
+            else {
+                strarray_appendm(&schedule_addresses, schedule_address);
+                schedule_address = NULL;
             }
-
-            syslog(LOG_DEBUG,
-                   "caldav_put: schedule address: %s", schedule_address);
 
             char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-            if (!strcasecmpsafe(schedule_address, organizer)) {
+            if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
                 /* Organizer scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
-                    goto done;
                 }
-                sched_request(userid, schedule_address, oldical, ical);
+                else sched_request(userid, organizer, oldical, ical);
             }
             else {
                 /* Attendee scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
-                    goto done;
                 }
 #if 0
-                if (!oldical) {
+                else if (!oldical) {
                     /* Can't reply to a non-existent invitation */
                     /* XXX  But what about invites over iMIP? */
                     txn->error.desc = "Can not reply to non-existent resource";
                     ret = HTTP_FORBIDDEN;
-                    goto done;
                 }
 #endif
-                sched_reply(userid, schedule_address, oldical, ical);
+                else {
+                    sched_reply(userid, strarray_nth(&schedule_addresses, 0),
+                                oldical, ical);
+                }
             }
             free(userid);
+            strarray_fini(&schedule_addresses);
+
+            if (ret) goto done;
 
             flags |= NEW_STAG;
         }
