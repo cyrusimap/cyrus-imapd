@@ -4011,6 +4011,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* Scheduling object resource */
             int r;
 
+            syslog(LOG_DEBUG,
+                   "caldav_put: organizer: %s", organizer);
+
             if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
             if (cdata->organizer) {
@@ -4065,6 +4068,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                     schedule_address = xstrdup(buf_cstring(&buf) + 7);
                 }
             }
+
+            syslog(LOG_DEBUG,
+                   "caldav_put: schedule address: %s", schedule_address);
 
             char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             if (!strcasecmpsafe(schedule_address, organizer)) {

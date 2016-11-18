@@ -564,6 +564,8 @@ static int imip_send(icalcomponent *ical, const char *recipient, unsigned is_upd
 {
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
 
+    syslog(LOG_DEBUG, "imip_send(%s)", recipient);
+
     /* if no notifier, fall back to sendmail */
     if (!notifier) return imip_send_sendmail(ical, recipient, is_update);
 
@@ -972,6 +974,8 @@ static void sched_deliver_remote(const char *recipient,
                                  struct sched_data *sched_data)
 {
     int r;
+
+    syslog(LOG_DEBUG, "sched_deliver_remote(%s, %X)", recipient, sparam->flags);
 
     if (sparam->flags & SCHEDTYPE_ISCHEDULE) {
         /* Use iSchedule */
@@ -1598,6 +1602,8 @@ static void sched_deliver_local(const char *recipient,
     icalproperty *prop;
     struct transaction_t txn;
 
+    syslog(LOG_DEBUG, "sched_deliver_local(%s, %X)", recipient, sparam->flags);
+
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
 
@@ -1865,6 +1871,8 @@ void sched_deliver(const char *recipient, void *data, void *rock)
     struct auth_state *authstate = (struct auth_state *) rock;
     struct caldav_sched_param sparam;
     int islegal;
+
+    syslog(LOG_DEBUG, "sched_deliver(%s)", recipient);
 
     /* Check SCHEDULE-FORCE-SEND value */
     switch (sched_data->force_send) {
@@ -2536,6 +2544,8 @@ void sched_request(const char *userid, const char *organizer,
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
+    syslog(LOG_DEBUG, "sched_request(%s)", organizer);
+
     r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
@@ -2894,6 +2904,8 @@ void sched_reply(const char *userid, const char *attendee,
                  icalcomponent *oldical, icalcomponent *newical)
 {
     int r;
+
+    syslog(LOG_DEBUG, "sched_reply(%s)", attendee);
 
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
