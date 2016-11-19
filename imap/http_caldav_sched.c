@@ -366,7 +366,7 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
             originator->qpname ? originator->qpname : "", originator->addr);
 
     for (recip = recipients; recip; recip = recip->next) {
-        if (strcmp(recip->addr, originator->addr) && strcasecmp(recip->addr, recipient)) {
+        if (strcmp(recip->addr, originator->addr) && !strcasecmp(recip->addr, recipient)) {
             fprintf(sm, "To: %s <%s>\r\n",
                     recip->qpname ? recip->qpname : "", recip->addr);
         }
