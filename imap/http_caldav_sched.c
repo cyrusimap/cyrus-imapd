@@ -318,7 +318,7 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
 
     if (sm == NULL) {
         syslog(LOG_ERR,
-               "imip_send_email(%s): failed to fork sendmail", recipient);
+               "imip_send_sendmail(%s): failed to fork sendmail", recipient);
         r = HTTP_UNAVAILABLE;
         goto done;
     }
@@ -542,7 +542,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
 
     while (waitpid(sm_pid, &r, 0) < 0);
 
-    syslog(LOG_INFO, "imip_send_email(%s): %s", recipient, sendmail_errstr(r));
+    syslog(LOG_INFO,
+           "imip_send_sendmail(%s): %s", recipient, sendmail_errstr(r));
 
   done:
     buf_free(&tmpbuf);
