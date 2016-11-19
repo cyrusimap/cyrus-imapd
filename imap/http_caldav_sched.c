@@ -366,7 +366,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
             originator->qpname ? originator->qpname : "", originator->addr);
 
     for (recip = recipients; recip; recip = recip->next) {
-        if (strcmp(recip->addr, originator->addr) && !strcasecmp(recip->addr, recipient)) {
+        if (strcmp(recip->addr, originator->addr) &&
+            (!recipient || !strcasecmp(recip->addr, recipient))) {
             fprintf(sm, "To: %s <%s>\r\n",
                     recip->qpname ? recip->qpname : "", recip->addr);
         }
@@ -2259,7 +2260,8 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
             const char *attendee = icalproperty_get_invitee(prop);
             if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
-            if (onattendee && !strcasecmp(attendee, onattendee)) continue;
+            /* skip attendees other than the one we're updating */
+            if (onattendee && strcasecmp(attendee, onattendee)) continue;
 
             /* mark the status */
             icalparameter *param = icalparameter_new_schedulestatus(status);
