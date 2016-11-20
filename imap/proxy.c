@@ -152,14 +152,16 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
     int i = 0;
     struct backend *ret = NULL;
 
-    if (current && *current && !strcmp(server, (*current)->hostname)) {
+    if (current && *current && !strcmp(server, (*current)->hostname)
+                && !strcmp(prot->service, (*current)->prot->service)) {
         /* this is our current backend */
         return *current;
     }
 
     /* check if we already a connection to this backend */
     while (cache && *cache && (*cache)[i]) {
-        if (!strcmp(server, ((*cache)[i])->hostname)) {
+        if ((!strcmp(server, ((*cache)[i])->hostname) &&
+             !strcmp(prot->service, ((*cache)[i])->prot->service))) {
             ret = (*cache)[i];
             /* ping/noop the server */
             if ((ret->sock != -1) && backend_ping(ret, userid)) {
