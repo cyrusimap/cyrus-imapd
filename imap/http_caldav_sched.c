@@ -251,7 +251,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
     icalproperty *prop;
     icalproperty_method meth;
     icalcomponent_kind kind;
-    const char *argv[7], *uid, *msg_type, *summary, *location, *descrip, *status;
+    const char *uid, *summary, *location, *descrip, *status;
+    const char *argv[7], *msg_type, *filename;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
     char *cp, when[2*RFC822_DATETIME_MAX+4], datestr[RFC822_DATETIME_MAX+1];
@@ -278,6 +279,7 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
     /* Determine Originator and Recipient(s) based on method and component */
     if (meth == ICAL_METHOD_REPLY) {
         msg_type = "a RSVP";
+        filename = "RSVP";
 
         prop = icalcomponent_get_first_invitee(comp);
         add_address(&originator, prop, &icalproperty_get_invitee);
@@ -287,12 +289,18 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
                     (const char*(*)(icalproperty *))&icalproperty_get_organizer);
     }
     else {
-        if (meth == ICAL_METHOD_CANCEL)
+        if (meth == ICAL_METHOD_CANCEL) {
             msg_type = "a cancellation";
-        else if (is_update)
+            filename = "Canceled";
+        }
+        else if (is_update) {
             msg_type = "an updated invitation";
-        else
+            filename = "Update";
+        }
+        else {
             msg_type = "an invitation";
+            filename = "Invitation";
+        }
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         add_address(&originator, prop,
@@ -361,7 +369,7 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
         }
     }
 
-    /* Create multipart/alternative iMIP message */
+    /* Create multipart/mixed + multipart/alternative iMIP message */
     fprintf(sm, "From: %s <%s>\r\n",
             originator->qpname ? originator->qpname : "", originator->addr);
 
@@ -373,15 +381,16 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
         }
     }
 
+    fprintf(sm, "Subject: %s: ", filename);
     if (summary) {
         char *mimehdr = charset_encode_mimeheader(summary, 0);
-        fprintf(sm, "Subject: %s\r\n", mimehdr);
+        fputs(mimehdr, sm);
         free(mimehdr);
     }
     else {
-        fprintf(sm, "Subject: %s %s\r\n", icalcomponent_kind_to_string(kind),
-                icalproperty_method_to_string(meth));
+        fputs(icalcomponent_kind_to_string(kind), sm);
     }
+    fputs("\r\n", sm);
 
     time_to_rfc822(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
@@ -393,8 +402,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
     snprintf(boundary, sizeof(boundary), "%s=_%ld=_%ld=_%ld",
              config_servername, (long) p, (long) t, (long) rand());
 
-    fprintf(sm, "Content-Type: multipart/alternative;"
-            "\r\n\tboundary=\"%s\"\r\n", boundary);
+    fprintf(sm, "Content-Type: multipart/mixed;"
+            "\r\n\tboundary=\"%s_M\"\r\n", boundary);
 
     fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
 
@@ -405,13 +414,17 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
     /* preamble */
     fputs("This is a message with multiple parts in MIME format.\r\n", sm);
 
+    /* multipart/alternative */
+    fprintf(sm, "\r\n--%s_M\r\n", boundary);
+
+    fprintf(sm, "Content-Type: multipart/alternative;"
+            "\r\n\tboundary=\"%s_A\"\r\n", boundary);
+
     /* plain text part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
+    fprintf(sm, "\r\n--%s_A\r\n", boundary);
 
     fputs("Content-Type: text/plain; charset=utf-8\r\n", sm);
-    fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
     fputs("Content-Disposition: inline\r\n", sm);
-    fputs("\r\n", sm);
 
     buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
                originator->name ? originator->name : "", originator->addr);
@@ -451,12 +464,18 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
 
     mimebody = charset_qpencode_mimebody(buf_base(&plainbuf),
                                          buf_len(&plainbuf), &outlen);
-    buf_free(&plainbuf);
+
+    if (outlen > buf_len(&plainbuf)) {
+        fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
+    }
+    fputs("\r\n", sm);
+
     fwrite(mimebody, outlen, 1, sm);
     free(mimebody);
+    buf_free(&plainbuf);
 
     /* HTML part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
+    fprintf(sm, "\r\n--%s_A\r\n", boundary);
 
     fprintf(sm, "Content-Type: text/html; charset=utf-8\r\n");
     fputs("Content-Disposition: inline\r\n", sm);
@@ -515,29 +534,49 @@ static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is
     fprintf(sm, "</table></body></html>\r\n");
 
     /* iCalendar part */
-    fprintf(sm, "\r\n--%s\r\n", boundary);
+    fprintf(sm, "\r\n--%s_A\r\n", boundary);
 
     fprintf(sm, "Content-Type: text/calendar; charset=utf-8");
     fprintf(sm, "; method=%s; component=%s \r\n",
             icalproperty_method_to_string(meth),
             icalcomponent_kind_to_string(kind));
 
-    fputs("Content-Transfer-Encoding: base64\r\n", sm);
-    fputs("Content-Disposition: attachment\r\n", sm);
-
     fprintf(sm, "Content-ID: <%s@%s>\r\n", uid, config_servername);
 
+    ical_str = icalcomponent_as_ical_string(ical);
+    mimebody = charset_qpencode_mimebody(ical_str, strlen(ical_str), &outlen);
+
+    if (outlen > strlen(ical_str)) {
+        fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
+    }
     fputs("\r\n", sm);
 
-    ical_str = icalcomponent_as_ical_string(ical);
+    fwrite(mimebody, outlen, 1, sm);
+    free(mimebody);
+
+    /* end boundary (alternative) */
+    fprintf(sm, "\r\n--%s_A--\r\n", boundary);
+
+
+    /* application/ics part */
+    fprintf(sm, "\r\n--%s_M\r\n", boundary);
+
+    fprintf(sm,
+            "Content-Type: application/ics; charset=utf-8; name=\"%s.ics\"\r\n",
+            filename);
+    fprintf(sm, "Content-Disposition: attachment; filename=\"%s.ics\"\r\n",
+            filename);
+    fputs("Content-Transfer-Encoding: base64\r\n", sm);
+    fputs("\r\n", sm);
+
     charset_encode_mimebody(NULL, strlen(ical_str), NULL, &outlen, NULL);
     buf_ensure(&tmpbuf, outlen);
     charset_encode_mimebody(ical_str, strlen(ical_str),
                             (char *) buf_base(&tmpbuf), &outlen, NULL);
     fwrite(buf_base(&tmpbuf), outlen, 1, sm);
 
-    /* end boundary and epilogue */
-    fprintf(sm, "\r\n--%s--\r\n\r\nEnd of MIME multipart body.\r\n", boundary);
+    /* end boundary (mixed) and epilogue */
+    fprintf(sm, "\r\n--%s_M--\r\n\r\nEnd of MIME multipart body.\r\n", boundary);
 
     fclose(sm);
 
