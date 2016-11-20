@@ -2201,4 +2201,72 @@ sub test_getmessagelist_snippets
     $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Message</mark> A"));
 }
 
+sub test_getthreads
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my %params;
+    my $dt;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "generating message A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "generating message D referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "fetch messages";
+    $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
+
+    my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
+    my $msgA = $m{"a"};
+    my $msgB = $m{"b"};
+    my $msgC = $m{"c"};
+    my $msgD = $m{"d"};
+    $self->assert_not_null($msgA);
+    $self->assert_not_null($msgB);
+    $self->assert_not_null($msgC);
+    $self->assert_not_null($msgD);
+
+    %m = map { $_->{threadId} => 1 } @{$res->[1][1]{list}};
+    my @threadids = keys %m;
+
+    xlog "get threads";
+    $res = $jmap->Request([['getThreads', { ids => \@threadids }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_null($res->[0][1]->{notFound});
+
+    %m = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+    my $threadA = $m{$msgA->{threadId}};
+    my $threadB = $m{$msgB->{threadId}};
+
+    # Assert all messages are listed
+    $self->assert_num_equals(3, scalar @{$threadA->{messageIds}});
+    $self->assert_num_equals(1, scalar @{$threadB->{messageIds}});
+
+    # Assert sort order by date
+    $self->assert_str_equals($msgA->{id}, $threadA->{messageIds}[0]);
+    $self->assert_str_equals($msgC->{id}, $threadA->{messageIds}[1]);
+    $self->assert_str_equals($msgD->{id}, $threadA->{messageIds}[2]);
+}
+
 1;
