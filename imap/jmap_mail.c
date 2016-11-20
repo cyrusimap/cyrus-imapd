@@ -81,8 +81,8 @@ static int getMessageList(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
+static int getThreads(jmap_req_t *req);
 
-/* XXX getThreads */
 /* XXX getMessageUpdates */
 /* XXX importMessages */
 /* XXX getThreadUpdates */
@@ -103,6 +103,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "getMessages",            &getMessages },
     { "setMessages",            &setMessages },
     { "getSearchSnippets",      &getSearchSnippets },
+    { "getThreads",             &getThreads },
     { NULL,                     NULL}
 };
 
@@ -586,7 +587,7 @@ int jmapmbox_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 
 static int getMailboxes(jmap_req_t *req)
 {
-    json_t *item = NULL, *mailboxes, *state;
+    json_t *item = NULL, *mailboxes, *state, *properties;
     struct jmapmbox_mboxlist_data data = {
         req,
         json_pack("[]"), /* list */
@@ -607,7 +608,7 @@ static int getMailboxes(jmap_req_t *req)
                      req->tag);
 
     /* Determine which properties to fetch. */
-    json_t *properties = json_object_get(req->args, "properties");
+    properties = json_object_get(req->args, "properties");
     if (properties && json_array_size(properties)) {
         int i;
         int size = json_array_size(properties);
@@ -1233,10 +1234,11 @@ static int setMailboxes(jmap_req_t *req)
     json_t *set = NULL;
     char *mboxname = NULL;
     char *parentname = NULL;
+    json_t *state, *create, *update, *destroy;
 
     _initreq(req);
 
-    json_t *state = json_object_get(req->args, "ifInState");
+    state = json_object_get(req->args, "ifInState");
     if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
         json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
                     "error", "type", "stateMismatch", req->tag));
@@ -1245,7 +1247,7 @@ static int setMailboxes(jmap_req_t *req)
     set = json_pack("{s:s}", "accountId", req->userid);
     json_object_set_new(set, "oldState", state);
 
-    json_t *create = json_object_get(req->args, "create");
+    create = json_object_get(req->args, "create");
     if (create) {
         json_t *created = json_pack("{}");
         json_t *notCreated = json_pack("{}");
@@ -1302,7 +1304,7 @@ static int setMailboxes(jmap_req_t *req)
         json_decref(notCreated);
     }
 
-    json_t *update = json_object_get(req->args, "update");
+    update = json_object_get(req->args, "update");
     if (update) {
         json_t *updated = json_pack("[]");
         json_t *notUpdated = json_pack("{}");
@@ -1355,7 +1357,7 @@ static int setMailboxes(jmap_req_t *req)
         json_decref(notUpdated);
     }
 
-    json_t *destroy = json_object_get(req->args, "destroy");
+    destroy = json_object_get(req->args, "destroy");
     if (destroy) {
         json_t *destroyed = json_pack("[]");
         json_t *notDestroyed = json_pack("{}");
@@ -2089,7 +2091,7 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
                     }
                 }
             }
-            json_object_set_new(msg, "inReplyToMessageId", reply_id);
+            json_object_set(msg, "inReplyToMessageId", reply_id);
         }
         /* isUnread */
         if (_wantprop(req, "isUnread")) {
@@ -2984,7 +2986,7 @@ static int getMessageList(jmap_req_t *req)
     int r;
     int fetchmsgs = 0, fetchsnippets = 0;
     json_t *filter, *sort;
-    json_t *messageids = NULL, *threadids = NULL, *msglist, *item;
+    json_t *messageids = NULL, *threadids = NULL, *item, *res;
     struct getmsglist_window window;
     json_int_t i = 0;
     size_t total;
@@ -3048,21 +3050,21 @@ static int getMessageList(jmap_req_t *req)
     if (r) goto done;
 
     /* Prepare response. */
-    msglist = json_pack("{}");
-    json_object_set_new(msglist, "accountId", json_string(req->userid));
-    json_object_set_new(msglist, "filter", filter);
-    json_object_set_new(msglist, "sort", sort);
-    json_object_set_new(msglist, "collapseThreads", json_boolean(window.collapse));
-    json_object_set_new(msglist, "state", jmap_getstate(0 /* MBTYPE */, req));
-    json_object_set_new(msglist, "canCalculateUpdates", json_false()); /* FIXME */
-    json_object_set_new(msglist, "position", json_integer(window.position));
-    json_object_set_new(msglist, "total", json_integer(total));
-    json_object_set(msglist, "messageIds", messageids);
-    json_object_set(msglist, "threadIds", threadids);
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "filter", filter);
+    json_object_set_new(res, "sort", sort);
+    json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
+    json_object_set_new(res, "state", jmap_getstate(0 /* MBTYPE */, req));
+    json_object_set_new(res, "canCalculateUpdates", json_false()); /* FIXME */
+    json_object_set_new(res, "position", json_integer(window.position));
+    json_object_set_new(res, "total", json_integer(total));
+    json_object_set(res, "messageIds", messageids);
+    json_object_set(res, "threadIds", threadids);
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("messageList"));
-    json_array_append_new(item, msglist);
+    json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
@@ -3306,6 +3308,239 @@ done:
     return r;
 }
 
+static int jmapmsg_cmpdate(const void **pa, const void **pb)
+{
+    const json_t *a = *pa;
+    const json_t *b = *pb;
+
+    return strcmpsafe(json_string_value(json_object_get(a, "date")),
+                      json_string_value(json_object_get(b, "date")));
+}
+
+static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
+                           json_t **threads, json_t **notfound)
+{
+    json_t *val;
+    size_t i, j;
+    struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
+    conversation_t *conv = NULL;
+    int r = 0;
+
+    *threads = json_pack("[]");
+    *notfound = json_pack("[]");
+
+    /* We need these properties for each JMAP message */
+    _addprop(req, "id");
+    _addprop(req, "inReplyToMessageId");
+    _addprop(req, "isDraft");
+
+    json_array_foreach(threadids, i, val) {
+        conversation_id_t cid;
+        conv_folder_t *folder;
+        const char *threadid, *msgid, *replyid;
+        json_t *drafts, *draft, *msg, *thread, *ids, *l;
+        ptrarray_t *msgs;
+        int mi, mj;
+
+        threadid = json_string_value(val);
+        conversation_id_decode(&cid, threadid);
+
+        r = conversation_load(cstate, cid, &conv);
+        if (r) {
+            if (r == CYRUSDB_NOTFOUND) {
+                json_array_append_new(*notfound, json_string(threadid));
+                continue;
+            }
+            goto done;
+        }
+
+        msgs = ptrarray_new();
+        drafts = json_pack("{}");
+
+        for (folder = conv->folders; folder; folder = folder->next) {
+            const char *fname = strarray_nth(cstate->folder_names, folder->number);
+            struct mailbox_iter *iter;
+            struct mailbox *mbox = NULL;
+            const struct index_record *record;
+
+            /* For each message, determine if it is a regular message or
+             * a draft that replies to another message in this thread. */
+
+            r = _openmbox(req, fname, &mbox, 0);
+            if (r) continue;
+
+            iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+            while ((record = mailbox_iter_step(iter))) {
+                if (record->cid == cid) {
+                    int isdraft;
+
+                    r = jmapmsg_from_record(req, mbox, record, &msg);
+                    if (r) continue;
+
+                    isdraft = json_object_get(msg, "isDraft") == json_true();
+                    replyid = json_string_value(json_object_get(msg, "inReplyToMessageId"));
+
+                    if (isdraft && replyid) {
+                        json_t *l = json_object_get(drafts, replyid);
+                        if (!l) l = json_pack("[]");
+                        json_array_append_new(l, msg);
+                        json_object_set_new(drafts, replyid, l);
+                    } else {
+                        ptrarray_append(msgs, msg);
+                    }
+                }
+            }
+            mailbox_iter_done(&iter);
+
+            _closembox(req, &mbox);
+        }
+
+        if (!msgs->count) {
+            json_array_append_new(*notfound, json_string(threadid));
+            goto doneloop;
+        }
+
+        /* For each msg, add it to the result list in order of date sort.
+         * Any drafts that reply to this message immediately follow it. */
+        ids = json_pack("[]");
+        thread = json_pack("{s:s s:o}", "id", threadid, "messageIds", ids);
+
+        /* Add messages in date sort order */
+        if (msgs->count > 1) {
+            ptrarray_sort(msgs, jmapmsg_cmpdate);
+        }
+        for (mi = 0; mi < msgs->count; mi++) {
+            msg = ptrarray_nth(msgs, mi);
+            msgid = json_string_value(json_object_get(msg, "id"));
+            json_array_append(ids, json_string(msgid));
+
+            /* Add any drafts that reply to msg, sorted by date */
+            if ((l = json_object_get(drafts, msgid))) {
+                ptrarray_t tmp = PTRARRAY_INITIALIZER;
+                json_array_foreach(l, j, val) {
+                    ptrarray_add(&tmp, val);
+                }
+                ptrarray_sort(&tmp, jmapmsg_cmpdate);
+
+                for (mj = 0; mj < tmp.count; mj++) {
+                    draft = ptrarray_nth(&tmp, mj);
+                    json_array_append(ids, json_object_get(draft, "id"));
+                }
+                ptrarray_fini(&tmp);
+                json_object_del(drafts, msgid);
+            }
+            json_decref(msg);
+
+        }
+
+        /* Append any stray draft ids */
+        json_object_foreach(drafts, replyid, l) {
+            json_array_foreach(l, j, draft) {
+                json_array_append(ids, json_object_get(draft, "id"));
+            }
+        }
+
+        json_array_append_new(*threads, thread);
+
+doneloop:
+        json_decref(drafts);
+        ptrarray_free(msgs);
+        conversation_free(conv);
+        conv = NULL;
+    }
+
+    if (!json_array_size(*notfound)) {
+        json_decref(*notfound);
+        *notfound = json_null();
+    }
+
+    r = 0;
+
+done:
+    if (conv) conversation_free(conv);
+    if (r) {
+        json_decref(*threads);
+        *threads = NULL;
+        json_decref(*notfound);
+        *notfound = NULL;
+    }
+
+    return r;
+}
+
+static int getThreads(jmap_req_t *req)
+{
+    int r, fetchmsgs = 0;
+    json_t *res, *item, *val, *threadids, *fetchprops, *threads, *notfound;
+    const char *s;
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
+
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* ids */
+    threadids = json_object_get(req->args, "ids");
+    json_array_foreach(threadids, i, val) {
+        if (!(s = json_string_value(val)) || !strlen(s)) {
+            buf_printf(&buf, "ids[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    if (json_array_size(threadids) == 0) {
+        json_array_append_new(invalid, json_string("ids"));
+    }
+
+    readprop(req->args, "fetchMessages", 0, invalid, "b", &fetchmsgs);
+
+    /* fetchMessageProperties */
+    fetchprops = json_object_get(req->args, "fetchMessageProperties");
+    json_array_foreach(fetchprops, i, val) {
+        if (!(s = json_string_value(val)) || !strlen(s)) {
+            buf_printf(&buf, "fetchMessageProperties[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    if (JNOTNULL(fetchprops) && !json_typeof(fetchprops) == JSON_ARRAY) {
+        json_array_append_new(invalid, json_string("fetchMessageProperties"));
+    }
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Find threads */
+    r = jmapmsg_threads(req, threadids, &threads, &notfound);
+    if (r) goto done;
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "state", jmap_getstate(0 /*MBYTPE*/, req));
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "list", threads);
+    json_object_set_new(res, "notFound", notfound);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("threads"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    buf_free(&buf);
+    _finireq(req);
+    return r;
+}
+
 static int getMessages(jmap_req_t *req)
 {
     int r = 0;
@@ -3313,7 +3548,7 @@ static int getMessages(jmap_req_t *req)
     json_t *notfound = json_pack("[]");
     json_t *invalid = json_pack("[]");
     size_t i;
-    json_t *ids, *val, *props;
+    json_t *ids, *val, *props, *res, *item;
 
     _initreq(req);
 
@@ -3392,15 +3627,15 @@ doneloop:
         notfound = json_null();
     }
 
-    json_t *messages = json_pack("{}");
-    json_object_set_new(messages, "state", jmap_getstate(0 /*MBYTPE*/, req));
-    json_object_set_new(messages, "accountId", json_string(req->userid));
-    json_object_set(messages, "list", list);
-    json_object_set(messages, "notFound", notfound);
+    res = json_pack("{}");
+    json_object_set_new(res, "state", jmap_getstate(0 /*MBYTPE*/, req));
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set(res, "list", list);
+    json_object_set(res, "notFound", notfound);
 
-    json_t *item = json_pack("[]");
+    item = json_pack("[]");
     json_array_append_new(item, json_string("messages"));
-    json_array_append_new(item, messages);
+    json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
@@ -4646,11 +4881,11 @@ static int jmapmsg_delete(jmap_req_t *req, const char *id)
 static int setMessages(jmap_req_t *req)
 {
     int r = 0;
-    json_t *set = NULL;
+    json_t *set = NULL, *create, *update, *destroy, *state, *item;
 
     _initreq(req);
 
-    json_t *state = json_object_get(req->args, "ifInState");
+    state = json_object_get(req->args, "ifInState");
     if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
         json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
                     "error", "type", "stateMismatch", req->tag));
@@ -4659,7 +4894,7 @@ static int setMessages(jmap_req_t *req)
     set = json_pack("{s:s}", "accountId", req->userid);
     json_object_set_new(set, "oldState", state);
 
-    json_t *create = json_object_get(req->args, "create");
+    create = json_object_get(req->args, "create");
     if (create) {
         json_t *created = json_pack("{}");
         json_t *notCreated = json_pack("{}");
@@ -4713,7 +4948,7 @@ static int setMessages(jmap_req_t *req)
         json_decref(notCreated);
     }
 
-    json_t *update = json_object_get(req->args, "update");
+    update = json_object_get(req->args, "update");
     if (update) {
         json_t *updated = json_pack("[]");
         json_t *notUpdated = json_pack("{}");
@@ -4753,7 +4988,7 @@ static int setMessages(jmap_req_t *req)
         json_decref(notUpdated);
     }
 
-    json_t *destroy = json_object_get(req->args, "destroy");
+    destroy = json_object_get(req->args, "destroy");
     if (destroy) {
         json_t *destroyed = json_pack("[]");
         json_t *notDestroyed = json_pack("{}");
@@ -4796,7 +5031,7 @@ static int setMessages(jmap_req_t *req)
     json_object_set_new(set, "newState", jmap_getstate(0 /*MBTYPE*/, req));
 
     json_incref(set);
-    json_t *item = json_pack("[]");
+    item = json_pack("[]");
     json_array_append_new(item, json_string("messagesSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
