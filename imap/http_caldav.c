@@ -1379,6 +1379,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
             sched_reply(userid, strarray_nth(&schedule_addresses, 0), ical, NULL);
         }
 
+        free(userid);
         strarray_fini(&schedule_addresses);
     }
 
