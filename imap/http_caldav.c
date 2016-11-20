@@ -1368,7 +1368,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
 
-        const char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             sched_request(userid, cdata->organizer, ical, NULL);
