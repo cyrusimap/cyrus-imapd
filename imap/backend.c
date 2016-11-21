@@ -732,7 +732,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     if (mechlist) free(mechlist);
 
-    return SASL_OK;
+    return r;
 }
 
 static int backend_login(struct backend *ret, const char *userid,
