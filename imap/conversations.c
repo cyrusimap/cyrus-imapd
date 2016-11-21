@@ -1602,17 +1602,20 @@ static void loadbody(struct mailbox *mailbox, const struct index_record *record,
 }
 
 static int _guid_addbody(struct conversations_state *state, struct body *body,
-                         const char *base, const char *part, int add)
+                         const char *base, int add)
 {
-    struct buf buf = BUF_INITIALIZER;
     int r = 0;
     if (!body) return 0;
 
     if (!message_guid_isnull(&body->content_guid)) {
+        struct buf buf = BUF_INITIALIZER;
+
         buf_setcstr(&buf, base);
-        if (part) buf_printf(&buf, "[%s]", part);
+        if (body->part_id) buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
         r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), add);
+        buf_free(&buf);
+
         if (r) goto done;
     }
 
@@ -1624,21 +1627,14 @@ static int _guid_addbody(struct conversations_state *state, struct body *body,
     if (body->numparts) {
         int i;
         for (i = 0; i < body->numparts; i++) {
-            buf_reset(&buf);
-            if (part) buf_printf(&buf, "%s.", part);
-            buf_printf(&buf, "%d", i+1);
-            _guid_addbody(state, &body->subpart[i], base, buf_cstring(&buf), add);
+            _guid_addbody(state, &body->subpart[i], base, add);
         }
     }
     else {
-        buf_reset(&buf);
-        if (part) buf_printf(&buf, "%s.", part);
-        buf_printf(&buf, "%d", 1);
-        _guid_addbody(state, body, base, buf_cstring(&buf), add);
+        _guid_addbody(state, body, base, add);
     }
 
  done:
-    buf_free(&buf);
     return r;
 }
 
@@ -1658,7 +1654,7 @@ static int conversations_set_guid(struct conversations_state *state,
 
     loadbody(mailbox, record, &body);
 
-    r = _guid_addbody(state, body, base, NULL, add);
+    r = _guid_addbody(state, body, base, add);
 
     message_free_body(body);
     buf_free(&item);

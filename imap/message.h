@@ -77,6 +77,7 @@ struct body {
     char *location;
     int charset_enc;            /* encoding in binary bodystructure */
     char *charset_id;           /* charset in binary bodystructure */
+    char *part_id;               /* IMAP part identifier of a subpart */
 
     /* Location/size information */
     uint32_t header_offset;

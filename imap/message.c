@@ -2507,6 +2507,7 @@ EXPORTED void message_free_body(struct body *body)
     if (body->references) free(body->references);
     if (body->received_date) free(body->received_date);
     if (body->charset_id) free(body->charset_id);
+    if (body->part_id) free(body->part_id);
 
     if (body->subpart) {
         if (body->numparts) {
@@ -2848,11 +2849,16 @@ static int message_read_envelope(struct protstream *strm, struct body *body)
  * Read cached bodystructure response.
  * Analog to mesage_write_body()
  */
-static int message_read_body(struct protstream *strm, struct body *body)
+static int message_read_body(struct protstream *strm, struct body *body,
+                             const char *part_id)
 {
 #define prot_peek(strm) prot_ungetc(prot_getc(strm), strm)
 
     int c;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* part id */
+    body->part_id = part_id ? xstrdup(part_id) : NULL;
 
     /* opening '(' */
     c = prot_getc(strm);
@@ -2866,7 +2872,11 @@ static int message_read_body(struct protstream *strm, struct body *body)
                 (struct body *)xrealloc((char *)body->subpart,
                                         (body->numparts+1)*sizeof(struct body));
             memset(&body->subpart[body->numparts], 0, sizeof(struct body));
-            c = message_read_body(strm, &body->subpart[body->numparts++]);
+            buf_reset(&buf);
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", body->numparts + 1);
+            c = message_read_body(strm, &body->subpart[body->numparts++],
+                                  buf_cstring(&buf));
 
         } while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
 
@@ -2915,7 +2925,10 @@ static int message_read_body(struct protstream *strm, struct body *body)
             c = message_read_envelope(strm, body->subpart);
 
             /* body structure */
-            c = message_read_body(strm, body->subpart);
+            buf_reset(&buf);
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", 1);
+            c = message_read_body(strm, body->subpart, buf_cstring(&buf));
             c = prot_getc(strm); /* trailing SP */
 
             /* body lines */
@@ -2963,6 +2976,7 @@ static int message_read_body(struct protstream *strm, struct body *body)
     /* XXX  We currently don't store any other extension data.
             MUST keep in sync with message_write_body() */
 
+    buf_free(&buf);
     return c;
 }
 
@@ -3099,7 +3113,7 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
                         cacheitem_size(record, CACHE_BODYSTRUCTURE));
     prot_setisclient(strm, 1);  /* no-sync literals */
 
-    message_read_body(strm, *body);
+    message_read_body(strm, *body, NULL);
     prot_free(strm);
 
     /* Read binary bodystructure from cache */
