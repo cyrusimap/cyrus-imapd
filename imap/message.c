@@ -147,7 +147,7 @@ static void message_write_section(struct buf *buf, const struct body *body);
 static void message_write_charset(struct buf *buf, const struct body *body);
 static void message_write_searchaddr(struct buf *buf,
                                      const struct address *addrlist);
-static int message_need(message_t *m, unsigned int need);
+static int message_need(const message_t *m, unsigned int need);
 static void message_yield(message_t *m, unsigned int yield);
 
 static void param_free(struct param **paramp);
@@ -3482,11 +3482,12 @@ EXPORTED void message_unref(message_t **mp)
 /*
  * Open or create resources which we need but do not yet have.
  */
-static int message_need(message_t *m, unsigned int need)
+static int message_need(const message_t *cm, unsigned int need)
 {
 #define is_missing(flags)    ((need & ~(m->have)) & (flags))
 #define found(flags)         (m->have |= (flags))
     int r = 0;
+    message_t *m = (message_t *)cm;
 
     if (!is_missing(M_ALL))
         return 0;       /* easy, we already have it */
@@ -4183,12 +4184,24 @@ EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
     return message_get_field(m, "mailing-list", MESSAGE_RAW, buf);
 }
 
+EXPORTED const struct index_record *msg_record(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return &m->record;
+}
+
 EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *sizep = m->record.size;
     return 0;
+}
+
+EXPORTED uint32_t msg_size(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return m->record.size;
 }
 
 EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
@@ -4199,12 +4212,24 @@ EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
     return 0;
 }
 
+EXPORTED uint32_t msg_uid(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return m->record.uid;
+}
+
 EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *cidp = m->record.cid;
     return 0;
+}
+
+EXPORTED conversation_id_t msg_cid(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return m->record.cid;
 }
 
 EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
@@ -4215,6 +4240,12 @@ EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
     return 0;
 }
 
+EXPORTED modseq_t msg_modseq(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return m->record.modseq;
+}
+
 EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
 {
     int r = message_need(m, M_INDEX);
@@ -4223,12 +4254,24 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
     return 0;
 }
 
+EXPORTED int msg_msgno(const message_t *m)
+{
+    assert(!message_need(m, M_INDEX))
+    return m->msgno;
+}
+
 EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *guidp = &m->record.guid;
     return 0;
+}
+
+EXPORTED const struct message_guid *msg_guid(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD))
+    return &m->record.guid;
 }
 
 EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)

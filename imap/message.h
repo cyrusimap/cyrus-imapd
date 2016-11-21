@@ -298,6 +298,16 @@ extern int message_foreach_text_section(message_t *m,
                    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
 
+
+/* less shitty interface */
+extern const struct index_record *msg_record(const message_t *m);
+extern uint32_t msg_size(const message_t *m);
+extern uint32_t msg_uid(const message_t *m);
+extern conversation_id_t msg_cid(const message_t *m);
+extern modseq_t msg_modseq(const message_t *m);
+extern int msg_msgno(const message_t *m);
+extern const struct message_guid *msg_guid(const message_t *m);
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 #endif /* INCLUDED_MESSAGE_H */
