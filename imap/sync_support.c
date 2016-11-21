@@ -5293,7 +5293,7 @@ static int update_seen_work(const char *user, const char *uniqueid,
     return sync_parse_response(cmd, sync_be->in, NULL);
 }
 
-int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
+int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
                  unsigned flags)
 {
     int r = 0;
@@ -5301,12 +5301,12 @@ int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
     struct seendata sd = SEENDATA_INITIALIZER;
 
     /* ignore read failures */
-    r = seen_open(user, SEEN_SILENT, &seendb);
+    r = seen_open(userid, SEEN_SILENT, &seendb);
     if (r) return 0;
 
     r = seen_read(seendb, uniqueid, &sd);
 
-    if (!r) r = update_seen_work(user, uniqueid, &sd, sync_be, flags);
+    if (!r) r = update_seen_work(userid, uniqueid, &sd, sync_be, flags);
 
     seen_close(&seendb);
     seen_freedata(&sd);
@@ -5895,7 +5895,7 @@ int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve
     return(r);
 }
 
-int sync_do_user(char *userid, const char *topart,
+int sync_do_user(const char *userid, const char *topart,
                  struct backend *sync_be, const char **channelp, unsigned flags)
 {
     int r = 0;
@@ -5958,7 +5958,7 @@ done:
 
 /* ====================================================================== */
 
-int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags)
+int sync_do_meta(const char *userid, struct backend *sync_be, unsigned flags)
 {
     struct sync_name_list *replica_subs = sync_name_list_create();
     struct sync_sieve_list *replica_sieve = sync_sieve_list_create();
