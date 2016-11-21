@@ -1009,6 +1009,7 @@ static void message_parse_charset(const struct body *body,
 
     if (e_ptr) *e_ptr = encoding;
     if (c_ptr) *c_ptr = charset;
+    else charset_free(&charset);
 }
 
 /*
