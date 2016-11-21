@@ -731,9 +731,6 @@ static int backend_authenticate(struct backend *s, const char *userid,
              backend_starttls(s, &prot->u.std.tls_cmd, c_cert_file, c_key_file) != -1 &&
              (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
 
-    /* FIXME there's a bug around here somewhere, if we fall out of here without a mech we
-     * end up returning SASL_OK anyway */
-
     if (r == SASL_OK) {
         prot_setsasl(s->in, s->saslconn);
         prot_setsasl(s->out, s->saslconn);
@@ -741,7 +738,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     if (mechlist) free(mechlist);
 
-    return SASL_OK;
+    return r;
 }
 
 static int backend_login(struct backend *ret, const char *userid,
