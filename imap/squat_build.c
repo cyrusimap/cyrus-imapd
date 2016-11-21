@@ -96,6 +96,7 @@
 #include <sys/mman.h>
 
 #include "squat_internal.h"
+#include "mailbox.h"
 #include "message.h"
 
 #include "assert.h"

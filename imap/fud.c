@@ -429,9 +429,10 @@ static int handle_request(const char *who, const char *name,
 
     lastarrived = mailbox->i.last_appenddate;
     {
-        const struct index_record *record;
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             if (record->uid > recentuid) numrecent++;
         }
         mailbox_iter_done(&iter);

@@ -209,7 +209,6 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
     else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
         /* Read \Seen state */
         struct seqset *seq = NULL;
-        const struct index_record *record;
         int internalseen = mailbox_internal_seen(mailbox, userid);
         unsigned recentuid;
 
@@ -230,7 +229,9 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
         }
 
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             if (record->uid > recentuid)
                 numrecent++;
             if (internalseen) {
@@ -308,7 +309,6 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
     else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
         /* Read \Seen state */
         struct seqset *seq = NULL;
-        const struct index_record *record;
         int internalseen = mailbox_internal_seen(mailbox, userid);
         unsigned recentuid;
 
@@ -329,7 +329,9 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
         }
 
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             if (record->uid > recentuid)
                 numrecent++;
             if (internalseen) {

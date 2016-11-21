@@ -200,7 +200,6 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     int r = 0;
     int flag = 0;
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     int j;
 
     signals_poll();
@@ -276,7 +275,9 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
 
     msgno = 1;
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if (wantvalue) {
             if (wantuid) {
                 if (record->uid != wantvalue) continue;
@@ -367,7 +368,6 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     if (!data) return 0;
     int r = 0;
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
@@ -390,7 +390,9 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         fname = mailbox_record_fname(mailbox, record);
 
         if (stat(fname, &sbuf) != 0) {

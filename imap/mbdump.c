@@ -193,7 +193,6 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     int header_size;
     int record_size;
     int n, r;
-    const struct index_record *record;
 
     if (oldversion == 6) {
         header_size = 76;
@@ -234,7 +233,10 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
 
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* we have to make sure expunged records don't get the
          * file copied, or a reconstruct could bring them back
          * to life!  It we're not creating an expunged file... */
@@ -271,7 +273,8 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
         if (n == -1) goto fail;
 
         iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-        while ((record = mailbox_iter_step(iter))) {
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             /* ignore non-expunged records */
             if (!(record->system_flags & FLAG_EXPUNGED))
                 continue;
@@ -758,8 +761,8 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     int r;
     struct seqset *seq = NULL;
     struct mailbox *mailbox = NULL;
+    const message_t *msg;
     struct seendata sd = SEENDATA_INITIALIZER;
-    const struct index_record *record;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
@@ -773,7 +776,8 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
 
     /* update all the seen records */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    while ((record = mailbox_iter_step(iter))) {
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if (record->system_flags & FLAG_SEEN)
             continue; /* no need to rewrite */
         if (!seqset_ismember(seq, record->uid))
@@ -1264,7 +1268,6 @@ EXPORTED int undump_mailbox(const char *mbname,
 
     /* let's make sure the modification times are right */
     if (!r) {
-        const struct index_record *record;
         struct utimbuf settime;
         const char *fname;
 
@@ -1296,7 +1299,9 @@ EXPORTED int undump_mailbox(const char *mbname,
         }
 
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             fname = mailbox_record_fname(mailbox, record);
             settime.actime = settime.modtime = record->internaldate;
             if (utime(fname, &settime) == -1) {

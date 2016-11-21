@@ -7176,7 +7176,6 @@ int report_sync_col(struct transaction_t *txn,
     uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
-    const struct index_record *record;
     char tokenuri[MAX_MAILBOX_PATH+1];
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
@@ -7294,7 +7293,9 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Find which resources we need to report */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if ((unbind_flag >= 0) &&
             record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
             /* Resource replaced by a PUT, COPY, or MOVE - ignore it */

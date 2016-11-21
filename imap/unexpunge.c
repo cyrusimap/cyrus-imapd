@@ -102,7 +102,6 @@ static void list_expunged(const char *mboxname)
 {
     struct mailbox *mailbox = NULL;
     struct index_record *records = NULL;
-    const struct index_record *record;
     int alloc = 0;
     int num = 0;
     int i;
@@ -118,7 +117,9 @@ static void list_expunged(const char *mboxname)
     /* first pass - read the records.  Don't print until we release the
      * lock */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* still active */
         if (!(record->system_flags & FLAG_EXPUNGED))
             continue;
@@ -137,7 +138,7 @@ static void list_expunged(const char *mboxname)
     mailbox_unlock_index(mailbox, NULL);
 
     for (i = 0; i < num; i++) {
-        record = &records[i];
+        const struct index_record *record = &records[i];
         printf("UID: %u\n", record->uid);
         printf("\tSize: %u\n", record->size);
         printf("\tSent: %s", ctime(&record->sentdate));
@@ -170,7 +171,6 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
                      unsigned nuids, time_t time_since, unsigned *numrestored,
                      const char *extname)
 {
-    const struct index_record *record;
     struct index_record newrecord;
     annotate_state_t *astate = NULL;
     unsigned uidnum = 0;
@@ -182,7 +182,9 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     *numrestored = 0;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* still active */
         if (!(record->system_flags & FLAG_EXPUNGED))
             continue;

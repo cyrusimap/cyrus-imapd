@@ -10695,7 +10695,6 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 {
     struct mailbox *mailbox = item->mailbox;
     struct seqset *outlist = NULL;
-    const struct index_record *record;
     struct seendata sd = SEENDATA_INITIALIZER;
     int r;
 
@@ -10703,7 +10702,9 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if (record->system_flags & FLAG_SEEN)
             seqset_add(outlist, record->uid, 1);
         else

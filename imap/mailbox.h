@@ -51,6 +51,7 @@
 #include "byteorder64.h"
 #include "conversations.h"
 #include "message_guid.h"
+#include "message.h"
 #include "ptrarray.h"
 #include "quota.h"
 #include "sequence.h"
@@ -284,7 +285,7 @@ struct mailbox {
 
 struct mailbox_iter {
     struct mailbox *mailbox;
-    struct index_record record;
+    message_t *msg;
     modseq_t changedsince;
     uint32_t recno;
     uint32_t num_records;
@@ -636,7 +637,7 @@ extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
                                               modseq_t changedsince,
                                               unsigned flags);
 extern void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid);
-extern const struct index_record *mailbox_iter_step(struct mailbox_iter *iter);
+extern const message_t *mailbox_iter_step(struct mailbox_iter *iter);
 extern void mailbox_iter_done(struct mailbox_iter **iterp);
 
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);

@@ -45,6 +45,7 @@
 #ifndef __CYRUS_SEARCH_EXPR_H__
 #define __CYRUS_SEARCH_EXPR_H__
 
+#include "mailbox.h"
 #include "message.h"
 #include "util.h"
 

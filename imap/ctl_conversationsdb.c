@@ -147,14 +147,15 @@ static int zero_cid_cb(const mbentry_t *mbentry,
                        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     int r;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* already zero, fine */
         if (record->cid == NULLCONVERSATION)
             continue;
@@ -190,7 +191,6 @@ static int build_cid_cb(const mbentry_t *mbentry,
                         void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     int r = 0;
     int count = 1;
     struct conversations_state *cstate = conversations_get_mbox(mbentry->name);
@@ -204,7 +204,9 @@ static int build_cid_cb(const mbentry_t *mbentry,
         count = 0;
 
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             /* already assigned, fine */
             if (record->cid != NULLCONVERSATION)
                 continue;

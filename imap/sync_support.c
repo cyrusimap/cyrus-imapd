@@ -1580,12 +1580,13 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     sync_annot_list_free(&annots);
 
     if (printrecords) {
-        const struct index_record *record;
+        const message_t *msg;
         struct dlist *rl = dlist_newlist(kl, "RECORD");
         modseq_t modseq = remote ? remote->highestmodseq : 0;
 
         iter = mailbox_iter_init(mailbox, modseq, 0);
-        while ((record = mailbox_iter_step(iter))) {
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             /* stop early for partial sync */
             modseq_t mymodseq = record->modseq;
             if (ispartial) {
@@ -2048,9 +2049,10 @@ int sync_mailbox_version_check(struct mailbox **mailboxp)
     /* scan index records to ensure they have guids.  version 10 index records
      * have this field, but it might have never been initialised.
      * XXX this might be overkill for versions > 10, but let's be cautious */
-    const struct index_record *record;
     struct mailbox_iter *iter = mailbox_iter_init((*mailboxp), 0, 0);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if (message_guid_isnull(&record->guid)) {
             syslog(LOG_WARNING, "%s: missing guid for record %u -- needs 'reconstruct -G'?",
                                 (*mailboxp)->name, record->recno);
@@ -2075,7 +2077,6 @@ static void reserve_folder(const char *part, const char *mboxname,
                     struct sync_msgid_list *part_list)
 {
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     int r;
     struct sync_msgid *item;
     const char *mailbox_msg_path, *stage_msg_path;
@@ -2091,7 +2092,9 @@ redo:
     if (r) return;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* do we need it? */
         item = sync_msgid_lookup(part_list, &record->guid);
         if (!item)
@@ -2257,7 +2260,6 @@ static int mailbox_compare_update(struct mailbox *mailbox,
                                   struct sync_msgid_list *part_list)
 {
     struct index_record mrecord;
-    const struct index_record *rrecord;
     struct dlist *ki;
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
@@ -2267,7 +2269,9 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
 
-    rrecord = mailbox_iter_step(iter);
+    const message_t *msg = mailbox_iter_step(iter);
+    const struct index_record *rrecord = msg ? msg_record(msg) : NULL;
+
     for (ki = kr->head; ki; ki = ki->next) {
         sync_annot_list_free(&mannots);
         sync_annot_list_free(&rannots);
@@ -2283,7 +2287,8 @@ static int mailbox_compare_update(struct mailbox *mailbox,
          */
         while (rrecord && rrecord->uid < mrecord.uid) {
             /* read another record */
-            rrecord = mailbox_iter_step(iter);
+            msg = mailbox_iter_step(iter);
+            rrecord = msg ? msg_record(msg) : NULL;
         }
 
         /* found a match, check for updates */
@@ -3658,11 +3663,12 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
                                uint32_t touid,
                                struct sync_msgid_list *part_list)
 {
-    const struct index_record *record;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         sync_msgid_insert(part_list, &record->guid);
         if (record->uid >= touid) break;
     }
@@ -3683,9 +3689,10 @@ static int calculate_intermediate_state(struct mailbox *mailbox,
     uint32_t seen = 0;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    const struct index_record *record = NULL;
     mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         if (seen < batchsize) {
             touid = record->uid;
         }
@@ -4740,18 +4747,18 @@ static int mailbox_update_loop(struct mailbox *mailbox,
                                struct sync_msgid_list *part_list,
                                struct backend *sync_be)
 {
-    const struct index_record *mrecord;
     struct index_record rrecord;
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
     int r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
-    mrecord = mailbox_iter_step(iter);
+    const message_t *msg = mailbox_iter_step(iter);
+    const struct index_record *mrecord = msg ? msg_record(msg) : NULL;
 
     /* while there are more records on either master OR replica,
      * work out what to do with them */
-    while (ki || mrecord) {
+    while (ki || msg) {
 
         sync_annot_list_free(&mannots);
         sync_annot_list_free(&rannots);
@@ -4772,7 +4779,8 @@ static int mailbox_update_loop(struct mailbox *mailbox,
                                        sync_be);
                 if (r) goto out;
                 /* increment both */
-                mrecord = mailbox_iter_step(iter);
+                msg = mailbox_iter_step(iter);
+                mrecord = msg ? msg_record(msg) : NULL;
                 ki = ki->next;
             }
             else if (rrecord.uid > mrecord->uid) {
@@ -4785,7 +4793,8 @@ static int mailbox_update_loop(struct mailbox *mailbox,
                     if (r) goto out;
                 }
                 /* only increment master */
-                mrecord = mailbox_iter_step(iter);
+                msg = mailbox_iter_step(iter);
+                mrecord = msg ? msg_record(msg) : NULL;
             }
             else {
                 /* record only exists on the replica */
@@ -4819,7 +4828,8 @@ static int mailbox_update_loop(struct mailbox *mailbox,
                     if (r) goto out;
                 }
             }
-            mrecord = mailbox_iter_step(iter);
+            msg = mailbox_iter_step(iter);
+            mrecord = msg ? msg_record(msg) : NULL;
         }
 
         /* record only exists on the replica */

@@ -176,7 +176,6 @@ static int do_timestamp(const mbname_t *mbname)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
-    const struct index_record *record;
     char olddate[RFC822_DATETIME_MAX+1];
     char newdate[RFC822_DATETIME_MAX+1];
 
@@ -193,7 +192,9 @@ static int do_timestamp(const mbname_t *mbname)
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
         if (labs(record->internaldate - record->gmtime) < 86400)
             continue;

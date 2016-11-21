@@ -4,6 +4,7 @@
 #include "cunit/cunit.h"
 #include "parseaddr.h"
 #include "util.h"
+#include "imap/mailbox.h"
 #include "imap/message.h"
 
 static void test_parse_trivial(void)

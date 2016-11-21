@@ -599,7 +599,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 static void index_refresh_locked(struct index_state *state)
 {
     struct mailbox *mailbox = state->mailbox;
-    const struct index_record *record;
+    const message_t *msg;
     uint32_t msgno = 1;
     uint32_t firstnotseen = 0;
     uint32_t numrecent = 0;
@@ -642,7 +642,8 @@ static void index_refresh_locked(struct index_state *state)
 
     /* walk through all records */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((record = mailbox_iter_step(iter))) {
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         im = &state->map[msgno-1];
         while (msgno <= state->exists && im->uid < record->uid) {
             /* NOTE: this same logic is repeated below for messages
@@ -929,11 +930,12 @@ struct seqset *index_vanished(struct index_state *state,
     /* XXX - use match_seq and match_uid */
 
     if (params->modseq >= mailbox->i.deletedmodseq) {
+        const message_t *msg;
         /* all records are significant */
         /* List only expunged UIDs with MODSEQ > requested */
-        const struct index_record *record;
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, 0);
-        while ((record = mailbox_iter_step(iter))) {
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             if (!(record->system_flags & FLAG_EXPUNGED))
                 continue;
             if (!params->sequence || seqset_ismember(seq, record->uid))
@@ -970,7 +972,7 @@ struct seqset *index_vanished(struct index_state *state,
             seqset_free(uidlist);
         }
 
-        const struct index_record *record;
+        const message_t *msg;
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, ITER_SKIP_EXPUNGED);
         mailbox_iter_startuid(iter, prevuid);
 
@@ -983,7 +985,8 @@ struct seqset *index_vanished(struct index_state *state,
         /* for the rest of the mailbox, we're just going to have to assume
          * every record in the requested range which DOESN'T exist has been
          * expunged, so build a complete sequence */
-        while ((record = mailbox_iter_step(iter))) {
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             while (++prevuid < record->uid) {
                 if (!params->sequence || seqset_ismember(seq, prevuid))
                     seqset_add(outlist, prevuid, 1);

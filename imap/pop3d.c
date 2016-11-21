@@ -1907,7 +1907,6 @@ int openinbox(void)
     else {
         /* local mailbox */
         uint32_t exists;
-        const struct index_record *record;
         int minpoll;
 
         popd_login_time = time(0);
@@ -1959,7 +1958,9 @@ int openinbox(void)
 
         struct mailbox_iter *iter = mailbox_iter_init(popd_mailbox, 0, iterflags);
 
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             if (popd_mailbox->i.pop3_show_after &&
                 record->internaldate <= popd_mailbox->i.pop3_show_after) {
                 /* Ignore messages older than the "show after" date */

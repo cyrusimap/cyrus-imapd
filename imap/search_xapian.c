@@ -1989,7 +1989,6 @@ static int reindex_mb(void *rock,
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
-    const struct index_record *record;
     int verbose = SEARCH_VERBOSE(filter->flags);
     int r = 0;
     int i;
@@ -2019,7 +2018,9 @@ static int reindex_mb(void *rock,
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         /* it wasn't in the previous index, skip it */
         if (!seqset_ismember(seq, record->uid))
             continue;

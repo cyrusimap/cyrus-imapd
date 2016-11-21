@@ -1414,7 +1414,6 @@ static int dump_calendar(struct transaction_t *txn)
     struct buf *buf = &resp_body->payload;
     struct mailbox *mailbox = NULL;
     static char etag[33];
-    const struct index_record *record;
     struct hash_table tzid_table;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -1495,7 +1494,9 @@ static int dump_calendar(struct transaction_t *txn)
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
 
-    while ((record = mailbox_iter_step(iter))) {
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
         icalcomponent *ical;
 
         /* Map and parse existing iCalendar resource */

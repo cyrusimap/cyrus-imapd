@@ -802,9 +802,10 @@ EXPORTED int caldav_alarm_upgrade()
         icaltimezone *floatingtz = get_floatingtz(mailbox);
 
         /* add alarms for all records */
-        const struct index_record *record;
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        while ((record = mailbox_iter_step(iter))) {
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
             struct buf msg_buf = BUF_INITIALIZER;
             rc = mailbox_map_record(mailbox, record, &msg_buf);
             if (rc) continue;
