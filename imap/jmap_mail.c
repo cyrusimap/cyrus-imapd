@@ -1643,6 +1643,8 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     struct index_record record;
     int r;
 
+    if (rec->part) return 0;
+
     r = _openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
@@ -2164,6 +2166,8 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
     struct jmapmsg_find_data *d = (struct jmapmsg_find_data*) rock;
     jmap_req_t *req = d->req;
     int r = 0;
+
+    if (rec->part) return 0;
 
     if (!d->mboxname || _mboxisopen(req, rec->mboxname)) {
         struct index_record record;
@@ -4454,6 +4458,8 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
     struct mailbox *mbox = NULL;
     int r = 0;
 
+    if (rec->part) return 0;
+
     r = _openmbox(req, rec->mboxname, &mbox, 1);
     if (r) goto done;
 
@@ -4517,6 +4523,8 @@ static int delrecord_cb(const conv_guidrec_t *rec, void *rock)
     jmap_req_t *req = d->req;
     struct mailbox *mbox = NULL;
     int r = 0;
+
+    if (rec->part) return 0;
 
     r = _openmbox(req, rec->mboxname, &mbox, 1);
     if (r) goto done;
