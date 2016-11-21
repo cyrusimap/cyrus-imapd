@@ -1049,7 +1049,7 @@ sub test_getmessages_body_multi
                 "Content-Type: image/jpeg\r\n".
                 "Content-Transfer-Encoding: base64\r\n".
                 "\r\n" .
-                "beefc0de==".
+                "beefc0de".
                 "\r\n--subsubsubsub\r\n".
                 "Content-Type: text/plain\r\n".
                 "\r\n".
@@ -1071,12 +1071,13 @@ sub test_getmessages_body_multi
             "Content-Type: image/tiff\r\n".
             "Content-Transfer-Encoding: base64\r\n".
             "\r\n" .
-            "beefc0de==".
+            "abc=".
             "\r\n--subsubsub\r\n".
             "Content-Type: application/x-excel\r\n".
             "Content-Transfer-Encoding: base64\r\n".
+            "Content-Disposition: attachment; filename=\"f.xls\"\r\n".
             "\r\n" .
-            "012312312313==".
+            "012312312313".
             "\r\n--subsubsub\r\n".
             "Content-Type: message/rfc822\r\n".
             "\r\n" .
@@ -1144,7 +1145,29 @@ sub test_getmessages_body_multi
     $self->assert_null($submsg->{size});
 
     # Assert attachments
-    $self->assert_num_equals(4, scalar keys %{$msg->{attachments}});
+    $self->assert_num_equals(4, scalar @{$msg->{attachments}});
+    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
+    my $att;
+
+    $att = $m{"image/jpeg"};
+    $self->assert_num_equals(6, $att->{size});
+    $self->assert_equals(JSON::false, $att->{isInline});
+    $self->assert_null($att->{cid});
+
+    $att = $m{"image/png"};
+    $self->assert_num_equals(4, $att->{size});
+    $self->assert_equals(JSON::false, $att->{isInline});
+    $self->assert_null($att->{cid});
+
+    $att = $m{"image/tiff"};
+    $self->assert_num_equals(2, $att->{size});
+    $self->assert_equals(JSON::false, $att->{isInline});
+    $self->assert_null($att->{cid});
+
+    $att = $m{"application/x-excel"};
+    $self->assert_num_equals(9, $att->{size});
+    $self->assert_equals(JSON::false, $att->{isInline});
+    $self->assert_null($att->{cid});
 }
 
 sub test_getmessages_preview
@@ -2212,6 +2235,17 @@ sub test_getthreads
 
     my $imaptalk = $self->{store}->get_client();
 
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $drafts = $res->[0][1]{created}{"#1"}{id};
+    $self->assert_not_null($drafts);
+
     xlog "generating message A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -3));
@@ -2234,8 +2268,7 @@ sub test_getthreads
     $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "fetch messages";
-    $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
+    xlog "fetch messages"; $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
 
     my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
     my $msgA = $m{"a"};
@@ -2250,6 +2283,20 @@ sub test_getthreads
     %m = map { $_->{threadId} => 1 } @{$res->[1][1]{list}};
     my @threadids = keys %m;
 
+    xlog "create draft replying to message A";
+    xlog "Create a draft";
+    $res = $jmap->Request(
+        [[ 'setMessages', { create => { "1" => {
+            mailboxIds           => [$drafts],
+            inReplyToMessageId   => $msgA->{id},
+            from                 => [ { name => "", email => "sam\@acme.local" } ],
+            to                   => [ { name => "", email => "bugs\@acme.local" } ],
+            subject              => "Re: Message A",
+            textBody             => "I'm givin' ya one last chance ta surrenda!",
+        }}}, "R1" ]]);
+    my $draftid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftid);
+
     xlog "get threads";
     $res = $jmap->Request([['getThreads', { ids => \@threadids }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
@@ -2260,13 +2307,14 @@ sub test_getthreads
     my $threadB = $m{$msgB->{threadId}};
 
     # Assert all messages are listed
-    $self->assert_num_equals(3, scalar @{$threadA->{messageIds}});
+    $self->assert_num_equals(4, scalar @{$threadA->{messageIds}});
     $self->assert_num_equals(1, scalar @{$threadB->{messageIds}});
 
     # Assert sort order by date
     $self->assert_str_equals($msgA->{id}, $threadA->{messageIds}[0]);
-    $self->assert_str_equals($msgC->{id}, $threadA->{messageIds}[1]);
-    $self->assert_str_equals($msgD->{id}, $threadA->{messageIds}[2]);
+    $self->assert_str_equals($draftid, $threadA->{messageIds}[1]);
+    $self->assert_str_equals($msgC->{id}, $threadA->{messageIds}[2]);
+    $self->assert_str_equals($msgD->{id}, $threadA->{messageIds}[3]);
 }
 
 1;
