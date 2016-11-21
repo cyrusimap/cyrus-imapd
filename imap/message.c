@@ -437,7 +437,7 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
  * listed in headers or (if headers_not is non-empty) those headers
  * not in headers_not.
  */
-void message_pruneheader(char *buf, const strarray_t *headers,
+EXPORTED void message_pruneheader(char *buf, const strarray_t *headers,
                          const strarray_t *headers_not)
 {
     char *p, *colon, *nextheader;
