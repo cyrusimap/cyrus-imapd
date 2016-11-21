@@ -414,6 +414,8 @@ static void cmd_xstats(char *tag, int c);
 
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
+static void cmd_xbackup(const char *tag, const char *mailbox,
+                        const char *toserver);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -2210,7 +2212,23 @@ static void cmdloop(void)
             break;
 
         case 'X':
-            if (!strcmp(cmd.s, "Xconvfetch")) {
+            if (!strcmp(cmd.s, "Xbackup")) {
+                /* user */
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+
+                /* destination server */
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg2);
+
+                if (c == '\r') c = prot_getc(imapd_in);
+                if (c != '\n') goto extraargs;
+
+                cmd_xbackup(tag.s, arg1.s, arg2.s);
+
+//              snmp_increment(XBACKUP_COUNT, 1);
+            }
+            else if (!strcmp(cmd.s, "Xconvfetch")) {
                 cmd_xconvfetch(tag.s);
 
 //              snmp_increment(XCONVFETCH_COUNT, 1);
@@ -5113,6 +5131,160 @@ static void do_xconvmeta(const char *tag,
     }
 
     prot_printf(imapd_out, "%s OK Completed\r\n", tag);
+}
+
+struct xbackup_item {
+    struct xbackup_item *next;
+    mbname_t *mbname;
+};
+
+struct xbackup_list {
+    struct xbackup_item *head;
+    size_t count;
+};
+
+static int do_xbackup(const char *toserver, struct xbackup_list *list)
+{
+    struct backend *backend = NULL;
+    struct xbackup_item *item;
+    unsigned sync_flags = 0; // FIXME ??
+    int partial_success = 0;
+    int mbox_count = 0;
+    int r;
+
+    syslog(LOG_INFO, "XBACKUP: connecting to server '%s'", toserver);
+
+    backend = proxy_findserver(toserver, &csync_protocol, NULL, &backend_cached,
+                               NULL, NULL, imapd_in); // FIXME ???
+    if (!backend) {
+        syslog(LOG_ERR, "XBACKUP: failed to connect to server '%s'", toserver);
+        return IMAP_SERVER_UNAVAILABLE;
+    }
+
+    for (item = list->head; item; item = item->next) {
+        const char *userid = mbname_userid(item->mbname);
+        const char *intname = mbname_intname(item->mbname);
+
+        if (userid) {
+            syslog(LOG_INFO, "XBACKUP: replicating user %s", userid);
+
+            r = sync_do_user(userid, NULL, backend, /*channelp*/ NULL, sync_flags);
+        }
+        else {
+            struct sync_name_list *mboxname_list = sync_name_list_create();
+
+            syslog(LOG_INFO, "XBACKUP: replicating mailbox %s", intname);
+            sync_name_list_add(mboxname_list, intname);
+
+            r = sync_do_mailboxes(mboxname_list, NULL, backend,
+                                  /*channelp*/ NULL, sync_flags);
+            mbox_count++;
+            sync_name_list_free(&mboxname_list);
+        }
+
+        if (r) {
+            prot_printf(imapd_out, "* NO %s %s (%s)\r\n",
+                        userid ? "USER" : "MAILBOX",
+                        userid ? userid : intname,
+                        error_message(r));
+        }
+        else {
+            partial_success++;
+            prot_printf(imapd_out, "* OK %s %s\r\n",
+                        userid ? "USER" : "MAILBOX",
+                        userid ? userid : intname);
+        }
+        prot_flush(imapd_out);
+
+        /* send RESTART after each user, or 1000 mailboxes */
+        if (!r && item->next && (userid || mbox_count >= 1000)) {
+            mbox_count = 0;
+
+            sync_send_restart(backend->out);
+            r = sync_parse_response("RESTART", backend->in, NULL);
+            if (r) goto done;
+        }
+    }
+
+    /* send a final RESTART */
+    sync_send_restart(backend->out);
+    sync_parse_response("RESTART", backend->in, NULL);
+
+    if (partial_success) r = 0;
+
+done:
+    return r;
+}
+
+static int xbackup_addmbox(struct findall_data *data, void *rock)
+{
+    if (!data) return 0;
+    struct xbackup_list *list = (struct xbackup_list *) rock;
+
+    if (!data->mbname) {
+        /* No partial matches */ /* FIXME ??? */
+        return 0;
+    }
+
+    /* Only add shared mailboxes or user INBOXes */
+    if (!mbname_localpart(data->mbname) ||
+        (!mbname_isdeleted(data->mbname) &&
+         !strarray_size(mbname_boxes(data->mbname)))) {
+
+        struct xbackup_item *item = xzmalloc(sizeof *item);
+
+        item->mbname = mbname_dup(data->mbname);
+
+        /* Add link on to the list (reverse order) */
+        item->next = list->head;
+        list->head = item;
+        list->count ++;
+    }
+
+    return 0;
+}
+
+/* Parse and perform an XBACKUP command. */
+void cmd_xbackup(const char *tag, const char *mailbox, const char *toserver)
+{
+    const char *intname;
+    struct xbackup_list list = { NULL, 0 };
+    struct xbackup_item *item, *next;
+    int r;
+
+    /* admins only please */
+    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+        r = IMAP_PERMISSION_DENIED;
+        goto done;
+    }
+
+    intname = mboxname_from_external(mailbox, &imapd_namespace, imapd_userid);
+
+    mboxlist_findall(NULL, intname, 1, NULL, NULL, xbackup_addmbox, &list);
+
+    if (list.count) {
+        r = do_xbackup(toserver, &list);
+
+        next = list.head;
+        while ((item = next)) {
+            next = item->next;
+            mbname_free(&item->mbname);
+            free(item);
+        }
+    }
+    else {
+        r = IMAP_MAILBOX_NONEXISTENT;
+    }
+
+done:
+    imapd_check(NULL, 0);
+
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+        prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED));
+    }
 }
 
 /*
