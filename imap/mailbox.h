@@ -283,6 +283,9 @@ struct mailbox {
 #define ITER_SKIP_EXPUNGED (1<<1)
 #define ITER_SKIP_DELETED (1<<2)
 
+/* pre-declare message_t to avoid circular dependency problems */
+typedef struct message message_t;
+
 struct mailbox_iter {
     struct mailbox *mailbox;
     message_t *msg;
