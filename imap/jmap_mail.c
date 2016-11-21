@@ -1690,8 +1690,9 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
      * and embedded messages. Based on the IMAPTalk find_message function.
      * https://github.com/robmueller/mail-imaptalk/blob/master/IMAPTalk.pm
      *
-     * Contrary to the IMAPTalk implementation, this function doesn't
-     * generate textlist/htmllist fields.
+     * XXX Contrary to the IMAPTalk implementation, this function doesn't
+     * generate textlist/htmllist fields, so html-to-text body conversion
+     * is only supported marginally.
      */
 
     ptrarray_t *work = ptrarray_new();
@@ -1998,24 +1999,82 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
     /* attachments */
     if (_wantprop(req, "attachments")) {
         int i;
-        json_t *atts = json_pack("{}");
+        json_t *atts = json_pack("[]");
 
         for (i = 0; i < bodies.atts.count; i++) {
             struct body *part = ptrarray_nth(&bodies.atts, i);
+            struct param *param;
             json_t *att;
-            char *tmp;
+            charset_t ascii = charset_lookupname("us-ascii");
+            const char *attid = message_guid_encode(&part->content_guid);
+            strarray_t headers = STRARRAY_INITIALIZER;
+            char *tmp, *cid;
+            static const char* imgprops[] = { "width", "height" };
+            size_t j;
 
-            tmp = strconcat(part->type, "/", part->subtype, NULL);
-            att = json_pack("{s:s}", "type", tmp);
+            att = json_pack("{s:s}", "blobId", attid);
+
+            /* type */
+            buf_setcstr(&buf, part->type);
+            if (part->subtype) {
+                buf_appendcstr(&buf, "/");
+                buf_appendcstr(&buf, part->subtype);
+            }
+            json_object_set_new(att, "type", json_string(buf_lcase(&buf)));
+
+            /* name */
+            for (param = part->disposition_params; param; param = param->next) {
+                if (!strncasecmp(param->attribute, "filename", 8)) {
+                    json_object_set_new(att, "name", json_string(param->value));
+                    break;
+                }
+            }
+
+            /* size */
+            if (part->charset_enc) {
+                buf_reset(&buf);
+                charset_decode(&buf, msg_buf->s + part->content_offset,
+                               part->content_size, part->charset_enc);
+                json_object_set_new(att, "size", json_integer(buf_len(&buf)));
+                buf_reset(&buf);
+            } else {
+                json_object_set_new(att, "size", json_integer(part->content_size));
+            }
+
+            /* cid */
+            strarray_add(&headers, "Content-ID");
+            tmp = xstrndup(msg_buf->s + part->header_offset, part->header_size);
+            message_pruneheader(tmp, &headers, NULL);
+            cid = strchr(buf.s, ':');
+            if (cid) cid = charset_unfold(cid, strlen(cid), 0);
+            while (cid && *cid == ' ') cid++;
+            json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
             free(tmp);
 
-            /* FIXME set other fields */
+            /* isInline - XXX might check for presence of cid in html body */
+            json_object_set_new(att, "isInline", json_boolean(cid));
 
-            buf_reset(&buf);
-            buf_printf(&buf, "att%d", i); /* FIXME need sha1 id from cachebody */
-            json_object_set_new(atts, buf_cstring(&buf), att);
+            /* width, height */
+            for (j = 0; j < sizeof(imgprops) / sizeof(imgprops[0]); j++) {
+                const char *pname;
+                char *annot;
+
+                pname = imgprops[j];
+                annot = strconcat(part->part_id, ".", pname, NULL);
+
+                buf_reset(&buf);
+                annotatemore_msg_lookup(mbox->name, record->uid, annot, req->userid, &buf);
+                json_object_set_new(att, pname, buf_len(&buf) ?
+                        json_integer(str2uint64(buf_cstring(&buf))) :
+                        json_null());
+            }
+
+            if (cid) free(cid);
+            charset_free(&ascii);
+            strarray_fini(&headers);
+            json_array_append_new(atts, att);
         }
-        if (!json_object_size(atts)) {
+        if (!json_array_size(atts)) {
             json_decref(atts);
             atts = json_null();
         }
@@ -2030,13 +2089,14 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         for (i = 0; i < bodies.msgs.count; i++) {
             struct body *part = ptrarray_nth(&bodies.msgs, i);
             json_t *submsg = NULL;
+            const char *attid;
 
-            r = jmapmsg_from_body(req, part->subpart, msg_buf, mbox, record, 1, &submsg);
+            r = jmapmsg_from_body(req, part->subpart, msg_buf,
+                                  mbox, record, 1, &submsg);
             if (r) goto done;
 
-            buf_reset(&buf);
-            buf_printf(&buf, "msg%d", i); /* FIXME need sha1 id from cachebody */
-            json_object_set_new(msgs, buf_cstring(&buf), submsg);
+            attid = message_guid_encode(&part->subpart->content_guid);
+            json_object_set_new(msgs, attid, submsg);
         }
         if (!json_object_size(msgs)) {
             json_decref(msgs);
@@ -2055,11 +2115,7 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
 
         /* blobId */
         if (_wantprop(req, "blobId")) {
-            buf_setcstr(&buf, "m-");
-            buf_appendcstr(&buf, msgid);
-            json_object_set_new(msg, "blobId", json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-
+            json_object_set_new(msg, "blobId", json_string(msgid));
         }
         /* threadId */
         if (_wantprop(req, "threadId")) {
