@@ -175,9 +175,6 @@ int caldav_abort(struct caldav_db *caldavdb);
 
 char *caldav_mboxname(const char *userid, const char *name);
 
-/* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
-void caldav_get_period(icalcomponent *comp, icalcomponent_kind kind, struct icalperiodtype *period);
-
 int caldav_get_events(struct caldav_db *caldavdb,
                       const char *mailbox, const char *ical_uid,
                       caldav_cb_t *cb, void *rock);

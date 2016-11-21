@@ -557,6 +557,264 @@ icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
 }
 
 
+/* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
+struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
+                                                     icalcomponent_kind kind)
+{
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icalperiodtype period;
+
+    period.start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
+    period.end   = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
+    period.duration = icaldurationtype_null_duration();
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+        if (icaltime_is_null_time(period.end)) {
+            /* No DTEND or DURATION */
+            if (icaltime_is_date(period.start)) {
+                /* DTSTART is not DATE-TIME */
+                struct icaldurationtype dur = icaldurationtype_null_duration();
+
+                dur.days = 1;
+                period.end = icaltime_add(period.start, dur);
+            }
+            else
+                memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
+        }
+        break;
+
+#ifdef HAVE_VPOLL
+    case ICAL_VPOLL_COMPONENT:
+#endif
+    case ICAL_VTODO_COMPONENT: {
+        struct icaltimetype due = (kind == ICAL_VPOLL_COMPONENT) ?
+            icalcomponent_get_dtend(comp) : icalcomponent_get_due(comp);
+
+        if (!icaltime_is_null_time(period.start)) {
+            /* Has DTSTART */
+            if (icaltime_is_null_time(period.end)) {
+                /* No DURATION */
+                memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
+
+                if (!icaltime_is_null_time(due)) {
+                    /* Has DUE (DTEND for VPOLL) */
+                    if (icaltime_compare(due, period.start) < 0)
+                        memcpy(&period.start, &due, sizeof(struct icaltimetype));
+                    if (icaltime_compare(due, period.end) > 0)
+                        memcpy(&period.end, &due, sizeof(struct icaltimetype));
+                }
+            }
+        }
+        else {
+            icalproperty *prop;
+
+            /* No DTSTART */
+            if (!icaltime_is_null_time(due)) {
+                /* Has DUE (DTEND for VPOLL) */
+                memcpy(&period.start, &due, sizeof(struct icaltimetype));
+                memcpy(&period.end, &due, sizeof(struct icaltimetype));
+            }
+            else if ((prop =
+                      icalcomponent_get_first_property(comp, ICAL_COMPLETED_PROPERTY))) {
+                /* Has COMPLETED */
+                period.start =
+                    icaltime_convert_to_zone(icalproperty_get_completed(prop), utc);
+                memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
+
+                if ((prop =
+                     icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
+                    /* Has CREATED */
+                    struct icaltimetype created =
+                        icaltime_convert_to_zone(icalproperty_get_created(prop), utc);
+                    if (icaltime_compare(created, period.start) < 0)
+                        memcpy(&period.start, &created, sizeof(struct icaltimetype));
+                    if (icaltime_compare(created, period.end) > 0)
+                        memcpy(&period.end, &created, sizeof(struct icaltimetype));
+                }
+            }
+            else if ((prop =
+                      icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
+                /* Has CREATED */
+                period.start =
+                    icaltime_convert_to_zone(icalproperty_get_created(prop), utc);
+                period.end = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+            }
+            else {
+                /* Always */
+                period.start = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+                period.end   = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+            }
+        }
+        break;
+    }
+
+    case ICAL_VJOURNAL_COMPONENT:
+        if (!icaltime_is_null_time(period.start)) {
+            /* Has DTSTART */
+            memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
+
+            if (icaltime_is_date(period.start)) {
+                /* DTSTART is not DATE-TIME */
+                struct icaldurationtype dur;
+
+                dur = icaldurationtype_from_int(60*60*24 - 1);  /* P1D */
+                icaltime_add(period.end, dur);
+            }
+        }
+        else {
+            /* Never */
+            period.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+            period.end   = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+        }
+        break;
+
+    case ICAL_VFREEBUSY_COMPONENT:
+        if (icaltime_is_null_time(period.start) ||
+            icaltime_is_null_time(period.end)) {
+            /* No DTSTART or DTEND */
+            icalproperty *fb =
+                icalcomponent_get_first_property(comp, ICAL_FREEBUSY_PROPERTY);
+
+            if (fb) {
+                /* Has FREEBUSY */
+                /* XXX  Convert FB period into our period */
+            }
+            else {
+                /* Never */
+                period.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+                period.end   = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+            }
+        }
+        break;
+
+    case ICAL_VAVAILABILITY_COMPONENT:
+        if (icaltime_is_null_time(period.start)) {
+            /* No DTSTART */
+            period.start = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+        }
+        if (icaltime_is_null_time(period.end)) {
+            /* No DTEND */
+            period.end = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return period;
+}
+
+
+/* icalcomponent_foreach_recurrence() callback to find earliest/latest time */
+static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
+{
+    struct icalperiodtype *period = (struct icalperiodtype *) rock;
+    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icaltimetype start =
+        icaltime_from_timet_with_zone(span->start, is_date, utc);
+    struct icaltimetype end =
+        icaltime_from_timet_with_zone(span->end, is_date, utc);
+
+    if (icaltime_compare(start, period->start) < 0)
+        memcpy(&period->start, &start, sizeof(struct icaltimetype));
+
+    if (icaltime_compare(end, period->end) > 0)
+        memcpy(&period->end, &end, sizeof(struct icaltimetype));
+}
+
+/* Determine the UTC time span of all components within ical of type kind. */
+struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
+                                                         icalcomponent_kind kind,
+                                                         void (*comp_cb)(icalcomponent*,
+                                                                         void*),
+                                                         void *cb_rock)
+{
+    struct icalperiodtype span;
+    icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
+    int recurring = 0;
+
+    /* Initialize span to be nothing */
+    span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+    span.end = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+    span.duration = icaldurationtype_null_duration();
+
+    do {
+        struct icalperiodtype period;
+        icalproperty *rrule;
+
+        /* Get base dtstart and dtend */
+        period = icalcomponent_get_utc_timespan(comp, kind);
+
+        /* See if its a recurring event */
+        rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+        if (rrule ||
+            icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY) ||
+            icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
+            /* Recurring - find widest time range that includes events */
+            int expand = recurring = 1;
+
+            if (rrule) {
+                struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+
+                if (!icaltime_is_null_time(recur.until)) {
+                    /* Recurrence ends - calculate dtend of last recurrence */
+                    struct icaldurationtype duration;
+                    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+                    duration = icaltime_subtract(period.end, period.start);
+                    period.end =
+                        icaltime_add(icaltime_convert_to_zone(recur.until, utc),
+                                duration);
+
+                    /* Do RDATE expansion only */
+                    /* Temporarily remove RRULE to allow for expansion of
+                     * remaining recurrences. */
+                    icalcomponent_remove_property(comp, rrule);
+                }
+                else if (!recur.count) {
+                    /* Recurrence never ends - set end of span to eternity */
+                    span.end =
+                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
+                    /* Skip RRULE & RDATE expansion */
+                    expand = 0;
+                }
+            }
+
+            /* Expand (remaining) recurrences */
+            if (expand) {
+                icalcomponent_foreach_recurrence(
+                        comp,
+                        icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
+                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
+                        utc_timespan_cb, &span);
+
+                /* Add RRULE back, if we had removed it before. */
+                if (rrule && !icalproperty_get_parent(rrule)) {
+                    icalcomponent_add_property(comp, rrule);
+                }
+            }
+        }
+
+        /* Check our dtstart and dtend against span */
+        if (icaltime_compare(period.start, span.start) < 0)
+            memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
+
+        if (icaltime_compare(period.end, span.end) > 0)
+            memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
+
+        /* Execute callback on this component */
+        if (comp_cb) comp_cb(comp, cb_rock);
+
+    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+    return span;
+}
+
+
 #ifndef HAVE_TZDIST_PROPS
 
 /* Functions to replace those not available in libical < v2.0 */

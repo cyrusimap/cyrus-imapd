@@ -90,6 +90,15 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
 
+extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
+                                                            icalcomponent_kind kind);
+
+extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
+                                                                icalcomponent_kind kind,
+                                                                void (*comp_cb)(icalcomponent*,
+                                                                                void*),
+                                                                void *cb_rock);
+
 
 /* Functions not declared in in libical < v2.0 */
 

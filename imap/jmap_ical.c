@@ -2457,108 +2457,6 @@ static void collect_timezones_cb(icalparameter *param, void *data)
     ptrarray_push(tzs, tz);
 }
 
-static void timezones_to_ical_cb(icalcomponent *comp,
-                                 struct icaltime_span *span,
-                                 void *rock) {
-    struct icalperiodtype *period = (struct icalperiodtype *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    struct icaltimetype start =
-        icaltime_from_timet_with_zone(span->start, is_date, utc);
-    struct icaltimetype end =
-        icaltime_from_timet_with_zone(span->end, is_date, utc);
-
-    if (icaltime_compare(start, period->start) < 0)
-        memcpy(&period->start, &start, sizeof(struct icaltimetype));
-
-    if (icaltime_compare(end, period->end) > 0)
-        memcpy(&period->end, &end, sizeof(struct icaltimetype));
-}
-
-/* Determine the UTC time span of all components within ical of type kind. */
-static struct icalperiodtype get_utc_timespan(icalcomponent *ical,
-                                              icalcomponent_kind kind) {
-    struct icalperiodtype span;
-    icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
-    int recurring = 0;
-
-    /* Initialize span to be nothing */
-    span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
-    span.end = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
-    span.duration = icaldurationtype_null_duration();
-
-    do {
-        struct icalperiodtype period;
-        icalproperty *rrule;
-        icalproperty *purged_rrule = NULL;
-
-        /* Get base dtstart and dtend */
-        caldav_get_period(comp, kind, &period);
-
-        /* See if its a recurring event */
-        rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-        if (rrule ||
-                icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY) ||
-                icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
-            /* Recurring - find widest time range that includes events */
-            int expand = recurring = 1;
-
-            if (rrule) {
-                struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
-
-                if (!icaltime_is_null_time(recur.until)) {
-                    /* Recurrence ends - calculate dtend of last recurrence */
-                    struct icaldurationtype duration;
-                    icaltimezone *utc = icaltimezone_get_utc_timezone();
-
-                    duration = icaltime_subtract(period.end, period.start);
-                    period.end =
-                        icaltime_add(icaltime_convert_to_zone(recur.until, utc),
-                                duration);
-
-                    /* Do RDATE expansion only */
-                    /* Temporarily remove RRULE to allow for expansion of
-                     * remaining recurrences. */
-                    icalcomponent_remove_property(comp, rrule);
-                    purged_rrule = rrule;
-                }
-                else if (!recur.count) {
-                    /* Recurrence never ends - set end of span to eternity */
-                    span.end =
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
-
-                    /* Skip RRULE & RDATE expansion */
-                    expand = 0;
-                }
-            }
-
-            /* Expand (remaining) recurrences */
-            if (expand) {
-                icalcomponent_foreach_recurrence(
-                        comp,
-                        icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
-                        timezones_to_ical_cb, &span);
-            }
-
-            /* Add RRULE again, if we had removed it before. */
-            if (purged_rrule) {
-                icalcomponent_add_property(comp, purged_rrule);
-            }
-        }
-
-        /* Check our dtstart and dtend against span */
-        if (icaltime_compare(period.start, span.start) < 0)
-            memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
-
-        if (icaltime_compare(period.end, span.end) > 0)
-            memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
-
-    } while ((comp = icalcomponent_get_next_component(ical, kind)));
-
-    return span;
-}
-
 static void expand_timezones(icalcomponent *ical)
 {
     icalcomponent *tzcomp, *next;
@@ -2567,7 +2465,7 @@ static void expand_timezones(icalcomponent *ical)
     ptrarray_t tzs = PTRARRAY_INITIALIZER;
 
     /* Determine recurrence span. */
-    span = get_utc_timespan(ical, ICAL_VEVENT_COMPONENT);
+    span = icalrecurrenceset_get_utc_timespan(ical, ICAL_VEVENT_COMPONENT, NULL, NULL);
 
     /* Remove all VTIMEZONE components for known TZIDs. This operation is
      * a bit hairy: we could expunge a timezone which is in use by an ical
