@@ -185,7 +185,7 @@ sub assert_caldav_notified
 
     my @err;
     unless (_all_keys_match(\@expected, \@payloads, \@err)) {
-        die "@err";
+        $self->fail("@err");
     }
 }
 
