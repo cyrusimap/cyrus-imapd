@@ -983,4 +983,36 @@ static void test_utf8_to_searchform(void)
     free(s);
 }
 
+static void test_charset_decode(void)
+{
+
+#define TESTCASE(in, inlen, want, wantlen, enc) \
+    { \
+        struct buf _dst = BUF_INITIALIZER; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        int _enc = (enc); \
+        size_t _inlen = (inlen); \
+        size_t _wantlen = (wantlen); \
+        int _r; \
+        _r = charset_decode(&_dst, _in, _inlen, _enc); \
+        CU_ASSERT(_r == 0); \
+        CU_ASSERT(_dst.len == _wantlen); \
+        { \
+            const char *p; \
+            for(p = _dst.s; p < _dst.s + _dst.len; p++) { \
+                if (0) fprintf(stderr, "%x\n", *p); \
+            } \
+        } \
+        CU_ASSERT(memcmp(_dst.s, _want, _wantlen) == 0); \
+    }
+
+    TESTCASE("", 0, "", 0, ENCODING_NONE);
+    TESTCASE("", 0, "", 0, ENCODING_BASE64);
+    TESTCASE("Hello", 5, "Hello", 5, ENCODING_NONE);
+    TESTCASE("beefc0de", 8, "\x6d\xe7\x9f\x73\x47\x5e", 6, ENCODING_BASE64);
+
+#undef TESTCASE
+}
+
 /* vim: set ft=c: */

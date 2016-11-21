@@ -1661,6 +1661,11 @@ static void buffer_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
+static void dont_free(struct convert_rock *rock __attribute__((unused)))
+{
+    /* Dummy free to avoid pipeline calling basic_free for NULL cleanup */
+}
+
 static void striphtml_free(struct convert_rock *rock)
 {
     if (rock && rock->state) {
@@ -1790,6 +1795,16 @@ static struct convert_rock *buffer_init(void)
     rock->state = (void *)buf;
 
     return rock;
+}
+
+static void buffer_setbuf(struct convert_rock *rock, struct buf *dst)
+{
+    if (rock->state) {
+        buf_free(rock->state);
+        free(rock->state);
+    }
+    rock->state = dst;
+    rock->cleanup = dont_free;
 }
 
 struct convert_rock *striphtml_init(struct convert_rock *next)
@@ -2096,6 +2111,51 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
     charset_free(&utf8);
 
     return res;
+}
+
+/* Decode bytes from src into buffer dst */
+EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int encoding)
+{
+    struct convert_rock *input;
+
+    buf_reset(dst);
+
+    /* check for trivial decode */
+    if (len == 0 || encoding == ENCODING_NONE) {
+        buf_setmap(dst, src, len);
+        return 0;
+    }
+
+    /* set up the conversion path */
+    input = buffer_init();
+    buffer_setbuf(input, dst);
+
+    /* choose encoding extraction if needed */
+    switch (encoding) {
+    case ENCODING_NONE:
+        break;
+
+    case ENCODING_QP:
+        input = qp_init(0, input);
+        break;
+
+    case ENCODING_BASE64:
+        input = b64_init(input);
+        /* XXX have to have nl-mapping base64 in order to
+         * properly count \n as 2 raw characters
+         */
+        break;
+
+    default:
+        /* Don't know encoding--nothing can match */
+        convert_free(input);
+        return -1;
+    }
+
+    convert_catn(input, src, len);
+    convert_free(input);
+
+    return 0;
 }
 
 static void mimeheader_cat(struct convert_rock *target, const char *s, int flags)

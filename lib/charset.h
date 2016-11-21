@@ -115,6 +115,8 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
 
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
+extern int charset_decode(struct buf *dst, const char *src, size_t len, int encoding);
+
 /* Extract the body text for the message denoted by 'uid', convert its
    text to the canonical form for searching, and pass the converted text
    down in a series of invocations of the callback 'cb'.  This is
