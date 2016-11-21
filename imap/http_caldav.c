@@ -1407,7 +1407,7 @@ static void end_icalendar(struct buf *buf)
     buf_setcstr(buf, "END:VCALENDAR\r\n");
 }
 
-static int dump_calendar(struct transaction_t *txn)
+static int export_calendar(struct transaction_t *txn)
 {
     int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -2195,7 +2195,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     if (txn->req_tgt.collection) {
         /* Download an entire calendar collection */
-        return dump_calendar(txn);
+        return export_calendar(txn);
     }
     else if (txn->req_tgt.userid) {
         /* GET a list of calendars under calendar-home-set */
