@@ -273,7 +273,7 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
     } else if (jval) {
         json_error_t err;
         if (!mandatory && jval == json_null()) {
-            /* FIXME not all non-mandatory properties are nullable */
+            /* XXX not all non-mandatory properties are nullable */
             r = 0;
         }
         else if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
@@ -2006,12 +2006,13 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
             struct param *param;
             json_t *att;
             charset_t ascii = charset_lookupname("us-ascii");
-            const char *attid = message_guid_encode(&part->content_guid);
+            const char *attid, *cid;
             strarray_t headers = STRARRAY_INITIALIZER;
-            char *tmp, *cid;
+            char *freeme;
             static const char* imgprops[] = { "width", "height" };
             size_t j;
 
+            attid = message_guid_encode(&part->content_guid);
             att = json_pack("{s:s}", "blobId", attid);
 
             /* type */
@@ -2043,13 +2044,17 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
 
             /* cid */
             strarray_add(&headers, "Content-ID");
-            tmp = xstrndup(msg_buf->s + part->header_offset, part->header_size);
-            message_pruneheader(tmp, &headers, NULL);
-            cid = strchr(buf.s, ':');
-            if (cid) cid = charset_unfold(cid, strlen(cid), 0);
-            while (cid && *cid == ' ') cid++;
+            freeme = xstrndup(msg_buf->s + part->header_offset, part->header_size);
+            message_pruneheader(freeme, &headers, NULL);
+            if ((cid = strchr(freeme, ':'))) {
+                if ((cid = charset_unfold(cid + 1, strlen(cid), 0))) {
+                    buf_setcstr(&buf, cid);
+                    buf_trim(&buf);
+                    cid = buf_cstring(&buf);
+                }
+            }
             json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
-            free(tmp);
+            free(freeme);
 
             /* isInline - XXX might check for presence of cid in html body */
             json_object_set_new(att, "isInline", json_boolean(cid));
@@ -2069,7 +2074,6 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
                         json_null());
             }
 
-            if (cid) free(cid);
             charset_free(&ascii);
             strarray_fini(&headers);
             json_array_append_new(atts, att);
@@ -2272,7 +2276,6 @@ static int jmapmsg_find(jmap_req_t *req, const char *id,
     *uid = data.uid;
     return r;
 }
-
 
 static int jmapmsg_from_record(jmap_req_t *req, struct mailbox *mbox,
                                const struct index_record *record,
@@ -3783,6 +3786,30 @@ done:
     return r;
 }
 
+static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out);
+
+#define JMAPMSG_WRITEHEADER(k, v) \
+    { \
+       const char *_v = (v); \
+       char *s = charset_encode_mimeheader(_v, strlen(_v)); \
+       fprintf(out, "%s: %s\r\n", k, s); \
+       free(s); \
+    }
+
+#define JMAPMSG_EMAILER_TO_MIME(b, m) \
+    { \
+        json_t *_m = (m); \
+        const char *name = json_string_value(json_object_get(_m, "name")); \
+        const char *email = json_string_value(json_object_get(_m, "email")); \
+        if (strlen(name) && email) { \
+            char *xname = charset_encode_mimeheader(name, strlen(name)); \
+            buf_printf(b, "%s <%s>", xname, email); \
+            free(xname); \
+        } else if (email) { \
+            buf_appendcstr(b, email); \
+        } \
+    }
+
 static char* _make_boundary()
 {
     char *boundary, *p, *q;
@@ -3849,6 +3876,303 @@ static int writetext(const char *s, FILE *out,
     return 0;
 }
 
+struct writeattach_data {
+    jmap_req_t *req;
+    struct mailbox *mbox;
+    struct index_record *record;
+    char *part_id;
+};
+
+static int writeattach_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct writeattach_data *d = (struct writeattach_data*) rock;
+    jmap_req_t *req = d->req;
+    int r = 0;
+
+    r = _openmbox(req, rec->mboxname, &d->mbox, 0);
+    if (r) return r;
+
+    d->record = xzmalloc(sizeof(struct index_record));
+
+    r = mailbox_find_index_record(d->mbox, rec->uid, d->record);
+    if (r || (d->record->system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+        memset(&d->record, 0, sizeof(struct index_record));
+        _closembox(req, &d->mbox);
+        free(d->record);
+        d->record = NULL;
+        return r;
+    }
+
+    d->part_id = rec->part ? xstrdup(rec->part) : NULL;
+    return IMAP_OK_COMPLETED;
+}
+
+static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
+{
+    struct writeattach_data data = { req, NULL, NULL, NULL };
+    struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
+    struct body *body = NULL, *part = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    const char *blob_id, *type, *cid, *name;
+    strarray_t headers = STRARRAY_INITIALIZER;
+    char *freeme = NULL;
+    int r, i;
+
+    type = json_string_value(json_object_get(att, "type"));
+    blob_id = json_string_value(json_object_get(att, "blobId"));
+    cid = json_string_value(json_object_get(att, "cid"));
+    name = json_string_value(json_object_get(att, "name"));
+
+    /* Find message for blob id */
+    if (!(cstate = mailbox_get_cstate(req->inbox))) {
+        syslog(LOG_INFO, "writeattach: cannot open conversations db");
+        return IMAP_NOTFOUND;
+    }
+
+    r = conversations_guid_foreach(cstate, blob_id, writeattach_cb, &data);
+    if (r != IMAP_OK_COMPLETED) {
+        if (!r) r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Fetch cache record for the message */
+    r = mailbox_cacherecord(data.mbox, data.record);
+    if (r) goto done;
+
+    /* Parse message body structure */
+    message_read_bodystructure(data.record, &body);
+
+    /* Find part containing the data */
+    if (data.part_id) {
+        ptrarray_t parts = PTRARRAY_INITIALIZER;
+
+        for (i = 0; i < body->numparts; i++) {
+            ptrarray_push(&parts, body->subpart + i);
+        }
+        while ((part = ptrarray_shift(&parts))) {
+            if (!strcmp(data.part_id, part->part_id)) {
+                break;
+            }
+            for (i = 0; i < part->numparts; i++) {
+                ptrarray_push(&parts, part->subpart + i);
+            }
+        }
+        ptrarray_fini(&parts);
+    }
+    if (!part) {
+        syslog(LOG_ERR, "writeattach: can't find part %s for blob %s",
+                data.part_id, blob_id);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Map the message into memory */
+    r = mailbox_map_record(data.mbox, data.record, &msg_buf);
+    if (r) goto done;
+
+    if (boundary) {
+        fprintf(out, "\r\n--%s\r\n", boundary);
+    }
+
+    /* Write headers */
+    if (type) {
+        JMAPMSG_WRITEHEADER("Content-Type", type);
+    } else {
+        strarray_add(&headers, "Content-Type");
+        freeme = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+        message_pruneheader(freeme, &headers, NULL);
+        fwrite(freeme, 1, strlen(freeme), out);
+        strarray_truncate(&headers, 0);
+    }
+
+    strarray_add(&headers, "Content-Transfer-Encoding");
+    freeme = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+    message_pruneheader(freeme, &headers, NULL);
+    fwrite(freeme, 1, strlen(freeme), out);
+    strarray_truncate(&headers, 0);
+
+    if (cid) {
+        JMAPMSG_WRITEHEADER("Content-ID", cid);
+    }
+
+    if (name) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "attachment; filename=\"%s\"", name);
+        JMAPMSG_WRITEHEADER("Content-Disposition", buf_cstring(&buf));
+        buf_free(&buf);
+    }
+
+    /* Write content */
+    fputs("\r\n", out);
+    fwrite(msg_buf.s + part->content_offset, 1, part->content_size, out);
+    r = 0;
+
+done:
+    if (data.mbox) _closembox(req, &data.mbox);
+    if (data.record) free(data.record);
+    if (data.part_id) free(data.part_id);
+    if (freeme) free(freeme);
+    buf_free(&msg_buf);
+    strarray_fini(&headers);
+    return r;
+}
+
+static int jmapmsg_writebody(jmap_req_t *req, json_t *msg,
+                             const char *boundary, FILE *out)
+{
+    const char *text, *html;
+    char *freeme = NULL, *myboundary = NULL;
+    size_t i;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+    json_t *atts, *cids, *msgs, *val;
+
+    /* Determine text bodies */
+    text = json_string_value(json_object_get(msg, "textBody"));
+    html = json_string_value(json_object_get(msg, "htmlBody"));
+
+    /* Determine attached messages */
+    msgs = json_object_get(msg, "attachedMessages");
+
+    /* Split attachments into ones with and without cid. If there's no
+     * htmlBody defined, all attachments end up in a multipart. */
+    cids = json_pack("[]");
+    atts = json_pack("[]");
+    json_array_foreach(json_object_get(msg, "attachments"), i, val) {
+        if (html && JNOTNULL(json_object_get(val, "cid")) &&
+                    json_object_get(val, "isInline") == json_true()) {
+            json_array_append(cids, val);
+        } else {
+            json_array_append(atts, val);
+        }
+    }
+    if (!json_array_size(cids)) {
+        json_decref(cids);
+        cids = NULL;
+    }
+    if (!json_array_size(atts)) {
+        json_decref(atts);
+        atts = NULL;
+    }
+
+    if (boundary) {
+        fprintf(out, "\r\n--%s\r\n", boundary);
+    }
+
+    if (json_array_size(atts) || json_object_size(msgs)) {
+        /* Content-Type is multipart/mixed */
+        json_t *submsg;
+        const char *subid;
+        myboundary = _make_boundary();
+
+        buf_setcstr(&buf, "multipart/mixed; boundary=");
+        buf_appendcstr(&buf, myboundary);
+        JMAPMSG_WRITEHEADER("Content-Type", buf_cstring(&buf));
+
+        /* Remove any non-cid attachments and attached messages. We'll
+         * write them after the trimmed down message is serialised. */
+        if (cids) {
+            json_object_set_new(msg, "attachments", cids);
+        } else {
+            json_object_del(msg, "attachments");
+        }
+        json_object_del(msg, "attachedMessages");
+
+        r = jmapmsg_writebody(req, msg, myboundary, out);
+        if (r) goto done;
+
+        /* Write attachments */
+        json_array_foreach(atts, i, val) {
+            r = writeattach(req, val, myboundary, out);
+            if (r) goto done;
+        }
+
+        /* Write embedded RFC822 messages */
+        json_object_foreach(msgs, subid, submsg) {
+            fprintf(out, "\r\n--%s\r\n", myboundary);
+            fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
+            r = jmapmsg_write(req, submsg, out);
+            if (r) goto done;
+        }
+
+        fprintf(out, "\r\n--%s--\r\n", myboundary);
+    }
+    else if (text && html) {
+        /* Content-Type is multipart/alternative */
+        myboundary = _make_boundary();
+
+        buf_setcstr(&buf, "multipart/alternative; boundary=");
+        buf_appendcstr(&buf, myboundary);
+        JMAPMSG_WRITEHEADER("Content-Type", buf_cstring(&buf));
+
+        /* Remove the html body. We'll write it after the plain text body */
+        val = json_object_get(msg, "htmlBody");
+        json_incref(val);
+        json_object_del(msg, "htmlBody");
+        atts = json_object_get(msg, "attachments");
+        json_incref(atts);
+        json_object_del(msg, "attachments");
+
+        /* Write the plain text body */
+        r = jmapmsg_writebody(req, msg, myboundary, out);
+        if (r) goto done;
+
+        /* Write the html body, including any of its related attachments */
+        json_object_del(msg, "textBody");
+        json_object_set_new(msg, "htmlBody", val);
+        if (json_array_size(atts)) {
+            json_object_set_new(msg, "attachments", atts);
+        }
+        r = jmapmsg_writebody(req, msg, myboundary, out);
+        if (r) goto done;
+
+        fprintf(out, "\r\n--%s--\r\n", myboundary);
+    }
+    else if (html && json_array_size(cids)) {
+        /* Content-Type is multipart/related */
+        myboundary = _make_boundary();
+
+        buf_setcstr(&buf, "multipart/related; boundary=");
+        buf_appendcstr(&buf, myboundary);
+        JMAPMSG_WRITEHEADER("Content-Type", buf_cstring(&buf));
+
+        /* Remove the attachments to serialise the html body */
+        json_object_del(msg, "attachments");
+        r = jmapmsg_writebody(req, msg, myboundary, out);
+        if (r) goto done;
+
+        /* Write attachments */
+        json_array_foreach(cids, i, val) {
+            r = writeattach(req, val, myboundary, out);
+            if (r) goto done;
+        }
+
+        fprintf(out, "\r\n--%s--\r\n", myboundary);
+
+    }
+    else if (html) {
+        /* Content-Type is text/html */
+        JMAPMSG_WRITEHEADER("Content-Type", "text/html;charset=UTF-8");
+        fputs("\r\n", out);
+        writetext(html, out, split_html);
+    }
+    else if (text) {
+        /* Content-Type is text/plain */
+        JMAPMSG_WRITEHEADER("Content-Type", "text/plain;charset=UTF-8");
+        fputs("\r\n", out);
+        writetext(text, out, split_plain);
+    }
+
+    /* All done */
+    r = 0;
+
+done:
+    if (myboundary) free(myboundary);
+    if (freeme) free(freeme);
+    buf_free(&buf);
+    if (r) r = HTTP_SERVER_ERROR;
+    return r;
+}
 
 /* Write the JMAP Message msg in RFC-5322 compliant wire format.
  *
@@ -3860,7 +4184,7 @@ static int writetext(const char *s, FILE *out,
  * Return 0 on success or non-zero if writing to the file failed */
 static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
 {
-    struct data {
+    struct jmapmsgdata {
         char *subject;
         char *to;
         char *cc;
@@ -3870,31 +4194,20 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
         char *from;
         char *date;
         char *msgid;
-        char *contenttype;
-        char *boundary;
         char *mua;
 
         char *references;
         char *inreplyto;
         char *replyto_id;
-
-        const char *text;
-        const char *html;
-
-        json_t *atts;
-        json_t *msgs;
         json_t *headers;
-
-        size_t have_atts;
     } d;
 
-    json_t *val, *prop;
+    json_t *val, *prop, *mymsg;
     const char *key, *s;
-    char *freeme = NULL;
     size_t i;
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
-    memset(&d, 0, sizeof(struct data));
+    memset(&d, 0, sizeof(struct jmapmsgdata));
 
     /* Weed out special header values. */
     d.headers = json_pack("{}");
@@ -3902,60 +4215,46 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
         s = json_string_value(val);
         if (!s) {
             continue;
-        } else if (!strcasecmp(key, "From")) {
-            d.from = xstrdup(s);
-        } else if (!strcasecmp(key, "Sender")) {
-            d.sender = xstrdup(s);
-        } else if (!strcasecmp(key, "To")) {
-            d.to = xstrdup(s);
-        } else if (!strcasecmp(key, "Cc")) {
-            d.cc = xstrdup(s);
         } else if (!strcasecmp(key, "Bcc")) {
             d.bcc = xstrdup(s);
-        } else if (!strcasecmp(key, "Reply-To")) {
-            d.replyto = xstrdup(s);
-        } else if (!strcasecmp(key, "Subject")) {
-            d.subject = xstrdup(s);
-        } else if (!strcasecmp(key, "Message-ID")) {
-            d.msgid = xstrdup(s);
-        } else if (!strcasecmp(key, "In-Reply-To")) {
-            d.inreplyto = xstrdup(s);
-        } else if (!strcasecmp(key, "References")) {
-            d.references = xstrdup(s);
-        } else if (!strcasecmp(key, "Date")) {
-            d.date = xstrdup(s);
-        } else if (!strcasecmp(key, "User-Agent")) {
-            d.mua = xstrdup(s);
-        } else if (!strcasecmp(key, "MIME-Version")) {
+        } else if (!strcasecmp(key, "Cc")) {
+            d.cc = xstrdup(s);
+        } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
             /* Ignore */
         } else if (!strcasecmp(key, "Content-Type")) {
             /* Ignore */
-        } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
+        } else if (!strcasecmp(key, "Date")) {
+            d.date = xstrdup(s);
+        } else if (!strcasecmp(key, "From")) {
+            d.from = xstrdup(s);
+        } else if (!strcasecmp(key, "In-Reply-To")) {
+            d.inreplyto = xstrdup(s);
+        } else if (!strcasecmp(key, "Message-ID")) {
             /* Ignore */
+        } else if (!strcasecmp(key, "MIME-Version")) {
+            /* Ignore */
+        } else if (!strcasecmp(key, "References")) {
+            d.references = xstrdup(s);
+        } else if (!strcasecmp(key, "Reply-To")) {
+            d.replyto = xstrdup(s);
+        } else if (!strcasecmp(key, "Sender")) {
+            d.sender = xstrdup(s);
+        } else if (!strcasecmp(key, "Subject")) {
+            d.subject = xstrdup(s);
+        } else if (!strcasecmp(key, "To")) {
+            d.to = xstrdup(s);
+        } else if (!strcasecmp(key, "User-Agent")) {
+            d.mua = xstrdup(s);
         } else {
             json_object_set(d.headers, key, val);
         }
-    }
-
-#define JMAP_MESSAGE_EMAILER_TO_WIRE(b, m) \
-    { \
-        json_t *_m = (m); \
-        const char *name = json_string_value(json_object_get(_m, "name")); \
-        const char *email = json_string_value(json_object_get(_m, "email")); \
-        if (strlen(name) && email) { \
-            char *xname = charset_encode_mimeheader(name, strlen(name)); \
-            buf_printf(b, "%s <%s>", xname, email); \
-            free(xname); \
-        } else if (email) { \
-            buf_appendcstr(b, email); \
-        } \
     }
 
     /* Override the From header */
     if ((prop = json_object_get(msg, "from"))) {
         json_array_foreach(prop, i, val) {
             if (i) buf_appendcstr(&buf, ", ");
-            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+            JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         if (d.from) free(d.from);
         d.from = buf_newcstring(&buf);
@@ -3965,7 +4264,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
 
     /* Override the Sender header */
     if ((prop = json_object_get(msg, "sender"))) {
-        JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, prop);
+        JMAPMSG_EMAILER_TO_MIME(&buf, prop);
         if (d.sender) free(d.sender);
         d.sender = buf_newcstring(&buf);
         buf_reset(&buf);
@@ -3975,7 +4274,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
     if ((prop = json_object_get(msg, "to"))) {
         json_array_foreach(prop, i, val) {
             if (i) buf_appendcstr(&buf, ", ");
-            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+            JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         if (d.to) free(d.to);
         d.to = buf_newcstring(&buf);
@@ -3986,7 +4285,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
     if ((prop = json_object_get(msg, "cc"))) {
         json_array_foreach(prop, i, val) {
             if (i) buf_appendcstr(&buf, ", ");
-            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+            JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         if (d.cc) free(d.cc);
         d.cc = buf_newcstring(&buf);
@@ -3997,7 +4296,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
     if ((prop = json_object_get(msg, "bcc"))) {
         json_array_foreach(prop, i, val) {
             if (i) buf_appendcstr(&buf, ", ");
-            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+            JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         if (d.bcc) free(d.bcc);
         d.bcc = buf_newcstring(&buf);
@@ -4008,13 +4307,12 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
     if ((prop = json_object_get(msg, "replyTo"))) {
         json_array_foreach(prop, i, val) {
             if (i) buf_appendcstr(&buf, ", ");
-            JMAP_MESSAGE_EMAILER_TO_WIRE(&buf, val);
+            JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         if (d.replyto) free(d.replyto);
         d.replyto = buf_newcstring(&buf);
         buf_reset(&buf);
     }
-#undef JMAP_MESSAGE_EMAILER_TO_WIRE
 
     /* Override the In-Reply-To and References headers */
     if ((prop = json_object_get(msg, "inReplyToMessageId"))) {
@@ -4052,40 +4350,9 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
         d.date = xstrdup(fmt);
     }
 
-    d.text = json_string_value(json_object_get(msg, "textBody"));
-    d.html = json_string_value(json_object_get(msg, "htmlBody"));
-    if (!d.text && d.html) {
-        freeme = extract_plain(d.html);
-        d.text = freeme;
-    }
-
-    d.atts = json_object_get(msg, "attachments");
-    d.msgs = json_object_get(msg, "attachedMessages");
-    d.have_atts = json_object_size(d.atts) + json_object_size(d.msgs);
-
-    /* Determine content-type and multipart boundary */
-    buf_reset(&buf);
-    d.boundary = _make_boundary();
-    if (d.have_atts) {
-        buf_setcstr(&buf, "multipart/mixed; boundary=");
-        buf_appendcstr(&buf, d.boundary);
-    } else if (d.html && d.text) {
-        buf_setcstr(&buf, "multipart/alternative; boundary=");
-        buf_appendcstr(&buf, d.boundary);
-    } else {
-        buf_setcstr(&buf, "text/");
-        buf_appendcstr(&buf, d.html ? "html" : "plain");
-        buf_appendcstr(&buf, "; charset=UTF-8");
-        free(d.boundary);
-        d.boundary = NULL;
-    }
-    d.contenttype = buf_release(&buf);
-
     /* Set Message-ID header */
-    if (!d.msgid) {
-        buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
-        d.msgid = buf_release(&buf);
-    }
+    buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
+    d.msgid = buf_release(&buf);
 
     /* Set User-Agent header */
     if (!d.mua) {
@@ -4101,31 +4368,22 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
     /* Build raw message */
     fputs("MIME-Version: 1.0\r\n", out);
 
-    /* Write headers */
-#define JMAP_MESSAGE_WRITE_HEADER(k, v) \
-    { \
-       char *_v = (v); \
-       char *s = charset_encode_mimeheader(_v, strlen(_v)); \
-       fprintf(out, "%s: %s\r\n", k, s); \
-       free(s); \
-    }
-
     /* Mandatory headers according to RFC 5322 */
-    JMAP_MESSAGE_WRITE_HEADER("From", d.from);
-    JMAP_MESSAGE_WRITE_HEADER("Date", d.date);
+    JMAPMSG_WRITEHEADER("From", d.from);
+    JMAPMSG_WRITEHEADER("Date", d.date);
 
     /* Common headers */
-    if (d.to)      JMAP_MESSAGE_WRITE_HEADER("To", d.to);
-    if (d.cc)      JMAP_MESSAGE_WRITE_HEADER("Cc", d.cc);
-    if (d.bcc)     JMAP_MESSAGE_WRITE_HEADER("Bcc", d.bcc);
-    if (d.sender)  JMAP_MESSAGE_WRITE_HEADER("Sender", d.sender);
-    if (d.replyto) JMAP_MESSAGE_WRITE_HEADER("Reply-To", d.replyto);
-    if (d.subject) JMAP_MESSAGE_WRITE_HEADER("Subject", d.subject);
+    if (d.to)      JMAPMSG_WRITEHEADER("To", d.to);
+    if (d.cc)      JMAPMSG_WRITEHEADER("Cc", d.cc);
+    if (d.bcc)     JMAPMSG_WRITEHEADER("Bcc", d.bcc);
+    if (d.sender)  JMAPMSG_WRITEHEADER("Sender", d.sender);
+    if (d.replyto) JMAPMSG_WRITEHEADER("Reply-To", d.replyto);
+    if (d.subject) JMAPMSG_WRITEHEADER("Subject", d.subject);
 
     /* References, In-Reply-To and the custom X-JMAP header */
-    if (d.inreplyto)  JMAP_MESSAGE_WRITE_HEADER("In-Reply-To", d.inreplyto);
-    if (d.references) JMAP_MESSAGE_WRITE_HEADER("References", d.references);
-    if (d.replyto_id) JMAP_MESSAGE_WRITE_HEADER(JMAP_INREPLYTO_HEADER, d.replyto_id);
+    if (d.inreplyto)  JMAPMSG_WRITEHEADER("In-Reply-To", d.inreplyto);
+    if (d.references) JMAPMSG_WRITEHEADER("References", d.references);
+    if (d.replyto_id) JMAPMSG_WRITEHEADER(JMAP_INREPLYTO_HEADER, d.replyto_id);
 
     /* Custom headers */
     json_object_foreach(d.headers, key, val) {
@@ -4136,81 +4394,36 @@ static int jmapmsg_write(jmap_req_t *req, json_t *msg, FILE *out)
         for (q = freeme, p = freeme; *p; p++) {
             if (*p == '\n' && (p == q || *(p-1) != '\r')) {
                 *p = '\0';
-                JMAP_MESSAGE_WRITE_HEADER(key, q);
+                JMAPMSG_WRITEHEADER(key, q);
                 *p = '\n';
                 q = p + 1;
             }
         }
-        JMAP_MESSAGE_WRITE_HEADER(key, q);
+        JMAPMSG_WRITEHEADER(key, q);
         free(freeme);
     }
 
     /* Not mandatory but we'll always write these */
-    JMAP_MESSAGE_WRITE_HEADER("Message-ID", d.msgid);
-    JMAP_MESSAGE_WRITE_HEADER("User-Agent", d.mua);
-    JMAP_MESSAGE_WRITE_HEADER("Content-Type", d.contenttype);
-#undef JMAP_MESSAGE_WRITE_HEADER
+    JMAPMSG_WRITEHEADER("Message-ID", d.msgid);
+    JMAPMSG_WRITEHEADER("User-Agent", d.mua);
 
-    /* Write body parts */
-    if (d.have_atts) {
-        /* Content-Type is multipart/mixed */
-        const char *subid;
-        json_t *submsg;
+    /* Make a shallow copy to alter */
+    mymsg = json_copy(msg);
 
-        r = fprintf(out, "\r\n--%s\r\n", d.boundary);
-        if (r < 0) goto done;
-
-        if (d.html && d.text) {
-            /* Write multipart/alternative part */
-            char *alt = _make_boundary();
-            fprintf(out, "Content-Type: multipart/alternative; boundary=%s\r\n", alt);
-            fprintf(out, "\r\n--%s\r\n", alt);
-            fputs("Content-Type: text/plain;charset=UTF-8\r\n\r\n", out);
-            writetext(d.text, out, split_plain);
-            fprintf(out, "\r\n--%s\r\n", alt);
-            fputs("Content-Type: text/html;charset=UTF-8\r\n\r\n", out);
-            writetext(d.html, out, split_html);
-            fprintf(out, "\r\n--%s--\r\n", alt);
-            free(alt);
-        } else if (d.html) {
-            fputs("Content-Type: text/html;charset=UTF-8\r\n\r\n", out);
-            writetext(d.html, out, split_html);
-        } else {
-            fputs("Content-Type: text/plain;charset=UTF-8\r\n\r\n", out);
-            writetext(d.text, out, split_plain);
+    /* Convert html body to plain text, if required */
+    if (!json_object_get(mymsg, "textBody")) {
+        const char *html = json_string_value(json_object_get(mymsg, "htmlBody"));
+        if (html) {
+            char *tmp = extract_plain(html);
+            json_object_set(mymsg, "textBody", json_string(tmp));
+            free(tmp);
         }
-
-        /* Write embedded RFC822 messages */
-        json_object_foreach(d.msgs, subid, submsg) {
-            fprintf(out, "\r\n--%s\r\n", d.boundary);
-            fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
-            r = jmapmsg_write(req, submsg, out);
-            if (r) goto done;
-        }
-
-        fprintf(out, "\r\n--%s--\r\n", d.boundary);
-
-    } else if (d.html && d.text) {
-        /* Content-Type is multipart/alternative */
-        fprintf(out, "\r\n--%s\r\n", d.boundary);
-        fputs("Content-Type: text/plain;charset=UTF-8\r\n\r\n", out);
-        writetext(d.text, out, split_plain);
-        fprintf(out, "\r\n--%s\r\n", d.boundary);
-        fputs("Content-Type: text/html;charset=UTF-8\r\n\r\n", out);
-        writetext(d.html, out, split_html);
-        fprintf(out, "\r\n--%s--\r\n", d.boundary);
-    } else if (d.html) {
-        /* Content-Type is text/html */
-        fputs("\r\n", out);
-        writetext(d.html, out, split_html);
-    } else {
-        /* Content-Type is text/plain */
-        fputs("\r\n", out);
-        writetext(d.text, out, split_plain);
     }
 
-done:
-    if (freeme) free(freeme);
+    /* Write message body */
+    r = jmapmsg_writebody(req, mymsg, NULL, out);
+    json_decref(mymsg);
+
     if (d.from) free(d.from);
     if (d.sender) free(d.sender);
     if (d.date) free(d.date);
@@ -4224,20 +4437,21 @@ done:
     if (d.inreplyto) free(d.inreplyto);
     if (d.replyto_id) free(d.replyto_id);
     if (d.mua) free(d.mua);
-    if (d.contenttype) free(d.contenttype);
-    if (d.boundary) free(d.boundary);
     if (d.headers) json_decref(d.headers);
     buf_free(&buf);
     if (r) r = HTTP_SERVER_ERROR;
     return r;
 }
 
+#undef JMAPMSG_EMAILER_TO_MIME
+#undef JMAPMSG_WRITEHEADER
+
 static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
 {
     int pe;
     json_t *prop;
     const char *sval;
-    int bval;
+    int bval, intval;
     struct buf buf = BUF_INITIALIZER;
     struct tm *date = xzmalloc(sizeof(struct tm));
     char *mboxname = NULL;
@@ -4416,7 +4630,8 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
     readprop(msg, "textBody", 0, invalid, "s", &sval);
     readprop(msg, "htmlBody", 0, invalid, "s", &sval);
 
-    if ((prop = json_object_get(msg, "attachedMessages"))) {
+    prop = json_object_get(msg, "attachedMessages");
+    if (json_object_size(prop)) {
         json_t *submsg;
         const char *subid;
         json_object_foreach(prop, subid, submsg) {
@@ -4438,9 +4653,45 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
             buf_reset(&buf);
         }
     }
+    else if (JNOTNULL(prop)) {
+        json_array_append_new(invalid, json_string("attachedMessages"));
+    }
+
     prop = json_object_get(msg, "attachments");
     if (json_array_size(prop)) {
-        /* XXX validate */
+        json_t *att;
+        size_t i;
+
+        json_array_foreach(prop, i, att) {
+            const char *prefix;
+            buf_printf(&buf, "attachments[%zu]", i);
+            prefix = buf_cstring(&buf);
+
+            readprop_full(att, prefix, "blobId", 1, invalid, "s", &sval);
+            readprop_full(att, prefix, "type", 0, invalid, "s", &sval);
+            readprop_full(att, prefix, "name", 0, invalid, "s", &sval);
+
+            if (readprop_full(att, prefix, "cid", 0, invalid, "s", &sval) > 0) {
+                struct address *addr = NULL;
+                parseaddr_list(sval, &addr);
+                if (!addr || addr->next || addr->name) {
+                    char *freeme = strconcat(prefix, ".", "cid", NULL);
+                    json_array_append_new(invalid, json_string(freeme));
+                    free(freeme);
+                }
+                parseaddr_free(addr);
+            }
+
+            readprop_full(att, prefix, "isInline", 0, invalid, "b", &bval);
+            readprop_full(att, prefix, "width", 0, invalid, "i", &intval);
+            readprop_full(att, prefix, "height", 0, invalid, "i", &intval);
+
+            buf_reset(&buf);
+        }
+
+    }
+    else if (JNOTNULL(prop)) {
+        json_array_append_new(invalid, json_string("attachments"));
     }
 
     buf_free(&buf);
@@ -4679,10 +4930,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **uid,
     r = jmapmsg_write(req, msg, f);
     qdiffs[QUOTA_STORAGE] = ftell(f);
     fclose(f);
-    if (r) {
-        append_removestage(stage);
-        goto done;
-    }
+    if (r) goto done;
 
     /* Make sure there is enough quota for all mailboxes */
     if (json_object_size(mailboxes) > 1) {
