@@ -2423,4 +2423,28 @@ sub test_getthreads
     $self->assert_str_equals($msgD->{id}, $threadA->{messageIds}[3]);
 }
 
+sub test_getidentities
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $id;
+    my $res;
+
+    xlog "get identities";
+    $res = $jmap->Request([['getIdentities', { }, "R1"]]);
+
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{notFound}});
+
+    $id = $res->[0][1]->{list}[0];
+    $self->assert_not_null($id->{id});
+    $self->assert_not_null($id->{email});
+
+    xlog "get unknown identities";
+    $res = $jmap->Request([['getIdentities', { ids => ["foo"] }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
+}
+
 1;
