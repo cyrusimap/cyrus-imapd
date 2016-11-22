@@ -3424,7 +3424,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
             const char *fname = strarray_nth(cstate->folder_names, folder->number);
             struct mailbox_iter *iter;
             struct mailbox *mbox = NULL;
-            const struct index_record *record;
+            const message_t *m;
 
             /* For each message, determine if it is a regular message or
              * a draft that replies to another message in this thread. */
@@ -3433,7 +3433,9 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
             if (r) continue;
 
             iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
-            while ((record = mailbox_iter_step(iter))) {
+            while ((m = mailbox_iter_step(iter))) {
+                const struct index_record *record = msg_record(m);
+
                 if (record->cid == cid) {
                     int isdraft;
 
