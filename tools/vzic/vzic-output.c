@@ -1302,11 +1302,6 @@ output_zone_components                  (FILE           *fp,
         fprintf (fp, "%s", rrule_buffer);
       }
 
-      /* This will look for matching components and output them as RDATEs
-         instead of separate components. */
-      if (VzicPureOutput && !VzicNoRDates)
-        check_for_rdates (fp, changes, i);
-
       output_component_end (fp, vzictime);
 
       continue;
@@ -1430,6 +1425,7 @@ check_for_recurrence            (FILE           *fp,
      There won't be any changes after it that we could merge. */
   if (vzictime_start->is_infinite) {
     vzictime_start->until = vzictime_start;
+    vzictime_start->output = TRUE;
     return TRUE;
   }
 
@@ -1518,6 +1514,7 @@ check_for_recurrence            (FILE           *fp,
   vzictime_start->until = vzictime;
 
   /* Mark all the changes as output. */
+  vzictime_start->output = TRUE;
   for (elem = matching_elements; elem; elem = elem->next) {
     vzictime = elem->data;
     vzictime->output = TRUE;
@@ -1581,11 +1578,6 @@ check_for_rdates                (FILE           *fp,
     /* TZNAME must match. */
     if (!timezones_match (vzictime->tzname, vzictime_start->tzname)) {
       continue;
-    }
-
-    /* Stop at next RRULE */
-    if (vzictime->until) {
-      break;
     }
 
     /* We have a match. */
