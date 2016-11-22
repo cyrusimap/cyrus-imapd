@@ -1164,7 +1164,7 @@ sub test_freebusy
 }
 
 sub test_imap_plusdav_novirt
-    :MagicPlus
+    :MagicPlus :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1182,7 +1182,7 @@ sub test_imap_plusdav_novirt
 }
 
 sub test_imap_plusdav
-    :MagicPlus :VirtDomains
+    :MagicPlus :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1200,7 +1200,7 @@ sub test_imap_plusdav
 }
 
 sub test_imap_magicplus_withdomain
-    :MagicPlus :VirtDomains
+    :MagicPlus :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
