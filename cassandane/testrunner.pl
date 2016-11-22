@@ -52,6 +52,7 @@ use Cassandane::Instance;
 
 use Data::Dumper;
 $Data::Dumper::Indent = 1;
+$Data::Dumper::Sortkeys = 1;
 
 my $format = 'tap';
 my $output_dir = 'reports';
