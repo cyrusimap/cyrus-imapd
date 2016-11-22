@@ -4135,7 +4135,7 @@ static int jmapmsg_writebody(jmap_req_t *req, json_t *msg,
         /* Content-Type is multipart/related */
         myboundary = _make_boundary();
 
-        buf_setcstr(&buf, "multipart/related; boundary=");
+        buf_setcstr(&buf, "multipart/related; type=\"text/html\"; boundary=");
         buf_appendcstr(&buf, myboundary);
         JMAPMSG_WRITEHEADER("Content-Type", buf_cstring(&buf));
 
