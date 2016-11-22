@@ -1486,6 +1486,7 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
         const char *p, *s, *err;
         conv_guidrec_t rec;
         uint32_t res;
+        char *freeme = NULL;
 
         /* foldernumber:uid */
         s = strarray_nth(recs, i);
@@ -1509,18 +1510,18 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
 
         /* uid */
         r = parseuint32(p + 1, &err, &res);
-        if (r || *err) {
+        if (r) {
             r = IMAP_INTERNAL;
             break;
         }
         rec.uid = res;
+        p = err;
 
+        /* part */
         rec.part = NULL;
-        p = strchr(p + 1, '[');
-        char *freeme = NULL;
-        if (p) {
+        if (*p) {
             const char *end = strchr(p+1, ']');
-            if (!end) {
+            if (*p != '[' || !end || p+1 == end) {
                 r = IMAP_INTERNAL;
                 break;
             }
