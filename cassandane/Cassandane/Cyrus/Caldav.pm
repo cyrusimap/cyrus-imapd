@@ -1285,7 +1285,7 @@ EOF
 }
 
 sub test_fastmailsharing
-    :FastmailSharing :ReverseACLs
+    :FastmailSharing :ReverseACLs :min_version_3_0
 {
     my ($self) = @_;
 
