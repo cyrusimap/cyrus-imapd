@@ -82,19 +82,20 @@ static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
+static int getIdentities(jmap_req_t *req);
 
-/* XXX getMessageUpdates */
-/* XXX importMessages */
-/* XXX getThreadUpdates */
-/* XXX getIdentities */
+/* FIXME getMessageUpdates */
+/* FIXME importMessages */
+/* FIXME getThreadUpdates */
 
-/* NOT IMPL */
-/* XXX copyMessages */
-/* XXX getVacationResponse */
-/* XXX setVacationResponse */
-/* XXX getIdentityUpdates */
-/* XXX setIdentities */
-/* XXX reportMessages */
+/* TODO:
+ * - copyMessages
+ * - getVacationResponse
+ * - setVacationResponse
+ * - getIdentityUpdates
+ * - setIdentities
+ * - reportMessages
+ */
 
 jmap_msg_t jmap_mail_messages[] = {
     { "getMailboxes",           &getMailboxes },
@@ -104,6 +105,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "setMessages",            &setMessages },
     { "getSearchSnippets",      &getSearchSnippets },
     { "getThreads",             &getThreads },
+    { "getIdentities",          &getIdentities },
     { NULL,                     NULL}
 };
 
@@ -5356,6 +5358,89 @@ static int setMessages(jmap_req_t *req)
 
 done:
     if (set) json_decref(set);
+    _finireq(req);
+    return r;
+}
+
+static int getIdentities(jmap_req_t *req)
+{
+    int r;
+    json_t *res, *item, *val, *ids, *notfound, *identities, *me;
+    struct buf buf = BUF_INITIALIZER;
+    const char *s;
+    size_t i;
+
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+
+    /* ids */
+    ids = json_object_get(req->args, "ids");
+    json_array_foreach(ids, i, val) {
+        if (!(s = json_string_value(val)) || !strlen(s)) {
+            buf_printf(&buf, "ids[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    if (JNOTNULL(ids) && json_array_size(ids) == 0) {
+        json_array_append_new(invalid, json_string("ids"));
+    }
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    notfound = json_pack("[]");
+    identities = json_pack("[]");
+
+    me = json_pack("{s:s s:s s:s s:s s:s s:s s:s s:b}",
+            "id", req->userid,
+            "name", "",
+            "email", req->userid,
+            "replyTo", "",
+            "bcc", "",
+            "textSignature", "",
+            "htmlSignature", "",
+            "mayDeleteIdentity", 0);
+    if (!strchr(req->userid, '@')) {
+        json_object_set_new(me, "email", json_string(""));
+    }
+
+    /* Build the identities */
+    if (json_array_size(ids)) {
+        json_array_foreach(ids, i, val) {
+            if (strcmp(json_string_value(val), req->userid)) {
+                json_array_append(notfound, val);
+            } else if (!json_array_size(identities)) {
+                json_array_append_new(identities, me);
+            }
+        }
+    } else {
+        json_array_append_new(identities, me);
+    }
+
+    /* Prepare the response */
+    res = json_pack("{}");
+    json_object_set_new(res, "state", json_string("0"));
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "list", identities);
+    json_object_set_new(res, "notFound", notfound);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("identities"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    buf_free(&buf);
     _finireq(req);
     return r;
 }
