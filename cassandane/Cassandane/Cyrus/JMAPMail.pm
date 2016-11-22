@@ -1375,6 +1375,112 @@ sub test_setmessages_attachedmessages
     $self->assert_str_equals($got->{subject}, $want->{subject});
 }
 
+sub test_setmessages_attachments
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    # Generate a message to have some blob ids
+    xlog "Generate a message in $inbox via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "Content-Transfer-Encoding: base64\r\n" . "\r\n"
+          . "beefc0de"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "f00bae=="
+          . "\r\n--sub--",
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    my $blobid1 = $m{"image/jpeg"}->{blobId};
+    my $blobid2 = $m{"image/png"}->{blobId};
+    $self->assert_not_null($blobid1);
+    $self->assert_not_null($blobid2);
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
+    my $draft =  {
+        mailboxIds => [$draftsmbox],
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        htmlBody => "<html>I'm givin' ya one last chance ta surrenda! ".
+                    "<img src=\"cid:foo\@local\"></html>",
+        attachments => [{
+            blobId => $blobid1,
+            name => "test.jpg",
+        }, {
+            blobId => $blobid2,
+            cid => "<foo\@local>",
+            isInline => JSON::true,
+        }],
+    };
+
+    xlog "Create a draft";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Get draft $id";
+    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $msg = $res->[0][1]->{list}[0];
+
+    %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    my $att1 = $m{"image/jpeg"};
+    my $att2 = $m{"image/png"};
+    $self->assert_not_null($att1);
+    $self->assert_not_null($att2);
+
+    $self->assert_str_equals($att1->{type}, "image/jpeg");
+    $self->assert_str_equals($att1->{name}, "test.jpg");
+    $self->assert_num_equals($att1->{size}, 6);
+    $self->assert_null($att1->{cid});
+    $self->assert_equals(JSON::false, $att1->{isInline});
+    $self->assert_null($att1->{width});
+    $self->assert_null($att1->{height});
+
+    $self->assert_str_equals($att2->{type}, "image/png");
+    $self->assert_num_equals($att2->{size}, 4);
+    $self->assert_str_equals("<foo\@local>", $att2->{cid});
+    $self->assert_equals(JSON::true, $att2->{isInline});
+    $self->assert_null($att2->{width});
+    $self->assert_null($att2->{height});
+}
+
 sub test_setmessages_flagged
     :min_version_3_0
 {
