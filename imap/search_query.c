@@ -265,6 +265,12 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
     if (mboxname_isdeletedmailbox(mboxname, 0))
         return NULL;
 
+    if (mboxname_iscalendarmailbox(mboxname, 0))
+        return NULL;
+
+    if (mboxname_isaddressbookmailbox(mboxname, 0))
+        return NULL;
+
     folder = query_get_folder(query, mboxname);
     if (uidvalidity) {
         if (uidvalidity < folder->uidvalidity) {
