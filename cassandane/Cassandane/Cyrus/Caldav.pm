@@ -270,7 +270,7 @@ sub test_url_virtdom_nodomain
 }
 
 sub test_url_virtdom_extradomain
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -612,7 +612,7 @@ EOF
 }
 
 sub test_invite
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -678,7 +678,7 @@ EOF
 }
 
 sub test_invite_add_another
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -752,7 +752,7 @@ EOF
 }
 
 sub test_invite_from_nonsched
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -826,7 +826,7 @@ EOF
 }
 
 sub test_invite_withheader
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -1137,6 +1137,7 @@ EOF
 }
 
 sub test_freebusy
+    :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2655,7 +2656,7 @@ EOF
 ############ REPLIES #############
 
 sub test_reply
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2739,7 +2740,7 @@ EOF
 }
 
 sub test_reply_withothers
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -2944,7 +2945,7 @@ sub test_netcaldavtalktests_fromje
 }
 
 sub test_invite_change_organizer
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -3068,7 +3069,7 @@ EOF
 }
 
 sub test_reply_scheduleaddress
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -3152,7 +3153,7 @@ EOF
 }
 
 sub test_recurring_freebusy
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -3240,7 +3241,7 @@ EOF
 }
 
 sub test_invite_samelocalpart
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
