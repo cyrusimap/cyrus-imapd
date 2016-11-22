@@ -538,7 +538,4 @@ extern int check_precond(struct transaction_t *txn,
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
 
-extern void tzdist_truncate_vtimezone(icalcomponent *vtz,
-                                      icaltimetype *startp, icaltimetype *endp);
-
 #endif /* HTTPD_H */

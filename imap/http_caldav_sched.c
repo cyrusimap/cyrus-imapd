@@ -58,6 +58,7 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "jmap_ical.h"
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
@@ -244,7 +245,8 @@ static void HTMLencode(struct buf *output, const char *input)
 #define HTML_ROW        "<tr><td><b>%s</b></td><td>%s</td></tr>\r\n"
 
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send_sendmail(icalcomponent *ical, const char *recipient, int is_update)
+static int imip_send_sendmail(icalcomponent *ical,
+                              const char *recipient, int is_update)
 {
     int r;
     icalcomponent *comp;
@@ -1017,6 +1019,8 @@ static void sched_deliver_remote(const char *recipient,
     int r;
 
     syslog(LOG_DEBUG, "sched_deliver_remote(%s, %X)", recipient, sparam->flags);
+
+    icalcomponent_add_required_timezones(sched_data->itip);
 
     if (sparam->flags & SCHEDTYPE_ISCHEDULE) {
         /* Use iSchedule */

@@ -710,7 +710,7 @@ static icaltimezone *tz_from_tzid(const char *tzid)
     if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
         return icaltimezone_get_utc_timezone();
 
-    return icaltimezone_get_builtin_timezone(tzid);
+    return icaltimezone_get_builtin_timezone_from_tzid(tzid);
 }
 
 /* Determine the Olson TZID, if any, of the ical property prop. */
@@ -2457,21 +2457,27 @@ static void collect_timezones_cb(icalparameter *param, void *data)
     ptrarray_push(tzs, tz);
 }
 
-static void expand_timezones(icalcomponent *ical)
+extern void tzdist_truncate_vtimezone(icalcomponent *vtz,
+                                      icaltimetype *startp, icaltimetype *endp);
+
+void icalcomponent_add_required_timezones(icalcomponent *ical)
 {
-    icalcomponent *tzcomp, *next;
+    icalcomponent *comp, *tzcomp, *next;
     icalproperty *prop;
     struct icalperiodtype span;
     ptrarray_t tzs = PTRARRAY_INITIALIZER;
 
     /* Determine recurrence span. */
-    span = icalrecurrenceset_get_utc_timespan(ical, ICAL_VEVENT_COMPONENT, NULL, NULL);
+    comp = icalcomponent_get_first_real_component(ical);
+    span = icalrecurrenceset_get_utc_timespan(ical, icalcomponent_isa(comp),
+                                              NULL, NULL);
 
     /* Remove all VTIMEZONE components for known TZIDs. This operation is
      * a bit hairy: we could expunge a timezone which is in use by an ical
      * property that is unknown to us. But since we don't know what to
      * look for, we can't make sure to preserve these timezones. */
-    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+    for (tzcomp = icalcomponent_get_first_component(ical,
+                                                    ICAL_VTIMEZONE_COMPONENT);
          tzcomp;
          tzcomp = next) {
 
@@ -2497,14 +2503,18 @@ static void expand_timezones(icalcomponent *ical)
         icaltimezone *tz = ptrarray_nth(&tzs, i);
 
         /* Clone tz to overwrite its TZID property. */
-        icalcomponent *tzcomp = icalcomponent_new_clone(icaltimezone_get_component(tz));
-        icalproperty *tzprop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+        icalcomponent *tzcomp =
+            icalcomponent_new_clone(icaltimezone_get_component(tz));
+        icalproperty *tzprop =
+            icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
         icalproperty_set_tzid(tzprop, icaltimezone_get_location(tz));
 
         /* Truncate the timezone to the events timespan. */
-        icaltimetype tzdtstart = icaltime_convert_to_zone(span.start, tz);
-        icaltimetype tzdtend = icaltime_convert_to_zone(span.end, tz);
-        tzdist_truncate_vtimezone(tzcomp, &tzdtstart, &tzdtend);
+        tzdist_truncate_vtimezone(tzcomp, &span.start, &span.end);
+
+        /* Add TZUNTIL to timezone */
+        icalproperty *tzuntil = icalproperty_new_tzuntil(span.end);
+        icalcomponent_add_property(tzcomp, tzuntil);
 
         /* Add the truncated timezone. */
         icalcomponent_add_component(ical, tzcomp);
@@ -4382,7 +4392,7 @@ jmapical_toical(json_t *obj, icalcomponent *src, jmapical_err_t *err)
         goto done;
     }
     calendarevent_to_ical(ctx, comp, obj);
-    expand_timezones(ical);
+    icalcomponent_add_required_timezones(ical);
 
     /* Bubble up any property errors. */
     if (have_invalid_props(ctx) && err) {

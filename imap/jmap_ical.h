@@ -98,6 +98,7 @@ json_t* jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err)
  * err:  optional error receiver
  */
 icalcomponent* jmapical_toical(json_t *obj, icalcomponent *ical, jmapical_err_t *err);
+void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* for CalDAV content negotiation */
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
