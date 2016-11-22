@@ -4124,6 +4124,7 @@ static int jmapmsg_writebody(jmap_req_t *req, json_t *msg,
         json_object_set_new(msg, "htmlBody", val);
         if (json_array_size(atts)) {
             json_object_set_new(msg, "attachments", atts);
+            atts = NULL;
         }
         r = jmapmsg_writebody(req, msg, myboundary, out);
         if (r) goto done;
@@ -4171,6 +4172,8 @@ static int jmapmsg_writebody(jmap_req_t *req, json_t *msg,
 done:
     if (myboundary) free(myboundary);
     if (freeme) free(freeme);
+    json_decref(atts);
+    json_decref(cids);
     buf_free(&buf);
     if (r) r = HTTP_SERVER_ERROR;
     return r;
