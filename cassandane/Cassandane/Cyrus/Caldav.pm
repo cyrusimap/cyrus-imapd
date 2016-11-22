@@ -896,7 +896,7 @@ EOF
 }
 
 sub test_invite_fullvirtual
-    :VirtDomains
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
@@ -963,6 +963,7 @@ EOF
 
   my $newdata = $self->{instance}->getnotify();
   my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
+  $self->assert_not_null($imip);
   my $payload = decode_json($imip->{MESSAGE});
 
   $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
