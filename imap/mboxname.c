@@ -1026,25 +1026,29 @@ EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     struct buf mbox = BUF_INITIALIZER;
     char result[MAX_MAILBOX_BUFFER];
+    int r;
 
     static struct namespace ns;
     mboxname_init_namespace(&ns, /*is_admin*/1);
 
     if (!userid) return NULL;
 
-    if (config_virtdomains) {
-	ns.mboxname_tointernal(&ns, "INBOX", userid, result);
-	buf_printf(&mbox, "%s", result);
-	goto userdone;
-    }
+    r = ns.mboxname_tointernal(&ns, "INBOX", userid, result);
+    if (r) goto error;
+    buf_printf(&mbox, "%s", result);
 
-userdone:
     if (subfolder) {
-	ns.mboxname_tointernal(&ns, subfolder, NULL, result);
+	r = ns.mboxname_tointernal(&ns, subfolder, NULL, result);
+	if (r) goto error;
 	buf_printf(&mbox, ".%s", result);
     }
 
     return buf_release(&mbox);
+
+error:
+    syslog(LOG_DEBUG, "%s(\"%s\", \"%s\"): %s", __func__, userid, subfolder, error_message(r));
+    buf_free(&mbox);
+    return NULL;
 }
 
 /*

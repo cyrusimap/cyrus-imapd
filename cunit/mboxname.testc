@@ -195,6 +195,43 @@ static void test_to_usermbox(void)
     free(r);
 }
 
+static void test_to_usermbox_novirtdomains(void)
+{
+    char *r;
+    enum enum_value orig = config_virtdomains;
+
+    config_virtdomains = IMAP_ENUM_VIRTDOMAINS_OFF;
+
+    r = mboxname_user_mbox(NULL, NULL);
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox(NULL, "extra.stuff");
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox("sam", NULL);
+    CU_ASSERT_STRING_EQUAL(r, "user.sam");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", NULL);
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox("sam", "sub");
+    CU_ASSERT_STRING_EQUAL(r, "user.sam.sub");
+    free(r);
+
+    r = mboxname_user_mbox("sam", "sub.deep.stuff");
+    CU_ASSERT_STRING_EQUAL(r, "user.sam.sub.deep.stuff");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", "sub");
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox("betty@boop.com", "sub.deep.stuff");
+    CU_ASSERT_PTR_NULL(r);
+
+    config_virtdomains = orig;
+}
+
 static void test_same_userid(void)
 {
     static const char FRED_DRAFTS[] = "user.fred.Drafts";
