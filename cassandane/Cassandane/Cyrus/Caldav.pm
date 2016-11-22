@@ -1359,7 +1359,7 @@ sub test_fastmailsharing
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 }
 
-sub test_multiinvite_add_person
+sub test_multiinvite_add_person_changes
 {
   my ($self) = @_;
 
@@ -1495,6 +1495,206 @@ EOF
                         "test3\@example.com" => { email => "test3\@example.com" },
                     },
                 },
+            },
+        },
+   },
+  );
+}
+
+sub test_multiinvite_add_person_only
+{
+  my ($self) = @_;
+
+  my $CalDAV = $self->{caldav};
+
+  my $CalendarId = $CalDAV->NewCalendar({name => 'invite3'});
+  $self->assert_not_null($CalendarId);
+
+  my $uuid = "db5c26fd-238f-41e4-a679-54cc9d9c8efc";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160601T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+RRULE:FREQ=WEEKLY;COUNT=3
+DTSTART;TZID=Australia/Melbourne:20160601T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  $self->assert_caldav_notified(
+   { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
+   { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
+  );
+
+  # add an override instance
+  my $override = <<EOF;
+BEGIN:VEVENT
+CREATED:20150701T234328Z
+UID:$uuid
+RECURRENCE-ID:20160608T053000Z
+DTEND;TZID=Australia/Melbourne:20160608T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160608T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+EOF
+
+  $card =~ s/END:VCALENDAR/${override}END:VCALENDAR/;
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  # only test3 is notified
+  $self->assert_caldav_notified(
+   { recipient => "test3\@example.com", is_update => JSON::false, method => 'REQUEST',
+        event => {
+            uid => $uuid,
+            replyTo => { imip => "mailto:cassandane\@example.com" },
+            recurrenceOverrides => {
+                '2016-06-08T15:30:00' => {
+                    title => "An Event",
+                    participants => {
+                        "cassandane\@example.com" => { email => "cassandane\@example.com" },
+                        "test1\@example.com" => { email => "test1\@example.com" },
+                        "test3\@example.com" => { email => "test3\@example.com" },
+                    },
+                },
+            },
+        },
+   },
+  );
+}
+
+sub test_multiinvite_remove_person_only
+{
+  my ($self) = @_;
+
+  my $CalDAV = $self->{caldav};
+
+  my $CalendarId = $CalDAV->NewCalendar({name => 'invite3'});
+  $self->assert_not_null($CalendarId);
+
+  my $uuid = "db5c26fd-238f-41e4-a679-54cc9d9c8efc";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150701T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160601T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+RRULE:FREQ=WEEKLY;COUNT=3
+DTSTART;TZID=Australia/Melbourne:20160601T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  $self->assert_caldav_notified(
+   { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
+   { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
+   { recipient => "test3\@example.com", is_update => JSON::false, method => 'REQUEST' },
+  );
+
+  # add an override instance
+  my $override = <<EOF;
+BEGIN:VEVENT
+CREATED:20150701T234328Z
+UID:$uuid
+RECURRENCE-ID:20160608T053000Z
+DTEND;TZID=Australia/Melbourne:20160608T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160608T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+EOF
+
+  $card =~ s/END:VCALENDAR/${override}END:VCALENDAR/;
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  # only test3 is notified with an RDATE
+  $self->assert_caldav_notified(
+   { recipient => "test3\@example.com", is_update => JSON::true, method => 'REQUEST',
+        event => {
+            uid => $uuid,
+            replyTo => { imip => "mailto:cassandane\@example.com" },
+            recurrenceOverrides => {
+                '2016-06-08T15:30:00' => undef,
             },
         },
    },
@@ -2279,10 +2479,10 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test3\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 UID:$uuid
 RECURRENCE-ID:20160608T153000
-DTEND;TZID=Australia/Melbourne:20160608T183000
+DTEND;TZID=Australia/Melbourne:20160608T190000
 TRANSP:OPAQUE
 SUMMARY:An Event
-DTSTART;TZID=Australia/Melbourne:20160608T153000
+DTSTART;TZID=Australia/Melbourne:20160608T160000
 DTSTAMP:20150806T234327Z
 SEQUENCE:1
 END:VEVENT
@@ -2309,6 +2509,7 @@ EOF
                  "test1\@example.com" => { email => "test1\@example.com" },
                  "test3\@example.com" => { email => "test3\@example.com" },
                },
+               start => '2016-06-08T16:00:00',
              },
            },
          },
@@ -2340,6 +2541,7 @@ EOF
                  "test1\@example.com" => { email => "test1\@example.com" },
                  "test3\@example.com" => { email => "test3\@example.com" },
                },
+               start => '2016-06-08T16:00:00',
              },
            },
          },
