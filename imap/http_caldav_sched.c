@@ -1315,42 +1315,15 @@ static void sched_pollstatus(const char *organizer __attribute__((unused)),
 }
 #endif  /* HAVE_VPOLL */
 
-/* annoying copypaste from libical because it's not exposed */
-static struct icaltimetype _get_datetime(icalcomponent *comp, icalproperty *prop)
-{
-    icalcomponent *c;
-    icalparameter *param;
-    struct icaltimetype ret;
-
-    ret = icalvalue_get_datetime(icalproperty_get_value(prop));
-
-    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
-        const char *tzid = icalparameter_get_tzid(param);
-        icaltimezone *tz = NULL;
-
-        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
-            tz = icalcomponent_get_timezone(c, tzid);
-            if (tz != NULL)
-                break;
-        }
-
-        if (tz == NULL)
-            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-
-        if (tz != NULL)
-            ret = icaltime_set_timezone(&ret, tz);
-    }
-
-    return ret;
-}
-
 
 static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *recurid)
 {
     icalproperty *prop, *next;
 
-    icalproperty *endprop = NULL;
-    icalproperty *startprop = NULL;
+    struct icaldatetimeperiodtype dtp;
+
+    struct icaltimetype start;
+    struct icaltimetype end = icaltime_null_time();
 
     icalcomponent *comp = icalcomponent_new_clone(master);
 
@@ -1361,11 +1334,13 @@ static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *
         switch (icalproperty_isa(prop)) {
             /* extract start and end for later processing */
         case ICAL_DTEND_PROPERTY:
-            endprop = prop;
+            dtp = icalproperty_get_datetimeperiod(prop);
+            end = dtp.time;
             break;
 
         case ICAL_DTSTART_PROPERTY:
-            startprop = prop;
+            dtp = icalproperty_get_datetimeperiod(prop);
+            start = dtp.time;
             break;
 
             /* Remove all recurrence properties */
@@ -1384,17 +1359,15 @@ static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *
     /* Add RECURRENCE-ID */
     icalcomponent_add_property(comp, icalproperty_new_clone(recurid));
 
-    /* calculate a new dtend based on recurid */
-    struct icaltimetype start = _get_datetime(master, startprop);
-    struct icaltimetype newstart = _get_datetime(master, recurid);
+    /* calculate a new dtstart based on recurid */
+    dtp = icalproperty_get_datetimeperiod(recurid);
+    struct icaltimetype newstart = dtp.time;
 
     icaltimezone *startzone = (icaltimezone *)icaltime_get_timezone(start);
     icalcomponent_set_dtstart(comp, icaltime_convert_to_zone(newstart, startzone));
 
-    if (endprop) {
-        struct icaltimetype end = _get_datetime(master, endprop);
-
-        // calculate and re-apply the diff
+    if (!icaltime_is_null_time(end)) {
+        /* calculate a new dtend based on original time diff */
         struct icaldurationtype diff = icaltime_subtract(end, start);
         struct icaltimetype newend = icaltime_add(newstart, diff);
 
