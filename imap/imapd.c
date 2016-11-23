@@ -415,7 +415,7 @@ static void cmd_xstats(char *tag, int c);
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
 static void cmd_xbackup(const char *tag, const char *mailbox,
-                        const char *toserver);
+                        const char *toserver, const char *channel);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -2213,6 +2213,8 @@ static void cmdloop(void)
 
         case 'X':
             if (!strcmp(cmd.s, "Xbackup")) {
+                int havechannel = 0;
+
                 /* user */
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2221,10 +2223,17 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
 
+                /* channel */
+                if (c == ' ') {
+                    havechannel = 1;
+                    c = getword(imapd_in, &arg3);
+                    if (c == EOF) goto missingargs;
+                }
+
                 if (c == '\r') c = prot_getc(imapd_in);
                 if (c != '\n') goto extraargs;
 
-                cmd_xbackup(tag.s, arg1.s, arg2.s);
+                cmd_xbackup(tag.s, arg1.s, arg2.s, havechannel ? arg3.s : NULL);
 
 //              snmp_increment(XBACKUP_COUNT, 1);
             }
@@ -5143,10 +5152,14 @@ struct xbackup_list {
     size_t count;
 };
 
-static int do_xbackup(const char *toserver, struct xbackup_list *list)
+static int do_xbackup(const char *toserver,
+                      const char *channel,
+                      struct xbackup_list *list)
 {
+    sasl_callback_t *cb = NULL;
     struct backend *backend = NULL;
     struct xbackup_item *item;
+    const char *port;
     unsigned sync_flags = 0; // FIXME ??
     int partial_success = 0;
     int mbox_count = 0;
@@ -5154,12 +5167,22 @@ static int do_xbackup(const char *toserver, struct xbackup_list *list)
 
     syslog(LOG_INFO, "XBACKUP: connecting to server '%s'", toserver);
 
-    backend = proxy_findserver(toserver, &csync_protocol, NULL, &backend_cached,
-                               NULL, NULL, imapd_in); // FIXME ???
+    cb = mysasl_callbacks(NULL,
+                          sync_get_config(channel, "sync_authname"),
+                          sync_get_config(channel, "sync_realm"),
+                          sync_get_config(channel, "sync_password"));
+
+    port = sync_get_config(channel, "sync_port");
+    if (port) csync_protocol.service = port;
+
+    backend = backend_connect(NULL, toserver, &csync_protocol, NULL, cb, NULL, -1);
     if (!backend) {
         syslog(LOG_ERR, "XBACKUP: failed to connect to server '%s'", toserver);
         return IMAP_SERVER_UNAVAILABLE;
     }
+
+    free_callbacks(cb);
+    cb = NULL;
 
     for (item = list->head; item; item = item->next) {
         const char *userid = mbname_userid(item->mbname);
@@ -5213,6 +5236,9 @@ static int do_xbackup(const char *toserver, struct xbackup_list *list)
     if (partial_success) r = 0;
 
 done:
+    backend_disconnect(backend);
+    free(backend);
+
     return r;
 }
 
@@ -5245,7 +5271,10 @@ static int xbackup_addmbox(struct findall_data *data, void *rock)
 }
 
 /* Parse and perform an XBACKUP command. */
-void cmd_xbackup(const char *tag, const char *mailbox, const char *toserver)
+void cmd_xbackup(const char *tag,
+                 const char *mailbox,
+                 const char *toserver,
+                 const char *channel)
 {
     const char *intname;
     struct xbackup_list list = { NULL, 0 };
@@ -5263,7 +5292,7 @@ void cmd_xbackup(const char *tag, const char *mailbox, const char *toserver)
     mboxlist_findall(NULL, intname, 1, NULL, NULL, xbackup_addmbox, &list);
 
     if (list.count) {
-        r = do_xbackup(toserver, &list);
+        r = do_xbackup(toserver, channel, &list);
 
         next = list.head;
         while ((item = next)) {
