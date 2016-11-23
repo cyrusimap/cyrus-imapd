@@ -101,6 +101,7 @@ struct search_query {
     int multiple;
     int need_ids;
     int need_expunge;
+    int want_expunged;
     int verbose;
 
     /*

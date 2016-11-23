@@ -322,6 +322,7 @@ static int query_begin_index(search_query_t *query,
         init.userid = query->searchargs->userid;
         init.authstate = query->searchargs->authstate;
         init.out = query->state->out;
+        init.want_expunged = query->want_expunged;
 
         r = index_open(mboxname, &init, statep);
         if (r == IMAP_PERMISSION_DENIED) r = IMAP_MAILBOX_NONEXISTENT;
@@ -505,7 +506,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
             continue;
 
         /* can happen if we didn't "tellchanges" yet */
-        if (im->system_flags & FLAG_EXPUNGED)
+        if ((im->system_flags & FLAG_EXPUNGED) && !query->want_expunged)
             continue;
 
         /* run the search program */
@@ -674,7 +675,7 @@ static int subquery_run_one_folder(search_query_t *query,
         if (r) goto out;
 
         /* can happen if we didn't "tellchanges" yet */
-        if (im->system_flags & FLAG_EXPUNGED)
+        if ((im->system_flags & FLAG_EXPUNGED) && !query->want_expunged)
             continue;
 
         /* run the search program */
