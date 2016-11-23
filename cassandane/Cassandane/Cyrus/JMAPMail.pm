@@ -2390,7 +2390,6 @@ sub test_getthreads
     my @threadids = keys %m;
 
     xlog "create draft replying to message A";
-    xlog "Create a draft";
     $res = $jmap->Request(
         [[ 'setMessages', { create => { "1" => {
             mailboxIds           => [$drafts],
@@ -2445,6 +2444,159 @@ sub test_getidentities
     $res = $jmap->Request([['getIdentities', { ids => ["foo"] }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
+}
+
+sub test_getmessageupdates
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $draftsmbox;
+
+    # FIXME mailbox changes also bump the state of messages
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
+    xlog "get message list";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog "get message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("Message A") || die;
+
+    xlog "Get message id";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_not_null($ida);
+
+    xlog "get message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "get message updates (expect no changes)";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "update message $ida";
+    $res = $jmap->Request([['setMessages', {
+        update => { $ida => { isUnread => JSON::false }}
+    }, "R1"]]);
+    $self->assert_str_equals($ida, $res->[0][1]->{updated}[0]);
+
+    xlog "get message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "delete message $ida";
+    $res = $jmap->Request([['setMessages', {destroy => [ $ida ] }, "R1"]]);
+    $self->assert_str_equals($ida, $res->[0][1]->{destroyed}[0]);
+
+    xlog "get message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog "get message updates (expect no changes)";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "create message B";
+    $res = $jmap->Request(
+        [[ 'setMessages', { create => { "1" => {
+            mailboxIds           => [$draftsmbox],
+            from                 => [ { name => "", email => "sam\@acme.local" } ],
+            to                   => [ { name => "", email => "bugs\@acme.local" } ],
+            subject              => "Message B",
+            textBody             => "I'm givin' ya one last chance ta surrenda!",
+        }}}, "R1" ]]);
+    my $idb = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($idb);
+
+    xlog "create message C";
+    $res = $jmap->Request(
+        [[ 'setMessages', { create => { "1" => {
+            mailboxIds           => [$draftsmbox],
+            from                 => [ { name => "", email => "sam\@acme.local" } ],
+            to                   => [ { name => "", email => "bugs\@acme.local" } ],
+            subject              => "Message C",
+            textBody             => "I *hate* that rabbit!",
+        }}}, "R1" ]]);
+    my $idc = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($idc);
+
+    xlog "get max 1 message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($idb, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "get max 1 message updates";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($idc, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "get message updates (expect no changes)";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
 1;
