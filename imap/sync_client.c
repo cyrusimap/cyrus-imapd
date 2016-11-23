@@ -665,57 +665,6 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
     return(r);
 }
 
-static int get_intconfig(const char *channel, const char *val)
-{
-    int response = -1;
-
-    if (channel) {
-        const char *result = NULL;
-        char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
-        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
-        result = config_getoverflowstring(name, NULL);
-        if (result) response = atoi(result);
-    }
-
-    if (response == -1) {
-        if (!strcmp(val, "sync_repeat_interval"))
-            response = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
-    }
-
-    return response;
-}
-
-static const char *get_config(const char *channel, const char *val)
-{
-    const char *response = NULL;
-
-    if (channel) {
-        char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
-        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
-        response = config_getoverflowstring(name, NULL);
-    }
-
-    if (!response) {
-        /* get the core value */
-        if (!strcmp(val, "sync_host"))
-            response = config_getstring(IMAPOPT_SYNC_HOST);
-        else if (!strcmp(val, "sync_authname"))
-            response = config_getstring(IMAPOPT_SYNC_AUTHNAME);
-        else if (!strcmp(val, "sync_password"))
-            response = config_getstring(IMAPOPT_SYNC_PASSWORD);
-        else if (!strcmp(val, "sync_realm"))
-            response = config_getstring(IMAPOPT_SYNC_REALM);
-        else if (!strcmp(val, "sync_port"))
-            response = config_getstring(IMAPOPT_SYNC_PORT);
-        else if (!strcmp(val, "sync_shutdown_file"))
-            response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
-        else
-            fatal("unknown config variable requested", EC_SOFTWARE);
-    }
-
-    return response;
-}
-
 static void replica_connect(const char *channel)
 {
     int wait;
@@ -724,12 +673,12 @@ static void replica_connect(const char *channel)
     const char *port, *auth_status = NULL;
 
     cb = mysasl_callbacks(NULL,
-                          get_config(channel, "sync_authname"),
-                          get_config(channel, "sync_realm"),
-                          get_config(channel, "sync_password"));
+                          sync_get_config(channel, "sync_authname"),
+                          sync_get_config(channel, "sync_realm"),
+                          sync_get_config(channel, "sync_password"));
 
     /* get the right port */
-    port = get_config(channel, "sync_port");
+    port = sync_get_config(channel, "sync_port");
     if (port) {
         imap_csync_protocol.service = port;
         csync_protocol.service = port;
@@ -1078,7 +1027,7 @@ int main(int argc, char **argv)
 
     /* get the server name if not specified */
     if (!servername)
-        servername = get_config(channel, "sync_host");
+        servername = sync_get_config(channel, "sync_host");
 
     if (!servername)
         fatal("sync_host not defined", EC_SOFTWARE);
@@ -1241,10 +1190,10 @@ int main(int argc, char **argv)
         else {
             /* rolling replication */
             if (!sync_shutdown_file)
-                sync_shutdown_file = get_config(channel, "sync_shutdown_file");
+                sync_shutdown_file = sync_get_config(channel, "sync_shutdown_file");
 
             if (!min_delta)
-                min_delta = get_intconfig(channel, "sync_repeat_interval");
+                min_delta = sync_get_intconfig(channel, "sync_repeat_interval");
 
             do_daemon(channel, sync_shutdown_file, timeout, min_delta);
         }

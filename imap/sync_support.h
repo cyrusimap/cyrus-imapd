@@ -69,6 +69,9 @@ void sync_print_flags(struct dlist *kl,
                       struct mailbox *mailbox,
                       const struct index_record *record);
 
+const char *sync_get_config(const char *channel, const char *val);
+int sync_get_intconfig(const char *channel, const char *val);
+
 char *sync_encode_options(int options);
 int sync_parse_options(const char *source);
 

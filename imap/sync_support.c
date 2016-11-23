@@ -206,6 +206,59 @@ static void imap_postcapability(struct backend *s)
     }
 }
 
+/* channel-based configuration */
+
+EXPORTED const char *sync_get_config(const char *channel, const char *val)
+{
+    const char *response = NULL;
+
+    if (channel) {
+        char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
+        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+        response = config_getoverflowstring(name, NULL);
+    }
+
+    if (!response) {
+        /* get the core value */
+        if (!strcmp(val, "sync_host"))
+            response = config_getstring(IMAPOPT_SYNC_HOST);
+        else if (!strcmp(val, "sync_authname"))
+            response = config_getstring(IMAPOPT_SYNC_AUTHNAME);
+        else if (!strcmp(val, "sync_password"))
+            response = config_getstring(IMAPOPT_SYNC_PASSWORD);
+        else if (!strcmp(val, "sync_realm"))
+            response = config_getstring(IMAPOPT_SYNC_REALM);
+        else if (!strcmp(val, "sync_port"))
+            response = config_getstring(IMAPOPT_SYNC_PORT);
+        else if (!strcmp(val, "sync_shutdown_file"))
+            response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
+        else
+            fatal("unknown config variable requested", EC_SOFTWARE);
+    }
+
+    return response;
+}
+
+EXPORTED int sync_get_intconfig(const char *channel, const char *val)
+{
+    int response = -1;
+
+    if (channel) {
+        const char *result = NULL;
+        char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
+        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+        result = config_getoverflowstring(name, NULL);
+        if (result) response = atoi(result);
+    }
+
+    if (response == -1) {
+        if (!strcmp(val, "sync_repeat_interval"))
+            response = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
+    }
+
+    return response;
+}
+
 /* Parse routines */
 
 char *sync_encode_options(int options)
