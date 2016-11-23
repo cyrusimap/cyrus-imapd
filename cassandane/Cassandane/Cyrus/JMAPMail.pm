@@ -2599,4 +2599,203 @@ sub test_getmessageupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
+sub test_getthreadupdates
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my %params;
+    my $dt;
+    my $draftsmbox;
+    my $state;
+    my $threadA;
+    my $threadB;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog "get thread state";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "generating message A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+    $threadA = $res->[0][1]{changed}[0];
+
+    xlog "generating message C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "get thread updates (expect no changes)";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message D referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "generating message E referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(minutes => -30));
+    $exp{E} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "e");
+    $exp{E}->set_attributes(uid => 5, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "get max 1 thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_not_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+    $threadB = $res->[0][1]{changed}[0];
+
+    xlog "get max 2 thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state, maxChanges => 2 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "fetch messages"; $res = $jmap->Request([['getMessageList', {
+        fetchMessages => JSON::true,
+    }, "R1"]]);
+
+    my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
+    my $msgA = $m{"a"};
+    my $msgB = $m{"b"};
+    my $msgC = $m{"c"};
+    my $msgD = $m{"d"};
+    my $msgE = $m{"e"};
+    $self->assert_not_null($msgA);
+    $self->assert_not_null($msgB);
+    $self->assert_not_null($msgC);
+    $self->assert_not_null($msgD);
+    $self->assert_not_null($msgE);
+
+    xlog "destroy message b, update message d";
+    $res = $jmap->Request([['setMessages', {
+        destroy => [ $msgB->{id} ],
+        update =>  { $msgD->{id} => { isUnread => JSON::false }},
+    }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $msgB->{id});
+    $self->assert_str_equals($res->[0][1]{updated}[0], $msgD->{id});
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($threadB, $res->[0][1]{removed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog "destroy messages c and e";
+    $res = $jmap->Request([['setMessages', {
+        destroy => [ $msgC->{id}, $msgE->{id} ],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog "get thread updates, fetch threads";
+    $res = $jmap->Request([['getThreadUpdates', {
+            sinceState => $state,
+            fetchRecords => JSON::true
+    }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    $self->assert_str_equals("threads", $res->[1][0]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals($threadA, $res->[1][1]{list}[0]->{id});
+
+    xlog "destroy messages a and d";
+    $res = $jmap->Request([['setMessages', {
+        destroy => [ $msgA->{id}, $msgD->{id} ],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{removed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog "get thread updates (expect no changes)";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+}
+
 1;
