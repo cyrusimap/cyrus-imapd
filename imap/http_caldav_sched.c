@@ -1315,6 +1315,97 @@ static void sched_pollstatus(const char *organizer __attribute__((unused)),
 }
 #endif  /* HAVE_VPOLL */
 
+/* annoying copypaste from libical because it's not exposed */
+static struct icaltimetype _get_datetime(icalcomponent *comp, icalproperty *prop)
+{
+    icalcomponent *c;
+    icalparameter *param;
+    struct icaltimetype ret;
+
+    ret = icalvalue_get_datetime(icalproperty_get_value(prop));
+
+    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+
+        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz != NULL)
+                break;
+        }
+
+        if (tz == NULL)
+            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
+    }
+
+    return ret;
+}
+
+
+static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *recurid)
+{
+    icalproperty *prop, *next;
+
+    icalproperty *endprop = NULL;
+    icalproperty *startprop = NULL;
+
+    icalcomponent *comp = icalcomponent_new_clone(master);
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+         prop; prop = next) {
+        next = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+
+        switch (icalproperty_isa(prop)) {
+            /* extract start and end for later processing */
+        case ICAL_DTEND_PROPERTY:
+            endprop = prop;
+            break;
+
+        case ICAL_DTSTART_PROPERTY:
+            startprop = prop;
+            break;
+
+            /* Remove all recurrence properties */
+        case ICAL_RRULE_PROPERTY:
+        case ICAL_RDATE_PROPERTY:
+        case ICAL_EXDATE_PROPERTY:
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    /* Add RECURRENCE-ID */
+    icalcomponent_add_property(comp, icalproperty_new_clone(recurid));
+
+    /* calculate a new dtend based on recurid */
+    struct icaltimetype start = _get_datetime(master, startprop);
+    struct icaltimetype newstart = _get_datetime(master, recurid);
+
+    icaltimezone *startzone = (icaltimezone *)icaltime_get_timezone(start);
+    icalcomponent_set_dtstart(comp, icaltime_convert_to_zone(newstart, startzone));
+
+    if (endprop) {
+        struct icaltimetype end = _get_datetime(master, endprop);
+
+        // calculate and re-apply the diff
+        struct icaldurationtype diff = icaltime_subtract(end, start);
+        struct icaltimetype newend = icaltime_add(newstart, diff);
+
+        icaltimezone *endzone = (icaltimezone *)icaltime_get_timezone(end);
+        icalcomponent_set_dtend(comp, icaltime_convert_to_zone(newend, endzone));
+    }
+    /* otherwise it will be a duration, which is still valid! */
+
+    return comp;
+}
+
 
 static const char *deliver_merge_reply(icalcomponent *ical,
                                        icalcomponent *reply)
@@ -1358,17 +1449,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
         if (!comp) {
             /* New recurrence overridden by attendee.
                Create a new recurrence from master component. */
-            comp = icalcomponent_new_clone(hash_lookup("", &comp_table));
-
-            /* Add RECURRENCE-ID */
-            icalcomponent_add_property(comp, icalproperty_new_clone(prop));
-
-            /* Remove RRULE */
-            prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-            if (prop) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
+            comp = master_to_recurrence(hash_lookup("", &comp_table), prop);
 
             /* Replace DTSTART, DTEND, SEQUENCE */
             prop =
@@ -2409,7 +2490,9 @@ icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
 }
 
 
-/* we've already tested that master does NOT contain this attendee */
+
+/* we've already tested that master does NOT contain this attendee or that
+ * master doesn't need to be scheduled */
 static void schedule_sub_updates(const char *attendee,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
@@ -2438,13 +2521,19 @@ static void schedule_sub_updates(const char *attendee,
         if (!att) continue;
         force_send = get_forcesend(att);
 
-        /* this recurrenceid is attended by this attendee in the old data? */
-        icalcomponent *oldcomp =
-            find_attended_component(oldical, recurid, attendee);
+        icalcomponent *freeme = NULL;
+
+        /* this recurrenceid was in the old data? if not we need to
+         * generate a synthetic one */
+        icalcomponent *oldcomp = find_component(oldical, recurid);
+        if (!oldcomp && oldmaster) {
+            oldcomp = freeme = master_to_recurrence(oldmaster, prop);
+        }
 
         /* unchanged event - we don't need to send anything */
         if (!check_changes(oldcomp, comp, attendee)) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE) {
+                if (freeme) icalcomponent_free(freeme);
                 continue;
             }
         }
@@ -2452,14 +2541,16 @@ static void schedule_sub_updates(const char *attendee,
         icalcomponent *copy = icalcomponent_new_clone(comp);
         clean_component(copy);
 
-        is_update |= oldcomp ? !!find_attendee(oldcomp, attendee) :
-                               !!find_attendee(oldmaster, attendee);
+        if (find_attendee(oldcomp, attendee))
+            is_update = 1;
 
         icalcomponent_add_component(itip, copy);
 
         strarray_add(&recurids, recurid);
 
         do_send = 1;
+
+        if (freeme) icalcomponent_free(freeme);
     }
 
     if (do_send) {
