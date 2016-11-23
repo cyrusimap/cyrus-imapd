@@ -84,9 +84,9 @@ static int getMessageUpdates(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
 static int getIdentities(jmap_req_t *req);
+static int getThreadUpdates(jmap_req_t *req);
 
 /* FIXME importMessages */
-/* FIXME getThreadUpdates */
 /* FIXME getMailboxUpdates */
 
 /* TODO:
@@ -107,6 +107,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "getMessageUpdates",      &getMessageUpdates },
     { "getSearchSnippets",      &getSearchSnippets },
     { "getThreads",             &getThreads },
+    { "getThreadUpdates",       &getThreadUpdates },
     { "getIdentities",          &getIdentities },
     { NULL,                     NULL}
 };
@@ -2951,10 +2952,11 @@ struct getmsglist_window {
 
 static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                           struct getmsglist_window *window, int want_expunged,
-                          size_t *total,
+                          size_t *total, size_t *total_threads,
                           json_t **messageids, json_t **expungedids,
                           json_t **threadids)
 {
+    hashu64_table cids = HASHU64_TABLE_INITIALIZER;
     struct index_state *state = NULL;
     search_query_t *query = NULL;
     struct searchargs *searchargs = NULL;
@@ -3008,12 +3010,18 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     /* Initialize window state */
     window->mdcount = query->merged_msgdata.count;
     window->anchor_pos = (size_t)-1;
+    window->highestmodseq = 0;
 
     memset(&window->ids, 0, sizeof(hash_table));
     construct_hash_table(&window->ids, window->mdcount + 1, 0);
 
     memset(&window->cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&window->cids, window->mdcount/4+4,0);
+
+    /* Initialize thread counter */
+    memset(&cids, 0, sizeof(hashu64_table));
+    construct_hashu64_table(&cids, query->merged_msgdata.count/4+4,0);
+    *total_threads = 0;
 
     for (i = 0 ; i < query->merged_msgdata.count ; i++) {
         MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
@@ -3066,6 +3074,12 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* OK, that's a legit message */
         (*total)++;
+
+        /* Keep track of conversation ids, inside and outside the window */
+        if (!hashu64_lookup(md->cid, &cids)) {
+            (*total_threads)++;
+            hashu64_insert(md->cid, (void*)1, &cids);
+        }
 
         /* Check if the message is in the search window */
         if (window->anchor) {
@@ -3148,6 +3162,7 @@ done:
     if (mbox) _closembox(req, &mbox);
     free_hash_table(&window->ids, NULL);
     free_hashu64_table(&window->cids, NULL);
+    free_hashu64_table(&cids, NULL);
     search_query_free(query);
     state->mailbox = NULL;
     index_close(&state);
@@ -3169,7 +3184,7 @@ static int getMessageList(jmap_req_t *req)
     json_t *messageids = NULL, *threadids = NULL, *item, *res;
     struct getmsglist_window window;
     json_int_t i = 0;
-    size_t total;
+    size_t total, total_threads;
 
     _initreq(req);
 
@@ -3226,7 +3241,7 @@ static int getMessageList(jmap_req_t *req)
     }
     json_decref(unsupported);
 
-    r = jmapmsg_search(req, filter, sort, &window, 0, &total,
+    r = jmapmsg_search(req, filter, sort, &window, 0, &total, &total_threads,
                        &messageids, /*expungedids*/NULL, &threadids);
     if (r) goto done;
 
@@ -3281,8 +3296,8 @@ static int getMessageUpdates(jmap_req_t *req)
     int fetchmsgs = 0;
     json_t *filter, *sort;
     json_t *changed = NULL, *removed = NULL, *invalid, *item, *res, *threads;
-    json_int_t i = 0;
-    size_t total;
+    json_int_t max = 0;
+    size_t total, total_threads;
     int has_more = 0;
     json_t *oldstate, *newstate;
     json_t *fetchprops = json_null();
@@ -3300,9 +3315,9 @@ static int getMessageUpdates(jmap_req_t *req)
         json_array_append_new(invalid, json_string("sinceState"));
     }
     /* maxChanges */
-    readprop(req->args, "maxChanges", 0, invalid, "i", &i);
-    if (i < 0) json_array_append_new(invalid, json_string("maxChanges"));
-    window.limit = i;
+    readprop(req->args, "maxChanges", 0, invalid, "i", &max);
+    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
+    window.limit = max;
     /* fetch */
     readprop(req->args, "fetchRecords", 0, invalid, "b", &fetchmsgs);
     readprop(req->args, "fetchRecordProperties", 0, invalid, "o", &fetchprops);
@@ -3327,8 +3342,8 @@ static int getMessageUpdates(jmap_req_t *req)
     changed = NULL;
     removed = NULL;
 
-    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1, &total,
-                       &changed, &removed, &threads);
+    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
+                       &total, &total_threads, &changed, &removed, &threads);
     if (r) goto done;
     if (threads) json_decref(threads);
 
@@ -3368,6 +3383,159 @@ static int getMessageUpdates(jmap_req_t *req)
 done:
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
+    _finireq(req);
+    return r;
+}
+
+static int getThreadUpdates(jmap_req_t *req)
+{
+    int pe, fetch = 0, has_more = 0, r = 0;
+    json_int_t max = 0;
+    json_t *invalid, *item, *res, *oldstate, *newstate;
+    json_t *changed, *removed, *threads, *filter, *sort, *val;
+    size_t total, total_threads, i;
+    struct getmsglist_window window;
+    const char *since;
+    conversation_t *conv = NULL;
+
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+
+    /* sinceState */
+    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
+    if (pe > 0 && !atomodseq_t(since)) {
+        json_array_append_new(invalid, json_string("sinceState"));
+    }
+    /* maxChanges */
+    readprop(req->args, "maxChanges", 0, invalid, "i", &max);
+    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
+    window.limit = max;
+    /* fetch */
+    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* FIXME we might miss to report some threads as removed, if all their
+     * mesages already were expired. can we determine the modseq of the latest
+     * cyr_expire call? if so, we could return "cannotCalculateChanges" */
+
+    /* Search for message updates and collapse threads */
+    filter = json_pack("{s:s}", "sinceMessageState", since);
+    sort = json_pack("[s]", "messageState asc");
+    window.collapse = 1;
+    threads = NULL;
+    changed = NULL;
+    removed = NULL;
+    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
+                       &total, &total_threads, &changed, &removed, &threads);
+    if (r) goto done;
+
+    /* Split the collapsed threads into changed and removed */
+    if (changed) json_decref(changed);
+    if (removed) json_decref(removed);
+    changed = json_pack("[]");
+    removed = json_pack("[]");
+
+    json_array_foreach(threads, i, val) {
+        conversation_id_t cid;
+        conv_folder_t *folder;
+        const char *threadid;
+        int is_expunged;
+        struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
+
+        threadid = json_string_value(val);
+        conversation_id_decode(&cid, threadid);
+
+        r = conversation_load(cstate, cid, &conv);
+        if (r) {
+            if (r == CYRUSDB_NOTFOUND) {
+                continue;
+            } else {
+                goto done;
+            }
+        }
+
+        /* Determine if all messages of the thread are expunged */
+        is_expunged = 1;
+        for (folder = conv->folders; is_expunged && folder; folder = folder->next) {
+            const char *fname = strarray_nth(cstate->folder_names, folder->number);
+            struct mailbox_iter *iter;
+            struct mailbox *mbox = NULL;
+            const message_t *m;
+
+            r = _openmbox(req, fname, &mbox, 0);
+            if (r) continue;
+
+            iter = mailbox_iter_init(mbox, 0, 0);
+            while ((m = mailbox_iter_step(iter))) {
+                const struct index_record *record = msg_record(m);
+                if (record->cid == cid) {
+                    if (!(record->system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+                        is_expunged = 0;
+                        break;
+                    }
+                }
+            }
+            mailbox_iter_done(&iter);
+
+            _closembox(req, &mbox);
+        }
+
+        /* Add the thread to the result list */
+        json_array_append(is_expunged ? removed : changed, val);
+
+        conversation_free(conv);
+        conv = NULL;
+    }
+
+    has_more = (json_array_size(changed) + json_array_size(removed)) < total_threads;
+
+    if (has_more) {
+        newstate = jmapmsg_fmtstate(window.highestmodseq);
+    } else {
+        newstate = jmapmsg_fmtstate(req->counters.mailmodseq);
+    }
+
+    oldstate = json_string(since);
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "oldState", oldstate);
+    json_object_set_new(res, "newState", newstate);
+    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
+    json_object_set(res, "changed", changed);
+    json_object_set(res, "removed", removed);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("threadUpdates"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    if (fetch) {
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", changed);
+        r = getThreads(&subreq);
+        json_decref(subreq.args);
+        if (r) goto done;
+    }
+
+done:
+    if (conv) conversation_free(conv);
+    if (changed) json_decref(changed);
+    if (removed) json_decref(removed);
+    if (threads) json_decref(threads);
     _finireq(req);
     return r;
 }
