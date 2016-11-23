@@ -80,13 +80,14 @@ static int setMailboxes(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
+static int getMessageUpdates(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
 static int getIdentities(jmap_req_t *req);
 
-/* FIXME getMessageUpdates */
 /* FIXME importMessages */
 /* FIXME getThreadUpdates */
+/* FIXME getMailboxUpdates */
 
 /* TODO:
  * - copyMessages
@@ -103,6 +104,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "getMessageList",         &getMessageList },
     { "getMessages",            &getMessages },
     { "setMessages",            &setMessages },
+    { "getMessageUpdates",      &getMessageUpdates },
     { "getSearchSnippets",      &getSearchSnippets },
     { "getThreads",             &getThreads },
     { "getIdentities",          &getIdentities },
@@ -587,6 +589,32 @@ int jmapmbox_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     return r;
 }
 
+static json_t *jmapmbox_getstate(jmap_req_t *req)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    modseq_t modseq = req->counters.mailmodseq; /* FIXME mailfoldersmodseq? */
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    state = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+    return state;
+}
+
+static json_t *jmapmsg_fmtstate(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    state = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+    return state;
+}
+
+static json_t *jmapmsg_getstate(jmap_req_t *req)
+{
+    return jmapmsg_fmtstate(req->counters.mailmodseq);
+}
+
 static int getMailboxes(jmap_req_t *req)
 {
     json_t *item = NULL, *mailboxes, *state, *properties;
@@ -601,7 +629,7 @@ static int getMailboxes(jmap_req_t *req)
     _initreq(req);
 
     /* Determine current state. */
-    state = jmap_getstate(0 /* MBTYPE */, req);
+    state = jmapmbox_getstate(req);
 
     /* Start constructing our response */
     item = json_pack("[s {s:s s:o} s]", "mailboxes",
@@ -1241,10 +1269,13 @@ static int setMailboxes(jmap_req_t *req)
     _initreq(req);
 
     state = json_object_get(req->args, "ifInState");
-    if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
-        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                    "error", "type", "stateMismatch", req->tag));
-        goto done;
+    if (JNOTNULL(state)) {
+        const char *s = json_string_value(state);
+        if (!s || atomodseq_t(s) != req->counters.mailfoldersmodseq) {
+            json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                        "error", "type", "stateMismatch", req->tag));
+            goto done;
+        }
     }
     set = json_pack("{s:s}", "accountId", req->userid);
     json_object_set_new(set, "oldState", state);
@@ -1449,15 +1480,19 @@ static int setMailboxes(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    /* Set newState field in calendarsSet. */
+    /* Update mailbox state */
     if (json_object_get(set, "created") ||
         json_object_get(set, "updated") ||
         json_object_get(set, "destroyed")) {
 
-        r = jmap_bumpstate(0 /*MBTYPE*/, req);
+        mboxname_read_counters(req->inbox->name, &req->counters);
+        mboxname_nextmodseq(mboxname, req->counters.mailfoldersmodseq, 0, 1);
+        mboxname_read_counters(req->inbox->name, &req->counters);
+
         if (r) goto done;
     }
-    json_object_set_new(set, "newState", jmap_getstate(0 /*MBTYPE*/, req));
+
+    json_object_set_new(set, "newState", jmapmbox_getstate(req));
 
     json_incref(set);
     json_t *item = json_pack("[]");
@@ -2264,7 +2299,7 @@ static int jmapmsg_find(jmap_req_t *req, const char *id,
     int r;
 
     if (!cstate) {
-        syslog(LOG_INFO, "findmessage: cannot open conversations db");
+        syslog(LOG_INFO, "jmapmsg_find: cannot open conversations db");
         return IMAP_NOTFOUND;
     }
 
@@ -2276,6 +2311,55 @@ static int jmapmsg_find(jmap_req_t *req, const char *id,
     }
     *mboxnameptr = data.mboxname;
     *uid = data.uid;
+    return r;
+}
+
+struct jmapmsg_isexpunged_data {
+    jmap_req_t *req;
+    int is_expunged;
+};
+
+static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct jmapmsg_isexpunged_data *d = (struct jmapmsg_isexpunged_data*) rock;
+    jmap_req_t *req = d->req;
+    struct index_record record;
+    struct mailbox *mbox = NULL;
+    int r = 0;
+
+    if (rec->part) return 0;
+
+    r = _openmbox(req, rec->mboxname, &mbox, 0);
+    if (r) return r;
+
+    r = mailbox_find_index_record(mbox, rec->uid, &record);
+    if (!r && !(record.system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+        d->is_expunged = 0;
+        r = IMAP_OK_COMPLETED;
+    }
+
+    _closembox(req, &mbox);
+
+    return r;
+}
+
+static int jmapmsg_isexpunged(jmap_req_t *req, const char *id, int *is_expunged)
+{
+    struct jmapmsg_isexpunged_data data = { req, 1 };
+    struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
+    int r;
+
+    if (!cstate) {
+        syslog(LOG_INFO, "jmapmsg_isexpunged: cannot open conversations db");
+        return IMAP_NOTFOUND;
+    }
+
+    r = conversations_guid_foreach(cstate, id, jmapmsg_isexpunged_cb, &data);
+    if (r == IMAP_OK_COMPLETED) {
+        r = 0;
+    }
+
+    *is_expunged = data.is_expunged;
     return r;
 }
 
@@ -2380,109 +2464,32 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         /* zero properties evaluate to true */
         search_expr_new(this, SEOP_TRUE);
 
-        if ((val = json_object_get(filter, "inMailboxes"))) {
-            match_mailboxes(this, val, req->userid);
-            json_object_set(matchprops, "mailboxIds", json_true());
-        }
-
-        if ((val = json_object_get(filter, "notInMailboxes"))) {
-            match_mailboxes(search_expr_new(this, SEOP_NOT), val, req->userid);
-            json_object_set(matchprops, "mailboxIds", json_true());
-        }
-
-        if ((s = json_string_value(json_object_get(filter, "before")))) {
-            time_from_iso8601(s, &t);
-            e = search_expr_new(this, SEOP_LE);
-            e->attr = search_attr_find("date");
-            e->value.u = t;
-        }
-
         if ((s = json_string_value(json_object_get(filter, "after")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_GE);
             e->attr = search_attr_find("date");
             e->value.u = t;
         }
-
-        if (JNOTNULL((val = json_object_get(filter, "minSize")))) {
-            e = search_expr_new(this, SEOP_GE);
-            e->attr = search_attr_find("size");
-            e->value.u = json_integer_value(val);
-        }
-
-        if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
+        if ((s = json_string_value(json_object_get(filter, "before")))) {
+            time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_LE);
-            e->attr = search_attr_find("size");
-            e->value.u = json_integer_value(val);
+            e->attr = search_attr_find("date");
+            e->value.u = t;
         }
-
-        if (JNOTNULL((val = json_object_get(filter, "threadIsFlagged")))) {
-            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("convflags");
-            e->value.s = xstrdup("\\flagged");
+        if ((s = json_string_value(json_object_get(filter, "body")))) {
+            match_string(this, s, "body");
         }
-
-        if (JNOTNULL((val = json_object_get(filter, "threadIsUnread")))) {
-            e = val == json_true() ? search_expr_new(this, SEOP_NOT): this;
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("convflags");
-            e->value.s = xstrdup("\\seen");
+        if ((s = json_string_value(json_object_get(filter, "cc")))) {
+            match_string(this, s, "cc");
         }
-
-        if (JNOTNULL((val = json_object_get(filter, "isFlagged")))) {
-            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("systemflags");
-            e->value.u = FLAG_FLAGGED;
+        if ((s = json_string_value(json_object_get(filter, "from")))) {
+            match_string(this, s, "from");
         }
-
-        if (JNOTNULL((val = json_object_get(filter, "isUnread")))) {
-            e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("indexflags");
-            e->value.u = MESSAGE_SEEN;
-        }
-
-        if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
-            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("systemflags");
-            e->value.u = FLAG_ANSWERED;
-        }
-
-        if (JNOTNULL((val = json_object_get(filter, "isDraft")))) {
-            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
-            e = search_expr_new(e, SEOP_MATCH);
-            e->attr = search_attr_find("systemflags");
-            e->value.u = FLAG_DRAFT;
-        }
-
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
             match_string(e, "text", "contenttype");
             json_object_set(matchprops, "hasAttachment", json_true());
         }
-
-        if ((s = json_string_value(json_object_get(filter, "text")))) {
-            match_string(this, s, "text");
-        }
-        if ((s = json_string_value(json_object_get(filter, "from")))) {
-            match_string(this, s, "from");
-        }
-        if ((s = json_string_value(json_object_get(filter, "to")))) {
-            match_string(this, s, "to");
-        }
-        if ((s = json_string_value(json_object_get(filter, "cc")))) {
-            match_string(this, s, "cc");
-        }
-        if ((s = json_string_value(json_object_get(filter, "subject")))) {
-            match_string(this, s, "subject");
-        }
-        if ((s = json_string_value(json_object_get(filter, "body")))) {
-            match_string(this, s, "body");
-        }
-
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
             charset_t utf8 = charset_lookupname("utf-8");
@@ -2504,6 +2511,77 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
                 e->attr = NULL;
             }
             charset_free(&utf8);
+        }
+        if ((val = json_object_get(filter, "inMailboxes"))) {
+            match_mailboxes(this, val, req->userid);
+            json_object_set(matchprops, "mailboxIds", json_true());
+        }
+        if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_ANSWERED;
+        }
+        if (JNOTNULL((val = json_object_get(filter, "isDraft")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_DRAFT;
+        }
+        if (JNOTNULL((val = json_object_get(filter, "isFlagged")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("systemflags");
+            e->value.u = FLAG_FLAGGED;
+        }
+        if (JNOTNULL((val = json_object_get(filter, "isUnread")))) {
+            e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("indexflags");
+            e->value.u = MESSAGE_SEEN;
+        }
+
+        if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
+            e = search_expr_new(this, SEOP_LE);
+            e->attr = search_attr_find("size");
+            e->value.u = json_integer_value(val);
+        }
+        if (JNOTNULL((val = json_object_get(filter, "minSize")))) {
+            e = search_expr_new(this, SEOP_GE);
+            e->attr = search_attr_find("size");
+            e->value.u = json_integer_value(val);
+        }
+        if ((val = json_object_get(filter, "notInMailboxes"))) {
+            match_mailboxes(search_expr_new(this, SEOP_NOT), val, req->userid);
+            json_object_set(matchprops, "mailboxIds", json_true());
+        }
+        if ((s = json_string_value(json_object_get(filter, "sinceMessageState")))) {
+            /* non-standard */
+            e = search_expr_new(this, SEOP_GT);
+            /* FIXME does search_expr optimise for mailbox modseqs? */
+            e->attr = search_attr_find("modseq");
+            e->value.u = atomodseq_t(s);
+        }
+        if ((s = json_string_value(json_object_get(filter, "subject")))) {
+            match_string(this, s, "subject");
+        }
+        if ((s = json_string_value(json_object_get(filter, "text")))) {
+            match_string(this, s, "text");
+        }
+        if (JNOTNULL((val = json_object_get(filter, "threadIsFlagged")))) {
+            e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("convflags");
+            e->value.s = xstrdup("\\flagged");
+        }
+        if (JNOTNULL((val = json_object_get(filter, "threadIsUnread")))) {
+            e = val == json_true() ? search_expr_new(this, SEOP_NOT): this;
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("convflags");
+            e->value.s = xstrdup("\\seen");
+        }
+        if ((s = json_string_value(json_object_get(filter, "to")))) {
+            match_string(this, s, "to");
         }
     }
 
@@ -2759,6 +2837,9 @@ static struct sortcrit *buildsort(json_t *sort)
             sortcrit[i].args.flag.name = xstrdup("\\seen");
             sortcrit[i].flags ^= SORT_REVERSE;
         }
+        if (!strcmp(prop.s, "messageState")) {
+            sortcrit[i].key = SORT_MODSEQ;
+        }
         if (!strcmp(prop.s, "size")) {
             sortcrit[i].key = SORT_SIZE;
         }
@@ -2830,6 +2911,8 @@ static void validatesort(json_t *sort, json_t *invalid, json_t *unsupported)
             continue;
         if (!strcmp(prop.s, "isUnread"))
             continue;
+        if (!strcmp(prop.s, "messageState"))
+            continue;
         if (!strcmp(prop.s, "size"))
             continue;
         if (!strcmp(prop.s, "subject"))
@@ -2849,12 +2932,15 @@ static void validatesort(json_t *sort, json_t *invalid, json_t *unsupported)
 }
 
 struct getmsglist_window {
-    /* arguments */
+    /* input arguments */
     int collapse;
     size_t position;
     const char *anchor;
     int anchor_off;
     size_t limit;
+
+    /* output arguments */
+    modseq_t highestmodseq;
 
     /* internal state */
     size_t mdcount;
@@ -2864,9 +2950,10 @@ struct getmsglist_window {
 };
 
 static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                          struct getmsglist_window *window,
+                          struct getmsglist_window *window, int want_expunged,
                           size_t *total,
-                          json_t **messageids, json_t **threadids)
+                          json_t **messageids, json_t **expungedids,
+                          json_t **threadids)
 {
     struct index_state *state = NULL;
     search_query_t *query = NULL;
@@ -2878,9 +2965,12 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     int i, r;
     void *iter;
 
+    assert(!want_expunged || expungedids);
+
     *total = 0;
     *messageids = json_pack("[]");
     *threadids = json_pack("[]");
+    if (want_expunged) *expungedids = json_pack("[]");
 
     /* Build searchargs */
     matchprops = json_pack("{}");
@@ -2895,10 +2985,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         iter = json_object_iter_next(matchprops, iter);
     }
 
+    /* FIXME use search_predict_total to short-circuit search? */
+
     /* Run the search query */
     memset(&init, 0, sizeof(init));
     init.userid = req->userid;
     init.authstate = req->authstate;
+    init.want_expunged = want_expunged;
 
     r = index_open_mailbox(req->inbox, &init, &state);
     if (r) goto done;
@@ -2907,6 +3000,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     query->sortcrit = buildsort(sort);
     query->multiple = 1;
     query->need_ids = 1;
+    query->verbose = 1;
+    query->want_expunged = want_expunged;
     r = search_query_run(query);
     if (r) return r;
 
@@ -2927,6 +3022,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         json_t *msg = NULL;
         const char *cid;
         size_t idcount = json_array_size(*messageids);
+        int is_expunged;
 
         if (!folder) continue;
 
@@ -2940,6 +3036,11 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             continue;
         }
         if (r) goto done;
+
+        /* Ignore expunged messages, if not requested by caller */
+        is_expunged = record.system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+        if (is_expunged && !want_expunged)
+            goto doneloop;
 
         msgid = message_guid_encode(&record.guid);
 
@@ -3014,9 +3115,23 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (window->limit && idcount && window->limit <= idcount)
             goto doneloop;
 
+        /* Keep track of the highest modseq */
+        if (window->highestmodseq < record.modseq)
+            window->highestmodseq = record.modseq;
+
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &window->ids);
-        json_array_append_new(*messageids, json_string(msgid));
+
+        /* Check if the message is expunged in all mailboxes */
+        r = jmapmsg_isexpunged(req, msgid, &is_expunged);
+        if (r) goto done;
+
+        /* Add the message id to the result */
+        if (is_expunged) {
+            json_array_append_new(*expungedids, json_string(msgid));
+        } else {
+            json_array_append_new(*messageids, json_string(msgid));
+        }
 
         /* Add the thread id */
         if (window->collapse)
@@ -3111,7 +3226,8 @@ static int getMessageList(jmap_req_t *req)
     }
     json_decref(unsupported);
 
-    r = jmapmsg_search(req, filter, sort, &window, &total, &messageids, &threadids);
+    r = jmapmsg_search(req, filter, sort, &window, 0, &total,
+                       &messageids, /*expungedids*/NULL, &threadids);
     if (r) goto done;
 
     /* Prepare response. */
@@ -3120,7 +3236,7 @@ static int getMessageList(jmap_req_t *req)
     json_object_set_new(res, "filter", filter);
     json_object_set_new(res, "sort", sort);
     json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
-    json_object_set_new(res, "state", jmap_getstate(0 /* MBTYPE */, req));
+    json_object_set_new(res, "state", jmapmsg_getstate(req));
     json_object_set_new(res, "canCalculateUpdates", json_false()); /* FIXME */
     json_object_set_new(res, "position", json_integer(window.position));
     json_object_set_new(res, "total", json_integer(total));
@@ -3155,6 +3271,103 @@ static int getMessageList(jmap_req_t *req)
 done:
     if (messageids) json_decref(messageids);
     if (threadids) json_decref(threadids);
+    _finireq(req);
+    return r;
+}
+
+static int getMessageUpdates(jmap_req_t *req)
+{
+    int r = 0, pe;
+    int fetchmsgs = 0;
+    json_t *filter, *sort;
+    json_t *changed = NULL, *removed = NULL, *invalid, *item, *res, *threads;
+    json_int_t i = 0;
+    size_t total;
+    int has_more = 0;
+    json_t *oldstate, *newstate;
+    json_t *fetchprops = json_null();
+    struct getmsglist_window window;
+    const char *since;
+
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+
+    /* sinceState */
+    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
+    if (pe > 0 && !atomodseq_t(since)) {
+        json_array_append_new(invalid, json_string("sinceState"));
+    }
+    /* maxChanges */
+    readprop(req->args, "maxChanges", 0, invalid, "i", &i);
+    if (i < 0) json_array_append_new(invalid, json_string("maxChanges"));
+    window.limit = i;
+    /* fetch */
+    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetchmsgs);
+    readprop(req->args, "fetchRecordProperties", 0, invalid, "o", &fetchprops);
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* FIXME we might miss to report some messages as removed, when they
+     * already have been expired. can we determine the modseq of the latest
+     * cyr_expire call? if so, we could return "cannotCalculateChanges" */
+
+    /* Search for updates */
+    filter = json_pack("{s:s}", "sinceMessageState", since);
+    sort = json_pack("[s]", "messageState asc");
+    threads = NULL;
+    changed = NULL;
+    removed = NULL;
+
+    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1, &total,
+                       &changed, &removed, &threads);
+    if (r) goto done;
+    if (threads) json_decref(threads);
+
+    if (window.limit && req->counters.mailmodseq != window.highestmodseq) {
+        newstate = jmapmsg_fmtstate(window.highestmodseq);
+    } else {
+        newstate = jmapmsg_fmtstate(req->counters.mailmodseq);
+    }
+    has_more = (json_array_size(changed) + json_array_size(removed)) < total;
+    oldstate = json_string(since);
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "oldState", oldstate);
+    json_object_set_new(res, "newState", newstate);
+    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
+    json_object_set(res, "changed", changed);
+    json_object_set(res, "removed", removed);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("messageUpdates"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    if (fetchmsgs) {
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", changed);
+        json_object_set(subreq.args, "properties", fetchprops);
+        r = getMessages(&subreq);
+        json_decref(subreq.args);
+        if (r) goto done;
+    }
+
+done:
+    if (changed) json_decref(changed);
+    if (removed) json_decref(removed);
     _finireq(req);
     return r;
 }
@@ -3591,7 +3804,7 @@ static int getThreads(jmap_req_t *req)
 
     /* Prepare response. */
     res = json_pack("{}");
-    json_object_set_new(res, "state", jmap_getstate(0 /*MBYTPE*/, req));
+    json_object_set_new(res, "state", jmapmsg_getstate(req));
     json_object_set_new(res, "accountId", json_string(req->userid));
     json_object_set_new(res, "list", threads);
     json_object_set_new(res, "notFound", notfound);
@@ -3695,7 +3908,7 @@ doneloop:
     }
 
     res = json_pack("{}");
-    json_object_set_new(res, "state", jmap_getstate(0 /*MBYTPE*/, req));
+    json_object_set_new(res, "state", jmapmsg_getstate(req));
     json_object_set_new(res, "accountId", json_string(req->userid));
     json_object_set(res, "list", list);
     json_object_set(res, "notFound", notfound);
@@ -3921,6 +4134,8 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     strarray_t headers = STRARRAY_INITIALIZER;
     char *freeme = NULL;
     int r, i;
+
+    /* FIXME attachmentsNotFound should be returned for unknown attachments */
 
     type = json_string_value(json_object_get(att, "type"));
     blob_id = json_string_value(json_object_get(att, "blobId"));
@@ -5071,25 +5286,29 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (json_object_get(msg, "isAnswered")) {
         readprop(msg, "isAnswered", 1, invalid, "b", &answered);
     }
-    dstmailboxes = json_pack("{}");
-    json_array_foreach(json_object_get(msg, "mailboxIds"), i, val) {
-        char *name = NULL;
-        id = json_string_value(val);
-        if (id && *id == '#') {
-            id = hash_lookup(id, req->idmap);
+    if (JNOTNULL(json_object_get(msg, "mailboxIds"))) {
+        dstmailboxes = json_pack("{}");
+        json_array_foreach(json_object_get(msg, "mailboxIds"), i, val) {
+            char *name = NULL;
+            id = json_string_value(val);
+            if (id && *id == '#') {
+                id = hash_lookup(id, req->idmap);
+            }
+            if (id && (name = mboxlist_find_uniqueid(id, req->userid))) {
+                json_object_set_new(dstmailboxes, id, json_string(name));
+                free(name);
+            } else {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "mailboxIds[%zu]", i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_free(&buf);
+            }
         }
-        if (id && (name = mboxlist_find_uniqueid(id, req->userid))) {
-            json_object_set_new(dstmailboxes, id, json_string(name));
-            free(name);
-        } else {
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "mailboxIds[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_free(&buf);
+        if (!json_object_size(dstmailboxes)) {
+            json_array_append_new(invalid, json_string("mailboxIds"));
         }
-    }
-    if (!json_object_size(dstmailboxes)) {
-        json_array_append_new(invalid, json_string("mailboxIds"));
+    } else {
+        dstmailboxes = json_deep_copy(srcmailboxes);
     }
     if (json_array_size(invalid)) {
         return 0;
@@ -5205,10 +5424,13 @@ static int setMessages(jmap_req_t *req)
     _initreq(req);
 
     state = json_object_get(req->args, "ifInState");
-    if (state && jmap_checkstate(state, 0 /*MBTYPE*/, req)) {
-        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                    "error", "type", "stateMismatch", req->tag));
-        goto done;
+    if (JNOTNULL(state)) {
+        const char *s = json_string_value(state);
+        if (!s || atomodseq_t(s) != req->counters.mailmodseq) {
+            json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
+                        "error", "type", "stateMismatch", req->tag));
+            goto done;
+        }
     }
     set = json_pack("{s:s}", "accountId", req->userid);
     json_object_set_new(set, "oldState", state);
@@ -5339,15 +5561,16 @@ static int setMessages(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    /* Bump mailbox state for any changes */
+    /* FIXME Bump mailbox state for any changes?/
     if (json_object_get(set, "created") ||
         json_object_get(set, "updated") ||
         json_object_get(set, "destroyed")) {
 
-        r = jmap_bumpstate(0 /*MBTYPE*/, req);
+        r = jmap_bumpstate(req, MBTYPE_MAILBOX, 0);
         if (r) goto done;
     }
-    json_object_set_new(set, "newState", jmap_getstate(0 /*MBTYPE*/, req));
+    */
+    json_object_set_new(set, "newState", jmapmsg_getstate(req));
 
     json_incref(set);
     item = json_pack("[]");
