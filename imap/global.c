@@ -978,5 +978,7 @@ EXPORTED int cmd_cancelled()
 {
     if (signals_cancelled())
         return IMAP_CANCELLED;
+    if (cmdtime_checksearch())
+        return IMAP_SEARCH_SLOW;
     return 0;
 }

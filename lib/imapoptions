@@ -1781,6 +1781,10 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
 /* The cyrusdb backend to use for the search latest indexed uid state. */
 
+{ "search_maxtime", NULL, STRING }
+/* The maximum number of seconds to run a search for before aborting.  Default
+   of no value means search "forever" until other timeouts. */
+
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match

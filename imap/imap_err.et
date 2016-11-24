@@ -247,6 +247,9 @@ ec IMAP_CANCELLED,
 
 # Used for search engine integration
 
+ec IMAP_SEARCH_SLOW,
+    "Search taking too long - try reducing the set of messages searched"
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

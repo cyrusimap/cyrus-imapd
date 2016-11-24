@@ -646,7 +646,7 @@ EXPORTED int become_cyrus(int is_master)
 
 static int cmdtime_enabled = 0;
 static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
-static double totaltime, cmdtime, nettime;
+static double totaltime, cmdtime, nettime, search_maxtime;
 
 double timeval_get_double(const struct timeval *tv)
 {
@@ -673,6 +673,13 @@ EXPORTED double timesub(const struct timeval *start, const struct timeval *end)
 EXPORTED void cmdtime_settimer(int enable)
 {
     cmdtime_enabled = enable;
+
+    /* always enable cmdtimer if MAXTIME set */
+    const char *maxtime = config_getstring(IMAPOPT_SEARCH_MAXTIME);
+    if (maxtime) {
+        cmdtime_enabled = 1;
+        search_maxtime = atof(maxtime);
+    }
 }
 
 EXPORTED void cmdtime_starttimer(void)
@@ -692,6 +699,19 @@ EXPORTED void cmdtime_endtimer(double *pcmdtime, double *pnettime)
     cmdtime = totaltime - nettime;
     *pcmdtime = cmdtime;
     *pnettime = nettime;
+}
+
+EXPORTED int cmdtime_checksearch(void)
+{
+    struct timeval nowtime;
+    if (!search_maxtime)
+        return 0;
+    gettimeofday(&nowtime, 0);
+    totaltime = timesub(&cmdtime_start, &nowtime);
+    cmdtime = totaltime - nettime;
+    if (cmdtime > search_maxtime)
+        return -1;
+    return 0;
 }
 
 EXPORTED void cmdtime_netstart(void)
