@@ -2798,4 +2798,128 @@ sub test_getthreadupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
+sub test_importmessages
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res;
+    my $blobid;
+    my $drafts;
+    my $inbox;
+    my $msg;
+
+    # Generate an embedded message to get a blob id
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Return-Path: <Ava.Nguyen\@local>\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "Subject: bar\r\n"
+          . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+          . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: Test User <test\@local>\r\n"
+          . "\r\n"
+          . "An embedded message"
+          . "\r\n--sub--",
+    ) || die;
+
+    xlog "get blobId";
+    $res = $jmap->Request([['getMessageList', {
+        fetchMessages => JSON::true,
+        fetchMessageProperties => ["attachedMessages"],
+    }, "R1"]]);
+    $blobid = (keys $res->[1][1]->{list}[0]->{attachedMessages})[0];
+    $self->assert_not_null($blobid);
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $drafts = $res->[0][1]{created}{"#1"}{id};
+    $self->assert_not_null($drafts);
+
+    $inbox = $self->getinbox()->{id};
+    $self->assert_not_null($inbox);
+
+    xlog "import message from blob $blobid";
+    $res = $jmap->Request([['importMessages', {
+        messages => {
+            "#1" => {
+                blobId => $blobid,
+                mailboxIds => [ $drafts ],
+                isUnread => JSON::true,
+                isFlagged => JSON::false,
+                isAnswered => JSON::false,
+                isDraft => JSON::true,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    $msg = $res->[0][1]->{created}{"#1"};
+    $self->assert_not_null($msg);
+
+    xlog "load message";
+    $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]->{mailboxIds}});
+    $self->assert_str_equals($drafts, $res->[0][1]{list}[0]->{mailboxIds}[0]);
+
+    xlog "import existing message (expect message exists error)";
+    $res = $jmap->Request([['importMessages', {
+        messages => {
+            "#1" => {
+                blobId => $blobid,
+                mailboxIds => [ $drafts ],
+                isUnread => JSON::true,
+                isFlagged => JSON::false,
+                isAnswered => JSON::false,
+                isDraft => JSON::true,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    $self->assert_str_equals("messageExists", $res->[0][1]->{notCreated}{"#1"}{type});
+
+    xlog "import existing message into new mailbox";
+    $res = $jmap->Request([['importMessages', {
+        messages => {
+            "#1" => {
+                blobId => $blobid,
+                mailboxIds => [ $drafts, $inbox ],
+                isUnread => JSON::true,
+                isFlagged => JSON::false,
+                isAnswered => JSON::false,
+                isDraft => JSON::true,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    $msg = $res->[0][1]->{created}{"#1"};
+    $self->assert_not_null($msg);
+
+    xlog "load message";
+    $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]->{mailboxIds}});
+}
+
 1;
