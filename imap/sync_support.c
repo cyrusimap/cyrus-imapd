@@ -5777,7 +5777,8 @@ static int do_user_main(const char *user, const char *topart,
     sync_name_list_free(&info.mboxlist);
     sync_name_list_free(&info.quotalist);
 
-    if (r) syslog(LOG_ERR, "IOERROR: do_user_main: %s", error_message(r));
+    if (r) syslog(LOG_ERR, "IOERROR: do_user_main: %s for %s to %s", error_message(r),
+                  user, (channelp && *channelp) ? *channelp : "[no channel]");
 
     return r;
 }
