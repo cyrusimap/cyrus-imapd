@@ -1603,6 +1603,8 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     listcount = index_prefilter_messages(msgno_list, state, &searchargs);
 
     for (listindex = 0; !n && listindex < listcount; listindex++) {
+        if (cmd_cancelled())
+            break;
         struct buf buf = BUF_INITIALIZER;
         struct index_record record;
         msgno = msgno_list[listindex];
