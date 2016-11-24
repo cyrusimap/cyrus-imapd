@@ -1883,9 +1883,10 @@ static void sched_deliver_local(const char *recipient,
                 if (prop) {
                     const char *organizer =
                         organizer = icalproperty_get_organizer(prop);
-
-                    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
-                    if (strcasecmp(cdata->organizer, organizer)) reject = 1;
+                    if (organizer) {
+                        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+                        if (strcasecmp(cdata->organizer, organizer)) reject = 1;
+                    }
                 }
             }
 
@@ -2184,6 +2185,7 @@ static icalproperty *find_attendee(icalcomponent *comp, const char *match)
 
     for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
         const char *attendee = icalproperty_get_invitee(prop);
+        if (!attendee) continue;
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* Skip where not the server's responsibility */
@@ -2382,6 +2384,7 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
         icalproperty *prop = icalcomponent_get_first_invitee(comp);
         for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
             const char *attendee = icalproperty_get_invitee(prop);
+            if (!attendee) continue;
             if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
             /* skip attendees other than the one we're updating */
@@ -2746,6 +2749,7 @@ static void trim_attendees(icalcomponent *comp, const char *match)
          prop;
          prop = icalcomponent_get_next_invitee(comp)) {
         const char *attendee = icalproperty_get_invitee(prop);
+        if (!attendee) continue;
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* keep my attendee */
