@@ -906,11 +906,13 @@ static int xapian_run_cb(const char *cyrusid, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
 
+    int r = cmd_cancelled();
+    if (r) return r;
+
     if (!strncmp(cyrusid, "*G*", 3)) {
         /* Current cyrus ids: *G*<encoded message guid> */
         struct conversations_state *cstate;
         const char *guid = cyrusid + 3;
-        int r;
 
         cstate = mailbox_get_cstate(bb->mailbox);
         if (!cstate) {
@@ -928,7 +930,6 @@ static int xapian_run_cb(const char *cyrusid, void *rock)
         const char *mboxname;
         unsigned int uidvalidity;
         unsigned int uid;
-        int r;
 
         r = parse_legacy_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid);
         if (!r) {
