@@ -5540,7 +5540,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     struct index_record record;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
-    size_t len, i, msgcount;
+    size_t len, i, msgcount = 0;
     int r = HTTP_SERVER_ERROR;
 
     /* Pick the mailbox to create the message in, prefer Drafts */
