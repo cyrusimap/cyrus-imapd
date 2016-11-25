@@ -123,7 +123,6 @@ struct _mboxcache_rec {
 };
 
 struct _req_context {
-    hash_table *props;
     ptrarray_t *cache;
 };
 
@@ -143,11 +142,6 @@ static void _finireq(jmap_req_t *req)
 
     assert(ctx->cache->count == 0);
     ptrarray_free(ctx->cache);
-
-    if (ctx->props) {
-        free_hash_table(ctx->props, NULL);
-        free(ctx->props);
-    }
 
     free(ctx);
     req->rock = NULL;
@@ -238,28 +232,10 @@ static void _closembox(jmap_req_t *req, struct mailbox **mboxp)
     *mboxp = NULL;
 }
 
-static int _wantprop(jmap_req_t *req, const char *name)
+static int _wantprop(hash_table *props, const char *name)
 {
-    struct _req_context *ctx = (struct _req_context *) req->rock;
-    if (!ctx->props) return 1;
-    return hash_lookup(name, ctx->props) != NULL;
-}
-
-static void _addprop(jmap_req_t *req, const char *name)
-{
-    struct _req_context *ctx = (struct _req_context *) req->rock;
-
-    if (!ctx->props) {
-        ctx->props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(ctx->props, 64, 0);
-    }
-    hash_insert(name, (void *)1, ctx->props);
-}
-
-static hash_table *_getprops(jmap_req_t *req)
-{
-    struct _req_context *ctx = (struct _req_context *) req->rock;
-    return ctx->props;
+    if (!props) return 1;
+    return hash_lookup(name, props) != NULL;
 }
 
 static int JNOTNULL(json_t *item)
@@ -411,7 +387,8 @@ static char *jmapmbox_name(jmap_req_t *req, const char *mboxname) {
 
 static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                                      const mbentry_t *mbentry,
-                                     hash_table *roles)
+                                     hash_table *roles,
+                                     hash_table *props)
 {
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
@@ -456,36 +433,36 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
     /* Build JMAP mailbox response. */
     obj = json_pack("{}");
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
-    if (_wantprop(req, "name")) {
+    if (_wantprop(props, "name")) {
         char *name = jmapmbox_name(req, mbentry->name);
         if (!name) goto done;
         json_object_set_new(obj, "name", json_string(name));
         free(name);
     }
-    if (_wantprop(req, "mustBeOnlyMailbox")) {
+    if (_wantprop(props, "mustBeOnlyMailbox")) {
         json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
     }
 
-    if (_wantprop(req, "mayReadItems")) {
+    if (_wantprop(props, "mayReadItems")) {
         json_object_set_new(obj, "mayReadItems", json_boolean(rights & ACL_READ));
     }
-    if (_wantprop(req, "mayAddItems")) {
+    if (_wantprop(props, "mayAddItems")) {
         json_object_set_new(obj, "mayAddItems", json_boolean(rights & ACL_INSERT));
     }
-    if (_wantprop(req, "mayRemoveItems")) {
+    if (_wantprop(props, "mayRemoveItems")) {
         json_object_set_new(obj, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
     }
-    if (_wantprop(req, "mayCreateChild")) {
+    if (_wantprop(props, "mayCreateChild")) {
         json_object_set_new(obj, "mayCreateChild", json_boolean(rights & ACL_CREATE));
     }
 
-    if (_wantprop(req, "totalMessages")) {
+    if (_wantprop(props, "totalMessages")) {
         json_object_set_new(obj, "totalMessages", json_integer(sdata.messages));
     }
-    if (_wantprop(req, "unreadMessages")) {
+    if (_wantprop(props, "unreadMessages")) {
         json_object_set_new(obj, "unreadMessages", json_integer(sdata.unseen));
     }
-    if (_wantprop(req, "totalThreads") || _wantprop(req, "unreadThreads")) {
+    if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
         if (cstate) {
             conv_status_t xconv = CONV_STATUS_INIT;
             if ((r = conversation_getstatus(cstate, mbentry->name, &xconv))) {
@@ -493,23 +470,23 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                         error_message(r));
                 goto done;
             }
-            if (_wantprop(req, "totalThreads")) {
+            if (_wantprop(props, "totalThreads")) {
                 json_object_set_new(obj, "totalThreads", json_integer(xconv.exists));
             }
-            if (_wantprop(req, "unreadThreads")) {
+            if (_wantprop(props, "unreadThreads")) {
                 json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
             }
         }
     }
-    if (_wantprop(req, "mayRename")) {
+    if (_wantprop(props, "mayRename")) {
         int mayRename = rights & ACL_DELETEMBOX && parent_rights & ACL_CREATE;
         json_object_set_new(obj, "mayRename", json_boolean(mayRename));
     }
-    if (_wantprop(req, "mayDelete")) {
+    if (_wantprop(props, "mayDelete")) {
         int mayDelete = (rights & ACL_DELETEMBOX) && !is_inbox;
         json_object_set_new(obj, "mayDelete", json_boolean(mayDelete));
     }
-    if (_wantprop(req, "role")) {
+    if (_wantprop(props, "role")) {
         char *role = jmapmbox_role(req, mbentry->name);
         if (role && !hash_lookup(role, roles)) {
             /* In JMAP, only one mailbox have a role. First one wins. */
@@ -520,7 +497,7 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         }
         if (role) free(role);
     }
-    if (_wantprop(req, "sortOrder")) {
+    if (_wantprop(props, "sortOrder")) {
         struct buf attrib = BUF_INITIALIZER;
         int sortOrder = 0;
         /* Ignore lookup errors here. */
@@ -536,7 +513,7 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         buf_free(&attrib);
     }
-    if (_wantprop(req, "parentId")) {
+    if (_wantprop(props, "parentId")) {
         json_object_set_new(obj, "parentId", (is_inbox || parent_is_inbox) ?
                 json_null() : json_string(mbparent->uniqueid));
     }
@@ -554,6 +531,7 @@ struct jmapmbox_mboxlist_data {
     jmap_req_t *req;
     json_t *list;
     hash_table *roles;
+    hash_table *props;
     hash_table *ids;
 };
 
@@ -580,7 +558,7 @@ int jmapmbox_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Convert mbox to JMAP object. */
-    obj = jmapmbox_from_mbentry(req, mbentry, data->roles);
+    obj = jmapmbox_from_mbentry(req, mbentry, data->roles, data->props);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
         r = IMAP_INTERNAL;
@@ -625,6 +603,7 @@ static int getMailboxes(jmap_req_t *req)
         req,
         json_pack("[]"), /* list */
         (hash_table *) xmalloc(sizeof(hash_table)), /* roles */
+        NULL, /* props */
         NULL  /* ids */
     };
     construct_hash_table(data.roles, 8, 0);
@@ -645,6 +624,9 @@ static int getMailboxes(jmap_req_t *req)
     if (properties && json_array_size(properties)) {
         int i;
         int size = json_array_size(properties);
+
+        data.props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(data.props, size + 1, 0);
         for (i = 0; i < size; i++) {
             const char *pn = json_string_value(json_array_get(properties, i));
             if (pn == NULL) {
@@ -654,7 +636,7 @@ static int getMailboxes(jmap_req_t *req)
                             "error", err, req->tag));
                 goto done;
             }
-            _addprop(req, pn);
+            hash_insert(pn, (void*)1, data.props);
         }
     }
 
@@ -707,6 +689,10 @@ done:
     if (data.roles) {
         free_hash_table(data.roles, NULL);
         free(data.roles);
+    }
+    if (data.props) {
+        free_hash_table(data.props, NULL);
+        free(data.props);
     }
     _finireq(req);
     return 0;
@@ -2113,8 +2099,8 @@ static int extract_headers(const char *key, const char *val, void *rock)
     return  0;
 }
 
-static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
-                             struct buf *msg_buf,
+static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
+                             struct body *body, struct buf *msg_buf,
                              struct mailbox *mbox,
                              const struct index_record *record,
                              int is_embedded, json_t **msgp)
@@ -2138,11 +2124,11 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
     msg = json_pack("{}");
 
     /* headers */
-    if (_wantprop(req, "headers")) {
+    if (_wantprop(props, "headers")) {
         json_object_set(msg, "headers", headers);
     }
     /* sender */
-    if (_wantprop(req, "sender")) {
+    if (_wantprop(props, "sender")) {
         const char *key, *s = NULL;
         json_t *val, *sender = json_null();
 
@@ -2168,23 +2154,23 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         json_object_set_new(msg, "sender", sender);
     }
     /* from */
-    if (_wantprop(req, "from")) {
+    if (_wantprop(props, "from")) {
         json_object_set_new(msg, "from", emailer_from_addr(body->from));
     }
     /* to */
-    if (_wantprop(req, "to")) {
+    if (_wantprop(props, "to")) {
         json_object_set_new(msg, "to", emailer_from_addr(body->to));
     }
     /* cc */
-    if (_wantprop(req, "cc")) {
+    if (_wantprop(props, "cc")) {
         json_object_set_new(msg, "cc", emailer_from_addr(body->cc));
     }
     /*  bcc */
-    if (_wantprop(req, "bcc")) {
+    if (_wantprop(props, "bcc")) {
         json_object_set_new(msg, "bcc", emailer_from_addr(body->bcc));
     }
     /* replyTo */
-    if (_wantprop(req, "replyTo")) {
+    if (_wantprop(props, "replyTo")) {
         json_t *reply_to = json_null();
         if (json_object_get(headers, "Reply-To")) {
             reply_to = emailer_from_addr(body->reply_to);
@@ -2192,12 +2178,12 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         json_object_set_new(msg, "replyTo", reply_to);
     }
     /* subject */
-    if (_wantprop(req, "subject")) {
+    if (_wantprop(props, "subject")) {
         const char *subject = body->subject ? body->subject : "";
         json_object_set_new(msg, "subject", json_string(subject));
     }
     /* date */
-    if (_wantprop(req, "date")) {
+    if (_wantprop(props, "date")) {
         time_t t;
         char datestr[RFC3339_DATETIME_MAX];
 
@@ -2206,10 +2192,10 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         json_object_set_new(msg, "date", json_string(datestr));
     }
 
-    if (_wantprop(req, "textBody") ||
-        _wantprop(req, "htmlBody") ||
-        _wantprop(req, "preview") ||
-        _wantprop(req, "body")) {
+    if (_wantprop(props, "textBody") ||
+        _wantprop(props, "htmlBody") ||
+        _wantprop(props, "preview") ||
+        _wantprop(props, "body")) {
 
         if (bodies.text) {
             charset_t cs = charset_lookupname(bodies.text->charset_id);
@@ -2226,29 +2212,29 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
     }
 
     /* textBody */
-    if (_wantprop(req, "textBody") || _wantprop(req, "body")) {
-        const char *name = _wantprop(req, "textBody") ? "textBody" : "body";
+    if (_wantprop(props, "textBody") || _wantprop(props, "body")) {
+        const char *name = _wantprop(props, "textBody") ? "textBody" : "body";
         if (!text && html) {
             text = extract_plain(html);
         }
         json_object_set_new(msg, name, text ? json_string(text) : json_null());
     }
     /* htmlBody */
-    if (_wantprop(req, "htmlBody") || _wantprop(req, "body")) {
-        const char *name = _wantprop(req, "htmlBody") ? "htmlBody" : "body";
+    if (_wantprop(props, "htmlBody") || _wantprop(props, "body")) {
+        const char *name = _wantprop(props, "htmlBody") ? "htmlBody" : "body";
         if (!html && text) {
             html = xstrdup(text);
         }
         json_object_set_new(msg, name, html ? json_string(html) : json_null());
     }
 
-    if (_wantprop(req, "hasAttachment")) {
+    if (_wantprop(props, "hasAttachment")) {
         json_object_set_new(msg, "hasAttachment",
                 json_boolean(bodies.atts.count + bodies.msgs.count));
     }
 
     /* attachments */
-    if (_wantprop(req, "attachments")) {
+    if (_wantprop(props, "attachments")) {
         int i;
         json_t *atts = json_pack("[]");
 
@@ -2337,7 +2323,7 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
     }
 
     /* attachedMessages */
-    if (_wantprop(req, "attachedMessages")) {
+    if (_wantprop(props, "attachedMessages")) {
         int i;
         json_t *msgs = json_pack("{}");
 
@@ -2346,7 +2332,7 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
             json_t *submsg = NULL;
             const char *attid;
 
-            r = jmapmsg_from_body(req, part->subpart, msg_buf,
+            r = jmapmsg_from_body(req, props, part->subpart, msg_buf,
                                   mbox, record, 1, &submsg);
             if (r) goto done;
 
@@ -2369,17 +2355,17 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         json_object_set_new(msg, "id", json_string(msgid));
 
         /* blobId */
-        if (_wantprop(req, "blobId")) {
+        if (_wantprop(props, "blobId")) {
             json_object_set_new(msg, "blobId", json_string(msgid));
         }
         /* threadId */
-        if (_wantprop(req, "threadId")) {
+        if (_wantprop(props, "threadId")) {
             conversation_id_t cid = record->cid;
             json_object_set_new(msg, "threadId", r ?
                     json_null() : json_string(conversation_id_encode(cid)));
         }
         /* mailboxIds */
-        if (_wantprop(req, "mailboxIds")) {
+        if (_wantprop(props, "mailboxIds")) {
             json_t *mailboxes, *val, *ids = json_pack("[]");
             const char *mboxid;
             mailboxes = jmapmsg_mailboxes(req, msgid);
@@ -2391,7 +2377,7 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
         }
 
         /* inReplyToMessageId */
-        if (_wantprop(req, "inReplyToMessageId")) {
+        if (_wantprop(props, "inReplyToMessageId")) {
             json_t *reply_id = json_null();
             if (flags & FLAG_DRAFT) {
                 const char *key;
@@ -2407,29 +2393,29 @@ static int jmapmsg_from_body(jmap_req_t *req, struct body *body,
             json_object_set(msg, "inReplyToMessageId", reply_id);
         }
         /* isUnread */
-        if (_wantprop(req, "isUnread")) {
+        if (_wantprop(props, "isUnread")) {
             json_object_set_new(msg, "isUnread", json_boolean(!(flags & FLAG_SEEN)));
         }
         /* isFlagged */
-        if (_wantprop(req, "isFlagged")) {
+        if (_wantprop(props, "isFlagged")) {
             json_object_set_new(msg, "isFlagged", json_boolean(flags & FLAG_FLAGGED));
         }
         /* isAnswered */
-        if (_wantprop(req, "isAnswered")) {
+        if (_wantprop(props, "isAnswered")) {
             json_object_set_new(msg, "isAnswered", json_boolean(flags & FLAG_ANSWERED));
         }
         /* isDraft */
-        if (_wantprop(req, "isDraft")) {
+        if (_wantprop(props, "isDraft")) {
             json_object_set_new(msg, "isDraft", json_boolean(flags & FLAG_DRAFT));
         }
 
         /* size */
-        if (_wantprop(req, "size")) {
+        if (_wantprop(props, "size")) {
             json_object_set_new(msg, "size", json_integer(record->size));
         }
 
         /* preview */
-        if (_wantprop(req, "preview")) {
+        if (_wantprop(props, "preview")) {
             const char *annot;
             buf_reset(&buf);
             if ((annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT))) {
@@ -2626,7 +2612,8 @@ static int jmapmsg_isexpunged(jmap_req_t *req, const char *id, int *is_expunged)
     return r;
 }
 
-static int jmapmsg_from_record(jmap_req_t *req, struct mailbox *mbox,
+static int jmapmsg_from_record(jmap_req_t *req, hash_table *props,
+                               struct mailbox *mbox,
                                const struct index_record *record,
                                json_t **msgp)
 {
@@ -2644,7 +2631,7 @@ static int jmapmsg_from_record(jmap_req_t *req, struct mailbox *mbox,
 
     /* Parse message body structure */
     message_read_bodystructure(record, &body);
-    r = jmapmsg_from_body(req, body, &msg_buf, mbox, record, 0, msgp);
+    r = jmapmsg_from_body(req, props, body, &msg_buf, mbox, record, 0, msgp);
     buf_free(&msg_buf);
     return r;
 }
@@ -2692,7 +2679,7 @@ static void match_mailboxes(search_expr_t *parent, json_t *mailboxes,
 
 static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
                                   search_expr_t *parent,
-                                  json_t *matchprops)
+                                  hash_table **props)
 {
     search_expr_t *this, *e;
     json_t *val;
@@ -2719,10 +2706,11 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            buildsearch(req, val, e, matchprops);
+            buildsearch(req, val, e, props);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
+        json_t *matchprops = json_pack("{}");
 
         /* zero properties evaluate to true */
         search_expr_new(this, SEOP_TRUE);
@@ -2751,7 +2739,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
             match_string(e, "text", "contenttype");
-            json_object_set(matchprops, "hasAttachment", json_true());
+            json_object_set_new(matchprops, "hasAttachment", json_true());
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -2777,7 +2765,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         }
         if ((val = json_object_get(filter, "inMailboxes"))) {
             match_mailboxes(this, val, req->userid);
-            json_object_set(matchprops, "mailboxIds", json_true());
+            json_object_set_new(matchprops, "mailboxIds", json_true());
         }
         if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
             e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
@@ -2846,6 +2834,22 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             match_string(this, s, "to");
         }
+
+        /* Add properties that are required to match */
+        if (props && json_object_size(matchprops)) {
+            void *iter = json_object_iter(matchprops);
+
+            if (!*props) {
+                *props = xzmalloc(sizeof(struct hash_table));
+                construct_hash_table(*props, 4, 0);
+            }
+
+            while (iter) {
+                hash_insert(json_object_iter_key(iter), (void*)1, *props);
+                iter = json_object_iter_next(matchprops, iter);
+            }
+        }
+        json_decref(matchprops);
     }
 
     return this;
@@ -3219,15 +3223,14 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                           json_t **threadids)
 {
     hashu64_table cids = HASHU64_TABLE_INITIALIZER;
+    hash_table *props = NULL;
     struct index_state *state = NULL;
     search_query_t *query = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
     struct mailbox *mbox = NULL;
     const char *msgid;
-    json_t *matchprops;
     int i, r;
-    void *iter;
 
     assert(!want_expunged || expungedids);
 
@@ -3237,17 +3240,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     if (want_expunged) *expungedids = json_pack("[]");
 
     /* Build searchargs */
-    matchprops = json_pack("{}");
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = buildsearch(req, filter, NULL, matchprops);
-
-    /* Add required JMAP properties to the property context */
-    iter = json_object_iter(matchprops);
-    while (iter) {
-        _addprop(req, json_object_iter_key(iter));
-        iter = json_object_iter_next(matchprops, iter);
-    }
+    searchargs->root = buildsearch(req, filter, NULL, &props);
 
     /* Run the search query */
     memset(&init, 0, sizeof(init));
@@ -3316,9 +3311,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (hash_lookup(msgid, &window->ids))
             goto doneloop;
 
-        if (_getprops(req)) {
-            /* Match the filter to the JMAP message */
-            if ((r = jmapmsg_from_record(req, mbox, &record, &msg))) {
+        if (props) {
+            /* Match the filter to the JMAP message properties */
+            if ((r = jmapmsg_from_record(req, props, mbox, &record, &msg))) {
                 syslog(LOG_ERR, "jmapmsg_search: could not convert %s:%d: %s",
                         mbox->name, record.uid, error_message(r));
                 r = 0;
@@ -3420,6 +3415,10 @@ doneloop:
 
 done:
     if (mbox) _closembox(req, &mbox);
+    if (props) {
+        free_hash_table(props, NULL);
+        free(props);
+    }
     free_hash_table(&window->ids, NULL);
     free_hashu64_table(&window->cids, NULL);
     free_hashu64_table(&cids, NULL);
@@ -3833,7 +3832,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     struct searchargs *searchargs = NULL;
     struct index_init init;
     const char *msgid;
-    json_t *matchprops, *snippet = NULL;
+    json_t *snippet = NULL;
     int r = 0;
     json_t *val;
     size_t i;
@@ -3844,11 +3843,9 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     *notfound = json_pack("[]");
 
     /* Build searchargs */
-    matchprops = json_pack("{}");
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = buildsearch(req, filter, NULL, matchprops);
-    json_decref(matchprops);
+    searchargs->root = buildsearch(req, filter, NULL, NULL);
 
     /* Build the search query */
     memset(&init, 0, sizeof(init));
@@ -4030,15 +4027,17 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
     size_t i, j;
     struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
     conversation_t *conv = NULL;
+    hash_table props = HASH_TABLE_INITIALIZER;
     int r = 0;
 
     *threads = json_pack("[]");
     *notfound = json_pack("[]");
 
     /* We need these properties for each JMAP message */
-    _addprop(req, "id");
-    _addprop(req, "inReplyToMessageId");
-    _addprop(req, "isDraft");
+    construct_hash_table(&props, 3, 0);
+    hash_insert("id", (void*)1, &props);
+    hash_insert("inReplyToMessageId", (void*)1, &props);
+    hash_insert("isDraft", (void*)1, &props);
 
     json_array_foreach(threadids, i, val) {
         conversation_id_t cid;
@@ -4082,7 +4081,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
                 if (record->cid == cid) {
                     int isdraft;
 
-                    r = jmapmsg_from_record(req, mbox, record, &msg);
+                    r = jmapmsg_from_record(req, &props, mbox, record, &msg);
                     if (r) continue;
 
                     isdraft = json_object_get(msg, "isDraft") == json_true();
@@ -4165,6 +4164,7 @@ doneloop:
     r = 0;
 
 done:
+    free_hash_table(&props, NULL);
     if (conv) conversation_free(conv);
     if (r) {
         json_decref(*threads);
@@ -4256,7 +4256,8 @@ static int getMessages(jmap_req_t *req)
     json_t *notfound = json_pack("[]");
     json_t *invalid = json_pack("[]");
     size_t i;
-    json_t *ids, *val, *props, *res, *item;
+    json_t *ids, *val, *properties, *res, *item;
+    hash_table *props = NULL;
 
     _initreq(req);
 
@@ -4277,11 +4278,13 @@ static int getMessages(jmap_req_t *req)
     }
 
     /* properties */
-    props = json_object_get(req->args, "properties");
-    if (props && json_array_size(props)) {
-        json_array_foreach(props, i, val) {
+    properties = json_object_get(req->args, "properties");
+    if (properties && json_array_size(properties)) {
+        props = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(props, json_array_size(properties) + 1, 0);
+        json_array_foreach(properties, i, val) {
             if (json_string_value(val)) {
-                _addprop(req, json_string_value(val));
+                hash_insert(json_string_value(val), (void*)1, props);
             }
         }
     }
@@ -4311,7 +4314,7 @@ static int getMessages(jmap_req_t *req)
         if (r) goto done;
 
         r = mailbox_find_index_record(mbox, uid, &record);
-        if (!r) jmapmsg_from_record(req, mbox, &record, &msg);
+        if (!r) jmapmsg_from_record(req, props, mbox, &record, &msg);
 
         _closembox(req, &mbox);
 
@@ -4349,6 +4352,10 @@ doneloop:
     json_array_append_new(req->response, item);
 
 done:
+    if (props) {
+        free_hash_table(props, NULL);
+        free(props);
+    }
     json_decref(list);
     json_decref(notfound);
     _finireq(req);
@@ -6167,6 +6174,7 @@ int jmapmsg_import_cb(jmap_req_t *req __attribute__((unused)),
 int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 {
     struct jmapmsg_import_data data = { BUF_INITIALIZER, NULL };
+    hash_table props = HASH_TABLE_INITIALIZER;
     struct body *body = NULL;
     struct index_record *record = NULL;
     struct mailbox *mbox = NULL;
@@ -6212,12 +6220,19 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     r = mailbox_find_index_record(mbox, uid, record);
     if (r) goto done;
 
-    r = jmapmsg_from_record(req, mbox, record, createdmsg);
+    construct_hash_table(&props, 4, 0);
+    hash_insert("id", (void*)1, &props);
+    hash_insert("blobId", (void*)1, &props);
+    hash_insert("threadId", (void*)1, &props);
+    hash_insert("size", (void*)1, &props);
+
+    r = jmapmsg_from_record(req, &props, mbox, record, createdmsg);
     if (r) goto done;
 
     _closembox(req, &mbox);
 
 done:
+    free_hash_table(&props, NULL);
     buf_free(&data.msg_buf);
     if (mbox) _closembox(req, &mbox);
     if (record) free(record);
@@ -6303,11 +6318,6 @@ static int importMessages(jmap_req_t *req)
     /* Import messages */
     created = json_pack("{}");
     notcreated = json_pack("{}");
-
-    _addprop(req, "id");
-    _addprop(req, "blobId");
-    _addprop(req, "threadId");
-    _addprop(req, "size");
 
     json_object_foreach(msgs, id, msg) {
         json_t *mymsg;
