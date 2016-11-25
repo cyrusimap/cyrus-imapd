@@ -4203,7 +4203,7 @@ static int getThreads(jmap_req_t *req)
             buf_reset(&buf);
         }
     }
-    if (JNOTNULL(fetchprops) && !json_typeof(fetchprops) == JSON_ARRAY) {
+    if (JNOTNULL(fetchprops) && !json_array_size((fetchprops))) {
         json_array_append_new(invalid, json_string("fetchMessageProperties"));
     }
 
