@@ -1511,7 +1511,6 @@ static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
 
     /* Is this a more recent update for an id that we have already seen? */
     if ((update = json_object_get(data->removed, mbentry->uniqueid))) {
-        /* FIXME safe cast? should be OK... */
         modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
         if (modseq <= mbentry->foldermodseq) {
             json_object_del(data->removed, mbentry->uniqueid);
@@ -2798,7 +2797,6 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "sinceMessageState")))) {
             /* non-standard */
             e = search_expr_new(this, SEOP_GT);
-            /* FIXME does search_expr optimise for mailbox modseqs? */
             e->attr = search_attr_find("modseq");
             e->value.u = atomodseq_t(s);
         }
@@ -3579,9 +3577,7 @@ static int getMessageUpdates(jmap_req_t *req)
     }
     json_decref(invalid);
 
-    /* FIXME we might miss to report some messages as removed, when they
-     * already have been expired. can we determine the modseq of the latest
-     * cyr_expire call? if so, we could return "cannotCalculateChanges" */
+    /* FIXME need to store deletemodseq in counters */
 
     /* Search for updates */
     filter = json_pack("{s:s}", "sinceMessageState", since);
@@ -3672,9 +3668,7 @@ static int getThreadUpdates(jmap_req_t *req)
     }
     json_decref(invalid);
 
-    /* FIXME we might miss to report some threads as removed, if all their
-     * mesages already were expired. can we determine the modseq of the latest
-     * cyr_expire call? if so, we could return "cannotCalculateChanges" */
+    /* FIXME need deletedmodseq in counters */
 
     /* Search for message updates and collapse threads */
     filter = json_pack("{s:s}", "sinceMessageState", since);
