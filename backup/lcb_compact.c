@@ -275,106 +275,119 @@ static int compact_required(struct backup_chunk_list *all_chunks,
     return 0;
 }
 
+static int want_append_message(struct dlist *dlist,
+                               struct sync_msgid_list *keep_message_guids)
+{
+    struct dlist *di, *next;
+
+    for (di = dlist->head; di; di = next) {
+        struct message_guid *guid = NULL;
+
+        /* save next pointer now in case we need to unstitch */
+        next = di->next;
+
+        if (!dlist_tofile(di, NULL, &guid, NULL, NULL))
+            continue;
+
+        if (!sync_msgid_lookup(keep_message_guids, guid)) {
+            syslog(LOG_DEBUG, "%s: MESSAGE no longer needed: %s",
+                                __func__, message_guid_encode(guid));
+            dlist_unstitch(dlist, di);
+            dlist_unlink_files(di);
+            dlist_free(&di);
+        }
+    }
+
+    if (dlist->head) {
+        syslog(LOG_DEBUG, "%s: keeping MESSAGE line", __func__);
+        return 1;
+    }
+
+    syslog(LOG_DEBUG, "%s: MESSAGE line has no more messages", __func__);
+    return 0;
+}
+
+static int want_append_mailbox(struct backup *orig_backup,
+                               int orig_chunk_id,
+                               struct dlist *dlist)
+{
+    struct dlist *record = NULL;
+    const char *uniqueid = NULL;
+    struct backup_mailbox *mailbox = NULL;
+    int mailbox_last_chunk_id = 0;
+
+    if (!dlist_getatom(dlist, "UNIQUEID", &uniqueid)) {
+        syslog(LOG_DEBUG, "%s: MAILBOX line with no UNIQUEID", __func__);
+        return 1; /* better keep it for now */
+    }
+
+    dlist_getlist(dlist, "RECORD", &record);
+    if (record && record->head) {
+        struct dlist *ki = NULL;
+
+        /* keep MAILBOX lines that contain the last RECORD for any message */
+        for (ki = record->head; ki; ki = ki->next) {
+            const char *guid = NULL;
+            struct backup_mailbox_message *mailbox_message = NULL;
+            int mailbox_message_last_chunk_id = 0;
+
+            if (!dlist_getatom(ki, "GUID", &guid)) {
+                syslog(LOG_DEBUG, "%s: MAILBOX RECORD with no GUID", __func__);
+                return 1; /* better keep it for now */
+            }
+
+            mailbox_message = backup_get_mailbox_message(orig_backup, uniqueid, guid);
+            if (!mailbox_message) {
+                /* already been compacted out by earlier run. we don't need
+                 * to keep the MAILBOX line for /this/ record, but may still
+                 * need it for other records.
+                 */
+                continue;
+            }
+
+            mailbox_message_last_chunk_id = mailbox_message->last_chunk_id;
+            backup_mailbox_message_free(&mailbox_message);
+
+            if (mailbox_message_last_chunk_id == orig_chunk_id) {
+                syslog(LOG_DEBUG, "%s: keeping MAILBOX line containing last RECORD for guid %s",
+                                    __func__, guid);
+                return 1;
+            }
+        }
+    }
+
+    mailbox = backup_get_mailbox_by_uniqueid(orig_backup, uniqueid,
+                                             BACKUP_MAILBOX_NO_RECORDS);
+    if (!mailbox) {
+        /* what? */
+        syslog(LOG_DEBUG, "%s: couldn't find mailbox entry for uniqueid %s", __func__, uniqueid);
+        return 1; /* better keep it for now */
+    }
+
+    mailbox_last_chunk_id = mailbox->last_chunk_id;
+    backup_mailbox_free(&mailbox);
+
+    if (mailbox_last_chunk_id == orig_chunk_id) {
+        /* keep all mailbox lines from the chunk recorded as its last */
+        syslog(LOG_DEBUG, "%s: keeping MAILBOX line from its last known chunk", __func__);
+        return 1;
+    }
+
+    syslog(LOG_DEBUG, "%s: discarding stale MAILBOX line (chunk %d, last %d, uniqueid %s)",
+                        __func__, orig_chunk_id, mailbox_last_chunk_id, uniqueid);
+    return 0;
+}
+
 static int want_append(struct backup *orig_backup,
                        int orig_chunk_id,
                        struct dlist *dlist,
                        struct sync_msgid_list *keep_message_guids)
 {
     if (strcmp(dlist->name, "MESSAGE") == 0) {
-        struct dlist *di, *next;
-
-        for (di = dlist->head; di; di = next) {
-            struct message_guid *guid = NULL;
-
-            /* save next pointer now in case we need to unstitch */
-            next = di->next;
-
-            if (!dlist_tofile(di, NULL, &guid, NULL, NULL))
-                continue;
-
-            if (!sync_msgid_lookup(keep_message_guids, guid)) {
-                syslog(LOG_DEBUG, "%s: MESSAGE no longer needed: %s",
-                                  __func__, message_guid_encode(guid));
-                dlist_unstitch(dlist, di);
-                dlist_unlink_files(di);
-                dlist_free(&di);
-            }
-        }
-
-        if (dlist->head) {
-            syslog(LOG_DEBUG, "%s: keeping MESSAGE line", __func__);
-            return 1;
-        }
-
-        syslog(LOG_DEBUG, "%s: MESSAGE line has no more messages", __func__);
-        return 0;
+        return want_append_message(dlist, keep_message_guids);
     }
     else if (strcmp(dlist->name, "MAILBOX") == 0) {
-        struct dlist *record = NULL;
-        const char *uniqueid = NULL;
-        struct backup_mailbox *mailbox = NULL;
-        int mailbox_last_chunk_id = 0;
-
-        if (!dlist_getatom(dlist, "UNIQUEID", &uniqueid)) {
-            syslog(LOG_DEBUG, "%s: MAILBOX line with no UNIQUEID", __func__);
-            return 1; /* better keep it for now */
-        }
-
-        dlist_getlist(dlist, "RECORD", &record);
-        if (record && record->head) {
-            struct dlist *ki = NULL;
-
-            /* keep MAILBOX lines that contain the last RECORD for any message */
-            for (ki = record->head; ki; ki = ki->next) {
-                const char *guid = NULL;
-                struct backup_mailbox_message *mailbox_message = NULL;
-                int mailbox_message_last_chunk_id = 0;
-
-                if (!dlist_getatom(ki, "GUID", &guid)) {
-                    syslog(LOG_DEBUG, "%s: MAILBOX RECORD with no GUID", __func__);
-                    return 1; /* better keep it for now */
-                }
-
-                mailbox_message = backup_get_mailbox_message(orig_backup, uniqueid, guid);
-                if (!mailbox_message) {
-                    /* already been compacted out by earlier run. we don't need
-                     * to keep the MAILBOX line for /this/ record, but may still
-                     * need it for other records.
-                     */
-                    continue;
-                }
-
-                mailbox_message_last_chunk_id = mailbox_message->last_chunk_id;
-                backup_mailbox_message_free(&mailbox_message);
-
-                if (mailbox_message_last_chunk_id == orig_chunk_id) {
-                    syslog(LOG_DEBUG, "%s: keeping MAILBOX line containing last RECORD for guid %s",
-                                      __func__, guid);
-                    return 1;
-                }
-            }
-        }
-
-        mailbox = backup_get_mailbox_by_uniqueid(orig_backup, uniqueid,
-                                                 BACKUP_MAILBOX_NO_RECORDS);
-        if (!mailbox) {
-            /* what? */
-            syslog(LOG_DEBUG, "%s: couldn't find mailbox entry for uniqueid %s", __func__, uniqueid);
-            return 1; /* better keep it for now */
-        }
-
-        mailbox_last_chunk_id = mailbox->last_chunk_id;
-        backup_mailbox_free(&mailbox);
-
-        if (mailbox_last_chunk_id == orig_chunk_id) {
-            /* keep all mailbox lines from the chunk recorded as its last */
-            syslog(LOG_DEBUG, "%s: keeping MAILBOX line from its last known chunk", __func__);
-            return 1;
-        }
-
-        syslog(LOG_DEBUG, "%s: discarding stale MAILBOX line (chunk %d, last %d, uniqueid %s)",
-                          __func__, orig_chunk_id, mailbox_last_chunk_id, uniqueid);
-        return 0;
+        return want_append_mailbox(orig_backup, orig_chunk_id, dlist);
     }
     /* FIXME detect other stale data types */
     else {
