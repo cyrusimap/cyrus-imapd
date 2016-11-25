@@ -323,37 +323,46 @@ static int want_append_mailbox(struct backup *orig_backup,
 
     dlist_getlist(dlist, "RECORD", &record);
     if (record && record->head) {
-        struct dlist *ki = NULL;
+        struct dlist *ki = NULL, *next = NULL;
+        int keep = 0;
 
-        /* keep MAILBOX lines that contain the last RECORD for any message */
-        for (ki = record->head; ki; ki = ki->next) {
+        /* keep MAILBOX lines that contain the last RECORD for any message, */
+        /* pruning out stale RECORDs */
+        for (ki = record->head; ki; ki = next) {
             const char *guid = NULL;
             struct backup_mailbox_message *mailbox_message = NULL;
-            int mailbox_message_last_chunk_id = 0;
+
+            /* save next pointer now in case we need to unstitch */
+            next = ki->next;
 
             if (!dlist_getatom(ki, "GUID", &guid)) {
                 syslog(LOG_DEBUG, "%s: MAILBOX RECORD with no GUID", __func__);
-                return 1; /* better keep it for now */
-            }
-
-            mailbox_message = backup_get_mailbox_message(orig_backup, uniqueid, guid);
-            if (!mailbox_message) {
-                /* already been compacted out by earlier run. we don't need
-                 * to keep the MAILBOX line for /this/ record, but may still
-                 * need it for other records.
-                 */
+                keep = 1; /* better keep it for now */
                 continue;
             }
 
-            mailbox_message_last_chunk_id = mailbox_message->last_chunk_id;
-            backup_mailbox_message_free(&mailbox_message);
+            mailbox_message = backup_get_mailbox_message(orig_backup, uniqueid, guid);
+            if (mailbox_message) {
+                int mailbox_message_last_chunk_id = mailbox_message->last_chunk_id;
+                backup_mailbox_message_free(&mailbox_message);
 
-            if (mailbox_message_last_chunk_id == orig_chunk_id) {
-                syslog(LOG_DEBUG, "%s: keeping MAILBOX line containing last RECORD for guid %s",
-                                    __func__, guid);
-                return 1;
+                if (mailbox_message_last_chunk_id == orig_chunk_id) {
+                    syslog(LOG_DEBUG, "%s: keeping MAILBOX line containing last RECORD for guid %s",
+                                        __func__, guid);
+                    keep = 1;
+                    continue;
+                }
             }
+
+            /* don't need this record */
+            syslog(LOG_DEBUG, "%s: pruning stale MAILBOX RECORD for guid %s",
+                              __func__, guid);
+            dlist_unstitch(record, ki);
+            dlist_unlink_files(ki);
+            dlist_free(&ki);
         }
+
+        if (keep) return 1;
     }
 
     mailbox = backup_get_mailbox_by_uniqueid(orig_backup, uniqueid,
