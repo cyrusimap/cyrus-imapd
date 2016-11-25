@@ -446,7 +446,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
                numexpunged, state->mboxname);
         /* send the MessageExpunge event notification for "immediate", "default"
          * and "delayed" expunge */
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
     }
 
     mboxevent_free(&mboxevent);
@@ -1163,7 +1163,7 @@ EXPORTED int index_fetch(struct index_state *state,
     index_unlock(state);
 
     /* send MessageRead event notification for successfully rewritten records */
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     index_checkflags(state, 1, 0);
@@ -1302,7 +1302,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_set_access(flagsclear, NULL, NULL, state->userid, state->mailbox->name, 1);
     mboxevent_set_numunseen(flagsclear, mailbox, state->numunseen);
 
-    mboxevent_notify(mboxevents);
+    mboxevent_notify(&mboxevents);
 
 out:
     mboxevent_freequeue(&mboxevents);

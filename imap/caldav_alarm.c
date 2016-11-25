@@ -298,7 +298,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
     mboxevent_extract_icalcomponent(event, userid, buf_cstring(&calname),
                                     comp, alarm, start, end, alarmtime, rock->floatingtz);
-    mboxevent_notify(event);
+    mboxevent_notify(&event);
     mboxevent_free(&event);
 
     buf_free(&calname);

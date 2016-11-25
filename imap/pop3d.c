@@ -596,7 +596,7 @@ int service_main(int argc __attribute__((unused)),
         mboxevent_set_access(mboxevent, saslprops.iplocalport,
                              NULL, popd_userid, NULL, 1);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 
@@ -884,7 +884,7 @@ static int expunge_deleted(void)
     mboxevent_extract_mailbox(mboxevent, popd_mailbox);
     mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
     mboxevent_set_access(mboxevent, NULL, NULL, popd_userid, NULL, 0);
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     return r;
@@ -1824,7 +1824,7 @@ int openinbox(void)
         mboxevent_set_access(mboxevent, saslprops.iplocalport,
                              saslprops.ipremoteport, popd_userid, NULL, 0);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 

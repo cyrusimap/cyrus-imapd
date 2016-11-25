@@ -1723,7 +1723,7 @@ static int jmap_write_calendarevent(json_t *event,
         mboxevent_set_numunseen(mboxevent, mbox, -1);
         mboxevent_set_access(mboxevent, NULL, NULL, req->userid, cdata->dav.mailbox, 0);
         mailbox_close(&mbox);
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
 
         if (mode & JMAP_DESTROY) {

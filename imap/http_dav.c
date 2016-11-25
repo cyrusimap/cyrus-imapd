@@ -3845,7 +3845,7 @@ static int dav_move_collection(struct transaction_t *txn,
                                        0 /* localonly*/, 0 /* force */);
         }
 
-        if (!r) mboxevent_notify(mboxevent);
+        if (!r) mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
 
         /* Attempt to delete all existing submailboxes */
@@ -3868,7 +3868,7 @@ static int dav_move_collection(struct transaction_t *txn,
                                httpd_userisadmin, httpd_userid, httpd_authstate,
                                mboxevent, 0, 0, 1 /* ignorequota */);
 
-    if (!r) mboxevent_notify(mboxevent);
+    if (!r) mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     /* Attempt to rename all submailboxes */
@@ -4581,7 +4581,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     mailbox_close(&mailbox);
 
     if (!r)
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     return ret;

@@ -5484,7 +5484,7 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     mboxevent_extract_mailbox(mboxevent, mbox);
     mboxevent_set_numunseen(mboxevent, mbox, -1);
     mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     return 0;

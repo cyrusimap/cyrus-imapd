@@ -936,7 +936,7 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_numunseen(mboxevent, mailbox, -1);
         mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
     if (r) {

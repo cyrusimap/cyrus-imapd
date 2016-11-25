@@ -286,7 +286,7 @@ EXPORTED int append_commit(struct appendstate *as)
     }
 
     /* send the list of MessageCopy or MessageAppend event notifications at once */
-    mboxevent_notify(as->mboxevents);
+    mboxevent_notify(&as->mboxevents);
 
     append_free(as);
     return 0;

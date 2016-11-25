@@ -590,7 +590,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 }
 
 #define TIMESTAMP_MAX 32
-EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
+EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
 {
     enum event_type type;
     struct mboxevent *event;
@@ -599,11 +599,11 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     const char *fname = NULL;
 
     /* nothing to notify */
-    if (!mboxevents)
+    if (!*mboxevents)
         return;
 
     /* loop over the chained list of events */
-    for (event = mboxevents; event; event = event->next) {
+    for (event = *mboxevents; event; event = event->next) {
         if (event->type == EVENT_CANCELLED)
             continue;
 
@@ -616,8 +616,15 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
             strarray_find_case(&event->next->flagnames, "\\Seen", 0) >= 0) {
 
             struct mboxevent *other = event->next;
+            // swap the outsides first
+            other->prev = event->prev;
             event->next = other->next;
+            // swap the insides
+            event->prev = other;
             other->next = event;
+            // switch the head if needed
+            if (event == *mboxevents) *mboxevents = other;
+            // and jump to this one for further processing
             event = other;
         }
 
@@ -1515,7 +1522,7 @@ void mboxevent_freequeue(struct mboxevent **mboxevent __attribute__((unused)))
 {
 }
 
-EXPORTED void mboxevent_notify(struct mboxevent *mboxevents __attribute__((unused)))
+EXPORTED void mboxevent_notify(struct mboxevent **mboxevents __attribute__((unused)))
 {
 }
 

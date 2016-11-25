@@ -301,7 +301,7 @@ EXPORTED int quota_check(const struct quota *q,
         mboxevent = mboxevent_new(EVENT_QUOTA_EXCEED);
         mboxevent_extract_quota(mboxevent, q, res);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
 
         return IMAP_QUOTA_EXCEEDED;
@@ -497,7 +497,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     }
     quota_commit(&tid);
 
-    mboxevent_notify(mboxevents);
+    mboxevent_notify(&mboxevents);
 
 out:
     quota_free(&q);

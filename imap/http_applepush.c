@@ -165,7 +165,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
                                        mailbox_userid, mailbox_uniqueid, mbtype,
                                        86400); // XXX interval from config
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     rc = HTTP_OK;

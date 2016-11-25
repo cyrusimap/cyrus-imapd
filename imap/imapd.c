@@ -1007,7 +1007,7 @@ int service_main(int argc __attribute__((unused)),
         mboxevent_set_access(mboxevent, saslprops.iplocalport,
                              saslprops.ipremoteport, imapd_userid, NULL, 1);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 
@@ -2536,7 +2536,7 @@ static void authentication_success(void)
         mboxevent_set_access(mboxevent, saslprops.iplocalport,
                              saslprops.ipremoteport, imapd_userid, NULL, 1);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 
@@ -7038,7 +7038,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* send a MailboxDelete event notification */
     if (!r)
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     /* was it a top-level user mailbox? */
@@ -7437,7 +7437,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
         /* send a MailboxRename event notification if enabled */
         if (!r)
-            mboxevent_notify(mboxevent);
+            mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 
@@ -14133,7 +14133,7 @@ static void cmd_xapplepushservice(const char *tag,
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE);
     mboxevent_set_applepushservice(mboxevent, applepushserviceargs,
                                    &notif_mailboxes, imapd_userid);
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
     buf_release(&applepushserviceargs->aps_account_id);

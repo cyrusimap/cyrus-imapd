@@ -1148,7 +1148,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 1);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 
@@ -2077,7 +2077,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         mboxevent_set_acl(mboxevent, identifier, rights);
         mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
 
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
 
     }
@@ -3094,7 +3094,7 @@ done:
         sync_log_quota(root);
 
         /* send QuotaChange and QuotaWithin event notifications */
-        mboxevent_notify(mboxevents);
+        mboxevent_notify(&mboxevents);
     }
     mboxevent_freequeue(&mboxevents);
 
@@ -3587,7 +3587,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
                                         EVENT_MAILBOX_UNSUBSCRIBE);
 
         mboxevent_set_access(mboxevent, NULL, NULL, userid, name, 1);
-        mboxevent_notify(mboxevent);
+        mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
 

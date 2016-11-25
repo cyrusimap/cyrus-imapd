@@ -242,7 +242,7 @@ struct mboxevent *mboxevent_enqueue(enum event_type type,
 /*
  * Send the queue of event notifications
  */
-void mboxevent_notify(struct mboxevent *mboxevents);
+void mboxevent_notify(struct mboxevent **mboxevents);
 
 /*
  * Release any allocated resources of this given event
