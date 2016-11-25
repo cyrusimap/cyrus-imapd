@@ -2140,10 +2140,10 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
         vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
         vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
-        vals->mailfoldersmodseq = ntohll(*((uint32_t *)(base+48)));
-        vals->caldavfoldersmodseq = ntohll(*((uint32_t *)(base+56)));
-        vals->carddavfoldersmodseq = ntohll(*((uint32_t *)(base+64)));
-        vals->notesfoldersmodseq = ntohll(*((uint32_t *)(base+72)));
+        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
         vals->uidvalidity = ntohl(*((uint32_t *)(base+80)));
         break;
 
