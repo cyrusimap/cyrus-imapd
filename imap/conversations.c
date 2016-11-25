@@ -1658,6 +1658,7 @@ static int conversations_set_guid(struct conversations_state *state,
     r = _guid_addbody(state, body, base, add);
 
     message_free_body(body);
+    free(body);
     buf_free(&item);
     return r;
 }
