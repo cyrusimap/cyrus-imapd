@@ -710,7 +710,7 @@ static icaltimezone *tz_from_tzid(const char *tzid)
     if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
         return icaltimezone_get_utc_timezone();
 
-    return icaltimezone_get_builtin_timezone_from_tzid(tzid);
+    return icaltimezone_get_builtin_timezone(tzid);
 }
 
 /* Determine the Olson TZID, if any, of the ical property prop. */
