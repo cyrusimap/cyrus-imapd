@@ -228,6 +228,7 @@ static void _closembox(jmap_req_t *req, struct mailbox **mboxp)
     if (!(--rec->refcount)) {
         ptrarray_remove(cache, i);
         mailbox_close(&rec->mbox);
+        free(rec);
     }
     *mboxp = NULL;
 }
@@ -2620,6 +2621,8 @@ static int jmapmsg_from_record(jmap_req_t *req, hash_table *props,
     /* Parse message body structure */
     message_read_bodystructure(record, &body);
     r = jmapmsg_from_body(req, props, body, &msg_buf, mbox, record, 0, msgp);
+    message_free_body(body);
+    free(body);
     buf_free(&msg_buf);
     return r;
 }
@@ -3041,6 +3044,8 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
             }
         }
     }
+
+    buf_free(&buf);
 }
 
 static struct sortcrit *buildsort(json_t *sort)
@@ -3213,6 +3218,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     hash_table *props = NULL;
     struct index_state *state = NULL;
     search_query_t *query = NULL;
+    struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
     struct mailbox *mbox = NULL;
@@ -3241,13 +3247,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     if (r) goto done;
 
     query = search_query_new(state, searchargs);
-    query->sortcrit = buildsort(sort);
+    query->sortcrit = sortcrit = buildsort(sort);
     query->multiple = 1;
     query->need_ids = 1;
     query->verbose = 1;
     query->want_expunged = want_expunged;
     r = search_query_run(query);
-    if (r) return r;
+    if (r) goto done;
 
     /* Initialize window state */
     window->mdcount = query->merged_msgdata.count;
@@ -3409,6 +3415,7 @@ done:
     free_hash_table(&window->ids, NULL);
     free_hashu64_table(&window->cids, NULL);
     free_hashu64_table(&cids, NULL);
+    freesortcrit(sortcrit);
     search_query_free(query);
     state->mailbox = NULL;
     index_close(&state);
@@ -6343,7 +6350,7 @@ done:
 
 static int getIdentities(jmap_req_t *req)
 {
-    int r;
+    int r = 0;
     json_t *res, *item, *val, *ids, *notfound, *identities, *me;
     struct buf buf = BUF_INITIALIZER;
     const char *s;
@@ -6371,7 +6378,6 @@ static int getIdentities(jmap_req_t *req)
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
         goto done;
     }
     json_decref(invalid);
@@ -6397,13 +6403,15 @@ static int getIdentities(jmap_req_t *req)
         json_array_foreach(ids, i, val) {
             if (strcmp(json_string_value(val), req->userid)) {
                 json_array_append(notfound, val);
-            } else if (!json_array_size(identities)) {
-                json_array_append_new(identities, me);
+            }
+            else {
+                json_array_append(identities, me);
             }
         }
     } else {
-        json_array_append_new(identities, me);
+        json_array_append(identities, me);
     }
+    json_decref(me);
 
     /* Prepare the response */
     res = json_pack("{}");
