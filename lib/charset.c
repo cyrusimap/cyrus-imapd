@@ -2398,15 +2398,15 @@ EXPORTED void charset_freepat(comp_pat *pat)
 EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
                          const char *s, size_t len, int flags)
 {
+    if (!substr[0])
+        return 1; /* zero length string always matches */
+
     struct convert_rock *tosearch;
     struct convert_rock *input;
+    int res;
     charset_t utf8from, utf8to;
     utf8from = charset_lookupname("utf-8");
     utf8to = charset_lookupname("utf-8");
-    int res;
-
-    if (!substr[0])
-        return 1; /* zero length string always matches */
 
     /* set up the search handler */
     tosearch = search_init(substr, pat);
