@@ -740,6 +740,141 @@ sub test_setmailboxes_parent
     $self->assert_str_equals($res->[0][1]{destroyed}[2], $id2);
 }
 
+sub test_getmailboxupdates
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $state;
+    my $res;
+    my %m;
+    my $inbox;
+    my $foo;
+    my $drafts;
+
+    xlog "get mailbox list";
+    $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $inbox = $m{"Inbox"}->{id};
+    $self->assert_not_null($inbox);
+
+    xlog "get mailbox updates (expect no changes)";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+
+    xlog "create mailbox via IMAP";
+    $imaptalk->create("INBOX.foo")
+        or die "Cannot create mailbox INBOX.foo: $@";
+
+    xlog "get mailbox list";
+    $res = $jmap->Request([['getMailboxes', {}, "R1"]]);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $foo = $m{"foo"}->{id};
+    $self->assert_not_null($foo);
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $drafts = $res->[0][1]{created}{"#1"}{id};
+    $self->assert_not_null($drafts);
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "rename mailbox foo to bar";
+    $res = $jmap->Request([
+            ['setMailboxes', { update => { $foo => {
+                            name => "bar",
+                            sortOrder => 10
+             }}}, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "delete mailbox bar";
+    $res = $jmap->Request([
+            ['setMailboxes', {
+                    destroy => [ $foo ],
+             }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+
+    xlog "rename mailbox drafts to stfard";
+    $res = $jmap->Request([
+            ['setMailboxes', {
+                    update => { $drafts => { name => "stfard" } },
+             }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+
+    xlog "get mailbox updates, limit to 1";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($foo, $res->[0][1]{removed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog "get mailbox updates, limit to 1";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $state = $res->[0][1]->{newState};
+
+    xlog "get mailbox updates (expect no changes)";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+}
+
 sub test_getmessages
     :min_version_3_0
 {
