@@ -574,7 +574,7 @@ static json_t *jmapmbox_getstate(jmap_req_t *req)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
-    modseq_t modseq = req->counters.mailmodseq; /* FIXME mailfoldersmodseq? */
+    modseq_t modseq = req->counters.mailfoldersmodseq;
     buf_printf(&buf, MODSEQ_FMT, modseq);
     state = json_string(buf_cstring(&buf));
     buf_free(&buf);
@@ -1469,18 +1469,7 @@ static int setMailboxes(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    /* Update mailbox state */
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        mboxname_read_counters(req->inbox->name, &req->counters);
-        mboxname_nextmodseq(req->inbox->name, req->counters.mailfoldersmodseq, 0, 1); /* FIXME mailfoldersmodseq? */
-        mboxname_read_counters(req->inbox->name, &req->counters);
-
-        if (r) goto done;
-    }
-
+    mboxname_read_counters(req->inbox->name, &req->counters);
     json_object_set_new(set, "newState", jmapmbox_getstate(req));
 
     json_incref(set);
@@ -6128,15 +6117,7 @@ static int setMessages(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    /* FIXME Bump mailbox state for any changes?/
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        r = jmap_bumpstate(req, MBTYPE_MAILBOX, 0);
-        if (r) goto done;
-    }
-    */
+    mboxname_read_counters(req->inbox->name, &req->counters);
     json_object_set_new(set, "newState", jmapmsg_getstate(req));
 
     json_incref(set);
