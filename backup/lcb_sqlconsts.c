@@ -474,7 +474,7 @@ const char backup_index_message_select_chunkid_sql[] =
 ;
 
 const char backup_index_message_select_live_chunkid_sql[] =
-    "SELECT " MESSAGE_SELECT_FIELDS
+    "SELECT DISTINCT " MESSAGE_SELECT_FIELDS
     " FROM message AS m"
     " JOIN mailbox_message AS mm"
     " ON m.id = mm.message_id"

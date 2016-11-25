@@ -19,6 +19,7 @@ Synopsis
     **ctl_backups** [OPTIONS] list [LIST OPTIONS] [[MODE] *backup*...]
     **ctl_backups** [OPTIONS] lock [LOCK OPTIONS] [MODE] *backup*
     **ctl_backups** [OPTIONS] reindex [MODE] *backup*...
+    **ctl_backups** [OPTIONS] stat [MODE] *backup*...
     **ctl_backups** [OPTIONS] verify [MODE] *backup*...
 
 Description
@@ -65,6 +66,24 @@ See :ref:`ctl-backups-modes` below.
     Rebuild the indexes for the named backups, based on the raw backup data.
     This is useful if their index files have been corrupted, or if the index
     format has changed.
+
+.. option:: stat
+
+    Display stats for the named backups.  Columns are separated by tabs, and
+    are:
+
+    * userid or filename
+    * compressed (i.e. on disk) size
+    * uncompressed size
+    * compactable size
+    * compression ratio
+    * utilisation ratio
+
+    The compactable size is an approximation of how much uncompressed data would
+    remain after **compact** is performed.  The utilisation ratio is this figure
+    expressed as a percentage of the uncompressed size.  Note that this
+    approximation is an underestimate.  That is to say, a backup that has just
+    been compacted will probably still report less than 100% utilisation.
 
 .. option:: verify
 

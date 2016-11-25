@@ -78,6 +78,7 @@ static void usage(void)
     fprintf(stderr, "    %s [options] list [list_opts] [[mode] backup...]\n", argv0);
     fprintf(stderr, "    %s [options] lock [lock_opts] [mode] backup\n", argv0);
     fprintf(stderr, "    %s [options] reindex [mode] backup...\n", argv0);
+    fprintf(stderr, "    %s [options] stat [mode] backup...\n", argv0);
     fprintf(stderr, "    %s [options] verify [mode] backup...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
@@ -86,6 +87,7 @@ static void usage(void)
             "    list [list_opts]    # list backups (all if none specified)\n"
             "    lock [lock_opts]    # lock specified backup\n"
             "    reindex             # reindex specified backups\n"
+            "    stat                # show stats of specified backups\n"
             "    verify              # verify specified backups\n"
     );
 
@@ -165,6 +167,7 @@ enum ctlbu_cmd {
     CTLBU_CMD_MOVE,
     CTLBU_CMD_RECONSTRUCT,
     CTLBU_CMD_REINDEX,
+    CTLBU_CMD_STAT,
     CTLBU_CMD_VERIFY,
 };
 
@@ -189,6 +192,9 @@ static int cmd_move_one(void *rock,
 static int cmd_reindex_one(void *rock,
                            const char *userid, size_t userid_len,
                            const char *fname, size_t fname_len);
+static int cmd_stat_one(void *rock,
+                        const char *userid, size_t userid_len,
+                        const char *fname, size_t fname_len);
 static int cmd_verify_one(void *rock,
                           const char *userid, size_t userid_len,
                           const char *fname, size_t fname_len);
@@ -202,6 +208,7 @@ static foreach_cb *const cmd_func[] = {
     cmd_move_one,
     NULL, /* reconstruct one doesn't make sense */
     cmd_reindex_one,
+    cmd_stat_one,
     cmd_verify_one,
 };
 
@@ -237,6 +244,9 @@ static enum ctlbu_cmd parse_cmd_string(const char *cmd)
     case 'r':
         if (strcmp(cmd, "reconstruct") == 0) return CTLBU_CMD_RECONSTRUCT;
         if (strcmp(cmd, "reindex") == 0) return CTLBU_CMD_REINDEX;
+        break;
+    case 's':
+        if (strcmp(cmd, "stat") == 0) return CTLBU_CMD_STAT;
         break;
     case 'v':
         if (strcmp(cmd, "verify") == 0) return CTLBU_CMD_VERIFY;
@@ -711,6 +721,103 @@ static int cmd_reindex_one(void *rock,
 
     if (r) ++ctlbu_skips_fails;
     if (r == IMAP_MAILBOX_LOCKED) r = 0;
+    return options->stop_on_error ? r : 0;
+}
+
+static int _sum_message_lengths_cb(const struct backup_message *message,
+                                   void *rock)
+{
+    size_t *sum = (size_t *) rock;
+
+    *sum += message->length;
+
+    return 0;
+}
+
+static int cmd_stat_one(void *rock,
+                        const char *key, size_t key_len,
+                        const char *data, size_t data_len)
+{
+    struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
+    struct backup *backup = NULL;
+    char *userid = NULL;
+    char *fname = NULL;
+    struct backup_chunk_list *all_chunks = NULL, *keep_chunks = NULL;
+    struct backup_chunk *chunk;
+    time_t since;
+    size_t compactable = 0, uncompressed = 0;
+    struct stat data_stat;
+    double cmp_ratio, utl_ratio;
+    int r;
+
+    /* input args might not be 0-terminated, so make a safe copy */
+    if (key_len)
+        userid = xstrndup(key, key_len);
+    if (data_len)
+        fname = xstrndup(data, data_len);
+
+    r = backup_open_paths(&backup, fname, NULL,
+                          options->wait, BACKUP_OPEN_NOCREATE);
+    if (r) goto done;
+
+    r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
+    if (r) goto done;
+
+    const int retention_days = config_getint(IMAPOPT_BACKUP_RETENTION_DAYS);
+    if (retention_days > 0) {
+        since = time(0) - (retention_days * 24 * 60 * 60);
+    }
+    else {
+        /* zero or negative retention days means "keep forever" */
+        since = -1;
+    }
+
+    all_chunks = backup_get_chunks(backup);
+    keep_chunks = backup_get_live_chunks(backup, since);
+
+    if (!all_chunks || !keep_chunks) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* uncompressed length is sum of lengths of all chunks */
+    for (chunk = all_chunks->head; chunk; chunk = chunk->next) {
+        uncompressed += chunk->length;
+    }
+
+    /* compactable length is sum of live message lengths in keep chunks */
+    for (chunk = keep_chunks->head; chunk; chunk = chunk->next) {
+        backup_message_foreach(backup, chunk->id, &since,
+                               _sum_message_lengths_cb, &compactable);
+    }
+
+    /* compression ratio is compressed length / uncompressed length */
+    r = backup_stat(backup, &data_stat, NULL);
+    if (r) goto done;
+    cmp_ratio = 100.0 * data_stat.st_size / uncompressed;
+
+    /* utilisation ratio is compactable length / uncompressed length */
+    utl_ratio = 100.0 * compactable / uncompressed;
+
+    printf("%s\t" OFF_T_FMT "\t" SIZE_T_FMT "\t" SIZE_T_FMT "\t%6.1f%%\t%6.1f%%\n",
+           userid ? userid : fname,
+           data_stat.st_size,
+           uncompressed,
+           compactable,
+           cmp_ratio,
+           utl_ratio);
+
+done:
+    if (r) {
+        fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
+    }
+
+    if (all_chunks) backup_chunk_list_free(&all_chunks);
+    if (keep_chunks) backup_chunk_list_free(&keep_chunks);
+    if (backup) backup_close(&backup);
+    if (fname) free(fname);
+    if (userid) free(userid);
+
     return options->stop_on_error ? r : 0;
 }
 
