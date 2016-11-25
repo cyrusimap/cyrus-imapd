@@ -6039,6 +6039,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
             }
 
             if (ical) icalcomponent_free(ical);
+            buf_free(&buf);
         }
 
         if (valid) {
