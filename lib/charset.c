@@ -2054,8 +2054,9 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
 EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
 {
     charset_t utf8 = charset_lookupname("utf-8");
-    return charset_convert(s, utf8, flags);
+    char *ret = charset_convert(s, utf8, flags);
     charset_free(&utf8);
+    return ret;
 }
 
 /* Convert from a given charset and encoding into utf8 */
@@ -2064,7 +2065,7 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
     struct convert_rock *input, *tobuffer;
     char *res;
     charset_t utf8;
-   
+
     /* Initialize character set mapping */
     if (charset == CHARSET_UNKNOWN_CHARSET) return NULL;
 
