@@ -78,6 +78,7 @@
 
 static int getMailboxes(jmap_req_t *req);
 static int setMailboxes(jmap_req_t *req);
+static int getMailboxUpdates(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
@@ -87,8 +88,6 @@ static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
 static int getIdentities(jmap_req_t *req);
 static int getThreadUpdates(jmap_req_t *req);
-
-/* FIXME getMailboxUpdates */
 
 /* TODO:
  * - copyMessages
@@ -102,6 +101,7 @@ static int getThreadUpdates(jmap_req_t *req);
 jmap_msg_t jmap_mail_messages[] = {
     { "getMailboxes",           &getMailboxes },
     { "setMailboxes",           &setMailboxes },
+    { "getMailboxUpdates",      &getMailboxUpdates },
     { "getMessageList",         &getMessageList },
     { "getMessages",            &getMessages },
     { "setMessages",            &setMessages },
@@ -603,7 +603,7 @@ static json_t *jmapmbox_getstate(jmap_req_t *req)
     return state;
 }
 
-static json_t *jmapmsg_fmtstate(modseq_t modseq)
+static json_t *jmap_fmtstate(modseq_t modseq)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
@@ -615,7 +615,7 @@ static json_t *jmapmsg_fmtstate(modseq_t modseq)
 
 static json_t *jmapmsg_getstate(jmap_req_t *req)
 {
-    return jmapmsg_fmtstate(req->counters.mailmodseq);
+    return jmap_fmtstate(req->counters.mailmodseq);
 }
 
 static int getMailboxes(jmap_req_t *req)
@@ -1508,6 +1508,217 @@ done:
     if (mboxname) free(mboxname);
     if (parentname) free(parentname);
     if (set) json_decref(set);
+    _finireq(req);
+    return r;
+}
+
+struct jmapmbox_updates_data {
+    json_t *changed;        /* maps mailbox ids to {id:foldermodseq} */
+    json_t *removed;        /* maps mailbox ids to {id:foldermodseq} */
+    modseq_t frommodseq;
+};
+
+static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct jmapmbox_updates_data *data = rock;
+    json_t *updates, *update;
+    modseq_t modseq;
+
+    /* Ignore anything but regular mailboxes */
+    if (mbentry->mbtype & ~(MBTYPE_DELETED)) {
+        return 0;
+    }
+
+    /* Ignore old changes */
+    if (mbentry->foldermodseq <= data->frommodseq) {
+        return 0;
+    }
+
+    /* Is this a more recent update for an id that we have already seen? */
+    if ((update = json_object_get(data->removed, mbentry->uniqueid))) {
+        /* FIXME safe cast? should be OK... */
+        modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
+        if (modseq <= mbentry->foldermodseq) {
+            json_object_del(data->removed, mbentry->uniqueid);
+        } else {
+            return 0;
+        }
+    }
+    if ((update = json_object_get(data->changed, mbentry->uniqueid))) {
+        modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
+        if (modseq <= mbentry->foldermodseq) {
+            json_object_del(data->changed, mbentry->uniqueid);
+        } else {
+            return 0;
+        }
+    }
+
+    /* OK, report that update */
+    update = json_pack("{s:s s:i}", "id", mbentry->uniqueid,
+                                    "modseq", mbentry->foldermodseq);
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+        updates = data->removed;
+    } else {
+        updates = data->changed;
+    }
+    json_object_set_new(updates, mbentry->uniqueid, update);
+
+    return 0;
+}
+
+static int jmapmbox_updates_cmp(const void **pa, const void **pb)
+{
+    const json_t *a = *pa, *b = *pb;
+    modseq_t ma, mb;
+
+    ma = (modseq_t) json_integer_value(json_object_get(a, "modseq"));
+    mb = (modseq_t) json_integer_value(json_object_get(b, "modseq"));
+
+    if (ma < mb)
+        return -1;
+    if (ma > mb)
+        return 1;
+    return 0;
+}
+
+static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
+                            size_t limit,
+                            json_t **changed, json_t **removed,
+                            int *has_more, json_t **newstate)
+{
+    ptrarray_t updates = PTRARRAY_INITIALIZER;
+    struct jmapmbox_updates_data data = {
+        json_pack("{}"),
+        json_pack("{}"),
+        frommodseq
+    };
+    modseq_t windowmodseq;
+    const char *id;
+    json_t *val;
+    int r, i;
+
+    /* Search for updates */
+    r = mboxlist_usermboxtree(req->userid, jmapmbox_updates_cb, &data,
+            MBOXTREE_TOMBSTONES | MBOXTREE_DELETED);
+    if (r) goto done;
+
+    /* Sort updates by modseq */
+    json_object_foreach(data.changed, id, val) {
+        ptrarray_add(&updates, val);
+    }
+    json_object_foreach(data.removed, id, val) {
+        ptrarray_add(&updates, val);
+    }
+    ptrarray_sort(&updates, jmapmbox_updates_cmp);
+
+    /* Build result */
+    *changed = json_pack("[]");
+    *removed = json_pack("[]");
+    *has_more = 0;
+    windowmodseq = 0;
+    for (i = 0; i < updates.count; i++) {
+        json_t *update = ptrarray_nth(&updates, i);
+        const char *id = json_string_value(json_object_get(update, "id"));
+        modseq_t modseq = json_integer_value(json_object_get(update,  "modseq"));
+
+        if (limit && ((size_t) i) >= limit) {
+            *has_more = 1;
+            break;
+        }
+
+        if (windowmodseq < modseq)
+            windowmodseq = modseq;
+
+        if (json_object_get(data.changed, id)) {
+            json_array_append_new(*changed, json_string(id));
+        } else {
+            json_array_append_new(*removed, json_string(id));
+        }
+    }
+
+    if (updates.count) {
+        *newstate = jmap_fmtstate(windowmodseq);
+    } else {
+        *newstate = jmap_fmtstate(frommodseq);
+    }
+
+done:
+    if (data.changed) json_decref(data.changed);
+    if (data.removed) json_decref(data.removed);
+    ptrarray_fini(&updates);
+    return r;
+}
+
+static int getMailboxUpdates(jmap_req_t *req)
+{
+    int r = 0, pe;
+    int fetch = 0, has_more = 0;
+    json_t *changed, *removed, *invalid, *item, *res;
+    json_int_t max_changes = 0;
+    json_t *oldstate, *newstate;
+    json_t *fetchprops = json_null();
+    const char *since;
+
+    _initreq(req);
+
+    /* Parse and validate arguments. */
+    invalid = json_pack("[]");
+
+    /* sinceState */
+    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
+    if (pe > 0 && !atomodseq_t(since)) {
+        json_array_append_new(invalid, json_string("sinceState"));
+    }
+    /* maxChanges */
+    pe = readprop(req->args, "maxChanges", 0, invalid, "i", &max_changes);
+    if (pe > 0 && max_changes < 0) {
+        json_array_append_new(invalid, json_string("maxChanges"));
+    }
+    /* fetch */
+    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
+    readprop(req->args, "fetchRecordProperties", 0, invalid, "o", &fetchprops);
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Search for updates */
+    r = jmapmbox_updates(req, atomodseq_t(since), max_changes,
+                         &changed, &removed, &has_more, &newstate);
+    if (r) goto done;
+    oldstate = json_string(since);
+
+    /* Prepare response */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->userid));
+    json_object_set_new(res, "oldState", oldstate);
+    json_object_set_new(res, "newState", newstate);
+    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
+    json_object_set_new(res, "changed", changed);
+    json_object_set_new(res, "removed", removed);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("messageUpdates"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+    if (fetch) {
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        json_object_set(subreq.args, "ids", changed);
+        json_object_set(subreq.args, "properties", fetchprops);
+        r = getMailboxes(&subreq);
+        json_decref(subreq.args);
+        if (r) goto done;
+    }
+
+done:
     _finireq(req);
     return r;
 }
@@ -3397,9 +3608,9 @@ static int getMessageUpdates(jmap_req_t *req)
     if (threads) json_decref(threads);
 
     if (window.limit && req->counters.mailmodseq != window.highestmodseq) {
-        newstate = jmapmsg_fmtstate(window.highestmodseq);
+        newstate = jmap_fmtstate(window.highestmodseq);
     } else {
-        newstate = jmapmsg_fmtstate(req->counters.mailmodseq);
+        newstate = jmap_fmtstate(req->counters.mailmodseq);
     }
     has_more = (json_array_size(changed) + json_array_size(removed)) < total;
     oldstate = json_string(since);
@@ -3549,9 +3760,9 @@ static int getThreadUpdates(jmap_req_t *req)
     has_more = (json_array_size(changed) + json_array_size(removed)) < total_threads;
 
     if (has_more) {
-        newstate = jmapmsg_fmtstate(window.highestmodseq);
+        newstate = jmap_fmtstate(window.highestmodseq);
     } else {
-        newstate = jmapmsg_fmtstate(req->counters.mailmodseq);
+        newstate = jmap_fmtstate(req->counters.mailmodseq);
     }
 
     oldstate = json_string(since);
