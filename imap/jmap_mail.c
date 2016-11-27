@@ -3548,8 +3548,8 @@ static int getMessageUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     int fetchmsgs = 0;
-    json_t *filter, *sort;
-    json_t *changed = NULL, *removed = NULL, *invalid, *item, *res, *threads;
+    json_t *filter = NULL, *sort = NULL;
+    json_t *changed = NULL, *removed = NULL, *invalid = NULL, *item = NULL, *res = NULL, *threads = NULL;
     json_int_t max = 0;
     size_t total, total_threads;
     int has_more = 0;
@@ -3584,21 +3584,17 @@ static int getMessageUpdates(jmap_req_t *req)
         r = 0;
         goto done;
     }
-    json_decref(invalid);
 
     /* FIXME need to store deletemodseq in counters */
 
     /* Search for updates */
     filter = json_pack("{s:s}", "sinceMessageState", since);
     sort = json_pack("[s]", "messageState asc");
-    threads = NULL;
-    changed = NULL;
-    removed = NULL;
 
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
+
     if (r) goto done;
-    if (threads) json_decref(threads);
 
     if (window.limit && req->counters.mailmodseq != window.highestmodseq) {
         newstate = jmap_fmtstate(window.highestmodseq);
@@ -3634,8 +3630,12 @@ static int getMessageUpdates(jmap_req_t *req)
     }
 
 done:
+    if (sort) json_decref(sort);
+    if (filter) json_decref(filter);
+    if (threads) json_decref(threads);
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
+    if (invalid) json_decref(invalid);
     _finireq(req);
     return r;
 }
@@ -5955,6 +5955,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
 done:
     if (mbox) _closembox(req, &mbox);
     if (mboxname) free(mboxname);
+    if (oldmailboxes) json_decref(oldmailboxes);
     if (srcmailboxes) json_decref(srcmailboxes);
     if (dstmailboxes) json_decref(dstmailboxes);
     if (newmailboxes) json_decref(newmailboxes);
