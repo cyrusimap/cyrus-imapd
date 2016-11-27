@@ -6503,6 +6503,8 @@ EXPORTED extern char *index_getheader(struct index_state *state,
         buf_free(&msgbuf);
     }
 
+    buf_cstring(&staticbuf);
+
     strarray_append(&headers, hdr);
     message_pruneheader(staticbuf.s, &headers, NULL);
     strarray_fini(&headers);
