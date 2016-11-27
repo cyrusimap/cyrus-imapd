@@ -2980,7 +2980,7 @@ sub test_importmessages
         fetchMessages => JSON::true,
         fetchMessageProperties => ["attachedMessages"],
     }, "R1"]]);
-    $blobid = (keys $res->[1][1]->{list}[0]->{attachedMessages})[0];
+    $blobid = (keys %{$res->[1][1]->{list}[0]->{attachedMessages}})[0];
     $self->assert_not_null($blobid);
 
     xlog "create drafts mailbox";
