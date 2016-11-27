@@ -372,8 +372,6 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     for (i = 0; i <= MAX_PARAM; i++) {
         if (event->params[i].filled && event->params[i].type == EVENT_PARAM_STRING)
             free(event->params[i].value.s);
-        if (event->params[i].filled && event->params[i].type == EVENT_PARAM_ARRAY)
-            strarray_free(event->params[i].value.a);
     }
 
     if (event->prev)
