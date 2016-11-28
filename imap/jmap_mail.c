@@ -3226,7 +3226,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
-    struct mailbox *mbox = NULL;
     const char *msgid;
     int i, r;
 
@@ -3279,44 +3278,44 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     for (i = 0 ; i < query->merged_msgdata.count ; i++) {
         MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
         search_folder_t *folder = md->folder;
-        struct index_record record;
         json_t *msg = NULL;
         const char *cid;
         size_t idcount = json_array_size(*messageids);
-        int is_expunged;
 
         if (!folder) continue;
 
-        /* Find message */
-        r = _openmbox(req, folder->mboxname, &mbox, 0);
-        if (r) goto done;
-
-        r = mailbox_find_index_record(mbox, md->uid, &record);
-        if (r == IMAP_NOTFOUND) {
-            _closembox(req, &mbox);
-            continue;
-        }
-        if (r) goto done;
-
         /* Ignore expunged messages, if not requested by caller */
-        is_expunged = record.system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
         if (is_expunged && !want_expunged)
             goto doneloop;
 
-        msgid = message_guid_encode(&record.guid);
+        msgid = message_guid_encode(&md->guid);
 
         /* Have we seen this message already? */
         if (hash_lookup(msgid, &window->ids))
             goto doneloop;
 
         if (props) {
+            /* Find message */
+            struct index_record record;
+            struct mailbox *mbox = NULL;
+            r = _openmbox(req, folder->mboxname, &mbox, 0);
+            if (r) goto done;
+
+            r = mailbox_find_index_record(mbox, md->uid, &record);
+
             /* Match the filter to the JMAP message properties */
-            if ((r = jmapmsg_from_record(req, props, mbox, &record, &msg))) {
+            if (!r) r = jmapmsg_from_record(req, props, mbox, &record, &msg);
+
+            _closembox(req, &mbox);
+
+            if (r) {
                 syslog(LOG_ERR, "jmapmsg_search: could not convert %s:%d: %s",
-                        mbox->name, record.uid, error_message(r));
+                        mbox->name, md->uid, error_message(r));
                 r = 0;
                 goto doneloop;
             }
+
             if (!filtermsg(req, msg, filter))
                 goto doneloop;
         }
@@ -3383,8 +3382,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             goto doneloop;
 
         /* Keep track of the highest modseq */
-        if (window->highestmodseq < record.modseq)
-            window->highestmodseq = record.modseq;
+        if (window->highestmodseq < md->modseq)
+            window->highestmodseq = md->modseq;
 
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &window->ids);
@@ -3408,11 +3407,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
 doneloop:
         if (msg) json_decref(msg);
-        _closembox(req, &mbox);
     }
 
 done:
-    if (mbox) _closembox(req, &mbox);
     if (props) {
         free_hash_table(props, NULL);
         free(props);
