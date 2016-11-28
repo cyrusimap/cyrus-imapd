@@ -2286,6 +2286,11 @@ product version in the capabilities */
    interface, otherwise the user is assumed to be in the default
    domain (if set). */
 
+{ "xbackup_enabled", 0, SWITCH }
+/* Enable support for the XBACKUP command in imapd.  If enabled, admin
+   users can use this command to provoke a replication of specified users
+   to the named backup channel. */
+
 { "lmtp_catchall_mailbox", NULL, STRING }
 /* Mail sent to mailboxes which do not exist, will be delivered to
    this user.  NOTE: This must be an existing local user name with an

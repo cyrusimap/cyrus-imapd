@@ -2215,6 +2215,9 @@ static void cmdloop(void)
             if (!strcmp(cmd.s, "Xbackup")) {
                 int havechannel = 0;
 
+                if (!config_getswitch(IMAPOPT_XBACKUP_ENABLED))
+                    goto badcmd;
+
                 /* user */
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -5286,6 +5289,12 @@ void cmd_xbackup(const char *tag,
 
     /* admins only please */
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+        r = IMAP_PERMISSION_DENIED;
+        goto done;
+    }
+
+    if (!config_getswitch(IMAPOPT_XBACKUP_ENABLED)) {
+        /* shouldn't get here, but just in case */
         r = IMAP_PERMISSION_DENIED;
         goto done;
     }
