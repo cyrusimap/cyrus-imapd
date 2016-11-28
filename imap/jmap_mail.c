@@ -3490,7 +3490,7 @@ static int getMessageList(jmap_req_t *req)
     json_decref(invalid);
 
     if (json_array_size(unsupported)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", invalid);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
