@@ -5282,7 +5282,6 @@ void cmd_xbackup(const char *tag,
                  const char *mailbox,
                  const char *channel)
 {
-    const char *intname;
     struct xbackup_list list = { NULL, 0 };
     struct xbackup_item *item, *next;
     int r;
@@ -5299,9 +5298,7 @@ void cmd_xbackup(const char *tag,
         goto done;
     }
 
-    intname = mboxname_from_external(mailbox, &imapd_namespace, imapd_userid);
-
-    mboxlist_findall(NULL, intname, 1, NULL, NULL, xbackup_addmbox, &list);
+    mboxlist_findall(NULL, mailbox, 1, NULL, NULL, xbackup_addmbox, &list);
 
     if (list.count) {
         r = do_xbackup(channel, &list);
