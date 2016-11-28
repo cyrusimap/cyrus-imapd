@@ -934,7 +934,8 @@ sub test_getmessages
     xlog "get messages";
     # Could also have set fetchMessages in getMessageList, but let's call
     # getMessages explicitely.
-    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{messageIds} }, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_str_equals($msg->{mailboxIds}[0], $inboxid);
@@ -976,6 +977,20 @@ sub test_getmessages
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{date});
     $self->assert_not_null($msg->{size});
+
+    xlog "fetch again but only some properties";
+    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ['sender', 'headers.X-Tra', 'isUnread'] }, "R1"]]);
+    $msg = $res->[0][1]->{list}[0];
+    $hdrs = $msg->{headers};
+    $self->assert_null($msg->{mailboxIds});
+    $self->assert_equals($msg->{isUnread}, JSON::true);
+    $self->assert_null($msg->{subject});
+    $self->assert_deep_equals($msg->{sender}, {
+            name => "Bla",
+            email => "blu\@local"
+    });
+    $self->assert_null($hdrs->{'Message-ID'});
+    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
 }
 
 sub test_getmessages_fetchmessages
