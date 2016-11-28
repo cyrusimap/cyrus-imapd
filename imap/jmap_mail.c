@@ -2733,7 +2733,6 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
             match_string(e, "text", "contenttype");
-            json_object_set_new(matchprops, "hasAttachment", json_true());
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -2759,7 +2758,10 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         }
         if ((val = json_object_get(filter, "inMailboxes"))) {
             match_mailboxes(this, val, req->userid);
-            json_object_set_new(matchprops, "mailboxIds", json_true());
+            if (json_array_size(val) > 1) {
+                /* FIXME JMAP requires to AND mailboxes, and that's sloooow.. */
+                json_object_set_new(matchprops, "mailboxIds", json_true());
+            }
         }
         if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
             e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
