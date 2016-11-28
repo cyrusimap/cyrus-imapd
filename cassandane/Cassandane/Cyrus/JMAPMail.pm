@@ -1116,6 +1116,115 @@ sub test_getmessages_fetchmessages
     $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
 }
 
+sub test_getmessages_threads
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $body = "";
+    $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
+    $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => -10));
+
+    xlog "Generate a message in INBOX via IMAP";
+    my %exp_inbox;
+    my %params = (
+        date => $maildate,
+        from => Cassandane::Address->new(
+            name => "Sally Sender",
+            localpart => "sally",
+            domain => "local"
+        ),
+        to => Cassandane::Address->new(
+            name => "Tom To",
+            localpart => 'tom',
+            domain => 'local'
+        ),
+        cc => Cassandane::Address->new(
+            name => "Cindy CeeCee",
+            localpart => 'cindy',
+            domain => 'local'
+        ),
+        bcc => Cassandane::Address->new(
+            name => "Benny CarbonCopy",
+            localpart => 'benny',
+            domain => 'local'
+        ),
+        messageid => 'fake.123456789@local',
+        extra_headers => [
+            ['X-Tra', "foo bar\r\n baz"],
+            ['Sender', "Bla <blu\@local>"],
+        ],
+        body => $body
+    );
+    $self->make_message("Message A", %params) || die;
+
+    xlog "get message list";
+    $res = $jmap->Request([['getMessageList', { fetchThreads => $JSON::true, fetchMessages => $JSON::true }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res}, 3);
+    $self->assert_str_equals($res->[0][0], "messageList");
+    $self->assert_str_equals($res->[1][0], "threads");
+    $self->assert_str_equals($res->[2][0], "messages");
+    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
+    $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
+    $self->assert_num_equals(scalar @{$res->[2][1]->{list}}, 1);
+
+    my $thread = $res->[1][1]->{list}[0];
+
+    $self->assert_num_equals(scalar @{$thread->{messageIds}}, 1);
+
+    my $msg = $res->[2][1]->{list}[0];
+
+    $self->assert_str_equals($msg->{mailboxIds}[0], $inboxid);
+    $self->assert_num_equals(scalar @{$msg->{mailboxIds}}, 1);
+    $self->assert_equals($msg->{isUnread}, JSON::true);
+    $self->assert_equals($msg->{isFlagged}, JSON::false);
+    $self->assert_equals($msg->{isAnswered}, JSON::false);
+    $self->assert_equals($msg->{isDraft}, JSON::false);
+
+    my $hdrs = $msg->{headers};
+    $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
+    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_deep_equals($msg->{from}[0], {
+            name => "Sally Sender",
+            email => "sally\@local"
+    });
+    $self->assert_deep_equals($msg->{to}[0], {
+            name => "Tom To",
+            email => "tom\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{to}}, 1);
+    $self->assert_deep_equals($msg->{cc}[0], {
+            name => "Cindy CeeCee",
+            email => "cindy\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{cc}}, 1);
+    $self->assert_deep_equals($msg->{bcc}[0], {
+            name => "Benny CarbonCopy",
+            email => "benny\@local"
+    });
+    $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
+    $self->assert_null($msg->{replyTo});
+    $self->assert_deep_equals($msg->{sender}, {
+            name => "Bla",
+            email => "blu\@local"
+    });
+    $self->assert_str_equals($msg->{subject}, "Message A");
+
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+    $self->assert_str_equals($datestr, $msg->{date});
+    $self->assert_not_null($msg->{size});
+}
+
 sub test_getmessages_multimailboxes
     :min_version_3_0
 {
