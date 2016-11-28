@@ -2116,6 +2116,26 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     if (_wantprop(props, "headers")) {
         json_object_set(msg, "headers", headers);
     }
+    else {
+        json_t *wantheaders = json_pack("{}");
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "headers.");
+        const char *key;
+        json_t *val;
+        json_object_foreach(headers, key, val) {
+            buf_truncate(&buf, 8);
+            buf_appendcstr(&buf, key);
+            if (_wantprop(props, buf_cstring(&buf))) {
+                json_object_set(wantheaders, key, val);
+            }
+        }
+
+        buf_free(&buf);
+        if (json_object_size(wantheaders))
+            json_object_set_new(msg, "headers", wantheaders);
+        else
+            json_decref(wantheaders);
+    }
     /* sender */
     if (_wantprop(props, "sender")) {
         const char *key, *s = NULL;
