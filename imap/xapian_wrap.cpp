@@ -923,8 +923,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 snipgen->omit,
                 Xapian::TermGenerator::FLAG_CJK_WORDS);
 
-        buf_reset(buf);
-        buf_appendcstr(buf, snippet.c_str());
+        buf_setcstr(buf, snippet.c_str());
         buf_cstring(buf);
 
         delete snipgen->matches;
