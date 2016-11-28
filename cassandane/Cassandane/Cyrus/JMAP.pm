@@ -76,6 +76,7 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
     my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGJMAP} = 1;
     eval {
 	$self->{carddav} = Net::CardDAVTalk->new(
 	    user => 'cassandane',
