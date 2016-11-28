@@ -1094,6 +1094,26 @@ sub test_getmessages_fetchmessages
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{date});
     $self->assert_not_null($msg->{size});
+
+    xlog "fetch again but only some properties";
+    $res = $jmap->Request([['getMessageList', { fetchMessages => $JSON::true, fetchMessageProperties => ['sender', 'headers.X-Tra', 'isUnread']  }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res}, 2);
+    $self->assert_str_equals($res->[0][0], "messageList");
+    $self->assert_str_equals($res->[1][0], "messages");
+    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
+    $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
+
+    $msg = $res->[1][1]->{list}[0];
+    $hdrs = $msg->{headers};
+    $self->assert_null($msg->{mailboxIds});
+    $self->assert_equals($msg->{isUnread}, JSON::true);
+    $self->assert_null($msg->{subject});
+    $self->assert_deep_equals($msg->{sender}, {
+            name => "Bla",
+            email => "blu\@local"
+    });
+    $self->assert_null($hdrs->{'Message-ID'});
+    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
 }
 
 sub test_getmessages_multimailboxes
