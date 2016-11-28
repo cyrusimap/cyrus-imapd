@@ -3543,6 +3543,8 @@ static int getMessageList(jmap_req_t *req)
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         json_object_set(subreq.args, "ids", messageids);
+        json_t *props = json_object_get(req->args, "fetchMessageProperties");
+        if (props) json_object_set(subreq.args, "properties", props);
         r = getMessages(&subreq);
         json_decref(subreq.args);
         if (r) goto done;
