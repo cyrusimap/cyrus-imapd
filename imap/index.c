@@ -4864,6 +4864,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 
         cur->uid = record.uid;
         cur->cid = record.cid;
+        cur->system_flags = record.system_flags;
         message_guid_copy(&cur->guid, &record.guid);
         if (found_anchor && record.uid == anchor)
             *found_anchor = 1;
