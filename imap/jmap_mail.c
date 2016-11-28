@@ -2273,8 +2273,10 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             freeme = xstrndup(msg_buf->s + part->header_offset, part->header_size);
             message_pruneheader(freeme, &headers, NULL);
             if ((cid = strchr(freeme, ':'))) {
-                if ((cid = charset_unfold(cid + 1, strlen(cid), 0))) {
-                    buf_setcstr(&buf, cid);
+                char *unfolded;
+                if ((unfolded = charset_unfold(cid + 1, strlen(cid), 0))) {
+                    buf_setcstr(&buf, unfolded);
+                    free(unfolded);
                     buf_trim(&buf);
                     cid = buf_cstring(&buf);
                 }
@@ -4556,11 +4558,12 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
 static int findblob(jmap_req_t *req, const char *blob_id,
                     struct mailbox **mbox, struct index_record **record,
-                    struct body **body, struct body **part)
+                    struct body **body, const struct body **part)
 {
     struct findblob_data data = { req, NULL, NULL, NULL };
     struct conversations_state *cstate = mailbox_get_cstate(req->inbox);
-    struct body *mybody, *mypart;
+    struct body *mybody = NULL;
+    const struct body *mypart = NULL;
     int i, r;
 
     /* Find message part containing blob */
@@ -4631,7 +4634,8 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
 {
     struct mailbox *mbox = NULL;
     struct index_record *record = NULL;
-    struct body *body = NULL, *part = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     const char *blob_id, *type, *cid, *name;
     strarray_t headers = STRARRAY_INITIALIZER;
@@ -4754,6 +4758,7 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
          * write them after the trimmed down message is serialised. */
         if (cids) {
             json_object_set_new(msg, "attachments", cids);
+            cids = NULL;
         } else {
             json_object_del(msg, "attachments");
         }
@@ -5099,7 +5104,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
         const char *html = json_string_value(json_object_get(mymsg, "htmlBody"));
         if (html) {
             char *tmp = extract_plain(html);
-            json_object_set(mymsg, "textBody", json_string(tmp));
+            json_object_set_new(mymsg, "textBody", json_string(tmp));
             free(tmp);
         }
     }
@@ -6143,7 +6148,7 @@ done:
 
 struct jmapmsg_import_data {
     struct buf msg_buf;
-    struct body *part;
+    const struct body *part;
 };
 
 int jmapmsg_import_cb(jmap_req_t *req __attribute__((unused)),
