@@ -4069,12 +4069,10 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         conversation_id_decode(&cid, threadid);
 
         r = conversation_load(cstate, cid, &conv);
-        if (r) {
-            if (r == CYRUSDB_NOTFOUND) {
-                json_array_append_new(*notfound, json_string(threadid));
-                continue;
-            }
-            goto done;
+        if (r) goto done;
+        if (!conv) {
+            json_array_append_new(*notfound, json_string(threadid));
+            continue;
         }
 
         msgs = ptrarray_new();
