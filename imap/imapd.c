@@ -5141,28 +5141,17 @@ static void do_xconvmeta(const char *tag,
     prot_printf(imapd_out, "%s OK Completed\r\n", tag);
 }
 
-struct xbackup_item {
-    struct xbackup_item *next;
-    mbname_t *mbname;
-};
-
-struct xbackup_list {
-    struct xbackup_item *head;
-    size_t count;
-};
-
 static int do_xbackup(const char *channel,
-                      struct xbackup_list *list)
+                      const ptrarray_t *list)
 {
     sasl_callback_t *cb = NULL;
     struct backend *backend = NULL;
-    struct xbackup_item *item;
     const char *hostname;
     const char *port;
     unsigned sync_flags = 0; // FIXME ??
     int partial_success = 0;
     int mbox_count = 0;
-    int r;
+    int i, r;
 
     hostname = sync_get_config(channel, "sync_host");
     if (!hostname) {
@@ -5191,9 +5180,11 @@ static int do_xbackup(const char *channel,
     free_callbacks(cb);
     cb = NULL;
 
-    for (item = list->head; item; item = item->next) {
-        const char *userid = mbname_userid(item->mbname);
-        const char *intname = mbname_intname(item->mbname);
+    for (i = 0; i < list->count; i++) {
+        const mbname_t *mbname = ptrarray_nth(list, i);
+        if (!mbname) continue;
+        const char *userid = mbname_userid(mbname);
+        const char *intname = mbname_intname(mbname);
 
         if (userid) {
             syslog(LOG_INFO, "XBACKUP: replicating user %s", userid);
@@ -5227,7 +5218,7 @@ static int do_xbackup(const char *channel,
         prot_flush(imapd_out);
 
         /* send RESTART after each user, or 1000 mailboxes */
-        if (!r && item->next && (userid || mbox_count >= 1000)) {
+        if (!r && i < list->count - 1 && (userid || mbox_count >= 1000)) {
             mbox_count = 0;
 
             sync_send_restart(backend->out);
@@ -5252,7 +5243,7 @@ done:
 static int xbackup_addmbox(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
-    struct xbackup_list *list = (struct xbackup_list *) rock;
+    ptrarray_t *list = (ptrarray_t *) rock;
 
     if (!data->mbname) {
         /* No partial matches */ /* FIXME ??? */
@@ -5264,14 +5255,7 @@ static int xbackup_addmbox(struct findall_data *data, void *rock)
         (!mbname_isdeleted(data->mbname) &&
          !strarray_size(mbname_boxes(data->mbname)))) {
 
-        struct xbackup_item *item = xzmalloc(sizeof *item);
-
-        item->mbname = mbname_dup(data->mbname);
-
-        /* Add link on to the list (reverse order) */
-        item->next = list->head;
-        list->head = item;
-        list->count ++;
+        ptrarray_append(list, mbname_dup(data->mbname));
     }
 
     return 0;
@@ -5282,9 +5266,8 @@ void cmd_xbackup(const char *tag,
                  const char *mailbox,
                  const char *channel)
 {
-    struct xbackup_list list = { NULL, 0 };
-    struct xbackup_item *item, *next;
-    int r;
+    ptrarray_t list = PTRARRAY_INITIALIZER;
+    int i, r;
 
     /* admins only please */
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
@@ -5303,12 +5286,12 @@ void cmd_xbackup(const char *tag,
     if (list.count) {
         r = do_xbackup(channel, &list);
 
-        next = list.head;
-        while ((item = next)) {
-            next = item->next;
-            mbname_free(&item->mbname);
-            free(item);
+        for (i = 0; i < list.count; i++) {
+            mbname_t *mbname = ptrarray_nth(&list, i);
+            if (mbname)
+                mbname_free(&mbname);
         }
+        ptrarray_fini(&list);
     }
     else {
         r = IMAP_MAILBOX_NONEXISTENT;
