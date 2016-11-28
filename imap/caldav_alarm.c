@@ -183,16 +183,19 @@ static int caldav_alarm_close(sqldb_t *alarmdb)
 /*
  * Extract data from the given ical object
  */
-static void mboxevent_extract_icalcomponent(struct mboxevent *event,
-                                            const char *userid,
-                                            const char *calname,
-                                            icalcomponent *comp,
-                                            icalcomponent *alarm,
-                                            icaltimetype start,
-                                            icaltimetype end,
-                                            icaltimetype alarmtime,
-                                            icaltimezone *floatingtz)
+static int send_alarm(struct get_alarm_rock *rock,
+                      icalcomponent *comp, icalcomponent *alarm,
+                      icaltimetype start, icaltimetype end, icaltimetype alarmtime)
 {
+    char *userid = mboxname_to_userid(rock->mboxname);
+    struct buf calname = BUF_INITIALIZER;
+
+    /* get the display name annotation */
+    const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    annotatemore_lookupmask(rock->mboxname, displayname_annot, userid, &calname);
+    if (!calname.len) buf_setcstr(&calname, strrchr(rock->mboxname, '.') + 1);
+
+    struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
     icalproperty *prop;
     icalvalue *val;
 
@@ -210,7 +213,7 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
     }
 
     FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
-    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, xstrdup(calname));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
 
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
@@ -237,8 +240,8 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
         timezone = "UTC";
     else if (icaltime_get_timezone(start))
         timezone = icaltime_get_tzid(start);
-    else if (floatingtz)
-        timezone = icaltimezone_get_tzid(floatingtz);
+    else if (rock->floatingtz)
+        timezone = icaltimezone_get_tzid(rock->floatingtz);
     else
         timezone = "[floating]";
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
@@ -281,25 +284,14 @@ static void mboxevent_extract_icalcomponent(struct mboxevent *event,
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_NAMES, attendee_names);
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
-}
 
-static int send_alarm(struct get_alarm_rock *rock,
-                      icalcomponent *comp, icalcomponent *alarm,
-                      icaltimetype start, icaltimetype end, icaltimetype alarmtime)
-{
-    char *userid = mboxname_to_userid(rock->mboxname);
-    struct buf calname = BUF_INITIALIZER;
-
-    /* get the display name annotation */
-    const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    annotatemore_lookupmask(rock->mboxname, displayname_annot, userid, &calname);
-    if (!calname.len) buf_setcstr(&calname, strrchr(rock->mboxname, '.') + 1);
-
-    struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
-    mboxevent_extract_icalcomponent(event, userid, buf_cstring(&calname),
-                                    comp, alarm, start, end, alarmtime, rock->floatingtz);
     mboxevent_notify(&event);
     mboxevent_free(&event);
+
+    strarray_free(recipients);
+    strarray_free(attendee_names);
+    strarray_free(attendee_emails);
+    strarray_free(attendee_status);
 
     buf_free(&calname);
     free(userid);
