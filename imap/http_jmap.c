@@ -199,14 +199,6 @@ static int jmap_post(struct transaction_t *txn,
 
     inboxname = mboxname_user_mbox(httpd_userid, NULL);
 
-    struct conversations_state *cstate = NULL;
-    int r = conversations_open_user(httpd_userid, &cstate);
-    if (r) {
-        txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
     /* Process each message in the request */
     for (i = 0; i < json_array_size(req); i++) {
         const jmap_msg_t *mp;
@@ -231,8 +223,17 @@ static int jmap_post(struct transaction_t *txn,
             continue;
         }
 
+        struct conversations_state *cstate = NULL;
+        r = conversations_open_user(httpd_userid, &cstate);
+        if (r) {
+            txn->error.desc = error_message(r);
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
         struct jmap_req req;
         req.userid = httpd_userid;
+        req.inboxname = inboxname;
         req.cstate = cstate;
         req.authstate = httpd_authstate;
         req.args = args;
@@ -249,13 +250,13 @@ static int jmap_post(struct transaction_t *txn,
         r = mp->proc(&req);
 
         if (r) {
+            conversations_abort(&req.cstate);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             goto done;
         }
+        conversations_commit(&req.cstate);
     }
-
-    conversations_commit(&cstate);
 
     /* Dump JSON object into a text buffer */
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
@@ -274,7 +275,6 @@ static int jmap_post(struct transaction_t *txn,
 
   done:
     free_hash_table(&idmap, free);
-    conversations_abort(&cstate); // safe if committed above
     free(inboxname);
     if (req) json_decref(req);
     if (resp) json_decref(resp);

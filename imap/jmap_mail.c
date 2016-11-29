@@ -863,9 +863,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         if (name) name = xstrdup(name);
     }
 
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
-    mboxlist_lookup(inboxname, &inboxentry, NULL);
-    free(inboxname);
+    mboxlist_lookup(req->inboxname, &inboxentry, NULL);
 
     /* parentId */
     if (JNOTNULL(json_object_get(arg, "parentId"))) {
@@ -1234,10 +1232,8 @@ static int setMailboxes(jmap_req_t *req)
 
     _initreq(req);
 
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
     mbentry_t *inboxentry = NULL;
-    mboxlist_lookup(inboxname, &inboxentry, NULL);
-    free(inboxname);
+    mboxlist_lookup(req->inboxname, &inboxentry, NULL);
 
     state = json_object_get(req->args, "ifInState");
     if (JNOTNULL(state)) {
@@ -3227,9 +3223,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     init.authstate = req->authstate;
     init.want_expunged = want_expunged;
 
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
-    r = index_open(inboxname, &init, &state);
-    free(inboxname);
+    r = index_open(req->inboxname, &init, &state);
     if (r) goto done;
 
     query = search_query_new(state, searchargs);
@@ -3845,9 +3839,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     init.userid = req->userid;
     init.authstate = req->authstate;
 
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
-    r = index_open(inboxname, &init, &state);
-    free(inboxname);
+    r = index_open(req->inboxname, &init, &state);
     if (r) goto done;
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
@@ -6133,9 +6125,7 @@ static int setMessages(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    char *inboxname = mboxname_user_mbox(req->userid, NULL);
-    mboxname_read_counters(inboxname, &req->counters);
-    free(inboxname);
+    mboxname_read_counters(req->inboxname, &req->counters);
     json_object_set_new(set, "newState", jmapmsg_getstate(req));
 
     json_incref(set);
