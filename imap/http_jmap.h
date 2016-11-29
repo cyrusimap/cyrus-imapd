@@ -47,6 +47,7 @@
 #include <jansson.h>
 
 #include "auth.h"
+#include "conversations.h"
 #include "httpd.h"
 #include "mailbox.h"
 #include "mboxname.h"
@@ -55,7 +56,7 @@ extern struct namespace jmap_namespace;
 
 typedef struct jmap_req {
     const char           *userid;
-    struct mailbox       *inbox;
+    struct conversations_state *cstate;
     struct auth_state    *authstate;
     struct hash_table    *idmap;
     json_t               *args;

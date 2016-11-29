@@ -154,7 +154,6 @@ static int jmap_post(struct transaction_t *txn,
     const char **hdr;
     json_t *req, *resp = NULL;
     json_error_t jerr;
-    struct mailbox *mailbox = NULL;
     struct hash_table idmap;
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
@@ -200,10 +199,8 @@ static int jmap_post(struct transaction_t *txn,
 
     inboxname = mboxname_user_mbox(httpd_userid, NULL);
 
-    /* we lock the user's INBOX before we start any operation, because that way we
-     * guarantee (via conversations magic) that nothing changes the modseqs except
-     * our operations */
-    int r = mailbox_open_iwl(inboxname, &mailbox);
+    struct conversations_state *cstate = NULL;
+    int r = conversations_open_user(httpd_userid, &cstate);
     if (r) {
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
@@ -236,7 +233,7 @@ static int jmap_post(struct transaction_t *txn,
 
         struct jmap_req req;
         req.userid = httpd_userid;
-        req.inbox = mailbox;
+        req.cstate = cstate;
         req.authstate = httpd_authstate;
         req.args = args;
         req.response = resp;
@@ -258,8 +255,7 @@ static int jmap_post(struct transaction_t *txn,
         }
     }
 
-    /* unlock here so that we don't block on writing */
-    mailbox_unlock_index(mailbox, NULL);
+    conversations_commit(&cstate);
 
     /* Dump JSON object into a text buffer */
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
@@ -278,7 +274,7 @@ static int jmap_post(struct transaction_t *txn,
 
   done:
     free_hash_table(&idmap, free);
-    mailbox_close(&mailbox);
+    conversations_abort(&cstate); // safe if committed above
     free(inboxname);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
