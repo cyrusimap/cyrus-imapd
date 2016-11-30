@@ -54,7 +54,7 @@
 
 tag_t *new_tag(int type, char *s)
 {
-    tag_t *p = (tag_t *) xmalloc(sizeof(tag_t));
+    tag_t *p = (tag_t *) xzmalloc(sizeof(tag_t));
     p->type = type;
     p->arg = s;
     return p;
@@ -62,7 +62,7 @@ tag_t *new_tag(int type, char *s)
 
 taglist_t *new_taglist(tag_t *t, taglist_t *n)
 {
-    taglist_t *p = (taglist_t *) xmalloc(sizeof(taglist_t));
+    taglist_t *p = (taglist_t *) xzmalloc(sizeof(taglist_t));
     p->t = t;
     p->next = n;
     return p;
@@ -70,7 +70,7 @@ taglist_t *new_taglist(tag_t *t, taglist_t *n)
 
 test_t *new_test(int type)
 {
-    test_t *p = (test_t *) xmalloc(sizeof(test_t));
+    test_t *p = (test_t *) xzmalloc(sizeof(test_t));
     p->type = type;
     return p;
 }
@@ -85,7 +85,7 @@ testlist_t *new_testlist(test_t *t, testlist_t *n)
 
 commandlist_t *new_command(int type)
 {
-    commandlist_t *p = (commandlist_t *) xmalloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
     p->type = type;
     p->next = NULL;
     return p;
@@ -93,7 +93,7 @@ commandlist_t *new_command(int type)
 
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
 {
-    commandlist_t *p = (commandlist_t *) xmalloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
     p->type = IF;
     p->u.i.t = t;
     p->u.i.do_then = y;
@@ -177,7 +177,7 @@ void free_test(test_t *t)
     case SERVERMETADATAEXISTS:
         free(t->u.mbx.extname);
         free(t->u.mbx.keyname);
-        if (t->u.mbx.keylist) strarray_free(t->u.mbx.keylist);
+        strarray_free(t->u.mbx.keylist);
         free(t->u.mbx.comparator);
         break;
     }
@@ -199,26 +199,26 @@ void free_tree(commandlist_t *cl)
             break;
 
         case INCLUDE:
-            if (cl->u.inc.script) free(cl->u.inc.script);
+            free(cl->u.inc.script);
             break;
 
         case FILEINTO:
-            if (cl->u.f.folder) free(cl->u.f.folder);
-            if (cl->u.f.flags) strarray_free(cl->u.f.flags);
+            free(cl->u.f.folder);
+            strarray_free(cl->u.f.flags);
             break;
 
         case REDIRECT:
-            if (cl->u.r.address) free(cl->u.r.address);
+            free(cl->u.r.address);
             break;
 
         case REJCT:
-            if (cl->u.str) free(cl->u.str);
+            free(cl->u.str);
             break;
 
         case VACATION:
-            if (cl->u.v.subject) free(cl->u.v.subject);
-            if (cl->u.v.addresses) strarray_free(cl->u.v.addresses);
-            if (cl->u.v.message) free(cl->u.v.message);
+            free(cl->u.v.subject);
+            strarray_free(cl->u.v.addresses);
+            free(cl->u.v.message);
             break;
 
         case SETFLAG:
@@ -228,7 +228,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case KEEP:
-            if (cl->u.k.flags) strarray_free(cl->u.k.flags);
+            strarray_free(cl->u.k.flags);
             break;
 
         case STOP:
