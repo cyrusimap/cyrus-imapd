@@ -3479,13 +3479,9 @@ static int getMessageUpdates(jmap_req_t *req)
 
     if (r) goto done;
 
-    if (window.limit && req->counters.mailmodseq != window.highestmodseq) {
-        newstate = jmap_fmtstate(window.highestmodseq);
-    } else {
-        newstate = jmap_fmtstate(req->counters.mailmodseq);
-    }
     has_more = (json_array_size(changed) + json_array_size(removed)) < total;
     oldstate = json_string(since);
+    newstate = jmap_fmtstate(has_more ? window.highestmodseq : req->counters.mailmodseq);
 
     /* Prepare response. */
     res = json_pack("{}");
