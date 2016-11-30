@@ -1312,7 +1312,7 @@ sub test_getmessages_body_both
     $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($htmlBody, $msg->{body});
+    $self->assert_str_equals($htmlBody, $msg->{htmlBody});
 }
 
 sub test_getmessages_body_plain
@@ -1351,7 +1351,7 @@ sub test_getmessages_body_plain
     $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($body, $msg->{body});
+    $self->assert_str_equals($body, $msg->{textBody});
 }
 
 sub test_getmessages_body_html
@@ -1392,7 +1392,7 @@ sub test_getmessages_body_html
         ids => $ids, properties => ["body"],
     }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
-    $self->assert_str_equals($body, $msg->{body});
+    $self->assert_str_equals($body, $msg->{htmlBody});
 }
 
 sub test_getmessages_body_multi
