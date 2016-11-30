@@ -2627,29 +2627,31 @@ static void match_string(search_expr_t *parent, const char *s, const char *name)
 }
 
 static void match_mailboxes(search_expr_t *parent, json_t *mailboxes,
-                            const char *userid)
+                            const char *userid, int is_not)
 {
     json_t *val;
-    search_expr_t *e, *p;
-    char *mboxname;
-    const char *s;
+    search_expr_t *e;
     size_t i;
 
-    e = search_expr_new(parent, SEOP_OR);
+    if (is_not) {
+        parent = search_expr_new(parent, SEOP_NOT);
+    }
+
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find(is_not ? "folders_any" : "folders_all");
+    e->value.strarr = strarray_new();
+
     json_array_foreach(mailboxes, i, val) {
-        s = json_string_value(val);
-        mboxname = mboxlist_find_uniqueid(s, userid);
+        const char *s = json_string_value(val);
+        char *mboxname = mboxlist_find_uniqueid(s, userid);
         if (!mboxname) continue;
 
-        p = search_expr_new(e, SEOP_MATCH);
-        p->attr = search_attr_find("folder");
-        p->value.s = mboxname;
+        strarray_appendm(e->value.strarr, mboxname);
     }
 }
 
 static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
-                                  search_expr_t *parent,
-                                  hash_table **props)
+                                  search_expr_t *parent)
 {
     search_expr_t *this, *e;
     json_t *val;
@@ -2676,11 +2678,10 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            buildsearch(req, val, e, props);
+            buildsearch(req, val, e);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
-        json_t *matchprops = json_pack("{}");
 
         /* zero properties evaluate to true */
         search_expr_new(this, SEOP_TRUE);
@@ -2708,7 +2709,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
-            match_string(e, "text", "contenttype");
+            match_string(e, "text", "contenttype"); /* FIXME use annotation */
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -2733,11 +2734,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             charset_free(&utf8);
         }
         if ((val = json_object_get(filter, "inMailboxes"))) {
-            match_mailboxes(this, val, req->userid);
-            if (json_array_size(val) > 1) {
-                /* FIXME JMAP requires to AND mailboxes, and that's sloooow.. */
-                json_object_set_new(matchprops, "mailboxIds", json_true());
-            }
+            match_mailboxes(this, val, req->userid, /*is_not*/0);
         }
         if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
             e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
@@ -2775,8 +2772,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             e->value.u = json_integer_value(val);
         }
         if ((val = json_object_get(filter, "notInMailboxes"))) {
-            match_mailboxes(search_expr_new(this, SEOP_NOT), val, req->userid);
-            json_object_set(matchprops, "mailboxIds", json_true());
+            match_mailboxes(this, val, req->userid, /*is_not*/1);
         }
         if ((s = json_string_value(json_object_get(filter, "sinceMessageState")))) {
             /* non-standard */
@@ -2805,98 +2801,9 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             match_string(this, s, "to");
         }
-
-        /* Add properties that are required to match */
-        if (props && json_object_size(matchprops)) {
-            void *iter = json_object_iter(matchprops);
-
-            if (!*props) {
-                *props = xzmalloc(sizeof(struct hash_table));
-                construct_hash_table(*props, 4, 0);
-            }
-
-            while (iter) {
-                hash_insert(json_object_iter_key(iter), (void*)1, *props);
-                iter = json_object_iter_next(matchprops, iter);
-            }
-        }
-        json_decref(matchprops);
     }
 
     return this;
-}
-
-static int filtermsg(jmap_req_t *req, json_t *msg, json_t *filter)
-{
-    json_t *val;
-    const char *s;
-    size_t i;
-
-    /* Apply a filter to a JMAP message. Only covers properties that require
-     * special postprocessing. Use buildsearch for general search filters */
-
-    if ((s = json_string_value(json_object_get(filter, "operator")))) {
-        enum search_op op = SEOP_UNKNOWN;
-
-        if (!strcmp("AND", s)) {
-            op = SEOP_AND;
-        } else if (!strcmp("OR", s)) {
-            op = SEOP_OR;
-        } else if (!strcmp("NOT", s)) {
-            op = SEOP_NOT;
-        }
-
-        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            int matches = filtermsg(req, msg, val);
-
-            if (matches && op == SEOP_OR)
-                return 1;
-            else if (matches && op == SEOP_NOT)
-                return 0;
-            else if (!matches && op == SEOP_AND)
-                return 0;
-        }
-        return op == SEOP_AND;
-    } else {
-        if ((val = json_object_get(filter, "inMailboxes"))) {
-            size_t i, j;
-            const char *a, *b;
-            json_t *mailboxids = json_object_get(msg, "mailboxIds");
-
-            /* Check that inMailboxes is a subset of mailboxIds */
-            for (i = 0; i < json_array_size(val); i++) {
-                a = json_string_value(json_array_get(val, i));
-                b = NULL;
-                for (j = 0; j < json_array_size(mailboxids); j++) {
-                    b = json_string_value(json_array_get(mailboxids, j));
-                    if (!strcmp(a, b)) break;
-                    b = NULL;
-                }
-                if (!b) return 0;
-            }
-            return 1;
-        }
-        if ((val = json_object_get(filter, "notInMailboxes"))) {
-            size_t i, j;
-            const char *a, *b;
-            json_t *mailboxids = json_object_get(msg, "mailboxIds");
-
-            /* Check that mailboxIds doesn't overlap notInMailboxes */
-            for (i = 0; i < json_array_size(mailboxids); i++) {
-                a = json_string_value(json_array_get(mailboxids, i));
-                for (j = 0; j < json_array_size(val); j++) {
-                    b = json_string_value(json_array_get(val, j));
-                    if (!strcmp(a, b)) return 0;
-                }
-            }
-            return 1;
-        }
-        if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
-            return json_object_get(msg, "hasAttachment") == val;
-        }
-
-        return 1;
-    }
 }
 
 static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
@@ -3196,7 +3103,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                           json_t **threadids)
 {
     hashu64_table cids = HASHU64_TABLE_INITIALIZER;
-    hash_table *props = NULL;
     struct index_state *state = NULL;
     search_query_t *query = NULL;
     struct sortcrit *sortcrit = NULL;
@@ -3215,7 +3121,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = buildsearch(req, filter, NULL, &props);
+    searchargs->root = buildsearch(req, filter, NULL);
 
     /* Run the search query */
     memset(&init, 0, sizeof(init));
@@ -3270,31 +3176,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Have we seen this message already? */
         if (hash_lookup(msgid, &window->ids))
             goto doneloop;
-
-        if (props) {
-            /* Find message */
-            struct index_record record;
-            struct mailbox *mbox = NULL;
-            r = _openmbox(req, folder->mboxname, &mbox, 0);
-            if (r) goto done;
-
-            r = mailbox_find_index_record(mbox, md->uid, &record);
-
-            /* Match the filter to the JMAP message properties */
-            if (!r) r = jmapmsg_from_record(req, props, mbox, &record, &msg);
-
-            _closembox(req, &mbox);
-
-            if (r) {
-                syslog(LOG_ERR, "jmapmsg_search: could not convert %s:%d: %s",
-                        mbox->name, md->uid, error_message(r));
-                r = 0;
-                goto doneloop;
-            }
-
-            if (!filtermsg(req, msg, filter))
-                goto doneloop;
-        }
 
         /* Collapse threads, if requested */
         if (window->collapse && hashu64_lookup(md->cid, &window->cids))
@@ -3386,10 +3267,6 @@ doneloop:
     }
 
 done:
-    if (props) {
-        free_hash_table(props, NULL);
-        free(props);
-    }
     free_hash_table(&window->ids, NULL);
     free_hashu64_table(&window->cids, NULL);
     free_hashu64_table(&cids, NULL);
@@ -3832,7 +3709,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = buildsearch(req, filter, NULL, NULL);
+    searchargs->root = buildsearch(req, filter, NULL);
 
     /* Build the search query */
     memset(&init, 0, sizeof(init));
