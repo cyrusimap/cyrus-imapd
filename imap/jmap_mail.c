@@ -405,7 +405,12 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         free(name);
     }
     if (_wantprop(props, "mustBeOnlyMailbox")) {
-        json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
+        if (!strcmpsafe(role, "trash"))
+            json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
+        else if (!strcmpsafe(role, "spam"))
+            json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
+        else
+            json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
     }
 
     if (_wantprop(props, "mayReadItems")) {
