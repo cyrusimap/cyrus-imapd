@@ -65,10 +65,14 @@ sub new
     $config->set(conversations => 'yes');
     $config->set(httpmodules => 'carddav caldav jmap');
     $config->set(httpallowcompress => 'no');
-    return $class->SUPER::new({
-	config => $config,
-	services => ['imap', 'http'],
-    }, @_);
+    return $class->SUPER::new(
+        {
+            config   => $config,
+            services => [ 'imap', 'http' ],
+            adminstore => 1,
+        },
+        @_
+    );
 }
 
 sub set_up
