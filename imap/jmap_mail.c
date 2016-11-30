@@ -297,7 +297,7 @@ char *jmapmbox_role(jmap_req_t *req, const mbname_t *mbname)
             } else if (!strcmp(use, "\\Drafts")) {
                 role = "drafts";
             } else if (!strcmp(use, "\\Junk")) {
-                role = "junk";
+                role = "spam";
             } else if (!strcmp(use, "\\Sent")) {
                 role = "sent";
             } else if (!strcmp(use, "\\Trash")) {
@@ -949,7 +949,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
                         specialuse = "\\Archive";
                     } else if (!strcmp(role, "drafts")) {
                         specialuse = "\\Drafts";
-                    } else if (!strcmp(role, "junk")) {
+                    } else if (!strcmp(role, "spam")) {
                         specialuse = "\\Junk";
                     } else if (!strcmp(role, "sent")) {
                         specialuse = "\\Sent";
