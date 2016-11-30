@@ -389,6 +389,8 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         break;
     }
 
+    char *role = jmapmbox_role(req, mbname);
+
     /* Lookup status. */
     r = status_lookup(mbname_intname(mbname), req->userid, statusitems, &sdata);
     if (r) goto done;
@@ -462,7 +464,6 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         json_object_set_new(obj, "mayDelete", json_boolean(mayDelete));
     }
     if (_wantprop(props, "role")) {
-        char *role = jmapmbox_role(req, mbname);
         if (role && !hash_lookup(role, roles)) {
             /* In JMAP, only one mailbox have a role. First one wins. */
             json_object_set_new(obj, "role", json_string(role));
@@ -470,7 +471,6 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         } else {
             json_object_set_new(obj, "role", json_null());
         }
-        if (role) free(role);
     }
     if (_wantprop(props, "sortOrder")) {
         struct buf attrib = BUF_INITIALIZER;
@@ -485,6 +485,41 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                 syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbname_intname(mbname));
             }
         }
+        else {
+            /* calculate based on role.  From FastMail:
+               [  1, '*Inbox',     'inbox',   0,    1, [ 'INBOX' ], { PreviewModeId => 2, MessagesPerPage => 20 } ],
+               [  2, 'Trash',      'trash',   0,    7, [ 'Trash', 'Deleted Items' ], { HasEmpty => 1 } ],
+               [  3, 'Sent',       'sent',    0,    5, [ 'Sent', 'Sent Items' ], { DefSort => 2 } ],
+               [  4, 'Drafts',     'drafts',  0,    4, [ 'Drafts' ] ],
+               [  5, '*User',      undef,     0,   10, [ ] ],
+               [  6, 'Junk',       'spam',    0,    6, [ 'Spam', 'Junk Mail', 'Junk E-Mail' ], { HasEmpty => 1 } ],
+               [  7, 'XChats',     undef,     0,    8, [ 'Chats' ] ],
+               [  8, 'Archive',    'archive', 0,    3, [ 'Archive' ] ],
+               [  9, 'XNotes',     undef,     1,   10, [ 'Notes' ] ],
+               [ 10, 'XTemplates', undef,     0,    9, [ 'Templates' ] ],
+               [ 12, '*Shared',    undef,     0, 1000, [ 'user' ] ],
+               [ 11, '*Restored',  undef,     0, 2000, [ 'RESTORED' ] ],
+              */
+
+            if (!role)
+                sortOrder = 10;
+            else if (!strcmp(role, "inbox"))
+                sortOrder = 1;
+            else if (!strcmp(role, "outbox"))
+                sortOrder = 2;
+            else if (!strcmp(role, "archive"))
+                sortOrder = 3;
+            else if (!strcmp(role, "drafts"))
+                sortOrder = 4;
+            else if (!strcmp(role, "sent"))
+                sortOrder = 5;
+            else if (!strcmp(role, "spam"))
+                sortOrder = 6;
+            else if (!strcmp(role, "trash"))
+                sortOrder = 7;
+            else
+                sortOrder = 8;
+        }
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         buf_free(&attrib);
     }
@@ -493,6 +528,7 @@ done:
     if (r) {
         syslog(LOG_ERR, "jmapmbox_from_mbentry: %s", error_message(r));
     }
+    free(role);
     mbname_free(&mbname);
     return obj;
 }
