@@ -1425,7 +1425,7 @@ EXPORTED int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum)
     return 0;
 }
 
-int mailbox_record_hasflag(struct mailbox *mailbox,
+EXPORTED int mailbox_record_hasflag(struct mailbox *mailbox,
                            const struct index_record *record,
                            const char *flag)
 {
