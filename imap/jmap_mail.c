@@ -2238,7 +2238,10 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             size_t j;
 
             attid = message_guid_encode(&part->content_guid);
-            att = json_pack("{s:s}", "blobId", attid);
+            char *shortId = (char *)attid;
+            /* blobIds are truncated at 128 bits */
+            shortId[32] = 0;
+            att = json_pack("{s:s}", "blobId", shortId);
 
             /* type */
             buf_setcstr(&buf, part->type);
@@ -3382,35 +3385,41 @@ static int getMessageList(jmap_req_t *req)
 
     // fetchmsgs is implicit in fetchthreads, because we fetch them all
     if (fetchthreads) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", threadids);
-        if (fetchmsgs) json_object_set_new(subreq.args, "fetchMessages", json_true());
-        json_t *props = json_object_get(req->args, "fetchMessageProperties");
-        if (props) json_object_set(subreq.args, "fetchMessageProperties", props);
-        r = getThreads(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
+        if (json_array_size(threadids)) {
+            struct jmap_req subreq = *req;
+            subreq.args = json_pack("{}");
+            json_object_set(subreq.args, "ids", threadids);
+            if (fetchmsgs) json_object_set_new(subreq.args, "fetchMessages", json_true());
+            json_t *props = json_object_get(req->args, "fetchMessageProperties");
+            if (props) json_object_set(subreq.args, "fetchMessageProperties", props);
+            r = getThreads(&subreq);
+            json_decref(subreq.args);
+            if (r) goto done;
+        }
     }
     else if (fetchmsgs) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", messageids);
-        json_t *props = json_object_get(req->args, "fetchMessageProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        r = getMessages(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
+        if (json_array_size(messageids)) {
+            struct jmap_req subreq = *req;
+            subreq.args = json_pack("{}");
+            json_object_set(subreq.args, "ids", messageids);
+            json_t *props = json_object_get(req->args, "fetchMessageProperties");
+            if (props) json_object_set(subreq.args, "properties", props);
+            r = getMessages(&subreq);
+            json_decref(subreq.args);
+            if (r) goto done;
+        }
     }
 
     if (fetchsnippets) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "messageIds", messageids);
-        json_object_set(subreq.args, "filter", filter);
-        r = getSearchSnippets(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
+        if (json_array_size(messageids)) {
+            struct jmap_req subreq = *req;
+            subreq.args = json_pack("{}");
+            json_object_set(subreq.args, "messageIds", messageids);
+            json_object_set(subreq.args, "filter", filter);
+            r = getSearchSnippets(&subreq);
+            json_decref(subreq.args);
+            if (r) goto done;
+        }
     }
 
 done:
@@ -3541,6 +3550,7 @@ static int getThreadUpdates(jmap_req_t *req)
     readprop(req->args, "maxChanges", 0, invalid, "i", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
+
     /* fetch */
     readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
 
@@ -3651,14 +3661,17 @@ static int getThreadUpdates(jmap_req_t *req)
     json_array_append_new(req->response, item);
 
     if (fetch) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", changed);
-        json_t *props = json_object_get(req->args, "fetchRecordProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        r = getThreads(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
+        if (json_array_size(changed)) {
+            struct jmap_req subreq = *req;
+            subreq.args = json_pack("{}");
+            json_object_set(subreq.args, "ids", changed);
+            json_t *props = json_object_get(req->args, "fetchRecordProperties");
+            if (props) json_object_set(subreq.args, "properties", props);
+            json_object_set(subreq.args, "fetchMessages", json_false());
+            r = getThreads(&subreq);
+            json_decref(subreq.args);
+            if (r) goto done;
+        }
     }
 
 done:
