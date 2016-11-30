@@ -492,6 +492,7 @@ done:
     if (r) {
         syslog(LOG_ERR, "jmapmbox_from_mbentry: %s", error_message(r));
     }
+    mbname_free(&mbname);
     return obj;
 }
 
