@@ -1580,28 +1580,23 @@ static void free_ntags(struct ntags *n)
 
 static struct dtags *new_dtags(void)
 {
-    struct dtags *r = (struct dtags *) xmalloc(sizeof(struct dtags));
+    struct dtags *r = (struct dtags *) xzmalloc(sizeof(struct dtags));
 
     r->comptag = r->priority= r->relation = -1;
-    r->pattern  = NULL;
 
     return r;
 }
 
 static void free_dtags(struct dtags *d)
 {
+    if (!d) return;
     if (d->pattern) free(d->pattern);
     free(d);
 }
 
 static struct ftags *new_ftags(void)
 {
-    struct ftags *f = (struct ftags *) xmalloc(sizeof(struct ftags));
-
-    f->copy = 0;
-    f->create = 0;
-    f->flags  = NULL;
-
+    struct ftags *f = (struct ftags *) xzmalloc(sizeof(struct ftags));
     return f;
 }
 
@@ -1612,6 +1607,7 @@ static struct ftags *canon_ftags(struct ftags *f)
 
 static void free_ftags(struct ftags *f)
 {
+    if (!f) return;
     if (f->flags) { strarray_free(f->flags); }
     free(f);
 }
