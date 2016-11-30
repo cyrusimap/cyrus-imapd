@@ -1487,6 +1487,7 @@ sub test_getmessages_body_multi
         mime_boundary => "sub",
         body => $body
     );
+    $talk->store('1', '+flags', '($HasAttachment)');
 
     xlog "get message list";
     my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
