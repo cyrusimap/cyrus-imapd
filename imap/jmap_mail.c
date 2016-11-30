@@ -4207,10 +4207,6 @@ doneloop:
         if (r) goto done;
     }
 
-    if (!json_array_size(list)) {
-        json_decref(list);
-        list = json_null();
-    }
     if (!json_array_size(notfound)) {
         json_decref(notfound);
         notfound = json_null();
