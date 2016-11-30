@@ -105,7 +105,7 @@ sub test_getmailboxes
     $self->assert_str_equals($inbox->{name}, "Inbox");
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($inbox->{role}, "inbox");
-    $self->assert_num_equals($inbox->{sortOrder}, 0);
+    $self->assert_num_equals($inbox->{sortOrder}, 1);
     $self->assert_equals($inbox->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($inbox->{mayReadItems}, JSON::true);
     $self->assert_equals($inbox->{mayAddItems}, JSON::true);
@@ -122,7 +122,7 @@ sub test_getmailboxes
     $self->assert_str_equals($foo->{name}, "foo");
     $self->assert_null($foo->{parentId});
     $self->assert_null($foo->{role});
-    $self->assert_num_equals($foo->{sortOrder}, 0);
+    $self->assert_num_equals($foo->{sortOrder}, 10);
     $self->assert_equals($foo->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($foo->{mayReadItems}, JSON::true);
     $self->assert_equals($foo->{mayAddItems}, JSON::true);
@@ -139,7 +139,7 @@ sub test_getmailboxes
     $self->assert_str_equals($bar->{name}, "bar");
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
     $self->assert_null($bar->{role});
-    $self->assert_num_equals($bar->{sortOrder}, 0);
+    $self->assert_num_equals($bar->{sortOrder}, 10);
     $self->assert_equals($bar->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($bar->{mayReadItems}, JSON::true);
     $self->assert_equals($bar->{mayAddItems}, JSON::true);
@@ -352,7 +352,7 @@ sub test_setmailboxes
     $res = $jmap->Request([
             ['setMailboxes', { update => { $id => {
                             name => "bar",
-                            sortOrder => 10
+                            sortOrder => 20
              }}}, "R1"]
     ]);
 
@@ -366,7 +366,7 @@ sub test_setmailboxes
     $self->assert_str_equals($res->[0][1]{list}[0]->{id}, $id);
     $mbox = $res->[0][1]{list}[0];
     $self->assert_str_equals($mbox->{name}, "bar");
-    $self->assert_num_equals($mbox->{sortOrder}, 10);
+    $self->assert_num_equals($mbox->{sortOrder}, 20);
 
     xlog "destroy mailbox";
     $res = $jmap->Request([
@@ -815,7 +815,7 @@ sub test_getmailboxupdates
     $res = $jmap->Request([
             ['setMailboxes', { update => { $foo => {
                             name => "bar",
-                            sortOrder => 10
+                            sortOrder => 20
              }}}, "R1"]
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
@@ -2259,7 +2259,7 @@ sub test_acl
         inReplyToMessageId => $msgid,
     } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
+    $self->assert_str_equals("mailboxIds", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
 
     $res = $jmap->Request([['setMessages', { accountId => "foo", create => { "1" => {
         mailboxIds => [$mboxid],
@@ -2272,15 +2272,15 @@ sub test_acl
         inReplyToMessageId => $msgid,
     } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
+    $self->assert_str_equals("mailboxIds", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
 
     $res = $jmap->Request([[ 'setMailboxes', { update => {
-            $mboxid => { sortOrder => 10 }
+            $mboxid => { sortOrder => 20 }
     }}, "R1" ]]);
     $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
 
     $res = $jmap->Request([[ 'setMailboxes', { accountId => "foo", update => {
-            $mboxid => { sortOrder => 10 }
+            $mboxid => { sortOrder => 20 }
     }}, "R1" ]]);
     $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
 }
