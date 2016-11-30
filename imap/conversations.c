@@ -1447,132 +1447,169 @@ EXPORTED const strarray_t *conversations_get_folders(struct conversations_state 
     return state->folder_names;
 }
 
+static int _match1(void *rock,
+                   const char *key __attribute__((unused)),
+                   size_t keylen __attribute__((unused)),
+                   const char *data __attribute__((unused)),
+                   size_t datalen __attribute__((unused)))
+{
+    int *match = (int *)rock;
+    *match = 1;
+    return CYRUSDB_DONE;
+}
+
 EXPORTED int conversations_guid_exists(struct conversations_state *state,
                                        const char *guidrep)
 {
-    char *key = strconcat("G", guidrep, (char *)NULL);
-    size_t datalen = 0;
-    const char *data;
+    int match = 0;
 
-    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
+    char *key = strconcat("G", guidrep, (char *)NULL);
+    cyrusdb_foreach(state->db, key, strlen(key), NULL, _match1, &match, NULL);
     free(key);
 
-    if (r || !datalen)
-        return 0;
-    return 1;
+    return match;
+}
+
+struct guid_foreach_rock {
+    struct conversations_state *state;
+    int(*cb)(const conv_guidrec_t *, void *);
+    void *cbrock;
+};
+
+static int _guid_one(const char *s, struct guid_foreach_rock *frock)
+{
+    const char *p, *err;
+    conv_guidrec_t rec;
+    uint32_t res;
+
+    p = strchr(s, ':');
+    if (!p) return IMAP_INTERNAL;
+
+    /* mboxname */
+    int r = parseuint32(s, &err, &res);
+    if (r || err != p) return IMAP_INTERNAL;
+    rec.mboxname = strarray_safenth(frock->state->folder_names, res);
+    if (!rec.mboxname) return IMAP_INTERNAL;
+
+    /* uid */
+    r = parseuint32(p + 1, &err, &res);
+    if (r) return IMAP_INTERNAL;
+    rec.uid = res;
+    p = err;
+
+    /* part */
+    rec.part = NULL;
+    char *freeme = NULL;
+    if (*p) {
+        const char *end = strchr(p+1, ']');
+        if (*p != '[' || !end || p+1 == end) {
+            return IMAP_INTERNAL;
+        }
+        rec.part = freeme = xstrndup(p+1, end-p-1);
+    }
+
+    r = frock->cb(&rec, frock->cbrock);
+    free(freeme);
+    return r;
+}
+
+static int _guid_cb(void *rock,
+                    const char *key,
+                    size_t keylen,
+                    const char *data,
+                    size_t datalen)
+{
+    struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
+    int r;
+
+    if (keylen < 41)
+        return IMAP_INTERNAL;
+
+    // oldstyle key
+    if (keylen == 41) {
+        strarray_t *recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
+        int i;
+        for (i = 0; i < recs->count; i++) {
+            r = _guid_one(strarray_nth(recs, i), frock);
+            if (r) break;
+        }
+        strarray_free(recs);
+        return r;
+    }
+
+    // newstyle key
+    if (key[41] != ':')
+        return IMAP_INTERNAL;
+
+    char *freeme = xstrndup(key+42, keylen-42);
+    r = _guid_one(freeme, frock);
+    free(freeme);
+
+    return r;
 }
 
 EXPORTED int conversations_guid_foreach(struct conversations_state *state,
                                         const char *guidrep,
-                                        int(*cb)(const conv_guidrec_t*,void*),
-                                        void *rock)
+                                        int(*cb)(const conv_guidrec_t *, void *),
+                                        void *cbrock)
 {
+    struct guid_foreach_rock rock;
+    rock.state = state;
+    rock.cb = cb;
+    rock.cbrock = cbrock;
+
     char *key = strconcat("G", guidrep, (char *)NULL);
-    strarray_t *recs = NULL;
-    size_t datalen = 0;
-    const char *data;
-    int i, r;
-
-    r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
-    if (r == CYRUSDB_NOTFOUND) {
-        free(key);
-        return 0;
-    } else if (r) {
-        free(key);
-        return r;
-    }
-
-    recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
-
-    for (i = 0; i < recs->count; i++) {
-        const char *p, *s, *err;
-        conv_guidrec_t rec;
-        uint32_t res;
-        char *freeme = NULL;
-
-        /* foldernumber:uid */
-        s = strarray_nth(recs, i);
-        p = strchr(s, ':');
-        if (!p) {
-            r = IMAP_INTERNAL;
-            break;
-        }
-
-        /* mboxname */
-        r = parseuint32(s, &err, &res);
-        if (r || err != p) {
-            r = IMAP_INTERNAL;
-            break;
-        }
-        rec.mboxname = strarray_safenth(state->folder_names, res);
-        if (!rec.mboxname) {
-            r = IMAP_INTERNAL;
-            break;
-        }
-
-        /* uid */
-        r = parseuint32(p + 1, &err, &res);
-        if (r) {
-            r = IMAP_INTERNAL;
-            break;
-        }
-        rec.uid = res;
-        p = err;
-
-        /* part */
-        rec.part = NULL;
-        if (*p) {
-            const char *end = strchr(p+1, ']');
-            if (*p != '[' || !end || p+1 == end) {
-                r = IMAP_INTERNAL;
-                break;
-            }
-            rec.part = freeme = xstrndup(p+1, end-p-1);
-        }
-
-        r = cb(&rec, rock);
-        free(freeme);
-        if (r) break;
-    }
-
-    if (recs) strarray_free(recs);
+    int r = cyrusdb_foreach(state->db, key, strlen(key), NULL, _guid_cb, &rock, NULL);
     free(key);
+
     return r;
 }
 
 static int conversations_guid_setitem(struct conversations_state *state, const char *guidrep,
                                       const char *item, int add)
 {
-    char *key = strconcat("G", guidrep, (char *)NULL);
+    struct buf key = BUF_INITIALIZER;
+    buf_setcstr(&key, "G");
+    buf_appendcstr(&key, guidrep);
     size_t datalen = 0;
     const char *data;
-    strarray_t *old = NULL;
 
-    int r = cyrusdb_fetch(state->db, key, strlen(key), &data, &datalen, &state->txn);
-    if (!r && datalen) old = strarray_nsplit(data, datalen, ",", /*flags*/0);
-    if (!old) old = strarray_new();
+    // check if we have to upgrade anything?
+    int r = cyrusdb_fetch(state->db, buf_base(&key), buf_len(&key), &data, &datalen, &state->txn);
+    if (!r && datalen) {
+        int i;
+        buf_putc(&key, ':');
+
+        /* add new keys for all the old values */
+        strarray_t *old = strarray_nsplit(data, datalen, ",", /*flags*/0);
+        for (i = 0; i < strarray_size(old); i++) {
+            buf_truncate(&key, 42); // trim back to the colon
+            buf_appendcstr(&key, strarray_nth(old, i));
+            r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key), "", 0, &state->txn);
+            if (r) break;
+        }
+        strarray_free(old);
+        if (r) goto done;
+
+        buf_truncate(&key, 41); // trim back to original key
+
+        /* remove the original key */
+        r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key), &state->txn, /*force*/0);
+        if (r) goto done;
+    }
+
+    buf_putc(&key, ':');
+    buf_appendcstr(&key, item);
 
     if (add) {
-        /* XXX - could do with an API like:
-         * strarray_add_sorted(old, item, cmpstringp_raw) */
-        strarray_add(old, item);
-        strarray_sort(old, cmpstringp_raw);
+        r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key), "", 0, &state->txn);
     }
     else {
-        strarray_remove_all(old, item);
-        /* stays sorted :) */
+        r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key), &state->txn, /*force*/1);
     }
 
-    char *new = strarray_join(old, ",");
-
-    if (new && strlen(new))
-        r = cyrusdb_store(state->db, key, strlen(key), new, strlen(new), &state->txn);
-    else
-        r = cyrusdb_delete(state->db, key, strlen(key), &state->txn, /*force*/1);
-
-    strarray_free(old);
-    free(new);
-    free(key);
+done:
+    buf_free(&key);
 
     return r;
 }
