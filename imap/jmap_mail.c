@@ -115,6 +115,7 @@ jmap_msg_t jmap_mail_messages[] = {
 };
 
 #define JMAP_INREPLYTO_HEADER "X-JMAP-In-Reply-To"
+#define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
 
 struct _mboxcache_rec {
     struct mailbox *mbox;
@@ -2213,8 +2214,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     }
 
     if (_wantprop(props, "hasAttachment")) {
-        json_object_set_new(msg, "hasAttachment",
-                json_boolean(bodies.atts.count + bodies.msgs.count));
+        int b = 0;
+        if (is_embedded) {
+            b = bodies.atts.count + bodies.msgs.count;
+        } else {
+            b = mailbox_record_hasflag(mbox, record, JMAP_HAS_ATTACHMENT_FLAG);
+        }
+        json_object_set_new(msg, "hasAttachment", json_boolean(b));
     }
 
     /* attachments */
@@ -2709,8 +2715,10 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             match_string(this, s, "from");
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
-            e = val == json_true() ? search_expr_new(this, SEOP_NOT) : this;
-            match_string(e, "text", "contenttype"); /* FIXME use annotation */
+            e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
+            e = search_expr_new(e, SEOP_MATCH);
+            e->attr = search_attr_find("keyword");
+            e->value.s = xstrdup(JMAP_HAS_ATTACHMENT_FLAG);
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -5543,6 +5551,8 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
         /* Save record */
         record.system_flags |= system_flags;
         r = mailbox_rewrite_index_record(mbox, &record);
+        if (r) goto done;
+        r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, NULL, 1);
         if (r) goto done;
 
         /* Complete message creation */
