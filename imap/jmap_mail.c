@@ -2272,10 +2272,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             size_t j;
 
             attid = message_guid_encode(&part->content_guid);
-            char *shortId = (char *)attid;
-            /* blobIds are truncated at 128 bits */
-            shortId[32] = 0;
-            att = json_pack("{s:s}", "blobId", shortId);
+            att = json_pack("{s:s}", "blobId", attid);
 
             /* type */
             buf_setcstr(&buf, part->type);
