@@ -2259,7 +2259,7 @@ sub test_acl
         inReplyToMessageId => $msgid,
     } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
+    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
 
     $res = $jmap->Request([['setMessages', { accountId => "foo", create => { "1" => {
         mailboxIds => [$mboxid],
@@ -2272,7 +2272,7 @@ sub test_acl
         inReplyToMessageId => $msgid,
     } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
+    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
 
     $res = $jmap->Request([[ 'setMailboxes', { update => {
             $mboxid => { sortOrder => 20 }
