@@ -1574,7 +1574,7 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
     for (i = 0; i < updates.count; i++) {
         json_t *update = ptrarray_nth(&updates, i);
         const char *id = json_string_value(json_object_get(update, "id"));
-        modseq_t modseq = json_integer_value(json_object_get(update,  "modseq"));
+        modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
 
         if (limit && ((size_t) i) >= limit) {
             *has_more = 1;
@@ -1591,11 +1591,7 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
         }
     }
 
-    if (updates.count) {
-        *newstate = jmap_fmtstate(windowmodseq);
-    } else {
-        *newstate = jmap_fmtstate(frommodseq);
-    }
+    *newstate = jmap_fmtstate(*has_more ? windowmodseq : req->counters.mailfoldersmodseq);
 
 done:
     if (data.changed) json_decref(data.changed);
@@ -1656,20 +1652,22 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_object_set_new(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messageUpdates"));
+    json_array_append_new(item, json_string("mailboxUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
     if (fetch) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", changed);
-        json_t *props = json_object_get(req->args, "fetchRecordProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        r = getMailboxes(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
+        if (json_array_size(changed)) {
+            struct jmap_req subreq = *req;
+            subreq.args = json_pack("{}");
+            json_object_set(subreq.args, "ids", changed);
+            json_t *props = json_object_get(req->args, "fetchRecordProperties");
+            if (props) json_object_set(subreq.args, "properties", props);
+            r = getMailboxes(&subreq);
+            json_decref(subreq.args);
+            if (r) goto done;
+        }
     }
 
 done:
