@@ -163,7 +163,7 @@ sub test_getmailboxes_specialuse
 
     $imaptalk->create("INBOX.Archive", "(USE (\\Archive))") || die;
     $imaptalk->create("INBOX.Drafts", "(USE (\\Drafts))") || die;
-    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))") || die;
+    $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
     $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
     $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
 
@@ -177,7 +177,7 @@ sub test_getmailboxes_specialuse
     my $inbox = $m{"Inbox"};
     my $archive = $m{"Archive"};
     my $drafts = $m{"Drafts"};
-    my $junk = $m{"Junk"};
+    my $spam = $m{"Spam"};
     my $sent = $m{"Sent"};
     my $trash = $m{"Trash"};
 
@@ -188,9 +188,9 @@ sub test_getmailboxes_specialuse
     $self->assert_null($drafts->{parentId});
     $self->assert_str_equals($drafts->{role}, "drafts");
 
-    $self->assert_str_equals($junk->{name}, "Junk");
-    $self->assert_null($junk->{parentId});
-    $self->assert_str_equals($junk->{role}, "junk");
+    $self->assert_str_equals($spam->{name}, "Spam");
+    $self->assert_null($spam->{parentId});
+    $self->assert_str_equals($spam->{role}, "spam");
 
     $self->assert_str_equals($sent->{name}, "Sent");
     $self->assert_null($sent->{parentId});
