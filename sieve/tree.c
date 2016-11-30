@@ -178,6 +178,7 @@ void free_test(test_t *t)
         free(t->u.mbx.extname);
         free(t->u.mbx.keyname);
         if (t->u.mbx.keylist) strarray_free(t->u.mbx.keylist);
+        free(t->u.mbx.comparator);
         break;
     }
 
