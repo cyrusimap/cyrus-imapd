@@ -5676,6 +5676,13 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
         }
 
         char *name = mboxlist_find_uniqueid(id, req->userid);
+        if (!name) {
+            struct buf buf = BUF_INITIALIZER;
+            buf_printf(&buf, "mailboxIds[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_free(&buf);
+            continue;
+        }
         mbname_t *mbname = mbname_from_intname(name);
         char *role = jmapmbox_role(req, mbname);
         mbname_free(&mbname);
@@ -5692,7 +5699,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
         free(name);
         free(role);
     }
-    if (!have_mbox) {
+    if (!have_mbox && !json_array_size(invalid)) {
         json_array_append_new(invalid, json_string("mailboxIds"));
     }
     jmapmsg_validate(msg, invalid, system_flags & FLAG_DRAFT);
