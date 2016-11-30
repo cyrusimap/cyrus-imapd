@@ -2198,19 +2198,17 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
     /* textBody */
     if (_wantprop(props, "textBody") || _wantprop(props, "body")) {
-        const char *name = _wantprop(props, "textBody") ? "textBody" : "body";
         if (!text && html) {
             text = extract_plain(html);
         }
-        json_object_set_new(msg, name, text ? json_string(text) : json_null());
+        json_object_set_new(msg, "textBody", text ? json_string(text) : json_null());
     }
     /* htmlBody */
     if (_wantprop(props, "htmlBody") || _wantprop(props, "body")) {
-        const char *name = _wantprop(props, "htmlBody") ? "htmlBody" : "body";
         if (!html && text) {
             html = xstrdup(text);
         }
-        json_object_set_new(msg, name, html ? json_string(html) : json_null());
+        json_object_set_new(msg, "htmlBody", html ? json_string(html) : json_null());
     }
 
     if (_wantprop(props, "hasAttachment")) {
