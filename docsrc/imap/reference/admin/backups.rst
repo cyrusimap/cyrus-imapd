@@ -169,14 +169,8 @@ It's recommended to set up a dedicated replication channel for backups, so that
 your backup replication can coexist independently of your other replication
 configurations
 
-Add settings to :cyrusman:`imapd.conf(5)` like:
+Add settings to :cyrusman:`imapd.conf(5)` like (default values shown):
 
-sync\_log\_channels: *channel*
-    Add a new channel "*channel*" to whatever was already here. Suggest calling
-    this "backup"
-sync\_log: 1
-    Enable sync log if you want rolling replication to the backup server (and
-    if it wasn't already)
 *channel*\ \_sync\_host: backup-server.example.com
     The host name of your Cyrus Backup server
 *channel*\ \_sync\_port: csync
@@ -185,20 +179,81 @@ sync\_log: 1
     Credentials for authenticating to the Cyrus Backup server
 *channel*\ \_sync\_password: ...
     Credentials for authenticating to the Cyrus Backup server
+
+Using rolling replication
++++++++++++++++++++++++++
+
+You can configure backups to use rolling replication.  Depending on the sync
+repeat interval you configure, this can be used to keep your backups very
+current -- potentially as current as your other replicas.
+
+To configure rolling replication, add additional settings to
+:cyrusman:`imapd.conf(5)` like:
+
+sync\_log: 1
+    Enable sync log if it wasn't already.
+sync\_log\_channels: *channel*
+    Add a new channel "*channel*" to whatever was already here. Suggest calling
+    this "backup"
 *channel*\ \_sync\_repeat\_interval: 1
     Minimum time in seconds between rolling replication runs. Smaller value
     means livelier backups but more network I/O. Larger value reduces I/O.
 
-Update :cyrusman:`cyrus.conf(5)` to arrange for replication to occur. If you
-want to use rolling replication, add a :cyrusman:`sync_client(8)` invocation
+Update :cyrusman:`cyrus.conf(5)` to add a :cyrusman:`sync_client(8)` invocation
 to the SERVICES section specifying (at least) the ``-r`` and ``-n channel``
 options.
 
-If you want to use scheduled replication, add :cyrusman:`sync_client(8)`
-invocations to the EVENTS section (or cron, etc), specifying at least the
+See :cyrusman:`imapd.conf(5)` for additional *sync\_* settings that can
+be used to affect the replication behaviour.  Many can be prefixed with
+a channel to limit their affect to only backups, if necessary.
+
+Using scheduled replication (push)
+++++++++++++++++++++++++++++++++++
+
+You can configure backups to occur on a schedule determined by the IMAP
+server.
+
+To do this, add :cyrusman:`sync_client(8)` invocations to the EVENTS section
+of :cyrusman:`cyrus.conf(5)` (or cron, etc), specifying at least the
 ``-n channel`` option (to use the channel-specific configuration), plus
 whatever other options you need for selecting users to back up. See the
 :cyrusman:`sync_client(8)` manpage for details.
+
+You could also invoke :cyrusman:`sync_client(8)` in a similar way from a
+custom script running on the IMAP server.
+
+Using scheduled replication (pull)
+++++++++++++++++++++++++++++++++++
+
+You can configure backups to occur on a schedule determined by the
+backup server.  For example, you may have a custom script that examines
+the existing backups, and provokes fresh backups to occur if they are
+determined to be out of date.
+
+To to this, enable XBACKUP on your IMAP server by adding the following
+setting to :cyrusman:`imapd.conf(5)`:
+
+xbackup\_enabled: yes
+    Enables the XBACKUP command in imapd.
+
+Your custom script can then authenticate to the IMAP server as an admin
+user, and invoke the command ``XBACKUP pattern [channel]``.  A replication
+of the users or shared mailboxes matching the specified pattern will occur
+to the backup server defined by the named channel.  If no channel is
+specified, default sync configuration will be used.
+
+For example::
+
+    C: 1 XBACKUP user.* backup
+    S: * OK USER anne
+    S: * OK USER bethany
+    S: * NO USER cassandane (Operation is not supported on mailbox)
+    S: * OK USER demi
+    S: * OK USER ellie
+    S: 1 OK Completed
+
+This replicates all users to the channel *backup*.
+
 
 Administration
 ==============
@@ -271,6 +326,11 @@ Provoking a backup for a particular user/user group/everyone/etc right now
 
 Just run :cyrusman:`sync_client(8)` by hand with appropriate options (as cyrus
 user, of course). See its man page for ways of specifying items to replicate.
+
+If the IMAP server with the user's mail has been configured with the
+``xbackup_enabled: yes`` option in :cyrusman:`imapd.conf(5)`, then an admin
+user can cause a backup to occur by sending the IMAP server an ``XBACKUP``
+command.
 
 What about tape backups?
 ------------------------
@@ -373,6 +433,8 @@ reindex
     is not lost. But this also means that reindex *increases* disk usage in
     practice, until the old files are cleaned up. This will probably be
     automated in some way once things are stable and reliable.
+stat
+    Show statistics about backups -- disk usage, compression ratio, etc.
 verify
     Deep verification of backups. Verifies that:
 
