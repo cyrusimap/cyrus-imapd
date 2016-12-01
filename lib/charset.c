@@ -1901,6 +1901,11 @@ EXPORTED charset_t charset_lookupname(const char *name)
     s = xzmalloc(sizeof(struct charset_converter));
     s->num = -1;
 
+    if (!name) {
+        s->num = 0; // us-ascii
+        return s;
+    }
+
     /* translate to canonical name */
     for (i = 0; charset_aliases[i].name; i++) {
         if (!strcasecmp(name, charset_aliases[i].name) ||
