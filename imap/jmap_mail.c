@@ -1730,8 +1730,8 @@ static json_t *emailer_from_addr(const struct address *a)
             char *dec = charset_decode_mimeheader(a->name, CHARSET_NO_CANONIFY);
             if (dec) {
                 json_object_set_new(e, "name", json_string(dec));
-                free(dec);
             }
+            free(dec);
         } else {
             json_object_set_new(e, "name", json_string(""));
         }
@@ -2084,17 +2084,22 @@ static int extract_headers(const char *key, const char *val, void *rock)
 {
     json_t *headers = (json_t*) rock;
     json_t *curval;
+    char *decodedval = NULL;
 
     if (isspace(*val)) val++;
 
+    decodedval = charset_decode_mimeheader(val, CHARSET_NO_CANONIFY);
+    if (!decodedval) return 0;
+
     if ((curval = json_object_get(headers, key))) {
-        char *newval = strconcat(json_string_value(curval), "\n", val, NULL);
+        char *newval = strconcat(json_string_value(curval), "\n", decodedval, NULL);
         json_object_set_new(headers, key, json_string(newval));
         free(newval);
     } else {
-        json_object_set_new(headers, key, json_string(val));
+        json_object_set_new(headers, key, json_string(decodedval));
     }
 
+    free(decodedval);
     return  0;
 }
 
@@ -2198,8 +2203,12 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     }
     /* subject */
     if (_wantprop(props, "subject")) {
-        const char *subject = body->subject ? body->subject : "";
-        json_object_set_new(msg, "subject", json_string(subject));
+        char *subject = NULL;
+        if (body->subject) {
+            subject = charset_decode_mimeheader(body->subject, CHARSET_NO_CANONIFY);
+        }
+        json_object_set_new(msg, "subject", json_string(subject ? subject : ""));
+        free(subject);
     }
     /* date */
     if (_wantprop(props, "date")) {
