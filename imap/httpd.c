@@ -1496,48 +1496,6 @@ static int examine_request(struct transaction_t *txn)
         return HTTP_BAD_REQUEST;
     }
 
-    /* Check for Connection options */
-    if ((ret = parse_connection(txn))) return ret;
-
-    syslog(LOG_DEBUG, "conn flags: %#x  upgrade flags: %#x  tls req: %d",
-           txn->flags.conn, txn->flags.upgrade, httpd_tls_required);
-    if (txn->flags.conn & CONN_UPGRADE) {
-        if (txn->flags.upgrade & UPGRADE_TLS) {
-            int http2 = 0;
-            if ((ret = starttls(txn, &http2))) {
-                txn->flags.conn = CONN_CLOSE;
-                return ret;
-            }
-            if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
-        }
-
-        syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
-               txn->flags.upgrade, httpd_tls_required);
-        if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
-            if ((ret = starthttp2(txn->conn, httpd_tls_done ? NULL : txn))) {
-                txn->flags.conn = CONN_CLOSE;
-                return ret;
-            }
-        }
-
-        txn->flags.conn &= ~CONN_UPGRADE;
-        txn->flags.upgrade = 0;
-    }
-    else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
-        /* Advertise available upgrade protocols */
-        txn->flags.conn |= CONN_UPGRADE;
-        txn->flags.upgrade = UPGRADE_HTTP2;
-        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))
-            txn->flags.upgrade |= UPGRADE_TLS;
-    }
-
-    /* Check message framing */
-    if ((ret = http_parse_framing(txn->flags.ver == VER_2, txn->req_hdrs,
-                                  &txn->req_body, &txn->error.desc))) return ret;
-
-    /* Check for Expectations */
-    if ((ret = parse_expect(txn))) return ret;
-
     /* Check for mandatory Host header (HTTP/1.1+ only) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host")) && hdr[1]) {
         txn->error.desc = "Too many Host headers";
@@ -1570,6 +1528,57 @@ static int examine_request(struct transaction_t *txn)
             txn->error.desc = "Missing Host header";
             return HTTP_BAD_REQUEST;
         }
+    }
+
+    /* Check message framing */
+    if ((ret = http_parse_framing(txn->flags.ver == VER_2, txn->req_hdrs,
+                                  &txn->req_body, &txn->error.desc))) return ret;
+
+    /* Check for Expectations */
+    if ((ret = parse_expect(txn))) return ret;
+
+    /* Check for Connection options */
+    if ((ret = parse_connection(txn))) return ret;
+
+    syslog(LOG_DEBUG, "conn flags: %#x  upgrade flags: %#x  tls req: %d",
+           txn->flags.conn, txn->flags.upgrade, httpd_tls_required);
+    if (txn->flags.conn & CONN_UPGRADE) {
+        /* Read any request body (can't upgrade in middle of request) */
+        txn->req_body.flags |= BODY_DECODE;
+        ret = http_read_body(httpd_in, httpd_out,
+                             txn->req_hdrs, &txn->req_body, &txn->error.desc);
+        if (ret) {
+            txn->flags.conn = CONN_CLOSE;
+            return ret;
+        }
+
+        if (txn->flags.upgrade & UPGRADE_TLS) {
+            int http2 = 0;
+            if ((ret = starttls(txn, &http2))) {
+                txn->flags.conn = CONN_CLOSE;
+                return ret;
+            }
+            if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
+        }
+
+        syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
+               txn->flags.upgrade, httpd_tls_required);
+        if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
+            if ((ret = starthttp2(txn->conn, httpd_tls_done ? NULL : txn))) {
+                txn->flags.conn = CONN_CLOSE;
+                return ret;
+            }
+        }
+
+        txn->flags.conn &= ~CONN_UPGRADE;
+        txn->flags.upgrade = 0;
+    }
+    else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
+        /* Advertise available upgrade protocols */
+        txn->flags.conn |= CONN_UPGRADE;
+        txn->flags.upgrade = UPGRADE_HTTP2;
+        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))
+            txn->flags.upgrade |= UPGRADE_TLS;
     }
 
     query = URI_QUERY(txn->req_uri);
