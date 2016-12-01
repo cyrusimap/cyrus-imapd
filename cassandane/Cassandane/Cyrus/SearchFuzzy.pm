@@ -412,8 +412,6 @@ sub test_snippets_termcover
         ]
     ) || die;
     $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
-
-
 }
 
 sub test_cjk_words
@@ -708,7 +706,52 @@ sub test_xapianv2
         ['fuzzy', 'body', 'run'],
     ) || die;
     $self->assert_num_equals(3, scalar @{$r->{snippets}});
+}
 
+sub test_snippets_escapehtml
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    xlog "Generate and index test messages.";
+    $self->make_message("Test1 subject with an unescaped & in it",
+        mime_charset => "utf-8",
+        mime_type => "text/html",
+        body => "Test1 body with the same <b>tag</b> as snippets"
+    ) || die;
+
+    $self->make_message("Test2 subject with a <tag> in it",
+        mime_charset => "utf-8",
+        mime_type => "text/plain",
+        body => "Test2 body with a <tag/>, although it's plain text",
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+    my %m;
+
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [ 'fuzzy', 'text', 'test1' ]
+    ) || die;
+
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert_str_equals("<b>Test1</b> body with the same tag as snippets", $m{body});
+    $self->assert_str_equals("<b>Test1</b> subject with an unescaped &amp; in it", $m{subject});
+
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [ 'fuzzy', 'text', 'test2' ]
+    ) || die;
+
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert_str_equals("<b>Test2</b> body with a &lt;tag/&gt;, although it's plain text", $m{body});
+    $self->assert_str_equals("<b>Test2</b> subject with a &lt;tag&gt; in it", $m{subject});
 }
 
 1;
