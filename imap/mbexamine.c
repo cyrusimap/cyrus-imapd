@@ -214,10 +214,6 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    /* Open/lock header */
-    r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
-
     if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
         r = IMAP_IOERROR;
         goto done;
