@@ -46,6 +46,10 @@ See :ref:`ctl-backups-modes` below.
     entry to the EVENTS section of :cyrusman:`cyrus.conf(5)`.  See
     :ref:`ctl-backups-examples` for an example.
 
+    If the **backup_keep_previous** configuration setting is enabled,
+    compact will preserve the original data and index files (renaming
+    them with a timestamp).  This is useful for debugging.
+
 .. option:: list
 
     List backups.  See :ref:`ctl-backups-list-options` for options specific
@@ -70,6 +74,10 @@ See :ref:`ctl-backups-modes` below.
     Rebuild the indexes for the named backups, based on the raw backup data.
     This is useful if their index files have been corrupted, or if the index
     format has changed.
+
+    If the **backup_keep_previous** configuration setting is enabled,
+    reindex will preserve the original index file (renaming it with a
+    timestamp).  This is useful for debugging.
 
 .. option:: stat
 

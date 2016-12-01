@@ -415,12 +415,6 @@ compact
     * combining small chunks for better gzip compression -- especially
       important for hot backups, which produce many tiny chunks
     * removing deleted content that has passed its retention period
-
-    Note that the original backup/index files are preserved (with a timestamped
-    filename), so that in the event of compact bugs/failures, data is not lost.
-    But this also means that compact actually *increases* disk usage in
-    practice, until the old files are cleaned up. This will probably be
-    automated in some way once things are stable and reliable.
 list
     List known backups.
 lock
@@ -428,11 +422,7 @@ lock
 reindex
     Regenerate indexes for backups from their data files. Useful if index
     becomes corrupted by some bug, or invalidated by working on data with
-    non-cyrus tools. Note that the original index file is preserved (with a
-    timestamped filename), so that in the event of reindex bugs/failures, data
-    is not lost. But this also means that reindex *increases* disk usage in
-    practice, until the old files are cleaned up. This will probably be
-    automated in some way once things are stable and reliable.
+    non-cyrus tools.
 stat
     Show statistics about backups -- disk usage, compression ratio, etc.
 verify
