@@ -993,6 +993,65 @@ sub test_getmessages
     $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
 }
 
+sub test_getmessages_mimeencode
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $body = "a body";
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => -10));
+
+     # Thanks to http://dogmamix.com/MimeHeadersDecoder/ for examples
+
+    xlog "Generate a message in INBOX via IMAP";
+    my %exp_inbox;
+    my %params = (
+        date => $maildate,
+        from => Cassandane::Address->new(
+            name => "=?ISO-8859-1?Q?Keld_J=F8rn_Simonsen?=",
+            localpart => "keld",
+            domain => "local"
+        ),
+        to => Cassandane::Address->new(
+            name => "=?US-ASCII?Q?Tom To?=",
+            localpart => 'tom',
+            domain => 'local'
+        ),
+        messageid => 'fake.123456789@local',
+        extra_headers => [
+            ['X-Tra', "foo bar\r\n baz"],
+            ['Sender', "Bla <blu\@local>"],
+            ['X-Mood', '=?UTF-8?Q?I feel =E2=98=BA?='],
+        ],
+        body => $body
+    );
+
+    $self->make_message(
+          "=?ISO-8859-1?B?SWYgeW91IGNhbiByZWFkIHRoaXMgeW8=?= " .
+          "=?ISO-8859-2?B?dSB1bmRlcnN0YW5kIHRoZSBleGFtcGxlLg==?=",
+    %params ) || die;
+
+    xlog "get message list";
+    $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
+    my $ids = $res->[1][1]->{messageIds};
+    my $msg = $res->[1][1]->{list}[0];
+
+    $self->assert_str_equals("If you can read this you understand the example.", $msg->{subject});
+    $self->assert_str_equals("I feel \N{WHITE SMILING FACE}", $msg->{headers}{"X-Mood"});
+    $self->assert_str_equals("Keld J\N{LATIN SMALL LETTER O WITH STROKE}rn Simonsen", $msg->{from}[0]{name});
+    $self->assert_str_equals("Tom To", $msg->{to}[0]{name});
+}
+
 sub test_getmessages_fetchmessages
     :min_version_3_0
 {
