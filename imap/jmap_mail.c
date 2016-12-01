@@ -3232,6 +3232,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (hash_lookup(msgid, &window->ids))
             goto doneloop;
 
+        /* Add the message the list of reported messages */
+        hash_insert(msgid, (void*)1, &window->ids);
+
         /* Collapse threads, if requested */
         if (window->collapse && hashu64_lookup(md->cid, &window->cids))
             goto doneloop;
@@ -3296,9 +3299,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Keep track of the highest modseq */
         if (window->highestmodseq < md->modseq)
             window->highestmodseq = md->modseq;
-
-        /* Add the message the list of reported messages */
-        hash_insert(msgid, (void*)1, &window->ids);
 
         /* Check if the message is expunged in all mailboxes */
         r = jmapmsg_isexpunged(req, msgid, &is_expunged);
