@@ -882,7 +882,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
     const char *parentId = NULL, *id = NULL;
     char *name = NULL;
     const char *role = NULL, *specialuse = NULL;
-    int sortOrder = 0;
+    int sortOrder = -1;
     char *mboxname = NULL, *parentname = NULL;
     int r = 0, pe, is_create = (*uid == NULL);
     mbentry_t *inboxentry = NULL;
@@ -1199,17 +1199,19 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         }
     }
 
-    /* Set displayname annotation on mailbox. */
-    struct buf val = BUF_INITIALIZER;
-    buf_setcstr(&val, name);
-    static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
-    r = annotatemore_write(mboxname, displayname_annot, req->userid, &val);
-    if (r) {
-        syslog(LOG_ERR, "failed to write annotation %s: %s",
-                displayname_annot, error_message(r));
-        goto done;
+    if (name) {
+        /* Set displayname annotation on mailbox. */
+        struct buf val = BUF_INITIALIZER;
+        buf_setcstr(&val, name);
+        static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
+        r = annotatemore_write(mboxname, displayname_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    displayname_annot, error_message(r));
+            goto done;
+        }
+        buf_free(&val);
     }
-    buf_reset(&val);
 
     /* Set specialuse or x-role. specialuse takes precendence. */
     if (specialuse) {
@@ -1223,7 +1225,8 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
             goto done;
         }
         buf_free(&val);
-    } else if (role) {
+    }
+    else if (role) {
         struct buf val = BUF_INITIALIZER;
         buf_setcstr(&val, role);
         static const char *annot = IMAP_ANNOT_NS "x-role";
@@ -1236,16 +1239,19 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         buf_free(&val);
     }
 
-    /* Set sortOrder annotation on mailbox. */
-    buf_printf(&val, "%d", sortOrder);
-    static const char *sortorder_annot = IMAP_ANNOT_NS "sortOrder";
-    r = annotatemore_write(mboxname, sortorder_annot, req->userid, &val);
-    if (r) {
-        syslog(LOG_ERR, "failed to write annotation %s: %s",
-                sortorder_annot, error_message(r));
-        goto done;
+    if (sortOrder >= 0) {
+        /* Set sortOrder annotation on mailbox. */
+        struct buf val = BUF_INITIALIZER;
+        buf_printf(&val, "%d", sortOrder);
+        static const char *sortorder_annot = IMAP_ANNOT_NS "sortOrder";
+        r = annotatemore_write(mboxname, sortorder_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    sortorder_annot, error_message(r));
+            goto done;
+        }
+        buf_free(&val);
     }
-    buf_free(&val);
 
     if (!*uid) {
         /* A newly created mailbox. Return it unique id. */
