@@ -59,6 +59,7 @@
 
 #include <config.h>
 
+#include <libgen.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <errno.h>
@@ -434,18 +435,36 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 
 EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
 {
-    int r;
+    char *copy = xstrdup(newname);
+    const char *dir = dirname(copy);
+    int r = 0;
+
+    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+    if (dirfd < 0) {
+        syslog(LOG_ERR, "IOERROR: mappedfile opendir (%s, %s): %m", mf->fname, newname);
+        r = dirfd;
+        goto done;
+    }
 
     r = rename(mf->fname, newname);
     if (r < 0) {
-        syslog(LOG_ERR, "IOERROR: rename (%s, %s): %m", mf->fname, newname);
-        return r;
+        syslog(LOG_ERR, "IOERROR: mappedfile rename (%s, %s): %m", mf->fname, newname);
+        goto done;
+    }
+
+    r = fsync(dirfd);
+    if (r < 0) {
+        syslog(LOG_ERR, "IOERROR: mappedfile rename (%s, %s): %m", mf->fname, newname);
+        goto done;
     }
 
     free(mf->fname);
     mf->fname = xstrdup(newname);
 
-    return 0;
+ done:
+    if (dirfd >= 0) close(dirfd);
+    free(copy);
+    return r;
 }
 
 
