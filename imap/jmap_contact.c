@@ -382,12 +382,13 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     struct cards_rock rock;
     int r = 0;
 
+    rock.mailbox = NULL;
+
     r = carddav_create_defaultaddressbook(req->userid);
     if (r) goto done;
 
     rock.array = json_pack("[]");
     rock.props = NULL;
-    rock.mailbox = NULL;
 
     json_t *properties = json_object_get(req->args, "properties");
     if (properties && json_array_size(properties)) {
