@@ -166,6 +166,13 @@ static int compact_closerename(struct backup **originalp,
         unlink(original->index_fname);
         link(buf_cstring(&ts_data_fname), original->data_fname);
         link(buf_cstring(&ts_index_fname), original->index_fname);
+        goto done;
+    }
+
+    /* finally, clean up the timestamped ones */
+    if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
+        unlink(buf_cstring(&ts_data_fname));
+        unlink(buf_cstring(&ts_index_fname));
     }
 
     /* release our locks */

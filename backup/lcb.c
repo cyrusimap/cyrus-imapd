@@ -462,8 +462,16 @@ EXPORTED int backup_close(struct backup **backupp)
 
     if (backup->db) r2 = sqldb_close(&backup->db);
 
-    if (r2 && backup->oldindex_fname) {
-        rename(backup->oldindex_fname, backup->index_fname);
+    if (backup->oldindex_fname) {
+        if (r2) {
+            /* something went wrong closing the new index, put the old one back */
+            rename(backup->oldindex_fname, backup->index_fname);
+        }
+        else {
+            if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
+                unlink(backup->oldindex_fname);
+            }
+        }
     }
 
     if (backup->fd >= 0) {

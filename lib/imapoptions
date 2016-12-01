@@ -482,6 +482,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path to the backup db file.  If not specified,
    will be confdir/backups.db */
 
+{ "backup_keep_previous", 0, SWITCH }
+/* Whether the \fBctl_backups compact\fR and \fBctl_backups reindex\fR
+   commands should preserve the original file.  The original file will
+   be named with a timestamped suffix.  This is mostly useful for
+   debugging.
+.PP
+   Note that with this enabled, compacting a backup will actually
+   increase the disk used by it (because there will now be an extra
+   copy: the original version, and the compacted version). */
+
 { "boundary_limit", 1000, INT }
 /* messages are parsed recursively and a deep enough MIME structure
    can cause a stack overflow.  Do not parse deeper than this many
