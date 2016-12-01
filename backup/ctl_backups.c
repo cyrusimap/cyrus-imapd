@@ -743,11 +743,14 @@ static int cmd_stat_one(void *rock,
     char *userid = NULL;
     char *fname = NULL;
     struct backup_chunk_list *all_chunks = NULL, *keep_chunks = NULL;
+    struct backup_chunk *latest_chunk = NULL;
     struct backup_chunk *chunk;
     time_t since;
     size_t compactable = 0, uncompressed = 0;
     struct stat data_stat;
     double cmp_ratio, utl_ratio;
+    char start_time[32] = "[unknown]";
+    char end_time[32] = "[unknown]";
     int r;
 
     /* input args might not be 0-terminated, so make a safe copy */
@@ -799,19 +802,31 @@ static int cmd_stat_one(void *rock,
     /* utilisation ratio is compactable length / uncompressed length */
     utl_ratio = 100.0 * compactable / uncompressed;
 
-    printf("%s\t" OFF_T_FMT "\t" SIZE_T_FMT "\t" SIZE_T_FMT "\t%6.1f%%\t%6.1f%%\n",
+    /* start/end time are from latest chunk */
+    latest_chunk = backup_get_latest_chunk(backup);
+    if (latest_chunk) {
+        strftime(start_time, sizeof(start_time), "%F %T",
+                 localtime(&latest_chunk->ts_start));
+        strftime(end_time, sizeof(end_time), "%F %T",
+                 localtime(&latest_chunk->ts_end));
+    }
+
+    printf("%s\t" OFF_T_FMT "\t" SIZE_T_FMT "\t" SIZE_T_FMT "\t%6.1f%%\t%6.1f%%\t%21s\t%s\n",
            userid ? userid : fname,
            data_stat.st_size,
            uncompressed,
            compactable,
            cmp_ratio,
-           utl_ratio);
+           utl_ratio,
+           start_time,
+           end_time);
 
 done:
     if (r) {
         fprintf(stderr, "%s: %s\n", userid ? userid : fname, error_message(r));
     }
 
+    if (latest_chunk) backup_chunk_free(&latest_chunk);
     if (all_chunks) backup_chunk_list_free(&all_chunks);
     if (keep_chunks) backup_chunk_list_free(&keep_chunks);
     if (backup) backup_close(&backup);

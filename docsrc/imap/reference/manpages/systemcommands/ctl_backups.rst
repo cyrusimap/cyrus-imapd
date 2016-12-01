@@ -78,6 +78,8 @@ See :ref:`ctl-backups-modes` below.
     * compactable size
     * compression ratio
     * utilisation ratio
+    * start time of latest chunk
+    * end time of latest chunk
 
     The compactable size is an approximation of how much uncompressed data would
     remain after **compact** is performed.  The utilisation ratio is this figure
