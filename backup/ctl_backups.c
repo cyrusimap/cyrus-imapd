@@ -607,9 +607,11 @@ static int cmd_list_one(void *rock,
 {
     struct ctlbu_cmd_options *options = (struct ctlbu_cmd_options *) rock;
     struct backup *backup = NULL;
-    struct backup_chunk *chunk = NULL;
+    struct backup_chunk *latest_chunk = NULL;
+    struct stat data_stat_buf = {0};
     char *userid = NULL;
     char *fname = NULL;
+    char timestamp[32] = "[unknown]";
     int r = 0;
 
     /* input args might not be 0-terminated, so make a safe copy */
@@ -628,18 +630,32 @@ static int cmd_list_one(void *rock,
         goto done;
     }
 
-    if (options->list_stale) {
-        chunk = backup_get_latest_chunk(backup);
+    latest_chunk = backup_get_latest_chunk(backup);
+    if (latest_chunk) {
+        if (options->list_stale) {
+            /* skip out early if it's not stale */
+            if (time(NULL) - latest_chunk->ts_end < 3600 * options->list_stale)
+                goto done;
+        }
 
-        /* skip out early if it's not stale */
-        if (chunk && time(NULL) - chunk->ts_end < 3600 * options->list_stale)
-            goto done;
+        strftime(timestamp, sizeof(timestamp), "%F %T",
+                 localtime(&latest_chunk->ts_end));
     }
 
-    backup_printinfo(backup, userid, stdout, options->verbose);
+    r = backup_stat(backup, &data_stat_buf, NULL);
+    if (r) {
+        fprintf(stderr, "fstat %s: %s\n", userid ? userid : fname, strerror(errno));
+        data_stat_buf.st_size = -1;
+    }
+
+    printf("%s\t" OFF_T_FMT "\t%s\t%s\n",
+           timestamp,
+           data_stat_buf.st_size,
+           userid ? userid : "[unknown]",
+           fname);
 
 done:
-    if (chunk) backup_chunk_free(&chunk);
+    if (latest_chunk) backup_chunk_free(&latest_chunk);
     if (backup) backup_close(&backup);
     if (userid) free(userid);
     if (fname) free(fname);

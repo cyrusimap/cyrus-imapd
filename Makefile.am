@@ -797,7 +797,6 @@ backup_libcyrus_backup_la_SOURCES = \
     backup/lcb_internal.c \
     backup/lcb_internal.h \
     backup/lcb_partlist.c \
-    backup/lcb_printinfo.c \
     backup/lcb_read.c \
     backup/lcb_sqlconsts.c \
     backup/lcb_sqlconsts.h \

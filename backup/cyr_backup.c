@@ -418,7 +418,6 @@ static int cmd_list_chunks(struct backup *backup,
     chunk_list = backup_get_chunks(backup);
     if (!chunk_list) return -1;
 
-    // FIXME dedup this with lcb_printinfo.c:detail_full()
     fprintf(stdout, "     id offset\tlength\tratio%%\tstart time           end time\n");
     for (chunk = chunk_list->head; chunk; chunk = chunk->next) {
         char ts_start[32] = "[unknown]";

@@ -48,12 +48,16 @@ See :ref:`ctl-backups-modes` below.
 
 .. option:: list
 
-    List backups.  The level of detail in the output can be controlled
-    with the **-v** option.  See :ref:`ctl-backups-list-options` for options specific
-    to the **list** sub-command.
+    List backups.  See :ref:`ctl-backups-list-options` for options specific
+    to the **list** sub-command.  Columns are separated by tabs, and are:
 
-    If no :ref:`mode <ctl-backups-modes>` or backups are specified, lists all known backups
-    (as if invoked with the **-A** mode).
+    * end time of latest chunk
+    * size of backup data file on disk
+    * userid to which the backup belongs
+    * path to backup data file
+
+    If no :ref:`mode <ctl-backups-modes>` or backups are specified, lists all
+    known backups (as if invoked with the **-A** mode).
 
 .. option:: lock
 
@@ -114,8 +118,7 @@ Options
 
 .. option:: -v
 
-    Increase the verbosity.  Can be specified multiple times.  Particularly
-    useful with the **list** sub-command.
+    Increase the verbosity.  Can be specified multiple times.
 
 .. option:: -w
 

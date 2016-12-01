@@ -422,7 +422,7 @@ compact
     practice, until the old files are cleaned up. This will probably be
     automated in some way once things are stable and reliable.
 list
-    List known backups. Add more ``-v``'s for more detail.
+    List known backups.
 lock
     Lock a single backup, so you can safely work on it with non-cyrus tools.
 reindex
