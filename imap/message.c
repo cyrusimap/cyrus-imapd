@@ -4391,11 +4391,11 @@ static void extract_one(struct buf *buf,
     case MESSAGE_SNIPPET:
         if (isutf8) {
             charset_t utf8 = charset_lookupname("utf-8");
-            p = charset_convert(buf_cstring(raw), utf8, CHARSET_SNIPPET);
+            p = charset_convert(buf_cstring(raw), utf8, charset_snippet_flags);
             charset_free(&utf8);
         }
         else {
-            p = charset_decode_mimeheader(buf_cstring(raw), CHARSET_SNIPPET);
+            p = charset_decode_mimeheader(buf_cstring(raw), charset_snippet_flags);
         }
         buf_appendcstr(buf, p);
         break;

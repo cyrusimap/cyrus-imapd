@@ -110,6 +110,7 @@ EXPORTED const char *config_zoneinfo_db;
 EXPORTED const char *config_conversations_db;
 EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
+EXPORTED int charset_snippet_flags;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -260,6 +261,13 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     if (config_getswitch(IMAPOPT_RFC2047_UTF8))
         charset_flags |= CHARSET_MIME_UTF8;
+
+    /* Set snippet conversion flags. */
+    charset_snippet_flags = CHARSET_SNIPPET;
+    if (config_getenum(IMAPOPT_SEARCH_ENGINE) != IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+        /* All search engines other than Xapian require escaped HTML */
+        charset_snippet_flags |= CHARSET_ESCAPEHTML;
+    }
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */

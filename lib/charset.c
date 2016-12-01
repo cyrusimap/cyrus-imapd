@@ -580,19 +580,21 @@ static void uni2html(struct convert_rock *rock, uint32_t c)
         return;
     }
 
-    if (c == '<') {
-        convert_cat(rock->next, "&lt;");
-        return;
-    }
+    if (s->flags & CHARSET_ESCAPEHTML) {
+        if (c == '<') {
+            convert_cat(rock->next, "&lt;");
+            return;
+        }
 
-    if (c == '>') {
-        convert_cat(rock->next, "&gt;");
-        return;
-    }
+        if (c == '>') {
+            convert_cat(rock->next, "&gt;");
+            return;
+        }
 
-    if (c == '&') {
-        convert_cat(rock->next, "&amp;");
-        return;
+        if (c == '&') {
+            convert_cat(rock->next, "&amp;");
+            return;
+        }
     }
 
     /* special case: whitespace or control characters */

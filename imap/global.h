@@ -149,6 +149,7 @@ extern const char *config_zoneinfo_db;
 extern const char *config_conversations_db;
 extern const char *config_backup_db;
 extern int charset_flags;
+extern int charset_snippet_flags;
 
 /* Session ID */
 extern void session_new_id(void);
