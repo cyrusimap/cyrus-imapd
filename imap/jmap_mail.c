@@ -3147,8 +3147,6 @@ struct getmsglist_window {
     /* internal state */
     size_t mdcount;
     size_t anchor_pos;
-    hash_table ids;
-    hashu64_table cids;
 };
 
 static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
@@ -3157,6 +3155,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                           json_t **messageids, json_t **expungedids,
                           json_t **threadids)
 {
+    hash_table ids = HASHU64_TABLE_INITIALIZER;
     hashu64_table cids = HASHU64_TABLE_INITIALIZER;
     struct index_state *state = NULL;
     search_query_t *query = NULL;
@@ -3201,15 +3200,12 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     window->anchor_pos = (size_t)-1;
     window->highestmodseq = 0;
 
-    memset(&window->ids, 0, sizeof(hash_table));
-    construct_hash_table(&window->ids, window->mdcount + 1, 0);
+    memset(&ids, 0, sizeof(hash_table));
+    construct_hash_table(&ids, window->mdcount + 1, 0);
 
-    memset(&window->cids, 0, sizeof(hashu64_table));
-    construct_hashu64_table(&window->cids, window->mdcount/4+4,0);
-
-    /* Initialize thread counter */
     memset(&cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&cids, query->merged_msgdata.count/4+4,0);
+
     *total_threads = 0;
 
     for (i = 0 ; i < query->merged_msgdata.count ; i++) {
@@ -3229,14 +3225,14 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         msgid = message_guid_encode(&md->guid);
 
         /* Have we seen this message already? */
-        if (hash_lookup(msgid, &window->ids))
+        if (hash_lookup(msgid, &ids))
             goto doneloop;
 
         /* Add the message the list of reported messages */
-        hash_insert(msgid, (void*)1, &window->ids);
+        hash_insert(msgid, (void*)1, &ids);
 
         /* Collapse threads, if requested */
-        if (window->collapse && hashu64_lookup(md->cid, &window->cids))
+        if (window->collapse && hashu64_lookup(md->cid, &cids))
             goto doneloop;
 
         /* OK, that's a legit message */
@@ -3274,13 +3270,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 json_decref(*threadids);
                 *threadids = anchored_cids;
 
-                /* Purge the caches for message and thread ids */
-                free_hash_table(&window->ids, NULL);
-                construct_hash_table(&window->ids, window->mdcount + 1, 0);
-
-                free_hashu64_table(&window->cids, NULL);
-                construct_hashu64_table(&window->cids, window->mdcount/4+4,0);
-
                 /* Reset message counter */
                 idcount = json_array_size(*messageids);
             }
@@ -3293,6 +3282,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         else if (window->position && *total < window->position + 1) {
             goto doneloop;
         }
+
         if (window->limit && idcount && window->limit <= idcount)
             goto doneloop;
 
@@ -3313,7 +3303,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* Add the thread id */
         if (window->collapse)
-            hashu64_insert(md->cid, (void*)1, &window->cids);
+            hashu64_insert(md->cid, (void*)1, &cids);
         cid = conversation_id_encode(md->cid);
         json_array_append_new(*threadids, json_string(cid));
 
@@ -3322,8 +3312,7 @@ doneloop:
     }
 
 done:
-    free_hash_table(&window->ids, NULL);
-    free_hashu64_table(&window->cids, NULL);
+    free_hash_table(&ids, NULL);
     free_hashu64_table(&cids, NULL);
     freesortcrit(sortcrit);
     search_query_free(query);
