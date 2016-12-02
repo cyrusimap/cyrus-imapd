@@ -163,11 +163,10 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) goto done;
+        if (r) break;
     }
-    mailbox_iter_done(&iter);
 
- done:
+    mailbox_iter_done(&iter);
     mailbox_close(&mailbox);
     return r;
 }
