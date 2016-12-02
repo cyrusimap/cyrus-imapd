@@ -232,9 +232,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     if (n == -1) goto fail;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-
     const message_t *msg;
-
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* we have to make sure expunged records don't get the
@@ -247,10 +245,10 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
         /* not making sure exists matches, we do trust a bit */
         downgrade_record(record, rbuf, oldversion);
         n = retry_write(oldindex_fd, rbuf, record_size);
-        if (n == -1) goto fail;
+        if (n == -1) break;
     }
-
     mailbox_iter_done(&iter);
+    if (n == -1) goto fail;
 
     close(oldindex_fd);
     r = dump_file(first, sync, pin, pout, oldname, "cyrus.index", NULL, 0);
