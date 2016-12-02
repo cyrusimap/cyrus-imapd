@@ -1386,6 +1386,7 @@ EXPORTED int tls_prune_sessions(void)
     if (ret != CYRUSDB_OK) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s",
                fname, cyrusdb_strerror(ret));
+        free(tofree);
         return 1;
     }
     else {
