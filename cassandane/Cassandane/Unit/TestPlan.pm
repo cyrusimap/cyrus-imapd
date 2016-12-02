@@ -777,8 +777,7 @@ sub _finish_workitem
     _dump_logfile($witem->{logfile}) if (get_verbose > 1);
     unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
-    if ($witem->{result} eq 'pass' ||
-	$witem->{result} eq 'unknown')
+    if ($witem->{result} eq 'pass')
     {
 	$result->add_pass($test);
     }
