@@ -2458,11 +2458,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         decrement_refcount(mid->s, attachments, webdavdb);
     }
 
-    if (rid) {
-        /* Split list of RECURRENCE-IDs */
-        rids = strarray_split(rid->s, ",", STRARRAY_TRIM);
-    }
- 
     if (op == ATTACH_REMOVE) aprop = NULL;
     else {
         /* SHA1 of content used as resource UID, resource name, & managed-id */
@@ -2565,7 +2560,12 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             }
         }
     }
-        
+
+    if (rid) {
+        /* Split list of RECURRENCE-IDs */
+        rids = strarray_split(rid->s, ",", STRARRAY_TRIM);
+    }
+
     /* Process each component */
     for (; comp; comp = nextc) {
         int idx;
