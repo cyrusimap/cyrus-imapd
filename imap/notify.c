@@ -168,7 +168,7 @@ EXPORTED int notify_at(time_t when, const char *method,
     FILE *f;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
-    struct stagemsg *stage;
+    struct stagemsg *stage = NULL;
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = mboxlist_createmailbox("#events", 0, config_defpartition, 1,
@@ -216,6 +216,7 @@ EXPORTED int notify_at(time_t when, const char *method,
     if (r) goto done;
 
 done:
+    append_removestage(stage);
     append_abort(&as);
     mailbox_close(&mailbox);
     buf_free(&buf);
