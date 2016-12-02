@@ -2812,8 +2812,6 @@ static int setContacts(struct jmap_req *req)
                 json_object_set_new(notUpdated, uid, err);
                 continue;
             }
-            olduid = cdata->dav.imap_uid;
-            resource = xstrdup(cdata->dav.resource);
 
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
                 mailbox_close(&mailbox);
@@ -2844,6 +2842,9 @@ static int setContacts(struct jmap_req *req)
 
             r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
             if (r) goto done;
+
+            olduid = cdata->dav.imap_uid;
+            resource = xstrdup(cdata->dav.resource);
 
             strarray_t *flags =
                 mailbox_extract_flags(mailbox, &record, req->userid);
