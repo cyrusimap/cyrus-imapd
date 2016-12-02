@@ -833,7 +833,6 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
             free(prev_userid);
             prev_userid = xstrdup(userid);
         }
-        free(userid);
     }
     else {
         /* all shared mailboxes, including DELETED ones, sync alone */
@@ -848,6 +847,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
     }
 
 done:
+    free(userid);
     return r;
 }
 
