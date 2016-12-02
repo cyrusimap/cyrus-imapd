@@ -220,31 +220,31 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
         /* copy the message file */
         fname = mailbox_record_fname(mailbox, &newrecord);
         r = mailbox_copyfile(oldfname, fname, 0);
-        if (r) goto done;
+        if (r) break;
 
         /* add the flag if requested */
         if (addflag) {
             int userflag = 0;
             r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
-            if (r) goto done;
+            if (r) break;
             newrecord.user_flags[userflag/32] |= 1<<(userflag&31);
         }
 
         /* and append the new record */
         r = mailbox_append_index_record(mailbox, &newrecord);
-        if (r) goto done;
+        if (r) break;
 
         /* ensure we have an astate connected to the destination
          * mailbox, so that the annotation txn will be committed
          * when we close the mailbox */
         r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
-        if (r) goto done;
+        if (r) break;
 
         /* and copy over any annotations */
         r = annotate_msg_copy(mailbox, record->uid,
                               mailbox, newrecord.uid,
                               userid);
-        if (r) goto done;
+        if (r) break;
 
         if (verbose)
             printf("Unexpunged %s: %u => %u\n",
@@ -254,17 +254,16 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
         struct index_record oldrecord = *record;
         oldrecord.system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) goto done;
+        if (r) break;
 
         (*numrestored)++;
     }
-    mailbox_iter_done(&iter);
 
     /* better get that seen to */
     if (*numrestored)
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
-done:
+    mailbox_iter_done(&iter);
     free(userid);
     return r;
 }
