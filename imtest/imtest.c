@@ -1386,7 +1386,6 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
                     close(fd);
                     fd = 0;
-                    fd_out = 1;
                     goto accept_again;
                 } else {
                     /* we're done, cleanup */
