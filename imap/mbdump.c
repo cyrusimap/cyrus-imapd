@@ -835,7 +835,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     struct mailbox *mailbox = NULL;
     const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-    const char *userid = NULL;
+    char *userid = NULL;
     int first_annotation = 1;
     char *annotation = NULL;
     struct buf content = BUF_INITIALIZER;
@@ -867,6 +867,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     /* we better be in a list now */
     if (c != '(' || data.s[0]) {
         buf_free(&data);
+        free(userid);
         eatline(pin, c);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
@@ -882,12 +883,14 @@ EXPORTED int undump_mailbox(const char *mbname,
     } else {
         /* Huh? */
         buf_free(&data);
+        free(userid);
         eatline(pin, c);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
     if(c != ' ' && c != ')') {
         buf_free(&data);
+        free(userid);
         eatline(pin, c);
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     } else if(c == ')') {
@@ -1323,6 +1326,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     buf_free(&content);
     free(seen_file);
     free(mboxkey_file);
+    free(userid);
 
     return r;
 }
