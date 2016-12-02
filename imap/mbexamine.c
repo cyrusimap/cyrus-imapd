@@ -400,6 +400,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
         if (record->size != (unsigned) sbuf.st_size) {
             printf("  Message %u has INCORRECT size in index record\n", record->uid);
             r = 0;
+            mailbox_iter_done(&iter);
             goto done;
         }
 
