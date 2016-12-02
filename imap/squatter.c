@@ -595,7 +595,7 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
         if (bx) {
             r = squatter_build_query(bx, query);
             if (!r)
-                r = bx->run(bx, print_search_hit, &single);
+                bx->run(bx, print_search_hit, &single);
             search_end_search(bx);
         }
 
