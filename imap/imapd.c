@@ -6142,14 +6142,12 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 	    char *destserver = NULL;
 	    char *destpart = NULL;
 
-	    destserver = xstrdupnull(location);
 	    c = strchr(location, '!');
 	    if (c) {
-		*c++ = '\0';
-		destpart = xstrdupnull(c);
+		destserver = xstrndup(location, c - location);
+		destpart = xstrdup(c + 1);
 	    } else {
 		destpart = xstrdup(location);
-		free(destserver);
 	    }
 
 	    if (destserver) {
