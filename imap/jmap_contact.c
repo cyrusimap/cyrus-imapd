@@ -2718,7 +2718,6 @@ static int setContacts(struct jmap_req *req)
         json_t *arg;
         json_object_foreach(create, key, arg) {
             const char *uid = makeuuid();
-            strarray_t *flags = strarray_new();
             struct entryattlist *annots = NULL;
 
             const char *addressbookId = "Default";
@@ -2746,6 +2745,7 @@ static int setContacts(struct jmap_req *req)
                 }
             }
 
+            strarray_t *flags = strarray_new();
             json_t *invalid = json_pack("[]");
             r = _json_to_card(uid, card, arg, flags, &annots, invalid);
             if (r || json_array_size(invalid)) {
