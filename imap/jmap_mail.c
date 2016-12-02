@@ -774,7 +774,8 @@ static int jmapmbox_newname_cb(const mbentry_t *mbentry, void *rock) {
  * for any such named mailbox.
  *
  * Return the malloced, combined name, or NULL on error. */
-char *jmapmbox_newname(const char *name, const char *parentname) {
+char *jmapmbox_newname(const char *name, const char *parentname)
+{
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -803,7 +804,7 @@ char *jmapmbox_newname(const char *name, const char *parentname) {
     memset(&rock, 0, sizeof(struct jmapmbox_newname_data));
     rock.mboxname = mboxname;
     r = mboxlist_mboxtree(parentname, &jmapmbox_newname_cb, &rock,
-            MBOXTREE_SKIP_ROOT);
+                          MBOXTREE_SKIP_ROOT);
     if (r) {
         syslog(LOG_ERR, "mboxlist_mboxtree(%s): %s",
                 parentname, error_message(r));
