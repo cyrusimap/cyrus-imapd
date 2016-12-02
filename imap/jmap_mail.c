@@ -5981,8 +5981,7 @@ static int setMessages(jmap_req_t *req)
             }
 
             json_object_set_new(created, key, json_pack("{s:s}", "id", msgid));
-            hash_insert(key, msgid, req->idmap);
-            free(msgid);
+            hash_insert(key, msgid, req->idmap); // hash takes ownership of msgid
         }
 
         if (json_object_size(created)) {
