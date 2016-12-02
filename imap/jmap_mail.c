@@ -5951,7 +5951,6 @@ static int setMessages(jmap_req_t *req)
 
         json_object_foreach(create, key, msg) {
             json_t *invalid = json_pack("[]");
-            char *msgid = NULL;
             json_t *err = NULL;
 
             if (!strlen(key)) {
@@ -5960,11 +5959,13 @@ static int setMessages(jmap_req_t *req)
                 continue;
             }
 
+            char *msgid = NULL;
             r = jmapmsg_create(req, msg, &msgid, invalid);
             if (json_array_size(invalid)) {
                 err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notCreated, key, err);
+                free(msgid);
                 continue;
             }
             json_decref(invalid);
@@ -5972,13 +5973,16 @@ static int setMessages(jmap_req_t *req)
             if (r == IMAP_QUOTA_EXCEEDED) {
                 err = json_pack("{s:s}", "type", "maxQuotaReached");
                 json_object_set_new(notCreated, key, err);
+                free(msgid);
                 continue;
             } else if (r) {
+                free(msgid);
                 goto done;
             }
 
             json_object_set_new(created, key, json_pack("{s:s}", "id", msgid));
             hash_insert(key, msgid, req->idmap);
+            free(msgid);
         }
 
         if (json_object_size(created)) {
