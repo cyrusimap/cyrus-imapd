@@ -109,7 +109,7 @@ static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
     return db;
 }
 
-static int _open(const char *backend, const char *fname,
+static int _myopen(const char *backend, const char *fname,
                  int flags, struct db **ret, struct txn **tid)
 {
     const char *realname;
@@ -177,13 +177,13 @@ done:
 EXPORTED int cyrusdb_open(const char *backend, const char *fname,
                           int flags, struct db **ret)
 {
-    return _open(backend, fname, flags, ret, NULL);
+    return _myopen(backend, fname, flags, ret, NULL);
 }
 
 EXPORTED int cyrusdb_lockopen(const char *backend, const char *fname,
                               int flags, struct db **ret, struct txn **tid)
 {
-    return _open(backend, fname, flags, ret, tid);
+    return _myopen(backend, fname, flags, ret, tid);
 }
 
 EXPORTED int cyrusdb_close(struct db *db)
