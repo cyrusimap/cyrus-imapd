@@ -303,8 +303,10 @@ static int meth_get_db(struct transaction_t *txn,
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
-        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+        if (mbname_localpart(mbname) && strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         //free(parts.domain); - XXX fix when converting to real parts
         mbname_set_domain(mbname, NULL);
     }
