@@ -526,7 +526,6 @@ int autocreate_user(struct namespace *namespace,
     int autocreatequota = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
     int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     int n;
-    char *inboxname = mboxname_user_mbox(userid, NULL);
     struct auth_state *auth_state = NULL;
     strarray_t *create = NULL;
     strarray_t *subscribe = NULL;
@@ -539,6 +538,8 @@ int autocreate_user(struct namespace *namespace,
     /* check for anonymous */
     if (!strcmp(userid, "anonymous"))
         return IMAP_MAILBOX_NONEXISTENT;
+
+    char *inboxname = mboxname_user_mbox(userid, NULL);
 
     auth_state = auth_newstate(userid);
 
