@@ -305,6 +305,11 @@ static void test_decode_mimeheader(void)
     static const char SEARCH_3c[] = "LOREMIPSUMDOLORSITAMET";
     static const char SEARCH_3d[] = "LOREMIPSÜMDOLORSÏTAMËT";
     static const char SEARCH_3e[] = "LOREM IPSÜM  DOLOR SÏT AMËT";
+    static const char HTML_4[] = "=?utf-8?q?=C2=A1<em>Hola</em>,_se=C3=B1or!?=";
+    static const char HTML_4a[] = "¡<EM>HOLA</EM>, SEN""\xcc\x83""OR!";
+    static const char HTML_4b[] = "¡<EM>HOLA</EM>, SENOR!";
+    static const char HTML_4c[] = "¡<em>Hola</em>, señor!";
+    static const char HTML_4d[] = "¡&lt;em&gt;Hola&lt;/em&gt;, señor!";
     int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
 
     s = charset_decode_mimeheader(NULL, flags);
@@ -353,6 +358,30 @@ static void test_decode_mimeheader(void)
     s = charset_decode_mimeheader(ASCII_B64_3, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_3e);
+    free(s);
+
+    flags = 0;
+    s = charset_decode_mimeheader(HTML_4, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, HTML_4a);
+    free(s);
+
+    flags = CHARSET_SKIPDIACRIT;
+    s = charset_decode_mimeheader(HTML_4, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, HTML_4b);
+    free(s);
+
+    flags = CHARSET_SNIPPET;
+    s = charset_decode_mimeheader(HTML_4, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, HTML_4c);
+    free(s);
+
+    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    s = charset_decode_mimeheader(HTML_4, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, HTML_4d);
     free(s);
 
     static const char ASCII_EUC_KR[] = "A =?EUC-KR?B?wMzIo8Dn?= B";
@@ -932,11 +961,21 @@ static void test_extract(void)
     /* &nonesuch; is most definitely not defined */
     TESTCASE("A&nonesuch;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
-    /* HTML: skip html but don't canonify */
-    flags |= CHARSET_NO_CANONIFY;
-    TESTCASE("<b>Photo</b> <em>booth</em>",
-        "us-ascii", ENCODING_NONE, "HTML",
-        "Photo booth");
+    /* HTML: Strip HTML from snippet and don't canonify */
+    flags = CHARSET_SNIPPET;
+    TESTCASE("<b>Photo</b> <em>booth</em>", "us-ascii", ENCODING_NONE, "HTML", "Photo booth");
+
+    /* HTML: Strip HTML from snippet, there is nothing to escape */
+    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "HTML", "Photo");
+
+    /* PLAIN: Generate snippet, don't escape HTML by default */
+    flags = CHARSET_SNIPPET;
+    TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "<b>Photo</b>");
+
+    /* PLAIN: Generate snippet with escaped HTML */
+    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "&lt;b&gt;Photo&lt;/b&gt;");
 }
 #undef TESTCASE
 

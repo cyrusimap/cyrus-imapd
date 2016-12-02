@@ -1738,7 +1738,7 @@ static json_t *emailer_from_addr(const struct address *a)
         buf_printf(&buf, "%s@%s", mailbox, domain);
 
         if (a->name) {
-            char *dec = charset_decode_mimeheader(a->name, CHARSET_NO_CANONIFY);
+            char *dec = charset_decode_mimeheader(a->name, CHARSET_SNIPPET);
             if (dec) {
                 json_object_set_new(e, "name", json_string(dec));
             }
@@ -1861,7 +1861,7 @@ static char *extract_plain(const char *html) {
     buf_init_ro(&src, tmp, q - tmp);
     buf_setcstr(&dst, "");
     charset_extract(&extract_plain_cb, &dst,
-            &src, utf8, ENCODING_NONE, "HTML", CHARSET_NO_CANONIFY);
+            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
     buf_cstring(&dst);
 
     /* Trim text */
@@ -2099,7 +2099,7 @@ static int extract_headers(const char *key, const char *val, void *rock)
 
     if (isspace(*val)) val++;
 
-    decodedval = charset_decode_mimeheader(val, CHARSET_NO_CANONIFY);
+    decodedval = charset_decode_mimeheader(val, CHARSET_SNIPPET);
     if (!decodedval) return 0;
 
     if ((curval = json_object_get(headers, key))) {
@@ -2216,7 +2216,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     if (_wantprop(props, "subject")) {
         char *subject = NULL;
         if (body->subject) {
-            subject = charset_decode_mimeheader(body->subject, CHARSET_NO_CANONIFY);
+            subject = charset_decode_mimeheader(body->subject, CHARSET_SNIPPET);
         }
         json_object_set_new(msg, "subject", json_string(subject ? subject : ""));
         free(subject);
