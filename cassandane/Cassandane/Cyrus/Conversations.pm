@@ -89,6 +89,7 @@ sub choose_cid
 # Test APPEND of messages to IMAP
 #
 sub test_append
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -122,6 +123,7 @@ sub test_append
 # Test APPEND of messages to IMAP which results in a CID clash.
 #
 sub bogus_test_append_clash
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -167,6 +169,7 @@ sub bogus_test_append_clash
 # Test APPEND of messages to IMAP which results in multiple CID clashes.
 #
 sub bogus_test_double_clash
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -218,6 +221,7 @@ sub bogus_test_double_clash
 # Test that a CID clash resolved on the master is replicated
 #
 sub bogus_test_replication_clash
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -289,6 +293,7 @@ sub bogus_test_replication_clash
 }
 
 sub test_xconvfetch
+    :min_version_3_0
 {
     my ($self) = @_;
     my $store = $self->{store};
@@ -364,6 +369,7 @@ sub test_xconvfetch
 # conversations but not any of Message-ID, References, or In-Reply-To.
 #
 sub bogus_test_fm_webui_draft
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -398,6 +404,7 @@ sub bogus_test_fm_webui_draft
 # Test a COPY between folders owned by different users
 #
 sub bogus_test_cross_user_copy
+    :min_version_3_0
 {
     my ($self) = @_;
     my $bobuser = "bob";
