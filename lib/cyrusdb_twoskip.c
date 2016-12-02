@@ -2255,6 +2255,7 @@ static int recovery1(struct dbengine *db, int *count)
             if (record.nextloc[i] >= db->end) {
                 record.nextloc[i] = 0;
                 r = rewrite_record(db, &record);
+                if (r) return r;
                 changed++;
             }
         }
