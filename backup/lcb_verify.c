@@ -230,7 +230,6 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
         struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
         prot_setisclient(ps, 1); /* don't sync literals */
         r = parse_backup_line(ps, NULL, NULL, &dl);
-        prot_free(ps);
 
         if (r == EOF) {
             const char *error = prot_error(ps);
@@ -242,8 +241,11 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
                     fprintf(out, "error reading message %i at offset %jd, byte %i: %s",
                             message->id, message->offset, prot_bytes_in(ps), error);
             }
+            prot_free(ps);
             return r;
         }
+
+        prot_free(ps);
 
         vmrock->cached_dlist = dl;
         vmrock->cached_offset = message->offset;
