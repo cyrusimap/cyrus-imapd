@@ -1056,7 +1056,7 @@ static void isched_init(struct buf *serverinfo)
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* If backend server, we require iSchedule (w/o DKIM) */
         namespace_ischedule.enabled = -1;
-        buf_len(serverinfo);  // squash compiler warning when #undef WITH_DKIM
+        buf_cstring(serverinfo);  // squash compiler warning when #undef WITH_DKIM
     }
 #ifdef WITH_DKIM
     else {
