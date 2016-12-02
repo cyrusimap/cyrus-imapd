@@ -341,7 +341,7 @@ sub test_setmailboxes
     $self->assert_str_equals($mbox->{name}, "foo");
     $self->assert_null($mbox->{parentId});
     $self->assert_null($mbox->{role});
-    $self->assert_num_equals($mbox->{sortOrder}, 0);
+    $self->assert_num_equals($mbox->{sortOrder}, 10);
     $self->assert_equals($mbox->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($mbox->{mayReadItems}, JSON::true);
     $self->assert_equals($mbox->{mayAddItems}, JSON::true);
