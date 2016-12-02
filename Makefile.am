@@ -1387,15 +1387,15 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = libcrc32.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.la $(LIB_RT) ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
 if USE_CYRUSDB_LMDB
 lib_libcyrus_la_LIBADD += -llmdb
 endif
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
-noinst_LIBRARIES = libcrc32.a
-libcrc32_a_SOURCES = lib/crc32.c lib/crc32c.c
-libcrc32_a_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+noinst_LTLIBRARIES += libcrc32.la
+libcrc32_la_SOURCES = lib/crc32.c lib/crc32c.c
+libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_min_la_SOURCES = \
 	lib/imapopts.c
