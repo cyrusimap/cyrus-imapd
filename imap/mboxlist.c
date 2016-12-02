@@ -1654,6 +1654,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq; /* bump regardless, it's rare */
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
+        if (r) goto done;
 
         /* skip ahead to the commit */
         goto dbdone;
