@@ -804,7 +804,7 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
 
 static int cleanup_seen_subfolders(const char *mbname)
 {
-    const char *userid = mboxname_to_userid(mbname);
+    char *userid = mboxname_to_userid(mbname);
     struct seen *seendb = NULL;
     char buf[MAX_MAILBOX_NAME];
     int r;
@@ -820,6 +820,8 @@ static int cleanup_seen_subfolders(const char *mbname)
     r = seen_open(userid, SEEN_SILENT, &seendb);
     if (!r) mboxlist_allmbox(buf, cleanup_seen_cb, seendb, /*incdel*/0);
     seen_close(&seendb);
+
+    free(userid);
 
     return 0;
 }
