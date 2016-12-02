@@ -2862,6 +2862,7 @@ static int message_read_body(struct protstream *strm, struct body *body,
 
     /* opening '(' */
     c = prot_getc(strm);
+    if (c == EOF) goto done;
 
     /* check for multipart */
     if ((c = prot_peek(strm)) == '(') {
@@ -2882,39 +2883,49 @@ static int message_read_body(struct protstream *strm, struct body *body,
 
         /* body subtype */
         c = message_read_nstring(strm, &body->subtype, 1);
+        if (c == EOF) goto done;
 
         /* extension data */
 
         /* body parameters */
         c = message_read_params(strm, &body->params, 1);
+        if (c == EOF) goto done;
     }
     else {
         /* non-multipart */
 
         /* body type */
         c = message_read_nstring(strm, &body->type, 1);
+        if (c == EOF) goto done;
 
         /* body subtype */
         c = message_read_nstring(strm, &body->subtype, 1);
+        if (c == EOF) goto done;
 
         /* body parameters */
         c = message_read_params(strm, &body->params, 1);
+        if (c == EOF) goto done;
 
         /* body id */
         c = message_read_nstring(strm, &body->id, 1);
+        if (c == EOF) goto done;
 
         /* body description */
         c = message_read_nstring(strm, &body->description, 1);
+        if (c == EOF) goto done;
 
         /* body encoding */
         c = message_read_nstring(strm, &body->encoding, 1);
+        if (c == EOF) goto done;
 
         /* body size */
         c = getuint32(strm, &body->content_size);
+        if (c == EOF) goto done;
 
         if (!strcmp(body->type, "TEXT")) {
             /* body lines */
             c = getint32(strm, (int32_t *) &body->content_lines);
+            if (c == EOF) goto done;
         }
         else if (!strcmp(body->type, "MESSAGE") &&
                  !strcmp(body->subtype, "RFC822")) {
@@ -2923,22 +2934,27 @@ static int message_read_body(struct protstream *strm, struct body *body,
 
             /* envelope structure */
             c = message_read_envelope(strm, body->subpart);
+            if (c == EOF) goto done;
 
             /* body structure */
             buf_reset(&buf);
             if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", 1);
             c = message_read_body(strm, body->subpart, buf_cstring(&buf));
+            if (c == EOF) goto done;
             c = prot_getc(strm); /* trailing SP */
+            if (c == EOF) goto done;
 
             /* body lines */
             c = getint32(strm, (int32_t *) &body->content_lines);
+            if (c == EOF) goto done;
         }
 
         /* extension data */
 
         /* body MD5 */
         c = message_read_nstring(strm, &body->md5, 1);
+        if (c == EOF) goto done;
     }
 
     /* common extension data */
@@ -2946,24 +2962,29 @@ static int message_read_body(struct protstream *strm, struct body *body,
     /* body disposition */
     if ((c = prot_getc(strm)) == '(') {
         c = message_read_nstring(strm, &body->disposition, 1);
+        if (c == EOF) goto done;
 
         c = message_read_params(strm, &body->disposition_params, 1);
         if (c == ')') c = prot_getc(strm); /* trailing SP */
+        if (c == EOF) goto done;
     }
     else {
         /* NIL */
         prot_ungetc(c, strm);
         c = message_read_nstring(strm, &body->disposition, 1);
+        if (c == EOF) goto done;
     }
 
     /* body language */
     if ((c = prot_peek(strm)) == '(') {
         c = message_read_params(strm, &body->language, 0);
+        if (c == EOF) goto done;
     }
     else {
         char *lang;
 
         c = message_read_nstring(strm, &lang, 1);
+        if (c == EOF) goto done;
         if (lang) {
             body->language = (struct param *) xzmalloc(sizeof(struct param));
             body->language->value = lang;
@@ -2976,6 +2997,7 @@ static int message_read_body(struct protstream *strm, struct body *body,
     /* XXX  We currently don't store any other extension data.
             MUST keep in sync with message_write_body() */
 
+done:
     buf_free(&buf);
     return c;
 }
