@@ -933,6 +933,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
             syslog(LOG_ERR, "DBERROR: fsync(%s): %m", db->fname);
             r = CYRUSDB_IOERROR;
         }
+        if (r) {
+            dispose_db(db);
+            return r;
+        }
 
         /* map the new file */
         db->map_size = db->logstart;
