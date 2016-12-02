@@ -11123,8 +11123,8 @@ static int sync_mailbox(struct mailbox *mailbox,
                         struct backend *be)
 {
     int r = 0;
-    struct sync_folder_list *master_folders;
-    struct sync_reserve_list *reserve_guids;
+    struct sync_folder_list *master_folders = NULL;
+    struct sync_reserve_list *reserve_guids = NULL;
     struct sync_msgid_list *part_list;
     struct sync_reserve *reserve;
     struct sync_folder *mfolder, *rfolder;
