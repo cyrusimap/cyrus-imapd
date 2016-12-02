@@ -1215,7 +1215,7 @@ void lmtpmode(struct lmtp_func *func,
                 snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
 
                 /* do delivery, report status */
-                r = func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
+                func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
                     send_lmtp_error(pout, msg->rcpt[j]->status);
