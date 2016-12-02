@@ -132,6 +132,7 @@ sub test_copy_messages
 }
 
 sub test_stem_verbs
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -161,6 +162,7 @@ sub test_stem_verbs
 }
 
 sub test_stem_any
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -184,6 +186,7 @@ sub test_stem_any
 }
 
 sub test_mix_fuzzy_and_nonfuzzy
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -202,7 +205,7 @@ sub test_mix_fuzzy_and_nonfuzzy
 }
 
 sub test_weird_crasher
-    :Conversations
+    :Conversations :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -219,6 +222,7 @@ sub test_weird_crasher
 }
 
 sub test_stopwords
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -283,6 +287,7 @@ sub test_stopwords
 }
 
 sub test_normalize_snippets
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -332,6 +337,7 @@ sub test_normalize_snippets
 }
 
 sub test_snippets_termcover
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -415,6 +421,7 @@ sub test_snippets_termcover
 }
 
 sub test_cjk_words
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -496,6 +503,7 @@ sub test_cjk_words
 }
 
 sub test_subject_isutf8
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -631,8 +639,11 @@ sub test_noindex_multipartheaders
 }
 
 sub test_xapianv2
+    :min_version_3_0
 {
     my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
     my $talk = $self->{store}->get_client();
 
     # This is a smallish regression test to check if we break something
@@ -709,6 +720,7 @@ sub test_xapianv2
 }
 
 sub test_snippets_escapehtml
+    :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
