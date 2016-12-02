@@ -2110,7 +2110,7 @@ int sync_mailbox_version_check(struct mailbox **mailboxp)
             syslog(LOG_WARNING, "%s: missing guid for record %u -- needs 'reconstruct -G'?",
                                 (*mailboxp)->name, record->recno);
             r = IMAP_MAILBOX_NOTSUPPORTED;
-            goto done;
+            break;
         }
     }
     mailbox_iter_done(&iter);
