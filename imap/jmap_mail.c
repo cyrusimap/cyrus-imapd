@@ -809,6 +809,7 @@ char *jmapmbox_newname(const char *name, const char *parentname)
         syslog(LOG_ERR, "mboxlist_mboxtree(%s): %s",
                 parentname, error_message(r));
         free(mboxname);
+        mboxname = NULL;
         goto done;
     }
     if (rock.highest) {
