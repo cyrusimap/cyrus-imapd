@@ -79,7 +79,7 @@ const char *icalparameter_get_value_as_string(icalparameter *param)
     return buf;
 }
 
-struct icaldatetimeperiodtype
+EXPORTED struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop)
 {
     struct icaldatetimeperiodtype ret = { icaltime_null_time(),
@@ -187,7 +187,7 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
-extern int icalcomponent_myforeach(icalcomponent *ical,
+EXPORTED extern int icalcomponent_myforeach(icalcomponent *ical,
                                    struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
@@ -385,12 +385,12 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 }
 
 
-icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
+EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
     return icalparser_parse_string(buf_cstring(buf));
 }
 
-struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
+EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
 {
     char *str = icalcomponent_as_ical_string_r(comp);
     struct buf *ret = buf_new();
@@ -400,7 +400,7 @@ struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
     return ret;
 }
 
-icalcomponent *record_to_ical(struct mailbox *mailbox,
+EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
                               const struct index_record *record,
                               char **schedule_userid)
 {
@@ -427,7 +427,7 @@ icalcomponent *record_to_ical(struct mailbox *mailbox,
     return ical;
 }
 
-const char *get_icalcomponent_errstr(icalcomponent *ical)
+EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
 {
     icalcomponent *comp;
 
@@ -470,7 +470,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 }
 
 
-void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
+EXPORTED void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
 {
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
         icalcomponent *vvoter = icalproperty_get_parent(prop);
@@ -485,7 +485,7 @@ void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
 }
 
 
-icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
+EXPORTED icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
 {
     icalproperty *prop;
 
@@ -502,7 +502,7 @@ icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
     return prop;
 }
 
-icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
+EXPORTED icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
 {
     icalproperty *prop;
 
@@ -519,7 +519,7 @@ icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
     return prop;
 }
 
-const char *icalproperty_get_invitee(icalproperty *prop)
+EXPORTED const char *icalproperty_get_invitee(icalproperty *prop)
 {
     const char *recip;
 
@@ -534,7 +534,7 @@ const char *icalproperty_get_invitee(icalproperty *prop)
 }
 
 
-icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
+EXPORTED icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 {
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);

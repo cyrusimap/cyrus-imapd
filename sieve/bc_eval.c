@@ -603,32 +603,36 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
                 address_itr_init(&ai, val[y]);
 
-                while (!res && (a = address_itr_next(&ai)) != NULL) {
+                while (!res && (val[y][0] == '\0' || (a = address_itr_next(&ai)) != NULL)) {
 #if VERBOSE
                     printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
-                    /*find the part of the address that we want*/
-                    switch(apart)
-                    {
-                    case B_ALL:
-                        addr = address_get_all(a, /*canon_domain*/0);
-                        break;
-                    case B_LOCALPART:
-                        addr = address_get_localpart(a);
-                        break;
-                    case B_DOMAIN:
-                        addr = address_get_domain(a, /*canon_domain*/0);
-                        break;
-                    case B_USER:
-                        addr = address_get_user(a);
-                        break;
-                    case B_DETAIL:
-                        addr = address_get_detail(a);
-                        break;
-                    default:
-                        /* this shouldn't happen with correct bytecode */
-                        res = SIEVE_RUN_ERROR;
-                        goto envelope_err;
+                    if (val[y][0] == '\0') {
+                        addr = "";
+                    } else {
+                        /*find the part of the address that we want*/
+                        switch(apart)
+                        {
+                        case B_ALL:
+                            addr = address_get_all(a, /*canon_domain*/0);
+                            break;
+                        case B_LOCALPART:
+                            addr = address_get_localpart(a);
+                            break;
+                        case B_DOMAIN:
+                            addr = address_get_domain(a, /*canon_domain*/0);
+                            break;
+                        case B_USER:
+                            addr = address_get_user(a);
+                            break;
+                        case B_DETAIL:
+                            addr = address_get_detail(a);
+                            break;
+                        default:
+                            /* this shouldn't happen with correct bytecode */
+                            res = SIEVE_RUN_ERROR;
+                            goto envelope_err;
+                        }
                     }
 
                     if (!addr) addr = xstrdup("");
@@ -667,6 +671,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                             }
                         } /* For each data */
                     }
+                    if (val[y][0] == '\0') break;
                     free(addr);
                 } /* For each address */
 
@@ -1031,51 +1036,56 @@ envelope_err:
         content_types = bc_makeArray(bc, &typesi);
         if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
             res = SIEVE_RUN_ERROR;
+            free(content_types);
             break;
         }
         free(content_types);
 
         /* bodypart(s) exist, now to test them */
 
-        for (y = 0; val && val[y] && !res; y++) {
+        if (val) {
+            for (y = 0; val[y]; y++) {
 
-            if (match == B_COUNT) {
-                count++;
-            } else if (val[y]->decoded_body) {
-                const char *content = val[y]->decoded_body;
+                if (!res) {
+                    if (match == B_COUNT) {
+                        count++;
+                    } else if (val[y]->decoded_body) {
+                        const char *content = val[y]->decoded_body;
 
-                /* search through all the data */
-                currd=datai+2;
-                for (z=0; z<numdata && !res; z++)
-                {
-                    const char *data_val;
+                        /* search through all the data */
+                        currd=datai+2;
+                        for (z=0; z<numdata && !res; z++)
+                        {
+                            const char *data_val;
 
-                    currd = unwrap_string(bc, currd, &data_val, NULL);
+                            currd = unwrap_string(bc, currd, &data_val, NULL);
 
-                    if (isReg) {
-                        reg = bc_compile_regex(data_val, ctag,
-                                               errbuf, sizeof(errbuf));
-                        if (!reg) {
-                            /* Oops */
-                            res=-1;
-                            goto alldone;
-                        }
+                            if (isReg) {
+                                reg = bc_compile_regex(data_val, ctag,
+                                                       errbuf, sizeof(errbuf));
+                                if (!reg) {
+                                    /* Oops */
+                                    res=-1;
+                                    goto alldone;
+                                }
 
-                        res |= comp(content, strlen(content), (const char *)reg, comprock);
-                        free(reg);
-                    } else {
-                        res |= comp(content, strlen(content), data_val, comprock);
+                                res |= comp(content, strlen(content), (const char *)reg, comprock);
+                                free(reg);
+                            } else {
+                                res |= comp(content, strlen(content), data_val, comprock);
+                            }
+                        } /* For each data */
                     }
-                } /* For each data */
-            }
+		}
 
-            /* free the bodypart */
-            free(val[y]);
+                /* free the bodypart */
+                free(val[y]);
 
-        } /* For each body part */
+            } /* For each body part */
 
-        /* free the bodypart array */
-        if (val) free(val);
+            /* free the bodypart array */
+            free(val);
+	}
 
         if  (match == B_COUNT)
         {

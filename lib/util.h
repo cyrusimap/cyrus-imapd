@@ -51,6 +51,7 @@
 #include <sys/types.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "xmalloc.h"
