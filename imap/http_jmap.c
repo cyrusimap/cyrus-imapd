@@ -49,6 +49,7 @@
 #include "imap/http_err.h"
 
 #include "http_jmap.h"
+#include "syslog.h"
 
 struct namespace jmap_namespace;
 
@@ -141,10 +142,13 @@ static void jmap_auth(const char *userid __attribute__((unused)))
 
 
 /* Perform a GET/HEAD request */
-static int jmap_get(struct transaction_t *txn __attribute__((unused)),
-                     void *params __attribute__((unused)))
+static int jmap_get(struct transaction_t *txn,
+                    void *params __attribute__((unused)))
 {
-    return HTTP_NO_CONTENT;
+    if (!strncmp(txn->req_uri->path, "/jmap/download/", 15))
+        return jmap_download(txn);
+
+    return HTTP_NOT_FOUND;
 }
 
 /* Perform a POST request */
@@ -167,6 +171,10 @@ static int jmap_post(struct transaction_t *txn,
     if (ret) {
         txn->flags.conn = CONN_CLOSE;
         return ret;
+    }
+
+    if (!strncmp(txn->req_uri->path, "/jmap/upload", 12)) {
+        return jmap_upload(txn);
     }
 
     if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;

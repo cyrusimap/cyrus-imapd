@@ -80,4 +80,7 @@ extern jmap_msg_t jmap_mail_messages[];
 extern jmap_msg_t jmap_contact_messages[];
 extern jmap_msg_t jmap_calendar_messages[];
 
+extern int jmap_upload(struct transaction_t *txn);
+extern int jmap_download(struct transaction_t *txn);
+
 #endif /* HTTP_JMAP_H */

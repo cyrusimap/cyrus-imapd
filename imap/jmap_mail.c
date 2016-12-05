@@ -58,11 +58,13 @@
 #include "append.h"
 #include "http_dav.h"
 #include "http_jmap.h"
+#include "http_proxy.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "parseaddr.h"
+#include "proxy.h"
 #include "search_query.h"
 #include "statuscache.h"
 #include "stristr.h"
@@ -70,6 +72,7 @@
 #include "times.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrnchr.h"
 
 #include "jmap_common.h"
 
@@ -6385,4 +6388,392 @@ done:
     buf_free(&buf);
     _finireq(req);
     return r;
+}
+
+/* XXX - these should be in a support module somewhere, but they depend
+ * on piles of stuff that's only in _mail, and I can't be bothered refactoring
+ * all the support right now */
+
+EXPORTED int jmap_download(struct transaction_t *txn)
+{
+    if (strncmp(txn->req_uri->path, "/jmap/download/", 15))
+        return HTTP_NOT_FOUND;
+
+    const char *userid = txn->req_uri->path + 15;
+    const char *slash = strchr(userid, '/');
+    if (!slash) {
+        /* XXX - error, needs AccountId */
+        return HTTP_NOT_FOUND;
+    }
+#if 0
+    size_t userlen = slash - userid;
+
+    /* invalid user? */
+    if (!strncmp(userid, httpd_userid, userlen)) {
+        txn->error.desc = "failed to match userid";
+        return HTTP_BAD_REQUEST;
+    }
+#endif
+
+    const char *blobbase = slash + 1;
+    slash = strchr(blobbase, '/');
+    if (!slash) {
+        /* XXX - error, needs blobid */
+        txn->error.desc = "failed to find blobid";
+        return HTTP_BAD_REQUEST;
+    }
+    size_t bloblen = slash - blobbase;
+
+    if (bloblen != 40) {
+        /* incomplete or incorrect blobid */
+        txn->error.desc = "invalid blobid (not 40 chars)";
+        return HTTP_BAD_REQUEST;
+    }
+
+    const char *name = slash + 1;
+
+    struct conversations_state *cstate = NULL;
+    int r = conversations_open_user(httpd_userid, &cstate);
+    if (r) {
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* now we're allocating memory, so don't return from here! */
+
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+
+    struct jmap_req req;
+    req.userid = httpd_userid;
+    req.inboxname = inboxname;
+    req.cstate = cstate;
+    req.authstate = httpd_authstate;
+    req.args = NULL;
+    req.response = NULL;
+    req.tag = NULL;
+    req.idmap = NULL;
+    req.txn = txn;
+
+    _initreq(&req);
+
+    char *blob_id = xstrndup(blobbase, bloblen);
+
+    struct mailbox *mbox = NULL;
+    struct index_record *record = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    size_t size = 0;
+    char *decbuf = NULL;
+    struct buf ct_buf = BUF_INITIALIZER;
+    int res = 0;
+
+    /* Find part containing blob */
+    r = findblob(&req, blob_id, &mbox, &record, &body, &part);
+    if (r) {
+        res = HTTP_NOT_FOUND; // XXX errors?
+        txn->error.desc = "failed to find blob by id";
+        goto done;
+    }
+
+    /* Map the message into memory */
+    r = mailbox_map_record(mbox, record, &msg_buf);
+    if (r) {
+        res = HTTP_NOT_FOUND; // XXX errors?
+        txn->error.desc = "failed to map record";
+        goto done;
+    }
+
+    int encoding = part->charset_enc & 0xff;
+    const char *data = charset_decode_mimebody(msg_buf.s + part->content_offset,
+                                               part->content_size, encoding,
+                                               &decbuf, &size);
+
+    buf_printf(&ct_buf, "%s/%s", part->type, part->subtype);
+
+    txn->resp_body.type = buf_cstring(&ct_buf);
+    txn->resp_body.len = size;
+    txn->resp_body.fname = name;
+
+    write_body(HTTP_OK, txn, data, size);
+
+ done:
+    if (mbox) _closembox(&req, &mbox);
+    conversations_commit(&cstate);
+    if (record) free(record);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    buf_free(&msg_buf);
+    buf_free(&ct_buf);
+    free(blob_id);
+    _finireq(&req);
+    free(inboxname);
+    return res;
+}
+
+static int lookup_upload_collection(const char *userid, mbentry_t **mbentry)
+{
+    mbname_t *mbname;
+    const char *uploadname;
+    int r;
+
+    /* Create notification mailbox name from the parsed path */
+    mbname = mbname_from_userid(userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+        /* not allowed to be cross domain */
+        if (mbname_localpart(mbname) &&
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            r = HTTP_NOT_FOUND;
+            goto done;
+        }
+        mbname_set_domain(mbname, NULL);
+    }
+
+    /* Locate the mailbox */
+    uploadname = mbname_intname(mbname);
+    r = http_mlookup(uploadname, mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* Find location of INBOX */
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+
+        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        free(inboxname);
+        if (r1 == IMAP_MAILBOX_NONEXISTENT) {
+            r = IMAP_INVALID_USER;
+            goto done;
+        }
+
+        if (*mbentry) free((*mbentry)->name);
+        else *mbentry = mboxlist_entry_create();
+        (*mbentry)->name = xstrdup(uploadname);
+    }
+
+  done:
+    mbname_free(&mbname);
+
+    return r;
+}
+
+
+static int create_upload_collection(const char *userid, struct mailbox **mailbox)
+{
+    /* notifications collection */
+    mbentry_t *mbentry = NULL;
+    int r = lookup_upload_collection(userid, &mbentry);
+
+    if (r == IMAP_INVALID_USER) {
+        goto done;
+    }
+    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+        if (!mbentry) goto done;
+        else if (mbentry->server) {
+            proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
+                             &backend_cached, NULL, NULL, httpd_in);
+            goto done;
+        }
+
+        r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
+                                   NULL, 1 /* admin */, userid, NULL,
+                                   0, 0, 0, 0, mailbox);
+        /* we lost the race, that's OK */
+        if (r == IMAP_MAILBOX_LOCKED) r = 0;
+        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                      mbentry->name, error_message(r));
+    }
+    else if (mailbox) {
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbentry->name, error_message(r));
+        }
+    }
+
+ done:
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+
+EXPORTED int jmap_upload(struct transaction_t *txn)
+{
+    struct mailbox *mailbox = NULL;
+    int r = create_upload_collection(httpd_userid, &mailbox);
+    if (r) return HTTP_SERVER_ERROR;
+
+    strarray_t flags = STRARRAY_INITIALIZER;
+    strarray_append(&flags, "\\Deleted");
+    strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
+
+    struct body *body = NULL;
+    const char *data = buf_base(&txn->req_body.payload);
+    size_t datalen = buf_len(&txn->req_body.payload);
+
+    int ret = HTTP_CREATED;
+    hdrcache_t hdrcache = txn->req_hdrs;
+    struct stagemsg *stage = NULL;
+    FILE *f = NULL;
+    const char **hdr, *cte;
+    time_t now = time(NULL);
+    struct appendstate as;
+
+    json_t *resp = json_pack("{s:s}", "accountId", httpd_userid);
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+        txn->error.desc = "append_newstage() failed\r\n";
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Create RFC 5322 header for resource */
+    if ((hdr = spool_getheader(hdrcache, "User-Agent"))) {
+        fprintf(f, "User-Agent: %s\r\n", hdr[0]);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "From"))) {
+        fprintf(f, "From: %s\r\n", hdr[0]);
+    }
+    else {
+        char *mimehdr;
+
+        assert(!buf_len(&txn->buf));
+        if (strchr(httpd_userid, '@')) {
+            /* XXX  This needs to be done via an LDAP/DB lookup */
+            buf_printf(&txn->buf, "<%s>", httpd_userid);
+        }
+        else {
+            buf_printf(&txn->buf, "<%s@%s>", httpd_userid, config_servername);
+        }
+
+        mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+                                            buf_len(&txn->buf));
+        fprintf(f, "From: %s\r\n", mimehdr);
+        free(mimehdr);
+        buf_reset(&txn->buf);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "Subject"))) {
+        fprintf(f, "Subject: %s\r\n", hdr[0]);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "Date"))) {
+        fprintf(f, "Date: %s\r\n", hdr[0]);
+    }
+    else {
+        char datestr[80];
+        time_to_rfc822(now, datestr, sizeof(datestr));
+        fprintf(f, "Date: %s\r\n", datestr);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "Message-ID"))) {
+        fprintf(f, "Message-ID: %s\r\n", hdr[0]);
+    }
+
+    const char *type = "application/octet-stream";
+    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+        type = hdr[0];
+    }
+    fprintf(f, "Content-Type: %s\r\n", type);
+
+    if (!datalen) {
+        datalen = strlen(data);
+        cte = "8bit";
+    }
+    else {
+        cte = strnchr(data, '\0', datalen) ? "binary" : "8bit";
+    }
+    fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
+
+    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
+        fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
+        fprintf(f, "Content-Description: %s\r\n", hdr[0]);
+    }
+
+    fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
+
+    fputs("MIME-Version: 1.0\r\n\r\n", f);
+
+    /* Write the data to the file */
+    fwrite(data, datalen, 1, f);
+    fclose(f);
+
+    /* Prepare to append the message to the mailbox */
+    r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
+                          0, /*quota*/NULL, 0, 0, /*event*/0);
+    if (r) {
+        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+               mailbox->name, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "append_setup() failed\r\n";
+        goto done;
+    }
+
+    /* Append the message to the mailbox */
+    r = append_fromstage(&as, &body, stage, now, &flags, 0, /*annots*/NULL);
+
+    if (r) {
+        append_abort(&as);
+        syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
+               mailbox->name, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "append_fromstage() failed\r\n";
+        goto done;
+    }
+
+    r = append_commit(&as);
+    if (r) {
+        syslog(LOG_ERR, "append_commit(%s) failed: %s",
+               mailbox->name, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "append_commit() failed\r\n";
+        goto done;
+    }
+
+    char datestr[RFC3339_DATETIME_MAX];
+    time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
+
+    json_object_set_new(resp, "blobId", json_string(message_guid_encode(&body->content_guid)));
+    json_object_set_new(resp, "type", json_string(type));
+    json_object_set_new(resp, "size", json_integer(datalen));
+    json_object_set_new(resp, "expires", json_string(datestr));
+
+    /* Dump JSON object into a text buffer */
+    size_t jflags = JSON_PRESERVE_ORDER;
+    jflags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+    char *buf = json_dumps(resp, jflags);
+
+    if (!buf) {
+        txn->error.desc = "Error dumping JSON response object";
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Output the JSON object */
+    txn->resp_body.type = "application/json; charset=utf-8";
+    write_body(HTTP_OK, txn, buf, strlen(buf));
+    free(buf);
+    ret = HTTP_CREATED;
+
+done:
+    json_decref(resp);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    strarray_fini(&flags);
+    append_removestage(stage);
+    if (r) mailbox_abort(mailbox);
+    else r = mailbox_commit(mailbox);
+
+    return ret;
 }
