@@ -122,8 +122,7 @@ struct namespace_t namespace_admin = {
 
 static void admin_init(struct buf *serverinfo __attribute__((unused)))
 {
-//    namespace_admin.enabled =
-//        config_httpmodules & IMAP_ENUM_HTTPMODULES_ADMIN;
+    namespace_admin.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_ADMIN;
 
     if (!namespace_admin.enabled) return;
 

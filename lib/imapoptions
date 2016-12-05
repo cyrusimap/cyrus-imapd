@@ -872,7 +872,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
+{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).
