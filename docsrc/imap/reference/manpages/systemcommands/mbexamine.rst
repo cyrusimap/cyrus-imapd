@@ -164,7 +164,7 @@ Examples
 ..
 
         Examine the mailbox hierarchy rooted at *user.jsmith* comparing
-        index records to the actual message files.
+        index records to the actual message files in the mailbox directory.
 
 .. only:: html
 
