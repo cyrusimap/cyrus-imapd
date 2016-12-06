@@ -46,9 +46,10 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk;
+use Mail::JMAPTalk 0.05;
 use Data::Dumper;
 use Storable 'dclone';
+use MIME::Base64 qw(encode_base64);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1821,6 +1822,68 @@ sub test_setmessages_attachedmessages
     $self->assert_deep_equals($got->{to}, $want->{to});
     $self->assert_str_equals($got->{textBody}, $want->{textBody});
     $self->assert_str_equals($got->{subject}, $want->{subject});
+}
+
+sub test_upload
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $data = $jmap->Upload("a message with some text", "text/rubbish");
+    $self->assert_str_equals("44911b55c3b83ca05db9659d7a8e8b7bf6e25c59", $data->{blobId});
+    $self->assert_num_equals(24, $data->{size});
+    $self->assert_str_equals("text/rubbish", $data->{type});
+}
+
+sub test_download
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    # Generate a message to have some blob ids
+    xlog "Generate a message in $inbox via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "Content-Transfer-Encoding: base64\r\n" . "\r\n"
+          . "beefc0de"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "f00bae=="
+          . "\r\n--sub--",
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    my $blobid1 = $m{"image/jpeg"}->{blobId};
+    my $blobid2 = $m{"image/png"}->{blobId};
+    $self->assert_not_null($blobid1);
+    $self->assert_not_null($blobid2);
+
+    my $data = $jmap->Download('cassandane', $blobid1);
+    $self->assert_str_equals(encode_base64($data, ''), "beefc0de");
 }
 
 sub test_setmessages_attachments
