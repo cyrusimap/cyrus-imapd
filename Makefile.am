@@ -1395,8 +1395,10 @@ notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
 notifyd_notifytest_LDADD = $(LD_BASIC_ADD)
 
+nodist_perl_libcyrus_la_SOURCES = $(nodist_lib_libcyrus_la_SOURCES)
 perl_libcyrus_la_SOURCES = $(lib_libcyrus_la_SOURCES)
 perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
+nodist_perl_libcyrus_min_la_SOURCES = $(nodist_lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
