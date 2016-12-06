@@ -395,6 +395,7 @@ sub test_sharing_crossdomain
 }
 
 sub test_control_chars
+    :min_version_3_0
 {
     my ($self) = @_;
 
