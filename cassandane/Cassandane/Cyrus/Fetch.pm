@@ -97,6 +97,7 @@ sub test_fetch_header
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/21
 sub test_duplicate_headers
+    :min_version_3_0
 {
     my ($self) = @_;
 
