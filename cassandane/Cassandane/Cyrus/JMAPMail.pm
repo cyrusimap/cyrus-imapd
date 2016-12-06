@@ -46,7 +46,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.05;
+use Mail::JMAPTalk 0.06;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -1882,8 +1882,8 @@ sub test_download
     $self->assert_not_null($blobid1);
     $self->assert_not_null($blobid2);
 
-    my $data = $jmap->Download('cassandane', $blobid1);
-    $self->assert_str_equals(encode_base64($data, ''), "beefc0de");
+    my $res = $jmap->Download('cassandane', $blobid1);
+    $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
 }
 
 sub test_setmessages_attachments
