@@ -790,6 +790,12 @@ static int append_apply_flags(struct appendstate *as,
             append_setseen(as, record);
             mboxevent_add_flag(mboxevent, flag);
         }
+        else if (!strcasecmp(flag, "\\expunged")) {
+            /* NOTE - this is a fake internal name */
+            if (as->myrights & ACL_DELETEMSG) {
+                record->system_flags |= FLAG_EXPUNGED;
+            }
+        }
         else if (!strcasecmp(flag, "\\deleted")) {
             if (as->myrights & ACL_DELETEMSG) {
                 record->system_flags |= FLAG_DELETED;
