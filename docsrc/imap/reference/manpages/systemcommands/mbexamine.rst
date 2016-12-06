@@ -16,6 +16,7 @@ Synopsis
     **mbexamine** [ **-C** *config-file* ] [ **-u** *uid* ] *mailbox*...
     **mbexamine** [ **-C** *config-file* ] [ **-s** *seqnum*] *mailbox*...
     **mbexamine** [ **-C** *config-file* ] **-q** *mailbox*...
+    **mbexamine** [ **-C** *config-file* ] **-c** *mailbox*...
 
 Description
 ===========
@@ -50,6 +51,12 @@ Options
     Compare the quota usage in cyrus.index to the actual message file
     sizes and report any differences.  If there are differences, the
     mailbox SHOULD be reconstructed.
+
+.. option:: -c
+
+    Compare the records in cyrus.index to the actual message files
+    report any differences.  This can help detect issues if messages
+    files were manipulated manually and/or restored incorrectly.
 
 Examples
 ========
@@ -149,6 +156,45 @@ Examples
         Examining user.jsmith.Sent...  Mailbox has CORRECT total quota usage
         Examining user.jsmith.Spam...  Mailbox has CORRECT total quota usage
         Examining user.jsmith.Trash...  Mailbox has CORRECT total quota usage
+
+.. parsed-literal::
+
+    **mbexamine -c** *user.jsmith*
+
+..
+
+        Examine the mailbox hierarchy rooted at *user.jsmith* comparing
+        index records to the actual message files.
+
+.. only:: html
+
+    ::
+
+        Examining user.jsmith...
+         Mailbox Header Info:
+          Path to mailbox: /var/spool/imap/user/jsmith
+        
+         Index Record Info:                                     	Message File Info:
+          UID: 00000002
+           GUID: 4aa62f540d81395dc7d52518ae8e8c75571c8f11          
+           Size: 6964                                              
+           Date: Tue, 29 Nov 2016 12:00:00 -0500                   
+           From: <foo@example.com>
+           Subj: "Re: hello there"
+        
+          UID: 00000011
+           GUID: 6aa93fd583f143dde555184d508ab0916e06b026          	739232245980a3efe3df490841221a4b7bac4f27          
+           Size: 21427                                             	23450                                             
+           Date: Wed, 30 Nov 2016 12:00:00 -0500                   	Wed, 26 Oct 2005 12:00:00 -0400                   
+           From: <bar@example.com>                              	<foo@example.com>
+           Subj: "Re: what's up?"                               	"hello there"
+        
+          UID: 00000022
+           GUID:                                                   	12a62f123451395dc7d52518ae8e8c75571c9876          
+           Size:                                                   	5623                                              
+           Date:                                                   	Tue, 29 Mar 2016 12:00:00 -0500                   
+           From:                                                   	<foo@example.com>
+           Subj:                                                   	"Re: vacation"
 
 Files
 =====

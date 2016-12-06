@@ -82,6 +82,7 @@
 #include "mboxlist.h"
 #include "seen.h"
 #include "util.h"
+#include "times.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -97,6 +98,7 @@ static struct namespace recon_namespace;
 /* forward declarations */
 static int do_examine(struct findall_data *data, void *rock);
 static int do_quota(struct findall_data *data, void *rock);
+static int do_compare(struct findall_data *data, void *rock);
 static void usage(void);
 void shut_down(int code);
 
@@ -108,13 +110,13 @@ int main(int argc, char **argv)
     int opt, i, r;
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
-    int quotachk = 0;
+    int (*cb)(struct findall_data *, void *) = &do_examine;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:u:s:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:u:s:qc")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -132,7 +134,11 @@ int main(int argc, char **argv)
             break;
 
         case 'q':
-            quotachk = 1;
+            cb = &do_quota;
+            break;
+
+        case 'c':
+            cb = &do_compare;
             break;
 
         default:
@@ -156,17 +162,13 @@ int main(int argc, char **argv)
 
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
-                         quotachk ? do_quota : do_examine,
-                         NULL);
+        mboxlist_findall(&recon_namespace, buf, 1, 0, 0, cb, NULL);
     }
 
     for (i = optind; i < argc; i++) {
         /* Handle virtdomains and separators in mailboxname */
         char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
-        mboxlist_findall(&recon_namespace, intname, 1, 0, 0,
-                         quotachk ? do_quota : do_examine,
-                         NULL);
+        mboxlist_findall(&recon_namespace, intname, 1, 0, 0, cb, NULL);
         free(intname);
     }
 
@@ -181,7 +183,8 @@ static void usage(void)
     fprintf(stderr,
             "usage: mbexamine [-C <alt_config>] [-s seqnum] mailbox...\n"
             "       mbexamine [-C <alt_config>] [-u uid] mailbox...\n"
-            "       mbexamine [-C <alt_config>] -q mailbox...\n");
+            "       mbexamine [-C <alt_config>] -q mailbox...\n"
+            "       mbexamine [-C <alt_config>] -c mailbox...\n");
     exit(EC_USAGE);
 }
 
@@ -361,7 +364,7 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
  */
 static int do_quota(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
+    if (!data || !data->mbname) return 0;
     int r = 0;
     struct mailbox *mailbox = NULL;
     quota_t total = 0;
@@ -417,6 +420,173 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
  done:
     mailbox_close(&mailbox);
+
+    return r;
+}
+
+int numcmp(const void *a, const void *b)
+{
+    uint32_t *n1 = (uint32_t *) a;
+    uint32_t *n2 = (uint32_t *) b;
+
+    return (*n1 - *n2);
+}
+
+/*
+ * mboxlist_findall() callback function to compare a mailbox
+ */
+static int do_compare(struct findall_data *data, void *rock __attribute__((unused)))
+{
+    if (!data || !data->mbname) return 0;
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+    DIR *dirp;
+    struct dirent *dirent;
+    uint32_t *uids = NULL, nalloc, count = 0, msgno;
+
+    signals_poll();
+
+    /* Convert internal name to external */
+    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
+    printf("Examining %s...", extname);
+
+    const char *name = mbname_intname(data->mbname);
+
+    /* Open/lock header */
+    r = mailbox_open_irl(name, &mailbox);
+    if (r) return r;
+
+    if (mailbox->i.minor_version < 7) {
+        printf("Mailbox version is too old for comparison\n");
+        goto done;
+    }
+
+    if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* Scan the mailbox spool directory */
+    dirp = opendir(".");
+    if (!dirp) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* Build a sorted array of message UIDs */
+    nalloc = mailbox->i.exists;
+    uids = xzmalloc(nalloc * sizeof(uint32_t));
+
+    while ((dirent = readdir(dirp))) {
+        uint32_t uid;
+
+        if (sscanf(dirent->d_name, "%u.", &uid) != 1) continue;
+        
+        if (count >= nalloc) {
+            nalloc += 2;
+            uids = xrealloc(uids, nalloc * sizeof(uint32_t));
+        }
+        uids[count++] = uid;
+    }
+    qsort(uids, count, sizeof(uint32_t), &numcmp);
+    closedir(dirp);
+
+    
+    printf("\n Mailbox Header Info:\n");
+    printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
+
+    printf("\n%-56s\t%s\n", " Index Record Info:", "Message File Info:");
+
+    msgno = 0;
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter)) || msgno < count) {
+        const struct index_record *record = msg ? msg_record(msg) : NULL;
+
+        r = 0;
+
+        do {
+            struct index_record fs_record = { .uid = 0 };
+            const struct buf *citem, empty_buf = BUF_INITIALIZER;
+            char sent[RFC822_DATETIME_MAX+1] = "";
+
+            if (msgno < count) {
+                char fname[100];
+
+                if (!record || uids[msgno] <= record->uid) {
+                    fs_record.uid = uids[msgno++];
+
+                    snprintf(fname, sizeof(fname), "%u.", fs_record.uid);
+                    if (message_parse(fname, &fs_record)) {
+                        message_guid_set_null(&fs_record.guid);
+                    }
+
+                    if (record && (record->uid == fs_record.uid) &&
+                         message_guid_equal(&record->guid, &fs_record.guid)) {
+                        /* Skip matches */
+                        continue;
+                    }
+                }
+            }
+
+            printf("  UID: %08u\n", record ? record->uid : fs_record.uid);
+
+            printf("   GUID: %-50s",
+                   record ? message_guid_encode(&record->guid) : "");
+
+            if (fs_record.uid) {
+                printf("\t%-50s", message_guid_isnull(&fs_record.guid) ?
+                       "Failed to parse file" :
+                       message_guid_encode(&fs_record.guid));
+            }
+            printf("\n");
+
+            printf("   Size: ");
+            if (record) printf("%-50u", record->size);
+            else printf("%-50s", "");
+
+            if (fs_record.uid && !message_guid_isnull(&fs_record.guid))
+                printf("\t%-50u", fs_record.size);
+            printf("\n");
+
+            if (record) time_to_rfc822(record->sentdate, sent, sizeof(sent));
+            printf("   Date: %-50s", sent);
+
+            if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
+                time_to_rfc822(fs_record.sentdate, sent, sizeof(sent));
+                printf("\t%-50s", sent);
+            }
+            printf("\n");
+
+            r = record ? mailbox_cacherecord(mailbox, record) : -1;
+
+            citem = r ? &empty_buf : cacheitem_buf(record, CACHE_FROM);
+            printf("   From: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+
+            if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
+                citem = cacheitem_buf(&fs_record, CACHE_FROM);
+                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+            }
+            printf("\n");
+
+            citem = r ? &empty_buf : cacheitem_buf(record, CACHE_SUBJECT);
+            printf("   Subj: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+
+            if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
+                citem = cacheitem_buf(&fs_record, CACHE_SUBJECT);
+                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+            }
+            printf("\n");
+            printf("\n");
+
+        } while ((msgno < count) && (!record || uids[msgno] <= record->uid));
+    }
+
+    mailbox_iter_done(&iter);
+
+  done:
+    mailbox_close(&mailbox);
+    free(uids);
 
     return r;
 }
