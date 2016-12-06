@@ -1882,7 +1882,7 @@ sub test_download
     $self->assert_not_null($blobid1);
     $self->assert_not_null($blobid2);
 
-    my $res = $jmap->Download('cassandane', $blobid1);
+    $res = $jmap->Download('cassandane', $blobid1);
     $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
 }
 
