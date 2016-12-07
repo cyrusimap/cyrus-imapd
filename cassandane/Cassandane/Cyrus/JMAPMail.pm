@@ -1830,10 +1830,42 @@ sub test_upload
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
     my $data = $jmap->Upload("a message with some text", "text/rubbish");
     $self->assert_str_equals("44911b55c3b83ca05db9659d7a8e8b7bf6e25c59", $data->{blobId});
     $self->assert_num_equals(24, $data->{size});
     $self->assert_str_equals("text/rubbish", $data->{type});
+
+    my $msgresp = $jmap->Request([
+      ['setMessages', { create => { "#2" => {
+        mailboxIds => [$draftsmbox],
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
+        attachments => [{
+            blobId => $data->{blobId},
+            name => "test.txt",
+        }],
+      } } }, 'R2'],
+    ]);
+
+    $self->assert_not_null($msgresp->[0][1]{created});
 }
 
 sub test_download
