@@ -2870,11 +2870,10 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
                                         (body->numparts+1)*sizeof(struct body));
             memset(&body->subpart[body->numparts], 0, sizeof(struct body));
             buf_reset(&buf);
-            if (body->part_id) buf_printf(&buf, "%s.", body->part_id);
+            if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", body->numparts + 1);
             struct body *subbody = &body->subpart[body->numparts++];
-            subbody->part_id = buf_release(&buf);
-            c = message_read_body(strm, subbody, subbody->part_id);
+            c = message_read_body(strm, subbody, buf_cstring(&buf));
         } while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
 
         /* body subtype */
