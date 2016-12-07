@@ -671,6 +671,7 @@ static void replica_connect(const char *channel)
     sasl_callback_t *cb;
     int timeout;
     const char *port, *auth_status = NULL;
+    int try_imap;
 
     cb = mysasl_callbacks(NULL,
                           sync_get_config(channel, "sync_authname"),
@@ -684,20 +685,24 @@ static void replica_connect(const char *channel)
         csync_protocol.service = port;
     }
 
-    for (wait = 15;; wait *= 2) {
-        sync_backend = backend_connect(sync_backend, servername,
-                                       &imap_csync_protocol, "", cb, &auth_status,
-                                       (verbose > 1 ? fileno(stderr) : -1));
+    try_imap = sync_get_switchconfig(channel, "sync_try_imap");
 
-        if (sync_backend) {
-            if (sync_backend->capability & CAPA_REPLICATION) {
-                /* attach our IMAP tag buffer to our protstreams as userdata */
-                sync_backend->in->userdata = sync_backend->out->userdata = &tagbuf;
-                break;
-            }
-            else {
-                backend_disconnect(sync_backend);
-                sync_backend = NULL;
+    for (wait = 15;; wait *= 2) {
+        if (try_imap) {
+            sync_backend = backend_connect(sync_backend, servername,
+                                        &imap_csync_protocol, "", cb, &auth_status,
+                                        (verbose > 1 ? fileno(stderr) : -1));
+
+            if (sync_backend) {
+                if (sync_backend->capability & CAPA_REPLICATION) {
+                    /* attach our IMAP tag buffer to our protstreams as userdata */
+                    sync_backend->in->userdata = sync_backend->out->userdata = &tagbuf;
+                    break;
+                }
+                else {
+                    backend_disconnect(sync_backend);
+                    sync_backend = NULL;
+                }
             }
         }
 

@@ -259,6 +259,26 @@ EXPORTED int sync_get_intconfig(const char *channel, const char *val)
     return response;
 }
 
+EXPORTED int sync_get_switchconfig(const char *channel, const char *val)
+{
+    int response = -1;
+
+    if (channel) {
+        const char *result = NULL;
+        char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
+        snprintf(name, sizeof(name), "%s_%s", channel, val);
+        result = config_getoverflowstring(name, NULL);
+        if (result) response = atoi(result);
+    }
+
+    if (response == -1) {
+        if (!strcmp(val, "sync_try_imap"))
+            response = config_getswitch(IMAPOPT_SYNC_TRY_IMAP);
+    }
+
+    return response;
+}
+
 /* Parse routines */
 
 char *sync_encode_options(int options)

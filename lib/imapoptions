@@ -2093,9 +2093,10 @@ product version in the capabilities */
 { "sync_port", NULL, STRING }
 /* Name of the service (or port number) of the replication service on
    replica host.  Prefix with a channel name to only apply for that
-   channel.  If not specified, the replication client will first
-   try "imap" (port 143) to check if imapd supports replication,
-   otherwise it will default to "csync" (usually port 2005). */
+   channel.  If not specified, and if sync_try_imap is set to "yes"
+   (the default), then the replication client will first try "imap"
+   (port 143) to check if imapd supports replication.  otherwise it
+   will default to "csync" (usually port 2005). */
 
 { "sync_realm", NULL, STRING }
 /* The authentication realm to use when authenticating to a sync server.
@@ -2115,6 +2116,12 @@ product version in the capabilities */
 { "sync_timeout", 1800, INT }
 /* Number of seconds to wait for a response before returning a timeout
    failure when talking to a replication peer (client or server). */
+
+{ "sync_try_imap", 1, SWITCH }
+/* Whether sync_client should try to perform an IMAP connection
+   before falling back to csync.  If this is set to "no",
+   sync_client will only use csync.  Prefix with a channel name to
+   apply only for that channel */
 
 { "syslog_prefix", NULL, STRING }
 /* String to be prepended to the process name in syslog entries. */
