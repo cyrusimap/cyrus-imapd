@@ -6514,7 +6514,8 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     struct buf msg_buf = BUF_INITIALIZER;
     size_t size = 0;
     char *decbuf = NULL;
-    struct buf ct_buf = BUF_INITIALIZER;
+    char *ctype;
+    strarray_t headers = STRARRAY_INITIALIZER;
     int res = 0;
 
     /* Find part containing blob */
@@ -6533,20 +6534,37 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
+    strarray_add(&headers, "Content-Type");
+    ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+    message_pruneheader(ctype, &headers, NULL);
+    strarray_truncate(&headers, 0);
+
     int encoding = part->charset_enc & 0xff;
     const char *data = charset_decode_mimebody(msg_buf.s + part->content_offset,
                                                part->content_size, encoding,
                                                &decbuf, &size);
 
-    buf_printf(&ct_buf, "%s/%s", part->type, part->subtype);
-
-    txn->resp_body.type = buf_cstring(&ct_buf);
+    txn->resp_body.type = "application/octet-stream";
+    if (ctype) {
+        char *p = strchr(ctype, ':');
+        if (p) {
+            p++;
+            while (*p == ' ') p++;
+            char *end = strchr(p, '\n');
+            if (end) *end = '\0';
+            end = strchr(p, '\r');
+            if (end) *end = '\0';
+        }
+        if (p && *p) txn->resp_body.type = p;
+    }
     txn->resp_body.len = size;
     txn->resp_body.fname = name;
 
     write_body(HTTP_OK, txn, data, size);
 
  done:
+    free(ctype);
+    strarray_fini(&headers);
     if (mbox) _closembox(&req, &mbox);
     conversations_commit(&cstate);
     if (record) free(record);
@@ -6555,7 +6573,6 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         free(body);
     }
     buf_free(&msg_buf);
-    buf_free(&ct_buf);
     free(blob_id);
     _finireq(&req);
     free(inboxname);
