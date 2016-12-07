@@ -4625,9 +4625,10 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         buf_free(&buf);
     }
 
-    /* Write content */
-    if (is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
-        /* if there is one... the correct approach is to rewrite the data */
+    /* MESSAGE parts mustn't be re-encoded, and maybe no encoding is required... */
+    if (!strcasecmp(part->type, "MESSAGE") ||
+         is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
+
         strarray_add(&headers, "Content-Transfer-Encoding");
         ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
         message_pruneheader(ctenc, &headers, NULL);
@@ -4639,6 +4640,19 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         fputs("\r\n", out);
 
         fwrite(msg_buf.s + part->content_offset, 1, part->content_size, out);
+    }
+    else if (!strcasecmp(part->type, "TEXT")) {
+        size_t qplen;
+        char *freeme = charset_qpencode_mimebody(msg_buf.s + part->content_offset,
+                                                 body->content_size, &qplen);
+
+        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "quoted-printable");
+
+        fputs("\r\n", out);
+
+        fwrite(freeme, 1, qplen, out);
+
+        free(freeme);
     }
     else {
         size_t b64_size;
