@@ -1614,68 +1614,35 @@ done:
     return r;
 }
 
-static int body_is_rfc822(struct body *body)
-{
-    return body &&
-        !strcasecmpsafe(body->type, "MESSAGE") &&
-        !strcasecmpsafe(body->subtype, "RFC822");
-}
-
-/* interface message_read_bodystructure which makes sure the cache record
- * exists and adds the MESSAGE/RFC822 wrapper to make fetch BODY[*]
- * work consistently */
-static void loadbody(struct mailbox *mailbox, const struct index_record *record,
-                     struct body **bodyp)
-{
-    if (*bodyp) return;
-    if (mailbox_cacherecord(mailbox, record)) return;
-    struct body *body = xzmalloc(sizeof(struct body));
-    message_read_bodystructure(record, &body->subpart);
-    body->type = xstrdup("MESSAGE");
-    body->subtype = xstrdup("RFC822");
-    body->header_offset = 0;
-    body->header_size = 0;
-    body->content_offset = 0;
-    body->content_offset = record->size;
-    body->content_guid = record->guid;
-    *bodyp = body;
-}
-
 static int _guid_addbody(struct conversations_state *state, struct body *body,
                          const char *base, int add)
 {
+    int i;
     int r = 0;
+
     if (!body) return 0;
 
-    if (!message_guid_isnull(&body->content_guid)) {
+    if (!message_guid_isnull(&body->content_guid) && body->part_id) {
         struct buf buf = BUF_INITIALIZER;
 
         buf_setcstr(&buf, base);
-        if (body->part_id) buf_printf(&buf, "[%s]", body->part_id);
+        buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
         r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), add);
         buf_free(&buf);
 
-        if (r) goto done;
+        if (r) return r;
     }
 
-    if (body_is_rfc822(body))
-        body = body->subpart;
-    else if (!body->numparts)
-        goto done;
+    r = _guid_addbody(state, body->subpart, base, add);
+    if (r) return r;
 
-    if (body->numparts) {
-        int i;
-        for (i = 0; i < body->numparts; i++) {
-            _guid_addbody(state, &body->subpart[i], base, add);
-        }
-    }
-    else {
-        _guid_addbody(state, body, base, add);
+    for (i = 1; i < body->numparts; i++) {
+        r = _guid_addbody(state, body->subpart + i, base, add);
+        if (r) return r;
     }
 
- done:
-    return r;
+    return 0;
 }
 
 static int conversations_set_guid(struct conversations_state *state,
@@ -1688,13 +1655,17 @@ static int conversations_set_guid(struct conversations_state *state,
     struct body *body = NULL;
     int r = 0;
 
+    r = mailbox_cacherecord(mailbox, record);
+    if (r) return r;
+
+    message_read_bodystructure(record, &body);
+
     /* process the GUID of the full message itself */
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    loadbody(mailbox, record, &body);
-
-    r = _guid_addbody(state, body, base, add);
+    r = conversations_guid_setitem(state, message_guid_encode(&record->guid), base, add);
+    if (!r) r = _guid_addbody(state, body, base, add);
 
     message_free_body(body);
     free(body);
