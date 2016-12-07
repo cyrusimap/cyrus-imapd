@@ -3236,6 +3236,102 @@ sub test_getmessageupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
+sub test_uploaddownload822
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $message = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test message
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test message.
+EOF
+    $message =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($message, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    my $download = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals($download->{content}, $message);
+}
+
+sub test_getthreadonemsg
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $draftsmbox;
+    my $state;
+    my $threadA;
+    my $threadB;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "create drafts mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog "get thread state";
+    $res = $jmap->Request([['getThreads', { ids => [ 'no' ] }, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    my $message = <<'EOF';
+Return-Path: <Hannah.Smith@gmail.com>
+Received: from gateway (gateway.vmtom.com [10.0.0.1])
+    by ahost (ahost.vmtom.com[10.0.0.2]); Wed, 07 Dec 2016 11:43:25 +1100
+Received: from mail.gmail.com (mail.gmail.com [192.168.0.1])
+    by gateway.vmtom.com (gateway.vmtom.com [10.0.0.1]); Wed, 07 Dec 2016 11:43:25 +1100
+Mime-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Subject: Message A
+From: Hannah V. Smith <Hannah.Smith@gmail.com>
+Message-ID: <fake.1481071405.58492@gmail.com>
+Date: Wed, 07 Dec 2016 11:43:25 +1100
+To: Test User <test@vmtom.com>
+X-Cassandane-Unique: 294f71c341218d36d4bda75aad56599b7be3d15b
+
+a
+EOF
+    $message =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($message, "message/rfc822");
+    my $blobid = $data->{blobId};
+    xlog "import message from blob $blobid";
+    $res = $jmap->Request([['importMessages', {
+        messages => {
+            "#1" => {
+                blobId => $blobid,
+                mailboxIds => [ $draftsmbox ],
+                isUnread => JSON::true,
+                isFlagged => JSON::false,
+                isAnswered => JSON::false,
+                isDraft => JSON::true,
+            },
+        },
+    }, "R1"]]);
+
+    xlog "get thread updates";
+    $res = $jmap->Request([['getThreadUpdates', { sinceState => $state, fetchRecords => $JSON::true }, "R1"]]);
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+}
+
 sub test_getthreadupdates
     :JMAP :min_version_3_0
 {
@@ -3513,6 +3609,7 @@ sub test_importmessages
             },
         },
     }, "R1"]]);
+
     $self->assert_str_equals("messagesImported", $res->[0][0]);
     $msg = $res->[0][1]->{created}{"#1"};
     $self->assert_not_null($msg);
