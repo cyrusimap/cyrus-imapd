@@ -1869,6 +1869,34 @@ sub test_upload
     $self->assert_not_null($msgresp->[0][1]{created});
 }
 
+sub test_uploadcharset
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
+    my $data = $jmap->Upload("some test with utf8", "text/plain; charset=utf-8");
+
+    my $resp = $jmap->Download('cassandane', $data->{blobId});
+
+    $self->assert_str_equals('text/plain; charset=utf-8', $resp->{headers}{'content-type'});
+
+    # XXX - fetch back the parts
+}
+
 sub test_uploadbin
     :JMAP :min_version_3_0
 {
