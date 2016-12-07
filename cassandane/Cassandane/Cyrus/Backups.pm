@@ -41,6 +41,7 @@ package Cassandane::Cyrus::Backups;
 use strict;
 use warnings;
 use Data::Dumper;
+use JSON::XS;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -74,6 +75,41 @@ sub test_aaasetup
 
     # does everything set up and tear down cleanly?
     $self->assert(1);
+}
+
+sub test_basic
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    # XXX probably don't do this like this
+    $self->{instance}->run_command(
+	{ cyrus => 1 },
+	qw(sync_client -vv -n backup -u cassandane)
+    );
+
+    # XXX probably don't do this like this either
+    my $cyr_backup_stdout = "$self->{backups}->{basedir}/$self->{_name}"
+			  . "-cyr_backup.stdout";
+    $self->{backups}->run_command(
+	{ cyrus => 1,
+	  redirects => { 'stdout' => $cyr_backup_stdout } },
+	qw(cyr_backup -u cassandane json chunks)
+    );
+
+    local $/;
+    open my $fh, '<', $cyr_backup_stdout
+	or die "Cannot open $cyr_backup_stdout for reading: $!";
+    my $chunks = JSON::decode_json(<$fh>);
+    close $fh;
+
+    $self->assert_equals(1, scalar @{$chunks});
+    $self->assert_equals(0, $chunks->[0]->{offset});
+    $self->assert_equals(1, $chunks->[0]->{id});
+    # an empty chunk has a 29 byte prefix
+    # make sure the chunk isn't empty -- it should at least send through
+    # the state of an empty inbox
+    $self->assert($chunks->[0]->{length} > 29);
 }
 
 1;
