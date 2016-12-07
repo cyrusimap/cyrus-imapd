@@ -50,6 +50,7 @@ use Mail::JMAPTalk 0.06;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
+use Cwd qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1866,6 +1867,54 @@ sub test_upload
     ]);
 
     $self->assert_not_null($msgresp->[0][1]{created});
+}
+
+sub test_uploadbin
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "#1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    my $msgresp = $jmap->Request([
+      ['setMessages', { create => { "#2" => {
+        mailboxIds => [$draftsmbox],
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => "I'm givin' ya one last chance ta surrenda!",
+        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
+        attachments => [{
+            blobId => $data->{blobId},
+            name => "logo.gif",
+        }],
+      } } }, 'R2'],
+    ]);
+
+    $self->assert_not_null($msgresp->[0][1]{created});
+
+    # XXX - fetch back the parts
 }
 
 sub test_download
