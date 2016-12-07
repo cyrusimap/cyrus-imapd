@@ -2873,8 +2873,13 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", body->numparts + 1);
             struct body *subbody = &body->subpart[body->numparts++];
-            c = message_read_body(strm, subbody, buf_cstring(&buf));
+            subbody->part_id = buf_release(&buf);
+            c = message_read_body(strm, subbody, subbody->part_id);
         } while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
+
+        /* remove the part_id here, you can't address multiparts directly */
+        free(body->part_id);
+        body->part_id = NULL;
 
         /* body subtype */
         c = message_read_nstring(strm, &body->subtype, 1);
