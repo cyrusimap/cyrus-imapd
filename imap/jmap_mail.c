@@ -3570,7 +3570,10 @@ static int getThreadUpdates(jmap_req_t *req)
     int pe, fetch = 0, has_more = 0, r = 0;
     json_int_t max = 0;
     json_t *invalid, *item, *res, *oldstate, *newstate;
-    json_t *changed, *removed, *threads, *filter, *sort, *val;
+    json_t *changed = NULL;
+    json_t *removed = NULL;
+    json_t *threads = NULL;
+    json_t *val;
     size_t total, total_threads, i;
     struct getmsglist_window window;
     const char *since;
@@ -3607,19 +3610,17 @@ static int getThreadUpdates(jmap_req_t *req)
     /* FIXME need deletedmodseq in counters */
 
     /* Search for message updates and collapse threads */
-    filter = json_pack("{s:s}", "sinceMessageState", since);
-    sort = json_pack("[s]", "messageState asc");
+    json_t *filter = json_pack("{s:s}", "sinceMessageState", since);
+    json_t *sort = json_pack("[s]", "messageState asc");
     window.collapse = 1;
-    threads = NULL;
-    changed = NULL;
-    removed = NULL;
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
     json_decref(filter);
     json_decref(sort);
     if (r) goto done;
 
-    /* Split the collapsed threads into changed and removed */
+    /* Split the collapsed threads into changed and removed - the values from
+       jmapmsg_search will be msgids */
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
     changed = json_pack("[]");
