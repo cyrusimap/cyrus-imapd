@@ -4514,17 +4514,15 @@ static int findblob(jmap_req_t *req, const char *blob_id,
 
         message_guid_decode(&content_guid, blob_id);
 
-        for (i = 0; i < mybody->numparts; i++) {
-            ptrarray_push(&parts, mybody->subpart + i);
-        }
-
+        ptrarray_push(&parts, mybody);
         while ((mypart = ptrarray_shift(&parts))) {
             if (!message_guid_cmp(&content_guid, &mypart->content_guid)) {
                 break;
             }
-            for (i = 0; i < mypart->numparts; i++) {
+            if (!mypart->subpart) continue;
+            ptrarray_push(&parts, mypart->subpart);
+            for (i = 1; i < mypart->numparts; i++)
                 ptrarray_push(&parts, mypart->subpart + i);
-            }
         }
         ptrarray_fini(&parts);
     } else {
