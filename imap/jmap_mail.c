@@ -6597,6 +6597,26 @@ static int create_upload_collection(const char *userid, struct mailbox **mailbox
     return r;
 }
 
+/* Helper function to determine domain of data */
+enum {
+    DOMAIN_7BIT = 0,
+    DOMAIN_8BIT,
+    DOMAIN_BINARY
+};
+
+static int data_domain(const char *p, size_t n)
+{
+    int r = DOMAIN_7BIT;
+
+    while (n--) {
+        if (!*p) return DOMAIN_BINARY;
+        if (*p & 0x80) r = DOMAIN_8BIT;
+        p++;
+    }
+
+    return r;
+}
+
 
 EXPORTED int jmap_upload(struct transaction_t *txn)
 {
@@ -6616,7 +6636,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     hdrcache_t hdrcache = txn->req_hdrs;
     struct stagemsg *stage = NULL;
     FILE *f = NULL;
-    const char **hdr, *cte;
+    const char **hdr;
     time_t now = time(NULL);
     struct appendstate as;
 
@@ -6680,14 +6700,19 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     }
     fprintf(f, "Content-Type: %s\r\n", type);
 
-    if (!datalen) {
+    if (!datalen)
         datalen = strlen(data);
-        cte = "8bit";
+    int domain = data_domain(data, datalen);
+    switch (domain) {
+        case DOMAIN_BINARY:
+            fputs("Content-Transfer-Encoding: BINARY\r\n", f);
+            break;
+        case DOMAIN_8BIT:
+            fputs("Content-Transfer-Encoding: 8BIT\r\n", f);
+            break;
+        default:
+            break; // no CTE == 7bit
     }
-    else {
-        cte = strnchr(data, '\0', datalen) ? "binary" : "8bit";
-    }
-    fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
 
     if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
         fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
