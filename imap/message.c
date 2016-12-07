@@ -4579,7 +4579,7 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
     if (!tmp) return IMAP_INTERNAL;
 
     key = tmp;
-    while (*key) {
+    while (key && *key) {
         /* Look for the key-value separator. */
         char *val = strchr(key, ':');
         if (!val || val == key) {
