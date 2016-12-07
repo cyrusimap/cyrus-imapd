@@ -4550,6 +4550,28 @@ done:
     return r;
 }
 
+static int is_7bit_safe(const char *base, size_t len, const char *boundary __attribute__((unused)))
+{
+    /* XXX check if boundary exists in base - base+len ? */
+
+    size_t linelen = 0;
+    size_t i;
+    for (i = 0; i < len; i++) {
+        if (base[i] == '\n') linelen = 0;
+        else linelen++;
+
+        // any long lines, reject
+        if (linelen > 80) return 0;
+
+        // any 8bit, reject
+        if (base[i] & 0x80) return 0;
+
+        // xxx - boundary match ?
+    }
+
+    return 1;
+}
+
 static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
 {
     struct mailbox *mbox = NULL;
@@ -4592,14 +4614,6 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         free(ctype);
     }
 
-    strarray_add(&headers, "Content-Transfer-Encoding");
-    ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-    message_pruneheader(ctenc, &headers, NULL);
-    fwrite(ctenc, 1, strlen(ctenc), out);
-    strarray_truncate(&headers, 0);
-    free(ctenc);
-    ctenc = NULL;
-
     if (cid) {
         JMAPMSG_HEADER_TO_MIME("Content-ID", cid);
     }
@@ -4612,9 +4626,46 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     }
 
     /* Write content */
-    fputs("\r\n", out);
-    fwrite(msg_buf.s + part->content_offset, 1, part->content_size, out);
+    if (is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
+        /* if there is one... the correct approach is to rewrite the data */
+        strarray_add(&headers, "Content-Transfer-Encoding");
+        ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+        message_pruneheader(ctenc, &headers, NULL);
+        fwrite(ctenc, 1, strlen(ctenc), out);
+        strarray_truncate(&headers, 0);
+        free(ctenc);
+        ctenc = NULL;
+
+        fputs("\r\n", out);
+
+        fwrite(msg_buf.s + part->content_offset, 1, part->content_size, out);
+    }
+    else {
+        size_t b64_size;
+
+        /* Determine encoded size */
+        charset_encode_mimebody(NULL, part->content_size, NULL,
+                                &b64_size, NULL);
+
+        /* Realloc buffer to accomodate encoding overhead */
+        char *freeme = xmalloc(b64_size);
+
+        /* Encode content into buffer at current position */
+        charset_encode_mimebody(msg_buf.s + part->content_offset,
+                                body->content_size,
+                                freeme, NULL, NULL);
+
+        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "base64");
+
+        fputs("\r\n", out);
+
+        fwrite(freeme, 1, b64_size, out);
+
+        free(freeme);
+    }
+
     r = 0;
+
 
 done:
     if (mbox) _closembox(req, &mbox);
