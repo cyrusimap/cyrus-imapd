@@ -6160,14 +6160,15 @@ int jmapmsg_import_cb(jmap_req_t *req __attribute__((unused)),
                       FILE *out, void *rock)
 {
     struct jmapmsg_import_data *data = (struct jmapmsg_import_data*) rock;
-    size_t len;
 
-    len = fwrite(data->msg_buf.s + data->part->content_offset, 1,
-                 data->part->content_size, out);
-    if (len < data->part->content_size)
-        return IMAP_IOERROR;
+    // we never need to pre-decode rfc822 messages, they're always 7bit (right?)
+    struct protstream *stream = prot_readmap(data->msg_buf.s + data->part->content_offset, data->part->content_size);
 
-    return 0;
+    int r = message_copy_strict(stream, out, data->part->content_size, 0);
+
+    prot_free(stream);
+
+    return r;
 }
 
 int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
