@@ -6760,9 +6760,9 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
 
     /* Output the JSON object */
     txn->resp_body.type = "application/json; charset=utf-8";
-    write_body(HTTP_OK, txn, buf, strlen(buf));
+    write_body(HTTP_CREATED, txn, buf, strlen(buf));
     free(buf);
-    ret = HTTP_CREATED;
+    ret = 0;
 
 done:
     json_decref(resp);
@@ -6774,6 +6774,7 @@ done:
     append_removestage(stage);
     if (r) mailbox_abort(mailbox);
     else r = mailbox_commit(mailbox);
+    mailbox_close(&mailbox);
 
     return ret;
 }
