@@ -6457,7 +6457,7 @@ static int importMessages(jmap_req_t *req)
         }
         else if (r == IMAP_QUOTA_EXCEEDED) {
             json_object_set_new(notcreated, id, json_pack("{s:s}",
-                        "type", "messageExists"));
+                        "type", "maxQuotaReached"));
             r = 0;
             continue;
         }
