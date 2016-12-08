@@ -5655,11 +5655,12 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     }
     r = writecb(req, f, rock);
     if (r) goto done;
-    len = ftell(f);
     if (fflush(f)) {
         r = IMAP_IOERROR;
         goto done;
     }
+    fseek(f, 0L, SEEK_END);
+    len = ftell(f);
 
     /* Generate a GUID from the raw file content */
     fd = fileno(f);
