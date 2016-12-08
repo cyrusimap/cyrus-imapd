@@ -4390,7 +4390,7 @@ static int jmap_validate_emailer(json_t *emailer,
     return r;
 }
 
-static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **msgid)
+static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **messageid)
 {
     char *mboxname = NULL;
     struct mailbox *mbox = NULL;
@@ -4419,7 +4419,7 @@ static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **msgid)
     if (r) goto done;
 
     buf_cstring(&buf);
-    *msgid = buf_release(&buf);
+    *messageid = buf_release(&buf);
 
 done:
     if (m) message_unref(&m);
@@ -4947,7 +4947,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
         char *sender;
         char *from;
         char *date;
-        char *msgid;
+        char *messageid;
         char *mua;
 
         char *references;
@@ -5106,7 +5106,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
 
     /* Set Message-ID header */
     buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
-    d.msgid = buf_release(&buf);
+    d.messageid = buf_release(&buf);
 
     /* Set User-Agent header */
     if (!d.mua) {
@@ -5158,7 +5158,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     }
 
     /* Not mandatory but we'll always write these */
-    JMAPMSG_HEADER_TO_MIME("Message-ID", d.msgid);
+    JMAPMSG_HEADER_TO_MIME("Message-ID", d.messageid);
     JMAPMSG_HEADER_TO_MIME("User-Agent", d.mua);
 
     /* Make a shallow copy to alter */
@@ -5186,7 +5186,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     if (d.bcc) free(d.bcc);
     if (d.replyto) free(d.replyto);
     if (d.subject) free(d.subject);
-    if (d.msgid) free(d.msgid);
+    if (d.messageid) free(d.messageid);
     if (d.references) free(d.references);
     if (d.inreplyto) free(d.inreplyto);
     if (d.replyto_id) free(d.replyto_id);
