@@ -43,6 +43,8 @@
 #ifndef MESSAGE_GUID_H
 #define MESSAGE_GUID_H
 
+#include <stdint.h>
+
 /* Public interface */
 
 #define MESSAGE_GUID_SIZE         (20)    /* Size of GUID byte sequence */
