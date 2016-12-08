@@ -4014,7 +4014,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
     hash_insert("isDraft", (void*)1, &props);
 
     json_array_foreach(threadids, i, val) {
-        conversation_id_t cid;
+        conversation_id_t cid = 0;
         conv_folder_t *folder;
         const char *threadid, *msgid, *replyid;
         json_t *drafts, *draft, *msg, *thread, *ids, *l;
@@ -4024,7 +4024,8 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         threadid = json_string_value(val);
         conversation_id_decode(&cid, threadid);
 
-        r = conversation_load(req->cstate, cid, &conv);
+
+        if (cid) r = conversation_load(req->cstate, cid, &conv);
         if (r) goto done;
         if (!conv) {
             json_array_append_new(*notfound, json_string(threadid));
@@ -6406,8 +6407,8 @@ static int importMessages(jmap_req_t *req)
     /* Prepare the response */
     res = json_pack("{}");
     json_object_set_new(res, "accountId", json_string(req->userid));
-    json_object_set_new(res, "created", created);
-    json_object_set_new(res, "notCreated", notcreated);
+    json_object_set(res, "created", created);
+    json_object_set(res, "notCreated", notcreated);
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("messagesImported"));
@@ -6416,6 +6417,8 @@ static int importMessages(jmap_req_t *req)
     json_array_append_new(req->response, item);
 
 done:
+    json_decref(created);
+    json_decref(notcreated);
     buf_free(&buf);
     _finireq(req);
     return r;
@@ -6629,6 +6632,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     write_body(HTTP_OK, txn, data, size);
 
  done:
+    free(decbuf);
     free(ctype);
     strarray_fini(&headers);
     if (mbox) _closembox(&req, &mbox);
