@@ -3383,6 +3383,60 @@ EOF
     $self->assert_str_equals($download->{content}, $message);
 }
 
+sub test_uploaddownloadtypes
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $lazy = "the quick brown fox jumped over the lazy dog";
+
+    my $data = $jmap->Upload($lazy, "text/plain");
+    my $blobid = $data->{blobId};
+
+    $data = $jmap->Upload($lazy, "text/html");
+    my $blobid2 = $data->{blobId};
+
+    $self->assert_str_not_equals($blobid, $blobid2);
+
+    my $download = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals($download->{content}, $lazy);
+    $self->assert_str_equals($download->{headers}{'content-type'}, "text/plain");
+
+    $download = $jmap->Download('cassandane', $blobid2);
+
+    $self->assert_str_equals($download->{content}, $lazy);
+    $self->assert_str_equals($download->{headers}{'content-type'}, "text/html");
+}
+
+sub test_uploaddownloadcharsets
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $lazy = "the quick brown fox jumped over the lazy dog";
+
+    my $data = $jmap->Upload($lazy, "text/plain; charset=us-ascii");
+    my $blobid = $data->{blobId};
+
+    $data = $jmap->Upload($lazy, "text/plain; charset=utf-8");
+    my $blobid2 = $data->{blobId};
+
+    $self->assert_str_not_equals($blobid, $blobid2);
+
+    my $download = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals($download->{content}, $lazy);
+    $self->assert_matches(qr/text\/plain/, $download->{headers}{'content-type'});
+
+    $download = $jmap->Download('cassandane', $blobid2);
+
+    $self->assert_str_equals($download->{content}, $lazy);
+    $self->assert_matches(qr/text\/plain/, $download->{headers}{'content-type'});
+}
+
 sub test_brokenrfc822_badendline
     :JMAP :min_version_3_0
 {
