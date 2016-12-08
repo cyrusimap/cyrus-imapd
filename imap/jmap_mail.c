@@ -2161,8 +2161,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                                body->header_size, extract_headers, headers);
     if (r) goto done;
 
-    r = annotatemore_findall(mbox->name, record->uid, "*", extract_annotations, annotations);
-    if (r) goto done;
+    annotatemore_findall(mbox->name, record->uid, "*", extract_annotations, annotations);
 
     msg = json_pack("{}");
 
