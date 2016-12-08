@@ -2138,6 +2138,16 @@ static int extract_annotations(const char *mboxname __attribute__((unused)),
     return 0;
 }
 
+const char *jmap_blobid(const struct message_guid *guid)
+{
+    return message_guid_encode(guid);
+}
+
+const char *jmap_msgid(const struct message_guid *guid)
+{
+    return message_guid_encode_short(guid, 24); // 96 bits
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              struct mailbox *mbox,
@@ -2344,7 +2354,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             static const char* imgprops[] = { "width", "height" };
             size_t j;
 
-            attid = message_guid_encode(&part->content_guid);
+            attid = jmap_blobid(&part->content_guid);
             att = json_pack("{s:s}", "blobId", attid);
 
             /* type */
@@ -2434,7 +2444,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                                   mbox, record, 1, &submsg);
             if (r) goto done;
 
-            attid = message_guid_encode(&part->content_guid);
+            attid = jmap_blobid(&part->content_guid);
             json_object_set_new(msgs, attid, submsg);
         }
         if (!json_object_size(msgs)) {
@@ -2449,7 +2459,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         const char *msgid;
 
         /* id */
-        msgid = message_guid_encode(&record->guid);
+        msgid = jmap_msgid(&record->guid);
         json_object_set_new(msg, "id", json_string(msgid));
 
         /* blobId */
@@ -2595,6 +2605,10 @@ static int jmapmsg_find(jmap_req_t *req, const char *id,
 {
     struct jmapmsg_find_data data = { req, NULL, 0 };
     int r;
+
+    /* this is on a 24 character prefix only */
+    if (strlen(id) != 24)
+        return IMAP_NOTFOUND;
 
     r = conversations_guid_foreach(req->cstate, id, jmapmsg_find_cb, &data);
     if (r == IMAP_OK_COMPLETED) {
@@ -3282,7 +3296,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (is_expunged && !want_expunged)
             goto doneloop;
 
-        msgid = message_guid_encode(&md->guid);
+        msgid = jmap_msgid(&md->guid);
 
         /* Have we seen this message already? */
         if (hash_lookup(msgid, &ids))
@@ -5668,7 +5682,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        *msgid = xstrdup(message_guid_encode(&guid));
+        *msgid = xstrdup(jmap_msgid(&guid));
         munmap(addr, len);
     } else {
         r = IMAP_IOERROR;
@@ -6901,7 +6915,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     char datestr[RFC3339_DATETIME_MAX];
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
-    json_object_set_new(resp, "blobId", json_string(message_guid_encode(&body->content_guid)));
+    json_object_set_new(resp, "blobId", json_string(jmap_blobid(&body->content_guid)));
     json_object_set_new(resp, "type", json_string(type));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
