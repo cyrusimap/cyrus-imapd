@@ -3383,6 +3383,23 @@ EOF
     $self->assert_str_equals($download->{content}, $message);
 }
 
+sub test_uploadsametype
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $lazy = "the quick brown fox jumped over the lazy dog";
+
+    my $data = $jmap->Upload($lazy, "text/plain; charset=us-ascii");
+    my $blobid = $data->{blobId};
+
+    $data = $jmap->Upload($lazy, "TEXT/PLAIN; charset=US-Ascii");
+    my $blobid2 = $data->{blobId};
+
+    $self->assert_str_equals($blobid, $blobid2);
+}
+
 sub test_uploaddownloadtypes
     :JMAP :min_version_3_0
 {
