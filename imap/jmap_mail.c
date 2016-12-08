@@ -2119,6 +2119,25 @@ static int extract_headers(const char *key, const char *val, void *rock)
     return  0;
 }
 
+static int extract_annotations(const char *mboxname __attribute__((unused)),
+                               uint32_t uid __attribute__((unused)),
+                               const char *entry,
+                               const char *userid __attribute__((unused)),
+                               const struct buf *value,
+                               void *rock)
+{
+    json_t *annotations = (json_t *)rock;
+
+    const char *prefix = "/vendor/jmapio/";
+    size_t prefixlen = strlen(prefix);
+
+    if (!strncmp(entry, prefix, prefixlen)) {
+        json_object_set_new(annotations, entry + prefixlen, json_string(buf_cstring(value)));
+    }
+
+    return 0;
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              struct mailbox *mbox,
@@ -2128,6 +2147,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     struct msgbodies bodies = MSGBODIES_INITIALIZER;
     json_t *msg = NULL;
     json_t *headers = json_pack("{}");
+    json_t *annotations = json_pack("{}");
     struct buf buf = BUF_INITIALIZER;
     char *text = NULL, *html = NULL;
     int r;
@@ -2139,6 +2159,9 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     /* Always read the message headers */
     r = message_foreach_header(msg_buf->s + body->header_offset,
                                body->header_size, extract_headers, headers);
+    if (r) goto done;
+
+    r = annotatemore_findall(mbox->name, record->uid, "*", extract_annotations, annotations);
     if (r) goto done;
 
     msg = json_pack("{}");
@@ -2167,6 +2190,32 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         else
             json_decref(wantheaders);
     }
+
+    /* annotations */
+    if (_wantprop(props, "annotations")) {
+        json_object_set(msg, "annotations", annotations);
+    }
+    else {
+        json_t *wantannotations = json_pack("{}");
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "annotations.");
+        const char *key;
+        json_t *val;
+        json_object_foreach(annotations, key, val) {
+            buf_truncate(&buf, 8);
+            buf_appendcstr(&buf, key);
+            if (_wantprop(props, buf_cstring(&buf))) {
+                json_object_set(wantannotations, key, val);
+            }
+        }
+        buf_free(&buf);
+        if (json_object_size(wantannotations))
+            json_object_set_new(msg, "annotations", wantannotations);
+        else
+            json_decref(wantannotations);
+    }
+
+
     /* sender */
     if (_wantprop(props, "sender")) {
         const char *key, *s = NULL;
@@ -2488,6 +2537,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     r = 0;
 
 done:
+    json_decref(annotations);
     json_decref(headers);
     buf_free(&buf);
     if (text) free(text);
