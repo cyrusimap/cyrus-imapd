@@ -1845,7 +1845,7 @@ sub test_uploadzero
     my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
 
     my $data = $jmap->Upload("", "text/plain");
-    $self->assert_str_equals("da39a3ee5e6b4b0d3255bfef95601890afd80709", $data->{blobId});
+    $self->assert_matches(qr/^da39a3ee5e6b4b0d3255bfef95601890/, $data->{blobId});
     $self->assert_num_equals(0, $data->{size});
     $self->assert_str_equals("text/plain", $data->{type});
 
@@ -1889,7 +1889,7 @@ sub test_upload
     my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
 
     my $data = $jmap->Upload("a message with some text", "text/rubbish");
-    $self->assert_str_equals("44911b55c3b83ca05db9659d7a8e8b7bf6e25c59", $data->{blobId});
+    $self->assert_matches(qr/^44911b55c3b83ca05db9659d7a8e8b7b/, $data->{blobId});
     $self->assert_num_equals(24, $data->{size});
     $self->assert_str_equals("text/rubbish", $data->{type});
 
