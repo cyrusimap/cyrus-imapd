@@ -6834,8 +6834,6 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     }
     fprintf(f, "Content-Type: %s\r\n", type);
 
-    if (!datalen)
-        datalen = strlen(data);
     int domain = data_domain(data, datalen);
     switch (domain) {
         case DOMAIN_BINARY:
