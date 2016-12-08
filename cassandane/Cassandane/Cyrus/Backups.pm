@@ -112,4 +112,66 @@ sub test_basic
     $self->assert($chunks->[0]->{length} > 29);
 }
 
+sub test_messages
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my %exp;
+
+    $exp{A} = $self->make_message("Message A");
+    $exp{B} = $self->make_message("Message B");
+    $exp{C} = $self->make_message("Message C");
+    $exp{D} = $self->make_message("Message D");
+
+    # XXX probably don't do this like this
+    $self->{instance}->run_command(
+	{ cyrus => 1 },
+	qw(sync_client -vv -n backup -u cassandane)
+    );
+
+    # XXX probably don't do this like this either
+    my $cyr_backup_stdout = "$self->{backups}->{basedir}/$self->{_name}"
+			  . "-cyr_backup.stdout";
+    $self->{backups}->run_command(
+	{ cyrus => 1,
+	  redirects => { 'stdout' => $cyr_backup_stdout } },
+	qw(cyr_backup -u cassandane json messages)
+    );
+
+    local $/;
+    open my $fh, '<', $cyr_backup_stdout
+	or die "Cannot open $cyr_backup_stdout for reading: $!";
+    my $messages = JSON::decode_json(<$fh>);
+    close $fh;
+
+    # backup should contain four messages
+    $self->assert_equals(4, scalar @{$messages});
+
+    my $f = "$self->{backups}->{basedir}/$self->{_name}-headers"
+	    . "-cyr_backup.stdout";
+
+    $self->{backups}->run_command(
+	{ cyrus => 1,
+	    redirects => { 'stdout' => $f } },
+	qw(cyr_backup -u cassandane json headers ), map { $_->{guid} } @{$messages}
+    );
+
+    open $fh, '<', $f
+	or die "Cannot open $f for reading: !";
+    $messages = JSON::decode_json(<$fh>);
+    close $fh;
+
+    # transform out enough data for comparison purposes
+    my %expected = map {
+	$_->get_guid() => $_->get_header('X-Cassandane-Unique')
+    } values %exp;
+
+    my %actual = map {
+	$_ => $messages->{$_}->{'X-Cassandane-Unique'}->[0]
+    } keys %{$messages};
+
+    $self->assert_deep_equals(\%expected, \%actual);
+}
+
 1;
