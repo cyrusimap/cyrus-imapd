@@ -3186,7 +3186,7 @@ static void message1_get_subject(const struct index_record *record, struct buf *
 
 /*
  * Generate a conversation id from the given message.
- * The conversation id is defined as the first 64b of
+ * The conversation id is derived from the first 64b of
  * the SHA1 of the message, except that an all-zero
  * conversation id is not valid.
  */
@@ -3202,6 +3202,10 @@ static conversation_id_t generate_conversation_id(
         cid <<= 8;
         cid |= record->guid.value[i];
     }
+
+    // we make sure the cid doesn't look anything like the sha1 so
+    // that people don't make assumptions
+    cid ^= 0x91f3d9e10b690b12; // chosen by fair dice roll
 
     /*
      * We carefully avoid returning NULLCONVERSATION as
