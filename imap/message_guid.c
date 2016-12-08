@@ -224,6 +224,14 @@ EXPORTED const char *message_guid_encode(const struct message_guid *guid)
     return text;
 }
 
+EXPORTED const char *message_guid_encode_short(const struct message_guid *guid, size_t len)
+{
+    assert(len > 0 && len < MESSAGE_GUID_SIZE*2);
+    char *backdoor = (char *)message_guid_encode(guid);
+    backdoor[len] = '\0';
+    return backdoor;
+}
+
 /* message_guid_decode() *************************************************
  *
  * Sets Message GUID from text form. Returns 1 if valid

@@ -101,6 +101,8 @@ const char *message_guid_import(struct message_guid *guid,
  */
 const char *message_guid_encode(const struct message_guid *guid);
 
+const char *message_guid_encode_short(const struct message_guid *guid, size_t len);
+
 /* Sets Message GUID from text form. Returns 1 if valid
  */
 int message_guid_decode(struct message_guid *guid, const char *text);
