@@ -62,6 +62,8 @@ struct message_guid {
 void message_guid_generate(struct message_guid *guid,
                            const char *msg_base, unsigned long msg_len);
 
+void message_guid_permute32(struct message_guid *guid, uint32_t val);
+
 /* Copy a GUID */
 void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
 

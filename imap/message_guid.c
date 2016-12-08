@@ -89,6 +89,17 @@ EXPORTED void message_guid_generate(struct message_guid *guid,
     xsha1((const unsigned char *) msg_base, msg_len, guid->value);
 }
 
+EXPORTED void message_guid_permute32(struct message_guid *guid, uint32_t val)
+{
+    if (message_guid_isnull(guid))
+        return;
+
+    uint32_t base = ntohl(*((uint32_t *)(guid->value + MESSAGE_GUID_SIZE - 4)));
+
+    /* XOR in the 32 bits */
+    *((uint32_t *)(guid->value + MESSAGE_GUID_SIZE - 4)) = base ^ val;
+}
+
 /* message_guid_copy() ***************************************************
  *
  * Copy GUID
