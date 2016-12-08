@@ -1912,11 +1912,11 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static json_t* jmapmsg_mailboxes(jmap_req_t *req, const char *id)
+static json_t* jmapmsg_mailboxes(jmap_req_t *req, const char *msgid)
 {
     struct jmapmsg_mailboxes_data data = { req, json_pack("{}") };
 
-    conversations_guid_foreach(req->cstate, id, jmapmsg_mailboxes_cb, &data);
+    conversations_guid_foreach(req->cstate, msgid+1, jmapmsg_mailboxes_cb, &data);
 
     return data.mboxs;
 }
@@ -2138,14 +2138,36 @@ static int extract_annotations(const char *mboxname __attribute__((unused)),
     return 0;
 }
 
-const char *jmap_blobid(const struct message_guid *guid)
+static char *jmap_blobid(const struct message_guid *guid)
 {
-    return message_guid_encode(guid);
+    char *blobid = xzmalloc(42);
+    blobid[0] = 'G';
+    memcpy(blobid+1, message_guid_encode(guid), 40);
+    return blobid;
 }
 
-const char *jmap_msgid(const struct message_guid *guid)
+static char *jmap_msgid(const struct message_guid *guid)
 {
-    return message_guid_encode_short(guid, 24); // 96 bits
+    char *msgid = xzmalloc(26);
+    msgid[0] = 'M';
+    memcpy(msgid+1, message_guid_encode(guid), 24);
+    return msgid;
+}
+
+static char *jmap_thrid(conversation_id_t cid)
+{
+    char *thrid = xzmalloc(18);
+    thrid[0] = 'T';
+    memcpy(thrid+1, conversation_id_encode(cid), 16);
+    return thrid;
+}
+
+static conversation_id_t jmap_decode_thrid(const char *thrid)
+{
+    conversation_id_t cid = 0;
+    if (thrid[0] == 'T')
+        conversation_id_decode(&cid, thrid+1);
+    return cid;
 }
 
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
@@ -2348,14 +2370,15 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             struct param *param;
             json_t *att;
             charset_t ascii = charset_lookupname("us-ascii");
-            const char *attid, *cid;
+            const char *cid;
             strarray_t headers = STRARRAY_INITIALIZER;
             char *freeme;
             static const char* imgprops[] = { "width", "height" };
             size_t j;
 
-            attid = jmap_blobid(&part->content_guid);
-            att = json_pack("{s:s}", "blobId", attid);
+            char *blobid = jmap_blobid(&part->content_guid);
+            att = json_pack("{s:s}", "blobId", blobid);
+            free(blobid);
 
             /* type */
             buf_setcstr(&buf, part->type);
@@ -2438,14 +2461,14 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         for (i = 0; i < bodies.msgs.count; i++) {
             struct body *part = ptrarray_nth(&bodies.msgs, i);
             json_t *submsg = NULL;
-            const char *attid;
 
             r = jmapmsg_from_body(req, props, part->subpart, msg_buf,
                                   mbox, record, 1, &submsg);
             if (r) goto done;
 
-            attid = jmap_blobid(&part->content_guid);
-            json_object_set_new(msgs, attid, submsg);
+            char *blobid = jmap_blobid(&part->content_guid);
+            json_object_set_new(msgs, blobid, submsg);
+            free(blobid);
         }
         if (!json_object_size(msgs)) {
             json_decref(msgs);
@@ -2456,21 +2479,27 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
     if (!is_embedded) {
         uint32_t flags = record->system_flags;
-        const char *msgid;
 
         /* id */
-        msgid = jmap_msgid(&record->guid);
+        char *msgid = jmap_msgid(&record->guid);
         json_object_set_new(msg, "id", json_string(msgid));
 
         /* blobId */
         if (_wantprop(props, "blobId")) {
-            json_object_set_new(msg, "blobId", json_string(msgid));
+            char *blobid = jmap_blobid(&record->guid);
+            json_object_set_new(msg, "blobId", json_string(blobid));
+            free(blobid);
         }
         /* threadId */
         if (_wantprop(props, "threadId")) {
-            conversation_id_t cid = record->cid;
-            json_object_set_new(msg, "threadId", r ?
-                    json_null() : json_string(conversation_id_encode(cid)));
+            if (record->cid) {
+                char *thrid = jmap_thrid(record->cid);
+                json_object_set_new(msg, "threadId", json_string(thrid));
+                free(thrid);
+            }
+            else {
+                json_object_set_new(msg, "threadId", json_null());
+            }
         }
         /* mailboxIds */
         if (_wantprop(props, "mailboxIds")) {
@@ -2541,6 +2570,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             }
             buf_reset(&buf);
         }
+        free(msgid);
     }
 
     r = 0;
@@ -2600,20 +2630,24 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int jmapmsg_find(jmap_req_t *req, const char *id,
+static int jmapmsg_find(jmap_req_t *req, const char *msgid,
                         char **mboxnameptr, uint32_t *uid)
 {
     struct jmapmsg_find_data data = { req, NULL, 0 };
     int r;
 
+    /* must be prefixed with 'M' */
+    if (msgid[0] != 'M')
+        return IMAP_NOTFOUND;
     /* this is on a 24 character prefix only */
-    if (strlen(id) != 24)
+    if (strlen(msgid) != 25)
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, id, jmapmsg_find_cb, &data);
+    r = conversations_guid_foreach(req->cstate, msgid+1, jmapmsg_find_cb, &data);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
-    } else if (!data.mboxname) {
+    }
+    else if (!data.mboxname) {
         r = IMAP_NOTFOUND;
     }
     *mboxnameptr = data.mboxname;
@@ -2649,12 +2683,15 @@ static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int jmapmsg_count(jmap_req_t *req, const char *id, size_t *count)
+static int jmapmsg_count(jmap_req_t *req, const char *msgid, size_t *count)
 {
     struct jmapmsg_count_data data = { req, 0 };
     int r;
 
-    r = conversations_guid_foreach(req->cstate, id, jmapmsg_count_cb, &data);
+    if (msgid[0] != 'M')
+        return IMAP_NOTFOUND;
+
+    r = conversations_guid_foreach(req->cstate, msgid+1, jmapmsg_count_cb, &data);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
     } else if (!data.count) {
@@ -2693,12 +2730,18 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int jmapmsg_isexpunged(jmap_req_t *req, const char *id, int *is_expunged)
+static int jmapmsg_isexpunged(jmap_req_t *req, const char *msgid, int *is_expunged)
 {
     struct jmapmsg_isexpunged_data data = { req, 1 };
     int r;
 
-    r = conversations_guid_foreach(req->cstate, id, jmapmsg_isexpunged_cb, &data);
+    if (msgid[0] != 'M')
+        return IMAP_NOTFOUND;
+
+    if (strlen(msgid) != 25)
+        return IMAP_NOTFOUND;
+
+    r = conversations_guid_foreach(req->cstate, msgid+1, jmapmsg_isexpunged_cb, &data);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
     }
@@ -3236,7 +3279,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
-    const char *msgid;
+    char *msgid = NULL;
     int i, r;
 
     assert(!want_expunged || expungedids);
@@ -3286,7 +3329,6 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
         search_folder_t *folder = md->folder;
         json_t *msg = NULL;
-        const char *cid;
         size_t idcount = json_array_size(*messageids);
 
         if (!folder) continue;
@@ -3296,6 +3338,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (is_expunged && !want_expunged)
             goto doneloop;
 
+        free(msgid);
         msgid = jmap_msgid(&md->guid);
 
         /* Have we seen this message already? */
@@ -3378,14 +3421,17 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Add the thread id */
         if (window->collapse)
             hashu64_insert(md->cid, (void*)1, &cids);
-        cid = conversation_id_encode(md->cid);
-        json_array_append_new(*threadids, json_string(cid));
+        char *thrid = jmap_thrid(md->cid);
+        json_array_append_new(*threadids, json_string(thrid));
+        free(thrid);
+
 
 doneloop:
         if (msg) json_decref(msg);
     }
 
 done:
+    free(msgid);
     free_hash_table(&ids, NULL);
     free_hashu64_table(&cids, NULL);
     freesortcrit(sortcrit);
@@ -3696,9 +3742,11 @@ static int getThreadUpdates(jmap_req_t *req)
         int is_expunged;
 
         threadid = json_string_value(val);
-        conversation_id_decode(&cid, threadid);
+        cid = jmap_decode_thrid(threadid);
+        if (!cid) continue;
 
         r = conversation_load(req->cstate, cid, &conv);
+        if (!conv) continue;
         if (r) {
             if (r == CYRUSDB_NOTFOUND) {
                 continue;
@@ -4036,8 +4084,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         int mi, mj;
 
         threadid = json_string_value(val);
-        conversation_id_decode(&cid, threadid);
-
+        cid = jmap_decode_thrid(threadid);
 
         if (cid) r = conversation_load(req->cstate, cid, &conv);
         if (r) goto done;
@@ -4550,7 +4597,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
-static int findblob(jmap_req_t *req, const char *blob_id,
+static int findblob(jmap_req_t *req, const char *blobid,
                     struct mailbox **mbox, struct index_record **record,
                     struct body **body, const struct body **part)
 {
@@ -4559,7 +4606,10 @@ static int findblob(jmap_req_t *req, const char *blob_id,
     const struct body *mypart = NULL;
     int i, r;
 
-    r = conversations_guid_foreach(req->cstate, blob_id, findblob_cb, &data);
+    if (blobid[0] != 'G')
+        return IMAP_NOTFOUND;
+
+    r = conversations_guid_foreach(req->cstate, blobid+1, findblob_cb, &data);
     if (r != IMAP_OK_COMPLETED) {
         if (!r) r = IMAP_NOTFOUND;
         goto done;
@@ -4577,7 +4627,7 @@ static int findblob(jmap_req_t *req, const char *blob_id,
         ptrarray_t parts = PTRARRAY_INITIALIZER;
         struct message_guid content_guid;
 
-        message_guid_decode(&content_guid, blob_id);
+        message_guid_decode(&content_guid, blobid+1);
 
         ptrarray_push(&parts, mybody);
         while ((mypart = ptrarray_shift(&parts))) {
@@ -4644,18 +4694,18 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    const char *blob_id, *type, *cid, *name;
+    const char *blobid, *type, *cid, *name;
     strarray_t headers = STRARRAY_INITIALIZER;
     char *ctenc = NULL;
     int r;
 
     type = json_string_value(json_object_get(att, "type"));
-    blob_id = json_string_value(json_object_get(att, "blobId"));
+    blobid = json_string_value(json_object_get(att, "blobId"));
     cid = json_string_value(json_object_get(att, "cid"));
     name = json_string_value(json_object_get(att, "name"));
 
     /* Find part containing blob */
-    r = findblob(req, blob_id, &mbox, &record, &body, &part);
+    r = findblob(req, blobid, &mbox, &record, &body, &part);
     if (r) goto done;
 
     /* Map the message into memory */
@@ -5682,7 +5732,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        *msgid = xstrdup(jmap_msgid(&guid));
+        *msgid = jmap_msgid(&guid);
         munmap(addr, len);
     } else {
         r = IMAP_IOERROR;
@@ -5999,7 +6049,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
             req, oldmailboxes, flagged, unread, answered
         };
 
-        r = conversations_guid_foreach(req->cstate, msgid, updaterecord_cb, &data);
+        r = conversations_guid_foreach(req->cstate, msgid+1, updaterecord_cb, &data);
         if (r) goto done;
     }
 
@@ -6024,7 +6074,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (json_object_size(delmailboxes)) {
         struct delrecord_data data = { req, 0, delmailboxes };
 
-        r = conversations_guid_foreach(req->cstate, msgid, delrecord_cb, &data);
+        r = conversations_guid_foreach(req->cstate, msgid+1, delrecord_cb, &data);
         if (r) goto done;
     }
 
@@ -6041,15 +6091,15 @@ done:
     return r;
 }
 
-static int jmapmsg_delete(jmap_req_t *req, const char *id)
+static int jmapmsg_delete(jmap_req_t *req, const char *msgid)
 {
     int r;
     struct delrecord_data data = { req, 0, NULL };
 
-    if (!strlen(id) || *id == '#')
+    if (msgid[0] != 'M')
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, id, delrecord_cb, &data);
+    r = conversations_guid_foreach(req->cstate, msgid+1, delrecord_cb, &data);
     if (r) return r;
 
     return data.deleted ? 0 : IMAP_NOTFOUND;
@@ -6172,22 +6222,22 @@ static int setMessages(jmap_req_t *req)
     if (destroy) {
         json_t *destroyed = json_pack("[]");
         json_t *notDestroyed = json_pack("{}");
-        json_t *msgid;
+        json_t *id;
         size_t i;
 
-        json_array_foreach(destroy, i, msgid) {
-            const char *id = json_string_value(msgid);
-            if ((r = jmapmsg_delete(req, id))) {
+        json_array_foreach(destroy, i, id) {
+            const char *msgid = json_string_value(id);
+            if ((r = jmapmsg_delete(req, msgid))) {
                 if (r == IMAP_NOTFOUND) {
                     json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, id, err);
+                    json_object_set_new(notDestroyed, msgid, err);
                     r = 0;
                     continue;
                 } else {
                     goto done;
                 }
             }
-            json_array_append_new(destroyed, json_string(id));
+            json_array_append_new(destroyed, json_string(msgid));
         }
 
         if (json_array_size(destroyed)) {
@@ -6556,9 +6606,14 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     }
     size_t bloblen = slash - blobbase;
 
-    if (bloblen != 40) {
+    if (*blobbase != 'G') {
+        txn->error.desc = "invalid blobid (doesn't start with G)";
+        return HTTP_BAD_REQUEST;
+    }
+
+    if (bloblen != 41) {
         /* incomplete or incorrect blobid */
-        txn->error.desc = "invalid blobid (not 40 chars)";
+        txn->error.desc = "invalid blobid (not 41 chars)";
         return HTTP_BAD_REQUEST;
     }
 
@@ -6588,7 +6643,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     _initreq(&req);
 
-    char *blob_id = xstrndup(blobbase, bloblen);
+    char *blobid = xstrndup(blobbase, bloblen);
 
     struct mailbox *mbox = NULL;
     struct index_record *record = NULL;
@@ -6602,7 +6657,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     int res = 0;
 
     /* Find part containing blob */
-    r = findblob(&req, blob_id, &mbox, &record, &body, &part);
+    r = findblob(&req, blobid, &mbox, &record, &body, &part);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to find blob by id";
@@ -6657,7 +6712,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         free(body);
     }
     buf_free(&msg_buf);
-    free(blob_id);
+    free(blobid);
     _finireq(&req);
     free(inboxname);
     return res;
@@ -6915,7 +6970,9 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     char datestr[RFC3339_DATETIME_MAX];
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
-    json_object_set_new(resp, "blobId", json_string(jmap_blobid(&body->content_guid)));
+    char *blobid = jmap_blobid(&body->content_guid);
+    json_object_set_new(resp, "blobId", json_string(blobid));
+    free(blobid);
     json_object_set_new(resp, "type", json_string(type));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
