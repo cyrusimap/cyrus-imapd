@@ -6652,7 +6652,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     struct buf msg_buf = BUF_INITIALIZER;
     size_t size = 0;
     char *decbuf = NULL;
-    char *ctype;
+    char *ctype = NULL;
     strarray_t headers = STRARRAY_INITIALIZER;
     int res = 0;
 
