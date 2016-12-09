@@ -781,7 +781,6 @@ char *jmapmbox_newname(const char *name, const char *parentname)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
-    struct buf buf = BUF_INITIALIZER;
     int r;
 
     cs = charset_lookupname("utf-8");
@@ -797,10 +796,10 @@ char *jmapmbox_newname(const char *name, const char *parentname)
         syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
         goto done;
     }
-    buf_printf(&buf, "%s%c%s", parentname, jmap_namespace.hier_sep, s);
+    mbname_t *mbname = mbname_from_intname(parentname);
+    mbname_push_boxes(mbname, s);
     free(s);
-    mboxname = buf_newcstring(&buf);
-    buf_reset(&buf);
+    mboxname = xstrdup(mbname_intname(mbname));
 
     /* Avoid any name collisions */
     struct jmapmbox_newname_data rock;
@@ -816,13 +815,14 @@ char *jmapmbox_newname(const char *name, const char *parentname)
         goto done;
     }
     if (rock.highest) {
+        struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "%s_%d", mboxname, rock.highest + 1);
         free(mboxname);
         mboxname = buf_newcstring(&buf);
+        buf_free(&buf);
     }
 
 done:
-    buf_free(&buf);
     charset_free(&cs);
     return mboxname;
 }
