@@ -90,6 +90,7 @@ static void usage(void)
     fprintf(stderr, "    %s [options] [mode] backup json chunks\n", argv0);
     fprintf(stderr, "    %s [options] [mode] backup json mailboxes\n", argv0);
     fprintf(stderr, "    %s [options] [mode] backup json messages\n", argv0);
+    fprintf(stderr, "    %s [options] [mode] backup json headers guid...\n", argv0);
 
     fprintf(stderr, "\n%s\n",
             "Commands:\n"
@@ -165,6 +166,8 @@ static int cmd_json_mailboxes(struct backup *backup,
                               const struct cyrbu_cmd_options *options);
 static int cmd_json_messages(struct backup *backup,
                              const struct cyrbu_cmd_options *options);
+static int cmd_json_headers(struct backup *backup,
+                            const struct cyrbu_cmd_options *options);
 
 enum cyrbu_cmd {
     CYRBU_CMD_UNSPECIFIED = 0,
@@ -181,6 +184,7 @@ enum cyrbu_cmd {
     CYRBU_CMD_JSON_CHUNKS,
     CYRBU_CMD_JSON_MAILBOXES,
     CYRBU_CMD_JSON_MESSAGES,
+    CYRBU_CMD_JSON_HEADERS,
 };
 
 static cyrbu_cmd_func *const cmd_func[] = {
@@ -198,6 +202,7 @@ static cyrbu_cmd_func *const cmd_func[] = {
     cmd_json_chunks,
     cmd_json_mailboxes,
     cmd_json_messages,
+    cmd_json_headers,
 };
 
 static enum cyrbu_cmd parse_cmd_string(const char *command, const char *sub)
@@ -215,6 +220,7 @@ static enum cyrbu_cmd parse_cmd_string(const char *command, const char *sub)
             if (strcmp(sub, "chunks") == 0) return CYRBU_CMD_JSON_CHUNKS;
             else if (strcmp(sub, "mailboxes") == 0) return CYRBU_CMD_JSON_MAILBOXES;
             else if (strcmp(sub, "messages") == 0) return CYRBU_CMD_JSON_MESSAGES;
+            else if (strcmp(sub, "headers") == 0) return CYRBU_CMD_JSON_HEADERS;
         }
         break;
     case 'l':
@@ -318,6 +324,7 @@ int main(int argc, char **argv)
     case CYRBU_CMD_SHOW_CHUNKS:
     case CYRBU_CMD_SHOW_MAILBOXES:
     case CYRBU_CMD_SHOW_MESSAGES:
+    case CYRBU_CMD_JSON_HEADERS:
         /* these need at least one more argument */
         if (optind == argc) usage();
         break;
@@ -882,5 +889,95 @@ static int cmd_json_messages(struct backup *backup,
     }
 
     json_decref(messages);
+    return r;
+}
+
+static int json_headers_cb(const struct buf *buf, void *rock)
+{
+    const char *header = NULL, *next = buf_cstring(buf);
+    char *name = NULL;
+    char *value = NULL;
+    size_t len;
+    json_t *jmessage = (json_t *) rock;
+    json_t *jheader;
+
+    while (next && *next) {
+        header = next;
+
+        /* advance next pointer before we carry on */
+        do {
+            next = strchr(next + 1, '\n');
+        } while (next && (next[1] == ' ' || next[1] == '\t'));
+        if (next) {
+            if (next[1] == '\0'         /* end of file */
+                || next[1] == '\n'      /* two line breaks in a row marks end of headers */
+                || (next[1] == '\r' && next[2] == '\n')) {
+                next = NULL;
+            }
+            else {
+                next++;
+            }
+        }
+
+        /* now process the current header */
+        len = strcspn(header, ":\r\n");
+        if (header[len] != ':')
+            continue;
+
+        name = xstrndup(header, len);
+        message_parse_string(header + len + 1, &value);
+
+        jheader = json_object_get(jmessage, name);
+        if (!jheader) {
+            jheader = json_array();
+            json_object_set_new(jmessage, name, jheader);
+        }
+
+        json_array_append_new(jheader, json_string(value));
+
+        free(name);
+        free(value);
+        name = value = NULL;
+    }
+
+    return 0;
+}
+
+static int cmd_json_headers(struct backup *backup,
+                            const struct cyrbu_cmd_options *options)
+{
+    json_t *jmessages = json_object();
+    json_t *jheaders = NULL;
+    struct backup_message *message = NULL;
+    struct message_guid want_guid;
+    int i, r = 0;
+
+    for (i = 0; i < strarray_size(options->argv); i++) {
+        if (!message_guid_decode(&want_guid, strarray_nth(options->argv, i)))
+            continue;
+
+        message = backup_get_message(backup, &want_guid);
+        if (!message)
+            continue;
+
+        jheaders = json_object();
+        backup_read_message_data(backup, message, json_headers_cb, jheaders);
+
+        json_object_set_new(jmessages, message_guid_encode(&want_guid), jheaders);
+        jheaders = NULL;
+
+        backup_message_free(&message);
+    }
+
+    if (!r) {
+        const int flags = JSON_PRESERVE_ORDER | JSON_INDENT(2);
+        char *dump;
+
+        dump = json_dumps(jmessages, flags);
+        printf("%s\n", dump);
+        free(dump);
+    }
+
+    json_decref(jmessages);
     return r;
 }

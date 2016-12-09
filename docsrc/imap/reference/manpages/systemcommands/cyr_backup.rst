@@ -24,6 +24,7 @@ Synopsis
     **cyr_backup** [OPTIONS] [MODE] *backup* json chunks
     **cyr_backup** [OPTIONS] [MODE] *backup* json mailboxes
     **cyr_backup** [OPTIONS] [MODE] *backup* json messages
+    **cyr_backup** [OPTIONS] [MODE] *backup* json headers *guid*...
 
 Description
 ===========
@@ -84,6 +85,7 @@ See :ref:`cyr-backup-modes` below.
         **cyr_backup** [OPTIONS] [MODE] *backup* json chunks
         **cyr_backup** [OPTIONS] [MODE] *backup* json mailboxes
         **cyr_backup** [OPTIONS] [MODE] *backup* json messages
+        **cyr_backup** [OPTIONS] [MODE] *backup* json headers *guid*...
 
     Dump information about the chunks, mailboxes or messages contained in the
     named *backup* to standard out, in JSON format.
