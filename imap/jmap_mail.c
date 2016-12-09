@@ -1308,11 +1308,10 @@ static int setMailboxes(jmap_req_t *req)
         const char *key;
         json_t *arg;
 
-        json_object_foreach(create, key, arg) {
-            json_t *invalid = json_pack("[]");
-            char *uid = NULL;
-            json_t *err = NULL;
+        strarray_t todo = STRARRAY_INITIALIZER;
 
+        /* sort keys topologically */
+        json_object_foreach(create, key, arg) {
             /* Validate key. */
             if (!strlen(key)) {
                 json_t *err= json_pack("{s:s}", "type", "invalidArguments");
@@ -1320,31 +1319,60 @@ static int setMailboxes(jmap_req_t *req)
                 continue;
             }
 
-            /* Create mailbox. */
-            r = jmapmbox_write(req, &uid, arg, invalid, &err);
-            if (r) goto done;
+            strarray_append(&todo, key);
+        }
 
-            /* Handle set errors. */
-            if (err) {
-                json_object_set_new(notCreated, key, err);
+        while (strarray_size(&todo)) {
+            int didsome = 0;
+            int i;
+
+            for (i = 0; i < strarray_size(&todo); i++) {
+                key = strarray_nth(&todo, i);
+                arg = json_object_get(create, key);
+
+                // check that parentId reference exists
+                const char *parentId = json_string_value(json_object_get(arg, "parentId"));
+                if (parentId && *parentId == '#' && !hash_lookup(parentId + 1, req->idmap))
+                    continue;
+
+                didsome = 1;
+
+                json_t *invalid = json_pack("[]");
+                char *uid = NULL;
+                json_t *err = NULL;
+
+                /* Create mailbox. */
+                r = jmapmbox_write(req, &uid, arg, invalid, &err);
+                if (r) goto done;
+
+                /* Handle set errors. */
+                if (err) {
+                    json_object_set_new(notCreated, key, err);
+                    json_decref(invalid);
+                    free(strarray_remove(&todo, i--));
+                    continue;
+                }
+
+                /* Handle invalid properties. */
+                if (json_array_size(invalid)) {
+                    json_t *err = json_pack("{s:s, s:o}",
+                            "type", "invalidProperties", "properties", invalid);
+                    json_object_set_new(notCreated, key, err);
+                    free(strarray_remove(&todo, i--));
+                    continue;
+                }
                 json_decref(invalid);
-                continue;
+
+                /* Report mailbox as created. */
+                json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
+
+                /* hash_insert takes ownership of uid */
+                hash_insert(key, uid, req->idmap);
+                free(strarray_remove(&todo, i--));
             }
 
-            /* Handle invalid properties. */
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Report mailbox as created. */
-            json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
-
-            /* hash_insert takes ownership of uid */
-            hash_insert(key, uid, req->idmap);
+            if (!didsome)
+                return IMAP_INTERNAL; // XXX - nice error for missing parent?
         }
 
         if (json_object_size(created)) {
@@ -1356,6 +1384,8 @@ static int setMailboxes(jmap_req_t *req)
             json_object_set(set, "notCreated", notCreated);
         }
         json_decref(notCreated);
+
+        strarray_fini(&todo);
     }
 
     update = json_object_get(req->args, "update");
@@ -4640,13 +4670,11 @@ static int findblob(jmap_req_t *req, const char *blobid,
                 ptrarray_push(&parts, mypart->subpart + i);
         }
         ptrarray_fini(&parts);
-    } else {
-        mypart = mybody;
-    }
 
-    if (!mypart) {
-        r = IMAP_NOTFOUND;
-        goto done;
+        if (!mypart) {
+            r = IMAP_NOTFOUND;
+            goto done;
+        }
     }
 
     *mbox = data.mbox;
@@ -4719,7 +4747,8 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     /* Write headers */
     if (type) {
         JMAPMSG_HEADER_TO_MIME("Content-Type", type);
-    } else {
+    }
+    else if (part) {
         char *ctype;
         strarray_add(&headers, "Content-Type");
         ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
@@ -4727,6 +4756,9 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         fwrite(ctype, 1, strlen(ctype), out);
         strarray_truncate(&headers, 0);
         free(ctype);
+    }
+    else {
+        fputs("Content-Type: message/rfc822\r\n", out);
     }
 
     if (cid) {
@@ -4740,9 +4772,14 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         buf_free(&buf);
     }
 
+    /* Raw file */
+    if (!part) {
+        fputs("\r\n", out);
+        fwrite(msg_buf.s, 1, record->size, out);
+    }
     /* MESSAGE parts mustn't be re-encoded, and maybe no encoding is required... */
-    if (!strcasecmp(part->type, "MESSAGE") ||
-         is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
+    else if (!strcasecmp(part->type, "MESSAGE") ||
+             is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
 
         strarray_add(&headers, "Content-Transfer-Encoding");
         ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
@@ -6277,9 +6314,16 @@ int jmapmsg_import_cb(jmap_req_t *req __attribute__((unused)),
     struct jmapmsg_import_data *data = (struct jmapmsg_import_data*) rock;
 
     // we never need to pre-decode rfc822 messages, they're always 7bit (right?)
-    struct protstream *stream = prot_readmap(data->msg_buf.s + data->part->content_offset, data->part->content_size);
+    const char *base = data->msg_buf.s;
+    size_t len = data->msg_buf.len;
+    if (data->part) {
+        base += data->part->content_offset;
+        len = data->part->content_size;
+    }
 
-    int r = message_copy_strict(stream, out, data->part->content_size, 0);
+    struct protstream *stream = prot_readmap(base, len);
+
+    int r = message_copy_strict(stream, out, len, 0);
 
     prot_free(stream);
 
@@ -6375,6 +6419,10 @@ static int importMessages(jmap_req_t *req)
     invalid = json_pack("[]");
     invalidmbox = json_pack("[]");
 
+    /* Import messages */
+    created = json_pack("{}");
+    notcreated = json_pack("{}");
+
     /* messages */
     msgs = json_object_get(req->args, "messages");
     json_object_foreach(msgs, id, msg) {
@@ -6434,10 +6482,6 @@ static int importMessages(jmap_req_t *req)
         goto done;
     }
     json_decref(invalidmbox);
-
-    /* Import messages */
-    created = json_pack("{}");
-    notcreated = json_pack("{}");
 
     json_object_foreach(msgs, id, msg) {
         json_t *mymsg;
@@ -6650,7 +6694,6 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    size_t size = 0;
     char *decbuf = NULL;
     char *ctype = NULL;
     strarray_t headers = STRARRAY_INITIALIZER;
@@ -6672,33 +6715,44 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
-    strarray_add(&headers, "Content-Type");
-    ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-    message_pruneheader(ctype, &headers, NULL);
-    strarray_truncate(&headers, 0);
+    // default with no part is the whole message
+    const char *base = msg_buf.s;
+    size_t len = msg_buf.len;
+    txn->resp_body.type = "message/rfc822";
 
-    int encoding = part->charset_enc & 0xff;
-    const char *data = charset_decode_mimebody(msg_buf.s + part->content_offset,
-                                               part->content_size, encoding,
-                                               &decbuf, &size);
+    if (part) {
+        // map into just this part
+        txn->resp_body.type = "application/octet-stream";
+        base += part->content_offset;
+        len = part->content_size;
 
-    txn->resp_body.type = "application/octet-stream";
-    if (ctype) {
-        char *p = strchr(ctype, ':');
-        if (p) {
-            p++;
-            while (*p == ' ') p++;
-            char *end = strchr(p, '\n');
-            if (end) *end = '\0';
-            end = strchr(p, '\r');
-            if (end) *end = '\0';
+        // update content type header if present
+        strarray_add(&headers, "Content-Type");
+        ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
+        message_pruneheader(ctype, &headers, NULL);
+        strarray_truncate(&headers, 0);
+        if (ctype) {
+            char *p = strchr(ctype, ':');
+            if (p) {
+                p++;
+                while (*p == ' ') p++;
+                char *end = strchr(p, '\n');
+                if (end) *end = '\0';
+                end = strchr(p, '\r');
+                if (end) *end = '\0';
+            }
+            if (p && *p) txn->resp_body.type = p;
         }
-        if (p && *p) txn->resp_body.type = p;
+
+        // binary decode if needed
+        int encoding = part->charset_enc & 0xff;
+        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
     }
-    txn->resp_body.len = size;
+
+    txn->resp_body.len = len;
     txn->resp_body.fname = name;
 
-    write_body(HTTP_OK, txn, data, size);
+    write_body(HTTP_OK, txn, base, len);
 
  done:
     free(decbuf);
