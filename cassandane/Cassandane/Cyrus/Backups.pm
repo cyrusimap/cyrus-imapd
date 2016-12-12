@@ -68,6 +68,36 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub cyr_backup_json
+{
+    my ($self, $params, $subcommand, @args) = @_;
+
+    die "params not a hashref"
+	if defined $params and ref $params ne 'HASH';
+    die "invalid subcommand: $subcommand"
+	if not grep { $_ eq $subcommand } qw(chunks mailboxes messages headers);
+
+    my $instance = $params->{instance} // $self->{backups};
+    my $user = $params->{user} // 'cassandane';
+
+    my $f = "$instance->{basedir}/$self->{_name}"
+	  . "-cyr_backup-$user-json-$subcommand.stdout";
+
+    $instance->run_command(
+	{ cyrus => 1,
+	  redirects => { 'stdout' => $f } },
+	'cyr_backup', '-u', $user, 'json', $subcommand, @args
+    );
+
+    local $/;
+    open my $fh, '<', $f
+	or die "Cannot open $f for reading: $!";
+    my $data = JSON::decode_json(<$fh>);
+    close $fh;
+
+    return $data;
+}
+
 sub test_aaasetup
     :min_version_3_0
 {
@@ -88,20 +118,7 @@ sub test_basic
 	qw(sync_client -vv -n backup -u cassandane)
     );
 
-    # XXX probably don't do this like this either
-    my $cyr_backup_stdout = "$self->{backups}->{basedir}/$self->{_name}"
-			  . "-cyr_backup.stdout";
-    $self->{backups}->run_command(
-	{ cyrus => 1,
-	  redirects => { 'stdout' => $cyr_backup_stdout } },
-	qw(cyr_backup -u cassandane json chunks)
-    );
-
-    local $/;
-    open my $fh, '<', $cyr_backup_stdout
-	or die "Cannot open $cyr_backup_stdout for reading: $!";
-    my $chunks = JSON::decode_json(<$fh>);
-    close $fh;
+    my $chunks = $self->cyr_backup_json({}, 'chunks');
 
     $self->assert_equals(1, scalar @{$chunks});
     $self->assert_equals(0, $chunks->[0]->{offset});
@@ -130,37 +147,12 @@ sub test_messages
 	qw(sync_client -vv -n backup -u cassandane)
     );
 
-    # XXX probably don't do this like this either
-    my $cyr_backup_stdout = "$self->{backups}->{basedir}/$self->{_name}"
-			  . "-cyr_backup.stdout";
-    $self->{backups}->run_command(
-	{ cyrus => 1,
-	  redirects => { 'stdout' => $cyr_backup_stdout } },
-	qw(cyr_backup -u cassandane json messages)
-    );
-
-    local $/;
-    open my $fh, '<', $cyr_backup_stdout
-	or die "Cannot open $cyr_backup_stdout for reading: $!";
-    my $messages = JSON::decode_json(<$fh>);
-    close $fh;
+    my $messages = $self->cyr_backup_json({}, 'messages');
 
     # backup should contain four messages
     $self->assert_equals(4, scalar @{$messages});
 
-    my $f = "$self->{backups}->{basedir}/$self->{_name}-headers"
-	    . "-cyr_backup.stdout";
-
-    $self->{backups}->run_command(
-	{ cyrus => 1,
-	    redirects => { 'stdout' => $f } },
-	qw(cyr_backup -u cassandane json headers ), map { $_->{guid} } @{$messages}
-    );
-
-    open $fh, '<', $f
-	or die "Cannot open $f for reading: !";
-    $messages = JSON::decode_json(<$fh>);
-    close $fh;
+    my $headers = $self->cyr_backup_json({}, 'headers', map { $_->{guid} } @{$messages});
 
     # transform out enough data for comparison purposes
     my %expected = map {
@@ -168,8 +160,8 @@ sub test_messages
     } values %exp;
 
     my %actual = map {
-	$_ => $messages->{$_}->{'X-Cassandane-Unique'}->[0]
-    } keys %{$messages};
+	$_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
+    } keys %{$headers};
 
     $self->assert_deep_equals(\%expected, \%actual);
 }
