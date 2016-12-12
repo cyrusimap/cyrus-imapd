@@ -119,7 +119,6 @@ static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
                                   int *encoding, charset_t *charset);
-static void message_parse_string(const char *hdr, char **hdrp);
 static void message_parse_header(const char *hdr, struct buf *buf);
 static void message_parse_type(const char *hdr, struct body *body);
 static void message_parse_disposition(const char *hdr, struct body *body);
@@ -1030,7 +1029,7 @@ static void message_parse_charset(const struct body *body,
 /*
  * Parse an uninterpreted header
  */
-static void message_parse_string(const char *hdr, char **hdrp)
+EXPORTED void message_parse_string(const char *hdr, char **hdrp)
 {
     const char *hdrend;
     char *he;
