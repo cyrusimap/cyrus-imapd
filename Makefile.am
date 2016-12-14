@@ -163,6 +163,7 @@ sbin_PROGRAMS += \
 	imap/cyr_sequence \
 	imap/cyr_synclog \
 	imap/cyr_userseen \
+	imap/cyr_virusscan \
 	imap/deliver \
 	imap/ipurge \
 	imap/mbexamine \
@@ -174,10 +175,6 @@ sbin_PROGRAMS += \
 noinst_PROGRAMS += \
 	imap/message_test \
 	imap/search_test
-
-if HAVE_CLAMAV
-sbin_PROGRAMS += imap/cyr_virusscan
-endif # HAVE_CLAMAV
 
 if USE_SPHINX
 sbin_PROGRAMS += imap/cyr_sphinxmgr

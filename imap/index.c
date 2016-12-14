@@ -4615,9 +4615,9 @@ out:
 /*
  * Evaluate a searchargs structure on a msgno
  */
-int index_search_evaluate(struct index_state *state,
-                          const search_expr_t *e,
-                          uint32_t msgno)
+EXPORTED int index_search_evaluate(struct index_state *state,
+                                   const search_expr_t *e,
+                                   uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;

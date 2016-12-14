@@ -322,7 +322,7 @@ void index_msgdata_free(MsgData **, unsigned int);
 MsgData **index_msgdata_load(struct index_state *state, unsigned *msgno_list, int n,
                              const struct sortcrit *sortcrit,
                              unsigned int anchor, int *found_anchor);
-int index_search_evaluate(struct index_state *state, const search_expr_t *e, uint32_t msgno);
+extern int index_search_evaluate(struct index_state *state, const search_expr_t *e, uint32_t msgno);
 
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);

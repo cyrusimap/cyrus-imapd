@@ -85,6 +85,13 @@ struct infected_mbox {
     struct infected_mbox *next;
 };
 
+struct scan_rock {
+    struct infected_mbox *i_mbox;
+    struct searchargs *searchargs;
+    struct index_state *idx_state;
+    uint32_t msgno;
+};
+
 /* globals for getopt routines */
 extern char *optarg;
 extern int  optind;
@@ -110,7 +117,6 @@ struct scan_engine {
 };
 
 
-#define HAVE_CLAMAV
 #ifdef HAVE_CLAMAV
 /* ClamAV implementation */
 #include <clamav.h>
@@ -214,7 +220,7 @@ struct scan_engine engine =
 
 #else
 /* NO configured virus scanner */
-struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
+struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
 #endif
 
 
@@ -230,15 +236,21 @@ void append_notifications();
 int main (int argc, char *argv[]) {
     int option;         /* getopt() returns an int */
     char *alt_config = NULL;
+    char *search_str = NULL;
+    struct scan_rock srock;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((option = getopt(argc, argv, "C:rn")) != EOF) {
+    while ((option = getopt(argc, argv, "C:s:rn")) != EOF) {
         switch (option) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case 's': /* IMAP SEARCH string */
+            search_str = optarg;
             break;
 
         case 'r':
@@ -256,13 +268,42 @@ int main (int argc, char *argv[]) {
 
     cyrus_init(alt_config, "cyr_virusscan", 0, CONFIG_NEED_PARTITION_DATA);
 
-    if (!engine.name) {
-        fatal("no virus scanner configured", EC_SOFTWARE);
-    } else {
-        if (verbose) printf("Using %s virus scanner\n", engine.name);
-    }
+    memset(&srock, 0, sizeof(struct scan_rock));
 
-    engine.state = engine.init();
+    if (search_str) {
+        int r, c;
+        struct namespace scan_namespace;
+        struct protstream *scan_in = NULL;
+        struct protstream *scan_out = NULL;
+
+        scan_in = prot_readmap(search_str, strlen(search_str)+1); /* inc NUL */
+        scan_out = prot_new(2, 1);
+
+        /* Set namespace -- force standard (internal) */
+        if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
+            syslog(LOG_ERR, "%s", error_message(r));
+            fatal(error_message(r), EC_CONFIG);
+        }
+
+        search_attr_init();
+
+        srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
+                                          &scan_namespace, NULL, NULL, 1);
+        c = get_search_program(scan_in, scan_out, srock.searchargs);
+        prot_free(scan_in);
+        prot_flush(scan_out);
+        prot_free(scan_out);
+
+        if (c == EOF) {
+            syslog(LOG_ERR, "Invalid search string");
+            fatal("Invalid search string", EC_USAGE);
+        }
+    }
+    else {
+        if (verbose) printf("Using %s virus scanner\n", engine.name);
+
+        if (engine.init) engine.state = engine.init();
+    }
 
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -277,13 +318,13 @@ int main (int argc, char *argv[]) {
     mboxevent_init();
 
     if (optind == argc) { /* do the whole partition */
-        mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, NULL);
+        mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, &srock);
     } else {
         strarray_t *array = strarray_new();
         for (; optind < argc; optind++) {
             strarray_append(array, argv[optind]);
         }
-        mboxlist_findallmulti(NULL, array, 1, 0, 0, scan_me, NULL);
+        mboxlist_findallmulti(NULL, array, 1, 0, 0, scan_me, &srock);
         strarray_free(array);
     }
 
@@ -297,7 +338,8 @@ int main (int argc, char *argv[]) {
     mboxlist_close();
     mboxlist_done();
 
-    engine.destroy(engine.state);
+    if (srock.searchargs) freesearchargs(srock.searchargs);
+    else if (engine.destroy) engine.destroy(engine.state);
 
     cyrus_done();
 
@@ -306,21 +348,26 @@ int main (int argc, char *argv[]) {
 
 int usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [ -r [-n] ]\n"
+    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ]\n"
            "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
+    printf("\t -s imap-search-string  Rather than scanning for viruses,\n"
+           "\t    messages matching the search criteria will be treated as infected.\n"
+           "\t    Useful for removing messages without a distinct signature, such as Phish.\n");
     printf("\t -r remove infected messages\n");
     printf("\t -n notify mailbox owner of deleted messages via email\n");
     exit(0);
 }
 
-int scan_me(struct findall_data *data,
-            void *rock __attribute__((unused)))
+
+int scan_me(struct findall_data *data, void *rock)
 {
-    struct mailbox *mailbox;
+    if (!data || !data->mbname) return 0;
+    struct mailbox *mailbox = NULL;
     int r;
     struct infected_mbox *i_mbox = NULL;
     const char *name = mbname_intname(data->mbname);
+    struct scan_rock *srock = (struct scan_rock *) rock;
 
     if (verbose) {
         printf("Working on %s...\n", name);
@@ -330,6 +377,19 @@ int scan_me(struct findall_data *data,
     if (r) {
         printf("failed to open %s (%s)\n", name, error_message(r));
         return 0;
+    }
+
+    if (srock->searchargs) {
+        r = index_open_mailbox(mailbox, NULL, &srock->idx_state);
+        if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        if (r) {
+            printf("failed to open index %s (%s)\n", name, error_message(r));
+            return 0;
+        }
+
+        search_expr_internalise(srock->idx_state, srock->searchargs->root);
+
+        srock->msgno = 1;
     }
 
     if (notify) {
@@ -358,8 +418,11 @@ int scan_me(struct findall_data *data,
 #endif
     }
 
-    mailbox_expunge(mailbox, virus_check, i_mbox, NULL, EVENT_MESSAGE_EXPUNGE);
-    mailbox_close(&mailbox);
+    srock->i_mbox = i_mbox;
+
+    mailbox_expunge(mailbox, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
+    if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
+    else mailbox_close(&mailbox);
 
     return 0;
 }
@@ -388,21 +451,36 @@ unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *deciderock)
 {
-    struct infected_mbox *i_mbox = (struct infected_mbox *) deciderock;
-    const char *virname;
+    struct scan_rock *srock = (struct scan_rock *) deciderock;
+    struct infected_mbox *i_mbox = srock->i_mbox;
+    const char *virname =
+        "Cyrus Administrator Targeted Removal (Phish, etc.)";
     int r = 0;
 
-    const char *fname = mailbox_record_fname(mailbox, record);
+    if (srock->searchargs) {
+        /* run the search program against this message */
+        r = index_search_evaluate(srock->idx_state,
+                                  srock->searchargs->root, srock->msgno++);
+    }
+    else if (engine.scanfile) {
+        const char *fname = mailbox_record_fname(mailbox, record);
 
-    if ((r = engine.scanfile(engine.state, fname, &virname))) {
+        /* run the virus scanner against this message */
+        r = engine.scanfile(engine.state, fname, &virname);
+    }
+
+    if (r) {
         if (verbose) {
-            printf("Virus detected in message %u: %s\n", record->uid, virname);
+            printf("Virus detected in %s message %u: %s\n",
+                   (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
+                   record->uid, virname);
         }
         if (disinfect) {
             if (notify && i_mbox) {
                 create_digest(i_mbox, mailbox, record, virname);
             }
         }
+        else r = 0;
     }
 
     return r;
