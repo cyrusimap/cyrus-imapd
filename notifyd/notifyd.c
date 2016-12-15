@@ -145,7 +145,7 @@ static int do_notify(void)
         if (nopt < 0 || errno == ERANGE) cp = NULL;
 
         for (i = 0; cp && i < nopt; i++)
-            strarray_appendm(&options, cp = fetch_arg(cp, tail));
+            strarray_append(&options, cp = fetch_arg(cp, tail));
 
         if (cp) message = (cp = fetch_arg(cp, tail));
         if (cp) fname = (cp = fetch_arg(cp, tail));
