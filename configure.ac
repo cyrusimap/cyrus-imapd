@@ -1413,6 +1413,11 @@ AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
 
 HTTP_CPPFLAGS=
 HTTP_LIBS=
+with_nghttp2=no
+with_xml2=no
+with_ical=no
+with_icu4c=no
+with_shaplib=no
 if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
@@ -1424,8 +1429,10 @@ dnl
             AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
         fi
 
-        PKG_CHECK_MODULES([XML2], [libxml-2.0],
-                LIBS="$LIBS ${XML2_LIBS}",
+        PKG_CHECK_MODULES([XML2], [libxml-2.0], [
+                LIBS="$LIBS ${XML2_LIBS}"
+                with_xml2=yes
+                ],
                 AC_MSG_ERROR([Need libxml-2.0 for http]))
 
         AC_CHECK_LIB(xml2, xmlFirstElementChild, [
@@ -1440,6 +1447,7 @@ dnl
         PKG_CHECK_MODULES([ICAL], [libical], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
+                with_ical=yes
                 ],
                 AC_MSG_ERROR([Need libical for http]))
 
@@ -1492,6 +1500,7 @@ dnl
                 PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
                         AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
                         LIBS="$LIBS ${ICU4C_LIBS}"
+                        with_icu4c=yes
                         ],
                         AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
                 ],
@@ -1505,9 +1514,11 @@ dnl                                [Build DKIM support into iSchedule?]),
 dnl                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
 dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
 
-        PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5],
+        PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
                 AC_DEFINE(HAVE_NGHTTP2,[],
-                        [Build HTTP/2 support into httpd?]),
+                        [Build HTTP/2 support into httpd?])
+                with_nghttp2=yes
+                ],
                 AC_MSG_WARN([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
         dnl httpd needs libmath in a few places
@@ -1519,6 +1530,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_DEFINE(HAVE_SHAPELIB,[],
                         [Build geographic support into tzdist?])
                 AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])
+                with_shapelib=yes
                 ],
                 AC_MSG_WARN([tzdist will not have geolocation support.  Consider installing shapelib]))
 
@@ -2152,8 +2164,18 @@ Cyrus Server configured components
 External dependencies:
    ldap:               $have_ldap
    openssl:            $with_ssl
+   zlib:               $with_zlib
    pcre:               $cyrus_cv_pcre_utf8
    clamav:             $with_clamav
+   -----------------------
+   caringo:            $with_caringo
+   openio:             $with_openio
+   -----------------------
+   nghttp2:            $with_nghttp2
+   xml2:               $with_xml2
+   ical:               $with_ical
+   icu4c:              $with_icu4c
+   shapelib:           $with_shapelib
 
 Database support:
    mysql:              $with_mysql
