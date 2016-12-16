@@ -56,9 +56,12 @@ my $basedir;
 my $binary;
 my $testdir;
 my %suppressed;
+my $cyrus_major_version;
 
 sub init
 {
+    ($cyrus_major_version) = Cassandane::Instance->get_version();
+
     my $cassini = Cassandane::Cassini->instance();
     $basedir = $cassini->val('jmaptester', 'basedir');
     return unless defined $basedir;
@@ -79,9 +82,12 @@ sub new
     $config->set(servername => "127.0.0.1"); # urlauth needs matching servername
     $config->set(virtdomains => 'userid');
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'jmap');
     $config->set(httpallowcompress => 'no');
     $config->set(conversations => 'yes');
+
+    if ($cyrus_major_version >= 3) {
+	$config->set(httpmodules => 'jmap');
+    }
 
     return $class->SUPER::new({
         config => $config,
@@ -111,6 +117,11 @@ sub list_tests
         return ( 'test_warning_jmaptester_is_not_installed' );
     }
 
+    if ($cyrus_major_version < 3)
+    {
+	return ( 'test_jmaptest_disabled' );
+    }
+
     opendir TESTS, $testdir
         or die "Cannot open directory $testdir: $!";
     while (my $e = readdir TESTS)
@@ -136,6 +147,13 @@ sub run_test
         xlog "and edit [jmaptester]basedir in cassandane.ini";
         xlog "This is not a failure";
         return;
+    }
+
+    if ($cyrus_major_version < 3)
+    {
+	xlog "The version of Cyrus being tested does not support JMAP";
+	xlog "JMAP-TestSuite tests skipped";
+	return;
     }
 
     my $name = $self->name();
