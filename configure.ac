@@ -1475,26 +1475,26 @@ dnl
                         AC_DEFINE(HAVE_TZDIST_PROPS,[],
                                 [Do we have built-in support for TZdist props?]))
                 ],
-                AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
+                AC_MSG_NOTICE([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
 
         AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
                 AC_DEFINE(HAVE_TZ_BY_REF,[],
                         [Build timezones by reference support into httpd?]),
-                AC_MSG_WARN([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
+                AC_MSG_NOTICE([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
 
         AC_CHECK_LIB(ical, icalcomponent_new_vavailability,
                 AC_DEFINE(HAVE_VAVAILABILITY,[],
                         [Build VAVAILABILITY support into httpd?]),
-                AC_MSG_WARN([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
+                AC_MSG_NOTICE([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
 
         AC_CHECK_LIB(ical, icalcomponent_new_vvoter,
                 AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
-                AC_MSG_WARN([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
+                AC_MSG_NOTICE([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
 
         AC_CHECK_LIB(ical, icalcomponent_new_vpatch,
                 AC_DEFINE(HAVE_VPATCH,[],
                         [Build VPATCH support into httpd?]),
-                AC_MSG_WARN([Your version of libical can not support patching iCalendar objects.  Consider upgrading to libical >= 2.1]))
+                AC_MSG_NOTICE([Your version of libical can not support patching iCalendar objects.  Consider upgrading to libical >= 2.1]))
 
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported, [
                 PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
@@ -1504,7 +1504,7 @@ dnl
                         ],
                         AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
                 ],
-                AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
+                AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
@@ -1519,7 +1519,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                         [Build HTTP/2 support into httpd?])
                 with_nghttp2=yes
                 ],
-                AC_MSG_WARN([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
+                AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
         dnl httpd needs libmath in a few places
         dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
@@ -1532,7 +1532,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])
                 with_shapelib=yes
                 ],
-                AC_MSG_WARN([tzdist will not have geolocation support.  Consider installing shapelib]))
+                AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${SHAPELIB_CFLAGS}"
         HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
