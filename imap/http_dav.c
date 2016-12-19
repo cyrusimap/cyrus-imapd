@@ -378,7 +378,7 @@ static const struct precond_t {
     /* Time Zones by Reference (RFC 7809) preconditions */
     { "valid-timezone", NS_CALDAV },
 
-    /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
+    /* Managed Attachments (draft-ietf-calext-caldav-attachments) preconditions */
     { "valid-managed-id", NS_CALDAV },
 
     /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */

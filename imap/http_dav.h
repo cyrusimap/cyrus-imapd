@@ -226,7 +226,7 @@ enum {
     /* Time Zones by Reference (RFC 7809) preconditions */
     CALDAV_VALID_TIMEZONE,
 
-    /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
+    /* Managed Attachments (draft-ietf-calext-caldav-attachments) preconditions */
     CALDAV_VALID_MANAGEDID,
 
     /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
