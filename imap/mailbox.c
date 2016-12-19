@@ -359,6 +359,12 @@ const struct mailbox_header_cache mailbox_cache_headers[] = {
      * future point [ken3 notes this may also be useful to have here for
      * threading so we can avoid parsing the envelope] */
     /* { "message-id", BIT32_MAX }, */
+
+    /* apple-specific headers that their clients fetch frequently */
+    { "x-universally-unique-identifier", 6 },
+    { "x-uniform-type-identifier", 6 },
+    { "x-apple-base-url", 6 },
+    { "x-apple-mail-remote-attachments", 6 },
 };
 const int MAILBOX_NUM_CACHE_HEADERS =
   sizeof(mailbox_cache_headers)/sizeof(struct mailbox_header_cache);

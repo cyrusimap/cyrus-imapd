@@ -1107,4 +1107,101 @@ static void test_cache_simple(void)
     free(body);
 }
 
+static void test_cache_appleheaders(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+"Subject: Testing cached Apple headers\r\n"
+"Message-ID: <fake800@fastmail.fm>\r\n"
+"X-Universally-Unique-Identifier: fake-uuid\r\n"
+"X-Uniform-Type-Identifier: fake-uti\r\n"
+"X-Apple-Base-Url: fake-baseurl\r\n"
+"X-Apple-Mail-Remote-Attachments: fake-remoteattach\r\n"
+"X-Dont-Cache-This: dont-cache-this\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* From: Fred Bloggs <fbloggs@fastmail.fm> */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.from);
+    CU_ASSERT_STRING_EQUAL(body.from->name, "Fred Bloggs");
+    CU_ASSERT_STRING_EQUAL(body.from->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(body.from->domain, "fastmail.fm");
+    CU_ASSERT_PTR_NULL(body.from->next);
+
+    CU_ASSERT_PTR_NULL(body.reply_to);
+
+    /* To: Sarah Jane Smith <sjsmith@gmail.com> */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.to);
+    CU_ASSERT_STRING_EQUAL(body.to->name, "Sarah Jane Smith");
+    CU_ASSERT_STRING_EQUAL(body.to->mailbox, "sjsmith");
+    CU_ASSERT_STRING_EQUAL(body.to->domain, "gmail.com");
+    CU_ASSERT_PTR_NULL(body.to->next);
+
+    CU_ASSERT_PTR_NULL(body.cc);
+
+    CU_ASSERT_PTR_NULL(body.bcc);
+
+    /* Date: Wed, 27 Oct 2010 18:37:26 +1100 */
+    CU_ASSERT_STRING_EQUAL(body.date, "Wed, 27 Oct 2010 18:37:26 +1100");
+
+    /* Subject: Testing cached Apple headers */
+    CU_ASSERT_STRING_EQUAL(body.subject, "Testing cached Apple headers");
+
+    /* Content-Type not specified, this is the default */
+    CU_ASSERT_STRING_EQUAL(body.type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "PLAIN");
+    CU_ASSERT_PTR_NOT_NULL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "CHARSET");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "us-ascii");
+    CU_ASSERT_PTR_NULL(body.params->next);
+
+    CU_ASSERT_PTR_NULL(body.language);
+
+    /* Message-ID: <fake800@fastmail.fm> */
+    CU_ASSERT_STRING_EQUAL(body.message_id, "<fake800@fastmail.fm>");
+
+    CU_ASSERT_PTR_NULL(body.in_reply_to);
+
+    CU_ASSERT_PTR_NULL(body.references);
+
+    CU_ASSERT_PTR_NULL(body.received_date);
+
+    /* simple body */
+    CU_ASSERT_EQUAL(body.numparts, 0);
+    CU_ASSERT_PTR_NULL(body.subpart);
+
+    /* check cache header versions */
+    CU_ASSERT_EQUAL(mailbox_cached_header("X-Universally-Unique-Identifier"), 6);
+    CU_ASSERT_EQUAL(mailbox_cached_header("X-Uniform-Type-Identifier"), 6);
+    CU_ASSERT_EQUAL(mailbox_cached_header("X-Apple-Base-Url"), 6);
+    CU_ASSERT_EQUAL(mailbox_cached_header("X-Apple-Mail-Remote-Attachments"), 6);
+
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Universally-Unique-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uuid"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Uniform-Type-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uti"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Base-Url"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-baseurl"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Mail-Remote-Attachments"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-remoteattach"));
+
+    /* make sure we're not caching every x- header, just the ones we like */
+    CU_ASSERT_EQUAL(mailbox_cached_header("X-Dont-Cache-This"), BIT32_MAX);
+    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "X-Dont-Cache-This"));
+    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "dont-cache-this"));
+
+    message_free_body(&body);
+}
+
 /* vim: set ft=c: */
