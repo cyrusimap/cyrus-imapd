@@ -824,12 +824,12 @@ AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
 AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"])
 
 AC_ARG_WITH([clamav],
-	AS_HELP_STRING([--without-clamav], [ignore presence of clamav and disable it]))
+	AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))
 AS_IF([test "x$with_clamav" != "xno"],
-	PKG_CHECK_MODULES([CLAMAV], [libclamav],
+	[ PKG_CHECK_MODULES([CLAMAV], [libclamav],
 		[ AC_DEFINE(HAVE_CLAMAV, [], [Do we have ClamAV?])
 		  with_clamav=yes ],
-		with_clamav=no))
+		with_clamav=no)])
 
 AC_ARG_ENABLE(server,
 	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
