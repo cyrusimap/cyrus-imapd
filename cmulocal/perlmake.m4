@@ -47,14 +47,15 @@ AC_CONFIG_FILES([$1/Makefile.PL])
 AC_CONFIG_COMMANDS($1/Makefile,[
     ( cd $1;
       $PERL Makefile.PL $MAKE_MAKER_ARGS;
-      sed -i -e'/^uninstall_from_sitedirs ::/{
-		n
-		s/\$(SITEARCHEXP)/\$(DESTINSTALLSITEARCH)/
-		a \
-	$(RM_F) "$(DESTINSTALLSITEARCH)/auto/$(FULLEXT)/.packlist"
-		a \
-	$(RM_F) "$(DESTINSTALLSITEARCH)/perllocal.pod"
-	  }' Makefile
+      $PERL -i -pe'next unless /^uninstall_from_sitedirs ::/;
+		print $_;
+		$_ = <>;
+		s/\$\(SITEARCHEXP\)/\$\(DESTINSTALLSITEARCH\)/;
+		$_ .= <<'END';
+	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/auto/$(FULLEXT)/.packlist\"
+	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/perllocal.pod\"
+END
+	  ' Makefile
     )
 ],[
     PERL="${PERL}"
