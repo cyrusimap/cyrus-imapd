@@ -2989,7 +2989,7 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
             invalidprop(ctx, "memberOf");
         }
     } else {
-        icalproperty_remove_parameter(prop, ICAL_MEMBER_PARAMETER);
+        icalproperty_remove_parameter_by_kind(prop, ICAL_MEMBER_PARAMETER);
     }
 }
 
@@ -3909,7 +3909,7 @@ static void set_language_icalprop(icalcomponent *comp, icalproperty_kind kind,
     prop = icalcomponent_get_first_property(comp, kind);
     if (!prop) return;
 
-    icalproperty_remove_parameter(prop, ICAL_LANGUAGE_PARAMETER);
+    icalproperty_remove_parameter_by_kind(prop, ICAL_LANGUAGE_PARAMETER);
     if (!lang) return;
 
     param = icalparameter_new(ICAL_LANGUAGE_PARAMETER);
