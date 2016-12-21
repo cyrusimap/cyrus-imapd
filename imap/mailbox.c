@@ -417,7 +417,7 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
     int i;
 
     /* Scan for header */
-    for (i=0; i < (MAX_CACHED_HEADER_SIZE - 1); i++) {
+    for (i=0; i < MAX_CACHED_HEADER_SIZE; i++) {
         if (!text[i] || text[i] == '\r' || text[i] == '\n') break;
 
         if (text[i] == ':') {
