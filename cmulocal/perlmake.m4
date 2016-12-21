@@ -52,7 +52,7 @@ AC_CONFIG_COMMANDS($1/Makefile,[
 		$_ = <>;
 		s/\$\(SITEARCHEXP\)/\$\(DESTINSTALLSITEARCH\)/;
 		$_ .= <<'END';
-	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/auto/$(FULLEXT)/.packlist\"
+	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/auto/\$(FULLEXT)/.packlist\"
 	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/perllocal.pod\"
 END
 	  ' Makefile
