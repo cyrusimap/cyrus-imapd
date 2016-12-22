@@ -68,7 +68,7 @@
 # endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
-#ifndef __GNUC__
+#ifndef HAVE_GLIBC_COMPAR_FN_T
 typedef int (*__compar_fn_t)(const void *, const void *);
 #endif
 

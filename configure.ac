@@ -207,6 +207,9 @@ AC_STRUCT_TM
 AC_STRUCT_TIMEZONE
 AC_CHECK_FUNCS(timegm)
 
+dnl glibc internal qsort(3) compar function prototype
+AC_CHECK_TYPE(__compar_fn_t, AC_DEFINE(HAVE_GLIBC_COMPAR_FN_T,[],[Do we have glibc __compar_fn_t?]))
+
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
