@@ -8156,7 +8156,7 @@ static int parse_metadata_string_or_list(const char *tag,
 
     // Assume by default the arguments are a list of entries,
     // until proven otherwise.
-    *is_list = 0;
+    *is_list = 1;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
@@ -8204,9 +8204,9 @@ static int parse_metadata_string_or_list(const char *tag,
 	strarray_append(entries, arg.s);
 
 	// It is a list if there are wildcards
-	if (!strchr(arg.s, '*') && !strchr(arg.s, '%')) {
+	if (!strchr(arg.s, '*') || !strchr(arg.s, '%')) {
 	    // No wildcards; Not a list
-	    *is_list = 1;
+	    *is_list = 0;
 	}
     }
 
@@ -8871,7 +8871,7 @@ static void cmd_getmetadata(const char *tag)
     if (nlists == 2) {
 	/* no options */
 	mboxes = &lists[0];
-	mbox_is_pattern = is_list[0];
+	mbox_is_pattern = !is_list[0];
     }
     if (nlists == 3) {
 	/* options, either before or after */
@@ -8885,12 +8885,12 @@ static void cmd_getmetadata(const char *tag)
 	    /* (options) (mailboxes) */
 	    options = &lists[0];
 	    mboxes = &lists[1];
-	    mbox_is_pattern = is_list[1];
+	    mbox_is_pattern = !is_list[1];
 	    break;
 	case 2:
 	    /* (mailboxes) (options) */
 	    mboxes = &lists[0];
-	    mbox_is_pattern = is_list[0];
+	    mbox_is_pattern = !is_list[0];
 	    options = &lists[1];
 	    break;
 	case 3:
