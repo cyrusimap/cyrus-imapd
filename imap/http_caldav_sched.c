@@ -2159,6 +2159,8 @@ static void add_attendees(icalcomponent *ical,
             prop = icalcomponent_get_next_invitee(comp)) {
 
             const char *attendee = icalproperty_get_invitee(prop);
+            if (!attendee) continue;
+
             if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
             /* Skip where attendee == organizer */
