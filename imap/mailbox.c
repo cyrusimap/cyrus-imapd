@@ -1903,7 +1903,7 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
 
     r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record);
 
-    if (!r) record->recno = recno;
+    record->recno = recno;
 
     return r;
 }
@@ -6244,7 +6244,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
     int r = 0;
     int i, flag;
-    const message_t *msg;
     struct mailbox_iter *iter = NULL;
     struct mailbox *mailbox = NULL;
     struct found_uids files = FOUND_UIDS_INITIALIZER;
@@ -6304,63 +6303,65 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     r = find_annots(mailbox, &annots);
     if (r) goto close;
 
-    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        if (record->uid <= last_seen_uid) {
-            if (record->uid)
+    uint32_t recno;
+    struct index_record record;
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+        r = mailbox_read_index_record(mailbox, recno, &record);
+        if (r || record.uid <= last_seen_uid) {
+            if (!r && record.uid)
                 syslog(LOG_ERR, "%s out of order uid %u at record %u, wiping",
-                       mailbox->name, record->uid, record->recno);
-            mailbox_wipe_index_record(mailbox, (struct index_record *)record);
+                       mailbox->name, record.uid, record.recno);
+            if (r)
+                syslog(LOG_ERR, "%s failed to read at record %u (%s), wiping",
+                       mailbox->name, record.recno, error_message(r));
+            mailbox_wipe_index_record(mailbox, &record);
             continue;
         }
 
-        last_seen_uid = record->uid;
+        last_seen_uid = record.uid;
 
         /* bogus annotations? */
-        while (annots.pos < annots.nused && annots.found[annots.pos].uid < record->uid) {
+        while (annots.pos < annots.nused && annots.found[annots.pos].uid < record.uid) {
             add_found(&delannots, annots.found[annots.pos].uid, /*isarchive*/0);
             annots.pos++;
         }
 
         /* skip over current */
-        while (annots.pos < annots.nused && annots.found[annots.pos].uid == record->uid) {
+        while (annots.pos < annots.nused && annots.found[annots.pos].uid == record.uid) {
             annots.pos++;
         }
 
         /* lower UID file exists */
-        while (files.pos < files.nused && files.found[files.pos].uid < record->uid) {
+        while (files.pos < files.nused && files.found[files.pos].uid < record.uid) {
             add_found(&discovered, files.found[files.pos].uid, files.found[files.pos].isarchive);
             files.pos++;
         }
 
         /* if they match, advance the pointer */
         have_file = 0;
-        while (files.pos < files.nused && files.found[files.pos].uid == record->uid) {
+        while (files.pos < files.nused && files.found[files.pos].uid == record.uid) {
             if (have_file) {
                 /* we can just unlink this one, already processed one copy */
                 const char *fname = mboxname_archivepath(mailbox->part, mailbox->name,
-                                                         mailbox->uniqueid, record->uid);
+                                                         mailbox->uniqueid, record.uid);
                 printf("Removing duplicate archive file %s\n", fname);
                 unlink(fname);
             }
             else {
                 if (files.found[files.pos].isarchive) {
-                    if (!(record->system_flags & FLAG_ARCHIVED)) {
+                    if (!(record.system_flags & FLAG_ARCHIVED)) {
                         /* oops, it's really archived - let's fix that right now */
-                        struct index_record copyrecord = *record;
-                        copyrecord.system_flags |= FLAG_ARCHIVED;
-                        printf("Marking file as archived %s %u\n", mailbox->name, copyrecord.uid);
-                        mailbox_rewrite_index_record(mailbox, &copyrecord);
+                        record.system_flags |= FLAG_ARCHIVED;
+                        printf("Marking file as archived %s %u\n", mailbox->name, record.uid);
+                        mailbox_rewrite_index_record(mailbox, &record);
                     }
                 }
                 else {
-                    if (record->system_flags & FLAG_ARCHIVED) {
+                    if (record.system_flags & FLAG_ARCHIVED) {
                         /* oops, non-archived copy exists, let's use that */
-                        struct index_record copyrecord = *record;
-                        copyrecord.system_flags &= ~FLAG_ARCHIVED;
-                        printf("Marking file as not archived %s %u\n", mailbox->name, copyrecord.uid);
-                        mailbox_rewrite_index_record(mailbox, &copyrecord);
+                        record.system_flags &= ~FLAG_ARCHIVED;
+                        printf("Marking file as not archived %s %u\n", mailbox->name, record.uid);
+                        mailbox_rewrite_index_record(mailbox, &record);
                     }
                 }
                 have_file = 1;
@@ -6368,7 +6369,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
             files.pos++;
         }
 
-        r = mailbox_reconstruct_compare_update(mailbox, (struct index_record *)record,
+        r = mailbox_reconstruct_compare_update(mailbox, &record,
                                                valid_user_flags,
                                                flags, have_file,
                                                &discovered);
