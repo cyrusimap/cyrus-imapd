@@ -404,6 +404,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve: A Mail Filtering Language
 
+:rfc:`5229`
+
+    Sieve Email Filtering: Variables Extension
+
 :rfc:`5230`
 
     Sieve Email Filtering: Vacation Extension
