@@ -1380,6 +1380,7 @@ sub test_getmessages_body_both
     $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($htmlBody, $msg->{htmlBody});
+    $self->assert(not exists $msg->{textBody});
 }
 
 sub test_getmessages_body_plain
@@ -1412,13 +1413,14 @@ sub test_getmessages_body_plain
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($body, $msg->{textBody});
-    $self->assert_str_equals($body, $msg->{htmlBody});
+    $self->assert_null($msg->{htmlBody});
 
     xlog "get messages";
     $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($body, $msg->{textBody});
+    $self->assert_null($msg->{htmlBody});
 }
 
 sub test_getmessages_body_html
@@ -1460,6 +1462,7 @@ sub test_getmessages_body_html
     }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
     $self->assert_str_equals($body, $msg->{htmlBody});
+    $self->assert(not exists $msg->{textBody});
 }
 
 sub test_getmessages_body_multi
