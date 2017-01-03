@@ -646,7 +646,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
             i = unwrap_string(d, i, &data, &len);
             supports_variables = 1;
             /* fall through */
-	case B_ADDFLAG_ORIG: /*9*/
+        case B_ADDFLAG_ORIG: /*9*/
         case B_SETFLAG_ORIG: /*10*/
         case B_REMOVEFLAG_ORIG: /*11*/
             switch (op) {
