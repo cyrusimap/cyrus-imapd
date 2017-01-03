@@ -808,10 +808,10 @@ EOF
     $self->assert_null($m->cid());
 
     # make_cid() returns a new CID but doesn't set the attribute
-    $self->assert_str_equals('e2f2c19a8097587d', $m->make_cid());
+    $self->assert_str_equals('7301187b8bfe536f', $m->make_cid());
     $self->assert_null($m->cid());
     $m->set_attribute(cid => $m->make_cid());
-    $self->assert_str_equals('e2f2c19a8097587d', $m->cid());
+    $self->assert_str_equals('7301187b8bfe536f', $m->cid());
 }
 
 sub test_header_normalisation
