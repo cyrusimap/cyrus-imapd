@@ -966,22 +966,22 @@ envelope_err:
             comprock = varlist_select(variables, VL_MATCH_VARS)->var;
         }
 
-            /* loop on each haystack */
-            currhaystack = haystacksi+2;
-            for (z = 0; z < (is_string ? numhaystacks :
-                             numhaystacks ? numhaystacks : 1); z++) {
-                const char *this_haystack;
-                strarray_t *this_var;
+        /* loop on each haystack */
+        currhaystack = haystacksi+2;
+        for (z = 0; z < (is_string ? numhaystacks :
+                         numhaystacks ? numhaystacks : 1); z++) {
+            const char *this_haystack;
+            strarray_t *this_var;
 
-                if (numhaystacks) {
-                    currhaystack = unwrap_string(bc, currhaystack, &this_haystack,
-                                                 NULL);
+            if (numhaystacks) {
+                currhaystack = unwrap_string(bc, currhaystack, &this_haystack,
+                                             NULL);
+            }
+
+            if (is_string) {
+                if (requires & BFE_VARIABLES) {
+                    this_haystack = parse_string(this_haystack, variables);
                 }
-
-                if (is_string) {
-                    if (requires & BFE_VARIABLES) {
-                        this_haystack = parse_string(this_haystack, variables);
-                    }
 	    } else if (numhaystacks) { // select the var
 		variable_list_t *vl;
 		vl = varlist_select(variables, this_haystack);
@@ -996,9 +996,9 @@ envelope_err:
 		    vl = vl_temp;
 		}
 		this_var = vl->var;
-                } else { // internal variable
-                    this_var = variables->var;
-                }
+            } else { // internal variable
+                this_var = variables->var;
+            }
 
 	    if (match == B_COUNT) {
                 if (is_string) {
@@ -1022,7 +1022,7 @@ envelope_err:
 		    const char *this_needle;
 
 		    currneedle = unwrap_string(bc, currneedle, &this_needle,
-			    NULL);
+                                               NULL);
 
 		    if (requires & BFE_VARIABLES) {
 			this_needle = parse_string(this_needle, variables);
@@ -1036,79 +1036,79 @@ envelope_err:
                 break;
             }
 
-        /* search through the haystack for the needles */
-        currneedle=needlesi+2;
-        for(x=0; x<numneedles && !res; x++)
-        {
-            const char *this_needle;
+            /* search through the haystack for the needles */
+            currneedle=needlesi+2;
+            for(x=0; x<numneedles && !res; x++)
+                {
+                    const char *this_needle;
 
-            currneedle = unwrap_string(bc, currneedle, &this_needle, NULL);
+                    currneedle = unwrap_string(bc, currneedle, &this_needle, NULL);
 
-            if (requires & BFE_VARIABLES) {
-                this_needle = parse_string(this_needle, variables);
-            }
-
-#if VERBOSE
-            printf ("val %s %s %s\n", val[0], val[1], val[2]);
-#endif
-
-            if (is_string) {
-                if (isReg) {
-                    reg = bc_compile_regex(this_needle, ctag, errbuf,
-                                           sizeof(errbuf));
-                    if (!reg)
-                        {
-                            /* Oops */
-                            res=-1;
-                            goto alldone;
-                        }
-
-                    res |= comp(this_haystack, strlen(this_haystack),
-                                (const char *)reg, comprock);
-                    free(reg);
-                } else {
-                    res |= comp(this_haystack, strlen(this_haystack),
-                                this_needle, comprock);
-                }
-            } else {
-            /* search through all the flags */
-
-            for (y=0; y < this_var->count && !res; y++)
-            {
-                const char *active_flag;
-
-                active_flag = this_var->data[y];
-
-                if (isReg) {
-                    reg= bc_compile_regex(this_needle, ctag, errbuf,
-                                          sizeof(errbuf));
-                    if (!reg)
-                    {
-                        /* Oops */
-                        res=-1;
-                        goto alldone;
+                    if (requires & BFE_VARIABLES) {
+                        this_needle = parse_string(this_needle, variables);
                     }
 
-                    res |= comp(active_flag, strlen(active_flag),
-                                (const char *)reg, comprock);
-                    free(reg);
-                } else {
-                    res |= comp(active_flag, strlen(active_flag),
-                                this_needle, comprock);
-                }
-            }
-            } // (is_string) else
+#if VERBOSE
+                    printf ("val %s %s %s\n", val[0], val[1], val[2]);
+#endif
 
-        } // loop on each item of the current haystack
-	{
-	    /* for debugging purposes only */
-	    char *temp;
-	    temp = strarray_join(varlist_select(variables, VL_MATCH_VARS)->var,
-		    ", ");
-	    printf((!is_string ? "B_hasflag:" : "B_STRING"));
-	    printf(" %s\n\n", temp);
-	    free (temp);
-	}
+                    if (is_string) {
+                        if (isReg) {
+                            reg = bc_compile_regex(this_needle, ctag, errbuf,
+                                                   sizeof(errbuf));
+                            if (!reg)
+                                {
+                                    /* Oops */
+                                    res=-1;
+                                    goto alldone;
+                                }
+
+                            res |= comp(this_haystack, strlen(this_haystack),
+                                        (const char *)reg, comprock);
+                            free(reg);
+                        } else {
+                            res |= comp(this_haystack, strlen(this_haystack),
+                                        this_needle, comprock);
+                        }
+                    } else {
+                        /* search through all the flags */
+
+                        for (y=0; y < this_var->count && !res; y++)
+                            {
+                                const char *active_flag;
+
+                                active_flag = this_var->data[y];
+
+                                if (isReg) {
+                                    reg= bc_compile_regex(this_needle, ctag, errbuf,
+                                                          sizeof(errbuf));
+                                    if (!reg)
+                                        {
+                                            /* Oops */
+                                            res=-1;
+                                            goto alldone;
+                                        }
+
+                                    res |= comp(active_flag, strlen(active_flag),
+                                                (const char *)reg, comprock);
+                                    free(reg);
+                                } else {
+                                    res |= comp(active_flag, strlen(active_flag),
+                                                this_needle, comprock);
+                                }
+                            }
+                    } // (is_string) else
+
+                } // loop on each item of the current haystack
+            {
+                /* for debugging purposes only */
+                char *temp;
+                temp = strarray_join(varlist_select(variables, VL_MATCH_VARS)->var,
+                                     ", ");
+                printf((!is_string ? "B_hasflag:" : "B_STRING"));
+                printf(" %s\n\n", temp);
+                free (temp);
+            }
 	} // loop on each variable or string
 
         /* Update IP */
