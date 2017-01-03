@@ -917,7 +917,7 @@ envelope_err:
         break;
     }
     case BC_HASFLAG:/*15*/
-    case BC_STRING:/*16*/
+    case BC_STRING:/*21*/
     {
         int haystacksi=i+4;/*the i value for the beginning of the variables*/
         int needlesi=(ntohl(bc[haystacksi+1].value)/4);
