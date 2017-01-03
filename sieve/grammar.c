@@ -20,7 +20,7 @@ EXPORTED int is_identifier(char *s)
     int i = 0;
     while (s && s[i]) {
         if (s[i] == '_' || (s[i] >= 'a' && s[i] <= 'z')
-            || (s[i] >= 'A' && s[i] <= 'A')
+            || (s[i] >= 'A' && s[i] <= 'Z')
             || (i && (s[i] >= '0' && s[i] <= '9'))) {
             i++;
         } else {
