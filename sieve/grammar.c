@@ -124,22 +124,22 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
                 test_str = stringparts.data[stringparts.count-1];
             }
         } else {
-	    /* first check if this is a namespace, which we don't yet support.
-   RFC 5229, Sieve: Variables Extension, Section 3. Interpretation of Strings:
-   References to namespaces without a prior require statement for the
-   relevant extension MUST cause an error.
-	     */
-	    {
-		char *dot;
-		if ((dot = strchr(test_str, '.'))) {
-		    *dot = '\0';
-		    if (is_identifier(test_str)) {
-			fail = 1;
-		    } else {
-			*dot = '.';
-		    }
-		}
-	    }
+            /* first check if this is a namespace, which we don't yet support.
+               RFC 5229, Sieve: Variables Extension, Section 3. Interpretation of Strings:
+               References to namespaces without a prior require statement for the
+               relevant extension MUST cause an error.
+            */
+            {
+                char *dot;
+                if ((dot = strchr(test_str, '.'))) {
+                    *dot = '\0';
+                    if (is_identifier(test_str)) {
+                        fail = 1;
+                    } else {
+                        *dot = '.';
+                    }
+                }
+            }
             /* if we haven't found a valid variable, restore the overwritten
              * character
              */
@@ -158,8 +158,8 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
 
     /* TODO: test this in the sieve parser, not at script runtime */
     if (0 && fail) {
-	free(test_str);
-	test_str = NULL;
+        free(test_str);
+        test_str = NULL;
     }
 
     return test_str;
