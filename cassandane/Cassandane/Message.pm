@@ -446,8 +446,17 @@ sub get_guid
 sub make_cid
 {
     my ($self) = @_;
+    no warnings 'portable';  # Support for 64-bit ints required
 
-    return substr(sha1_hex($self->as_string()), 0, 16);
+    my $sha1 = sha1($self->as_string());
+    my $cid = 0;
+    for (0..7) {
+        $cid <<= 8;
+        $cid |= ord(substr($sha1, $_, 1));
+    }
+    $cid ^= 0x91f3d9e10b690b12; # chosen by fair dice roll
+    my $res = sprintf("%16x", $cid);
+    return $res;
 }
 
 # Handy accessors
