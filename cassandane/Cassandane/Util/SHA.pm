@@ -49,11 +49,11 @@ use warnings;
 use vars qw(@ISA @EXPORT);
 
 @ISA = qw(Exporter);
-@EXPORT = qw(sha1_hex);
+@EXPORT = qw(sha1_hex sha1);
 
 BEGIN {
-    eval "use Digest::SHA qw(sha1_hex); 1;"
-     || eval "use Digest::SHA1 qw(sha1_hex);";
+    eval "use Digest::SHA qw(sha1_hex sha1); 1;"
+     || eval "use Digest::SHA1 qw(sha1_hex sha1);";
 }
 
 1;
