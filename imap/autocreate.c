@@ -59,6 +59,7 @@
 #include <syslog.h>
 
 #include "global.h"
+#include "annotate.h"
 #include "util.h"
 #include "user.h"
 #include "xmalloc.h"
@@ -519,6 +520,45 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
     return;
 }
 
+struct autocreate_specialuse_rock {
+    const char *userid;
+    const char *intname;
+    const char *name;
+};
+
+static void autocreate_specialuse_cb(const char *key, const char *val, void *rock)
+{
+    struct autocreate_specialuse_rock *ar = (struct autocreate_specialuse_rock *)rock;
+    if (strncmp(key, "xlist-", 6)) return;
+    if (strcmp(val, ar->name)) return;
+
+    struct buf usebuf = BUF_INITIALIZER;
+    buf_putc(&usebuf, '\\');
+    buf_appendcstr(&usebuf, key + 6);
+
+    /* we've got an XLIST key that matches the autocreated name */
+    char *existing = mboxlist_find_specialuse(buf_cstring(&usebuf), ar->userid);
+    if (existing) {
+        syslog(LOG_NOTICE, "autocreate: not setting specialuse %s for %s, already exists as %s",
+               buf_cstring(&usebuf), ar->intname, existing);
+        free(existing);
+        goto done;
+    }
+
+    int r = annotatemore_write(ar->intname, "/specialuse", ar->userid, &usebuf);
+    if (r) {
+        syslog(LOG_WARNING, "autocreate: failed to set specialuse %s for %s",
+               buf_cstring(&usebuf), ar->intname);
+    }
+    else {
+        syslog(LOG_INFO, "autocreate: set specialuse %s for %s",
+               buf_cstring(&usebuf), ar->intname);
+    }
+
+ done:
+    buf_free(&usebuf);
+}
+
 int autocreate_user(struct namespace *namespace,
                     const char *userid)
 {
@@ -634,6 +674,7 @@ int autocreate_user(struct namespace *namespace,
     for (n = 0; n < create->count; n++) {
         const char *name = strarray_nth(create, n);
         char *foldername = mboxname_user_mbox(userid, name);
+        struct autocreate_specialuse_rock specialrock = { userid, foldername, name };
 
         r = mboxlist_createmailbox(foldername, /*mbtype*/0, /*partition*/NULL,
                                    /*isadmin*/1, userid, auth_state,
@@ -652,20 +693,22 @@ int autocreate_user(struct namespace *namespace,
             continue;
         }
 
-        /* skip to next if not subscribing */
-        if (strarray_find(subscribe, name, 0) < 0)
-            continue;
-
-        r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1);
-        if (!r) {
-            numsub++;
-            syslog(LOG_NOTICE,"autocreateinbox: User %s, subscription to %s succeeded",
-                   userid, name);
-        } else {
-            syslog(LOG_WARNING, "autocreateinbox: User %s, subscription to  %s failed. %s",
-                   userid, name, error_message(r));
-            r = 0;
+        /* subscribe if requested */
+        if (strarray_find(subscribe, name, 0) >= 0) {
+            r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1);
+            if (!r) {
+                numsub++;
+                syslog(LOG_NOTICE,"autocreateinbox: User %s, subscription to %s succeeded",
+                    userid, name);
+            } else {
+                syslog(LOG_WARNING, "autocreateinbox: User %s, subscription to  %s failed. %s",
+                    userid, name, error_message(r));
+                r = 0;
+            }
         }
+
+        /* set specialuse if requested */
+        config_foreachoverflowstring(autocreate_specialuse_cb, &specialrock);
     }
 
     if (numcrt)
