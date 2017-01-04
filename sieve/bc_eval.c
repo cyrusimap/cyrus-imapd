@@ -1814,6 +1814,20 @@ envelope_err:
     return res;
 }
 
+int sieve_bytecode_version(const sieve_bytecode_t *bc)
+{
+    if (!bc) return 0;
+
+    int version, v_index;
+    const bytecode_input_t *input = (bytecode_input_t *) bc->data;
+
+    v_index = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
+    version = ntohl(input[v_index].op);
+
+    /* XXX may need to convert value "1" from host byte order? */
+    return version;
+}
+
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   void *sc, void *m,
@@ -1851,7 +1865,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
     ip = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-    version= ntohl(bc[ip].op);
+    version = sieve_bytecode_version(bc_cur);
 
     /* this is because there was a time where integers were not network byte
        order.  all the scripts written then would have version 0x01 written

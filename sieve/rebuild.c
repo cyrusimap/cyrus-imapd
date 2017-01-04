@@ -54,6 +54,8 @@
 #include "imap/imap_err.h"
 #include "imap/mailbox.h"
 
+#include "sieve/bytecode.h"
+#include "sieve/script.h"
 #include "sieve/sieve_interface.h"
 
 EXPORTED char *sieve_getbcfname(const char *script_fname)
@@ -130,6 +132,8 @@ EXPORTED char *sieve_getdefaultbcfname(const char *defaultbc)
     return xstrdup(tmp);
 }
 
+extern int sieve_bytecode_version(const sieve_bytecode_t *bc);
+
 EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
                            int force, char **out_parse_errors)
 {
@@ -174,9 +178,17 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
         }
 
         if (!r && bc_stat.st_mtime >= script_stat.st_mtime) {
-            syslog(LOG_DEBUG, "%s: %s is up to date\n", __func__, bc_fname);
-            r = SIEVE_OK;
-            goto done;
+            sieve_execute_t *exe = NULL;
+            r = sieve_script_load(bc_fname, &exe);
+
+            if (!r && sieve_bytecode_version(exe->bc_cur) == BYTECODE_VERSION) {
+                syslog(LOG_DEBUG, "%s: %s is up to date\n", __func__, bc_fname);
+                r = SIEVE_OK;
+                sieve_script_unload(&exe);
+                goto done;
+            }
+
+            sieve_script_unload(&exe);
         }
     }
 
