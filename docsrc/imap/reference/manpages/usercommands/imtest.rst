@@ -138,7 +138,7 @@ Options
 
 .. option:: -w passwd
 
-    Password to use (if not supplied, we will prompt)
+    Password to use (if not supplied, we will prompt).
 
 .. option:: -o  option=value
 
