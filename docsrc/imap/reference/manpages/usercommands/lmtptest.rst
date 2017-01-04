@@ -16,7 +16,7 @@ Synopsis
     **lmtptest** [ **-t** *keyfile* ] [ **-p** *port* ] [ **-m** *mechanism* ]
         [ **-a** *userid* ] [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ]
         [ **-r** *realm* ] [ **-f** *file* ] [ **-n** *num* ] [ **-c** ] [ **-i** ] 
-        [ **-v** ] [ **-o** *option*\ =\ *value* ] *hostname*
+        [ **-v** ] [ **-w** *passwd* ] [ **-o** *option*\ =\ *value* ] *hostname*
 
 Description
 ===========
@@ -111,6 +111,10 @@ Options
 .. option:: -v
 
     Verbose. Print out more information than usual.
+
+.. option:: -w passwd
+
+    Password to use (if not supplied, we will prompt)
 
 .. option:: -o  option=value
 
