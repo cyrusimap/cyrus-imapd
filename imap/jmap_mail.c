@@ -2886,13 +2886,13 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "after")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_GE);
-            e->attr = search_attr_find("date");
+            e->attr = search_attr_find("internaldate");
             e->value.u = t;
         }
         if ((s = json_string_value(json_object_get(filter, "before")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_LE);
-            e->attr = search_attr_find("date");
+            e->attr = search_attr_find("internaldate");
             e->value.u = t;
         }
         if ((s = json_string_value(json_object_get(filter, "body")))) {
