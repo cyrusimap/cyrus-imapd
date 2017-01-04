@@ -118,7 +118,7 @@ Options
 
     Verbose. Print out more information than usual.
 
-.. option:: -w
+.. option:: -w passwd
 
     Password to use (if not supplied, we will prompt).
 
