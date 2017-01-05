@@ -3649,6 +3649,8 @@ static int getMessageUpdates(jmap_req_t *req)
         goto done;
     }
 
+    json_decref(invalid);
+
     /* FIXME need to store deletemodseq in counters */
 
     /* Search for updates */
@@ -3696,7 +3698,6 @@ done:
     if (threads) json_decref(threads);
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
-    if (invalid) json_decref(invalid);
     _finireq(req);
     return r;
 }
