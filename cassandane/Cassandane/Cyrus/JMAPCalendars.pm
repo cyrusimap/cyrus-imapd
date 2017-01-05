@@ -163,7 +163,7 @@ sub test_setcalendars
     $self->assert_str_equals($res->[0][0], 'calendarsSet');
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
     
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
@@ -353,7 +353,7 @@ sub test_getcalendarupdates
     $res = $jmap->Request([
             ['setCalendars', { update => { $id1 => { color => "aqua" }}}, "R1" ]
         ]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id1);
+    $self->assert(exists $res->[0][1]{updated}{$id1});
 
     xlog "get calendar updates";
     $res = $jmap->Request([['getCalendarUpdates', {
@@ -368,7 +368,7 @@ sub test_getcalendarupdates
     $res = $jmap->Request([
             ['setCalendars', { update => { $id1 => { sortOrder => 5 }}}, "R1" ]
         ]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id1);
+    $self->assert(exists $res->[0][1]{updated}{$id1});
 
     xlog "get calendar updates";
     $res = $jmap->Request([['getCalendarUpdates', {
@@ -1807,7 +1807,7 @@ sub test_getcalendareventupdates
                             "title" => "2(updated)",
                         }
                     }}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 2);
+    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 2);
 
     xlog "get exactly one update";
     $res = $jmap->Request([['getCalendarEventUpdates', {
@@ -1839,7 +1839,7 @@ sub test_getcalendareventupdates
                     },
                     destroy => [ $id2 ]
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 1);
+    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 1);
     $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
 
     xlog "get calendar event updates";
@@ -1870,7 +1870,7 @@ sub test_getcalendareventupdates
                         },
                     }
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{updated}}, 1);
+    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 1);
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);

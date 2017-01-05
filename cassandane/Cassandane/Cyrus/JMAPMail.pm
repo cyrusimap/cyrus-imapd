@@ -367,7 +367,7 @@ sub test_setmailboxes
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get mailbox $id";
     $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
@@ -826,7 +826,7 @@ sub test_getmailboxupdates
                             sortOrder => 20
              }}}, "R1"]
     ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
@@ -852,7 +852,7 @@ sub test_getmailboxupdates
                     update => { $drafts => { name => "stfard" } },
              }, "R1"]
     ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
     xlog "get mailbox updates, limit to 1";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
@@ -2342,7 +2342,7 @@ sub test_setmessages_move
         $msg->{mailboxIds} = $moveto;
         $res = $jmap->Request(
             [ [ 'setMessages', { update => { $id => $msg } }, "R1" ] ] );
-        $self->assert_str_equals( $res->[0][1]{updated}[0], $id );
+        $self->assert(exists $res->[0][1]{updated}{$id});
 
         $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ] );
         $msg = $res->[0][1]->{list}[0];
@@ -3273,7 +3273,7 @@ sub test_getmessageupdates
     $res = $jmap->Request([['setMessages', {
         update => { $ida => { isUnread => JSON::false }}
     }, "R1"]]);
-    $self->assert_str_equals($ida, $res->[0][1]->{updated}[0]);
+    $self->assert(exists $res->[0][1]->{updated}{$ida});
 
     xlog "get message updates";
     $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
@@ -3717,7 +3717,7 @@ sub test_getthreadupdates
         update =>  { $msgD->{id} => { isUnread => JSON::false }},
     }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $msgB->{id});
-    $self->assert_str_equals($res->[0][1]{updated}[0], $msgD->{id});
+    $self->assert(exists $res->[0][1]->{updated}{$msgD->{id}});
 
     xlog "get thread updates";
     $res = $jmap->Request([['getThreadUpdates', { sinceState => $state }, "R1"]]);

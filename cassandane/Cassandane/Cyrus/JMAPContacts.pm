@@ -289,7 +289,7 @@ sub test_setcontactgroups
                     }}, "R4"]]);
 
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact group $id";
     $res = $jmap->Request([['getContactGroups', { ids => [$id] }, "R3"]]);
@@ -662,7 +662,7 @@ sub test_setcontacts
     xlog "update isFlagged";
     $contact->{isFlagged} = JSON::true;
     $res = $jmap->Request([['setContacts', {update => {$id => {isFlagged => JSON::true} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -677,7 +677,7 @@ sub test_setcontacts
     xlog "update prefix";
     $contact->{prefix} = 'foo';
     $res = $jmap->Request([['setContacts', {update => {$id => {prefix => 'foo'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -692,7 +692,7 @@ sub test_setcontacts
     xlog "update suffix";
     $contact->{suffix} = 'bar';
     $res = $jmap->Request([['setContacts', {update => {$id => {suffix => 'bar'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -707,7 +707,7 @@ sub test_setcontacts
     xlog "update nickname";
     $contact->{nickname} = 'nick';
     $res = $jmap->Request([['setContacts', {update => {$id => {nickname => 'nick'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -727,7 +727,7 @@ sub test_setcontacts
     xlog "update birthday";
     $contact->{birthday} = '1979-04-01'; # Happy birthday, El Barto!
     $res = $jmap->Request([['setContacts', {update => {$id => {birthday => '1979-04-01'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -747,7 +747,7 @@ sub test_setcontacts
     xlog "update anniversary";
     $contact->{anniversary} = '1989-12-17'; # Happy anniversary, Simpsons!
     $res = $jmap->Request([['setContacts', {update => {$id => {anniversary => '1989-12-17'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -762,7 +762,7 @@ sub test_setcontacts
     xlog "update company";
     $contact->{company} = 'acme';
     $res = $jmap->Request([['setContacts', {update => {$id => {company => 'acme'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -777,7 +777,7 @@ sub test_setcontacts
     xlog "update department";
     $contact->{department} = 'looney tunes';
     $res = $jmap->Request([['setContacts', {update => {$id => {department => 'looney tunes'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -792,7 +792,7 @@ sub test_setcontacts
     xlog "update jobTitle";
     $contact->{jobTitle} = 'director of everything';
     $res = $jmap->Request([['setContacts', {update => {$id => {jobTitle => 'director of everything'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -818,7 +818,7 @@ sub test_setcontacts
     $res = $jmap->Request([['setContacts', {update => {$id => {
                             emails => [{ type => "work", value => "acme\@example.com" }]
                         } }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -844,7 +844,7 @@ sub test_setcontacts
     $res = $jmap->Request([['setContacts', {update => {$id => {
                             phones => [{ type => "home", value => "12345678" }]
                         } }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -870,7 +870,7 @@ sub test_setcontacts
     $res = $jmap->Request([['setContacts', {update => {$id => {
                             online => [{ type => "uri", value => "http://example.com/me" }]
                         } }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -896,7 +896,7 @@ sub test_setcontacts
                                     country => "acme land"
                                 }]
                         } }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -911,7 +911,7 @@ sub test_setcontacts
     xlog "update notes";
     $contact->{notes} = 'baz';
     $res = $jmap->Request([['setContacts', {update => {$id => {notes => 'baz'} }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     xlog "get contact $id";
     $fetch = $jmap->Request([['getContacts', {}, "R2"]]);
@@ -949,7 +949,7 @@ sub test_setcontacts_state
                         {firstName => "first", lastName => "last"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
     my $oldState = $state;
     $state = $res->[0][1]{newState};
@@ -1011,7 +1011,7 @@ sub test_setcontacts_importance_later
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R3');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
@@ -1046,7 +1046,7 @@ sub test_setcontacts_importance_upfront
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R3');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
@@ -1081,7 +1081,7 @@ sub test_setcontacts_importance_multiedit
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R3');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
@@ -1116,7 +1116,7 @@ sub test_setcontacts_importance_zero_multi
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R3');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
@@ -1151,7 +1151,7 @@ sub test_setcontacts_importance_zero_byself
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R3');
-    $self->assert_str_equals($res->[0][1]{updated}[0], $id);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 
     $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
