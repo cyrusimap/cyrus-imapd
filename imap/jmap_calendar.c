@@ -972,7 +972,7 @@ static int setCalendars(struct jmap_req *req)
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-        json_t *updated = json_pack("[]");
+        json_t *updated = json_pack("{}");
         json_t *notUpdated = json_pack("{}");
 
         const char *uid;
@@ -1068,10 +1068,10 @@ static int setCalendars(struct jmap_req *req)
             }
 
             /* Report calendar as updated. */
-            json_array_append_new(updated, json_string(uid));
+            json_object_set_new(updated, uid, json_null());
         }
 
-        if (json_array_size(updated)) {
+        if (json_object_size(updated)) {
             json_object_set(set, "updated", updated);
         }
         json_decref(updated);
@@ -1863,7 +1863,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-        json_t *updated = json_pack("[]");
+        json_t *updated = json_pack("{}");
         json_t *notUpdated = json_pack("{}");
 
         const char *uid;
@@ -1901,10 +1901,10 @@ static int setCalendarEvents(struct jmap_req *req)
             }
 
             /* Report calendar event as updated. */
-            json_array_append_new(updated, json_string(uid));
+            json_object_set_new(updated, uid, json_null());
         }
 
-        if (json_array_size(updated)) {
+        if (json_object_size(updated)) {
             json_object_set(set, "updated", updated);
         }
         json_decref(updated);

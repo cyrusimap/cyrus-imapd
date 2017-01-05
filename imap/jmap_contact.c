@@ -780,7 +780,7 @@ static int setContactGroups(struct jmap_req *req)
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-        json_t *updated = json_pack("[]");
+        json_t *updated = json_pack("{}");
         json_t *notUpdated = json_pack("{}");
 
         const char *uid;
@@ -931,10 +931,10 @@ static int setContactGroups(struct jmap_req *req)
             free(resource);
             if (r) goto done;
 
-            json_array_append_new(updated, json_string(uid));
+            json_object_set_new(updated, uid, json_null());
         }
 
-        if (json_array_size(updated))
+        if (json_object_size(updated))
             json_object_set(set, "updated", updated);
         json_decref(updated);
         if (json_object_size(notUpdated))
@@ -2794,7 +2794,7 @@ static int setContacts(struct jmap_req *req)
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-        json_t *updated = json_pack("[]");
+        json_t *updated = json_pack("{}");
         json_t *notUpdated = json_pack("{}");
 
         const char *uid;
@@ -2927,10 +2927,10 @@ static int setContacts(struct jmap_req *req)
 
             if (r) goto done;
 
-            json_array_append_new(updated, json_string(uid));
+            json_object_set_new(updated, uid, json_null());
         }
 
-        if (json_array_size(updated))
+        if (json_object_size(updated))
             json_object_set(set, "updated", updated);
         json_decref(updated);
         if (json_object_size(notUpdated))
