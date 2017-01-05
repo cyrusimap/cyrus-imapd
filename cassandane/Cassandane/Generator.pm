@@ -345,6 +345,7 @@ sub generate
     }
     $msg->set_body($params->{body} . $extra);
     $msg->set_attributes(uid => $params->{uid});
+    $msg->set_internaldate($params->{date});
 
     return $msg;
 }

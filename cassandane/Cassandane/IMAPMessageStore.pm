@@ -169,6 +169,9 @@ sub write_message
     if ($opts{flags}) {
 	push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
     }
+    if ($msg->has_attribute('internaldate')) {
+        push @extra, $msg->get_attribute('internaldate');
+    }
 
     $self->{client}->append($self->{folder}, @extra,
 			    { Literal => $msg->as_string() } )
