@@ -13,7 +13,9 @@ Cyrus annotations are based on a draft (http://tools.ietf.org/html/draft-daboo-i
 
 * **/checkperiod** - Numeric value indicating a period of minutes that the client uses to determine the interval of regular 'new mail' checks for the corresponding mailbox. (Draft RFC)
 
-* **/comment** - Sets a comment or description associated with the mailbox. (cyradm(1)) /motd - Sets a "message of the day". The message gets displayed as an ALERT after authentication.
+* **/comment** - Sets a comment or description associated with the mailbox. (cyradm(1))
+
+* **/motd** - Sets a "message of the day". The message gets displayed as an ALERT after authentication.
 
 * **/sort** - Defines the default sort criteria [I-D.ietf-imapext-sort] to use when first displaying the mailbox contents to the user, or NIL if sorting is not required. (Draft RFC)
 
