@@ -770,6 +770,11 @@ sub test_getmailboxupdates
     $inbox = $m{"Inbox"}->{id};
     $self->assert_not_null($inbox);
 
+    xlog "get mailbox updates (expect error)";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => 0 }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]->{type}, "invalidArguments");
+    $self->assert_str_equals($res->[0][1]->{arguments}[0], "sinceState");
+
     xlog "get mailbox updates (expect no changes)";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
@@ -3230,10 +3235,16 @@ sub test_getmessageupdates
     ]);
     $draftsmbox = $res->[0][1]{created}{"#1"}{id};
 
+    xlog "get message updates (expect error)";
+    $res = $jmap->Request([['getMessageUpdates', { sinceState => 0 }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]->{type}, "invalidArguments");
+    $self->assert_str_equals($res->[0][1]->{arguments}[0], "sinceState");
+
     xlog "get message list";
     $res = $jmap->Request([['getMessageList', {}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
+
 
     xlog "get message updates";
     $res = $jmap->Request([['getMessageUpdates', { sinceState => $state }, "R1"]]);
