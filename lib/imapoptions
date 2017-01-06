@@ -2318,7 +2318,11 @@ product version in the capabilities */
 /* Set the special-use flag \fIflag\fR on the specified folder when it
    is autocreated (see the \fIautocreate_inbox_folders\fR option).  For
    example, if \fBxlist-junk: Spam\fR is set, and the folder \fBSpam\fR
-   is autocreated, the special-use flag \fB\\Junk\fR will be set on it. */
+   is autocreated, the special-use flag \fB\\Junk\fR will be set on it.
+.PP
+   (This option is so named for backward compatibility with old config
+   files.)
+   */
 
 { "lmtp_catchall_mailbox", NULL, STRING }
 /* Mail sent to mailboxes which do not exist, will be delivered to
