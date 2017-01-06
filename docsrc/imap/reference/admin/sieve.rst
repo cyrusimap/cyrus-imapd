@@ -153,6 +153,8 @@ Some mail clients allow users to rename the system folders, such as Archive and 
 * \\Sent
 * \\Trash
 
+.. _cyrus-sieve-extensions:
+
 Supported extensions
 --------------------
 Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions/sieve-extensions.xhtml>`_. Cyrus supports a subset of these:
@@ -169,6 +171,7 @@ Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions
 * Include :rfc:`6609`
 * Date :rfc:`5260`
 * Index :rfc:`5260`
+* Variables :rfc:`5229`
 * IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
 * Body Extension `Draft body extension RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
 
