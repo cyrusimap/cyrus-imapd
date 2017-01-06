@@ -88,6 +88,9 @@ ec HTTP_FOUND,
 ec HTTP_SEE_OTHER,
    "303 See Other"
 
+ec HTTP_USE_PROXY,
+   "305 Use Proxy"
+
 ec HTTP_TEMP_REDIRECT,
    "307 Temporary Redirect"
 
