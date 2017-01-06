@@ -75,6 +75,18 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+#ifndef AI_V4MAPPED
+#define AI_V4MAPPED	0
+#endif
+
+#ifndef AI_ADDRCONFIG
+#define AI_ADDRCONFIG	0
+#endif
+
+#ifndef AI_MASK
+#define AI_MASK	(AI_V4MAPPED | AI_ADDRCONFIG)
+#endif
+
 enum {
     AUTO_CAPA_BANNER = -1,
     AUTO_CAPA_NO = 0,
@@ -877,7 +889,7 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
     hints.ai_family = dest->ai_family;
     hints.ai_socktype = dest->ai_socktype;
     hints.ai_protocol = dest->ai_protocol;
-    hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+    hints.ai_flags = AI_MASK & (AI_V4MAPPED | AI_ADDRCONFIG);
 
     r = getaddrinfo(client_bind_name, NULL, &hints, &res0);
     if (r && config_debug) {
