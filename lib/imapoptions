@@ -165,7 +165,7 @@ are listed with ``<none>''.
   to do so may result in the user's meta-data (seen state,
   subscriptions, etc) being corrupted or out of date. */
 
-{ "altnamespace", 0, SWITCH }
+{ "altnamespace", 1, SWITCH }
 /* Use the alternate IMAP namespace, where personal folders reside at the
    same level in the hierarchy as INBOX.
 .PP
@@ -174,7 +174,7 @@ are listed with ``<none>''.
    and Sieve scripts (lmtpd).  This option does NOT apply to admin tools
    such as cyradm (admins ONLY), reconstruct, quota, etc., NOR does it
    affect LMTP delivery of messages directly to mailboxes via
-   plus-addressing. */
+   plus-addressing.  The default changed in 3.0 from off to on. */
 
 { "altprefix", "Alt Folders", STRING }
 /* Alternative INBOX spellings that can't be accessed in altnamespace
@@ -2292,11 +2292,11 @@ product version in the capabilities */
    with a backend (such as LDAP) that can make getgrent() calls very
    slow) */
 
-{ "unixhierarchysep", 0, SWITCH }
+{ "unixhierarchysep", 1, SWITCH }
 /* Use the UNIX separator character '/' for delimiting levels of
    mailbox hierarchy.  Turn off to use the netnews separator
    character '.'. Note that with the newnews separator, no dots may
-   occur in mailbox names. */
+   occur in mailbox names.  The default switched in 3.0 from off to on. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on") }
 /* Enable virtual domain support.  If enabled, the user's domain will
