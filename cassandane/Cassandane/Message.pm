@@ -455,7 +455,7 @@ sub make_cid
         $cid |= ord(substr($sha1, $_, 1));
     }
     $cid ^= 0x91f3d9e10b690b12; # chosen by fair dice roll
-    my $res = sprintf("%16x", $cid);
+    my $res = sprintf("%016x", $cid);
     return $res;
 }
 
