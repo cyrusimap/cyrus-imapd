@@ -348,7 +348,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                      YYERROR; /* vu should call yyerror() */
                                    }
                                    $$ = new_command(REJCT);
-                                   $$->u.str = $2; }
+                                   $$->u.reject = $2; }
         | FILEINTO ftags STRING  { if (!parse_script->support.fileinto) {
                                      yyerror(parse_script, "fileinto MUST be enabled with \"require\"");
                                      YYERROR;

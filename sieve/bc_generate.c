@@ -761,8 +761,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 /* REJECT (STRING: len + dataptr) */
                 if (!atleast(retval, codep+3)) return -1;
                 retval->data[codep++].op = B_REJECT;
-                retval->data[codep++].len = strlen(c->u.str);
-                retval->data[codep++].str = c->u.str;
+                retval->data[codep++].len = strlen(c->u.reject);
+                retval->data[codep++].str = c->u.reject;
                 break;
 
             case FILEINTO:

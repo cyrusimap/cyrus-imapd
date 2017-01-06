@@ -215,7 +215,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case REJCT:
-            free(cl->u.str);
+            free(cl->u.reject);
             break;
 
         case VACATION:

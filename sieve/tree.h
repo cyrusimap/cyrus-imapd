@@ -133,8 +133,7 @@ struct Testlist {
 struct Commandlist {
     int type;
     union {
-        char *str;
-        strarray_t *sl; /* the parameters */
+        char *reject; /* its a reject action */
         struct { /* it's an if statement */
             test_t *t;
             commandlist_t *do_then;
