@@ -63,6 +63,7 @@ imap/ctl_deliver
 imap/ctl_mboxlist
 imap/ctl_zoneinfo
 imap/cvt_cyrusdb
+imap/cvt_xlist_specialuse
 imap/cyr_buildinfo
 imap/cyr_charset
 imap/cyr_dbtool

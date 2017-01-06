@@ -170,7 +170,8 @@ sbin_PROGRAMS += \
 	imap/mbpath \
 	imap/mbtool \
 	imap/quota \
-	imap/reconstruct
+	imap/reconstruct \
+	imap/cvt_xlist_specialuse
 
 noinst_PROGRAMS += \
 	imap/message_test \
@@ -1452,6 +1453,8 @@ lib/imapopts.h: lib/imapopts.c
 lib/imapopts.c: lib/imapoptions tools/config2header
 	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
 
+imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
+imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
 
 @SET_MAKE@
 
