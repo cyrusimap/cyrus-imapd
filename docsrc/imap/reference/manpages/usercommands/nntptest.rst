@@ -49,8 +49,8 @@ Options
 
     Force **nntptest** to use *mechanism* for authentication. If not
     specified, the strongest authentication mechanism supported by the
-    server is chosen.  Specify *login* to use the LOGIN command instead
-    of AUTHENTICATE.
+    server is chosen.  Specify *user* to use the AUTHINFO USER/PASS
+    commands instead of AUTHINFO SASL.
 
 .. option:: -a  userid
 
