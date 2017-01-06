@@ -1386,10 +1386,9 @@ static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder)
         if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
             ret->u.f.folder = xmalloc(5 * strlen(folder) + 1);
             UTF8_to_mUTF7(ret->u.f.folder, folder);
-            free(folder);
         }
         else {
-            ret->u.f.folder = folder;
+            ret->u.f.folder = xstrdup(folder);
         }
         free_ftags(f);
     }
@@ -1477,7 +1476,7 @@ static commandlist_t *build_flag(int t, char *variable, strarray_t *flags)
     assert(t == SETFLAG || t == ADDFLAG || t == REMOVEFLAG);
 
     if (ret) {
-        ret->u.f.folder = variable ? variable : "";
+        ret->u.f.folder = xstrdup(variable ? variable : "");
         ret->u.f.flags = flags;
         ret->u.f.copy = 0; /* unused */
     }
