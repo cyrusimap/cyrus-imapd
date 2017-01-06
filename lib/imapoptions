@@ -351,7 +351,8 @@ Blank lines and lines beginning with ``#'' are ignored.
    separated by a "|", that are automatically created by the server
    under the following two scenarios. Leading and trailing whitespace is
    stripped, so "Junk | Trash" results in two folders: "Junk" and
-   "Trash".
+   "Trash".  See also the \fIxlist-flag\fR option, for setting
+   special-use flags on autocreated folders.
 .PP
    INBOX folders are created under both the following conditions:
 .\"
@@ -2310,6 +2311,14 @@ product version in the capabilities */
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users
    to the named backup channel. */
+
+# Commented out - there's no such thing as "xlist-flag", but we need
+# this for the man page
+# { "xlist-flag", NULL, STRING }
+/* Set the special-use flag \fIflag\fR on the specified folder when it
+   is autocreated (see the \fIautocreate_inbox_folders\fR option).  For
+   example, if \fBxlist-junk: Spam\fR is set, and the folder \fBSpam\fR
+   is autocreated, the special-use flag \fB\\Junk\fR will be set on it. */
 
 { "lmtp_catchall_mailbox", NULL, STRING }
 /* Mail sent to mailboxes which do not exist, will be delivered to
