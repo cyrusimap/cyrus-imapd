@@ -2695,6 +2695,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     int i;
     const char *p;
 
+    if (patterns->count < 1) return 0; /* nothing to do */
+
     for (i = 0; i < patterns->count; i++) {
         glob *g = glob_init(strarray_nth(patterns, i), rock->namespace->hier_sep);
         ptrarray_append(&rock->globs, g);
