@@ -2453,6 +2453,29 @@ EXPORTED void comma_list_hdr(struct transaction_t *txn, const char *name,
     buf_free(&buf);
 }
 
+EXPORTED void list_auth_schemes(struct transaction_t *txn)
+{
+    struct auth_challenge_t *auth_chal = &txn->auth_chal;
+    unsigned conn_close = (txn->flags.conn & CONN_CLOSE);
+    struct auth_scheme_t *scheme;
+
+    /* Advertise available schemes that can work with the type of connection */
+    for (scheme = auth_schemes; scheme->name; scheme++) {
+        if ((avail_auth_schemes & (1 << scheme->idx)) &&
+            !(conn_close && (scheme->flags & AUTH_NEED_PERSIST))) {
+            auth_chal->param = NULL;
+
+            if (scheme->flags & AUTH_SERVER_FIRST) {
+                /* Generate the initial challenge */
+                http_auth(scheme->name, txn);
+
+                if (!auth_chal->param) continue;  /* If fail, skip it */
+            }
+            WWW_Authenticate(scheme->name, auth_chal->param);
+        }
+    }
+}
+
 EXPORTED void allow_hdr(struct transaction_t *txn,
                         const char *name, unsigned allow)
 {
@@ -2599,8 +2622,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     time_t now;
     char datestr[30];
     const char **hdr;
-    struct auth_challenge_t *auth_chal;
-    struct resp_body_t *resp_body;
+    struct auth_challenge_t *auth_chal = &txn->auth_chal;
+    struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
 
     /* Stop method processing alarm */
@@ -2612,31 +2635,36 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     begin_resp_headers(txn, code);
 
 
-    /* Connection Management */
     switch (code) {
-    case HTTP_SWITCH_PROT:
     default:
         /* Final response */
-        auth_chal = &txn->auth_chal;
-        resp_body = &txn->resp_body;
+        now = time(0);
+        httpdate_gen(datestr, sizeof(datestr), now);
+        simple_hdr(txn, "Date", datestr);
 
-        if (txn->flags.conn && txn->flags.ver != VER_2) {
-            /* Construct Connection header - HTTP/1.x only */
+        if (txn->flags.ver == VER_2) break;
+
+        /* Fall through and specify connection options - HTTP/1.x only */
+
+    case HTTP_SWITCH_PROT:
+        if (txn->flags.conn) {
+            /* Construct Connection header */
             const char *conn_tokens[] =
                 { "close", "Upgrade", "Keep-Alive", NULL };
-            const char *upgrade_tokens[] =
-                { TLS_VERSION,
-#ifdef HAVE_NGHTTP2
-                  NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-#endif
-                  NULL };
 
             comma_list_hdr(txn, "Connection", conn_tokens, txn->flags.conn);
 
             if (txn->flags.upgrade) {
-                comma_list_hdr(txn, "Upgrade", upgrade_tokens, txn->flags.upgrade);
-            }
+                /* Construct Upgrade header */
+                const char *upgrd_tokens[] =
+                    { TLS_VERSION,
+#ifdef HAVE_NGHTTP2
+                      NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+#endif
+                      NULL };
 
+                comma_list_hdr(txn, "Upgrade", upgrd_tokens, txn->flags.upgrade);
+            }
             if (txn->flags.conn & CONN_KEEPALIVE) {
                 simple_hdr(txn, "Keep-Alive", "timeout=%d", httpd_timeout);
             }
@@ -2659,15 +2687,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Control Data */
-    now = time(0);
-    httpdate_gen(datestr, sizeof(datestr), now);
-    simple_hdr(txn, "Date", datestr);
-
     if (httpd_tls_done) {
         simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
     }
     if (txn->location) {
         simple_hdr(txn, "Location", txn->location);
+    }
+    if (txn->flags.mime) {
+        simple_hdr(txn, "MIME-Version", "1.0");
     }
     if (txn->flags.cc) {
         /* Construct Cache-Control header */
@@ -2709,10 +2736,32 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* Response Context */
-    if (txn->flags.mime) {
-        simple_hdr(txn, "MIME-Version", "1.0");
+    /* Authentication Challenges */
+    if (code == HTTP_UNAUTHORIZED) {
+        if (!auth_chal->scheme) {
+            /* Require authentication by advertising all available schemes */
+            list_auth_schemes(txn);
+        }
+        else {
+            /* Continue with current authentication exchange */
+            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+        }
     }
+    else if (auth_chal->param) {
+        /* Authentication completed with success data */
+        if (auth_chal->scheme->send_success) {
+            /* Special handling of success data for this scheme */
+            auth_chal->scheme->send_success(txn, auth_chal->scheme->name,
+                                            auth_chal->param);
+        }
+        else {
+            /* Default handling of success data */
+            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+        }
+    }
+
+    
+    /* Response Context */
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
         simple_hdr(txn, "iSchedule-Version", "1.0");
 
@@ -2720,21 +2769,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "iSchedule-Capabilities", "%ld", resp_body->iserial);
         }
     }
-    if (resp_body->prefs) {
-        /* Construct Preference-Applied header */
-        const char *prefs[] =
-            { "return=minimal", "return=representation", "depth-noroot", NULL };
-
-        comma_list_hdr(txn, "Preference-Applied", prefs, resp_body->prefs);
-        if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
-    }
-
-    if (resp_body->patch) {
-        accept_patch_hdr(txn, resp_body->patch);
-    }
-
     if (resp_body->link) {
         simple_hdr(txn, "Link", resp_body->link);
+    }
+    if (resp_body->patch) {
+        accept_patch_hdr(txn, resp_body->patch);
     }
 
     switch (code) {
@@ -2750,6 +2789,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         case METH_OPTIONS:
             if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
                 simple_hdr(txn, "Server", buf_cstring(&serverinfo));
+            }
+
+            if (!httpd_userid && !auth_chal->scheme) {
+                /* Advertise all available auth schemes */
+                list_auth_schemes(txn);
             }
 
             if (txn->req_tgt.allow & ALLOW_DAV) {
@@ -2787,12 +2831,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
             break;
         }
-        goto authorized;
+        break;
 
     case HTTP_NOT_ALLOWED:
         /* Construct Allow header(s) for 405 response */
         allow_hdr(txn, "Allow", txn->req_tgt.allow);
-        goto authorized;
+        break;
 
     case HTTP_BAD_CE:
         /* Construct Accept-Encoding header for 415 response */
@@ -2801,53 +2845,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 #else
         simple_hdr(txn, "Accept-Encoding", "identity");
 #endif
-        goto authorized;
-
-    case HTTP_UNAUTHORIZED:
-        /* Authentication Challenges */
-        if (!auth_chal->scheme) {
-            /* Require authentication by advertising all possible schemes */
-            struct auth_scheme_t *scheme;
-
-            for (scheme = auth_schemes; scheme->name; scheme++) {
-                /* Only advertise what is available and
-                   can work with the type of connection */
-                if ((avail_auth_schemes & (1 << scheme->idx)) &&
-                    !((txn->flags.conn & CONN_CLOSE) &&
-                      (scheme->flags & AUTH_NEED_PERSIST))) {
-                    auth_chal->param = NULL;
-
-                    if (scheme->flags & AUTH_SERVER_FIRST) {
-                        /* Generate the initial challenge */
-                        http_auth(scheme->name, txn);
-
-                        if (!auth_chal->param) continue;  /* If fail, skip it */
-                    }
-                    WWW_Authenticate(scheme->name, auth_chal->param);
-                }
-            }
-        }
-        else {
-            /* Continue with current authentication exchange */
-            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-        }
         break;
-
-    default:
-    authorized:
-        /* Authentication completed/unnecessary */
-        if (auth_chal->param) {
-            /* Authentication completed with success data */
-            if (auth_chal->scheme->send_success) {
-                /* Special handling of success data for this scheme */
-                auth_chal->scheme->send_success(txn, auth_chal->scheme->name,
-                                                auth_chal->param);
-            }
-            else {
-                /* Default handling of success data */
-                WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-            }
-        }
     }
 
 
@@ -2878,6 +2876,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Representation Metadata */
+    if (resp_body->prefs) {
+        /* Construct Preference-Applied header */
+        const char *prefs[] =
+            { "return=minimal", "return=representation", "depth-noroot", NULL };
+
+        comma_list_hdr(txn, "Preference-Applied", prefs, resp_body->prefs);
+        if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
+    }
     if (resp_body->cmid) {
         simple_hdr(txn, "Cal-Managed-ID", "\"%s\"", resp_body->cmid);
         if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
@@ -2917,13 +2923,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         resp_body->len = 0;
         break;
 
-    case HTTP_BAD_RANGE:
-        simple_hdr(txn, "Content-Range", "bytes */%lu", resp_body->len);
-        resp_body->len = 0;  /* No content */
-
-        /* Fall through and specify framing */
-
     case HTTP_PARTIAL:
+    case HTTP_BAD_RANGE:
         if (resp_body->range) {
             simple_hdr(txn, "Content-Range", "bytes %lu-%lu/%lu",
                        resp_body->range->first, resp_body->range->last,
@@ -2934,6 +2935,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 resp_body->range->last - resp_body->range->first + 1;
 
             free(resp_body->range);
+        }
+        else {
+            simple_hdr(txn, "Content-Range", "bytes */%lu", resp_body->len);
+            resp_body->len = 0;  /* No content */
         }
 
         /* Fall through and specify framing */
