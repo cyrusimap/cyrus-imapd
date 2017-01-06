@@ -1660,6 +1660,10 @@ static int examine_request(struct transaction_t *txn)
                 txn->auth_chal.scheme = NULL;
                 ret = HTTP_UNAUTHORIZED;
             }
+            else if (r == SASL_CONTINUE) {
+                /* Continue with multi-step authentication */
+                ret = HTTP_UNAUTHORIZED;
+            }
         }
     }
     else if (!httpd_userid && txn->auth_chal.scheme) {
