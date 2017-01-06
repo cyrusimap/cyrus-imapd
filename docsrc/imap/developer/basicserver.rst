@@ -14,10 +14,10 @@ At the end of this guide, you will be up and running with a local instance of Cy
 .. note::
     These instructions are for Ubuntu, specifically Ubuntu 15.04. For other operating systems, dependency names in package managers may differ, but the main concepts remain the same.
 
-    Please note that **this guide is meant to get you a working environment quickly, not to allow you to customize everything from the get go**. 
+    Please note that **this guide is meant to get you a working environment quickly, not to allow you to customize everything from the get go**.
 
     This guide will set up Cyrus to work with the Sendmail SMTP server - and there will be no instructions for using Postfix. Once you have a working environment, you are encouraged to experiment further and set up Postfix instead of Sendmail, use different kinds of authentication schemes, etc.
-  
+
 
 1. Update your system
 ----------------------
@@ -26,7 +26,7 @@ First things first, let's update our existing system to ensure everything is cur
 
 ::
 
-    sudo apt-get update  
+    sudo apt-get update
     sudo apt-get upgrade -y
 
 .. _Hacker News: https://news.ycombinator.com/
@@ -46,7 +46,7 @@ Now, let's install libraries and tools used by Cyrus IMAP. This includes a C com
     libsnmp-dev libsqlite3-dev libssl-dev libtest-unit-perl libtool libunix-syslog-perl liburi-perl \
     libxapian-dev libxml-generator-perl libxml-xpath-perl libxml2-dev libwrap0-dev libzephyr-dev lsb-base \
     net-tools perl php5-cli php5-curl pkg-config po-debconf tcl-dev \
-    transfig uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo acl telnet  
+    transfig uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo acl telnet
 
 
 3. The cyrus:mail user
@@ -56,8 +56,8 @@ Now let's create a **special user account just for the Cyrus server** to sandbox
 
 ::
 
-    groupadd -r mail  
-    useradd -c "Cyrus IMAP Server" -d /var/lib/imap -g mail -s /bin/bash -r cyrus  
+    groupadd -r mail
+    useradd -c "Cyrus IMAP Server" -d /var/lib/imap -g mail -s /bin/bash -r cyrus
 
 4. Setting up authentication with SASL
 --------------------------------------
@@ -68,31 +68,31 @@ Create a ``saslauth`` group and add the ``cyrus`` user to the group, so Cyrus ca
 
 ::
 
-    groupadd -r saslauth  
+    groupadd -r saslauth
     usermod -aG saslauth cyrus
-    
+
 Change the default SASL configuration in ``/etc/default/saslauthd``.
     1. Make sure that the ``START`` option is set to *yes* ``(START=yes)`` and
     2. Set the``MECHANISMS`` option to **sasldb** ``(MECHANISMS="sasldb")``.
-    
+
 Start the SASL auth daemon:
 
 ::
 
     /etc/init.d/saslauthd start
-    
+
 Great! Now, we'll create the IMAP user inside SASL. This is the user you'll use to login to the IMAP server later on.
 
 ::
 
     echo 'secret' | saslpasswd2 -p -c imapuser
-    
+
 You can replace ``secret`` with a more suitable password you want and ``imapuser`` with the username you want. Once this is done, check that the user exists and is set up correctly:
 
 ::
 
-    testsaslauthd -u imapuser -p secret  
-    
+    testsaslauthd -u imapuser -p secret
+
 You should get an ``0: OK "Success."`` message.
 
 .. note::
@@ -111,41 +111,41 @@ We'll set up LMTP with the Sendmail SMTP server.
 
 ::
 
-    sudo apt-get install -y sendmail  
-    
+    sudo apt-get install -y sendmail
+
 We need to make Sendmail aware of the fact we are using the Cyrus IMAP server: modify the ``/etc/mail/sendmail.mc`` file. Add this line before the ``MAILER_DEFINITIONS`` section:
 
 ::
 
-    define(`confLOCAL_MAILER', `cyrusv2')dnl  
-    
+    define(`confLOCAL_MAILER', `cyrusv2')dnl
+
 And right below ``MAILER_DEFINITIONS``, add this:
 
 ::
 
-    MAILER(`cyrusv2')dnl  
-    
+    MAILER(`cyrusv2')dnl
+
 This enables the **cyrusv2** mailer for local mail delivery. In case you're wondering, cyrusv2 stands for Cyrus v2.x, which means this is meant to work with versions 2.x of Cyrus IMAP. It may or may not work with Cyrus 3.x too.
 
 Next, we run a script that takes the ``/etc/mail/sendmail.mc`` file and and prepares it for use by Sendmail. This may take some time. In the meantime, you are encouraged to read the `IMAP spec`_ one more time, because, you know, it's a fun read :-)
 
 ::
 
-    sudo sendmailconfig  
+    sudo sendmailconfig
 
 Sendmail communication
 ######################
-    
+
 One last thing we need to do for LMTP to work with Sendmail is to create a folder that will contain the UNIX socket used by Sendmail and Cyrus to deliver/receive emails:
 
 ::
 
-    sudo mkdir -p /var/run/cyrus/socket  
-    sudo chown cyrus:mail /var/run/cyrus/socket  
-    sudo chmod 750 /var/run/cyrus/socket  
+    sudo mkdir -p /var/run/cyrus/socket
+    sudo chown cyrus:mail /var/run/cyrus/socket
+    sudo chmod 750 /var/run/cyrus/socket
 
-.. note::   
-    For some reason, the /var/run/cyrus/socket folder disappears when I reboot my PC. I need to recreate it when I reboot. You may or may not have to do that too.   
+.. note::
+    For some reason, the /var/run/cyrus/socket folder disappears when I reboot my PC. I need to recreate it when I reboot. You may or may not have to do that too.
 
 .. _IMAP spec: http://tools.ietf.org/html/rfc3501
 
@@ -155,19 +155,19 @@ Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/
 
 ::
 
-    pop3      110/tcp  
-    nntp      119/tcp  
-    imap      143/tcp  
-    imsp      406/tcp  
-    nntps     563/tcp  
-    acap      674/tcp  
-    imaps     993/tcp  
-    pop3s     995/tcp  
-    kpop      1109/tcp  
-    lmtp      2003/tcp  
-    sieve     4190/tcp  
-    fud       4201/udp      
-    
+    pop3      110/tcp
+    nntp      119/tcp
+    imap      143/tcp
+    imsp      406/tcp
+    nntps     563/tcp
+    acap      674/tcp
+    imaps     993/tcp
+    pop3s     995/tcp
+    kpop      1109/tcp
+    lmtp      2003/tcp
+    sieve     4190/tcp
+    fud       4201/udp
+
 7. Configuring Cyrus
 --------------------
 
@@ -177,25 +177,25 @@ Set up a simple directory structure for Cyrus to store emails, owned by the ``cy
 
 ::
 
-    sudo mkdir -p /var/imap /var/spool/imap  
-    sudo chown cyrus:mail /var/imap /var/spool/imap  
-    sudo chmod 750 /var/imap /var/spool/imap  
+    sudo mkdir -p /var/imap /var/spool/imap
+    sudo chown cyrus:mail /var/imap /var/spool/imap
+    sudo chmod 750 /var/imap /var/spool/imap
 
-    
+
 Let's add some basic configuration for the Cyrus IMAP server. Two files have to be added: ``/etc/imapd.conf`` and ``/etc/cyrus.conf``.
 
 For :cyrusman:`imapd.conf(5)`, start with this:
 
 ::
 
-    configdirectory: /var/imap  
-    partition-default: /var/spool/imap  
-    admins: imapuser 
-    sasl_pwcheck_method: saslauthd  
-    allowplaintext: yes  
-    virtdomains: yes  
-    defaultdomain: localhost  
-    
+    configdirectory: /var/imap
+    partition-default: /var/spool/imap
+    admins: imapuser
+    sasl_pwcheck_method: saslauthd
+    allowplaintext: yes
+    virtdomains: yes
+    defaultdomain: localhost
+
 Note that **configdirectory** and **partition-default** are set to the folders we just created.
 
 The admin user is the ``imapuser`` created in step 4, for authentication against sasl. Change this value if you named your user something different.
@@ -204,13 +204,13 @@ For :cyrusman:`cyrus.conf(5)`, start with this:
 
 ::
 
-    START {  
+    START {
       # do not delete this entry!
       recover    cmd="ctl_cyrusdb -r"
     }
 
     # UNIX sockets start with a slash and are put into /var/imap/sockets
-    SERVICES {  
+    SERVICES {
       # add or remove based on preferences
       imap        cmd="imapd" listen="imap" prefork=0
       pop3        cmd="pop3d" listen="pop3" prefork=0
@@ -219,7 +219,7 @@ For :cyrusman:`cyrus.conf(5)`, start with this:
       lmtpunix    cmd="lmtpd" listen="/var/run/cyrus/socket/lmtp" prefork=0
     }
 
-    EVENTS {  
+    EVENTS {
       # this is required
       checkpoint    cmd="ctl_cyrusdb -c" period=30
 
@@ -238,19 +238,23 @@ Before you launch Cyrus for the first time, create the Cyrus directory structure
 
 ::
 
-    sudo -u cyrus ./tools/mkimap  
-        
+    sudo -u cyrus ./tools/mkimap
+
 8. Launch Cyrus
 ---------------
 
 ::
 
-    sudo ./master/master -d  
+    sudo ./master/master -d
 
 Check ``/var/log/syslog`` for errors so you can quickly understand potential problems.
 
+When you're ready, you can create init scripts to start and stop your daemons. This
+https://www.linux.com/learn/managing-linux-daemons-init-scripts is old, but has a good
+explanation of the concepts required.
+
 Time to cheer!
- 
+
 Optional: Setting up SSL certificates
 -------------------------------------
 
@@ -260,22 +264,22 @@ Let's set up encryption with TLS. Create a TLS certificate using OpenSSL. Genera
 
     sudo openssl req -new -x509 -nodes -out /var/imap/server.pem \
     -keyout /var/imap/server.pem -days 365 \
-    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"  
-    
+    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"
+
 This creates a TLS certificate (`-out`) and private key (`-keyout`) in the `X.509 <https://en.wikipedia.org/wiki/X.509>`_ format (`-x509`). The certificate is set to expire in 365 days (`-days`) and has default information set up (`-subj ...`). The contents of the -subj is non-trivial and defined in `RFC 5280 <http://www.ietf.org/rfc/rfc5280.txt>`_, a brief summary is available on `stackoverflow <http://stackoverflow.com/questions/6464129/certificate-subject-x-509>`_ which is enough to decode our sample above.
 
 Great! You should now have a file at /var/imap/server.pem. Give Cyrus access to this file:
 
 ::
 
-    sudo chown cyrus:mail /var/imap/server.pem 
- 
+    sudo chown cyrus:mail /var/imap/server.pem
+
 Awesome! Almost done. We will now configure the Cyrus IMAP server to actually use this TLS certificate. Open your Cyrus configuration file /etc/imapd.conf and add the following to lines at the end of it:
 
 ::
 
-    tls_server_cert: /var/imap/server.pem  
-    tls_server_key: /var/imap/server.pem  
+    tls_server_cert: /var/imap/server.pem
+    tls_server_key: /var/imap/server.pem
 
 This tells the server where to find the TLS certificate and the key. It may seem weird to specify the same file twice, but since the file has the x509 format, the server will know what to do. Cyrus is there for you, always (unless your hard drive burns down) ! :-)
 
@@ -283,17 +287,17 @@ The other configuration file we have to edit is /etc/cyrus.conf. Open it up with
 
 ::
 
-    imaps        cmd="imapd" listen="imaps" prefork=0  
-    
-Notice the `s` at the end of `imaps`. This says we are using TLS.   
+    imaps        cmd="imapd" listen="imaps" prefork=0
+
+Notice the `s` at the end of `imaps`. This says we are using TLS.
 
 If you now restart (or start) your Cyrus server, you should have Cyrus listening on port **993** (the IMAPS port) with the **STARTTLS IMAP extension** enabled. You can check that TLS works as expected with the following command:
 
 ::
 
-    imtest -t "" -u imapuser -a imapuser -w secret localhost  
-    
-Make sure to replace `imapuser` with whatever user you set up with saslpasswd2 before, and to replace `secret` with the actual password you set for that user. 
+    imtest -t "" -u imapuser -a imapuser -w secret localhost
+
+Make sure to replace `imapuser` with whatever user you set up with saslpasswd2 before, and to replace `secret` with the actual password you set for that user.
 
 Sending a test email
 --------------------
@@ -304,12 +308,12 @@ We will now send a test email to our local development environment to see if eve
 * LMTP should transmit the email to Cyrus IMAP,
 * You should be able to see the email stored on your filesystem.
 
-But first, let's create a mailbox that we will send the test email to. We'll call this test mailbox `example@localhost`. 
+But first, let's create a mailbox that we will send the test email to. We'll call this test mailbox `example@localhost`.
 
 ::
 
-    echo 'createmailbox user.example@localhost' | cyradm -u imapuser -w secret localhost  
-    
+    echo 'createmailbox user.example@localhost' | cyradm -u imapuser -w secret localhost
+
 Notice how we seem to be creating a mailbox named `user.example@localhost`. In fact, Cyrus understands this to be `example@localhost`, so we're fine. As usual, adjust the password via the `-w` option to the password you set above.
 
 If you have explicitly enabled `unixhierarchysep` in `/etc/imapd.conf`, you should replace `user.example@localhost` with `user/example@localhost`. You can read more about unixhierarchysep in :cyrusman:`imapd.conf(5)`.
@@ -318,9 +322,9 @@ Also, note that the command above might produce some weird looking output, such 
 
 ::
 
-    localhost> localhost>  
-    
-This happens because cyradm is normally used interactively, with a prompt. We aren't using a prompt, so this output is fine and expected. 
+    localhost> localhost>
+
+This happens because cyradm is normally used interactively, with a prompt. We aren't using a prompt, so this output is fine and expected.
 
 Now that the mailbox exists, we'll send it an email. We won't be using Fastmail or Yahoo Mail or Google Mail. No, no. We will use the good old telnet with raw SMTP commands. Let's do this!
 
@@ -328,30 +332,30 @@ First, connect to the Sendmail SMTP server:
 
 ::
 
-    telnet localhost smtp 
-    
+    telnet localhost smtp
+
 You should see a prompt appear:
 
 ::
 
-    Trying ::1...  
-    Trying 127.0.0.1...  
-    Connected to localhost.  
-    Escape character is '^]'.  
-    220 ... ESMTP Sendmail ...  
-    
+    Trying ::1...
+    Trying 127.0.0.1...
+    Connected to localhost.
+    Escape character is '^]'.
+    220 ... ESMTP Sendmail ...
+
 Now, we'll send the `SMTP commands <https://www.ietf.org/rfc/rfc2821.txt>`_ to the server. These are responsible for ordering Sendmail to store an email:
 
 ::
 
-    EHLO localhost  
-    MAIL FROM:<hello@localhost>  
-    RCPT TO:<example@localhost>  
-    DATA  
-    Hello world!  
+    EHLO localhost
+    MAIL FROM:<hello@localhost>
+    RCPT TO:<example@localhost>
+    DATA
+    Hello world!
     .
-    QUIT  
-    
+    QUIT
+
 If you are using Sendmail as your SMTP server, you should be able to safely copy and paste this bit into the terminal before hitting your ENTER key. If not, you may want to paste these commands one by one (or make sure you enable `PIPELINING` in the SMTP config).
 
 If you see a message like **250 2.0.0 ... Message accepted for delivery**, you did it! You should now have a file called `1.` in the `/var/spool/imap/user/example` directory, with the content of the email you sent just before.
@@ -375,7 +379,7 @@ To be written.
 Troubleshooting
 ---------------
 
-Some common issues are explained below. 
+Some common issues are explained below.
 
 I have all kinds of weird Perl errors when running cyradm
 #########################################################
@@ -384,8 +388,8 @@ The solution is to set the Perl library path right. To be honest, I was too lazy
 
 ::
 
-    export PERL5LIB="$PERL5LIB:$(find path/to/cyrus/perl -type d | tr "\\n" ":")"  
-    
+    export PERL5LIB="$PERL5LIB:$(find path/to/cyrus/perl -type d | tr "\\n" ":")"
+
 Just make sure to change **path/to/cyrus** to the actual path to the Cyrus source code directory. This should be something like ``/home/jack/cyrus-src/perl``.
 
 I can't connect to the IMAP server
@@ -396,7 +400,7 @@ Make sure that the SASL auth daemon is running. You can start it with this comma
 ::
 
     /etc/init.d/saslauthd start
-    
+
 You can safely run this command even if you don't know whether the SASL auth daemon is already running or not.
 
 Emails are not being delivered to Cyrus
@@ -407,7 +411,7 @@ Make sure that you have started Sendmail, which you can do like this:
 ::
 
     /etc/init.d/sendmail start
-    
+
 Something is not working but I can't figure out why
 ###################################################
 
@@ -415,9 +419,9 @@ More information is almost always logged to **syslog**. Make sure you start sysl
 
 ::
 
-    /etc/init.d/rsyslog start 
+    /etc/init.d/rsyslog start
 
 My question isn't answered here
 ###############################
 
-Join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` or on the mailing lists if you need help or just want to chat about Cyrus, IMAP, donuts, etc.   
+Join us in the :ref:`#cyrus IRC channel on Freenode <feedback>` or on the mailing lists if you need help or just want to chat about Cyrus, IMAP, donuts, etc.

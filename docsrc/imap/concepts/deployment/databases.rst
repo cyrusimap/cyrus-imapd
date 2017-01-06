@@ -1,3 +1,5 @@
+.. _databases:
+
 =========
 Databases
 =========
@@ -33,17 +35,17 @@ One per system:
 * `STATUS cache (statuscache.db)`_
 * `User Access (user_deny.db)`_
 * `Backups (backup.db)`_
-* `Conversations (conversations.db)`_
 * `News database (fetchnews.db)`_
-* `Search Index db (?.db)`_
 * `Sort Cache db (?.db)`_
 * `Zoneinfo db (zoneinfo.db)`_
 
 One per user:
 
+* `Conversations (conversations.db)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
 * `Mailbox Keys (<userid>.mboxkey)`_
+* `Search Index db (?.db)`_
 
 Mailbox List (mailboxes.db)
 ---------------------------
@@ -165,6 +167,9 @@ File format not selectable.
 
 Search Index db (?.db)
 ----------------------
+
+This is either cyrus.squatter if you're using squatter, or xapian.active
+if you're using xapian.
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
 
