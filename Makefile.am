@@ -1458,6 +1458,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 dist_man1_MANS = \
 	man/imtest.1 \
 	man/installsieve.1 \
+	man/httptest.1 \
 	man/lmtptest.1 \
 	man/mupdatetest.1 \
 	man/nntptest.1 \
@@ -1909,6 +1910,7 @@ endif
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(bindir)
 	cd $(DESTDIR)$(bindir) && \
+	  $(LN_S) -f imtest httptest && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupdatetest && \
 	  $(LN_S) -f imtest nntptest && \
