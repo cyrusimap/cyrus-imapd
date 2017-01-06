@@ -811,9 +811,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                     retval->data[codep++].op = B_REMOVEFLAG;
                     break;
                 }
-                retval->data[codep++].len = strlen(c->u.f.folder);
-                retval->data[codep++].str = c->u.f.folder;
-                codep = bc_stringlist_generate(codep,retval,c->u.f.flags);
+                retval->data[codep++].len = strlen(c->u.fl.variable);
+                retval->data[codep++].str = c->u.fl.variable;
+                codep = bc_stringlist_generate(codep,retval,c->u.fl.flags);
                 if (codep == -1) return -1;
                 break;
 

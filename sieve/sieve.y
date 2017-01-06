@@ -1476,9 +1476,8 @@ static commandlist_t *build_flag(int t, char *variable, strarray_t *flags)
     assert(t == SETFLAG || t == ADDFLAG || t == REMOVEFLAG);
 
     if (ret) {
-        ret->u.f.folder = xstrdup(variable ? variable : "");
-        ret->u.f.flags = flags;
-        ret->u.f.copy = 0; /* unused */
+        ret->u.fl.variable = xstrdup(variable ? variable : "");
+        ret->u.fl.flags = flags;
     }
 
     return ret;

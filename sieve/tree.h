@@ -157,12 +157,16 @@ struct Commandlist {
             int copy;
             strarray_t *flags;
         } k;
-        struct { /* it's a fileinto or a flag action */
+        struct { /* it's a fileinto action */
             char *folder;
             int copy;
             int create;
             strarray_t *flags;
         } f;
+        struct { /* it's a flag action */
+            char *variable;
+            strarray_t *flags;
+        } fl;
         struct { /* it's a redirect action */
             char *address;
             int copy;
