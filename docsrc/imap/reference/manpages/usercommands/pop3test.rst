@@ -50,8 +50,8 @@ Options
 
     Force **pop3test** to use *mechanism* for authentication. If not
     specified, the strongest authentication mechanism supported by the
-    server is chosen.  Specify *login* to use the LOGIN command instead
-    of AUTHENTICATE.
+    server is chosen.  Specify *user* to use the USER/PASS commands
+    or *apop* to use the APOP command instead of AUTH.
 
 .. option:: -a  userid
 
