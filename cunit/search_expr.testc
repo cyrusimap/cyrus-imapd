@@ -352,7 +352,7 @@ static void test_get_search_program(void)
     /* FOLDER <mboxname> */
     TESTCASE("folder INBOX\r\n",
              "(and (match folder \"user.fred\"))");
-    TESTCASE("folder INBOX.GastroPub\r\n",
+    TESTCASE("folder GastroPub\r\n",
              "(and (match folder \"user.fred.GastroPub\"))");
 
     /* XLISTID <string> */
