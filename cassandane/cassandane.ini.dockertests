@@ -51,6 +51,10 @@ cleanup = no
 [gdb]
 
 [config]
+# need to revert the defaults for now because tests were built do old defaults.
+# remove this when they're fixed!
+altnamespace = no
+unixhierarchysep = no
 
 [imaptest]
 basedir = /srv/imaptest.git
