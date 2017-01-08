@@ -224,7 +224,9 @@ static void cmd_newnews(char *wild, time_t tstamp);
 static void cmd_over(char *msgid, unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
+#ifdef HAVE_ZLIB
 static void cmd_compress(char *alg);
+#endif
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 

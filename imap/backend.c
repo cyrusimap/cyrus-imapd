@@ -478,11 +478,9 @@ EXPORTED char *backend_get_cap_params(const struct backend *s, unsigned long cap
     return NULL;
 }
 
+#ifdef HAVE_ZLIB
 static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 {
-#ifndef HAVE_ZLIB
-    return -1;
-#else
     char buf[1024];
 
     /* send compress command */
@@ -498,8 +496,14 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
     prot_setcompress(s->out);
 
     return 0;
-#endif /* HAVE_ZLIB */
 }
+#else
+static int do_compress(struct backend *s __attribute__((unused)),
+                       struct simple_cmd_t *compress_cmd __attribute__((unused)))
+{
+    return -1;
+}
+#endif /* HAVE_ZLIB */
 
 #ifdef HAVE_SSL
 EXPORTED int backend_starttls(  struct backend *s,

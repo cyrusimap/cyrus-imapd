@@ -987,6 +987,7 @@ int main(int argc, char **argv)
 #ifdef HAVE_ZLIB
             do_compress = 1;
 #else
+            do_compress = 0;
             fatal("Compress not available without zlib compiled in", EC_SOFTWARE);
 #endif
             break;

@@ -1268,9 +1268,11 @@ esac
 if test "$with_zlib" != "no"; then
     AC_DEFINE(HAVE_ZLIB,[],[Do we have zlib?])
     ZLIB="-lz"
+    HAVE_ZLIB=1
 else
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
+    HAVE_ZLIB=0
 fi
 
 AC_MSG_CHECKING(for zlib)
@@ -1571,6 +1573,9 @@ if test "x$enable_backup" != xno; then
         AC_MSG_ERROR([Need sqlite3 for backups])
     else
         use_sqlite="yes"
+    fi
+    if test "x$HAVE_ZLIB" != x1; then
+        AC_MSG_ERROR([Need zlib for backups])
     fi
 
     AC_DEFINE([ENABLE_BACKUP],[],[Build with backup support])

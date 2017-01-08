@@ -221,7 +221,9 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 static void cmd_startupdate(struct conn *C, const char *tag,
                      strarray_t *partial);
 static void cmd_starttls(struct conn *C, const char *tag);
+#ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
+#endif
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
@@ -2091,7 +2093,9 @@ static void cmd_compress(struct conn *C, const char *tag, const char *alg)
     }
 }
 #else
-void cmd_compress(struct conn *C, const char *tag, const char *alg)
+void cmd_compress(struct conn *C __attribute__((unused)),
+                  const char *tag __attribute__((unused)),
+                  const char *alg __attribute__((unused)))
 {
     fatal("cmd_compress() executed, but COMPRESS isn't implemented!",
           EC_SOFTWARE);

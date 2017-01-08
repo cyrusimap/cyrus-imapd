@@ -957,7 +957,7 @@ static void cmd_compress(char *alg)
     sync_compress_done = 1;
 }
 #else
-static void cmd_compress(char *alg)
+static void cmd_compress(char *alg __attribute__((unused)))
 {
     prot_printf(sync_out, "NO ZLIB not available\r\n");
 }

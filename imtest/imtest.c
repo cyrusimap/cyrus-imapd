@@ -2705,12 +2705,17 @@ int main(int argc, char **argv)
 #else
     #define WITH_SSL_ONLY __attribute__((unused))
 #endif
+#ifdef HAVE_ZLIB
+    #define WITH_ZLIB_ONLY /**/
+#else
+    #define WITH_ZLIB_ONLY __attribute__((unused))
+#endif
 
     char *prog;
     char *tls_keyfile WITH_SSL_ONLY = "";
     char *port = "", *prot = "";
     int run_stress_test=0;
-    int dotls WITH_SSL_ONLY = 0, dossl=0, docompress=0;
+    int dotls WITH_SSL_ONLY = 0, dossl = 0, docompress WITH_ZLIB_ONLY = 0;
     unsigned long capabilities = 0;
     char str[1024];
     const char *pidfile = NULL;
