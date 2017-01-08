@@ -49,10 +49,6 @@
 #include <libxml/uri.h>
 #include <libical/ical.h>
 
-#ifdef HAVE_ZLIB
-#include <zlib.h>
-#endif /* HAVE_ZLIB */
-
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
 #endif /* HAVE_NGHTTP2 */
@@ -313,10 +309,8 @@ struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
 
-    int gzip_enabled;                   /* Is gzip compression enabled? */
-#ifdef HAVE_ZLIB
-    z_stream zstrm;                     /* Compression context */
-#endif
+    void *zstrm;                        /* Zlib compression context */
+    void *brotli;                       /* Brotli compression context */
 
 #ifdef HAVE_NGHTTP2
     nghttp2_session *http2_session;     /* HTTP/2 session context */
@@ -398,9 +392,10 @@ enum {
 
 /* Content-Encoding flags (coding of representation) */
 enum {
-    CE_IDENTITY =       0,
-    CE_DEFLATE =        (1<<0),
-    CE_GZIP =           (1<<1)
+    CE_IDENTITY =       0,      /* no encoding       */
+    CE_DEFLATE =        (1<<0), /* ZLIB   - RFC 1950 */
+    CE_GZIP =           (1<<1), /* GZIP   - RFC 1952 */
+    CE_BR =             (1<<2)  /* Brotli - RFC 7932 */
 };
 
 /* Cache-Control directive flags */

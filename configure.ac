@@ -1426,6 +1426,7 @@ with_xml2=no
 with_ical=no
 with_icu4c=no
 with_shaplib=no
+with_brotli=no
 if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
@@ -1529,6 +1530,14 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
+
+        PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
+                AC_DEFINE(HAVE_BROTLI,[],
+                        [Build Brotli compression support into httpd?])
+                with_brotli=yes
+                ],
+                AC_MSG_NOTICE([httpd will not have support for Brotli compression.  Consider installing libbrotli]))
+
         dnl httpd needs libmath in a few places
         dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
         dnl XXX break under -Werror(!)
@@ -1542,8 +1551,8 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -2183,6 +2192,7 @@ External dependencies:
    openio:             $with_openio
    -----------------------
    nghttp2:            $with_nghttp2
+   brotli:             $with_brotli
    xml2:               $with_xml2
    ical:               $with_ical
    icu4c:              $with_icu4c

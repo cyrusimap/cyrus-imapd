@@ -110,6 +110,27 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#ifdef HAVE_BROTLI
+#include <brotli/encode.h>
+
+BrotliEncoderState *brotli_init()
+{
+    BrotliEncoderState *brotli = BrotliEncoderCreateInstance(NULL, NULL, NULL);
+
+    if (brotli) {
+        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_MODE,
+                                  BROTLI_DEFAULT_MODE);
+        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_QUALITY,
+                                  BROTLI_DEFAULT_QUALITY);
+        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGWIN,
+                                  BROTLI_DEFAULT_WINDOW);
+        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGBLOCK, 0);
+    }
+
+    return brotli;
+}
+#endif /* HAVE_BROTLI */
+
 
 static const char tls_message[] =
     HTML_DOCTYPE
@@ -921,6 +942,11 @@ int service_init(int argc __attribute__((unused)),
 #ifdef HAVE_ZLIB
     buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
 #endif
+#ifdef HAVE_BROTLI
+    uint32_t version = BrotliEncoderVersion();
+    buf_printf(&serverinfo, " Brotli/%u.%u.%u",
+               (version >> 24) & 0xfff, (version >> 12) & 0xfff, version & 0xfff);
+#endif
     buf_printf(&serverinfo, " LibXML%s", LIBXML_DOTTED_VERSION);
 
     /* Do any namespace specific initialization */
@@ -1064,14 +1090,21 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
+    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
 #ifdef HAVE_ZLIB
-    /* Always use gzip format because IE incorrectly uses raw deflate */
-    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
-        deflateInit2(&http_conn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-                     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
-        http_conn.gzip_enabled = 1;
-    }
+        http_conn.zstrm = xzmalloc(sizeof(z_stream));
+        /* Always use gzip format because IE incorrectly uses raw deflate */
+        if (deflateInit2(http_conn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                         16+MAX_WBITS /* gzip */,
+                         MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
+            free(http_conn.zstrm);
+            http_conn.zstrm = NULL;
+        }
 #endif
+#ifdef HAVE_BROTLI
+        http_conn.brotli = brotli_init();
+#endif
+    }
 
     cmdloop(&http_conn);
 
@@ -1087,7 +1120,13 @@ int service_main(int argc __attribute__((unused)),
 #endif
 
 #ifdef HAVE_ZLIB
-    deflateEnd(&http_conn.zstrm);
+    if (http_conn.zstrm) {
+        deflateEnd(http_conn.zstrm);
+        free(http_conn.zstrm);
+    }
+#endif
+#ifdef HAVE_BROTLI
+    if (http_conn.brotli) BrotliEncoderDestroyInstance(http_conn.brotli);
 #endif
 
     return 0;
@@ -1756,38 +1795,48 @@ static int examine_request(struct transaction_t *txn)
         xmlFreeURI(uri);
     }
 
-    /* Check if we should compress response body */
-    if (txn->conn->gzip_enabled) {
-        /* XXX  Do we want to support deflate even though M$
-           doesn't implement it correctly (raw deflate vs. zlib)? */
+    /* Check if we should compress response body
 
-        if (txn->flags.ver == VER_1_1 &&
-            (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-            struct accept *e, *enc = parse_accept(hdr);
+       XXX  Do we want to support deflate even though M$
+       doesn't implement it correctly (raw deflate vs. zlib)? */
+    if (txn->conn->zstrm &&
+        txn->flags.ver == VER_1_1 &&
+        (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+        struct accept *e, *enc = parse_accept(hdr);
 
-            for (e = enc; e && e->token; e++) {
-                if (e->qual > 0.0 &&
-                    (!strcasecmp(e->token, "gzip") ||
-                     !strcasecmp(e->token, "x-gzip"))) {
-                    txn->flags.te = TE_GZIP;
-                }
-                free(e->token);
+        for (e = enc; e && e->token; e++) {
+            if (e->qual > 0.0 &&
+                (!strcasecmp(e->token, "gzip") ||
+                 !strcasecmp(e->token, "x-gzip"))) {
+                txn->flags.te = TE_GZIP;
             }
-            if (enc) free(enc);
+            free(e->token);
         }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
-            struct accept *e, *enc = parse_accept(hdr);
+        if (enc) free(enc);
+    }
+    else if ((txn->conn->zstrm || txn->conn->brotli) &&
+             (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
+        struct accept *e, *enc = parse_accept(hdr);
+        float qual = 0.0;
 
-            for (e = enc; e && e->token; e++) {
-                if (e->qual > 0.0 &&
-                    (!strcasecmp(e->token, "gzip") ||
-                     !strcasecmp(e->token, "x-gzip"))) {
+        for (e = enc; e && e->token; e++) {
+            if (e->qual > 0.0) {
+                /* Favor Brotli over GZIP if q values are equal */
+                if (txn->conn->brotli &&
+                    (e->qual >= qual) && !strcasecmp(e->token, "br")) {
+                    txn->resp_body.enc = CE_BR;
+                    qual = e->qual;
+                }
+                else if (txn->conn->zstrm &&
+                         (e->qual > qual) && (!strcasecmp(e->token, "gzip") ||
+                                              !strcasecmp(e->token, "x-gzip"))) {
                     txn->resp_body.enc = CE_GZIP;
+                    qual = e->qual;
                 }
-                free(e->token);
             }
-            if (enc) free(enc);
+            free(e->token);
         }
+        if (enc) free(enc);
     }
 
     /* Parse any query parameters */
@@ -2902,7 +2951,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (txn->resp_body.enc) {
             /* Construct Content-Encoding header */
             const char *ce[] =
-                { "deflate", "gzip", NULL };
+                { "deflate", "gzip", "br", NULL };
 
             comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc);
         }
@@ -3224,21 +3273,59 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     }
 
     /* Compress data */
-    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
+    if (txn->resp_body.enc == CE_BR) {
+#ifdef HAVE_BROTLI
+        /* Only flush for static content or on last (zero-length) chunk */
+        unsigned op = (is_dynamic && len) ?
+            BROTLI_OPERATION_FLUSH : BROTLI_OPERATION_FINISH;
+        BrotliEncoderState *brotli = txn->conn->brotli;
+        const uint8_t *next_in = (const uint8_t *) buf;
+        size_t avail_in = (size_t) len;
+
+        buf_ensure(&txn->zbuf, BrotliEncoderMaxCompressedSize(avail_in));
+        buf_reset(&txn->zbuf);
+
+        do {
+            uint8_t *next_out = (uint8_t *) txn->zbuf.s + txn->zbuf.len;
+            size_t avail_out = txn->zbuf.alloc - txn->zbuf.len;
+
+            if (!BrotliEncoderCompressStream(brotli, op,
+                                             &avail_in, &next_in,
+                                             &avail_out, &next_out, NULL)) {
+                syslog(LOG_ERR, "Brotli: Error while compressing data");
+                fatal("Brotli: Error while compressing data", EC_SOFTWARE);
+            }
+
+            txn->zbuf.len = txn->zbuf.alloc - avail_out;
+        } while (avail_in || BrotliEncoderHasMoreOutput(brotli));
+
+        buf = txn->zbuf.s;
+        outlen = txn->zbuf.len;
+
+        if (BrotliEncoderIsFinished(brotli)) {
+            BrotliEncoderDestroyInstance(brotli);
+            txn->conn->brotli = brotli_init();
+        }
+#else
+        /* XXX should never get here */
+        fatal("Brotli Compression requested, but not available", EC_SOFTWARE);
+#endif /* HAVE_BROTLI */
+    }
+    else if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
 #ifdef HAVE_ZLIB
         /* Only flush for static content or on last (zero-length) chunk */
         unsigned flush = (is_dynamic && len) ? Z_NO_FLUSH : Z_FINISH;
-        z_stream *zstrm = &txn->conn->zstrm;
+        z_stream *zstrm = txn->conn->zstrm;
 
         if (code) deflateReset(zstrm);
 
         zstrm->next_in = (Bytef *) buf;
         zstrm->avail_in = len;
+
+        buf_ensure(&txn->zbuf, deflateBound(zstrm, zstrm->avail_in));
         buf_reset(&txn->zbuf);
 
         do {
-            buf_ensure(&txn->zbuf, deflateBound(zstrm, zstrm->avail_in));
-
             zstrm->next_out = (Bytef *) txn->zbuf.s + txn->zbuf.len;
             zstrm->avail_out = txn->zbuf.alloc - txn->zbuf.len;
 
