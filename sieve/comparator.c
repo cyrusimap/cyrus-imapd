@@ -202,10 +202,7 @@ static int octet_contains(const char *text, size_t tlen, const char *pat,
 static void append_var(int var_num, const char* val_start, const char* val_end,
                        strarray_t *match_vars)
 {
-    char *val;
-    val = xzmalloc(val_end - val_start + 1);
-    snprintf(val, val_end - val_start + 1, "%s", val_start);
-    val[val_end-val_start] = '\0';
+    char *val = xstrndup(val_start, val_end - val_start);
     strarray_setm(match_vars, var_num, val);
 }
 
@@ -336,32 +333,50 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 
 
 #ifdef ENABLE_REGEX
+#define MAX_MATCH 9  /* MUST support ${1} through ${9} per RFC 5229 */
+
 static int octet_regex(const char *text, size_t tlen, const char *pat,
-                       void *rock __attribute__((unused)))
+                       void *rock)
 {
+    strarray_t *match_vars = (strarray_t *) rock;
+    regmatch_t pm[MAX_MATCH+1];
+    size_t nmatch = 0;
     int r;
+
+    if (match_vars) {
+        strarray_fini(match_vars);
+        nmatch = MAX_MATCH+1;
+    }
 
 #ifdef REG_STARTEND
     /* pcre, BSD, some linuxes support this handy trick */
-    regmatch_t pm[1];
-
     pm[0].rm_so = 0;
     pm[0].rm_eo = tlen;
-    r = !regexec((regex_t *) pat, text, 0, pm, REG_STARTEND);
-#else
-#ifdef HAVE_RX_POSIX_H
+    r = !regexec((regex_t *) pat, text, nmatch, pm, REG_STARTEND);
+#elif defined(HAVE_RX_POSIX_H)
     /* rx provides regnexec, that will work too */
-    r = !regnexec((regex_t *) pat, text, tlen, 0, NULL, 0);
+    r = !regnexec((regex_t *) pat, text, tlen, nmatch, pm, 0);
 #else
     /* regexec() requires a NUL-terminated string, and we have no
      * guarantee that "text" is one.  Also, it may be only exactly
      * tlen's length, so we can't safely check.  Always dup. */
     char *buf = (char *) xstrndup(text, tlen);
-    r = !regexec((regex_t *) pat, buf, 0, NULL, 0);
+    r = !regexec((regex_t *) pat, buf, nmatch, pm, 0);
     free(buf);
-#endif /* HAVE_RX_POSIX_H */
 #endif /* REG_STARTEND */
 
+    if (r) {
+        /* populate match variables */
+        size_t var_num;
+
+        for (var_num = 0; var_num < nmatch; var_num++) {
+            regmatch_t *m = &pm[var_num];
+
+            if (m->rm_so < 0) break;
+
+            append_var(var_num, text + m->rm_so, text + m->rm_eo, match_vars);
+        }
+    }
     return r;
 }
 #endif

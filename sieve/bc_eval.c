@@ -363,6 +363,16 @@ out:
     return l;
 }
 
+static int regcomp_flags(int comparator, int requires)
+{
+    int cflags = REG_EXTENDED;
+
+    if (comparator == B_ASCIICASEMAP) cflags |= REG_ICASE;
+    if (!(requires & BFE_VARIABLES))  cflags |= REG_NOSUB;
+
+    return cflags;
+}
+
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
@@ -541,16 +551,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag = REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag = REG_EXTENDED | REG_NOSUB;
-            }
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
@@ -780,17 +782,8 @@ envelope_err:
         char *decoded_header;
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag= REG_EXTENDED | REG_NOSUB;
-            }
-
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
@@ -942,17 +935,8 @@ envelope_err:
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag= REG_EXTENDED | REG_NOSUB;
-            }
-
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
@@ -1140,16 +1124,8 @@ envelope_err:
         char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag = REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag = REG_EXTENDED | REG_NOSUB;
-            }
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
@@ -1598,17 +1574,8 @@ envelope_err:
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag= REG_EXTENDED | REG_NOSUB;
-            }
-
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
@@ -1708,17 +1675,8 @@ envelope_err:
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
-        if (isReg)
-        {
-            if (comparator== B_ASCIICASEMAP)
-            {
-                ctag= REG_EXTENDED | REG_NOSUB | REG_ICASE;
-            }
-            else
-            {
-                ctag= REG_EXTENDED | REG_NOSUB;
-            }
-
+        if (isReg) {
+            ctag = regcomp_flags(comparator, requires);
         }
 
         /*find the correct comparator fcn*/
