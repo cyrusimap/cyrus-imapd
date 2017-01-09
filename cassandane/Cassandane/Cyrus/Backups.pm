@@ -80,18 +80,21 @@ sub cyr_backup_json
     my $instance = $params->{instance} // $self->{backups};
     my $user = $params->{user} // 'cassandane';
 
-    my $f = "$instance->{basedir}/$self->{_name}"
+    my $out = "$instance->{basedir}/$self->{_name}"
 	  . "-cyr_backup-$user-json-$subcommand.stdout";
+    my $err = "$instance->{basedir}/$self->{_name}"
+	  . "-cyr_backup-$user-json-$subcommand.stderr";
 
     $instance->run_command(
 	{ cyrus => 1,
-	  redirects => { 'stdout' => $f } },
+	  redirects => { 'stdout' => $out,
+			 'stderr' => $err } },
 	'cyr_backup', '-u', $user, 'json', $subcommand, @args
     );
 
     local $/;
-    open my $fh, '<', $f
-	or die "Cannot open $f for reading: $!";
+    open my $fh, '<', $out
+	or die "Cannot open $out for reading: $!";
     my $data = JSON::decode_json(<$fh>);
     close $fh;
 
