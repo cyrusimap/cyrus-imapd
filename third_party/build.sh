@@ -17,7 +17,7 @@ git submodule update
   cd icu4c
   git clean -f -x -d
   cd source
-  ./configure --with-data-packaging=archive --prefix=$PREFIX
+  ./configure --enable-silent-rules --with-data-packaging=archive --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
 )
@@ -26,7 +26,7 @@ git submodule update
   cd jansson
   git clean -f -x -d
   autoreconf -v -i
-  ./configure --prefix=$PREFIX
+  ./configure --enable-silent-rules --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
 )
@@ -35,7 +35,7 @@ git submodule update
   cd opendkim
   git clean -f -x -d
   autoreconf -v -i
-  ./configure --prefix=$PREFIX
+  ./configure --enable-silent-rules --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
 )
@@ -56,7 +56,7 @@ git submodule update
   cd xapian
   git clean -f -x -d
   ./bootstrap
-  ./configure --prefix=$PREFIX
+  ./configure --enable-silent-rules --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
 )
