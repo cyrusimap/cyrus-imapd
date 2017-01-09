@@ -145,6 +145,7 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     bytecode_info_t *bc = NULL;
     int bc_fd = -1;
     int r;
+    int is_retry = 0;
     size_t len;
 
     if (!script_fname && !bc_fname)
@@ -158,6 +159,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
 
     if (!script_fname || !bc_fname)
         return SIEVE_FAIL;
+
+retry:
 
     /* exit early if bc is up to date */
     if (!force) {
@@ -216,6 +219,14 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     bc_fd = open(new_bc_fname, O_CREAT|O_EXCL|O_WRONLY,
                                S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (bc_fd < 0) {
+        if (errno == EEXIST && !is_retry) {
+            syslog(LOG_INFO, "%s: file exists, rebuild already in progress? retrying...\n", new_bc_fname);
+            /* XXX how long does compiling sieve usually take? how long can we stall lmtp for? */
+            usleep(100000); /* 1/10th second */
+            is_retry = 1;
+            goto retry;
+        }
+
         syslog(LOG_ERR, "IOERROR: unable to open %s for writing: %m",
                         new_bc_fname);
         r = IMAP_IOERROR;
