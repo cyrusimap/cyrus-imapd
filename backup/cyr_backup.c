@@ -379,8 +379,10 @@ int main(int argc, char **argv)
     if (!r && cmd_func[cmd])
         r = cmd_func[cmd](backup, &options);
 
-    if (r)
+    if (r) {
         fprintf(stderr, "%s: %s\n", backup_name, error_message(r));
+        syslog(LOG_ERR, "backup error %s: %s",  backup_name, error_message(r));
+    }
 
     /* close backup */
     if (backup)
