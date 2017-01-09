@@ -58,7 +58,6 @@ unixhierarchysep = no
 
 [imaptest]
 basedir = /srv/imaptest.git
-suppress = append-binary urlauth-binary fetch-binary-mime fetch-binary-mime-qp
 
 [caldavtester]
 basedir = /srv/caldavtester.git
