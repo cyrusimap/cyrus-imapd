@@ -58,6 +58,8 @@ unixhierarchysep = no
 
 [imaptest]
 basedir = /srv/imaptest.git
+suppress = urlauth
 
 [caldavtester]
-basedir = /srv/caldavtester.git
+# still buggy, skip for now
+#basedir = /srv/caldavtester.git
