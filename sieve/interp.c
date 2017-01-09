@@ -133,6 +133,14 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
             strlcat(i->extensions, " body", EXT_LEN);
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)
             strlcat(i->extensions, " imap4flags", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
+            strlcat(i->extensions, " date", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)
+            strlcat(i->extensions, " mailbox", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)
+            strlcat(i->extensions, " mboxmetadata", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)
+            strlcat(i->extensions, " servermetadata", EXT_LEN);
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
@@ -147,9 +155,10 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
             strlcat(i->extensions, " subaddress", EXT_LEN);
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
             strlcat(i->extensions, " copy", EXT_LEN);
-
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
-            strlcat(i->extensions, " date", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)
+            strlcat(i->extensions, " index", EXT_LEN);
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)
+            strlcat(i->extensions, " variables", EXT_LEN);
     }
 
     return i->extensions;
