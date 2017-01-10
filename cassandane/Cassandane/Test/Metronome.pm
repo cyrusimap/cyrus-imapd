@@ -61,7 +61,7 @@ sub test_basic
     my ($self) = @_;
 
     my $rate = 100.0;
-    my $epsilon = 0.02;
+    my $epsilon = 0.05;
     my $m = Cassandane::Util::Metronome->new(rate => $rate);
 
     my $ss = new Cassandane::Util::Sample;
