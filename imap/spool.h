@@ -45,14 +45,16 @@
 
 #include <stdio.h>
 #include "prot.h"
-#include "hash.h"
 
-typedef hash_table *hdrcache_t;
+typedef struct hdrcache_t *hdrcache_t;
 
 hdrcache_t spool_new_hdrcache(void);
-void spool_cache_header(char *name, char *body, hdrcache_t cache);
+void spool_prepend_header(char *name, char *body, hdrcache_t cache);
+void spool_append_header(char *name, char *body, hdrcache_t cache);
+#define spool_cache_header(n, b, c) spool_append_header(n, b, c)
 void spool_replace_header(char *name, char *newvalue, hdrcache_t cache);
 void spool_remove_header(char *name, hdrcache_t cache);
+void spool_remove_header_instance(char *name, const char *body, hdrcache_t cache);
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
                         const char **skipheaders);
 const char **spool_getheader(hdrcache_t cache, const char *phead);
