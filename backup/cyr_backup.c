@@ -357,19 +357,19 @@ int main(int argc, char **argv)
     switch (mode) {
     case CYRBU_MODE_FILENAME:
         r = backup_open_paths(&backup, backup_name, NULL,
-                              BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+                              BACKUP_OPEN_BLOCK, BACKUP_OPEN_NOCREATE);
         break;
     case CYRBU_MODE_MBOXNAME:
         mbname = mbname_from_intname(backup_name);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
-                        BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+                        BACKUP_OPEN_BLOCK, BACKUP_OPEN_NOCREATE);
         break;
     case CYRBU_MODE_USERNAME:
         mbname = mbname_from_userid(backup_name);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
-                        BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
+                        BACKUP_OPEN_BLOCK, BACKUP_OPEN_NOCREATE);
         break;
     default:
         usage();
