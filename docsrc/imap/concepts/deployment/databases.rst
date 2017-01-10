@@ -45,6 +45,7 @@ One per user:
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
 * `Mailbox Keys (<userid>.mboxkey)`_
+* `DAV Index (<userid>.dav)`_
 * `Search Index db (?.db)`_
 
 Mailbox List (mailboxes.db)
