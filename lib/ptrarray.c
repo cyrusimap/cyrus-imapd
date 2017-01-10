@@ -211,3 +211,8 @@ EXPORTED void ptrarray_sort(ptrarray_t *pa,
     qsort(pa->data, pa->count, sizeof(void*),
             (int (*)(const void *, const void *))compare);
 }
+
+EXPORTED int ptrarray_size(const ptrarray_t *pa)
+{
+    return pa->count;
+}

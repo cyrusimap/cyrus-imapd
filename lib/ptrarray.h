@@ -87,4 +87,6 @@ int ptrarray_find(const ptrarray_t *pa, void *match,
 
 void ptrarray_sort(ptrarray_t *pa, int (*compare)(const void **, const void **));
 
+int ptrarray_size(const ptrarray_t *pa);
+
 #endif /* __CYRUS_PTRARRAY_H__ */
