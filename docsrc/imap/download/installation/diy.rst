@@ -1,3 +1,5 @@
+.. _install-diy:
+
 ==============
 Do It Yourself
 ==============

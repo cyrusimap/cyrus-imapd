@@ -123,7 +123,7 @@ Individual Rights Reference
         NOT fail, as the tagged NO response is not handled very well by
         deployed clients.
 
-        In order to comply, we have `Bug #3488 <https://bugzilla.cyrusimap.org/show_bug.cgi?id=3488>`__, as
+        In order to comply, we have `Bug #1375 <https://github.com/cyrusimap/cyrus-imapd/issues/1375>`__, as
         Cyrus IMAP currently does seem to issue a tagged ``NO``
         response.
 

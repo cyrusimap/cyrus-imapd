@@ -6,7 +6,14 @@ IMAP Installation Guide
 
 Cyrus IMAP packages are shipped with every major distribution, including
 but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
-Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS.
+Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS. They are not
+guaranteed to be up to date!
+
+Upgrading
+==========
+
+.. toctree::
+    upgrade
 
 Installation Using Packages
 ===========================
@@ -25,20 +32,20 @@ Build and Install Yourself
     :maxdepth: 2
 
     installation/diy
-	
+
 .. toctree::
     :hidden:
 
     installation/mta/index
-    
+
 External Tools
 ==============
 
-These are projects that are not directly developed or managed 
-under the umbrella of the Cyrus Project, but may provide enhancements 
+These are projects that are not directly developed or managed
+under the umbrella of the Cyrus Project, but may provide enhancements
 or additional functionality.
 
-Both of these projects are not under active development, but are 
+Both of these projects are not under active development, but are
 definitely worthwhile and would be Good Things to have available.
 If you think you'd be interested in taking them on and bringing them
 up to speed, we encourage you to contact the original authors.
@@ -46,13 +53,13 @@ up to speed, we encourage you to contact the original authors.
 There is an effort to develop `Cyrus utilities <http://sourceforge.net/projects/cyrus-utils/>`_.
 
 Additionally, a Cyrus administrative GUI is available from http://korreio.sf.net
-    
+
 Licensing
 =========
 
-All versions of the Cyrus IMAP server and Cyrus SASL library are now 
-covered by the following copyright message. However, please note that 
-in older distributions, there may still be files that have the old 
+All versions of the Cyrus IMAP server and Cyrus SASL library are now
+covered by the following copyright message. However, please note that
+in older distributions, there may still be files that have the old
 copyright text.
 
 ::
@@ -64,7 +71,7 @@ copyright text.
     * are met:
     *
     * 1. Redistributions of source code must retain the above copyright
-    *    notice, this list of conditions and the following disclaimer. 
+    *    notice, this list of conditions and the following disclaimer.
     *
     * 2. Redistributions in binary form must reproduce the above copyright
     *    notice, this list of conditions and the following disclaimer in
@@ -74,7 +81,7 @@ copyright text.
     * 3. The name "Carnegie Mellon University" must not be used to
     *    endorse or promote products derived from this software without
     *    prior written permission. For permission or any legal
-    *    details, please contact  
+    *    details, please contact
     *      Office of Technology Transfer
     *      Carnegie Mellon University
     *      5000 Forbes Avenue

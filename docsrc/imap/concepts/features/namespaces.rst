@@ -1,5 +1,7 @@
 :tocdepth: 2
 
+.. _mailbox-namespaces:
+
 ==================
 Mailbox Namespaces
 ==================
