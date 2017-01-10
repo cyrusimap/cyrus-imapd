@@ -17,7 +17,7 @@ Synopsis
         [ **-a** *userid* ] [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ]
         [ **-r** *realm* ] [ **-f** *file* ] [ **-n** *num* ] [ **-s** ] [ **-q** ]
         [ **-c** ] [ **-i** ] [ **-z** ] [ **-v** ] [ **-I** *file* ] [ **-x** *file* ]
-        [ **-X** *file* ] [ **-o** *option*\ =\ *value* ] *hostname*
+        [ **-X** *file* ] [ **-w** *passwd* ] [ **-o** *option*\ =\ *value* ] *hostname*
 
 Description
 ===========
@@ -135,6 +135,10 @@ Options
 .. option:: -X  file
 
     Like -x, only close all file descriptors & daemonize the process.
+
+.. option:: -w passwd
+
+    Password to use (if not supplied, we will prompt).
 
 .. option:: -o  option=value
 
