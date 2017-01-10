@@ -2348,7 +2348,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
     if (_wantprop(props, "textBody") ||
         _wantprop(props, "htmlBody") ||
-        _wantprop(props, "preview") ||
+        (_wantprop(props, "preview") && !config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT)) ||
         _wantprop(props, "body")) {
 
         if (bodies.text) {
@@ -2580,15 +2580,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
         /* preview */
         if (_wantprop(props, "preview")) {
-            const char *annot;
+            const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
             buf_reset(&buf);
-            if ((annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT))) {
-                annotatemore_msg_lookup(mbox->name, record->uid, annot, req->userid, &buf);
+            if (annot) {
+                /* preview is shared */
+                annotatemore_msg_lookup(mbox->name, record->uid, annot, /*userid*/NULL, &buf);
             }
-            if (buf.len) {
-                /* If there is a preview message annotations, use that one */
-                json_object_set_new(msg, "preview", json_string(buf_cstring(&buf)));
-            } else {
+            else {
                 /* Generate our own preview */
                 char *preview = extract_preview(text,
                         config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH));
