@@ -993,5 +993,44 @@ EOF
     $self->assert_num_equals(1, $imaptalk->get_response_code('exists'));
 }
 
+sub test_sieve_setflag
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "imapflags"];
+if header :matches "Subject" "Message 2" {
+    setflag "\\\\Flagged";
+}
+EOF
+    );
+
+    xlog "Deliver a message";
+
+    # should go in Folder1
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # should go in Folder2
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+
+    # should fail to deliver and wind up in INBOX
+    my $msg3 = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg3);
+
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(3, $imaptalk->get_response_code('exists'));
+
+    my @uids = $imaptalk->search('1:*', 'NOT', 'FLAGGED');
+
+    $self->assert_num_equals(2, scalar(@uids));
+}
 
 1;
