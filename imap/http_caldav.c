@@ -3952,17 +3952,16 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        if (organizer) {
-            const char *nextorg = NULL;
+        const char *nextorg = NULL;
 
-            prop = icalcomponent_get_first_property(nextcomp,
-                                                    ICAL_ORGANIZER_PROPERTY);
-            if (prop) nextorg = icalproperty_get_organizer(prop);
-            if (!nextorg || strcmp(organizer, nextorg)) {
-                txn->error.precond = CALDAV_SAME_ORGANIZER;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
+        prop = icalcomponent_get_first_property(nextcomp,
+                                                ICAL_ORGANIZER_PROPERTY);
+        if (prop) nextorg = icalproperty_get_organizer(prop);
+        if ( (!organizer && nextorg)
+             || (organizer && (!nextorg || strcmp(organizer, nextorg)))) {
+            txn->error.precond = CALDAV_SAME_ORGANIZER;
+            ret = HTTP_FORBIDDEN;
+            goto done;
         }
 
         if (rscale_calendars && !rrule) {
