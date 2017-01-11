@@ -346,6 +346,7 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
     if (match_vars) {
         strarray_fini(match_vars);
         nmatch = MAX_MATCH+1;
+        memset(&pm, 0, sizeof(pm));
     }
 
 #ifdef REG_STARTEND
