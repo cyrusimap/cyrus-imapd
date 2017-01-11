@@ -1033,4 +1033,59 @@ EOF
     $self->assert_num_equals(2, scalar(@uids));
 }
 
+sub test_variables_regex
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.target");
+    $imaptalk->create("INBOX.target.Folder1");
+    $imaptalk->create("INBOX.target.Folder2");
+
+    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "variables", "regex"];
+set "folder" "target";
+if header :regex "Subject" "Message (.*)" {
+    fileinto "INBOX.\${folder}.Folder\${1}";
+    stop;
+}
+fileinto "INBOX.\${folder}";
+EOF
+    );
+
+    xlog "Deliver a message";
+
+    # should go in Folder1
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # should go in Folder2
+    my $msg2 = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg2);
+
+    # should fail to deliver and wind up in INBOX
+    my $msg3 = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg3);
+
+    # should not match the if, and file into target
+    my $msg4 = $self->{gen}->generate(subject => "Totally different");
+    $self->{instance}->deliver($msg4);
+
+    $imaptalk->select("INBOX.target.Folder1");
+    $self->assert_num_equals(1, $imaptalk->get_response_code('exists'));
+
+    $imaptalk->select("INBOX.target.Folder2");
+    $self->assert_num_equals(1, $imaptalk->get_response_code('exists'));
+
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(1, $imaptalk->get_response_code('exists'));
+
+    $imaptalk->select("INBOX.target");
+    $self->assert_num_equals(1, $imaptalk->get_response_code('exists'));
+}
+
 1;
