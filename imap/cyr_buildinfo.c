@@ -312,6 +312,7 @@ int main(int argc, char *argv[])
             break;
         case FORMAT_FLAT:
             format_flat(bi, &buf);
+            break;
         default:
             /* should not happen */
             exit(-3);
