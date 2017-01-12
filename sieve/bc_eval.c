@@ -1084,6 +1084,7 @@ envelope_err:
                     } // (is_string) else
 
                 } // loop on each item of the current haystack
+#if VERBOSE
             {
                 /* for debugging purposes only */
                 char *temp;
@@ -1093,6 +1094,7 @@ envelope_err:
                 printf(" %s\n\n", temp);
                 free (temp);
             }
+#endif
 	} // loop on each variable or string
 
         /* Update IP */
@@ -2554,8 +2556,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             data = parse_string(data, variables);
             strarray_appendm(variable->var,
                              variables_modify_string(data, modifiers));
+#if VERBOSE
 	    printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
-
+#endif
             actionflags = NULL;
             break;
         }
