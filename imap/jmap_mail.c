@@ -2842,30 +2842,6 @@ static void match_mailbox(search_expr_t *parent, json_t *mailbox,
     }
 }
 
-static void match_mailboxes(search_expr_t *parent, json_t *mailboxes,
-                            const char *userid, int is_not)
-{
-    json_t *val;
-    search_expr_t *e;
-    size_t i;
-
-    if (is_not) {
-        parent = search_expr_new(parent, SEOP_NOT);
-    }
-
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find(is_not ? "folders_any" : "folders_all");
-    e->value.strarr = strarray_new();
-
-    json_array_foreach(mailboxes, i, val) {
-        const char *s = json_string_value(val);
-        char *mboxname = mboxlist_find_uniqueid(s, userid);
-        if (!mboxname) continue;
-
-        strarray_appendm(e->value.strarr, mboxname);
-    }
-}
-
 static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
                                   search_expr_t *parent)
 {
@@ -2992,9 +2968,6 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
         }
-        if ((val = json_object_get(filter, "notInMailboxes"))) {
-            match_mailboxes(this, val, req->userid, /*is_not*/1);
-        }
         if ((s = json_string_value(json_object_get(filter, "sinceMessageState")))) {
             /* non-standard */
             e = search_expr_new(this, SEOP_GT);
@@ -3060,36 +3033,6 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
         }
 
     } else {
-        arg = json_object_get(filter, "inMailboxes");
-        if (JNOTNULL(arg) && !json_array_size(arg)) {
-            buf_printf(&buf, "%s.inMailboxes", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-        json_array_foreach(arg, i, val) {
-            s = json_string_value(val);
-            if (!s || !strlen(s)) {
-                buf_printf(&buf, "%s.inMailboxes[%zu]", prefix, i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-
-        arg = json_object_get(filter, "notInMailboxes");
-        if (JNOTNULL(arg) && !json_array_size(arg)) {
-            buf_printf(&buf, "%s.notInMailboxes", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-        json_array_foreach(arg, i, val) {
-            s = json_string_value(val);
-            if (!s || !strlen(s)) {
-                buf_printf(&buf, "%s.notInMailboxes[%zu]", prefix, i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-
         if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
@@ -3110,6 +3053,8 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
             }
         }
 
+        readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s);
+        readprop_full(filter, prefix, "inMailboxOtherThan", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "minSize", 0, invalid, "i", &num);
         readprop_full(filter, prefix, "maxSize", 0, invalid, "i", &num);
         readprop_full(filter, prefix, "threadIsFlagged", 0, invalid, "b", &b);
