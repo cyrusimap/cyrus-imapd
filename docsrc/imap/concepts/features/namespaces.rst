@@ -216,7 +216,8 @@ User Namespace Mode
 altnamespace: on or off
 -----------------------
 
-NOTE: If you are upgrading an existing server which uses :cyrusman:`timsieved(8)` to manage Sieve scripts and choose to swap namespace modes, you should run the script :cyrusman:`translatesieve(8)` after configuring the namespace option(s). This script will translate the folder names in fileinto actions.
+.. note::
+    If you are upgrading an existing server which uses :cyrusman:`timsieved(8)` to manage Sieve scripts and choose to swap namespace modes, you should run the script :cyrusman:`translatesieve(8)` after configuring the namespace option(s). This script will translate the folder names in fileinto actions.
 
 By default  Cyrus IMAP uses *altnamespace: on* , and unixhierarchysep: on "/" (slash) character for the
 hierarchy separator.
