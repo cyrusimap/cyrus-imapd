@@ -2580,8 +2580,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
             if (annot) {
                 buf_reset(&buf);
-                /* preview is shared */
-                annotatemore_msg_lookup(mbox->name, record->uid, annot, /*userid*/NULL, &buf);
+                if (!strncmp(annot, "/shared/", 8)) {
+                    annotatemore_msg_lookup(mbox->name, record->uid, annot+7, /*userid*/NULL, &buf);
+                }
+                else if (!strncmp(annot, "/private/", 9)) {
+                    annotatemore_msg_lookup(mbox->name, record->uid, annot+7, req->userid, &buf);
+                }
+                /* otherwise there's no preview, so we return an empty string */
                 json_object_set_new(msg, "preview", json_string(buf_cstring(&buf)));
             }
             else {
