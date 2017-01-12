@@ -2581,7 +2581,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             if (annot) {
                 buf_reset(&buf);
                 if (!strncmp(annot, "/shared/", 8)) {
-                    annotatemore_msg_lookup(mbox->name, record->uid, annot+7, /*userid*/NULL, &buf);
+                    annotatemore_msg_lookup(mbox->name, record->uid, annot+7, /*userid*/"", &buf);
                 }
                 else if (!strncmp(annot, "/private/", 9)) {
                     annotatemore_msg_lookup(mbox->name, record->uid, annot+7, req->userid, &buf);
