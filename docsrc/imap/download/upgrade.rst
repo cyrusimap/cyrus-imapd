@@ -57,7 +57,11 @@ Follow the :ref:`general install instructions <basicserver>`.
 
 .. note::
 
-    Note you won't want to set up your new Cyrus initially to be able to listen for new inbound/outbound imap connections.
+    It's best to ensure your new Cyrus initially *will not* start up listening for new
+    inbound/outbound imap connections, not until you've completed your migration.
+
+    How this is best achieved will depend upon your OS and distro, but may involve
+    something like ``systemctl disable cyrus-imapd`` or ``update-rc.d cyrus-imapd disable``
 
 3. Shut down existing Cyrus
 ---------------------------
@@ -97,14 +101,17 @@ in your config files::
 
     cyr_info conf-all -C <path to cyrus.conf> -M <path to imapd.conf>
 
-**Important config** options: unixhierarchysep and altnamespace defaults have changed
-in :cyrusman:`imapd.conf(5)`. Implications are outlined in :ref:`Mailbox namespaces <mailbox-namespaces>`.
+**Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
+defaults have changed in :cyrusman:`imapd.conf(5)`. Implications are
+outlined in the Note in :ref:`imap-admin-namespaces-mode` and
+:ref:`imap-switching-alt-namespace-mode`.
 
 * unixhierarchysep: on
 * altnamespace: on
 
-Note: if you're using groups, don't turn reverseacls: on. Reverseacl support
-only works well for users without groups.
+.. note::
+    If your installation is using groups, don't turn ``reverseacls:`` on. Reverseacl support
+    only works well for sites without groups.
 
 
 6. Copy all data to new location
@@ -119,34 +126,72 @@ Before you launch Cyrus for the first time, create the Cyrus directory structure
 Copy your data files to the new Cyrus 3.0 locations you just specified.
 
 * Sieve scripts
+
+   Location set via ``sieveusehomedir:`` and ``sievedir:`` directives
+
 * Config files
+
+   Location set via ``configdirectory:`` directive
+
 * Mail spool
+
+   Location set via ``partition-XX`` directive(s), of which there may be
+   several
+
+* Metadata
+
+   Location set via ``metapartition-XX`` directive(s), of which there may
+   be several
+
 * :ref:`Cyrus Databases <databases>`
 
-You don't need to copy the following databases as Cyrus 3.0 will recreate these for you automatically:
+   Location set via ``XX_db_path:`` directives (i.e.
+   ``tls_sessions_db_path: /run/cyrus/tls_sessions.db``)
+
+You don't need to copy the following databases as Cyrus 3.0 will
+recreate these for you automatically:
 
 * duplicate delivery (deliver.db),
 * TLS cache (tls_sessions.db),
 * PTS cache (ptscache.db),
 * STATUS cache (statuscache.db).
 
+.. note::
+    If you're upgrading from versions older than 2.4, you may wish to
+    consider relocating these four databases to ephemeral storage, such
+    as ``/run/cyrus`` (Debian/Ubuntu) or ``/var/run/cyrus`` or whatever
+    suitable tmpfs is provided on your distro.
+
+.. note::
+    Please be warned that some packages place tasks such as ``tlsprune``
+    (:cyrusman:`tls_prune(8)`) in the ``START{}`` stanza of
+    :cyrusman:`cyrus.conf(5)`.  This will cause a startup problem if the
+    ``tls_sessions_db`` is not present.  The solution to this is to
+    remove the ``tlsprune`` task from ``START{}`` and schedule it in
+    ``EVENTS{}``, further down.
+    
 .. warning::
 
     **Berkeley db format no longer supported**
 
-    If you have any databases using Berkeley db, they'll need to be converted to skiplist or flat in your
-    existing installation. And then optionally converted to whatever final format
-    you'd like in your 3.0 installation.
+    If you have any databases using Berkeley db, they'll need to be
+    converted to skiplist or flat *in your existing installation*. And
+    then optionally converted to whatever final format you'd like in
+    your 3.0 installation.
 
     Databases potentially affected: mailboxes, annotations, conversations, quotas.
 
-    Using old version tool::
+    On old install, prior to migration::
 
-       cvt_cyrusdb mailboxes.db berkeley new-mailboxes.db skiplist
+       cvt_cyrusdb /<confdir>mailboxes.db berkeley /tmp/new-mailboxes.db skiplist
 
-    If you don't want to use flat or skiplist for 3.0, you can use the new 3.0 cvt_cyrusdb to swap to new format::
+    If you don't want to use flat or skiplist for 3.0, you can use the
+    new 3.0 :cyrusman:`cvt_cyrusdb(8)` to swap to new format::
 
-       cvt_cyrusdb new-mailboxes.db skiplist really-new-mailboxes.db <new file format>
+       cvt_cyrusdb /tmp/new-mailboxes.db skiplist /<confdir>/mailboxes.db <new file format>
+
+.. note::
+    The :cyrusman:`cvt_cyrusdb(8)` command does not accept relative paths.
 
 
 7. Start new 3.0 Cyrus and verify
