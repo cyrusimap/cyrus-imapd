@@ -2258,7 +2258,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     }
     else {
         json_t *wantannotations = json_pack("{}");
-        struct buf buf = BUF_INITIALIZER;
         buf_setcstr(&buf, "annotations.");
         const char *key;
         json_t *val;
@@ -2269,7 +2268,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 json_object_set(wantannotations, key, val);
             }
         }
-        buf_free(&buf);
         if (json_object_size(wantannotations))
             json_object_set_new(msg, "annotations", wantannotations);
         else
@@ -2429,7 +2427,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 charset_decode(&buf, msg_buf->s + part->content_offset,
                                part->content_size, part->charset_enc);
                 json_object_set_new(att, "size", json_integer(buf_len(&buf)));
-                buf_reset(&buf);
             } else {
                 json_object_set_new(att, "size", json_integer(part->content_size));
             }
@@ -2581,10 +2578,11 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         /* preview */
         if (_wantprop(props, "preview")) {
             const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
-            buf_reset(&buf);
             if (annot) {
+                buf_reset(&buf);
                 /* preview is shared */
                 annotatemore_msg_lookup(mbox->name, record->uid, annot, /*userid*/NULL, &buf);
+                json_object_set_new(msg, "preview", json_string(buf_cstring(&buf)));
             }
             else {
                 /* Generate our own preview */
@@ -2593,7 +2591,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 json_object_set_new(msg, "preview", json_string(preview));
                 free(preview);
             }
-            buf_reset(&buf);
         }
         free(msgid);
     }
