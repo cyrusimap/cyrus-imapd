@@ -2701,7 +2701,7 @@ sub test_getmessagelist
     xlog "filter mailboxes";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            operator => 'OR',
+            operator => 'AND',
             conditions => [
                 {
                     inMailbox => $mboxa,
@@ -2727,7 +2727,7 @@ sub test_getmessagelist
     xlog "filter mailboxes";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            operator => 'or',
+            operator => 'AND',
             conditions => [
                 {
                     inMailbox => $mboxa,
