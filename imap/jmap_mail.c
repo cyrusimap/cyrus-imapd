@@ -3090,7 +3090,7 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
             }
         }
 
-        if (readprop_full(arg, prefix, "before", 0, invalid, "s", &s) > 0) {
+        if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
             if (!p || *p) {
@@ -3100,7 +3100,7 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
             }
         }
 
-        if (readprop_full(arg, prefix, "after", 0, invalid, "s", &s) > 0) {
+        if (readprop_full(filter, prefix, "after", 0, invalid, "s", &s) > 0) {
             struct tm tm;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
             if (!p || *p) {
