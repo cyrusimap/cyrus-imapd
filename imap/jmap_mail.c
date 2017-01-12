@@ -2821,6 +2821,27 @@ static void match_string(search_expr_t *parent, const char *s, const char *name)
     charset_free(&utf8);
 }
 
+static void match_mailbox(search_expr_t *parent, json_t *mailbox,
+                          const char *userid, int is_not)
+{
+    search_expr_t *e;
+
+    if (is_not) {
+        parent = search_expr_new(parent, SEOP_NOT);
+    }
+
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find("folders_any");
+    e->value.strarr = strarray_new();
+
+    const char *s = json_string_value(mailbox);
+    char *mboxname = mboxlist_find_uniqueid(s, userid);
+
+    if (mboxname) {
+        strarray_appendm(e->value.strarr, mboxname);
+    }
+}
+
 static void match_mailboxes(search_expr_t *parent, json_t *mailboxes,
                             const char *userid, int is_not)
 {
@@ -2930,8 +2951,11 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             }
             charset_free(&utf8);
         }
-        if ((val = json_object_get(filter, "inMailboxes"))) {
-            match_mailboxes(this, val, req->userid, /*is_not*/0);
+        if ((val = json_object_get(filter, "inMailbox"))) {
+            match_mailbox(this, val, req->userid, /*is_not*/0);
+        }
+        if ((val = json_object_get(filter, "inMailboxOtherThan"))) {
+            match_mailbox(this, val, req->userid, /*is_not*/1);
         }
         if (JNOTNULL((val = json_object_get(filter, "isAnswered")))) {
             e = val == json_true() ? this : search_expr_new(this, SEOP_NOT);
