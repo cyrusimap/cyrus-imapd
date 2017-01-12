@@ -1425,7 +1425,7 @@ with_nghttp2=no
 with_xml2=no
 with_ical=no
 with_icu4c=no
-with_shaplib=no
+with_shapelib=no
 with_brotli=no
 if test "$enable_http" != no; then
 dnl
