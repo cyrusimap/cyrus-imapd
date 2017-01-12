@@ -2692,7 +2692,7 @@ sub test_getmessagelist
     xlog "filter mailbox A";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            inMailboxes => [ $mboxa ],
+            inMailbox => $mboxa,
         },
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
@@ -2701,7 +2701,24 @@ sub test_getmessagelist
     xlog "filter mailboxes";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            inMailboxes => [ $mboxa, $mboxc ]
+            operator => 'OR',
+            conditions => [
+                {
+                    inMailbox => $mboxa,
+                },
+                {
+                    inMailbox => $mboxc,
+                },
+            ],
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter mailboxes with not in";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            inMailboxOtherThan => $mboxb,
         },
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
@@ -2710,7 +2727,18 @@ sub test_getmessagelist
     xlog "filter mailboxes";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            inMailboxes => [ $mboxa, $mboxb, $mboxc ]
+            operator => 'or',
+            conditions => [
+                {
+                    inMailbox => $mboxa,
+                },
+                {
+                    inMailbox => $mboxb,
+                },
+                {
+                    inMailbox => $mboxc,
+                },
+            ],
         },
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
@@ -2718,7 +2746,12 @@ sub test_getmessagelist
     xlog "filter not in mailbox A";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            notInMailboxes => [ $mboxa ],
+            operator => 'NOT',
+            conditions => [
+                {
+                    inMailbox => $mboxa,
+                },
+            ],
         },
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
