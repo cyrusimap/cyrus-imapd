@@ -2708,21 +2708,20 @@ static void match_mailbox(search_expr_t *parent, json_t *mailbox,
                           const char *userid, int is_not)
 {
     search_expr_t *e;
+    const char *s = json_string_value(mailbox);
+    char *mboxname = mboxlist_find_uniqueid(s, userid);
+    if (!mboxname) {
+        /* XXX - add a "never match" terminal */
+        return;
+    }
 
     if (is_not) {
         parent = search_expr_new(parent, SEOP_NOT);
     }
 
     e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("folders_any");
-    e->value.strarr = strarray_new();
-
-    const char *s = json_string_value(mailbox);
-    char *mboxname = mboxlist_find_uniqueid(s, userid);
-
-    if (mboxname) {
-        strarray_appendm(e->value.strarr, mboxname);
-    }
+    e->attr = search_attr_find("folder");
+    e->value.s = xstrdup(mboxname);
 }
 
 static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
