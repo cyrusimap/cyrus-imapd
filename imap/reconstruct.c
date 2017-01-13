@@ -138,7 +138,7 @@ int main(int argc, char **argv)
     int mflag = 0;
     int fflag = 0;
     int xflag = 0;
-    char buf[MAX_MAILBOX_PATH+1];
+    struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     char *start_part = NULL;
     struct reconstruct_rock rrock = { NULL, HASH_TABLE_INITIALIZER };
@@ -328,8 +328,8 @@ int main(int argc, char **argv)
             exit(EC_USAGE);
         }
         assert(!rflag);
-        strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
+        buf_setcstr(&buf, "*");
+        mboxlist_findall(&recon_namespace, buf_cstring(&buf), 1, 0, 0,
                          do_reconstruct, &rrock);
     }
 
@@ -344,22 +344,24 @@ int main(int argc, char **argv)
         /* save domain */
         if (config_virtdomains) domain = strchr(argv[i], '@');
 
-        strlcpy(buf, argv[i], sizeof(buf));
+        buf_setcstr(&buf, argv[i]);
 
         /* reconstruct the first mailbox/pattern */
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0, do_reconstruct, &rrock);
+        mboxlist_findall(&recon_namespace, buf_cstring(&buf), 1, 0, 0, do_reconstruct, &rrock);
 
         if (rflag) {
             /* build a pattern for submailboxes */
-            char *p = strchr(buf, '@');
-            if (p) *p = '\0';
-            strlcat(buf, ".*", sizeof(buf));
+            int atidx = buf_findchar(&buf, 0, '@');
+            if (atidx >= 0)
+                buf_truncate(&buf, atidx);
+            buf_putc(&buf, recon_namespace.hier_sep);
+            buf_putc(&buf, '*');
 
             /* append the domain */
-            if (domain) strlcat(buf, domain, sizeof(buf));
+            if (domain) buf_appendcstr(&buf, domain);
 
             /* reconstruct the submailboxes */
-            mboxlist_findall(&recon_namespace, buf, 1, 0, 0, do_reconstruct, &rrock);
+            mboxlist_findall(&recon_namespace, buf_cstring(&buf), 1, 0, 0, do_reconstruct, &rrock);
         }
     }
 
@@ -388,6 +390,8 @@ int main(int argc, char **argv)
     free_hash_table(&rrock.visited, NULL);
 
     free_hash_table(&unqid_table, free);
+
+    buf_free(&buf);
 
     sync_log_done();
 
