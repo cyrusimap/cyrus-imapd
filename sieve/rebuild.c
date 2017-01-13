@@ -46,6 +46,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include "lib/cyr_lock.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
 #include "lib/xstrlcat.h"
@@ -143,9 +144,8 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     char *parse_errors = NULL;
     sieve_script_t *script = NULL;
     bytecode_info_t *bc = NULL;
-    int bc_fd = -1;
+    int script_fd = -1, bc_fd = -1;
     int r;
-    int is_retry = 0;
     size_t len;
 
     if (!script_fname && !bc_fname)
@@ -160,13 +160,29 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
     if (!script_fname || !bc_fname)
         return SIEVE_FAIL;
 
-retry:
+    /* open and lock the script file */
+    script_fd = open(script_fname, O_RDWR);
+    if (script_fd == -1) {
+        syslog(LOG_ERR, "IOERROR: unable to open %s for reading: %m",
+                        script_fname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    r = lock_setlock(script_fd, /* exclusive */ 1, /* nonblocking */ 0,
+                     script_fname);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: unable to obtain lock on %s: %m",
+                        script_fname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
 
     /* exit early if bc is up to date */
     if (!force) {
         struct stat script_stat, bc_stat;
 
-        r = stat(script_fname, &script_stat);
+        r = fstat(script_fd, &script_stat);
         if (r) {
             syslog(LOG_DEBUG, "%s: stat %s: %m", __func__, script_fname);
             r = SIEVE_FAIL;
@@ -195,14 +211,6 @@ retry:
         }
     }
 
-    script_file = fopen(script_fname, "r");
-    if (!script_file) {
-        syslog(LOG_ERR, "IOERROR: unable to open %s for reading: %m",
-                        script_fname);
-        r = IMAP_IOERROR;
-        goto done;
-    }
-
     len = strlcpy(new_bc_fname, bc_fname, sizeof(new_bc_fname));
     if (len >= sizeof(new_bc_fname)) {
         syslog(LOG_DEBUG, "%s: filename too long: %s", __func__, bc_fname);
@@ -216,17 +224,12 @@ retry:
         goto done;
     }
 
-    bc_fd = open(new_bc_fname, O_CREAT|O_EXCL|O_WRONLY,
+    /* make sure no stray hardlink is lying around */
+    unlink(new_bc_fname);
+
+    bc_fd = open(new_bc_fname, O_CREAT|O_TRUNC|O_WRONLY,
                                S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (bc_fd < 0) {
-        if (errno == EEXIST && !is_retry) {
-            syslog(LOG_INFO, "%s: file exists, rebuild already in progress? retrying...\n", new_bc_fname);
-            /* XXX how long does compiling sieve usually take? how long can we stall lmtp for? */
-            usleep(100000); /* 1/10th second */
-            is_retry = 1;
-            goto retry;
-        }
-
         syslog(LOG_ERR, "IOERROR: unable to open %s for writing: %m",
                         new_bc_fname);
         r = IMAP_IOERROR;
@@ -234,6 +237,14 @@ retry:
     }
 
     /* if an error occurs after this point, we need to unlink new_bc_fname */
+
+    script_file = fdopen(script_fd, "r");
+    if (!script_file) {
+        syslog(LOG_ERR, "IOERROR: unable to fdopen %s for reading: %m",
+                          script_fname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
 
     r = sieve_script_parse_only(script_file, &parse_errors, &script);
     if (r != SIEVE_OK) {
@@ -256,6 +267,12 @@ retry:
         goto done;
     }
 
+    if (fsync(bc_fd) < 0) {
+        r = errno;
+        syslog(LOG_ERR, "IOERROR: fsync %s: %m", new_bc_fname);
+        goto done;
+    }
+
     if (rename(new_bc_fname, bc_fname) < 0) {
         r = errno;
         syslog(LOG_ERR, "IOERROR: rename %s -> %s: %m",
@@ -269,6 +286,16 @@ retry:
 done:
     if (r && new_bc_fname[0] != '\0') unlink(new_bc_fname);
 
+    if (bc_fd >= 0) close(bc_fd);
+
+    lock_unlock(script_fd, script_fname);
+    if (script_file) {
+        fclose(script_file); /* also closes underlying fd */
+    }
+    else if (script_fd >= 0) {
+        close(script_fd);
+    }
+
     if (parse_errors) {
         if (out_parse_errors)
             *out_parse_errors = parse_errors;
@@ -278,8 +305,7 @@ done:
 
     if (bc) sieve_free_bytecode(&bc);
     if (script) sieve_script_free(&script);
-    if (bc_fd >= 0) close(bc_fd);
-    if (script_file) fclose(script_file);
+
     if (freeme) free(freeme);
 
     return r;
