@@ -28,6 +28,7 @@ Man pages
     systemcommands/ctl_mboxlist
     systemcommands/ctl_zoneinfo
     systemcommands/cvt_cyrusdb
+    systemcommands/cvt_xlist_specialuse
     systemcommands/cyr_backup
     systemcommands/cyr_buildinfo
     systemcommands/cyr_dbtool

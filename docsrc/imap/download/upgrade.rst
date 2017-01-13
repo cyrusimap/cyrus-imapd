@@ -143,6 +143,12 @@ Copy your data files to the new Cyrus 3.0 locations you just specified.
    Location set via ``metapartition-XX`` directive(s), of which there may
    be several
 
+* Special-Use flags
+
+   If your 2.4 :cyrusman:`imapd.conf(5)` made use of the ``xlist-XX``
+   directive(s), you can convert these to per-user special-use annotations
+   in your new install with the :cyrusman:`cvt_xlist_specialuse(8)` tool
+
 * :ref:`Cyrus Databases <databases>`
 
    Location set via ``XX_db_path:`` directives (i.e.

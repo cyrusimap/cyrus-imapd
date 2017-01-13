@@ -371,6 +371,16 @@ man_pages = [
     ),
 
         (
+            'imap/reference/manpages/systemcommands/cvt_xlist_specialuse',
+            'cvt_xlist_specialuse',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                ],
+            8
+    ),
+
+        (
             'imap/reference/manpages/systemcommands/cyr_backup',
             'cyr_backup',
             u'Cyrus IMAP Documentation',
