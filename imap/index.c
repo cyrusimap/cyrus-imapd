@@ -4879,7 +4879,7 @@ MsgData **index_msgdata_load(struct index_state *state,
         for (j = 0; sortcrit[j].key; j++) {
             label = sortcrit[j].key;
 
-            if ((label == SORT_CC || label == SORT_DATE ||
+            if ((label == SORT_CC ||
                  label == SORT_FROM || label == SORT_SUBJECT ||
                  label == SORT_TO || label == LOAD_IDS ||
                  label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO ||
