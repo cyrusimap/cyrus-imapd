@@ -252,6 +252,15 @@ static int known_overflowkey(const char *key)
             return 1;
     }
 
+    /* only valid if there's a partition with the same name */
+    if (!strncmp(key, "archivepartition-", 17)) {
+        if (config_getoverflowstring(key+8, NULL))
+            return 1;
+    }
+
+    /* no relation to partition- */
+    if (!strncmp(key, "backuppartition-", 16)) return 1;
+
     match = strstr(key, "searchpartition-");
     if (match) {
         if (config_getoverflowstring(match+6, NULL))
