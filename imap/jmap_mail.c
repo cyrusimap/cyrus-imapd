@@ -3015,7 +3015,7 @@ static struct sortcrit *buildsort(json_t *sort)
         /* Note: add any new sort criteria also to validatesort() */
 
         if (!strcmp(prop.s, "date")) {
-            sortcrit[i].key = SORT_DATE;
+            sortcrit[i].key = SORT_ARRIVAL;
         }
         if (!strcmp(prop.s, "from")) {
             sortcrit[i].key = SORT_FROM;
