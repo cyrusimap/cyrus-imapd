@@ -258,6 +258,9 @@ static int known_overflowkey(const char *key)
             return 1;
     }
 
+    /* legacy xlist-flag settings are OK */
+    if (!strncmp(key, "xlist-", 6)) return 1;
+
     return 0;
 }
 
