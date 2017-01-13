@@ -78,7 +78,7 @@ static void usage(void)
     fprintf(stderr, "\n");
     fprintf(stderr, "  * conf-all      - listing of all config values\n");
     fprintf(stderr, "  * conf          - listing of non-default config values\n");
-    fprintf(stderr, "  * conf-defaults - listing of all default config values\n");
+    fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
     cyrus_done();
@@ -252,11 +252,23 @@ static int known_overflowkey(const char *key)
             return 1;
     }
 
+    /* only valid if there's a partition with the same name */
+    if (!strncmp(key, "archivepartition-", 17)) {
+        if (config_getoverflowstring(key+8, NULL))
+            return 1;
+    }
+
+    /* no relation to partition- */
+    if (!strncmp(key, "backuppartition-", 16)) return 1;
+
     match = strstr(key, "searchpartition-");
     if (match) {
         if (config_getoverflowstring(match+6, NULL))
             return 1;
     }
+
+    /* legacy xlist-flag settings are OK */
+    if (!strncmp(key, "xlist-", 6)) return 1;
 
     return 0;
 }
