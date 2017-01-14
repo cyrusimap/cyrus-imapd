@@ -760,6 +760,9 @@ static int savemsg(struct clientdata *cd,
         clean_retpath(m->return_path);
     }
 
+    /* get offset of message body */
+    m->body_offset = ftell(f);
+
     r |= spool_copy_msg(cd->pin, f);
     if (r) {
         fclose(f);

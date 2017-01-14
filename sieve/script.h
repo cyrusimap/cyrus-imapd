@@ -76,6 +76,7 @@ struct sieve_script {
         int mboxmetadata   : 1;
         int servermetadata : 1;
         int variables      : 1;
+        int editheader     : 1;
     } support;
 
     void *script_context;

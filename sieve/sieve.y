@@ -167,7 +167,7 @@ static commandlist_t *build_include(int, struct itags *, char*);
 static commandlist_t *build_set(int t, struct stags *s,
                                 char *variable, char *value);
 static commandlist_t *build_flag(int t, char *variable, strarray_t *flags);
-
+static commandlist_t *build_addheader(int t, int index, char *name, char *value);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -276,6 +276,7 @@ extern void sieverestart(FILE *f);
 %token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 WEEKDAY
 %token <nval> STRINGT SET LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
 %token <nval> SETFLAG ADDFLAG REMOVEFLAG HASFLAG
+%token ADDHEADER DELETEHEADER
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -296,6 +297,7 @@ extern void sieverestart(FILE *f);
 %type <nval> mod40 mod30 mod20 mod10
 %type <sval> flagtags
 %type <nval> flagaction
+%type <nval> ahtags
 
 %name-prefix "sieve"
 %defines
@@ -521,6 +523,19 @@ action: REJCT STRING
                                      }
                                      $$ = build_set(SET, canon_stags($2), $3, $4);
                                  }
+
+        | ADDHEADER ahtags STRING STRING {
+                                   if (!parse_script->support.editheader) {
+                                     yyerror(parse_script, "editheader MUST be enabled with \"require\"");
+                                     YYERROR;
+                                   }
+                                   /* XXX  do we need to validate name/value? */
+                                   $$ = build_addheader(ADDHEADER, $2, $3, $4);
+                                 }
+        ;
+
+ahtags: /* empty */              { $$ = 1; }
+        | LAST                   { $$ = -1; }
         ;
 
 flagaction: ADDFLAG
@@ -1946,6 +1961,21 @@ static commandlist_t *build_flag(int t, char *variable, strarray_t *flags)
     if (ret) {
         ret->u.fl.variable = xstrdup(variable ? variable : "");
         ret->u.fl.flags = flags;
+    }
+
+    return ret;
+}
+
+static commandlist_t *build_addheader(int t, int index, char *name, char *value)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == ADDHEADER);
+
+    if (ret) {
+        ret->u.ah.index = index;
+        ret->u.ah.name = xstrdup(name);
+        ret->u.ah.value = xstrdup(value);
     }
 
     return ret;

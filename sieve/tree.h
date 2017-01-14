@@ -194,6 +194,11 @@ struct Commandlist {
             void *pattern;
             int priority;
         } d;
+        struct { /* it's an addheader action */
+            int index;
+            char *name;
+            char *value;
+        } ah;
     } u;
     struct Commandlist *next;
 };

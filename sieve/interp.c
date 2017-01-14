@@ -123,6 +123,9 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
         if (i->getinclude &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
             strlcat(i->extensions, " include", EXT_LEN);
+        if (i->addheader &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
+            strlcat(i->extensions, " editheader", EXT_LEN);
 
         /* add tests */
         if (i->getenvelope &&
@@ -237,6 +240,11 @@ EXPORTED void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata
 EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 {
     interp->getheader = f;
+}
+
+EXPORTED void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f)
+{
+    interp->addheader = f;
 }
 
 EXPORTED void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f)

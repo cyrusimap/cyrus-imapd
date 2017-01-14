@@ -155,11 +155,14 @@ enum bytecode {
     B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
     B_FILEINTO,         /* require mailbox, imap4flags, copy */
 
-    B_SET,		/* require variables */
+    B_SET,              /* require variables */
 
-    B_ADDFLAG,		/* require imap4flags */
-    B_SETFLAG,		/* require imap4flags */
-    B_REMOVEFLAG	/* require imap4flags */
+    B_ADDFLAG,          /* require imap4flags */
+    B_SETFLAG,          /* require imap4flags */
+    B_REMOVEFLAG,       /* require imap4flags */
+
+    B_ADDHEADER,        /* require editheader */
+    B_DELETEHEADER      /* require editheader */
 };
 
 enum bytecode_comps {

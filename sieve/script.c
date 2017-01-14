@@ -209,6 +209,10 @@ int script_require(sieve_script_t *s, char *req)
                (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)) {
         s->support.servermetadata = 1;
         return 1;
+    } else if (!strcmp("editheader", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)) {
+        s->support.editheader = 1;
+        return 1;
     }
 
     return 0;
@@ -305,6 +309,7 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_mailboxexists(interpreter, (sieve_get_mailboxexists *) &stub_generic);
     sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);
     sieve_register_header(interpreter, (sieve_get_header *) &stub_generic);
+    sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);

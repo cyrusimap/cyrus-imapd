@@ -56,6 +56,7 @@ typedef struct address_data address_data_t;
 struct message_data {
     struct protstream *data;    /* message in temp file */
     FILE *f;                    /* FILE * corresponding */
+    long body_offset;           /* offset of msg body in file */
 
     char *id;                   /* message id */
     int size;                   /* size of message */

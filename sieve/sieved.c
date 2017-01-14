@@ -766,6 +766,18 @@ static void dump2(bytecode_input_t *d, int bc_len)
         }
             break;
 
+        case B_ADDHEADER: /*29*/
+        {
+            int m = ntohl(d[i++].value);
+            i = unwrap_string(d, i, &data, &len);
+            printf("ADDHEADER ");
+            printf("INDEX(%d)\n", m);
+            printf("              NAME({%d}%s)", len, data);
+            i = unwrap_string(d, i, &data, &len);
+            printf(" VAL({%d}%s)\n", len, data);
+        }
+            break;
+
         case B_RETURN:/*18*/
             printf("RETURN\n");
             break;

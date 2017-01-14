@@ -64,11 +64,13 @@
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
+#include "map.h"
 #include "notify.h"
 #include "prot.h"
 #include "times.h"
 #include "sieve/sieve_interface.h"
 #include "smtpclient.h"
+#include "strhash.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -87,6 +89,8 @@ typedef struct script_data {
     const mbname_t *mbname;
     const struct auth_state *authstate;
     const struct namespace *ns;
+
+    int edited_header;
 } script_data_t;
 
 static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
@@ -117,6 +121,25 @@ static int getheader(void *v, const char *phead, const char ***body)
     } else {
         return SIEVE_FAIL;
     }
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *sc, void *mc,
+                     const char *head, const char *body, int index)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    message_data_t *m = ((deliver_data_t *) mc)->m;
+
+    if (head == NULL || body == NULL) return SIEVE_FAIL;
+
+    if (index < 0)
+        spool_append_header(xstrdup(head), xstrdup(body), m->hdrcache);
+    else
+        spool_prepend_header(xstrdup(head), xstrdup(body), m->hdrcache);
+
+    sd->edited_header = 1;
+
+    return SIEVE_OK;
 }
 
 static int getmailboxexists(void *sc, const char *extname)
@@ -515,6 +538,75 @@ static int sieve_reject(void *ac,
     }
 }
 
+static void dump_header(const char *name, const char *value, void *rock)
+{
+    /* XXX  Need to handle folding/encoding */
+    fprintf((FILE *) rock, "%s: %s\r\n", name, value);
+}
+
+static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
+{
+    static deliver_data_t dd;
+    static message_data_t md;
+    static struct message_content mc;
+
+    memcpy(&dd, mydata, sizeof(deliver_data_t));
+    dd.m = memcpy(&md, mydata->m, sizeof(message_data_t));
+    dd.content = &mc;
+    memset(&mc, 0, sizeof(struct message_content));
+
+    /* build the mailboxname from the recipient address */
+    const mbname_t *origmbname = msg_getrcpt(mydata->m, mydata->cur_rcpt);
+
+    /* do the userid */
+    mbname_t *mbname = mbname_dup(origmbname);
+    if (mbname_userid(mbname)) {
+        mbname_truncate_boxes(mbname, 0);
+    }
+
+    const char *intname = mbname_intname(mbname);
+    md.f = append_newstage(intname, time(0),
+                           strhash(intname) /* unique msgnum for modified msg */,
+                           &dd.stage);
+    if (md.f) {
+        char buf[4096];
+
+        /* write updated message headers */
+        spool_enum_hdrcache(mydata->m->hdrcache, &dump_header, md.f);
+
+        /* get offset of message body */
+        md.body_offset = ftell(md.f);
+
+        /* write message body */
+        fseek(mydata->m->f, mydata->m->body_offset, SEEK_SET);
+        while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
+        fflush(md.f);
+
+        /* XXX  do we look for updated Date and Message-ID? */
+        md.size = ftell(md.f);
+
+        mydata = &dd;
+    }
+    else mydata = NULL;
+
+    mbname_free(&mbname);
+
+    return mydata;
+}
+
+static void free_special_delivery(deliver_data_t *mydata)
+{
+    fclose(mydata->m->f);
+    append_removestage(mydata->stage);
+    if (mydata->content->base) {
+        map_free(&mydata->content->base, &mydata->content->len);
+        if (mydata->content->body) {
+            message_free_body(mydata->content->body);
+            free(mydata->content->body);
+        }
+    }
+}
+
 static int sieve_fileinto(void *ac,
                           void *ic __attribute__((unused)),
                           void *sc,
@@ -532,6 +624,12 @@ static int sieve_fileinto(void *ac,
     char *intname = mboxname_from_external(fc->mailbox, sd->ns, mbname_userid(sd->mbname));
     strncpy(namebuf, intname, sizeof(namebuf));
     free(intname);
+
+    if (sd->edited_header) {
+        mdata = new_special_delivery(mdata);
+        if (!mdata) return SIEVE_FAIL;
+        else md = mdata->m;
+    }
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           fc->imapflags,
@@ -552,6 +650,8 @@ static int sieve_fileinto(void *ac,
                                   namebuf, md->date, quotaoverride, 0);
     }
 
+    if (sd->edited_header) free_special_delivery(mdata);
+
     if (!ret) {
         snmp_increment(SIEVE_FILEINTO, 1);
         return SIEVE_OK;
@@ -570,8 +670,15 @@ static int sieve_keep(void *ac,
     deliver_data_t *mydata = (deliver_data_t *) mc;
     int ret;
 
+    if (sd->edited_header) {
+        mydata = new_special_delivery(mydata);
+        if (!mydata) return SIEVE_FAIL;
+    }
+
     ret = deliver_local(mydata, kc->imapflags, sd->mbname);
 
+    if (sd->edited_header) free_special_delivery(mydata);
+ 
     if (!ret) {
         snmp_increment(SIEVE_KEEP, 1);
         return SIEVE_OK;
@@ -814,6 +921,7 @@ sieve_interp_t *setup_sieve(void)
     sieve_register_mailboxexists(interp, &getmailboxexists);
     sieve_register_metadata(interp, &getmetadata);
     sieve_register_header(interp, &getheader);
+    sieve_register_addheader(interp, &addheader);
     sieve_register_fname(interp, &getfname);
 
     sieve_register_envelope(interp, &getenvelope);
@@ -940,6 +1048,7 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
 
     sdata.mbname = mbname;
     sdata.ns = msgdata->ns;
+    sdata.edited_header = 0;
 
     if (mbname_userid(mbname)) {
         sdata.authstate = freeauthstate = auth_newstate(mbname_userid(mbname));

@@ -2563,6 +2563,23 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
+        case B_ADDHEADER:/*29*/
+        {
+            const char *name, *value;
+            int index = ntohl(bc[ip++].value);
+
+            /* get the header name */
+            ip = unwrap_string(bc, ip, &name, NULL);
+
+            /* get the header value */
+            ip = unwrap_string(bc, ip, &value, NULL);
+
+            /* XXX  do we need to deal with variables in name/value? */
+
+            i->addheader(sc, m, name, value, index);
+            break;
+        }
+
         default:
             if(errmsg) *errmsg = "Invalid sieve bytecode";
             return SIEVE_FAIL;

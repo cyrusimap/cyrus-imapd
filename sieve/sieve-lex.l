@@ -193,6 +193,8 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>:upperfirst    return yylval->nval = UPPERFIRST;
 <INITIAL>:quotewildcard return yylval->nval = QUOTEWILDCARD;
 <INITIAL>:length        return yylval->nval = LENGTH;
+<INITIAL>addheader      return ADDHEADER;
+<INITIAL>deleteheader   return DELETEHEADER;
 <INITIAL>[ \t\n\r] ;    /* ignore whitespace */
 <INITIAL>#.* ;          /* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracket comments */

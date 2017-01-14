@@ -981,6 +981,23 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
             }
             break;
 
+            case ADDHEADER:
+            {
+                /* ADDHEADER
+                   NUMBER index
+                   STRING name
+                   STRING value
+                */
+                if (!atleast(retval, codep+6)) return -1;
+                retval->data[codep++].op = B_ADDHEADER;
+                retval->data[codep++].value = c->u.ah.index;
+                retval->data[codep++].len = strlen(c->u.ah.name);
+                retval->data[codep++].str = c->u.ah.name;
+                retval->data[codep++].len = strlen(c->u.ah.value);
+                retval->data[codep++].str = c->u.ah.value;
+            }
+            break;
+
             case IF:
             {
                 int jumpVal;
