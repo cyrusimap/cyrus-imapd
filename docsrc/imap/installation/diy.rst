@@ -21,19 +21,19 @@ Clone the GIT repository:
 
 .. parsed-literal::
 
-    $ `git clone git@github.com:cyrusimap/cyrus-imapd.git`
+    $ :command: `git clone git@github.com:cyrusimap/cyrus-imapd.git`
 
 Check out the desired branch or revision:
 
 .. parsed-literal::
 
-    $ `git branch -la`
+    $ :command: `git branch -la`
     * master
       (...snip...)
       remotes/origin/cyrus-imapd-2.3
       remotes/origin/cyrus-imapd-2.4
       remotes/origin/cyrus-imapd-2.5
-    $ `git checkout $BRANCH`
+    $ :command: `git checkout $BRANCH`
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 
@@ -46,7 +46,7 @@ Extract the tarball:
 
 .. parsed-literal::
 
-    $ `tar xzvf cyrus-imapd-x.y.z.tar.gz`
+    $ :command: `tar xzvf cyrus-imapd-x.y.z.tar.gz`
 
 .. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
 
@@ -67,8 +67,8 @@ CentOS system for example, you can run the following commands:
 
 .. parsed-literal::
 
-    # `yum install yum-utils`
-    # `yum-builddep cyrus-imapd`
+    # :command: `yum install yum-utils`
+    # :command: `yum-builddep cyrus-imapd`
 
 Consult the upstream documentation of your platform for further
 information on the availability of such commands and their usage.
@@ -302,8 +302,8 @@ Configure the Build
 
 .. parsed-literal::
 
-    $ `autoreconf -vi`
-    $ `./configure [options]`
+    $ :command: `autoreconf -vi`
+    $ :command: `./configure [options]`
 
 Check the summary after ``./configure`` completes successfully. The
 following segment shows the defaults in version 2.5.0, ran on a system
@@ -341,4 +341,4 @@ please see:
 
 .. parsed-literal::
 
-    # `./configure --help`
+    # :command: `./configure --help`
