@@ -95,6 +95,8 @@ typedef struct script_data {
 
 static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
                                   const char *internalname, int createsievefolder);
+static deliver_data_t *new_special_delivery(deliver_data_t *mydata);
+static void free_special_delivery(deliver_data_t *mydata);
 
 static char *make_sieve_db(const char *user)
 {
@@ -429,7 +431,8 @@ static int sieve_redirect(void *ac,
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *m = ((deliver_data_t *) mc)->m;
+    deliver_data_t *mdata = (deliver_data_t *) mc;
+    message_data_t *m = mdata->m;
     char buf[8192], *sievedb = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     int res;
@@ -449,7 +452,17 @@ static int sieve_redirect(void *ac,
         }
     }
 
-    if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
+    if (sd->edited_header) {
+        mdata = new_special_delivery(mdata);
+        if (!mdata) return SIEVE_FAIL;
+        else m = mdata->m;
+    }
+
+    res = send_forward(rc->addr, m->return_path, m->data);
+
+    if (sd->edited_header) free_special_delivery(mdata);
+
+    if (res == 0) {
         /* mark this message as redirected */
         if (sievedb) duplicate_mark(&dkey, time(NULL), 0);
 
@@ -584,6 +597,7 @@ static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
 
         /* XXX  do we look for updated Date and Message-ID? */
         md.size = ftell(md.f);
+        md.data = prot_new(fileno(md.f), 0);
 
         mydata = &dd;
     }
@@ -597,6 +611,7 @@ static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
 static void free_special_delivery(deliver_data_t *mydata)
 {
     fclose(mydata->m->f);
+    prot_free(mydata->m->data);
     append_removestage(mydata->stage);
     if (mydata->content->base) {
         map_free(&mydata->content->base, &mydata->content->len);
