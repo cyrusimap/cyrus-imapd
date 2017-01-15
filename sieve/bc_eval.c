@@ -2571,10 +2571,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             /* get the header name */
             ip = unwrap_string(bc, ip, &name, NULL);
 
+            if (requires & BFE_VARIABLES) {
+                name = parse_string(name, variables);
+            }
+
             /* get the header value */
             ip = unwrap_string(bc, ip, &value, NULL);
 
-            /* XXX  do we need to deal with variables in name/value? */
+            if (requires & BFE_VARIABLES) {
+                value = parse_string(value, variables);
+            }
 
             i->addheader(sc, m, name, value, index);
             break;
