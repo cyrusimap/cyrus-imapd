@@ -1,9 +1,9 @@
 #!/bin/sh
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
+#
 # script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
-#!/usr/bin/perl
 #
 # Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
 #
@@ -44,44 +44,89 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-if ($] !~ /^5\..*/) {
-  # uh-oh. this isn't perl 5.
-  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
-    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
-  }
-  # we failed. bail.
-  die "Your perl is too old; I need perl 5.\n";
-}
-
-# load the real script. this is isolated in an 'eval' so perl4 won't
-# choke on the perl5-isms.
-eval join("\n", <DATA>);
-if ($@) { die "$@"; }
-
-__END__
 require 5;
+use strict;
+use warnings;
+
+use Getopt::Std;
+
+my $OPT_WasUnix    = 0;
+my $OPT_WasAlt     = 0;
+
+my %Opts;
+getopts('vnhua', \%Opts);
+usage() if $Opts{h};
+
+my $OPT_NoAction = $Opts{n};
+my $OPT_Verbose = $Opts{v} || $Opts{n};
+
+my $OPT_Force   = 1 if $Opts{f};
+$OPT_WasUnix    = 1 if $Opts{u};
+$OPT_WasAlt     = 1 if $Opts{a};
 
 $| = 1;
 
-if (($#ARGV > -1) && ("-f" eq $ARGV[0])) {
-    $force = 1;
-    shift @ARGV;
-}
-if ((($#ARGV > -1) && ($ARGV[0] eq "-h")) || ($#ARGV > 0)) {
-    print "usage: translatesieve [-f] [imapd.conf]\n";
-    print "       -f keep going on errors\n";
-    exit;
+# XXX - actually read the cyrus username from the imapd.conf and
+# change ownership as appropriate?
+die "must not run as root" if ($< == 0);
+
+my $imapdconf = shift || "/etc/imapd.conf";
+my $sievedir = "/usr/sieve";
+my $userprefix = "Other Users";
+my $sharedprefix = "Shared Folders";
+# The following two settings used to default to 0,but that changed
+# with v3.0
+my $unixhierarchysep = 1;
+my $altnamespace = 1;
+
+my @configs = ($imapdconf);
+
+while (my $conf = shift @configs) {
+    read_conf($conf);
 }
 
 sub ouch {
     my $msg = shift;
 
-    if ($force) {
+    if ($OPT_Force || $OPT_NoAction) {
         print "error: $msg\n";
     } else {
         print "fatal error: $msg\n";
         exit 1;
     }
+}
+
+sub usage {
+    die <<EOF
+usage: $0 [-v] [-n] [-u] [-a] [imapd.conf]
+
+       -v verbose
+       -n no change - just show what would be done
+       -f keep going on errors
+       -u previous configuration used "unixhierarchysep: yes"
+       -a previous configuration used "altnamespace: yes"
+
+NOTE: if imapd.conf is not provided, it will be read from the default
+location.  On a normal system this will be /etc/imapd.conf.  The *new*
+settings for unixhierarcysep and altnamespace will be read from the
+provided imapd.conf.
+
+WARNING: By default, this utility assumes that the OLD configuration
+did not use either unixhierarchysep or altnamespace.  If you had used
+either of these you MUST indicate this or your sieve scripts may get
+broken!
+
+In verbose mode, each command will be printed.
+
+In "no change" mode, it will just print the changes.  Note, verbose is
+always turned on in no-change mode.
+
+NOTE: It should be safe to run translatesieve on a running system, but
+it may mess things up horribly if you have some processes still running
+with old config, and some with new - so it is always recommended to
+fully shut down Cyrus, change the configuration file, run
+translatesieve, and then start Cyrus again.
+EOF
 }
 
 sub read_conf {
@@ -99,11 +144,11 @@ sub read_conf {
             $sievedir = $1;
             print "you are using $sievedir as your sieve directory.\n";
         }
-        if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
-            $unixhierarchysep = 1;
+        if (/^unixhierarchysep:\s*(0|f|no|off)/) {
+            $unixhierarchysep = 0;
         }
-        if (/^altnamespace:\s*(1|t|yes|on)/) {
-            $altnamespace = 1;
+        if (/^altnamespace:\s*(0|f|no|off)/) {
+            $altnamespace = 0;
         }
         if (/^userprefix:\s*(.*)$/) {
             $userprefix = $1;
@@ -117,109 +162,144 @@ sub read_conf {
     close CONF;
 }
 
-$imapdconf = shift || "/etc/imapd.conf";
-
-$sievedir = "/usr/sieve";
-$unixhierarchysep = 0;
-$altnamespace = 0;
-$userprefix = "Other Users";
-$sharedprefix = "Shared Folders";
-
-push @configs, $imapdconf;
-
-while ($conf = shift @configs) {
-    read_conf($conf);
-}
-
-unless ($unixhierarchysep || $altnamespace) {
-    ouch "you are not using the Unix hierarchy separator or the alternate namespace";
+# Only continue if the new settings are different from the old
+unless (($unixhierarchysep != $OPT_WasUnix) || ($altnamespace != $OPT_WasAlt)) {
+    ouch "There's been no change to Unix hierarchy separator or the alternate namespace";
     exit;
 }
 
+# Which separator did we used to use?
+my $sep = $OPT_WasUnix ? '/' : '.';
+my $psep = $OPT_WasUnix ? '/' : '\.'; # for use in patterns
+
+# declare vars used in following loop
+my $d = '';
+my $file = '';
+my $inbox = "[Ii][Nn][Bb][Oo][Xx]";
+my $updates = 0;
+my $orig = '';
+
 print "translating sievedir $sievedir... ";
-chdir $sievedir or die "couldn't change to $sievedir";
-foreach $i ("a".."z") {
-    print "$i ";
-    if (! chdir $i) {
-        ouch "couldn't chdir to $i";
-        next;
-    }
-
-    # translate the scripts user by user
-    opendir (D, ".");
-    while ($d = readdir D) {
-        next if ($d =~ /^\./s);
-        if (! -d $d) {
-            ouch "expected $d to be a directory";
-            next;
-        }
-
-        if (! chdir $d) {
-            ouch "couldn't chdir to $d";
-            next;
-        }
-
-        # translate all of the user's scripts
-        opendir DIR, ".";
-        while ($file = readdir DIR) {
-            next if (!($file =~ /\.script$/));
-
-            # print "translating $file... ";
-            if (!open(IN, $file)) {
-                ouch "cannot open $file for reading: $!";
-                next;
-            }
-            if (!open(OUT, ">.$file")) {
-                close(IN);
-                ouch "cannot create /.$file: $!";
-                next;
-            }
-
-            $inbox = "[Ii][Nn][Bb][Oo][Xx]";
-            while (<IN>) {
-                # Alternate namespace
-                if ($altnamespace) {
-                    # INBOX
-                    if (/\s+fileinto\s+"$inbox"\s*;/) {
-                        # do nothing
-                    }
-                    # Personal namespace
-                    elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
-                        substr($_, index($_, $1), 6) = "";
-                    }
-                    # Other Users namespace
-                    elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
-                        substr($_, index($_, $1), 4) = $userprefix;
-                    }
-                    # Shared namespace
-                    elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
-                        substr($_, index($_, $1), 0) = $sharedprefix . ".";
-                    }
-                }
-                # Hierarchy separator
-                if ($unixhierarchysep) {
-                    if (/\s+fileinto\s+"([^"]*)"\s*;/) {
-                        substr($_, index($_, $1)) =~ s~\.~/~g;
-                    }
-                }
-                print OUT $_;
-            }
-            close(IN);
-            close(OUT);
-
-            rename(".$file", "$file")
-                or ouch "couldn't move .$file to $file";
-
-            # print "\n";
-        }
-
-        closedir DIR;
-        chdir "..";
-    }
-    closedir D;
-
-    # back to "/usr/sieve"
-    chdir "..";
+if ($unixhierarchysep > $OPT_WasUnix) {
+    print "converting separator from '.' to '/'\n";
+} elsif ($OPT_WasUnix > $unixhierarchysep) {
+    print "converting separator from '/' to '.'\n";
+} else {
+    print "not converting separator.\n";
 }
 
+if ($altnamespace > $OPT_WasAlt) {
+    print "converting name space from traditional to alternative.\n";
+} elsif ($OPT_WasAlt > $altnamespace) {
+    # Due to ambiguous results, with shared folders, we cannot convert back
+    # to altnamespace: off
+    ouch "this utility *cannot* convert from altnamespace to traditional!";
+    exit;
+} else {
+    print "not changing name space.\n";
+}
+
+chdir $sievedir or die "couldn't change to $sievedir";
+opendir (H, ".");
+while (my $i = readdir H) {
+    if (-d $i) {
+        if (! chdir $i) {
+            ouch "couldn't chdir to $i";
+            next;
+        }
+
+        # translate the scripts user by user
+        opendir (D, ".");
+        while ($d = readdir D) {
+            next if ($d =~ /^\./s);
+            if (-d $d) { # Let's just skip over files, rather than bailing
+                if (! chdir $d) {
+                    ouch "couldn't chdir to $d";
+                    next;
+                }
+
+                # translate all of the user's scripts
+                opendir DIR, ".";
+                while ($file = readdir DIR) {
+                    next if (!($file =~ /\.script$/));
+
+                    print "translating $file...\n" if ($OPT_Verbose);
+                    if (!open(IN, $file)) {
+                        ouch "cannot open $file for reading: $!";
+                        next;
+                    }
+                    if (!$OPT_NoAction) {
+                        if (!open(OUT, ">.$file")) {
+                            close(IN);
+                            ouch "cannot create /.$file: $!";
+                            next;
+                        }
+                    }
+
+                    while (<IN>) {
+                        $updates = 0;
+                        $orig = $_;
+                        # INBOX
+                        if (/\s+fileinto\s+"$inbox"\s*;/) {
+                            # do nothing
+                        } else {
+                            # Alternate namespace
+                            if ($altnamespace != $OPT_WasAlt) {
+                                # Personal namespace
+                                if (/\s+fileinto\s+"($inbox$psep[^"]*)"\s*;/) {
+                                    substr($_, index($_, $1), 6) = "";
+                                    $updates++;
+                                }
+                                # Other Users namespace
+                                elsif (/\s+fileinto\s+"(user$psep[^"]*)"\s*;/) {
+                                    substr($_, index($_, $1), 4) = $userprefix;
+                                    $updates++;
+                                }
+                                # Shared namespace
+                                elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                    substr($_, index($_, $1), 0) = $sharedprefix . $sep;
+                                    $updates++;
+                                }
+                            }
+                            # Hierarchy separator
+                            if ($unixhierarchysep > $OPT_WasUnix) {
+                                if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                    substr($_, index($_, $1)) =~ s~\.~/~g;
+                                    $updates++;
+                                }
+                            } elsif ($unixhierarchysep < $OPT_WasUnix) {
+                                if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                    substr($_, index($_, $1)) =~ s~/~.~g;
+                                    $updates++;
+                                }
+                            }
+                        }
+                        if ($OPT_Verbose && $updates > 0) {
+                            print "< $orig";
+                            print "> $_";
+                        }
+
+                        print OUT $_ unless $OPT_NoAction;
+                    }
+                    close(IN);
+                    close(OUT);
+
+                    if (!$OPT_NoAction) {
+                        rename(".$file", "$file")
+                            or ouch "couldn't move .$file to $file";
+                    }
+                    # print "\n";
+                }
+
+                closedir DIR;
+                chdir "..";
+            }
+        }
+        closedir D;
+
+        # back to "$sievedir"
+        chdir "..";
+    }
+}
+closedir H;
 print "done\n";
