@@ -21,7 +21,7 @@ Clone the GIT repository:
 
 .. parsed-literal::
 
-    $ :command:`git clone github.com/cyrusimap/cyrus-imapd.git`
+    $ :command:`git clone git@github.com:cyrusimap/cyrus-imapd.git`
 
 Check out the desired branch or revision:
 
@@ -33,7 +33,7 @@ Check out the desired branch or revision:
       remotes/origin/cyrus-imapd-2.3
       remotes/origin/cyrus-imapd-2.4
       remotes/origin/cyrus-imapd-2.5
-    $ :command:`git checkout` *$branch*
+    $ :command:`git checkout $BRANCH`
 
 Continue with :ref:`imap-installation-diy-build-dependencies`.
 
@@ -303,7 +303,7 @@ Configure the Build
 .. parsed-literal::
 
     $ :command:`autoreconf -vi`
-    $ :command:`./configure` [options]
+    $ :command:`./configure [options]`
 
 Check the summary after ``./configure`` completes successfully. The
 following segment shows the defaults in version 2.5.0, ran on a system
