@@ -529,7 +529,10 @@ action: REJCT STRING
                                      yyerror(parse_script, "editheader MUST be enabled with \"require\"");
                                      YYERROR;
                                    }
-                                   /* XXX  do we need to validate name/value? */
+                                   if (!verify_header(parse_script, $3)) {
+                                     YYERROR; /* vh should call yyerror() */
+                                   }
+                                   /* XXX  do we need to validate value? */
                                    $$ = build_addheader(ADDHEADER, $2, $3, $4);
                                  }
         ;
