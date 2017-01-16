@@ -3,35 +3,46 @@
 .. _imap-reference-manpages-systemcommands-ptexpire:
 
 ============
-``ptexpire``
+**ptexpire**
 ============
 
-intro
+Program to expire pts cache DB entries on command.
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    ptexpire [OPTIONS]
+    **ptexpire** [**-C** *filename*] [**-E** *time*]
 
 Description
 ===========
 
-The ``ptexpire`` program outputs a list of files and/or directories
-that it expects to exist, but that in fact do not.
+The **ptexpire** program sweeps the ``ptscache_db`` database, expiring
+entries older than the time specified on the command line (default 3
+hours).
+
+**ptexpire** |default-conf-text|
 
 Options
 =======
 
-.. program:: ptexpire
+.. program::  ptexpire
 
-.. option:: -C config-file
+.. option::  -C config-file
 
-    |cli-dash-c-text|
+  |cli-dash-c-text|
+  
+.. option::  -E time
 
-Examples
-========
+  Expire entries older than this time.
+  Default: 3 hours
+
+Files
+=====
+
+/etc/imapd.conf
 
 See Also
 ========
+:cyrusman:`imapd.conf(5)`
