@@ -2053,7 +2053,7 @@ struct sockaddr_storage {
 #endif
 
 #if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
-#include "gai.h"
+#include "lib/gai.h"
 #endif
 
 /* End IPv6 things */
