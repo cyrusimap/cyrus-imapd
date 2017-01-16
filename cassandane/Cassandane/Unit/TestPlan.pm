@@ -838,7 +838,11 @@ sub run
 
     # try to clean up after ourselves on interrupt
     my $interrupted = 0;
-    $SIG{INT} = sub { $interrupted ++ };
+    $SIG{INT} = sub {
+	$interrupted ++;
+	# third ^C will terminate without cleanup
+	$SIG{INT} = 'DEFAULT' if $interrupted >= 2;
+    };
 
     if ($maxworkers > 1)
     {
