@@ -327,24 +327,26 @@ EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
     spool_append_header(name, body, cache);
 }
 
-static void __spool_remove_header(char *name, const char *body, hdrcache_t cache)
+static void __spool_remove_header(char *name, int first, int last,
+                                  hdrcache_t cache)
 {
-    ptrarray_t *contents = (ptrarray_t *) hash_lookup(lcase(name), &cache->cache);
+    ptrarray_t *contents =
+        (ptrarray_t *) hash_lookup(lcase(name), &cache->cache);
 
     if (contents) {
         int idx;
 
-        for (idx = ptrarray_size(contents) - 1; idx >= 0; idx--) {
-            struct header_t *hdr;
+        /* normalize indices */
+        if (first < 0) first += ptrarray_size(contents);
+        if (last < 0) {
+            last += ptrarray_size(contents);
+            if (last < 0) first = 0;
+        }
+        else if (last >= ptrarray_size(contents)) first = last + 1;
 
-            if (body) {
-                /* is this the instance we want? */
-                hdr = ptrarray_nth(contents, idx);
-                if (body != hdr->body) continue;
-            }
-
+        for (idx = last; idx >= first; idx--) {
             /* remove header from ptrarray */
-            hdr = ptrarray_remove(contents, idx);
+            struct header_t *hdr = ptrarray_remove(contents, idx);
 
             /* unlink header from list */
             if (hdr->prev) hdr->prev->next = hdr->next;
@@ -364,13 +366,15 @@ static void __spool_remove_header(char *name, const char *body, hdrcache_t cache
 
 EXPORTED void spool_remove_header(char *name, hdrcache_t cache)
 {
-    __spool_remove_header(name, NULL, cache);
+    __spool_remove_header(name, 0, -1, cache);
 }
 
-EXPORTED void spool_remove_header_instance(char *name, const char *body,
-                                           hdrcache_t cache)
+EXPORTED void spool_remove_header_instance(char *name, int n, hdrcache_t cache)
 {
-    __spool_remove_header(name, body, cache);
+    if (!n) return;
+    if (n > 0) n--; /* normalize to zero */
+
+    __spool_remove_header(name, n, n, cache);
 }
 
 EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
