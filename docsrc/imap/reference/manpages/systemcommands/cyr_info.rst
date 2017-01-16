@@ -44,16 +44,21 @@ Options
 Commands
 ========
 
-*allconf*
-
-    Print ALL configuration options - including default options
-
 *conf*
 
     Print only the configuration options which are not the same as
-    default (regardless of whether you have specified them or not)
+    default (regardless of whether you have specified them or not).
 
-*lint*
+*conf-default*
+
+    Print all default configuration options, ignoring those set locally.
+
+*conf-all*
+
+    Print ALL configuration options - including default options.  This
+    command shows which options will be in effect at runtime.
+
+*conf-lint*
 
     Print only configuration options which are NOT recognised.  This
     command should not print anything.  It uses cyrus.conf to find
