@@ -78,7 +78,7 @@ static void usage(void)
     fprintf(stderr, "\n");
     fprintf(stderr, "  * conf-all      - listing of all config values\n");
     fprintf(stderr, "  * conf          - listing of non-default config values\n");
-    fprintf(stderr, "  * conf-defaults - listing of all default config values\n");
+    fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
     cyrus_done();
