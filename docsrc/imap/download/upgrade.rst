@@ -93,13 +93,13 @@ your existing data with your new install).
 
 Check to see if your config file contains any deprecated options::
 
-    cyr_info conf-lint -C <path to cyrus.conf> -M <path to imapd.conf>
+    cyr_info conf-lint -C <path to imapd.conf> -M <path to cyrus.conf> 
 
 Check to see that the sum of your system's config values is correct. This command
 takes all the system defaults, along with anything you have provided overrides for
 in your config files::
 
-    cyr_info conf-all -C <path to cyrus.conf> -M <path to imapd.conf>
+    cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf> 
 
 **Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
 defaults have changed in :cyrusman:`imapd.conf(5)`. Implications are
