@@ -162,6 +162,8 @@ sub start
 	$self->{downpipe} = _pipe_read_fh($dr, $dw);
 	$self->{uppipe} = _pipe_write_fh($ur, $uw);
 	$ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
+	$ENV{TEST_UNIT_BASENAME} = $0;
+	$0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
 	$self->_mainloop();
 	exit(0);
     }
@@ -201,7 +203,9 @@ sub _mainloop
 	elsif ($command eq 'run')
 	{
 	    my ($witem) = thaw(decode_base64($args[0]));
+	    $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $witem->{suite}.$witem->{testname}";
 	    $self->{handler}->($witem);
+	    $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
 	    _send($self->{uppipe},
 		  "done %s\n", encode_base64(freeze($witem), ''));
 	}
