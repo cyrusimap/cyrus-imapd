@@ -283,6 +283,8 @@ sub DESTROY
 
 package Cassandane::Unit::WorkerPool;
 
+use Errno qw(EINTR);
+
 sub new
 {
     my ($class, %params) = @_;
@@ -340,7 +342,10 @@ sub _wait
     }
 
     # select() with no timeout
-    my $res = select($rbits, undef, undef, undef);
+    my $res;
+    do {
+	$res = select($rbits, undef, undef, undef);
+    } while ($res < 0 && $! == EINTR);
     die "select failed: $!" if ($res < 0);
 
     # discover which of our workers has responded
@@ -838,6 +843,10 @@ sub run
 	# we want an error not a signal
 	$SIG{PIPE} = 'IGNORE';
 
+	# try to clean up after ourselves on interrupt
+	my $interrupted = 0;
+	$SIG{INT} = sub { $interrupted ++ };
+
 	# Just In Case any code samples this in a TestCase c'tor
 	$ENV{TEST_UNIT_WORKER_ID} = 'invalid';
 
@@ -854,7 +863,8 @@ sub run
 	);
 	my $witem;
 	$pool->start();
-	while ($witem = shift @workitems)
+	# first ^C stops spawning new work items
+	while ($interrupted < 1 && ($witem = shift @workitems))
 	{
 	    $pool->assign($witem)
 		if ($self->{keep_going} || $result->was_successful());
@@ -863,7 +873,8 @@ sub run
 		$self->_finish_workitem($witem, $result, $runner);
 	    }
 	}
-	while ($witem = $pool->retrieve(1))
+	# second ^C stops waiting for work items to finish
+	while ($interrupted < 2 && ($witem = $pool->retrieve(1)))
 	{
 	    $self->_finish_workitem($witem, $result, $runner);
 	}
