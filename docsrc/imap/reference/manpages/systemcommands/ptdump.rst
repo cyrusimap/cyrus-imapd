@@ -3,23 +3,25 @@
 .. _imap-reference-manpages-systemcommands-ptdump:
 
 ==========
-``ptdump``
+**ptdump**
 ==========
 
-intro
+Program to to dump the current PTS (protection database authorization)
+cache.
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    ptdump [OPTIONS]
+    **ptdump** [**-C** *filename*] 
 
 Description
 ===========
 
-The ``ptdump`` program outputs a list of files and/or directories
-that it expects to exist, but that in fact do not.
+The **ptdump** program outputs a list of entries from the PTS DB.
+
+**ptdump** |default-conf-text|
 
 Options
 =======
@@ -30,8 +32,11 @@ Options
 
     |cli-dash-c-text|
 
-Examples
-========
+Files
+=====
+
+/etc/imapd.conf
 
 See Also
 ========
+:cyrusman:`imapd.conf(5)`

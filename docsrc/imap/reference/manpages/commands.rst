@@ -59,6 +59,9 @@ Man pages
     systemcommands/notifyd
     systemcommands/pop3d
     systemcommands/pop3proxyd    
+    systemcommands/ptdump
+    systemcommands/ptexpire
+    systemcommands/ptloader
     systemcommands/quota
     systemcommands/reconstruct
     systemcommands/restore
@@ -93,9 +96,6 @@ the form of actual man-pages.
 .. toctree::
     :maxdepth: 1
 
-    systemcommands/ptdump
-    systemcommands/ptexpire
-    systemcommands/ptloader
     systemcommands/proxyd
 
 .. toctree::
@@ -119,11 +119,9 @@ the form of actual man-pages.
     systemcommands/dohash
     systemcommands/undohash
     systemcommands/upgradesieve
-
     systemcommands/translatesieve
     systemcommands/template
 
    
 ..  systemcommands/template: this is just the template for new command files so it obeys man and html formatting.   
 .. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
-

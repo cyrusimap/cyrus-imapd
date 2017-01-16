@@ -476,7 +476,7 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -487,7 +487,7 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -498,7 +498,7 @@ man_pages = [
             u'Cyrus IMAP Documentation',
             [
                     u'The Cyrus Team',
-                    u'Jeroen van Meeuwen (Kolab Systems)'
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
@@ -742,7 +742,8 @@ man_pages = [
             'translatesieve',
             u'Cyrus IMAP Documentation',
             [
-                    u'The Cyrus Team'
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
                 ],
             8
     ),
