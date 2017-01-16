@@ -569,8 +569,38 @@ static int sieve_reject(void *ac,
 
 static void dump_header(const char *name, const char *value, void *rock)
 {
-    /* XXX  Need to handle folding/encoding */
-    fprintf((FILE *) rock, "%s: %s\r\n", name, value);
+    /* Q-encode the value */
+    char *mimehdr = charset_encode_mimeheader(value, strlen(value));
+    size_t maxlen = 78 - (strlen(name) + 2);
+
+    /* write header name */
+    fprintf((FILE *) rock, "%s: ", name);
+
+    /* fold value */
+    /* XXX  Do we want/need to do smarter folding on structed headers? */
+    while (strlen(mimehdr) > maxlen) {
+        char *p;
+
+        /* look for first whitespace prior to maxlen */
+        for (p = mimehdr + maxlen; p > mimehdr; p--) {
+            if (*p == ' ' || *p == '\t') {
+                *p = '\t';  /* make sure its a TAB */
+                break;
+            }
+        }
+        if (p == mimehdr) break;
+
+        /* write chunk of value + fold */
+        fprintf((FILE *) rock, "%.*s\r\n", (int) (p - mimehdr), mimehdr);
+
+        mimehdr = p;
+        maxlen = 78;
+    }
+
+    /* write remainder of value */
+    fprintf((FILE *) rock, "%s\r\n", mimehdr);
+
+    free(mimehdr);
 }
 
 static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
