@@ -836,16 +836,16 @@ sub run
     # to the worker
     my @workitems = $self->_get_schedule();
 
+    # try to clean up after ourselves on interrupt
+    my $interrupted = 0;
+    $SIG{INT} = sub { $interrupted ++ };
+
     if ($maxworkers > 1)
     {
 	# multi-threaded case: use worker pool
 
 	# we want an error not a signal
 	$SIG{PIPE} = 'IGNORE';
-
-	# try to clean up after ourselves on interrupt
-	my $interrupted = 0;
-	$SIG{INT} = sub { $interrupted ++ };
 
 	# Just In Case any code samples this in a TestCase c'tor
 	$ENV{TEST_UNIT_WORKER_ID} = 'invalid';
@@ -886,7 +886,7 @@ sub run
 	foreach my $witem (@workitems)
 	{
 	    $self->_run_workitem($witem, $result, $runner, 1);
-	    last if (!($self->{keep_going} || $result->was_successful()));
+	    last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
 	}
     }
 
