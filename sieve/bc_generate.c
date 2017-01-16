@@ -998,6 +998,33 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
             }
             break;
 
+            case DELETEHEADER:
+            {
+                /* DELETEHEADER
+                   NUMBER index
+                   COMPARATOR
+                   STRING name
+                   STRINGLIST value-patterns
+                */
+                if (!atleast(retval, codep+2)) return -1;
+                retval->data[codep++].op = B_DELETEHEADER;
+                retval->data[codep++].value = c->u.dh.index;
+
+                codep = bc_comparator_generate(codep, retval,
+                                               c->u.dh.comptag,
+                                               c->u.dh.relation,
+                                               c->u.dh.comparator);
+                if (codep == -1) return -1;
+
+                if (!atleast(retval, codep+2)) return -1;
+                retval->data[codep++].len = strlen(c->u.dh.name);
+                retval->data[codep++].str = c->u.dh.name;
+
+                codep = bc_stringlist_generate(codep, retval, c->u.dh.values);
+                if (codep == -1) return -1;
+            }
+            break;
+
             case IF:
             {
                 int jumpVal;

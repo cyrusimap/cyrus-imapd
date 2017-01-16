@@ -418,6 +418,7 @@ static int build_sieve_interp(void)
     sieve_register_metadata(interp, (sieve_get_metadata *) &timsieved_generic_cb);
     sieve_register_header(interp, (sieve_get_header *) &timsieved_generic_cb);
     sieve_register_addheader(interp, (sieve_add_header *) &timsieved_generic_cb);
+    sieve_register_deleteheader(interp, (sieve_delete_header *) &timsieved_generic_cb);
     sieve_register_envelope(interp, (sieve_get_envelope *) &timsieved_generic_cb);
     sieve_register_body(interp, (sieve_get_body *) &timsieved_generic_cb);
     sieve_register_include(interp, (sieve_get_include *) &timsieved_generic_cb);

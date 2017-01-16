@@ -769,12 +769,26 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_ADDHEADER: /*29*/
         {
             int m = ntohl(d[i++].value);
-            i = unwrap_string(d, i, &data, &len);
             printf("ADDHEADER ");
             printf("INDEX(%d)\n", m);
+            i = unwrap_string(d, i, &data, &len);
             printf("              NAME({%d}%s)", len, data);
             i = unwrap_string(d, i, &data, &len);
             printf(" VAL({%d}%s)\n", len, data);
+        }
+            break;
+
+        case B_DELETEHEADER: /*30*/
+        {
+            int m = ntohl(d[i++].value);
+            printf("DELETEHEADER ");
+            printf("INDEX(%d)\n", m);
+            i = printComparison(d, i);
+            i = unwrap_string(d, i, &data, &len);
+            printf("              NAME({%d}%s)\n", len, data);
+            printf("              VALS(");
+            i=write_list(ntohl(d[i].len), i+1, d);
+            printf(")\n");
         }
             break;
 

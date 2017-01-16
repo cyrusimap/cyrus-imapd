@@ -168,6 +168,8 @@ static commandlist_t *build_set(int t, struct stags *s,
                                 char *variable, char *value);
 static commandlist_t *build_flag(int t, char *variable, strarray_t *flags);
 static commandlist_t *build_addheader(int t, int index, char *name, char *value);
+static commandlist_t *build_deleteheader(int t, struct comptags *dh,
+                                         char *name, strarray_t *values);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -279,7 +281,7 @@ extern void sieverestart(FILE *f);
 %token ADDHEADER DELETEHEADER
 
 %type <cl> commands command action elsif block
-%type <sl> stringlist strings
+%type <sl> optstringlist stringlist strings
 %type <test> test
 %type <nval> match relmatch sizetag addrparttag copy rtags creat datepart
 %type <testl> testlist tests
@@ -532,8 +534,33 @@ action: REJCT STRING
                                    if (!verify_header(parse_script, $3)) {
                                      YYERROR; /* vh should call yyerror() */
                                    }
-                                   /* XXX  do we need to validate value? */
+                                   if (!verify_utf8(parse_script, $4)) {
+                                     YYERROR; /* vu should call yyerror() */
+                                   }
                                    $$ = build_addheader(ADDHEADER, $2, $3, $4);
+                                 }
+        ;
+
+        | DELETEHEADER htags STRING optstringlist {
+                                   if (!parse_script->support.editheader) {
+                                     yyerror(parse_script, "editheader MUST be enabled with \"require\"");
+                                     YYERROR;
+                                   }
+                                   else if (!verify_header(parse_script, $3)) {
+                                     YYERROR; /* vh should call yyerror() */
+                                   }
+                                   else if (!strcasecmp("Received", $3) ||
+                                            !strcasecmp("Auto-Submitted", $3)) {
+                                     yyerror(parse_script, "MUST NOT delete Received or Auto-Submitted headers");
+                                     YYERROR;
+                                   }
+                                   else if (!verify_stringlist(parse_script, $4, verify_utf8)) {
+                                     YYERROR; /* vu should call yyerror() */
+                                   }
+                                   else {
+                                     $2 = canon_comptags($2);
+                                     $$ = build_deleteheader(DELETEHEADER, $2, $3, $4);
+                                   }
                                  }
         ;
 
@@ -864,6 +891,10 @@ vtags: /* empty */               { $$ = new_vtags(); }
                                      $$->mime = MIME;
                                  }
         ;
+
+optstringlist: /* empty */       { $$ = strarray_new(); }
+        | stringlist             { $$ = $1; }
+;
 
 stringlist: '[' strings ']'      { $$ = $2; }
         | STRING                 {
@@ -1979,6 +2010,26 @@ static commandlist_t *build_addheader(int t, int index, char *name, char *value)
         ret->u.ah.index = index;
         ret->u.ah.name = xstrdup(name);
         ret->u.ah.value = xstrdup(value);
+    }
+
+    return ret;
+}
+
+static commandlist_t *build_deleteheader(int t, struct comptags *dh,
+                                         char *name, strarray_t *values)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == DELETEHEADER);
+
+    if (ret) {
+        ret->u.dh.comptag = dh->match;
+        ret->u.dh.relation = dh->relation;
+        ret->u.dh.comparator = xstrdup(dh->comparator);
+        ret->u.dh.index = dh->index;
+        ret->u.dh.name = xstrdup(name);
+        ret->u.dh.values = values;
+        free_comptags(dh, 1);
     }
 
     return ret;

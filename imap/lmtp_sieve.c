@@ -144,6 +144,22 @@ static int addheader(void *sc, void *mc,
     return SIEVE_OK;
 }
 
+/* deletes (instance "index" of) the header "head" from msg */
+static int deleteheader(void *sc, void *mc, const char *head, int index)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    message_data_t *m = ((deliver_data_t *) mc)->m;
+
+    if (head == NULL) return SIEVE_FAIL;
+
+    if (!index) spool_remove_header(xstrdup(head), m->hdrcache);
+    else spool_remove_header_instance(xstrdup(head), index, m->hdrcache);
+
+    sd->edited_header = 1;
+
+    return SIEVE_OK;
+}
+
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;
@@ -937,6 +953,7 @@ sieve_interp_t *setup_sieve(void)
     sieve_register_metadata(interp, &getmetadata);
     sieve_register_header(interp, &getheader);
     sieve_register_addheader(interp, &addheader);
+    sieve_register_deleteheader(interp, &deleteheader);
     sieve_register_fname(interp, &getfname);
 
     sieve_register_envelope(interp, &getenvelope);

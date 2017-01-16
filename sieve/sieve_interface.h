@@ -72,6 +72,8 @@ typedef int sieve_get_header(void *message_context,
                              const char ***contents);
 typedef int sieve_add_header(void *script_context, void *message_context,
                              const char *header, const char *contents, int index);
+typedef int sieve_delete_header(void *script_context, void *message_context,
+                             const char *header, int index);
 typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,
@@ -168,6 +170,7 @@ void sieve_register_mailboxexists(sieve_interp_t *interp, sieve_get_mailboxexist
 void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f);
 void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
+void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);

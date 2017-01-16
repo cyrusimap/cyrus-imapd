@@ -1158,6 +1158,60 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
             break;
 
+        case B_DELETEHEADER:
+            /* NUMBER index
+               COMPARATOR
+               STRING name
+               STRINGLIST value-patterns
+            */
+            /* write index */
+            if(write_int(fd, bc->data[codep++].value) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write match type */
+            if(write_int(fd, bc->data[codep++].value) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write relation */
+            if(write_int(fd, bc->data[codep++].value) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write comparator */
+            if(write_int(fd, bc->data[codep++].value) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write string length of name */
+            len = bc->data[codep++].len;
+            if(write_int(fd,len) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write name */
+            if(write(fd,bc->data[codep++].str,len) == -1)
+                return -1;
+
+            ret = align_string(fd, len);
+            if(ret == -1)
+                return -1;
+
+            filelen += len + ret;
+
+            /* write value patterns */
+            ret = bc_stringlist_emit(fd, &codep, bc);
+            if (ret < 0) return -1;
+            filelen += ret;
+
+            break;
+
         case B_NULL:
         case B_STOP:
         case B_DISCARD:

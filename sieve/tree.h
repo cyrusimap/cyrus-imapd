@@ -199,6 +199,14 @@ struct Commandlist {
             char *name;
             char *value;
         } ah;
+        struct { /* it's a deleteheader action */
+            int index;
+            int comptag;
+            int relation;
+            char *comparator;
+            char *name;
+            strarray_t *values;
+        } dh;
     } u;
     struct Commandlist *next;
 };

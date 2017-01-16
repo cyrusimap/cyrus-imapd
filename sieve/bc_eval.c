@@ -2586,6 +2586,127 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
+        case B_DELETEHEADER:/*30*/
+        {
+            const char *name;
+            int index = ntohl(bc[ip++].value);
+            int match = ntohl(bc[ip++].value);
+            int relation = ntohl(bc[ip++].value);
+            int comparator = ntohl(bc[ip++].value);
+            comparator_t *comp = NULL;
+            void *comprock = NULL;
+            int isReg = (match == B_REGEX), ctag = 0, npat;
+
+            /* find comparator function */
+            comp = lookup_comp(comparator, match, relation, &comprock);
+            if (!comp) {
+                res = SIEVE_RUN_ERROR;
+                break;
+            }
+
+            /* set up variables needed for compiling regex */
+            if (isReg) {
+                ctag = regcomp_flags(comparator, requires);
+            }
+
+            /* get the header name */
+            ip = unwrap_string(bc, ip, &name, NULL);
+
+            if (requires & BFE_VARIABLES) {
+                name = parse_string(name, variables);
+            }
+            if (!strcasecmp("Received", name) ||
+                !strcasecmp("Auto-Submitted", name)) {
+                /* MUST NOT delete -- ignore */
+                name = NULL;
+            }
+
+            /* get number of value patterns */
+            npat = ntohl(bc[ip++].value);
+
+            /* skip end of list marker */
+            ip++;
+
+            if (!npat) {
+                if (name) i->deleteheader(sc, m, name, index);
+            }
+            else {
+                const char **val, *pat;
+                strarray_t dval = STRARRAY_INITIALIZER;
+                int p, v, nval = 0, first_val = 0;
+                unsigned long delete_mask = 0;
+
+                /* get the header values */
+                if (name && i->getheader(m, name, &val) == SIEVE_OK) {
+                    while (val[nval]) {
+                        /* decode header value and add to strarray_t */
+                        strarray_appendm(&dval,
+                                         charset_parse_mimeheader(val[nval++],
+                                                                  0 /*flags*/));
+                    }
+
+                    if (nval && index) {
+                        /* normalize index */
+                        index += (index < 0) ? nval : -1;  /* 0-based */
+                        if (index < 0 || index >= nval) {
+                            /* index out of range */
+                            nval = 0;
+                        }
+                        else {
+                            /* target single instance */
+                            first_val = index;
+                            nval = index + 1;
+                        }
+                    }
+                }
+
+                /* get (and optionally compare) each value pattern */
+                for (p = 0; p < npat; p++) {
+                    ip = unwrap_string(bc, ip, &pat, NULL);
+
+                    for (v = first_val; v < nval; v++) {
+                        if (!(delete_mask & (1<<v))) {
+                            const char *decoded_val = strarray_nth(&dval, v);
+                            regex_t *reg = NULL;
+                            char errbuf[100];
+
+                            if (requires & BFE_VARIABLES) {
+                                pat = parse_string(pat, variables);
+                            }
+
+                            if (isReg) {
+                                reg = bc_compile_regex(pat, ctag,
+                                                       errbuf, sizeof(errbuf));
+                                if (!reg) continue;
+                                else pat = (const char *) reg;
+                            }
+
+                            if (comp(decoded_val, strlen(decoded_val),
+                                     pat, comprock)) {
+                                /* flag the header for deletion */
+                                delete_mask |= (1<<v);
+                            }
+
+                            if (reg) {
+                                regfree(reg);
+                                free(reg);
+                            }
+                        }
+                    }
+                }
+                strarray_fini(&dval);
+
+                /* delete flagged headers in reverse order
+                   (so indexing is consistent) */
+                for (v = nval - 1; v >= first_val; v--) {
+                    if (delete_mask & (1<<v)) {
+                        i->deleteheader(sc, m, name, v+1 /* 1-based */);
+                    }
+                }
+            }
+            break;
+        }
+
         default:
             if(errmsg) *errmsg = "Invalid sieve bytecode";
             return SIEVE_FAIL;

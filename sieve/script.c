@@ -310,6 +310,7 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);
     sieve_register_header(interpreter, (sieve_get_header *) &stub_generic);
     sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
+    sieve_register_deleteheader(interpreter, (sieve_delete_header *) &stub_generic);
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
