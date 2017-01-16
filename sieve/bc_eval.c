@@ -2565,7 +2565,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
         case B_ADDHEADER:/*29*/
         {
-            const char *name, *value;
+            const char *name, *value, *h;
             int index = ntohl(bc[ip++].value);
 
             /* get the header name */
@@ -2575,6 +2575,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 name = parse_string(name, variables);
             }
 
+            /* validate header name */
+            for (h = name; *h; h++) {
+                /* field-name      =       1*ftext
+                   ftext           =       %d33-57 / %d59-126
+                   ; Any character except
+                   ;  controls, SP, and
+                   ;  ":". */
+                if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
+                    *errmsg = "Invalid header field name in Addheader";
+                    return SIEVE_RUN_ERROR;
+                }
+            }
+            
             /* get the header value */
             ip = unwrap_string(bc, ip, &value, NULL);
 
