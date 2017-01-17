@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_info** [ **-C** *config-file* ] [ **-M** *config-file* ] [ **-n** *servicename* ] *command*
+    **cyr_info** [ **-C** *config-file* ] [ **-M** *config-file* ] [ **-n** *servicename* ] *command* [*mailbox*]
 
 Description
 ===========
@@ -21,6 +21,8 @@ Description
 **cyr_info** is a tool for getting information from Cyrus.  The intent
 is to extend this tool with useful commands to make managing and
 configuring Cyrus easier.
+
+If *command* is **reid**, the *mailbox* argument is required.
 
 **cyr_info** |default-conf-text|
 
@@ -68,6 +70,11 @@ Commands
 *proc*
 
     Print all currently connected processes in the proc directory
+
+*reid* *mailbox*
+
+    Create a new unique ID for mailbox *mailbox*.  The *mailbox*
+    argument is required.
 
 Examples
 ========
