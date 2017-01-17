@@ -95,8 +95,8 @@ typedef struct script_data {
 
 static int autosieve_createfolder(const char *userid, const struct auth_state *auth_state,
                                   const char *internalname, int createsievefolder);
-static deliver_data_t *new_special_delivery(deliver_data_t *mydata);
-static void free_special_delivery(deliver_data_t *mydata);
+static deliver_data_t *setup_special_delivery(deliver_data_t *mydata);
+static void cleanup_special_delivery(deliver_data_t *mydata);
 
 static char *make_sieve_db(const char *user)
 {
@@ -469,14 +469,14 @@ static int sieve_redirect(void *ac,
     }
 
     if (sd->edited_header) {
-        mdata = new_special_delivery(mdata);
+        mdata = setup_special_delivery(mdata);
         if (!mdata) return SIEVE_FAIL;
         else m = mdata->m;
     }
 
     res = send_forward(rc->addr, m->return_path, m->data);
 
-    if (sd->edited_header) free_special_delivery(mdata);
+    if (sd->edited_header) cleanup_special_delivery(mdata);
 
     if (res == 0) {
         /* mark this message as redirected */
@@ -577,7 +577,7 @@ static void dump_header(const char *name, const char *value, void *rock)
     fprintf((FILE *) rock, "%s: ", name);
 
     /* fold value */
-    /* XXX  Do we want/need to do smarter folding on structed headers? */
+    /* XXX  Do we want/need to do smarter folding on structured headers? */
     while (strlen(mimehdr) > maxlen) {
         char *p;
 
@@ -603,7 +603,7 @@ static void dump_header(const char *name, const char *value, void *rock)
     free(mimehdr);
 }
 
-static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
+static deliver_data_t *setup_special_delivery(deliver_data_t *mydata)
 {
     static deliver_data_t dd;
     static message_data_t md;
@@ -654,7 +654,7 @@ static deliver_data_t *new_special_delivery(deliver_data_t *mydata)
     return mydata;
 }
 
-static void free_special_delivery(deliver_data_t *mydata)
+static void cleanup_special_delivery(deliver_data_t *mydata)
 {
     fclose(mydata->m->f);
     prot_free(mydata->m->data);
@@ -687,7 +687,7 @@ static int sieve_fileinto(void *ac,
     free(intname);
 
     if (sd->edited_header) {
-        mdata = new_special_delivery(mdata);
+        mdata = setup_special_delivery(mdata);
         if (!mdata) return SIEVE_FAIL;
         else md = mdata->m;
     }
@@ -711,7 +711,7 @@ static int sieve_fileinto(void *ac,
                                   namebuf, md->date, quotaoverride, 0);
     }
 
-    if (sd->edited_header) free_special_delivery(mdata);
+    if (sd->edited_header) cleanup_special_delivery(mdata);
 
     if (!ret) {
         snmp_increment(SIEVE_FILEINTO, 1);
@@ -732,13 +732,13 @@ static int sieve_keep(void *ac,
     int ret;
 
     if (sd->edited_header) {
-        mydata = new_special_delivery(mydata);
+        mydata = setup_special_delivery(mydata);
         if (!mydata) return SIEVE_FAIL;
     }
 
     ret = deliver_local(mydata, kc->imapflags, sd->mbname);
 
-    if (sd->edited_header) free_special_delivery(mydata);
+    if (sd->edited_header) cleanup_special_delivery(mydata);
  
     if (!ret) {
         snmp_increment(SIEVE_KEEP, 1);
