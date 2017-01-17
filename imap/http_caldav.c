@@ -767,6 +767,7 @@ static void my_caldav_auth(const char *userid)
 	else r = 0;
 
 	/* will have been overwritten */
+	free(mailboxname);
 	mailboxname = caldav_mboxname(userid, NULL);
 
 	/* Create locally */
@@ -779,6 +780,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Default calendar */
+    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -791,6 +793,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Scheduling Inbox */
+    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_INBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -803,6 +806,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Scheduling Outbox */
+    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -813,6 +817,7 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 }
 
 
@@ -950,6 +955,7 @@ static int caldav_parse_path(const char *path,
 
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
+    free(parts.box);
     mboxname_free_parts(&parts);
 
     return 0;

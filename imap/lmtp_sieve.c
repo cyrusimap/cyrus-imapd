@@ -170,7 +170,7 @@ static int getbody(void *mc, const char **content_types,
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
     if (!r) message_fetch_part(mydata->content, content_types,
 			       (struct bodypart ***) parts);
-    return (!r ? SIEVE_OK : SIEVE_FAIL);
+    return r ? SIEVE_FAIL : SIEVE_OK;
 }
 
 

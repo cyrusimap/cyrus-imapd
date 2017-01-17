@@ -2051,6 +2051,7 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
     xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
 				       BAD_CAST buf_cstring(&attrib), buf_len(&attrib)));
+    buf_free(&attrib);
 
     return 0;
 }

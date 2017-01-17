@@ -384,6 +384,7 @@ static void my_carddav_auth(const char *userid)
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
 
+    free(mailboxname);
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
     /* Auto-provision an addressbook for 'userid' */
@@ -405,6 +406,7 @@ static void my_carddav_auth(const char *userid)
 	}
 	else r = 0;
 
+	free(mailboxname);
 	mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
 	/* XXX - set rights */
@@ -420,7 +422,9 @@ static void my_carddav_auth(const char *userid)
     /* Default addressbook */
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
+    free(mailboxname);
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    buf_free(&boxbuf);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* XXX - set rights */
@@ -431,6 +435,7 @@ static void my_carddav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 }
 
 
@@ -556,6 +561,7 @@ static int carddav_parse_path(const char *path,
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
     mboxname_free_parts(&parts);
+    buf_free(&boxbuf);
 
     return 0;
 }

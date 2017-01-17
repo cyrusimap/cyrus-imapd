@@ -2792,7 +2792,8 @@ static void auth_success(struct transaction_t *txn)
 
     if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
 	/* Close existing telemetry log */
-	close(httpd_logfd);
+       if (httpd_logfd != -1)
+           close(httpd_logfd);
 
 	prot_setlog(httpd_in, PROT_NO_FD);
 	prot_setlog(httpd_out, PROT_NO_FD);
