@@ -69,7 +69,7 @@ struct service_item {
 
 static void usage(void)
 {
-    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command\n");
+    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command [mailbox]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "If you give a service name, it will show config as if you were\n");
     fprintf(stderr, "running that service, i.e. imap\n");
@@ -81,6 +81,7 @@ static void usage(void)
     fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
+    frpintf(stderr, "  * reid [mbox]   - create new unique ID for mailbox [mbox]\n");
     cyrus_done();
     exit(-1);
 }
