@@ -81,7 +81,7 @@ static void usage(void)
     fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
-    frpintf(stderr, "  * reid [mbox]   - create new unique ID for mailbox [mbox]\n");
+    fprintf(stderr, "  * reid [mbox]   - create new unique ID for mailbox [mbox]\n");
     cyrus_done();
     exit(-1);
 }
