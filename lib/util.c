@@ -600,13 +600,11 @@ EXPORTED int become_cyrus(int is_master)
 
     if (uid) return cap_setuid(uid, is_master);
 
-    const char *cyrus_user = getenv("CYRUS_USER");
-    if (!cyrus_user) cyrus_user = config_getstring(IMAPOPT_CYRUS_USER);
-    if (!cyrus_user) cyrus_user = CYRUS_USER;
+    const char *cyrus = cyrus_user();
 
-    p = getpwnam(cyrus_user);
+    p = getpwnam(cyrus);
     if (p == NULL) {
-        syslog(LOG_ERR, "no entry in /etc/passwd for user %s", cyrus_user);
+        syslog(LOG_ERR, "no entry in /etc/passwd for user %s", cyrus);
         return -1;
     }
 
@@ -624,15 +622,15 @@ EXPORTED int become_cyrus(int is_master)
         return 0;
     }
 
-    if (initgroups(cyrus_user, newgid)) {
+    if (initgroups(cyrus, newgid)) {
         syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
-               cyrus_user, strerror(errno));
+               cyrus, strerror(errno));
         return -1;
     }
 
     if (setgid(newgid)) {
         syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
-              newgid, cyrus_user, strerror(errno));
+              newgid, cyrus, strerror(errno));
         return -1;
     }
 
@@ -642,6 +640,15 @@ EXPORTED int become_cyrus(int is_master)
     if (result == 0)
         uid = newuid;
     return result;
+}
+
+EXPORTED const char *cyrus_user(void)
+{
+    const char *cyrus = getenv("CYRUS_USER");
+    if (!cyrus) cyrus = config_getstring(IMAPOPT_CYRUS_USER);
+    if (!cyrus) cyrus = CYRUS_USER;
+    assert(cyrus != NULL);
+    return cyrus;
 }
 
 static int cmdtime_enabled = 0;

@@ -210,6 +210,7 @@ enum {
 
 extern int set_caps(int stage, int is_master);
 extern int become_cyrus(int is_master);
+extern const char *cyrus_user(void);
 
 /* Some systems have very inefficient implementations of isdigit,
  * and we use it in a lot of inner loops

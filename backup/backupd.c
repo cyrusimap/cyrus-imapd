@@ -58,6 +58,7 @@
 #include "lib/map.h"
 #include "lib/signals.h"
 #include "lib/strarray.h"
+#include "lib/util.h"
 #include "lib/xmalloc.h"
 
 #include "imap/global.h"
@@ -236,8 +237,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     backupd_clienthost = get_clienthost(0, &localip, &remoteip);
     if (!strcmp(backupd_clienthost, UNIX_SOCKET)) {
         /* we're not connected to an internet socket! */
-        /* XXX todo: support cyrus_user setting and $CYRUS_USER env variable */
-        backupd_userid = xstrdup(CYRUS_USER);
+        backupd_userid = xstrdup(cyrus_user());
         backupd_userisadmin = 1;
     }
     else {

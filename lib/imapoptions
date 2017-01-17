@@ -615,7 +615,8 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "cyrus_user", NULL, STRING }
 /* The username to use as the 'cyrus' user.  If not configured, the compile
-   time default will be used */
+   time default will be used. Can be further overridden by setting the
+   $CYRUS_USER environment variable. */
 
 { "davdriveprefix", "#drive", STRING }
 /* The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
