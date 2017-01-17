@@ -1259,4 +1259,74 @@ sub test_virtdomains_return_subscribed_noaltns
     });
 }
 
+sub test_delete_nounsubscribe
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
+	[ 'subscribe' => [qw( deltest deltest/sub2 )] ],
+	[ 'delete' => 'deltest' ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'         => '\\Subscribed',
+        'deltest'       => [qw( \\NonExistent \\Subscribed )],
+	'deltest/sub2'  => [qw( \\Subscribed )],
+    });
+
+    $self->_install_test_data([
+	[ 'delete' => 'deltest/sub2' ],
+    ]);
+
+    $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'         => '\\Subscribed',
+        'deltest'       => [qw( \\NonExistent \\Subscribed )],
+	'deltest/sub2'  => [qw( \\NonExistent \\Subscribed )],
+    });
+}
+
+sub test_delete_unsubscribe
+    :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_0
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('delete_unsubscribe' => 'yes');
+    $self->_start_instances();
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
+	[ 'subscribe' => [qw( deltest deltest/sub2 )] ],
+	[ 'delete' => 'deltest' ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'        => '\\Subscribed',
+        'deltest/sub2' => '\\Subscribed',
+    });
+
+    $self->_install_test_data([
+	[ 'delete' => 'deltest/sub2' ],
+    ]);
+
+    $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+
+    $self->_assert_list_data($subdata, '/', {
+	'INBOX' => '\\Subscribed',
+    });
+}
+
 1;
