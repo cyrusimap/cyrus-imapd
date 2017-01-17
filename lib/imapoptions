@@ -680,6 +680,12 @@ Blank lines and lines beginning with ``#'' are ignored.
     immediately.
 */
 
+{ "delete_unsubscribe", 0, SWITCH }
+/* Whether to also unsubscribe from mailboxes when they are deleted.
+   Note that this behaviour contravenes RFC 3501 section 6.3.9, but
+   may be useful for avoiding user/client software confusion.
+   The default is 'no'. */
+
 { "deleteright", "c", STRING }
 /* Deprecated - only used for backwards compatibility with existing
    installations.  Lists the old RFC 2086 right which was used to

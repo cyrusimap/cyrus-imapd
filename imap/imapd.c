@@ -7044,6 +7044,11 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         }
     }
 
+    if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
+        mboxlist_changesub(intname, imapd_userid, imapd_authstate,
+                           /* add */ 0, /* force */ 0, /* notify? */ 1);
+    }
+
     imapd_check(NULL, 0);
 
     if (r) {
