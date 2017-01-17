@@ -2608,18 +2608,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int comparator = ntohl(bc[ip++].value);
             comparator_t *comp = NULL;
             void *comprock = NULL;
-            int isReg = (match == B_REGEX), ctag = 0, npat;
+            int npat;
 
             /* find comparator function */
             comp = lookup_comp(comparator, match, relation, &comprock);
             if (!comp) {
                 res = SIEVE_RUN_ERROR;
                 break;
-            }
-
-            /* set up variables needed for compiling regex */
-            if (isReg) {
-                ctag = regcomp_flags(comparator, requires);
             }
 
             /* get the header name */
@@ -2644,18 +2639,32 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 if (name) i->deleteheader(sc, m, name, index);
             }
             else {
-                const char **val, *pat;
-                strarray_t dval = STRARRAY_INITIALIZER;
-                int p, v, nval = 0, first_val = 0;
+                const char **vals, *pat;
+                strarray_t decoded_vals = STRARRAY_INITIALIZER;
+                int p, v, nval = 0, first_val = 0, ctag = 0;
                 unsigned long delete_mask = 0;
+                char scount[20];
 
                 /* get the header values */
-                if (name && i->getheader(m, name, &val) == SIEVE_OK) {
-                    while (val[nval]) {
+                if (name && i->getheader(m, name, &vals) == SIEVE_OK) {
+                    for (nval = 0; vals[nval]; nval++) {
+                        if (match == B_COUNT) continue;  /* count only */
+
                         /* decode header value and add to strarray_t */
-                        strarray_appendm(&dval,
-                                         charset_parse_mimeheader(val[nval++],
+                        strarray_appendm(&decoded_vals,
+                                         charset_parse_mimeheader(vals[nval],
                                                                   0 /*flags*/));
+                    }
+
+                    if (match == B_COUNT) {
+                        /* convert number of headers to a string.
+                           Note: use of :index restricts count to at most 1 */
+                        snprintf(scount, sizeof(scount), "%u",
+                                 index ? 1 : nval);
+                    }
+                    else if (match == B_REGEX) {
+                        /* set up options needed for compiling regex */
+                        ctag = regcomp_flags(comparator, requires);
                     }
 
                     if (nval && index) {
@@ -2679,23 +2688,31 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
                     for (v = first_val; v < nval; v++) {
                         if (!(delete_mask & (1<<v))) {
-                            const char *decoded_val = strarray_nth(&dval, v);
+                            const char *val;
                             regex_t *reg = NULL;
-                            char errbuf[100];
 
                             if (requires & BFE_VARIABLES) {
                                 pat = parse_string(pat, variables);
                             }
 
-                            if (isReg) {
-                                reg = bc_compile_regex(pat, ctag,
-                                                       errbuf, sizeof(errbuf));
-                                if (!reg) continue;
-                                else pat = (const char *) reg;
+                            if (match == B_COUNT) {
+                                val = scount;
+                            }
+                            else {
+                                val = strarray_nth(&decoded_vals, v);
+
+                                if (match == B_REGEX) {
+                                    char errbuf[100];
+
+                                    reg = bc_compile_regex(pat, ctag,
+                                                           errbuf,
+                                                           sizeof(errbuf));
+                                    if (!reg) continue;
+                                    else pat = (const char *) reg;
+                                }
                             }
 
-                            if (comp(decoded_val, strlen(decoded_val),
-                                     pat, comprock)) {
+                            if (comp(val, strlen(val), pat, comprock)) {
                                 /* flag the header for deletion */
                                 delete_mask |= (1<<v);
                             }
@@ -2707,7 +2724,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                         }
                     }
                 }
-                strarray_fini(&dval);
+                strarray_fini(&decoded_vals);
 
                 /* delete flagged headers in reverse order
                    (so indexing is consistent) */
