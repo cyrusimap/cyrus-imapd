@@ -13,7 +13,12 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_info** [ **-C** *config-file* ] [ **-M** *config-file* ] [ **-n** *servicename* ] *command* [*mailbox*]
+    **cyr_info** [OPTIONS] conf
+    **cyr_info** [OPTIONS] conf-default
+    **cyr_info** [OPTIONS] conf-all
+    **cyr_info** [OPTIONS] conf-lint
+    **cyr_info** [OPTIONS] proc
+    **cyr_info** [OPTIONS] reid *mailbox*
 
 Description
 ===========
@@ -22,9 +27,44 @@ Description
 is to extend this tool with useful commands to make managing and
 configuring Cyrus easier.
 
-If *command* is **reid**, the *mailbox* argument is required.
-
 **cyr_info** |default-conf-text|
+
+**cyr_info** provides the following sub-commands:
+
+.. option:: conf
+
+    Print only the configuration options which are not the same as
+    default (regardless of whether you have specified them or not).
+
+.. option:: conf-default
+
+    Print all default configuration options, ignoring those set locally.
+
+.. option:: conf-all
+
+    Print ALL configuration options - including default options.  This
+    command shows which options will be in effect at runtime.
+
+.. option:: conf-lint
+
+    Print only configuration options which are NOT recognised.  This
+    command should not print anything.  It uses cyrus.conf to find
+    the names of configured services to avoid displaying any known
+    configuration options for the named service.
+
+.. option:: proc
+
+    Print all currently connected processes in the proc directory
+
+.. option:: reid
+
+    .. parsed-literal::
+
+        **cyr_info** [OPTIONS] reid *mailbox*
+
+    Create a new unique ID for mailbox *mailbox*.  The *mailbox*
+    argument is required.
+
 
 Options
 =======
@@ -42,39 +82,6 @@ Options
 .. option:: -n servicename
 
     Read the configuration as if for the service named *name*.
-
-Commands
-========
-
-*conf*
-
-    Print only the configuration options which are not the same as
-    default (regardless of whether you have specified them or not).
-
-*conf-default*
-
-    Print all default configuration options, ignoring those set locally.
-
-*conf-all*
-
-    Print ALL configuration options - including default options.  This
-    command shows which options will be in effect at runtime.
-
-*conf-lint*
-
-    Print only configuration options which are NOT recognised.  This
-    command should not print anything.  It uses cyrus.conf to find
-    the names of configured services to avoid displaying any known
-    configuration options for the named service.
-
-*proc*
-
-    Print all currently connected processes in the proc directory
-
-*reid* *mailbox*
-
-    Create a new unique ID for mailbox *mailbox*.  The *mailbox*
-    argument is required.
 
 Examples
 ========
