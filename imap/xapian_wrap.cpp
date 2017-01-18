@@ -915,8 +915,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         snippet = enquire.get_mset(0, 0).snippet(text,
                 snippet_length,
                 *snipgen->stemmer,
-                Xapian::MSet::SNIPPET_TERMCOVER|
-                Xapian::MSet::SNIPPET_EMPTY_NOMATCH|
+                Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH|
                 Xapian::MSet::SNIPPET_EXHAUSTIVE,
                 snipgen->hi_start,
                 snipgen->hi_end,
