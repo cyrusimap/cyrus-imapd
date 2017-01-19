@@ -31,7 +31,11 @@ If you're familiar with replication, and your current installation is 2.4 or new
 installation to replicate data to a new 3.0 installation and failover to the new installation when you're
 ready. The replication protocol has been kept backwards compatible.
 
-Most risky is upgrading in-place. Please don't do this, for your sanity and ours.
+If you are upgrading in place, you will need to shut down Cyrus entirely while you install the new package.  If your
+old installation was using berkeley DB format databases, you will need to convert or upgrade the databases **before**
+you upgrade.  Cyrus v3.0 does not support berkeley at all.
+
+We strongly recommend that you read this entire document before upgrading.
 
 2. Install new 3.0 Cyrus
 ------------------------
@@ -57,8 +61,8 @@ Follow the :ref:`general install instructions <basicserver>`.
 
 .. note::
 
-    It's best to ensure your new Cyrus initially *will not* start up listening for new
-    inbound/outbound imap connections, not until you've completed your migration.
+    It's best to ensure your new Cyrus *will not* start up automatically
+    if your server restarts in the middle of the upgrade.
 
     How this is best achieved will depend upon your OS and distro, but may involve
     something like ``systemctl disable cyrus-imapd`` or ``update-rc.d cyrus-imapd disable``
@@ -66,7 +70,7 @@ Follow the :ref:`general install instructions <basicserver>`.
 3. Shut down existing Cyrus
 ---------------------------
 
-Shut down your existing Cyrus as user cyrus.
+Shut down your existing Cyrus installation with its init script or whatever method you normally use.
 
 This is necessary to guarantee a clean data snapshot.
 
@@ -81,25 +85,23 @@ We recommend backing up all your data before continuing.
 * :ref:`Cyrus Databases <databases>`
 
 (You do already have a backup strategy in place, right? Once you're on 3.0, you can
-use the new inbuilt :ref:`backup tools <cyrus-backups>`.)
+consider using the new inbuilt :ref:`backup tools <cyrus-backups>`.)
 
 5. Copy config files and update
 -------------------------------
 
-Copy your existing :cyrusman:`imapd.conf(5)` and :cyrusman:`cyrus.conf(5)` into the new 3.0 locations.
+Check to see if your imapd.conf file contains any deprecated options::
 
-Update imapd.conf (edit as root) so that the new data directories are in the right spot (you don't want to mix
-your existing data with your new install).
+    cyr_info conf-lint -C <path to imapd.conf> -M <path to cyrus.conf>
 
-Check to see if your config file contains any deprecated options::
+You need to provide both imapd.conf and cyrus.conf so that conf-lint knows
+the names of all your services and can check service-specific overrides.
 
-    cyr_info conf-lint -C <path to imapd.conf> -M <path to cyrus.conf> 
-
-Check to see that the sum of your system's config values is correct. This command
+To check your entire system's configuration you can use conf-all. This command
 takes all the system defaults, along with anything you have provided overrides for
 in your config files::
 
-    cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf> 
+    cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf>
 
 **Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
 defaults have changed in :cyrusman:`imapd.conf(5)`. Implications are
@@ -113,46 +115,14 @@ outlined in the Note in :ref:`imap-admin-namespaces-mode` and
     If your installation is using groups, don't turn ``reverseacls:`` on. Reverseacl support
     only works well for sites without groups.
 
-
-6. Copy all data to new location
---------------------------------
-
-Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
-
-::
-
-    sudo -u cyrus ./tools/mkimap
-
-Copy your data files to the new Cyrus 3.0 locations you just specified.
-
-* Sieve scripts
-
-   Location set via ``sieveusehomedir:`` and ``sievedir:`` directives
-
-* Config files
-
-   Location set via ``configdirectory:`` directive
-
-* Mail spool
-
-   Location set via ``partition-XX`` directive(s), of which there may be
-   several
-
-* Metadata
-
-   Location set via ``metapartition-XX`` directive(s), of which there may
-   be several
+6. Upgrade specific items
+-------------------------
 
 * Special-Use flags
 
    If your 2.4 :cyrusman:`imapd.conf(5)` made use of the ``xlist-XX``
    directive(s), you can convert these to per-user special-use annotations
    in your new install with the :cyrusman:`cvt_xlist_specialuse(8)` tool
-
-* :ref:`Cyrus Databases <databases>`
-
-   Location set via ``XX_db_path:`` directives (i.e.
-   ``tls_sessions_db_path: /run/cyrus/tls_sessions.db``)
 
 You don't need to copy the following databases as Cyrus 3.0 will
 recreate these for you automatically:
@@ -163,10 +133,10 @@ recreate these for you automatically:
 * STATUS cache (statuscache.db).
 
 .. note::
-    If you're upgrading from versions older than 2.4, you may wish to
-    consider relocating these four databases to ephemeral storage, such
-    as ``/run/cyrus`` (Debian/Ubuntu) or ``/var/run/cyrus`` or whatever
-    suitable tmpfs is provided on your distro.
+    You may wish to consider relocating these four databases to ephemeral
+    storage, such as ``/run/cyrus`` (Debian/Ubuntu) or ``/var/run/cyrus``
+    or whatever suitable tmpfs is provided on your distro.  It will place
+    less IO load on your disks and run faster.
 
 .. note::
     Please be warned that some packages place tasks such as ``tlsprune``
@@ -175,7 +145,7 @@ recreate these for you automatically:
     ``tls_sessions_db`` is not present.  The solution to this is to
     remove the ``tlsprune`` task from ``START{}`` and schedule it in
     ``EVENTS{}``, further down.
-    
+
 .. warning::
 
     **Berkeley db format no longer supported**
@@ -210,12 +180,11 @@ recreate these for you automatically:
 Check ``/var/log/syslog`` for errors so you can quickly understand potential problems.
 
 When you're satisfied version 3.0 is running and can see all its data correctly,
-connect the new Cyrus back up to send and receive mail and you're
-back in business.
+start the new Cyrus up with your regular init script.
 
 If something has gone wrong, contact us on the :ref:`mailing list <feedback>`.
-You can switch your old installation back on
-and keep processing mail until you're able to finish your 3.0 installation.
+You can revert to backups and keep processing mail using your old version
+until you're able to finish your 3.0 installation.
 
 8. Reconstruct databases and cache
 ----------------------------------
@@ -238,8 +207,8 @@ To check (and correct) quota usage::
 
     quota -f
 
-If you're using CalDAV/CardDAV/all of the DAV, then all the user.dav databases need
-to be reconstructed due to format changes.::
+If you've been using CalDAV/CardDAV/all of the DAV from earlier releases, then the user.dav
+databases need to be reconstructed due to format changes.::
 
     dav_reconstruct -a
 
@@ -273,7 +242,11 @@ how many Cyrus installations are out there, and how the upgrade process went.
 Special note for Murder configurations
 --------------------------------------
 
-Generally accepted wisdom when upgrading a Murder configuration is to
-upgrade your back end servers first. This can be done one at a time.
+If you upgrade murder frontends before you upgrade all the backends,
+they may advertise features to clients which the backends don't support,
+which will cause the commands to fail when they are proxied to the backend.
 
-Then upgrade your front ends and the mupdate master.
+Generally accepted wisdom when upgrading a Murder configuration is to
+upgrade all your back end servers first. This can be done one at a time.
+
+Upgrade your mupdate master and front ends last.

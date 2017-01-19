@@ -46,7 +46,7 @@ Options
 
 .. option:: -f
 
-    Force deletion of mail in *all* mailboxes.
+    Force ipurge to examine mailboxes below INBOX.* and user.*.
 
 .. option:: -d days
 

@@ -45,7 +45,7 @@
 
 #include <stdio.h>
 
-#define SIEVE_VERSION "CMU Sieve 2.4"
+#define SIEVE_VERSION "CMU Sieve 3.0"
 
 /* error codes */
 #define SIEVE_OK (0)

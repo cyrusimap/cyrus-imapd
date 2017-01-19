@@ -36,17 +36,17 @@ One per system:
 * `User Access (user_deny.db)`_
 * `Backups (backup.db)`_
 * `News database (fetchnews.db)`_
-* `Sort Cache db (?.db)`_
 * `Zoneinfo db (zoneinfo.db)`_
 
 One per user:
 
-* `Conversations (conversations.db)`_
+* `Conversations (<userid>.conversations)`_
+* `Counters (<userid>.counters)`_
+* `DAV Index (<userid>.dav)`_
+* `Mailbox Keys (<userid>.mboxkey)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
-* `Mailbox Keys (<userid>.mboxkey)`_
-* `DAV Index (<userid>.dav)`_
-* `Search Index db (?.db)`_
+* `Search Index DB list (<userid>.xapianactive)`_
 
 Mailbox List (mailboxes.db)
 ---------------------------
@@ -84,10 +84,12 @@ File type can be: `quotalegacy`_ (default), `flat`_, `skiplist`_, `sql`_, `twosk
 
 **Legacy Quotas**
 
-The legacy quota database uses a distributed system in which each quota root is stored in a separate file named by quota root and the contents has the following format::
+The legacy quota database uses a distributed system in which each quota root is stored in a separate file named by quota root and the contents had the following format in older versions::
 
     <Usage (in bytes)>\n
     <Limit (in Kbytes)>\n
+
+Newer versions are stored as a DList file with keys for each type of quota, and values with both usage and limit for each type.  A limit value of -1 means no limit.
 
 The translation to/from this data record format is handled by the quota_legacy cyrusdb backend.
 
@@ -156,8 +158,18 @@ Backups (backup.db)
 
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
 
-Conversations (conversations.db)
---------------------------------
+Conversations (<userid>.conversations)
+--------------------------------------
+
+This file contains all the message-id fields from every email that has been seen
+in the past three months, mapping to the conversation IDs in which this message
+ID has been seen, and the timestampe when it was last seen.
+
+It also has a records for each conversation ID with details about which folders
+have that converations ID in them, and counts of messages and flags.
+
+Finally there are records for each folder with the counts of conversations in
+that folder.
 
 File type can be: `skiplist`_ (default), `sql`_, `twoskip`_, or `lmdb`_.
 
@@ -166,18 +178,11 @@ News database (fetchnews.db)
 
 File format not selectable.
 
-Search Index db (?.db)
+Search Index databases
 ----------------------
 
-This is either cyrus.squatter if you're using squatter, or xapian.active
-if you're using xapian.
-
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
-
-Sort Cache db (?.db)
---------------------
-
-Only used for xconvmultisort.
+This is either cyrus.squat in each folder, or if you're using xapian a single
+<userid>.xapianactive file listing active databases by tier name and number.
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
 
