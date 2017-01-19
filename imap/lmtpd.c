@@ -101,6 +101,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/lmtp_err.h"
 #include "imap/lmtpstats.h"
 
 #include "lmtpd.h"
@@ -197,6 +198,8 @@ int service_init(int argc __attribute__((unused)),
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
     global_sasl_init(1, 1, mysasl_cb);
+
+    initialize_lmtp_error_table();
 
     /* so we can do mboxlist operations */
     mboxlist_init(0);

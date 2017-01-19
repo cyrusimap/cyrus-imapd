@@ -78,6 +78,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/lmtp_err.h"
 #include "imap/lmtpstats.h"
 #include "imap/mupdate_err.h"
 
@@ -153,13 +154,11 @@ static int roundToK(int x)
 
 static void send_lmtp_error(struct protstream *pout, int r)
 {
+    int code;
+
     switch (r) {
     case 0:
-        prot_printf(pout, "250 2.1.5 Ok SESSIONID=<%s>\r\n", session_id());
-        break;
-
-    case IMAP_IOERROR:
-        prot_printf(pout, "451 4.3.0 System I/O error\r\n");
+        code = LMTP_OK;
         break;
 
     case IMAP_SERVER_UNAVAILABLE:
@@ -167,103 +166,73 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case MUPDATE_NOAUTH:
     case MUPDATE_TIMEOUT:
     case MUPDATE_PROTOCOL_ERROR:
-        prot_printf(pout, "451 4.4.3 Remote server unavailable\r\n");
+        code = LMTP_SERVER_FAILURE;
         break;
 
     case IMAP_NOSPACE:
-        prot_printf(pout, "451 4.3.1 cannot create file: out of space\r\n");
-        break;
-
-    case IMAP_AGAIN:
-        prot_printf(pout, "451 4.3.0 transient system error\r\n");
+        code = LMTP_SERVER_FULL;
         break;
 
     case IMAP_PERMISSION_DENIED:
         if (LMTP_LONG_ERROR_MSGS) {
-            prot_printf(pout,
-"550-You do not have permission to post a message to this mailbox.\r\n"
-"550-Please contact the owner of this mailbox in order to submit\r\n"
-"550-your message, or %s if you believe you\r\n"
-"550-received this message in error.\r\n"
-"550 5.7.1 Permission denied\r\n",
+            prot_printf(pout, error_message(LMTP_NOT_AUTHORIZED_LONG),
                         config_getstring(IMAPOPT_POSTMASTER));
-        } else {
-            prot_printf(pout, "550 5.7.1 Permission denied\r\n");
         }
+        code = LMTP_NOT_AUTHORIZED;
         break;
 
     case IMAP_QUOTA_EXCEEDED:
         if(config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
             /* Not Default - Perm Failure */
-            prot_printf(pout, "552 5.2.2 Over quota SESSIONID=<%s>\r\n", session_id());
+            code = LMTP_MAILBOX_FULL_PERM;
         } else {
             /* Default - Temp Failure */
-            prot_printf(pout, "452 4.2.2 Over quota SESSIONID=<%s>\r\n", session_id());
+            code = LMTP_MAILBOX_FULL;
         }
         break;
 
     case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
-        prot_printf(pout, "451 4.2.0 Mailbox has an invalid format\r\n");
+        code = LMTP_MAILBOX_ERROR;
         break;
 
     case IMAP_MAILBOX_MOVED:
-        prot_printf(pout, "451 4.2.1 Mailbox Moved\r\n");
-        break;
-
     case IMAP_MAILBOX_RESERVED:
-        prot_printf(pout, "451 4.2.1 Mailbox Reserved\r\n");
-        break;
-
     case IMAP_MAILBOX_DISABLED:
-        prot_printf(pout,
-                    "450 4.2.1 Mailbox disabled, not accepting messages\r\n");
+        code = LMTP_MAILBOX_DISABLED;
         break;
 
     case IMAP_MESSAGE_CONTAINSNULL:
-        prot_printf(pout, "554 5.6.0 Message contains NUL characters\r\n");
-        break;
-
     case IMAP_MESSAGE_CONTAINSNL:
-        prot_printf(pout, "554 5.6.0 Message contains bare newlines\r\n");
-        break;
-
     case IMAP_MESSAGE_CONTAINS8BIT:
-        prot_printf(pout, "554 5.6.0 Message contains non-ASCII characters in headers\r\n");
-        break;
-
     case IMAP_MESSAGE_BADHEADER:
-        prot_printf(pout, "554 5.6.0 Message contains invalid header\r\n");
-        break;
-
     case IMAP_MESSAGE_NOBLANKLINE:
-        prot_printf(pout,
-                    "554 5.6.0 Message has no header/body separator\r\n");
+        code = LMTP_MESSAGE_INVALID;
         break;
 
     case IMAP_MAILBOX_NONEXISTENT:
         /* XXX Might have been moved to other server */
         if (LMTP_LONG_ERROR_MSGS) {
-            prot_printf(pout,
-"550-Mailbox unknown.  Either there is no mailbox associated with this\r\n"
-"550-name or you do not have authorization to see it.\r\n"
-"550 5.1.1 User unknown\r\n");
-        } else {
-            prot_printf(pout, "550 5.1.1 User unknown\r\n");
+            prot_puts(pout, error_message(LMTP_USER_UNKNOWN_LONG));
         }
+        code = LMTP_USER_UNKNOWN;
         break;
 
     case IMAP_PROTOCOL_BAD_PARAMETERS:
-        prot_printf(pout, "501 5.5.4 Syntax error in parameters\r\n");
+        code = LMTP_PROTOCOL_ERROR;
         break;
 
+    case IMAP_IOERROR:
+    case IMAP_AGAIN:
     case MUPDATE_BADPARAM:
     default:
         /* Some error we're not expecting. */
-        prot_printf(pout, "451 4.3.0 Unexpected internal error: %s\r\n",
-                    error_message(r));
+        code = LMTP_SYSTEM_ERROR;
         break;
     }
+
+    prot_printf(pout, error_message(code), error_message(r), session_id());
+    prot_puts(pout, "\r\n");
 }
 
 /* ----- this section defines functions on message_data_t.
