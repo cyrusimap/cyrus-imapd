@@ -1,6 +1,10 @@
-The version of Xapian used to build the search support into Cyrus was
-2.2, and the patches here are against that version.
+How to install Xapian for Cyrus 3.0 or later
+============================================
+Please follow the installation guide for Cyrus dependencies in the
+main README. Then see the section for Xapian configuration.
 
+How to install Xapian for Cyrus 2.5
+===================================
 To build xapian support into Cyrus, you need to build your own xapian
 library as follows:
 
@@ -29,8 +33,10 @@ make install
 
 And you have a Xapian-supporting Cyrus IMAPd!
 
-Configuration wise, you'll need to set up sync log to a channel
-called squatter, and at least one search tier.
+How to configure Cyrus to use Xapian search
+===========================================
+You'll need to set up sync log to a channel called squatter, and
+at least one search tier.
 
 search_engine: xapian
 search_index_headers: no

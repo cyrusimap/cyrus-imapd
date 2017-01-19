@@ -74,6 +74,9 @@ The Cyrus source is available at:
 
 https://github.com/cyrusimap/cyrus-imapd
 
+For version 3.0 or later, please first build Cyrus main dependencies
+from source (see next section).
+
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
@@ -90,6 +93,35 @@ Unlike releases, the git repository doesn't have a pre-built
 If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
 Read through doc/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at http://www.cyrusimap.org/imap/developer.html
+
+How to install Cyrus libraries from git source
+==============================================
+For version 3.0 or later, it is recommended to also build the main
+dependencies from source. You will need to do so, to use Xapian for
+search.
+
+The Cyrus dependencies source is available at:
+
+https://github.com/cyrusimap/cyruslibs
+
+To build and install the libraries, run
+
+    $ ./build.sh
+
+By default, all dependencies are installed in /usr/local/cyruslibs.
+Before compiling Cyrus from git source, make sure to update your environment
+variables, accordingly. For example:
+
+    $ export CYRUSLIBS=/usr/local/cyruslibs
+    $ export PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
+    $ export LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
+
+For Xapian, either make sure to add $CYRUSLIBS/bin to your PATH, or call
+Cyrus ./configure script as follows:
+
+    $ XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config" ./configure [...]
+
+Then continue to install Cyrus.
 
 Are you upgrading?
 ==================
