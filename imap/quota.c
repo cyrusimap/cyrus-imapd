@@ -718,16 +718,20 @@ static void reportquota(void)
             return;
         }
 
+        mbname_t *mbname = mbname_from_intname(quotaroots[i].name);
+        const char *extname = mbname_extname(mbname, &quota_namespace, NULL);
+
         json_t *jsonroot = NULL;
         if (jsonout) {
             jsonroot = json_object();
-            json_object_set_new(jsonout, quotaroots[i].name, jsonroot);
+            json_object_set_new(jsonout, extname, jsonroot);
         }
 
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            reportquota_resource(&localq, quotaroots[i].name, res, jsonroot);
+            reportquota_resource(&localq, extname, res, jsonroot);
         }
 
+        mbname_free(&mbname);
         quota_free(&localq);
     }
 
