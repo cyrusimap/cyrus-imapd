@@ -815,6 +815,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
 
         case B_REJECT:
+        case B_EREJECT:
             /*just a string*/
             len = bc->data[codep++].len;
             if(write_int(fd,len) == -1)

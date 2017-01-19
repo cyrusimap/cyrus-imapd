@@ -96,6 +96,14 @@ int script_require(sieve_script_t *s, char *req)
         } else {
             return 0;
         }
+    } else if (!strcmp("ereject", req)) {
+        if (s->interp.reject &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT)) {
+            s->support.ereject = 1;
+            return 1;
+        } else {
+            return 0;
+        }
     } else if (!strcmp("envelope", req)) {
         if (s->interp.getenvelope &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE)) {
@@ -497,6 +505,7 @@ static char *action_to_string(action_t action)
         case ACTION_NULL: return "NULL";
         case ACTION_NONE: return "None";
         case ACTION_REJECT: return "Reject";
+        case ACTION_EREJECT: return "eReject";
         case ACTION_FILEINTO: return "Fileinto";
         case ACTION_KEEP: return "Keep";
         case ACTION_REDIRECT: return "Redirect";
@@ -775,6 +784,7 @@ static int do_action_list(sieve_interp_t *interp,
         implicit_keep = implicit_keep && !a->cancel_keep;
         switch (a->a) {
         case ACTION_REJECT:
+        case ACTION_EREJECT:
             if (!interp->reject)
                 return SIEVE_INTERNAL_ERROR;
             ret = interp->reject(&a->u.rej,
@@ -788,7 +798,9 @@ static int do_action_list(sieve_interp_t *interp,
             if (ret == SIEVE_OK)
                 snprintf(actions_string+strlen(actions_string),
                          ACTIONS_STRING_LEN-strlen(actions_string),
-                         "Rejected with: %s\n", a->u.rej.msg);
+                         "%s with: %s\n",
+                         (a->a == ACTION_EREJECT) ? "eRejected" : "Rejected",
+                         a->u.rej.msg);
 
             break;
         case ACTION_FILEINTO:

@@ -53,6 +53,7 @@ typedef enum {
     ACTION_NULL = -1,
     ACTION_NONE = 0,
     ACTION_REJECT,
+    ACTION_EREJECT,
     ACTION_FILEINTO,
     ACTION_KEEP,
     ACTION_REDIRECT,
@@ -115,7 +116,7 @@ void free_notify_list(notify_list_t *n);
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
  * action list */
-int do_reject(action_list_t *m, const char *msg);
+int do_reject(action_list_t *m, int action, const char *msg);
 int do_fileinto(action_list_t *m, const char *mbox, int cancel_keep, int do_create,
                 strarray_t *imapflags);
 int do_redirect(action_list_t *m, const char *addr, int cancel_keep);

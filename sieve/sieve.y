@@ -259,7 +259,7 @@ extern void sieverestart(FILE *f);
 %token <nval> NUMBER
 %token <sval> STRING
 %token IF ELSIF ELSE
-%token REJCT FILEINTO REDIRECT KEEP STOP DISCARD VACATION REQUIRE
+%token REJCT EREJECT FILEINTO REDIRECT KEEP STOP DISCARD VACATION REQUIRE
 %token MARK UNMARK FLAGS
 %token NOTIFY DENOTIFY
 %token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE BODY
@@ -361,6 +361,20 @@ action: REJCT STRING
                                          YYERROR; /* vu should call yyerror() */
                                      }
                                      $$ = new_command(REJCT);
+                                     $$->u.reject = $2;
+                                 }
+
+        | EREJECT STRING         {
+                                     if (!parse_script->support.ereject) {
+                                         parse_error(parse_script,
+                                                     SIEVE_MISSING_REQUIRE,
+                                                     "ereject");
+                                         YYERROR; /* pe should call yyerror() */
+                                     }
+                                     if (!verify_utf8(parse_script, $2)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+                                     $$ = new_command(EREJECT);
                                      $$->u.reject = $2;
                                  }
 

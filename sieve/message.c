@@ -55,11 +55,11 @@
 #include "xmalloc.h"
 #include "util.h"
 
-/* reject message m with message msg
+/* [e]reject message m with message msg
  *
  * incompatible with: fileinto, redirect
  */
-int do_reject(action_list_t *a, const char *msg)
+int do_reject(action_list_t *a, int action, const char *msg)
 {
     action_list_t *b = NULL;
 
@@ -70,6 +70,7 @@ int do_reject(action_list_t *a, const char *msg)
             a->a == ACTION_KEEP ||
             a->a == ACTION_REDIRECT ||
             a->a == ACTION_REJECT ||
+            a->a == ACTION_EREJECT ||
             a->a == ACTION_VACATION ||
             a->a == ACTION_SETFLAG ||
             a->a == ACTION_ADDFLAG ||
@@ -85,9 +86,10 @@ int do_reject(action_list_t *a, const char *msg)
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
         return SIEVE_NOMEM;
-    a->a = ACTION_REJECT;
+    a->a = action;
     a->cancel_keep = 1;
     a->u.rej.msg = msg;
+    a->u.rej.is_extended = (action == ACTION_EREJECT);
     b->next = a;
     a->next =  NULL;
     return 0;
@@ -95,7 +97,7 @@ int do_reject(action_list_t *a, const char *msg)
 
 /* fileinto message m into mailbox
  *
- * incompatible with: reject
+ * incompatible with: [e]reject
  */
 int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep, int do_create,
                 strarray_t *imapflags)
@@ -104,7 +106,7 @@ int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep, int do_crea
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
         if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
             /* don't bother doing it twice */
@@ -144,7 +146,7 @@ int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep, int do_crea
 
 /* redirect message m to to addr
  *
- * incompatible with: reject
+ * incompatible with: [e]reject
  */
 int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
 {
@@ -155,7 +157,7 @@ int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         b = a;
-        if (a->a == ACTION_REJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
         a = a->next;
     }
@@ -174,7 +176,7 @@ int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
 
 /* keep message
  *
- * incompatible with: reject
+ * incompatible with: [e]reject
  */
 int do_keep(action_list_t *a, int cancel_keep, strarray_t *imapflags)
 {
@@ -182,7 +184,7 @@ int do_keep(action_list_t *a, int cancel_keep, strarray_t *imapflags)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
         if (a->a == ACTION_KEEP) {
             /* don't bother doing it twice */
@@ -269,7 +271,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         b = a;
-        if (a->a == ACTION_REJECT ||
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT ||
             a->a == ACTION_VACATION) /* vacation can't be used twice */
             return SIEVE_RUN_ERROR;
         a = a->next;
@@ -298,7 +300,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 
 /* mark message m
  *
- * incompatible with: reject
+ * incompatible with: [e]reject
  */
 int do_mark(action_list_t *a)
 {
@@ -307,7 +309,7 @@ int do_mark(action_list_t *a)
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         b = a;
-        if (a->a == ACTION_REJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
         a = a->next;
     }
@@ -326,7 +328,7 @@ int do_mark(action_list_t *a)
 
 /* unmark message m
  *
- * incompatible with: reject
+ * incompatible with: [e]reject
  */
 int do_unmark(action_list_t *a)
 {
@@ -335,7 +337,7 @@ int do_unmark(action_list_t *a)
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         b = a;
-        if (a->a == ACTION_REJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
         a = a->next;
     }

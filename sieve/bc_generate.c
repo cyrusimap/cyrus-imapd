@@ -745,9 +745,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 break;
 
             case REJCT:
-                /* REJECT (STRING: len + dataptr) */
+            case EREJECT:
+                /* (REJECT | EREJECT) (STRING: len + dataptr) */
                 if (!atleast(retval, codep+3)) return -1;
-                retval->data[codep++].op = B_REJECT;
+                retval->data[codep++].op =
+                    (c->type == EREJECT) ? B_EREJECT : B_REJECT;
                 retval->data[codep++].len = strlen(c->u.reject);
                 retval->data[codep++].str = c->u.reject;
                 break;

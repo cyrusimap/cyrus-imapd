@@ -69,22 +69,9 @@ EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
         initonce = 1;
     }
 
-    i = (sieve_interp_t *) xmalloc(sizeof(sieve_interp_t));
-
-    i->redirect = i->discard = i->reject = i->fileinto = i->keep = NULL;
-    i->getsize = NULL;
-    i->getheader = NULL;
-    i->getenvelope = NULL;
-    i->getbody = NULL;
-    i->getinclude = NULL;
-    i->vacation = NULL;
-    i->notify = NULL;
-
-    i->markflags = NULL;
+    i = (sieve_interp_t *) xzmalloc(sizeof(sieve_interp_t));
 
     i->interp_context = interp_context;
-    i->err = NULL;
-    i->lastitem = NULL;
     i->extensions[0] = '\0';
 
     i->time = time(NULL);
@@ -107,7 +94,7 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
             strlcat(i->extensions, " fileinto", EXT_LEN);
         if (i->reject &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
-            strlcat(i->extensions, " reject", EXT_LEN);
+            strlcat(i->extensions, " reject ereject", EXT_LEN);
         if (i->vacation &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
             strlcat(i->extensions, " vacation vacation-seconds", EXT_LEN);

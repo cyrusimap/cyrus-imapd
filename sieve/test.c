@@ -361,7 +361,10 @@ static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
-    printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
+    if (rc->is_extended)
+        printf("LMTP rejecting message '%s' with '%s'\n", m->name, rc->msg);
+    else
+        printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }

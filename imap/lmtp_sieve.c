@@ -79,6 +79,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/lmtp_err.h"
 #include "imap/lmtpstats.h"
 
 static int sieve_usehomedir = 0;
@@ -525,10 +526,37 @@ static int sieve_reject(void *ac,
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = ((deliver_data_t *) mc)->m;
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *md = mydata->m;
     const char **body;
     const char *origreceip;
-    int res;
+    int res, need_encode = 0;
+
+    if (!rc->is_extended) {
+        /* Per RFC 5429, we can LMTP reject if reason string is US-ASCII */
+        size_t i;
+
+        for (i = 0; i < strlen(rc->msg); i++) {
+            if (!(isprint(rc->msg[i]) || (rc->msg[i] == '\t'))) {
+                need_encode = 1;
+                break;
+            }
+        }
+    }
+
+    if (rc->is_extended || !need_encode) {
+        msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, rc->msg);
+
+        snmp_increment(SIEVE_REJECT, 1);
+        syslog(LOG_INFO, "sieve LMTP rejected: %s",
+               md->id ? md->id : "<nomsgid>");
+        if (config_auditlog)
+            syslog(LOG_NOTICE,
+                   "auditlog: LMTP reject sessionid=<%s> message-id=%s",
+                   session_id(), md->id ? md->id : "<nomsgid>");
+
+        return SIEVE_OK;
+    }
 
     if (md->return_path == NULL) {
         /* return message to who?!? */
@@ -540,7 +568,8 @@ static int sieve_reject(void *ac,
         syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
                mbname_userid(sd->mbname), md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
-            syslog(LOG_NOTICE, "auditlog: discard-reject sessionid=<%s> message-id=%s",
+            syslog(LOG_NOTICE,
+                   "auditlog: discard-reject sessionid=<%s> message-id=%s",
                    session_id(), md->id ? md->id : "<nomsgid>");
         return SIEVE_OK;
     }
@@ -554,7 +583,8 @@ static int sieve_reject(void *ac,
         syslog(LOG_INFO, "sieve rejected: %s to: %s",
                md->id ? md->id : "<nomsgid>", md->return_path);
         if (config_auditlog)
-            syslog(LOG_NOTICE, "auditlog: reject sessionid=<%s> message-id=%s target=<%s>",
+            syslog(LOG_NOTICE,
+                   "auditlog: reject sessionid=<%s> message-id=%s target=<%s>",
                    session_id(), md->id ? md->id : "<nomsgid>", md->return_path);
         return SIEVE_OK;
     } else {

@@ -591,8 +591,10 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
         case B_REJECT:/*3*/
+        case B_EREJECT:/*31*/
             i = unwrap_string(d, i, &data, &len);
-            printf("REJECT {%d}%s\n", len, data);
+            printf("%s {%d}%s\n", (op == B_EREJECT) ? "EREJECT" : "REJECT",
+                   len, data);
             break;
 
         case B_FILEINTO: /*24*/

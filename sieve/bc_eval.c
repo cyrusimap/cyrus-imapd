@@ -1922,16 +1922,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
 
         case B_REJECT:/*3*/
+        case B_EREJECT:/*31*/
             ip = unwrap_string(bc, ip, &data, NULL);
 
             if (requires & BFE_VARIABLES) {
                 data = parse_string(data, variables);
             }
 
-            res = do_reject(actions, data);
+            res = do_reject(actions,
+                            (op == B_EREJECT) ? ACTION_EREJECT : ACTION_REJECT,
+                            data);
 
             if (res == SIEVE_RUN_ERROR)
-                *errmsg = "Reject can not be used with any other action";
+                *errmsg = "[e]Reject can not be used with any other action";
 
             break;
 

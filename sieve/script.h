@@ -57,6 +57,7 @@ struct sieve_script {
     struct sieve_support {
         int fileinto       : 1;
         int reject         : 1;
+        int ereject        : 1;
         int envelope       : 1;
         int body           : 1;
         int vacation       : 1;

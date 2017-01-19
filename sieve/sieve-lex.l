@@ -121,6 +121,7 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>hasflag        return yylval->nval = HASFLAG;
 <INITIAL>string         return yylval->nval = STRINGT;
 <INITIAL>reject         return REJCT;
+<INITIAL>ereject        return EREJECT;
 <INITIAL>fileinto       return FILEINTO;
 <INITIAL>redirect       return REDIRECT;
 <INITIAL>keep           return KEEP;

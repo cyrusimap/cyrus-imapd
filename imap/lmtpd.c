@@ -667,7 +667,7 @@ static void deliver_remote(message_data_t *msgdata,
                 break;
             case nosieve:
                 /* this is the only delivery we're attempting for this rcpt */
-                msg_setrcpt_status(msgdata, j, lt->rcpt[i].r);
+                msg_setrcpt_status(msgdata, j, lt->rcpt[i].r, NULL);
                 status[j] = done;
                 break;
             case done:
@@ -809,7 +809,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
         setstatus:
 
-        msg_setrcpt_status(msgdata, n, r);
+        msg_setrcpt_status(msgdata, n, r, NULL);
 
         mboxlist_entry_free(&mbentry);
     }

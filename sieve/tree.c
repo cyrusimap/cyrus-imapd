@@ -219,6 +219,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case REJCT:
+        case EREJECT:
             free(cl->u.reject);
             break;
 

@@ -107,7 +107,7 @@ typedef union
  * version 0x08 scripts implemented DATE and INDEX extensions
  * version 0x09 scripts implemented IMAP4FLAGS extension
  * version 0x10 scripts implemented Mailbox and Metadata (RFC5490)
- * version 0x11 scripts implemented Variables extension (RFC5229)
+ * version 0x11 scripts implemented Variables (RFC5229) and Ext Reject (RFC5429)
  */
 #define BYTECODE_VERSION 0x11
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -162,7 +162,9 @@ enum bytecode {
     B_REMOVEFLAG,       /* require imap4flags */
 
     B_ADDHEADER,        /* require editheader */
-    B_DELETEHEADER      /* require editheader */
+    B_DELETEHEADER,     /* require editheader */
+
+    B_EREJECT           /* require ereject */
 };
 
 enum bytecode_comps {

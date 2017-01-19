@@ -75,6 +75,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "version.h"
+#include "tok.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -93,6 +94,7 @@ struct address_data {
     mbname_t *mbname;
     int ignorequota;
     int status;
+    char *status_msg;
 };
 
 struct clientdata {
@@ -152,11 +154,27 @@ static int roundToK(int x)
 #define roundToK(x)
 #endif /* USING_SNMPGEN */
 
-static void send_lmtp_error(struct protstream *pout, int r)
+static void send_lmtp_error(struct protstream *pout, int r, const char *msg)
 {
-    int code;
+    int code = r;
 
     switch (r) {
+    case LMTP_MESSAGE_REJECTED:
+        if (msg) {
+            const char *cur, *next;
+            tok_t tok;
+
+            tok_initm(&tok, charset_qpencode_mimebody(msg, strlen(msg), NULL),
+                      "\r\n", TOK_FREEBUFFER);
+            for (cur = tok_next(&tok); (next = tok_next(&tok)); cur = next) {
+                prot_printf(pout, "550-5.7.1 %s\r\n", cur);
+            }
+            prot_printf(pout, "550 5.7.1 %s\r\n", cur);
+            tok_fini(&tok);
+            return;
+        }
+        break;
+
     case 0:
         code = LMTP_OK;
         break;
@@ -285,6 +303,7 @@ static void msg_free(message_data_t *m)
     if (m->rcpt) {
         for (i = 0; i < m->rcpt_num; i++) {
             mbname_free(&m->rcpt[i]->mbname);
+            free(m->rcpt[i]->status_msg);
             free(m->rcpt[i]);
         }
         free(m->rcpt);
@@ -340,10 +359,13 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
-void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
+void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, const char *msg)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
-    m->rcpt[rcpt_num]->status = r;
+    if (!m->rcpt[rcpt_num]->status) {
+        m->rcpt[rcpt_num]->status = r;
+        m->rcpt[rcpt_num]->status_msg = xstrdupnull(msg);
+    }
 }
 
 void *msg_getrock(message_data_t *m)
@@ -740,7 +762,7 @@ static int savemsg(struct clientdata *cd,
             func->removespool(m);
         }
         while (nrcpts--) {
-            send_lmtp_error(cd->pout, r);
+            send_lmtp_error(cd->pout, r, NULL);
         }
         return r;
     }
@@ -844,7 +866,7 @@ static int process_recipient(char *addr,
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
+    address_data_t *ret = (address_data_t *) xzmalloc(sizeof(address_data_t));
     ret->mbname = mbname;
     ret->ignorequota = ignorequota;
     msg->rcpt[msg->rcpt_num] = ret;
@@ -1190,7 +1212,8 @@ void lmtpmode(struct lmtp_func *func,
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
-                    send_lmtp_error(pout, msg->rcpt[j]->status);
+                    send_lmtp_error(pout, msg->rcpt[j]->status,
+                                    msg->rcpt[j]->status_msg);
                 }
 
                 snmp_increment(mtaTransmittedMessages, delivered);
@@ -1415,7 +1438,7 @@ void lmtpmode(struct lmtp_func *func,
                                       msg);
                 if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
                 if (r) {
-                    send_lmtp_error(pout, r);
+                    send_lmtp_error(pout, r, NULL);
                     continue;
                 }
                 msg->rcpt_num++;

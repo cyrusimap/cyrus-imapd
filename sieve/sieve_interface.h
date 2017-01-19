@@ -112,6 +112,7 @@ typedef struct sieve_redirect_context {
 
 typedef struct sieve_reject_context {
     const char *msg;
+    int is_extended :1;
 } sieve_reject_context_t;
 
 typedef struct sieve_fileinto_context {
