@@ -1655,7 +1655,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "quota_db_path", NULL, STRING }
 /* The absolute path for the quota database (if you choose a single-file
    quota DB type - or the base path if you choose quotalegacy).  If
-   not specified will be confdir/quota.db or confdir/quota/ */
+   not specified will be confdir/quotas.db or confdir/quota/ */
 
 { "quotawarn", 90, INT }
 /* The percent of quota utilization over which the server generates
