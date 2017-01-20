@@ -22,6 +22,7 @@ Management
     admin/access-control
     admin/nntp
     admin/protlayer
+    admin/quotas
     admin/sieve
     admin/backups
     admin/sop
@@ -37,7 +38,3 @@ Management
     Archive partition
     Conversations
     DAV / HTTP
-
-
-
-

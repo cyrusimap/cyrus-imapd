@@ -61,8 +61,57 @@ Please note that the configuration value of
 the ``\Deleted`` flag, but only on the ``\Seen`` flag. To be more
 precise, all flags other than ``\Seen`` are global.
 
+ACL "Macros"
+============
+
+Cyrus adminitration supports short-hand macros you may use:
+
+none
+----
+
+    Remove any existing ACL for this ACI
+
+read (lrs)
+----------
+
+    Grant the ACI read-only access to the mailbox (*lookup*, *read* and
+    *seen*).
+
+post (lrsp)
+-----------
+
+    Give the ACI read access to the mailbox, and allow them to post to
+    the mailbox using the delivery system (*lookup*, *read*, *seen* and
+    *post*).
+
+    Most delivery systems do not provide authentication, so the ``p``
+    right usually has meaning only for the "anonymous" user.
+
+append (lrsip)
+--------------
+
+    The ACI can read and append to the mailbox, either through IMAP, or
+    through the delivery system.
+
+write (lrswipkxtecd)
+--------------------
+
+    The ACI may do pretty much anything with a mailbox, and folders
+    within it.
+
+delete (lrxte)
+--------------
+
+    The ACI may list, read, delete and expunge messages and delete
+    folders.
+
+all (lrswipkxtecda)
+-------------------
+
+    Same as write, plus admin rights.
+    
 Features and Combined Access Rights
------------------------------------
+===================================
 
 For most features, ACI subjects need certain access rights on a folder
 in order to perform or control the feature.
