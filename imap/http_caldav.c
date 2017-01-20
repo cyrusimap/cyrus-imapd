@@ -4051,7 +4051,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
             if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
-            if (cdata->organizer) {
+            if (cdata->organizer && !spool_getheader(txn->req_hdrs, "Allow-Organizer-Change")) {
                 /* Don't allow ORGANIZER to be changed */
                 if (strcmp(cdata->organizer, organizer)) {
                     txn->error.desc = "Can not change organizer address";
