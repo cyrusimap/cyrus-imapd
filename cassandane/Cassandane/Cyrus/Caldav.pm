@@ -2939,4 +2939,128 @@ sub test_netcaldavtalktests_fromje
     }
 }
 
+sub test_invite_change_organizer
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  $self->assert_caldav_notified(
+   { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
+  );
+
+  # change organizer and move the event 1 hour later
+  $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T193000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T163000
+DTSTAMP:20150806T234327Z
+SEQUENCE:1
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:otherme\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:otherme\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card,
+                   'Content-Type' => 'text/calendar',
+                   'Schedule-Address' => 'otherme@example.com',
+                   'Allow-Organizer-Change' => 'yes',
+  );
+
+  $self->assert_caldav_notified(
+   {
+     recipient => "friend\@example.com",
+     is_update => JSON::true,
+     method => 'REQUEST',
+     event => {
+       replyTo => {
+         imip => 'mailto:otherme@example.com',
+       },
+     },
+   },
+  );
+}
+
 1;
