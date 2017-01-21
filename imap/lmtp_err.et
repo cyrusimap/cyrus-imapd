@@ -69,17 +69,13 @@ ec LMTP_PROTOCOL_ERROR,
    "501 5.5.4 %s"
 
 ec LMTP_USER_UNKNOWN_LONG,
-   "550-Mailbox unknown.  Either there is no mailbox associated with this\r\n"
-   "550-name or you do not have authorization to see it.\r\n"
+   "550-Mailbox unknown.  Either there is no mailbox associated with this\r\n550-name or you do not have authorization to see it.\r\n"
 
 ec LMTP_USER_UNKNOWN,
    "550 5.1.1 User unknown"
 
 ec LMTP_NOT_AUTHORIZED_LONG,
-   "550-You do not have permission to post a message to this mailbox.\r\n"
-   "550-Please contact the owner of this mailbox in order to submit\r\n"
-   "550-your message, or %s if you believe you\r\n"
-   "550-received this message in error.\r\n"
+   "550-You do not have permission to post a message to this mailbox.\r\n550-Please contact the owner of this mailbox in order to submit\r\n550-your message, or %s if you believe you\r\n550-received this message in error.\r\n"
 
 ec LMTP_NOT_AUTHORIZED,
    "550 5.7.1 %s"
