@@ -800,6 +800,7 @@ char *jmapmbox_newname(const char *name, const char *parentname)
     mbname_push_boxes(mbname, s);
     free(s);
     mboxname = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
 
     /* Avoid any name collisions */
     struct jmapmbox_newname_data rock;
@@ -4045,42 +4046,22 @@ done:
     return r;
 }
 
-static int jmapmsg_cmpdate(const void **pa, const void **pb)
-{
-    const json_t *a = *pa;
-    const json_t *b = *pb;
-
-    return strcmpsafe(json_string_value(json_object_get(a, "date")),
-                      json_string_value(json_object_get(b, "date")));
-}
-
 static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
                            json_t **threads, json_t **notfound)
 {
-    json_t *val;
-    size_t i, j;
     conversation_t *conv = NULL;
-    hash_table props = HASH_TABLE_INITIALIZER;
+    json_t *val;
+    size_t i;
     int r = 0;
 
     *threads = json_pack("[]");
     *notfound = json_pack("[]");
 
-    /* We need these properties for each JMAP message */
-    construct_hash_table(&props, 3, 0);
-    hash_insert("id", (void*)1, &props);
-    hash_insert("inReplyToMessageId", (void*)1, &props);
-    hash_insert("isDraft", (void*)1, &props);
-
     json_array_foreach(threadids, i, val) {
         conversation_id_t cid = 0;
-        conv_folder_t *folder;
-        const char *threadid, *msgid, *replyid;
-        json_t *drafts, *draft, *msg, *thread, *ids, *l;
-        ptrarray_t *msgs;
-        int mi, mj;
+        conv_thread_t *thread;
 
-        threadid = json_string_value(val);
+        const char *threadid = json_string_value(val);
         cid = jmap_decode_thrid(threadid);
 
         if (cid) r = conversation_load(req->cstate, cid, &conv);
@@ -4090,99 +4071,14 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
             continue;
         }
 
-        msgs = ptrarray_new();
-        drafts = json_pack("{}");
-
-        for (folder = conv->folders; folder; folder = folder->next) {
-            const char *fname = strarray_nth(req->cstate->folder_names, folder->number);
-            struct mailbox_iter *iter;
-            struct mailbox *mbox = NULL;
-            const message_t *m;
-
-            /* For each message, determine if it is a regular message or
-             * a draft that replies to another message in this thread. */
-
-            r = _openmbox(req, fname, &mbox, 0);
-            if (r) continue;
-
-            iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
-            while ((m = mailbox_iter_step(iter))) {
-                const struct index_record *record = msg_record(m);
-
-                if (record->cid == cid) {
-                    int isdraft;
-
-                    r = jmapmsg_from_record(req, &props, mbox, record, &msg);
-                    if (r) continue;
-
-                    isdraft = json_object_get(msg, "isDraft") == json_true();
-                    replyid = json_string_value(json_object_get(msg, "inReplyToMessageId"));
-
-                    if (isdraft && replyid) {
-                        json_t *l = json_object_get(drafts, replyid);
-                        if (!l) l = json_pack("[]");
-                        json_array_append_new(l, msg);
-                        json_object_set_new(drafts, replyid, l);
-                    } else {
-                        ptrarray_append(msgs, msg);
-                    }
-                }
-            }
-            mailbox_iter_done(&iter);
-
-            _closembox(req, &mbox);
+        json_t *ids = json_pack("[]");
+        for (thread = conv->thread; thread; thread = thread->next) {
+            json_array_append_new(ids, json_string(jmap_msgid(&thread->guid)));
         }
 
-        if (!msgs->count) {
-            json_array_append_new(*notfound, json_string(threadid));
-            goto doneloop;
-        }
+        json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "messageIds", ids);
+        json_array_append_new(*threads, jthread);
 
-        /* For each msg, add it to the result list in order of date sort.
-         * Any drafts that reply to this message immediately follow it. */
-        ids = json_pack("[]");
-        thread = json_pack("{s:s s:o}", "id", threadid, "messageIds", ids);
-
-        /* Add messages in date sort order */
-        if (msgs->count > 1) {
-            ptrarray_sort(msgs, jmapmsg_cmpdate);
-        }
-        for (mi = 0; mi < msgs->count; mi++) {
-            msg = ptrarray_nth(msgs, mi);
-            msgid = json_string_value(json_object_get(msg, "id"));
-            json_array_append_new(ids, json_string(msgid));
-
-            /* Add any drafts that reply to msg, sorted by date */
-            if ((l = json_object_get(drafts, msgid))) {
-                ptrarray_t tmp = PTRARRAY_INITIALIZER;
-                json_array_foreach(l, j, val) {
-                    ptrarray_add(&tmp, val);
-                }
-                ptrarray_sort(&tmp, jmapmsg_cmpdate);
-
-                for (mj = 0; mj < tmp.count; mj++) {
-                    draft = ptrarray_nth(&tmp, mj);
-                    json_array_append(ids, json_object_get(draft, "id"));
-                }
-                ptrarray_fini(&tmp);
-                json_object_del(drafts, msgid);
-            }
-            json_decref(msg);
-
-        }
-
-        /* Append any stray draft ids */
-        json_object_foreach(drafts, replyid, l) {
-            json_array_foreach(l, j, draft) {
-                json_array_append(ids, json_object_get(draft, "id"));
-            }
-        }
-
-        json_array_append_new(*threads, thread);
-
-doneloop:
-        json_decref(drafts);
-        ptrarray_free(msgs);
         conversation_free(conv);
         conv = NULL;
     }
@@ -4195,7 +4091,6 @@ doneloop:
     r = 0;
 
 done:
-    free_hash_table(&props, NULL);
     if (conv) conversation_free(conv);
     if (r) {
         json_decref(*threads);

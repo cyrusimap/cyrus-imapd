@@ -52,6 +52,7 @@
 #include "arrayu64.h"
 #include "hash.h"
 #include "hashu64.h"
+#include "message_guid.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -83,8 +84,18 @@ typedef struct conv_folder  conv_folder_t;
 typedef struct conv_sender  conv_sender_t;
 typedef struct conv_status  conv_status_t;
 typedef struct conv_guidrec conv_guidrec_t;
+typedef struct conv_thread  conv_thread_t;
 
 #define MAX_CONVERSATION_FLAGS 256
+
+struct conv_thread {
+    conv_thread_t *next;
+    struct message_guid guid;
+    int exists;
+    time_t internaldate;
+    int32_t msgid;
+    int32_t inreplyto;
+};
 
 struct conv_folder {
     conv_folder_t   *next;
@@ -129,6 +140,7 @@ struct conversation {
     uint32_t        *counts;
     conv_folder_t   *folders;
     conv_sender_t   *senders;
+    conv_thread_t   *thread;
     char            *subject;
     int             dirty;
 };

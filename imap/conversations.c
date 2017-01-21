@@ -58,6 +58,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "charset.h"
+#include "crc32.h"
 #include "dlist.h"
 #include "exitcodes.h"
 #include "hash.h"
@@ -753,6 +754,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
     struct buf buf = BUF_INITIALIZER;
     const conv_folder_t *folder;
     const conv_sender_t *sender;
+    const conv_thread_t *thread;
     int version = CONVERSATIONS_VERSION;
     int i;
     int r;
@@ -802,6 +804,18 @@ EXPORTED int conversation_store(struct conversations_state *state,
     dlist_setatom(dl, "SUBJECT", conv->subject);
 
     dlist_setnum32(dl, "SIZE", conv->size);
+
+    n = dlist_newlist(dl, "THREAD");
+    for (thread = conv->thread; thread; thread = thread->next) {
+        if (!thread->exists)
+            continue;
+        nn = dlist_newlist(n, "THREAD");
+        dlist_setguid(nn, "GUID", &thread->guid);
+        dlist_setnum32(nn, "EXISTS", thread->exists);
+        dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
+        dlist_setnum32(nn, "MSGID", thread->msgid);
+        if (thread->inreplyto) dlist_setnum32(nn, "INREPLYTO", thread->inreplyto);
+    }
 
     buf_printf(&buf, "%d ", version);
     dlist_printbuf(dl, 0, &buf);
@@ -1033,6 +1047,35 @@ EXPORTED conv_folder_t *conversation_get_folder(conversation_t *conv,
     return folder;
 }
 
+static conv_thread_t *parse_thread(struct dlist *dl)
+{
+    conv_thread_t *res = NULL;
+    conv_thread_t **p = &res;
+    struct dlist *item = dl->head;
+    struct dlist *n;
+    while (item) {
+        conv_thread_t *thread = *p = xzmalloc(sizeof(conv_thread_t));
+        p = &thread->next;
+        n = dlist_getchildn(item, 0);
+        if (n) {
+            struct message_guid *guid = NULL;
+            dlist_toguid(n, &guid);
+            if (guid) message_guid_copy(&thread->guid, guid);
+        }
+        n = dlist_getchildn(item, 1);
+        if (n) thread->exists = dlist_num(n);
+        n = dlist_getchildn(item, 2);
+        if (n) thread->internaldate = dlist_num(n);
+        n = dlist_getchildn(item, 3);
+        if (n) thread->msgid = dlist_num(n);
+        n = dlist_getchildn(item, 4);
+        if (n) thread->inreplyto = dlist_num(n);
+        item = item->next;
+    }
+
+    return res;
+}
+
 EXPORTED int conversation_parse(struct conversations_state *state,
                        const char *data, size_t datalen,
                        conversation_t **convp)
@@ -1138,6 +1181,9 @@ EXPORTED int conversation_parse(struct conversations_state *state,
 
     n = dlist_getchildn(dl, 8);
     if (n) conv->size = dlist_num(n);
+
+    n = dlist_getchildn(dl, 9);
+    if (n) conv->thread = parse_thread(n);
 
     conv->prev_unseen = conv->unseen;
 
@@ -1338,6 +1384,76 @@ static int sender_preferred_name(const char *a, const char *b)
     free(sa);
     free(sb);
     return d;
+}
+
+static void conversation_update_thread(conversation_t *conv,
+                                       const struct message_guid *guid,
+                                       time_t internaldate,
+                                       const char *msgid,
+                                       const char *inreplyto,
+                                       int delta_exists)
+{
+    conv_thread_t *thread, *parent, **nextp = &conv->thread;
+
+    for (thread = conv->thread; thread; thread = thread->next) {
+        /* does it already exist? */
+        if (message_guid_equal(guid, &thread->guid))
+            break;
+        nextp = &thread->next;
+    }
+
+    if (thread) {
+        /* unstitch */
+        *nextp = thread->next;
+    }
+    else {
+        /* we start with zero */
+        thread = xzmalloc(sizeof(*thread));
+    }
+
+    /* counts first, may be just removing it */
+    if (thread->exists + delta_exists <= 0) {
+        conv->dirty = 1;
+        free(thread);
+        return;
+    }
+
+    message_guid_copy(&thread->guid, guid);
+    thread->internaldate = internaldate;
+    thread->exists += delta_exists;
+    /* just copy, it's not that expensive for a write */
+    thread->msgid = msgid ? crc32_cstring(msgid) : 0;
+    thread->inreplyto = inreplyto ? crc32_cstring(inreplyto) : 0;
+
+    if (thread->inreplyto) {
+        /* see if we can stitch it into the list behind the message it replies to */
+        conv_thread_t *candidate = NULL;
+        for (parent = conv->thread; parent; parent = parent->next) {
+            if (thread->inreplyto == parent->msgid) {
+                candidate = parent;
+            }
+            if (thread->inreplyto == parent->inreplyto) {
+                if (parent->internaldate < internaldate)
+                    candidate = parent;
+            }
+        }
+        if (candidate) {
+            thread->next = candidate->next;
+            candidate->next = thread;
+            return;
+        }
+    }
+
+    /* OK, we didn't find a parent to attach to, so just go through by date and put it
+     * after the last one with an earlier date */
+    nextp = &conv->thread;
+    for (parent = conv->thread; parent; parent = parent->next) {
+        if (parent->internaldate > thread->internaldate) break;
+        nextp = &parent->next;
+    }
+
+    thread->next = *nextp;
+    *nextp = thread;
 }
 
 EXPORTED void conversation_update_sender(conversation_t *conv,
@@ -1821,11 +1937,24 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         if (envtokens[ENV_FROM])
             message_parse_env_address(envtokens[ENV_FROM], &addr);
 
+        const char *msgid = envtokens[ENV_MSGID];
+        const char *inreplyto = NULL;
+        if (record->system_flags & FLAG_DRAFT) {
+            /* non-drafts don't get an inreplyto, using it as both a value AND a flag */
+            inreplyto = envtokens[ENV_INREPLYTO];
+        }
+
         /* XXX - internaldate vs gmtime? */
         conversation_update_sender(conv,
                                    addr.name, addr.route,
                                    addr.mailbox, addr.domain,
                                    record->gmtime, delta_exists);
+
+        conversation_update_thread(conv,
+                                   &record->guid,
+                                   record->internaldate,
+                                   msgid, inreplyto,
+                                   delta_exists);
         free(env);
     }
 
@@ -1909,6 +2038,7 @@ EXPORTED void conversation_free(conversation_t *conv)
 {
     conv_folder_t *folder;
     conv_sender_t *sender;
+    conv_thread_t *thread;
 
     if (!conv) return;
 
@@ -1928,6 +2058,12 @@ EXPORTED void conversation_free(conversation_t *conv)
 
     free(conv->subject);
     free(conv->counts);
+
+    while ((thread = conv->thread)) {
+        conv->thread = thread->next;
+        free(thread);
+    }
+
     free(conv);
 }
 
