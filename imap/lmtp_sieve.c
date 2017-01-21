@@ -71,6 +71,7 @@
 #include "sieve/sieve_interface.h"
 #include "smtpclient.h"
 #include "strhash.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -646,20 +647,34 @@ static int sieve_reject(void *ac,
     const char *origreceip;
     int res, need_encode = 0;
 
-    if (!rc->is_extended) {
-        /* Per RFC 5429, we can LMTP reject if reason string is US-ASCII */
-        size_t i;
-
-        for (i = 0; i < strlen(rc->msg); i++) {
-            if (!(isprint(rc->msg[i]) || (rc->msg[i] == '\t'))) {
-                need_encode = 1;
-                break;
-            }
+    /* Per RFC 5429, reject can do LMTP reject if reason string is US-ASCII */
+    const char *cp;
+    for (cp = rc->msg; *cp; cp++) {
+        if (!isascii(*cp)) {
+            need_encode = 1;
+            break;
         }
     }
 
     if (rc->is_extended || !need_encode) {
-        msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, rc->msg);
+        char *msg = need_encode ?
+            charset_qpencode_mimebody(rc->msg, strlen(rc->msg), NULL) :
+            xstrdup(rc->msg);
+        strarray_t *resp = strarray_new();
+        struct buf buf = BUF_INITIALIZER;
+        const char *cur, *next;
+        tok_t tok;
+
+        tok_initm(&tok, msg, "\r\n", 0);
+        for (cur = tok_next(&tok); (next = tok_next(&tok)); cur = next) {
+            buf_printf(&buf, "550-5.7.1 %s\r\n", cur);
+            strarray_appendm(resp, buf_release(&buf));
+        }
+        buf_printf(&buf, "550 5.7.1 %s\r\n", cur);
+        strarray_appendm(resp, buf_release(&buf));
+        free(msg);
+
+        msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, resp);
 
         snmp_increment(SIEVE_REJECT, 1);
         syslog(LOG_INFO, "sieve LMTP rejected: %s",

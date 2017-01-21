@@ -75,7 +75,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "version.h"
-#include "tok.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -94,7 +93,7 @@ struct address_data {
     mbname_t *mbname;
     int ignorequota;
     int status;
-    char *status_msg;
+    strarray_t *resp;
 };
 
 struct clientdata {
@@ -154,27 +153,20 @@ static int roundToK(int x)
 #define roundToK(x)
 #endif /* USING_SNMPGEN */
 
-static void send_lmtp_error(struct protstream *pout, int r, const char *msg)
+static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
-    int code = r;
+    int code;
+
+    if (resp) {
+        int i;
+
+        for (i = 0; i < strarray_size(resp); i++) {
+            prot_puts(pout, strarray_nth(resp, i));
+        }
+        return;
+    }
 
     switch (r) {
-    case LMTP_MESSAGE_REJECTED:
-        if (msg) {
-            const char *cur, *next;
-            tok_t tok;
-
-            tok_initm(&tok, charset_qpencode_mimebody(msg, strlen(msg), NULL),
-                      "\r\n", TOK_FREEBUFFER);
-            for (cur = tok_next(&tok); (next = tok_next(&tok)); cur = next) {
-                prot_printf(pout, "550-5.7.1 %s\r\n", cur);
-            }
-            prot_printf(pout, "550 5.7.1 %s\r\n", cur);
-            tok_fini(&tok);
-            return;
-        }
-        break;
-
     case 0:
         code = LMTP_OK;
         break;
@@ -303,7 +295,7 @@ static void msg_free(message_data_t *m)
     if (m->rcpt) {
         for (i = 0; i < m->rcpt_num; i++) {
             mbname_free(&m->rcpt[i]->mbname);
-            free(m->rcpt[i]->status_msg);
+            strarray_free(m->rcpt[i]->resp);
             free(m->rcpt[i]);
         }
         free(m->rcpt);
@@ -359,12 +351,12 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
-void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, const char *msg)
+void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, strarray_t *resp)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
     if (!m->rcpt[rcpt_num]->status) {
         m->rcpt[rcpt_num]->status = r;
-        m->rcpt[rcpt_num]->status_msg = xstrdupnull(msg);
+        m->rcpt[rcpt_num]->resp = resp;
     }
 }
 
@@ -1213,7 +1205,7 @@ void lmtpmode(struct lmtp_func *func,
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
                     send_lmtp_error(pout, msg->rcpt[j]->status,
-                                    msg->rcpt[j]->status_msg);
+                                    msg->rcpt[j]->resp);
                 }
 
                 snmp_increment(mtaTransmittedMessages, delivered);
@@ -1672,15 +1664,23 @@ static int ask_code(const char *s)
    if a read failed, '*code == 400', a temporary failure.
 
    returns an IMAP error code. */
-static int getlastresp(char *buf, int len, int *code, struct protstream *pin)
+static int getlastresp(char *buf, int len, int *code, struct protstream *pin,
+                       strarray_t **sa)
 {
+    *code = 0;
+
     do {
         if (!prot_fgets(buf, len, pin)) {
             *code = 400;
             return IMAP_SERVER_UNAVAILABLE;
         }
+
+        if (!*code) *code = ask_code(buf);
+        if (sa && (*code == 550)) {
+            if (!*sa) *sa = strarray_new();
+            strarray_append(*sa, buf);
+        }
     } while (ISCONT(buf));
-    *code = ask_code(buf);
 
     return 0;
 }
@@ -1757,7 +1757,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 
     /* rset */
     prot_printf(conn->out, "RSET\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
     if (!ISGOOD(code)) {
         goto failall;
     }
@@ -1780,7 +1780,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
                     txn->auth && txn->auth[0] ? txn->auth : "<>");
     }
     prot_printf(conn->out, "\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
     if (!ISGOOD(code)) {
         goto failall;
     }
@@ -1793,7 +1793,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
             prot_printf(conn->out, " IGNOREQUOTA");
         }
         prot_printf(conn->out, "\r\n");
-        r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
+        r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
         if (r) {
             goto failall;
         }
@@ -1826,7 +1826,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 
     /* data */
     prot_printf(conn->out, "DATA\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
+    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
     if (r) {
         goto failall;
     }
@@ -1844,7 +1844,8 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     for (j = 0; j < txn->rcpt_num; j++) {
         if (txn->rcpt[j].result == RCPT_GOOD) {
             /* expecting a status code for this recipient */
-            r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
+            r = getlastresp(buf, sizeof(buf)-1, &code, conn->in,
+                            &txn->rcpt[j].resp);
             if (r) {
                 /* technically, some recipients might've succeeded here,
                    but we'll be paranoid */

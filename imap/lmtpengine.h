@@ -97,7 +97,7 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num);
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
-void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, const char *msg);
+void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, strarray_t *resp);
 
 void *msg_getrock(message_data_t *m);
 void msg_setrock(message_data_t *m, void *rock);
@@ -164,10 +164,11 @@ struct lmtp_txn {
         } result;
         int r;                  /* if non-zero,
                                    a more descriptive error code */
+        strarray_t *resp;
     } rcpt[1];
 };
 
-#define LMTP_TXN_ALLOC(n) (xmalloc(sizeof(struct lmtp_txn) + \
+#define LMTP_TXN_ALLOC(n) (xzmalloc(sizeof(struct lmtp_txn) + \
                                    ((n) * (sizeof(struct lmtp_rcpt)))))
 
 int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn);
