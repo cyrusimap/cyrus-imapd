@@ -66,42 +66,54 @@ typedef int (*compare_t)(const void *, size_t, const void *);
 
 /* these are generic wrappers in which 'rock' is the compare function */
 
-static int rel_eq(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_eq(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
     return (compar(text, tlen, pat) == 0);
 }
 
-static int rel_ne(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_ne(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
     return (compar(text, tlen, pat) != 0);
 }
 
-static int rel_gt(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_gt(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
     return (compar(text, tlen, pat) > 0);
 }
 
-static int rel_ge(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_ge(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
     return (compar(text, tlen, pat) >= 0);
 }
 
-static int rel_lt(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_lt(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
     return (compar(text, tlen, pat) < 0);
 }
 
-static int rel_le(const char *text, size_t tlen, const char *pat, void *rock)
+static int rel_le(const char *text, size_t tlen, const char *pat,
+                  strarray_t *match_vars __attribute__((unused)),
+                  void *rock)
 {
     compare_t compar = (compare_t) rock;
 
@@ -194,6 +206,7 @@ static int octet_contains_(const char *text, size_t tlen,
 }
 
 static int octet_contains(const char *text, size_t tlen, const char *pat,
+                          strarray_t *match_vars __attribute__((unused)),
                           void *rock __attribute__((unused)))
 {
     return octet_contains_(text, tlen, pat, 0);
@@ -312,21 +325,22 @@ static int octet_matches_(const char *text, size_t tlen,
 }
 
 static int octet_matches(const char *text, size_t tlen, const char *pat,
-                         void *rock)
+                         strarray_t *match_vars,
+                         void *rock __attribute__((unused)))
 {
     int ret;
     int needs_free = 0;
     strarray_t temp = STRARRAY_INITIALIZER;
-    if (rock) {
-        strarray_fini((strarray_t*) rock);
+    if (match_vars) {
+        strarray_fini(match_vars);
     } else {
-        rock = &temp;
+        match_vars = &temp;
         needs_free = 1;
     }
-    strarray_add((strarray_t*) rock, text);
-    ret = octet_matches_(text, tlen, pat, 0, rock);
+    strarray_add(match_vars, text);
+    ret = octet_matches_(text, tlen, pat, 0, match_vars);
     if (!ret || needs_free) {
-        strarray_fini((strarray_t*) rock);
+        strarray_fini(match_vars);
     }
     return ret;
 }
@@ -336,9 +350,9 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 #define MAX_MATCH 9  /* MUST support ${1} through ${9} per RFC 5229 */
 
 static int octet_regex(const char *text, size_t tlen, const char *pat,
-                       void *rock)
+                       strarray_t *match_vars,
+                       void *rock __attribute__((unused)))
 {
-    strarray_t *match_vars = (strarray_t *) rock;
     regmatch_t pm[MAX_MATCH+1];
     size_t nmatch = 0;
     int r;
@@ -393,28 +407,29 @@ static int ascii_casemap_cmp(const char *text, size_t tlen, const char *pat)
 
 static int ascii_casemap_contains(const char *text, size_t tlen,
                                   const char *pat,
+                                  strarray_t *match_vars __attribute__((unused)),
                                   void *rock __attribute__((unused)))
 {
     return octet_contains_(text, tlen, pat, 1);
 }
 
 static int ascii_casemap_matches(const char *text, size_t tlen,
-                                 const char *pat,
-                                 void *rock)
+                                 const char *pat, strarray_t *match_vars,
+                                 void *rock __attribute__((unused)))
 {
     int ret;
     int needs_free = 0;
     strarray_t temp = STRARRAY_INITIALIZER;
-    if (rock) {
-        strarray_fini((strarray_t*) rock);
+    if (match_vars) {
+        strarray_fini(match_vars);
     } else {
-        rock = &temp;
+      match_vars = &temp;
         needs_free = 1;
     }
-    strarray_add((strarray_t*) rock, text);
-    ret = octet_matches_(text, tlen, pat, 1, rock);
+    strarray_add(match_vars, text);
+    ret = octet_matches_(text, tlen, pat, 1, match_vars);
     if (!ret || needs_free) {
-        strarray_fini((strarray_t*) rock);
+        strarray_fini(match_vars);
     }
     return ret;
 }
@@ -528,8 +543,8 @@ static comparator_t *lookup_rel(int relation)
     return ret;
 }
 
-EXPORTED comparator_t *lookup_comp(int comp, int mode, int relation,
-                          void **comprock)
+EXPORTED comparator_t *lookup_comp(sieve_interp_t *i __attribute__((unused)),
+                                   int comp, int mode, int relation, void **comprock)
 {
     comparator_t *ret;
 

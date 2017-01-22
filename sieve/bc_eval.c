@@ -388,6 +388,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
     int is_string = 0; /* differentiate between string and hasflag tests */
     comparator_t * comp=NULL;
     void * comprock=NULL;
+    strarray_t *match_vars = NULL;
     int op= ntohl(bc[i].op);
     #define SCOUNT_SIZE 20
     char scount[SCOUNT_SIZE];
@@ -556,15 +557,13 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         }
 
         /*find the correct comparator fcn*/
-        comp = lookup_comp(comparator, match, relation, &comprock);
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
-        if (!comprock) {
-            comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-        }
+        match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /*loop through all the headers*/
         currh=headersi+2;
@@ -685,7 +684,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                                 }
 
                                 res |= comp(addr, strlen(addr),
-                                            (const char *)reg, comprock);
+                                            (const char *)reg,
+                                            match_vars, comprock);
                                 free(reg);
                             } else {
 #if VERBOSE
@@ -693,7 +693,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                                        addr, data_val);
 #endif
                                 res |= comp(addr, strlen(addr),
-                                            data_val, comprock);
+                                            data_val, match_vars, comprock);
                             }
                         } /* For each data */
                     }
@@ -723,7 +723,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                     data_val = parse_string(data_val, variables);
                 }
 
-                res |= comp(scount, strlen(scount), data_val, comprock);
+                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
             }
         }
 
@@ -787,15 +787,13 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(comparator, match, relation, &comprock);
+        comp=lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
-        if (!comprock) {
-            comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-        }
+        match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /*search through all the flags for the header*/
         currh=headersi+2;
@@ -871,11 +869,11 @@ envelope_err:
                             }
 
                             res |= comp(decoded_header, strlen(decoded_header),
-                                        (const char *)reg, comprock);
+                                        (const char *)reg, match_vars, comprock);
                             free(reg);
                         } else {
                             res |= comp(decoded_header, strlen(decoded_header),
-                                        data_val, comprock);
+                                        data_val, match_vars, comprock);
                         }
                     }
                     free(decoded_header);
@@ -901,7 +899,7 @@ envelope_err:
 #if VERBOSE
                 printf("%d, %s \n", count, data_val);
 #endif
-                res |= comp(scount, strlen(scount), data_val, comprock);
+                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
             }
 
         }
@@ -940,15 +938,13 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(comparator, match, relation, &comprock);
+        comp=lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
-        if (!comprock) {
-            comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-        }
+        match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /* loop on each haystack */
         currhaystack = haystacksi+2;
@@ -1015,7 +1011,8 @@ envelope_err:
 #if VERBOSE
 		    printf("%d, %s \n", count, data_val);
 #endif
-		    res |= comp(scount, strlen(scount), this_needle, comprock);
+		    res |= comp(scount, strlen(scount), this_needle,
+                                match_vars, comprock);
 		}
                 break;
             }
@@ -1048,11 +1045,11 @@ envelope_err:
                                 }
 
                             res |= comp(this_haystack, strlen(this_haystack),
-                                        (const char *)reg, comprock);
+                                        (const char *)reg, match_vars, comprock);
                             free(reg);
                         } else {
                             res |= comp(this_haystack, strlen(this_haystack),
-                                        this_needle, comprock);
+                                        this_needle, match_vars, comprock);
                         }
                     } else {
                         /* search through all the flags */
@@ -1074,11 +1071,12 @@ envelope_err:
                                         }
 
                                     res |= comp(active_flag, strlen(active_flag),
-                                                (const char *)reg, comprock);
+                                                (const char *)reg,
+                                                match_vars, comprock);
                                     free(reg);
                                 } else {
                                     res |= comp(active_flag, strlen(active_flag),
-                                                this_needle, comprock);
+                                                this_needle, match_vars, comprock);
                                 }
                             }
                     } // (is_string) else
@@ -1131,7 +1129,7 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp = lookup_comp(comparator, match, relation, &comprock);
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
@@ -1200,10 +1198,12 @@ envelope_err:
                             goto alldone;
                         }
 
-                        res |= comp(content, strlen(content), (const char *)reg, comprock);
+                        res |= comp(content, strlen(content), (const char *)reg,
+                                    match_vars, comprock);
                         free(reg);
                     } else {
-                        res |= comp(content, strlen(content), data_val, comprock);
+                        res |= comp(content, strlen(content), data_val,
+                                    match_vars, comprock);
                     }
                 } /* For each data */
             }
@@ -1231,7 +1231,7 @@ envelope_err:
                     data_val = parse_string(data_val, variables);
                 }
 
-                res |= comp(scount, strlen(scount), data_val, comprock);
+                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
             }
         }
 
@@ -1349,14 +1349,12 @@ envelope_err:
         comparator = ntohl(bc[i++].value);
 
         /* find comparator function */
-        comp = lookup_comp(comparator, match, relation, &comprock);
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
         if(!comp) {
                 res = SIEVE_RUN_ERROR;
                 break;
         }
-        if (!comprock) {
-            comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-        }
+        match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /* date-part */
         date_part = ntohl(bc[i++].value);
@@ -1535,7 +1533,7 @@ envelope_err:
                         break;
                 }
 
-                res |= comp(buffer, strlen(buffer), *key, comprock);
+                res |= comp(buffer, strlen(buffer), *key, match_vars, comprock);
         }
         free(keylist);
         break;
@@ -1581,7 +1579,7 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(comparator, match, relation, &comprock);
+        comp=lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
@@ -1615,7 +1613,7 @@ envelope_err:
                 }
 
                 res |= comp(val, strlen(val),
-                            (const char *)reg, comprock);
+                            (const char *)reg, match_vars, comprock);
                 free(reg);
             } else {
 #if VERBOSE
@@ -1623,7 +1621,7 @@ envelope_err:
                        val, testval);
 #endif
                 res |= comp(val, strlen(val),
-                            testval, comprock);
+                            testval, match_vars, comprock);
             }
             if (res) break;
         }
@@ -1682,7 +1680,7 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(comparator, match, relation, &comprock);
+        comp=lookup_comp(interp, comparator, match, relation, &comprock);
 
         if(!comp) {
             res = SIEVE_RUN_ERROR;
@@ -1714,7 +1712,7 @@ envelope_err:
                 }
 
                 res |= comp(val, strlen(val),
-                            (const char *)reg, comprock);
+                            (const char *)reg, match_vars, comprock);
                 free(reg);
             } else {
 #if VERBOSE
@@ -1722,7 +1720,7 @@ envelope_err:
                        val, testval);
 #endif
                 res |= comp(val, strlen(val),
-                            testval, comprock);
+                            testval, match_vars, comprock);
             }
             if (res) break;
         }
@@ -2291,6 +2289,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             const char *priority = NULL;
             void *comprock = NULL;
+            strarray_t *match_vars = NULL;
 
             int comparator;
             int pri;
@@ -2330,11 +2329,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 int x= ntohl(bc[ip].value);
                 ip++;
 
-                comp=lookup_comp(B_ASCIICASEMAP,comparator,
+                comp=lookup_comp(i, B_ASCIICASEMAP, comparator,
                                  x, &comprock);
-                if (!comprock) {
-                    comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-                }
+                match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
             }
 
             ip = unwrap_string(bc, ip, &pattern, NULL);
@@ -2354,12 +2351,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     res = SIEVE_RUN_ERROR;
                 } else {
                     res = do_denotify(notify_list, comp, reg,
-                                      comprock, priority);
+                                      match_vars, comprock, priority);
                     free(reg);
                 }
             } else {
                 res = do_denotify(notify_list, comp, pattern,
-                                  comprock, priority);
+                                  match_vars, comprock, priority);
             }
 
             break;
@@ -2614,7 +2611,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int npat;
 
             /* find comparator function */
-            comp = lookup_comp(comparator, match, relation, &comprock);
+            comp = lookup_comp(i, comparator, match, relation, &comprock);
             if (!comp) {
                 res = SIEVE_RUN_ERROR;
                 break;
@@ -2715,7 +2712,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                                 }
                             }
 
-                            if (comp(val, strlen(val), pat, comprock)) {
+                            if (comp(val, strlen(val), pat, NULL, comprock)) {
                                 /* flag the header for deletion */
                                 delete_mask |= (1<<v);
                             }

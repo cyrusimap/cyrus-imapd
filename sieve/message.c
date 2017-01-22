@@ -390,12 +390,13 @@ int do_notify(notify_list_t *a, const char *id,
  * incomaptible with: none
  */
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
-                void *comprock, const char *priority)
+                strarray_t *match_vars, void *comprock, const char *priority)
 {
     while (n != NULL) {
         if (n->isactive &&
             (!priority || !strcasecmp(n->priority, priority)) &&
-            (!comp || (n->id && comp(n->id, strlen(n->id), pat, comprock)))) {
+            (!comp ||
+             (n->id && comp(n->id, strlen(n->id), pat, match_vars, comprock)))) {
             n->isactive = 0;
         }
         n = n->next;

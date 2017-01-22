@@ -59,12 +59,15 @@
 # endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
-/* compares pat to text; returns 1 if it's true, 0 otherwise
-   first arg is text, second arg is pat, third arg is rock */
-typedef int comparator_t(const char *, size_t, const char *, void *);
+#include "sieve_interface.h"
+#include "strarray.h"
+
+/* compares pat to text; returns 1 if it's true, 0 otherwise */
+typedef int comparator_t(const char *text, size_t tlen, const char *pat,
+                         strarray_t *match_vars, void *rock);
 
 /* returns a pointer to a comparator function given it's name */
-comparator_t *lookup_comp(int comp, int mode,
+comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
                           int relation, void **rock);
 
 #endif /* COMPARATOR_H */

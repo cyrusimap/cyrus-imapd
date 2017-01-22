@@ -134,7 +134,7 @@ int do_notify(notify_list_t *n, const char *id,
               const char *method, const char **options,
               const char *priority, const char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
-                void *comprock, const char *priority);
+                strarray_t *match_vars, void *comprock, const char *priority);
 
 
 #endif
