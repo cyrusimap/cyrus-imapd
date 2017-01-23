@@ -2205,10 +2205,12 @@ them (unless overridden by a mailbox annotation).
 
 B<setquota> I<root> I<resource> I<value> [I<resource> I<value> ...]
 
-Set a quota on the specified root, which may or may not be an actual mailbox.
-The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The units
-are as defined in RFC 2087, groups of 1024 octets (i.e. Kilobytes).
-The I<value> may be the special string C<none> which will remove the quota.
+Set a quota on the specified root, which may or may not be an actual
+mailbox. The I<resources> understood by B<Cyrus> are C<STORAGE>,
+C<MESSAGE>, C<X-NUM-FOLDERS> and C<X-ANNOTATION-STORAGE>.  The storage
+units are, as defined in RFC 2087, groups of 1024 octets (i.e.
+Kilobytes). The I<value> may be the special string C<none> which will
+remove the quota.
 
 aliases: C<sq>
 

@@ -10,6 +10,68 @@ Access to each mailbox is controlled by each mailbox's access control list. Acce
 
 An ACL is a list of zero or more entries. Each entry has an identifier and a set of rights. The identifier specifies the user or group of users for which the entry applies. The set of rights is one or more letters or digits, each letter or digit conferring a particular privilege.
 
+Working with ACLs
+"""""""""""""""""
+
+ACLs are manipulated via these subcommands within the
+:cyrusman:`cyradm(8)` program:
+
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-setaclmailbox`
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-listaclmailbox`
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-deleteaclmailbox`
+
+Sample ACL
+""""""""""
+
+A typical ACL is expressed like this:
+
+.. parsed-literal::
+
+    **setaclmailbox** *mailbox* *id* *rights* [*id* *rights* ...]
+
+where *mailbox* is the name of the mailbox to which the ACL is applied,
+*id* is the identifier for the user or group for which the ACL applies,
+and *rights* is a concatenated list of Access Rights from the list below.
+
+A real world example may look like this:
+
+::
+
+    setaclmailbox user/bovik/public bovik all group:users lrsp anyone lrs
+
+Here's some samples, illustrated via output from the ``listaclmailbox``
+command in :cyrusman:`cyradm(8)`:
+
+.. parsed-literal::
+
+    localhost> **listaclmamilbox tech/%**
+    tech/Commits:
+      group:tech lrswipkxtea
+      anyone lrs
+    tech/abuse:
+      group:tech lrswipkxtecda
+      anyone lrsp
+    tech/security:
+      anyone lrsp
+      group:tech lrswipkxtecda
+    tech/support:
+      group:tech lrswipkxtecda
+      anyone lrsp
+
+    localhost> **listaclmamilbox user/ted/%**
+    user/ted/Drafts:
+      ted lrswipkxtecda
+    user/ted/Sent:
+      ted lrswipkxtecda
+    user/ted/Sent Items:
+      ted lrswipkxtecda
+    user/ted/Spam:
+      anyone p
+      ted lrswipkxtecda
+    user/ted/Trash:
+      ted lrswipkxtecda
+
+
 Access Rights
 """""""""""""
 
@@ -24,26 +86,49 @@ r
     The user may select the mailbox, fetch data, perform searches, and copy messages from the mailbox.
 
 s
-    Keep per-user seen state (**seen**).
+    Keep per-user seen state (i.e. modify the "Seen" flag) (**setseen**).
 
-    The "Seen" and "Recent" flags are preserved for the user.
+    "Seen" and "Recent" flags are maintained per user.
 
 w
-    The user may modify flags and keywords other than "Seen" and "Deleted" (which are controlled by other access rights).
+    The user may modify flags and keywords other than "Seen" and "Deleted" (which are controlled by other access rights). (**write**)
 
 i
-    The user may insert new messages into the mailbox (**insert**).
+    The user may insert (append) new messages into the mailbox
+    (**insert**).
 
 p
-    The user may send email to the submission address for the mailbox (**post**).
+    The user may send email to the submission address for the mailbox
+    (**post**).
 
     This right differs from the ``i`` (**insert**) right in that the delivery system inserts trace information into messages posted, whereas no delivery trace information is added to messages inserted (by move or copy).
 
 c
+    [**deprecated**: see ``k`` right, below.]
+
+k
     The user may create new mailboxes in this mailbox, delete the current mailbox, or rename the mailbox (**create**).
 
+x
+    The user may delete the mailbox itself. (**deletembox**)
+
+t
+    The user may store the "Deleted" flag.  In other words, delete
+    messages.  Unlike the ``d`` right, however, ``t`` does not confer
+    expunge rights (**deletemsg**).
+
+e
+    The user may Expunge messages which have the "Deleted" flag already
+    set (**expunge**).  Unlike the ``d`` right, however, ``e`` does not
+    confer delete rights.
+
 d
-    The user may store the "Deleted" flag, and perform expunges (**delete**).
+    The user may store the "Deleted" flag, and perform expunges.  This
+    "legacy" right is treated by the software as a macro for ``te``
+    (**deletemsg** && **expunge**).
+
+n
+    The user may store annotations for a message (**annotatemsg**)
 
 a
     The user may change the *Access Control Information* (ACI) on the mailbox (**administer**).
@@ -69,20 +154,56 @@ rs
 lrsip
     The user can read and append to the mailbox, either through IMAP, or through the delivery system.
 
+Finally, there are some short-hand macros you may use:
+
+none
+    Remove any existing ACL for this identifier
+
+read (lrs)
+    Give the user read-only access to the mailbox (*lookup*, *read* and *seen*).
+
+post (lrsp)
+    Give the user read access to the mailbox, and allow the user to
+    post to the mailbox using the delivery system (*lookup*, *read*,
+    *seen* and *post*). Most delivery systems do not provide
+    authentication, so the ``p`` right usually has meaning only for the
+    "anonymous" user.
+
+append (lrsip)
+    The user can read and append to the mailbox, either through IMAP,
+    or through the delivery system.
+
+write (lrswipkxtecd)
+    The user may do pretty much anything with a mailbox, and folders
+    within it.
+
+delete (lrxte)
+    The user may list, read, delete and expunge messages and delete folders.
+
+all (lrswipkxtecda)
+    Same as write, plus admin rights.
 
 Identifiers
 """""""""""
 
-The identifier part of an ACL entry specifies the user or group for which the entry applies.
+The identifier part of an ACL entry specifies the user or group for
+which the entry applies.  Group identifiers are distinguished be the
+prefix "group:".  For example, "group:accounting".
 
 .. todo:: FIXME: Clarify what an ACL entry looks like first. Refer to how user login names are translated into their identifiers, and (in that section) refer to altnamespace, unixhiersep, default domain, virtdomains, sasl_auth_mech tips and tricks etc.
 
 There are two special identifiers, "anonymous", and "anyone", which are explained below. The meaning of other identifiers usually depends on the authorization mechanism being used (selected by ``--with-auth`` at compile time, defaulting to Unix).
 
 ``anonymous`` and ``anyone``
-""""""""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""
 
-With any authorization mechanism, two special identifiers are defined. The identifier ``anonymous`` refers to the anonymous, or unauthenticated user. The identifier ``anyone`` refers to all users, including the anonymous user.
+With any authorization mechanism, two special identifiers are defined.
+The identifier ``anonymous`` refers to the anonymous, or unauthenticated
+user. The identifier ``anyone`` refers to all users, including the
+anonymous user.
+
+Both ``anonymous`` and ``anyone`` may commonly be used with the **post**
+right ``p`` to allow message insertion to mailboxes.
 
 
 Kerberos vs. Unix Authorization
@@ -98,7 +219,7 @@ The Cyrus IMAP server comes with four authorization mechanisms, one is compatibl
 .. todo::
    In the paragraph above, make sure 'Login Authentication' links to the appropriate section.
 
-In the Unix authorization mechanism, identifiers are either a valid userid or the string ``group``: followed by a group listed in ``/etc/group``. Thus:
+In the Unix authorization mechanism, identifiers are either a valid userid or the string ``group:`` followed by a group listed in ``/etc/group``. Thus:
 
 ::
 
@@ -159,7 +280,9 @@ Initial ACLs for Newly Created Mailboxes
 
 When a mailbox is created, its ACL starts off with a copy of the ACL of its closest parent mailbox. When a user is created, the ACL on the user's ``INBOX`` starts off with a single entry granting all rights to the user. When a non-user mailbox is created and does not have a parent, its ACL is initialized to the value of the ``defaultacl`` option in :cyrusman:`imapd.conf(5)`.
 
-Note that some rights are available implicitly, for example 'anonymous' always has 'p' on user INBOXes, and users always have rights on mailboxes within their INBOX hierarchy.
+Note that some rights are available implicitly, for example 'anonymous'
+always has 'p' on user INBOXes, and users always have ``la`` rights on
+mailboxes within their INBOX hierarchy.
 
 
 Login Authentication
@@ -172,7 +295,11 @@ The Cyrus IMAP server uses the Cyrus SASL library for authentication. This secti
 Anonymous Login
 """""""""""""""
 
-Regardless of the SASL mechanism used by an individual connection, the server can support anonymous login. If the ``allowanonymouslogin`` option in :cyrusman:`imapd.conf(5)` is turned on, then the server will permit plaintext password logins using the user ``anonymous`` and any password.
+Regardless of the SASL mechanism used by an individual connection, the
+server may support anonymous login. If the ``allowanonymouslogin``
+option in :cyrusman:`imapd.conf(5)` is turned on, then the server will
+permit plaintext password logins using the user ``anonymous`` and any
+password.
 
 Additionally, the server will enable any SASL mechanisms that allow anonymous logins.
 
@@ -212,10 +339,27 @@ Quota
 
 Quotas allow server administrators to limit resources used by hierarchies of mailboxes on the server.
 
-Supports Quotas on Storage
-""""""""""""""""""""""""""
+Working with Quotas
+"""""""""""""""""""
 
-The Cyrus IMAP server supports quotas on storage, which is defined as the number of bytes of the relevant :rfc:`822` messages, in kilobytes. Each copy of a message is counted independently, even when the server can conserve disk space use by making hard links to message files. The additional disk space overhead used by mailbox index and cache files is not charged against a quota.
+Quotas are manipulated via these subcommands within the
+:cyrusman:`cyradm(8)` program:
+
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-setquota`
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-listquota`
+    * :ref:`imap-reference-manpages-systemcommands-cyradm-listquotaroot`
+
+Supported Quota Types
+"""""""""""""""""""""
+
+The Cyrus IMAP server supports quotas on Storage (KB), Messages (#),
+Folders (#) and Annotation Storage (KB).  These types each have their
+own identifier:
+
+    * STORAGE
+    * MESSAGE
+    * X-NUM-FOLDERS
+    * X-ANNOTATION-STORAGE
 
 Quota Roots
 """""""""""
@@ -228,33 +372,134 @@ For example, if the mailboxes
 
 ::
 
-   user.bovik
-   user.bovik.list.imap
-   user.bovik.list.info-cyrus
-   user.bovik.saved
-   user.bovik.todo
+   user/bovik
+   user/bovik/list/imap
+   user/bovik/list/info-cyrus
+   user/bovik/saved
+   user/bovik/todo
 
 exist and the quota roots
 
 ::
 
-   user.bovik
-   user.bovik.list
-   user.bovik.saved
+   user/bovik
+   user/bovik/list
+   user/bovik/saved
 
-exist, then the quota root ``user.bovik`` applies to the mailboxes ``user.bovik`` and ``user.bovik.todo``; the quota root ``user.bovik.list`` applies to the mailboxes ``user.bovik.list.imap`` and ``user.bovik.list.info-cyrus``; and the quota root ``user.bovik.saved`` applies to the mailbox ``user.bovik.saved``.
+exist, then the quota root ``user/bovik`` applies to the mailboxes ``user/bovik`` and ``user/bovik/todo``; the quota root ``user/bovik/list`` applies to the mailboxes ``user/bovik/list/imap`` and ``user/bovik/list/info-cyrus``; and the quota root ``user/bovik/saved`` applies to the mailbox ``user/bovik/saved``.
 
-Quota roots are created automatically when they are mentioned in the ``setquota`` command. Quota roots may not be deleted through the protocol, see Removing Quota Roots for instructions on how to delete them.
+Quota roots are created automatically when they are mentioned in the
+:ref:`imap-reference-manpages-systemcommands-cyradm-setquota` command. Quota
+roots may not be deleted through the protocol, see Removing Quota Roots
+for instructions on how to delete them.
+
+Storage Quotas
+""""""""""""""
+
+Storage quotas are defined as the number of kilobytes (KB) of the
+relevant :rfc:`822` messages located within a quota root. Each copy of
+a message is counted independently, even when the server can conserve
+disk space use by making hard links to message files. The additional
+disk space overhead used by mailbox index and cache files is not
+charged against a quota. On servers with ``delete_mode: delayed``
+and/or ``expunge_mode:delayed`` space used by deleted mailboxes or
+expunged messages are not charged against quota.
+
+Numeric Quotas
+""""""""""""""
+
+Numeric Quotas are quite simply a limit on the number of a particular
+class of object.  Cyrus IMAP currently supports quotas on the number of
+messages and/or folders below a given quota root.
+
+Controlling Quota Behavior
+""""""""""""""""""""""""""
+
+How restrictive quotas will be may be tailored to the needs of different
+sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob lmtp_over_quota_perm_failure
+        :end-before: endblob lmtp_over_quota_perm_failure
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob lmtp_strict_quota
+        :end-before: endblob lmtp_strict_quota
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob quotawarn
+        :end-before: endblob quotawarn
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob quotawarnkb
+        :end-before: endblob quotawarnkb
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob quotawarnmsg
+        :end-before: endblob quotawarnmsg
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob autocreate_quota
+        :end-before: endblob autocreate_quota
+
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob autocreate_quota_messages
+        :end-before: endblob autocreate_quota_messages
 
 
 Mail Delivery Behavior
 """"""""""""""""""""""
 
-Normally, in order for a message to be inserted into a mailbox, the quota root for the mailbox must have enough unused storage so that inserting the message will not cause the block quota to go over the limit.
+Normally, in order for a message to be inserted into a mailbox, the
+quota root for the mailbox must have enough unused storage so that
+inserting the message will not cause the block quota to go over the
+limit.
 
-Mail delivery is a special case. In order for a message to be delivered to a mailbox, the quota root for the mailbox must not have usage that is over the limit. If the usage is not over the limit, then one message may be delivered regardless of its size. This puts the mailbox's usage over the quota, causing a user to be informed of the problem and permitting them to correct it. If delivery were not permitted in this case, the user would have no practical way of knowing that there was mail that could not be delivered.
+Mail delivery is a special case. In order for a message to be delivered
+to a mailbox, the quota root for the mailbox must not have usage that
+is over the limit
 
-If the usage is over the limit, then the mail delivery will fail with a temporary error. This will cause the delivery system to re-attempt delivery for a couple of days (permitting the user time to notice and correct the problem) and then return the mail to the sender.
+As long as usage is not over the limit, new messages may be delivered
+regardless of size, unless ``lmtp_strict_quota: on`` is set in
+:cyrusman:`imapd.conf(5)`.  In that case, delivery of messages will be
+rejected would such delivery exceed quota.
+
+If a delivery puts the mailbox's usage over the quota, the server will
+issue an alert notifying the user that usage is close to or over the
+limit, permitting them to correct it. If delivery were not permitted in
+this case, the user would have no practical way of knowing that there
+was mail that could not be delivered.
+
+.. note::
+
+    While the Cyrus IMAP server may from time to time issue alerts,
+    there is great variability in how IMAP clients handle these.  Many
+    sites find it preferable to install cron jobs which use the
+    :cyrusman:`quota(8)` command to produce periodic reports of users
+    at or near quota, so administrators may nag them or so that
+    warnings may be issued to users via some other mechanism.
+
+If the usage is over the limit, mail delivery will fail with a temporary
+error (LMTP error 452), unless ``lmtp_over_quota_perm_failure: on``
+is set in :cyrusman:`imapd.conf(5)` in which case a permanent error
+(LMTP error 552) will be returned.
+
+A temporary error will *typically* cause the delivery system to requeue
+the message and re-attempt delivery for a few days (permitting the user
+time to notice and correct the problem) before returning the mail to
+the sender.
+
+.. Note::
+
+    Such requeuing behaviour is controlled by the MTA (i.e. Sendmail,
+    EXIM or Postfix) and as such is outside the purview of this
+    document.
 
 Quota Warnings Upon Select When User Has ``d`` Rights
 """""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -267,6 +512,44 @@ Quotas and Partitions
 """""""""""""""""""""
 
 Quota roots are independent of partitions. A single quota root can apply to mailboxes in different partitions.
+
+Quota Database
+""""""""""""""
+
+Quota information is stored either in a database (i.e. twoskip,
+skiplist) or in "quotalegacy" format, which is a filesystem hierarchy.
+This is controlled by the ``quota_db`` setting in
+:cyrusman:`imapd.conf(5)`.  Here's more about the pertinent settings:
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob quota_db
+        :end-before: endblob quota_db
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob quota_db_path
+        :end-before: endblob quota_db_path
+
+The :cyrusman:`cvt_cyrusdb(8)` utility may be used to convert between
+formats.  It's usage with ``quotalegacy`` is a special case, in that
+the first argument ("<old db>") will be the path to the *base* of the
+``quotalegacy`` directory structure, not to a particular file.
+
+For example, given this typical layout:
+
+::
+
+    /var/lib/imap/
+    |            /quota/
+    |                  /A/
+    |                    /user/
+    |                         /bob/
+
+The proper ``cvt_cyrusdb`` command would be:
+
+::
+
+    cvt_cyrusdb /var/lib/imap/quota quotalegacy /var/lib/imap/quotas.db twoskip
+
 
 
 New Mail Notification
@@ -419,6 +702,12 @@ rebuilding the mailboxes file.
 
 Reconstructing Quota Roots
 """"""""""""""""""""""""""
+
+.. note::
+
+    The following instructions are valid where ``quota_db: quotalegacy``
+    is set in :cyrusman:`imapd.conf(5)`.  If your site uses a different
+    quota DB type, then these steps do not apply.
 
 The subdirectory ``quota`` of the configuration directory (specified in
 the ``configdirectory`` configuration option) contains one file per
