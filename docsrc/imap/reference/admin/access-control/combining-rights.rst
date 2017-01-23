@@ -117,7 +117,7 @@ For most features, ACI subjects need certain access rights on a folder
 in order to perform or control the feature.
 
 METADATA
-++++++++
+--------
 
 In order to be allowed to retrieve and/or set annotations on a folder,
 the ACI subject requires the :ref:`imap-admin-access-control-right-l`

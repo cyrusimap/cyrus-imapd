@@ -18,6 +18,7 @@ Management
 .. toctree::
     :maxdepth: 2
 
+    admin/locations
     admin/murder/murder
     admin/access-control
     admin/nntp

@@ -108,8 +108,6 @@ There are four different uses of the term "namespace" within Cyrus:
 
     More info at :ref:`imap-developer-namespaces`.
 
-----
-
 .. _imap-admin-namespaces-user-access:
 
 User Access Namespaces
@@ -171,7 +169,7 @@ in question is part of another user's personal namespace.
 The other users namespace can be suppressed in LIST commands by setting
 ``disable_user_namespace`` to ``1`` in :cyrusman:`imapd.conf(5)`. This
 is useful in larger environments because of the nature of the
-:ref:`imap-features-access-control-lists-discretionary` Cyrus IMAP
+:ref:`imap-admin-access-control-lists-discretionary` Cyrus IMAP
 entertains by default.
 
 .. _imap-features-namespaces-shared:
