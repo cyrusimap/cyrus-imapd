@@ -143,6 +143,16 @@
    fun:_ZN6icu_558TimeZone13createDefaultEv
    ...
 }
-
-
+{
+   sasl_initleak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   ...
+   fun:sasl_client_add_plugin
+   ...
+   fun:sasl_client_init
+   fun:global_sasl_init
+   fun:main
+}
 
