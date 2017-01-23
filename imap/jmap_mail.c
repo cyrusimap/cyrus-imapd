@@ -3734,13 +3734,8 @@ static int getThreadUpdates(jmap_req_t *req)
     removed = json_pack("[]");
 
     json_array_foreach(threads, i, val) {
-        conversation_id_t cid;
-        conv_folder_t *folder;
-        const char *threadid;
-        int is_expunged;
-
-        threadid = json_string_value(val);
-        cid = jmap_decode_thrid(threadid);
+        const char *threadid = json_string_value(val);
+        conversation_id_t cid = jmap_decode_thrid(threadid);
         if (!cid) continue;
 
         r = conversation_load(req->cstate, cid, &conv);
@@ -3753,34 +3748,7 @@ static int getThreadUpdates(jmap_req_t *req)
             }
         }
 
-        /* Determine if all messages of the thread are expunged */
-        is_expunged = 1;
-        for (folder = conv->folders; is_expunged && folder; folder = folder->next) {
-            const char *fname = strarray_nth(req->cstate->folder_names, folder->number);
-            struct mailbox_iter *iter;
-            struct mailbox *mbox = NULL;
-            const message_t *m;
-
-            r = _openmbox(req, fname, &mbox, 0);
-            if (r) continue;
-
-            iter = mailbox_iter_init(mbox, 0, 0);
-            while ((m = mailbox_iter_step(iter))) {
-                const struct index_record *record = msg_record(m);
-                if (record->cid == cid) {
-                    if (!(record->system_flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-                        is_expunged = 0;
-                        break;
-                    }
-                }
-            }
-            mailbox_iter_done(&iter);
-
-            _closembox(req, &mbox);
-        }
-
-        /* Add the thread to the result list */
-        json_array_append(is_expunged ? removed : changed, val);
+        json_array_append(conv->thread ? changed : removed, val);
 
         conversation_free(conv);
         conv = NULL;
