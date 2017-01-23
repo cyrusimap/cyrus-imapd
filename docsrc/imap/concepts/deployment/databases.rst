@@ -46,7 +46,7 @@ One per user:
 * `Mailbox Keys (<userid>.mboxkey)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
-* `Search Index DB list (<userid>.xapianactive)`_
+* `Search Indexes (cyrus.squat, <userid>.xapianactive)`_
 
 Mailbox List (mailboxes.db)
 ---------------------------
@@ -173,13 +173,18 @@ that folder.
 
 File type can be: `skiplist`_ (default), `sql`_, `twoskip`_, or `lmdb`_.
 
+Counters (<userid>.counters)
+----------------------------
+
+File format not selectable.
+
 News database (fetchnews.db)
 ----------------------------
 
 File format not selectable.
 
-Search Index databases
-----------------------
+Search Indexes (cyrus.squat, <userid>.xapianactive)
+---------------------------------------------------
 
 This is either cyrus.squat in each folder, or if you're using xapian a single
 <userid>.xapianactive file listing active databases by tier name and number.
