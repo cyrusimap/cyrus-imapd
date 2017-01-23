@@ -724,7 +724,7 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static void my_caldav_auth(const char *userid)
 {
-    const char *mailboxname;
+    char *mailboxname;
     int r;
 
     /* Generate mailboxname of calendar-home-set */
@@ -752,10 +752,12 @@ static void my_caldav_auth(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
-	    const char *inboxname = mboxname_user_mbox(userid, NULL);
+	    char *inboxname = mboxname_user_mbox(userid, NULL);
 	    mbentry_t *mbentry = NULL;
 
 	    r = http_mlookup(inboxname, &mbentry, NULL);
+	    free(inboxname);
+
 	    if (!r && mbentry->server) {
 		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
@@ -778,9 +780,9 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 
     /* Default calendar */
-    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -791,9 +793,9 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 
     /* Scheduling Inbox */
-    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_INBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -804,9 +806,9 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 
     /* Scheduling Outbox */
-    free(mailboxname);
     mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -951,11 +953,11 @@ static int caldav_parse_path(const char *path,
 	buf_putc(&boxbuf, '.');
 	buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
-    parts.box = buf_release(&boxbuf);
+    parts.box = buf_release(&boxbuf); /* tricky, we now need to free parts.box separately */
 
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
-    free(parts.box);
+    free((char *) parts.box); /* n.b. casting away constness */
     mboxname_free_parts(&parts);
 
     return 0;
