@@ -269,6 +269,7 @@ static struct meth_params carddav_params = {
     { (db_open_proc_t) &my_carddav_open,
       (db_close_proc_t) &my_carddav_close,
       (db_lookup_proc_t) &carddav_lookup_resource,
+      (db_release_proc_t) &carddav_data_fini,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
       (db_delete_proc_t) &carddav_delete,
@@ -836,6 +837,7 @@ static int report_card_query(struct transaction_t *txn,
     fctx->open_db = (db_open_proc_t) &my_carddav_open;
     fctx->close_db = (db_close_proc_t) &my_carddav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
+    fctx->release_resource = (db_release_proc_t) &carddav_data_fini;
     fctx->foreach_resource = (db_foreach_proc_t) &carddav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
 

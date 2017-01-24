@@ -563,6 +563,7 @@ static struct meth_params caldav_params = {
     { (db_open_proc_t) &my_caldav_open,
       (db_close_proc_t) &my_caldav_close,
       (db_lookup_proc_t) &caldav_lookup_resource,
+      (db_release_proc_t) &caldav_data_fini,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
       (db_delete_proc_t) &caldav_delete,
@@ -4397,6 +4398,7 @@ static int report_cal_query(struct transaction_t *txn,
     fctx->open_db = (db_open_proc_t) &my_caldav_open;
     fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
+    fctx->release_resource = (db_release_proc_t) &caldav_data_fini;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
 
@@ -4855,6 +4857,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     fctx->open_db = (db_open_proc_t) &my_caldav_open;
     fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
+    fctx->release_resource = (db_release_proc_t) &caldav_data_fini;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
 

@@ -2992,6 +2992,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	}
 	overwrite = OVERWRITE_NO;
     }
+    cparams->davdb.release_resource(ddata);
 
     /* Open source mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
@@ -3049,6 +3050,8 @@ int meth_copy(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    cparams->davdb.release_resource(ddata);
+
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
     if ((txn->meth == METH_MOVE) && (dest_mbox == src_mbox))
 	flags |= NO_DUP_CHECK;
@@ -3094,9 +3097,13 @@ int meth_copy(struct transaction_t *txn, void *params)
 		goto done;
 	    }
 	}
+
+	cparams->davdb.release_resource(ddata);
     }
 
   done:
+    cparams->davdb.release_resource(ddata);
+
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
 	txn->location = dest_tgt.path;
@@ -4093,6 +4100,8 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	    /* XXX  Check errors */
 
 	    r = fctx->proc_by_resource(rock, data);
+
+	    fctx->release_resource(data);
 	}
 	else {
 	    /* Add responses for all contained resources */
@@ -4301,6 +4310,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.open_db = fparams->davdb.open_db;
     fctx.close_db = fparams->davdb.close_db;
     fctx.lookup_resource = fparams->davdb.lookup_resource;
+    fctx.release_resource = fparams->davdb.release_resource;
     fctx.foreach_resource = fparams->davdb.foreach_resource;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;

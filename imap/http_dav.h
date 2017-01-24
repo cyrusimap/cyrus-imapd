@@ -247,6 +247,9 @@ typedef void (*db_close_proc_t)(void *davdb);
 typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
 				const char *resource, int lock, void **data);
 
+/* Function to release previously lookup'd DAV resource record */
+typedef void (*db_release_proc_t)(void *data);
+
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
 typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
 				 int (*cb)(void *rock, void *data), void *rock);
@@ -278,6 +281,7 @@ struct propfind_ctx {
     db_open_proc_t open_db;		/* open DAV DB for a given mailbox */
     db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    db_release_proc_t release_resource; /* release a lookup'd resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
@@ -373,6 +377,7 @@ struct davdb_params {
     db_open_proc_t open_db;		/* open DAV DB for a given mailbox */
     db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    db_release_proc_t release_resource; /* release the resource when done with it */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     db_write_proc_t write_resource;	/* write a specific resource */
     db_delete_proc_t delete_resource;	/* delete a specific resource */
