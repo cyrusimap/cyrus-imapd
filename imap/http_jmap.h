@@ -81,7 +81,7 @@ extern jmap_msg_t jmap_contact_messages[];
 extern jmap_msg_t jmap_calendar_messages[];
 
 /* Request-scoped mailbox cache */
-extern int  jmap_initreq(jmap_req_t *req);
+extern int  jmap_initreq(jmap_req_t *req); /* FIXME make static */
 extern void jmap_finireq(jmap_req_t *req);
 extern int  jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
@@ -90,5 +90,9 @@ extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 /* Blob services */
 extern int jmap_upload(struct transaction_t *txn);
 extern int jmap_download(struct transaction_t *txn);
+extern int jmap_findblob(jmap_req_t *req, const char *blobid,
+                         struct mailbox **mbox, struct index_record **record,
+                         struct body **body, const struct body **part);
+extern char *jmap_blobid(const struct message_guid *guid);
 
 #endif /* HTTP_JMAP_H */
