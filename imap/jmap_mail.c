@@ -120,109 +120,6 @@ jmap_msg_t jmap_mail_messages[] = {
 #define JMAP_INREPLYTO_HEADER "X-JMAP-In-Reply-To"
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
 
-struct _mboxcache_rec {
-    struct mailbox *mbox;
-    int refcount;
-    int rw;
-};
-
-struct _req_context {
-    ptrarray_t *cache;
-};
-
-static int _initreq(jmap_req_t *req)
-{
-    struct _req_context *ctx = xzmalloc(sizeof(struct _req_context));
-    ctx->cache = ptrarray_new();
-    req->rock = ctx;
-    return 0;
-}
-
-static void _finireq(jmap_req_t *req)
-{
-    struct _req_context *ctx = (struct _req_context *) req->rock;
-
-    if (!ctx) return;
-
-    assert(ctx->cache->count == 0);
-    ptrarray_free(ctx->cache);
-
-    free(ctx);
-    req->rock = NULL;
-}
-
-static int _openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw)
-{
-    int i, r;
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
-        if (!strcmp(name, rec->mbox->name)) {
-            if (rw && !rec->rw) {
-                /* Lock promotions are not supported */
-                syslog(LOG_ERR, "jmapmbox: won't reopen mailbox %s", name);
-                return IMAP_INTERNAL;
-            }
-            rec->refcount++;
-            *mboxp = rec->mbox;
-            return 0;
-        }
-    }
-
-    r = rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
-    if (r) {
-        syslog(LOG_ERR, "_openmbox(%s): %s", name, error_message(r));
-        return r;
-    }
-
-    rec = xzmalloc(sizeof(struct _mboxcache_rec));
-    rec->mbox = *mboxp;
-    rec->refcount = 1;
-    rec->rw = rw;
-    ptrarray_add(cache, rec);
-
-    return 0;
-}
-
-static int _mboxisopen(jmap_req_t *req, const char *name)
-{
-
-    int i;
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
-        if (!strcmp(name, rec->mbox->name))
-            return 1;
-    }
-
-    return 0;
-}
-
-static void _closembox(jmap_req_t *req, struct mailbox **mboxp)
-{
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
-    struct _mboxcache_rec *rec = NULL;
-    int i;
-
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
-        if (rec->mbox == *mboxp)
-            break;
-    }
-    assert(i < cache->count);
-
-    if (!(--rec->refcount)) {
-        ptrarray_remove(cache, i);
-        mailbox_close(&rec->mbox);
-        free(rec);
-    }
-    *mboxp = NULL;
-}
-
 static int _wantprop(hash_table *props, const char *name)
 {
     if (!props) return 1;
@@ -622,7 +519,7 @@ static int getMailboxes(jmap_req_t *req)
     };
     construct_hash_table(data.roles, 8, 0);
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Determine current state. */
     state = jmapmbox_getstate(req);
@@ -708,7 +605,7 @@ done:
         free_hash_table(data.props, NULL);
         free(data.props);
     }
-    _finireq(req);
+    jmap_finireq(req);
     return 0;
 }
 
@@ -1285,7 +1182,7 @@ static int setMailboxes(jmap_req_t *req)
     char *parentname = NULL;
     json_t *state, *create, *update, *destroy;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     mbentry_t *inboxentry = NULL;
     mboxlist_lookup(req->inboxname, &inboxentry, NULL);
@@ -1547,7 +1444,7 @@ done:
     free(parentname);
     mboxlist_entry_free(&inboxentry);
     if (set) json_decref(set);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -1692,7 +1589,7 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_t *oldstate, *newstate;
     const char *since;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -1754,7 +1651,7 @@ static int getMailboxUpdates(jmap_req_t *req)
     }
 
 done:
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -1931,7 +1828,7 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = _openmbox(req, rec->mboxname, &mbox, 0);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
     r = mailbox_find_index_record(mbox, rec->uid, &record);
@@ -1939,7 +1836,7 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         json_object_set_new(mboxs, mbox->uniqueid, json_string(mbox->name));
     }
 
-    _closembox(req, &mbox);
+    jmap_closembox(req, &mbox);
     return r;
 }
 
@@ -2633,13 +2530,13 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    if (!d->mboxname || _mboxisopen(req, rec->mboxname)) {
+    if (!d->mboxname || jmap_isopenmbox(req, rec->mboxname)) {
         struct index_record record;
         struct mailbox *mbox = NULL;
 
         /* Prefer to use messages in already opened mailboxes */
 
-        r = _openmbox(req, rec->mboxname, &mbox, 0);
+        r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
         if (r) return r;
 
         r = mailbox_find_index_record(mbox, rec->uid, &record);
@@ -2652,7 +2549,7 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
             d->uid = rec->uid;
         }
 
-        _closembox(req, &mbox);
+        jmap_closembox(req, &mbox);
     }
 
     return r;
@@ -2698,7 +2595,7 @@ static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = _openmbox(req, rec->mboxname, &mbox, 0);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
     r = mailbox_find_index_record(mbox, rec->uid, &record);
@@ -2706,7 +2603,7 @@ static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
         d->count++;
     }
 
-    _closembox(req, &mbox);
+    jmap_closembox(req, &mbox);
 
     return r;
 }
@@ -2744,7 +2641,7 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = _openmbox(req, rec->mboxname, &mbox, 0);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
     r = mailbox_find_index_record(mbox, rec->uid, &record);
@@ -2753,7 +2650,7 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
         r = IMAP_OK_COMPLETED;
     }
 
-    _closembox(req, &mbox);
+    jmap_closembox(req, &mbox);
 
     return r;
 }
@@ -3455,7 +3352,7 @@ static int getMessageList(jmap_req_t *req)
     json_int_t i = 0;
     size_t total, total_threads;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -3576,7 +3473,7 @@ static int getMessageList(jmap_req_t *req)
 done:
     if (messageids) json_decref(messageids);
     if (threadids) json_decref(threadids);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -3593,7 +3490,7 @@ static int getMessageUpdates(jmap_req_t *req)
     struct getmsglist_window window;
     const char *since;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -3668,7 +3565,7 @@ done:
     if (threads) json_decref(threads);
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -3686,7 +3583,7 @@ static int getThreadUpdates(jmap_req_t *req)
     const char *since;
     conversation_t *conv = NULL;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -3798,7 +3695,7 @@ done:
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
     if (threads) json_decref(threads);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -3901,7 +3798,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
             continue;
         }
 
-        r = _openmbox(req, mboxname, &mbox, 0);
+        r = jmap_openmbox(req, mboxname, &mbox, 0);
         if (r) goto done;
 
         r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
@@ -3923,7 +3820,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
         r = rx->end_mailbox(rx, mbox);
         if (r) goto done;
 
-        _closembox(req, &mbox);
+        jmap_closembox(req, &mbox);
         free(mboxname);
         mboxname = NULL;
     }
@@ -3938,7 +3835,7 @@ done:
     if (snippet) json_decref(snippet);
     if (intquery) search_free_internalised(intquery);
     if (mboxname) free(mboxname);
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (searchargs) freesearchargs(searchargs);
     if (state) {
         state->mailbox = NULL;
@@ -3956,7 +3853,7 @@ static int getSearchSnippets(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     size_t i;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -4010,7 +3907,7 @@ static int getSearchSnippets(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -4078,7 +3975,7 @@ static int getThreads(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     size_t i;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -4147,7 +4044,7 @@ static int getThreads(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -4161,7 +4058,7 @@ static int getMessages(jmap_req_t *req)
     json_t *ids, *val, *properties, *res, *item;
     hash_table *props = NULL;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* ids */
     ids = json_object_get(req->args, "ids");
@@ -4212,13 +4109,13 @@ static int getMessages(jmap_req_t *req)
         r = jmapmsg_find(req, id, &mboxname, &uid);
         if (r) goto doneloop;
 
-        r = _openmbox(req, mboxname, &mbox, 0);
+        r = jmap_openmbox(req, mboxname, &mbox, 0);
         if (r) goto done;
 
         r = mailbox_find_index_record(mbox, uid, &record);
         if (!r) jmapmsg_from_record(req, props, mbox, &record, &msg);
 
-        _closembox(req, &mbox);
+        jmap_closembox(req, &mbox);
 
 doneloop:
         if (r == IMAP_NOTFOUND) r = 0;
@@ -4256,7 +4153,7 @@ done:
     }
     json_decref(list);
     json_decref(notfound);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -4310,7 +4207,7 @@ static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **message
     r = jmapmsg_find(req, id, &mboxname, &uid);
     if (r) goto done;
 
-    r = _openmbox(req, mboxname, &mbox, 0);
+    r = jmap_openmbox(req, mboxname, &mbox, 0);
     if (r) goto done;
 
     r = mailbox_find_index_record(mbox, uid, &record);
@@ -4330,7 +4227,7 @@ static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **message
 
 done:
     if (m) message_unref(&m);
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     buf_free(&buf);
     return r;
@@ -4439,7 +4336,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     jmap_req_t *req = d->req;
     int r = 0;
 
-    r = _openmbox(req, rec->mboxname, &d->mbox, 0);
+    r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
     if (r) return r;
 
     d->record = xzmalloc(sizeof(struct index_record));
@@ -4447,7 +4344,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     r = mailbox_find_index_record(d->mbox, rec->uid, d->record);
     if (r) {
         memset(&d->record, 0, sizeof(struct index_record));
-        _closembox(req, &d->mbox);
+        jmap_closembox(req, &d->mbox);
         free(d->record);
         d->record = NULL;
         return r;
@@ -4515,7 +4412,7 @@ static int findblob(jmap_req_t *req, const char *blobid,
 
 done:
     if (r) {
-        if (data.mbox) _closembox(req, &data.mbox);
+        if (data.mbox) jmap_closembox(req, &data.mbox);
         if (data.record) free(data.record);
         if (mybody) message_free_body(mybody);
     }
@@ -4664,7 +4561,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
 
 
 done:
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (record) free(record);
     if (body) {
         message_free_body(body);
@@ -5438,7 +5335,7 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = _openmbox(req, rec->mboxname, &mbox, 1);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 1);
     if (r) goto done;
 
     if (!d->mailboxes || json_object_get(d->mailboxes, mbox->uniqueid)) {
@@ -5455,7 +5352,7 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
     }
 
 done:
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     return r;
 }
 
@@ -5504,7 +5401,7 @@ static int delrecord_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = _openmbox(req, rec->mboxname, &mbox, 1);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 1);
     if (r) goto done;
 
     if (!d->mailboxes || json_object_get(d->mailboxes, mbox->uniqueid)) {
@@ -5513,7 +5410,7 @@ static int delrecord_cb(const conv_guidrec_t *rec, void *rock)
     }
 
 done:
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     return r;
 }
 
@@ -5576,7 +5473,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     }
 
     /* Create the message in the destination mailbox */
-    r = _openmbox(req, mboxname, &mbox, 1);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) goto done;
 
     /* Write the message to the filesystem */
@@ -5663,7 +5560,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
         append_removestage(stage);
         stage = NULL;
 
-        _closembox(req, &mbox);
+        jmap_closembox(req, &mbox);
 
         /* Don't overwrite the existing messages */
         oldmailboxes = jmapmsg_mailboxes(req, *msgid);
@@ -5682,7 +5579,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
         if (r) goto done;
 
         /* Open the mailbox where the message is stored */
-        r = _openmbox(req, mboxname, &mbox, 0);
+        r = jmap_openmbox(req, mboxname, &mbox, 0);
         if (r) goto done;
 
         r = mailbox_find_index_record(mbox, uid, &record);
@@ -5733,19 +5630,19 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
         if (!strcmp(mboxname, dstname))
             continue;
 
-        r = _openmbox(req, dstname, &dst, 1);
+        r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
 
         r = copyrecord(req, mbox, dst, &record);
 
-        _closembox(req, &dst);
+        jmap_closembox(req, &dst);
         if (r) goto done;
     }
 
 done:
     if (f) fclose(f);
     if (stage) append_removestage(stage);
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (mailboxes) json_decref(mailboxes);
     return r;
@@ -5897,7 +5794,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
     /* Update index record system flags. */
-    r = _openmbox(req, mboxname, &mbox, 1);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) goto done;
 
     r = mailbox_find_index_record(mbox, uid, &record);
@@ -5928,12 +5825,12 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         if (!strcmp(mboxname, dstname))
             continue;
 
-        r = _openmbox(req, dstname, &dst, 1);
+        r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
 
         r = copyrecord(req, mbox, dst, &record);
 
-        _closembox(req, &dst);
+        jmap_closembox(req, &dst);
         if (r) goto done;
     }
 
@@ -5946,7 +5843,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
 done:
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (oldmailboxes) json_decref(oldmailboxes);
     if (srcmailboxes) json_decref(srcmailboxes);
@@ -5977,7 +5874,7 @@ static int setMessages(jmap_req_t *req)
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     state = json_object_get(req->args, "ifInState");
     if (JNOTNULL(state)) {
@@ -6129,7 +6026,7 @@ static int setMessages(jmap_req_t *req)
 
 done:
     if (set) json_decref(set);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -6183,7 +6080,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     r = mailbox_map_record(mbox, record, &data.msg_buf);
     if (r) goto done;
 
-    _closembox(req, &mbox);
+    jmap_closembox(req, &mbox);
 
     /* Write the message to the file system */
     if (json_object_get(msg, "isDraft") == json_true())
@@ -6203,7 +6100,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     r = jmapmsg_find(req, msgid, &mboxname, &uid);
     if (r) goto done;
 
-    r = _openmbox(req, mboxname, &mbox, 0);
+    r = jmap_openmbox(req, mboxname, &mbox, 0);
     if (r) goto done;
 
     memset(record, 0, sizeof(struct index_record));
@@ -6219,13 +6116,13 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     r = jmapmsg_from_record(req, &props, mbox, record, createdmsg);
     if (r) goto done;
 
-    _closembox(req, &mbox);
+    jmap_closembox(req, &mbox);
 
 done:
     free_hash_table(&props, NULL);
     buf_free(&data.msg_buf);
     if (msgid) free(msgid);
-    if (mbox) _closembox(req, &mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (record) free(record);
     if (body) {
         message_free_body(body);
@@ -6243,7 +6140,7 @@ static int importMessages(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     const char *id;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -6358,7 +6255,7 @@ done:
     json_decref(created);
     json_decref(notcreated);
     buf_free(&buf);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -6370,7 +6267,7 @@ static int getIdentities(jmap_req_t *req)
     const char *s;
     size_t i;
 
-    _initreq(req);
+    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -6442,7 +6339,7 @@ static int getIdentities(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    _finireq(req);
+    jmap_finireq(req);
     return r;
 }
 
@@ -6515,7 +6412,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     req.idmap = NULL;
     req.txn = txn;
 
-    _initreq(&req);
+    jmap_initreq(&req);
 
     char *blobid = xstrndup(blobbase, bloblen);
 
@@ -6588,7 +6485,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     free(decbuf);
     free(ctype);
     strarray_fini(&headers);
-    if (mbox) _closembox(&req, &mbox);
+    if (mbox) jmap_closembox(&req, &mbox);
     conversations_commit(&cstate);
     if (record) free(record);
     if (body) {
@@ -6597,7 +6494,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     }
     buf_free(&msg_buf);
     free(blobid);
-    _finireq(&req);
+    jmap_finireq(&req);
     free(inboxname);
     return res;
 }

@@ -41,12 +41,15 @@
  *
  */
 
+#include <syslog.h>
+
 #include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #include "http_jmap.h"
 #include "jmap_common.h"
