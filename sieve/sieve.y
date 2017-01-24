@@ -164,8 +164,6 @@ static test_t *build_header(int t, struct htags *h,
                             strarray_t *sl, strarray_t *pl);
 static test_t *build_body(int t, struct btags *b, strarray_t *pl);
 static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
-static test_t *build_hasflag(int t, struct htags *h,
-                            strarray_t *pl);
 static test_t *build_mailboxtest(int t, struct mtags *m, const char *extname, const char *keyname, strarray_t *keylist);
 
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
@@ -297,7 +295,6 @@ extern void sieverestart(FILE *f);
 %type <ftag> ftags
 %type <stag> stags
 %type <nval> mod40 mod30 mod20 mod10
-%type <nval> variablestest
 %type <sval> flagtags
 %type <nval> flagaction
 
@@ -685,16 +682,38 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                          YYERROR; }
                                  }
 
-        | variablestest htags stringlist stringlist {
+        | STRINGT htags stringlist stringlist {
                                      if (!parse_script->support.variables) {
                                          yyerror(parse_script, "variables MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
-                                     if (STRINGT == $1) {
-                                         if (!verify_stringlist(parse_script, $3, verify_utf8)) {
-                                             YYERROR; /* vu should call yyerror() */
-                                         }
-                                     } else if (!verify_stringlist(parse_script, $3, verify_identifier)) {
+                                     if (!verify_stringlist(parse_script, $3, verify_utf8)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+                                     if (!verify_stringlist(parse_script, $4, verify_utf8)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+                                     $2 = canon_htags($2);
+#ifdef ENABLE_REGEX
+                                     if ($2->comptag == REGEX &&
+                                         !(verify_regexs(parse_script, $4, $2->comparator))) {
+                                         YYERROR;
+                                     }
+#endif
+                                     $$ = build_header(STRINGT, $2, $3, $4);
+                                 }
+
+/* Per RFC 5232, the variables list (penultimate argument) is optional,
+   but defining the grammar this way results in a shift/reduce conflict.
+   Therefore, we have to flatten the grammar into two rules.
+*/
+        | HASFLAG htags stringlist stringlist
+                                 {
+                                     if (!parse_script->support.variables) {
+                                         yyerror(parse_script, "variables MUST be enabled with \"require\"");
+                                         YYERROR;
+                                     }
+                                     if (!verify_stringlist(parse_script, $3, verify_identifier)) {
                                          YYERROR; /* vi should call yyerror() */
                                      }
                                      if (!verify_stringlist(parse_script, $4, verify_utf8)) {
@@ -702,34 +721,31 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      }
                                      $2 = canon_htags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX) {
-                                         if (!(verify_regexs(parse_script, $4, $2->comparator))) {
-                                             YYERROR;
-                                         }
+                                     if ($2->comptag == REGEX &&
+                                         !(verify_regexs(parse_script, $4, $2->comparator))) {
+                                         YYERROR;
                                      }
 #endif
-                                     $$ = build_header($1, $2, $3, $4);
+                                     $$ = build_header(HASFLAG, $2, $3, $4);
                                  }
 
-        | HASFLAG htags stringlist
+        | HASFLAG htags stringlist 
                                  {
                                      if (!parse_script->support.imap4flags) {
                                        yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
                                        YYERROR;
                                      }
-
+                                     if (!verify_stringlist(parse_script, $3, verify_utf8)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
                                      $2 = canon_htags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX)
-                                     {
-                                         if (!(verify_regexs(parse_script, $3, $2->comparator)))
-                                         { YYERROR; }
+                                     if ($2->comptag == REGEX &&
+                                         !(verify_regexs(parse_script, $3, $2->comparator))) {
+                                         YYERROR;
                                      }
 #endif
-                                     $$ = build_hasflag(HASFLAG, $2, $3);
-                                     if ($$ == NULL) {
-                                         yyerror(parse_script, "unable to find a compatible comparator");
-                                         YYERROR; }
+                                     $$ = build_header(HASFLAG, $2, NULL, $3);
                                  }
 
 
@@ -865,10 +881,6 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      YYERROR; }
                                  }
         | error                  { $$ = NULL; }
-        ;
-
-variablestest: STRINGT
-        | HASFLAG
         ;
 
 addrorenv: ADDRESS               { $$ = ADDRESS; }
@@ -1259,12 +1271,6 @@ static test_t *build_header(int t, struct htags *h,
         free_htags(h);
     }
     return ret;
-}
-
-static test_t *build_hasflag(int t, struct htags *h,
-                            strarray_t *pl)
-{
-    return build_header(t,h,NULL,pl);
 }
 
 static test_t *build_body(int t, struct btags *b, strarray_t *pl)
