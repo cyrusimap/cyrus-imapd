@@ -1446,7 +1446,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     char *fname = activefile_fname(mailbox->name);
     strarray_t *active = NULL;
-    int r = 0;
+    int r = IMAP_IOERROR;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -1487,11 +1487,17 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  to avoid it happening at least."
      */
     active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
-    if (!active || !active->count) goto out;
+    if (!active || !active->count) {
+        syslog(LOG_ERR, "IOERROR: can't determine xapianactive files");
+        goto out;
+    }
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it */
     tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2);
-    if (!tr->activedirs || !tr->activedirs->count) goto out;
+    if (!tr->activedirs || !tr->activedirs->count) {
+        syslog(LOG_ERR, "IOERROR: can't determine xapianactive directories");
+        goto out;
+    }
 
     /* create the directory if needed */
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
