@@ -83,34 +83,23 @@ struct vtags {
     int mime;
 };
 
-struct htags {
-    int index;
-    char *comparator;
-    int comptag;
+struct comptags {
+    int match;
     int relation;
-};
-
-struct mtags {
-    char *comparator;
-    int comptag;
-    int relation;
+    char *comparator;  /* only used where comparator can be defined */
+    int index;         /* only used were index extension is defined */
 };
 
 struct aetags {
-    int index;
+    struct comptags comptags;  /* MUST be first so we can typecast */
     int addrtag;
-    char *comparator;
-    int comptag;
-    int relation;
 };
 
 struct btags {
+    struct comptags comptags;  /* MUST be first so we can typecast */
     int transform;
     int offset;
     strarray_t *content_types;
-    char *comparator;
-    int comptag;
-    int relation;
 };
 
 struct ntags {
@@ -122,25 +111,22 @@ struct ntags {
 };
 
 struct dtags {
-    int comptag;
+    int match;
     int relation;
     void *pattern;
     int priority;
 };
 
 struct itags {
-  int location;
-  int once;
-  int optional;
+    int location;
+    int once;
+    int optional;
 };
 
 struct dttags {
-    int index;
+    struct comptags comptags;  /* MUST be first so we can typecast */
     int zonetag;
     char *zone;
-    int comptag;
-    int relation;
-    char *comparator;
     int date_part;
 };
 
@@ -160,11 +146,11 @@ struct stags {
 
 static test_t *build_address(int t, struct aetags *ae,
                              strarray_t *sl, strarray_t *pl);
-static test_t *build_header(int t, struct htags *h,
+static test_t *build_header(int t, struct comptags *c,
                             strarray_t *sl, strarray_t *pl);
 static test_t *build_body(int t, struct btags *b, strarray_t *pl);
 static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
-static test_t *build_mailboxtest(int t, struct mtags *m, const char *extname, const char *keyname, strarray_t *keylist);
+static test_t *build_mailboxtest(int t, struct comptags *c, const char *extname, const char *keyname, strarray_t *keylist);
 
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
@@ -178,9 +164,10 @@ static commandlist_t *build_flag(int t, char *variable, strarray_t *flags);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
-static struct htags *new_htags(void);
-static struct htags *canon_htags(struct htags *h);
-static void free_htags(struct htags *h);
+static struct comptags *new_comptags(void);
+static struct comptags *init_comptags(struct comptags *c);
+static struct comptags *canon_comptags(struct comptags *c);
+static void free_comptags(struct comptags *c, int destroy);
 static struct btags *new_btags(void);
 static struct btags *canon_btags(struct btags *b);
 static void free_btags(struct btags *b);
@@ -200,9 +187,6 @@ static void free_dttags(struct dttags *b);
 static struct ftags *new_ftags(void);
 static struct ftags *canon_ftags(struct ftags *f);
 static void free_ftags(struct ftags *f);
-static struct mtags *new_mtags(void);
-static struct mtags *canon_mtags(struct mtags *h);
-static void free_mtags(struct mtags *h);
 static struct stags *new_stags(void);
 static struct stags *canon_stags(struct stags *s);
 static void free_stags(struct stags *s);
@@ -243,8 +227,7 @@ extern void sieverestart(FILE *f);
     commandlist_t *cl;
     struct vtags *vtag;
     struct aetags *aetag;
-    struct htags *htag;
-    struct mtags *mtag;
+    struct comptags *ctag;
     struct btags *btag;
     struct ntags *ntag;
     struct dtags *dtag;
@@ -280,17 +263,16 @@ extern void sieverestart(FILE *f);
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv copy rtags creat
+%type <nval> match relcomp sizetag addrparttag copy rtags creat
 %type <testl> testlist tests
-%type <htag> htags
-%type <mtag> mtags
-%type <aetag> aetags
+%type <ctag> htags strtags hftags mtags
+%type <aetag> atags etags
 %type <btag> btags
 %type <vtag> vtags
 %type <ntag> ntags
 %type <dtag> dtags
 %type <itag> itags
-%type <dttag> dttags
+%type <dttag> dttags cdtags
 %type <nval> priority
 %type <ftag> ftags
 %type <stag> stags
@@ -560,13 +542,13 @@ dtags: /* empty */               { $$ = new_dtags(); }
         | dtags priority         { if ($$->priority != -1) {
                                 yyerror(parse_script, "duplicate priority level"); YYERROR; }
                                    else { $$->priority = $2; } }
-        | dtags comptag STRING   { if ($$->comptag != -1)
+        | dtags match STRING     { if ($$->match != -1)
                                      {
                                          yyerror(parse_script, "duplicate comparator type tag"); YYERROR;
                                      }
-                                   $$->comptag = $2;
+                                   $$->match = $2;
 #ifdef ENABLE_REGEX
-                                   if ($$->comptag == REGEX)
+                                   if ($$->match == REGEX)
                                    {
                                        int cflags = REG_EXTENDED |
                                            REG_NOSUB | REG_ICASE;
@@ -576,9 +558,9 @@ dtags: /* empty */               { $$ = new_dtags(); }
                                    $$->pattern = $3;
                                   }
         | dtags relcomp STRING  { $$ = $1;
-                                   if ($$->comptag != -1) {
+                                   if ($$->match != -1) {
                         yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2;
+                                   else { $$->match = $2;
                                    $$->relation = verify_relat(parse_script, $3);
                                    if ($$->relation==-1)
                                      {YYERROR; /*vr called yyerror()*/ }
@@ -668,9 +650,9 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                          YYERROR; /* vu should call yyerror() */
                                      }
 
-                                     $2 = canon_htags($2);
+                                     $2 = canon_comptags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX)
+                                     if ($2->match == REGEX)
                                      {
                                          if (!(verify_regexs(parse_script, $4, $2->comparator)))
                                          { YYERROR; }
@@ -682,7 +664,7 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                          YYERROR; }
                                  }
 
-        | STRINGT htags stringlist stringlist {
+        | STRINGT strtags stringlist stringlist {
                                      if (!parse_script->support.variables) {
                                          yyerror(parse_script, "variables MUST be enabled with \"require\"");
                                          YYERROR;
@@ -693,9 +675,9 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      if (!verify_stringlist(parse_script, $4, verify_utf8)) {
                                          YYERROR; /* vu should call yyerror() */
                                      }
-                                     $2 = canon_htags($2);
+                                     $2 = canon_comptags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX &&
+                                     if ($2->match == REGEX &&
                                          !(verify_regexs(parse_script, $4, $2->comparator))) {
                                          YYERROR;
                                      }
@@ -707,8 +689,12 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
    but defining the grammar this way results in a shift/reduce conflict.
    Therefore, we have to flatten the grammar into two rules.
 */
-        | HASFLAG htags stringlist stringlist
+        | HASFLAG hftags stringlist stringlist
                                  {
+                                     if (!parse_script->support.imap4flags) {
+                                       yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
+                                       YYERROR;
+                                     }
                                      if (!parse_script->support.variables) {
                                          yyerror(parse_script, "variables MUST be enabled with \"require\"");
                                          YYERROR;
@@ -719,9 +705,9 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      if (!verify_stringlist(parse_script, $4, verify_utf8)) {
                                          YYERROR; /* vu should call yyerror() */
                                      }
-                                     $2 = canon_htags($2);
+                                     $2 = canon_comptags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX &&
+                                     if ($2->match == REGEX &&
                                          !(verify_regexs(parse_script, $4, $2->comparator))) {
                                          YYERROR;
                                      }
@@ -729,7 +715,7 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      $$ = build_header(HASFLAG, $2, $3, $4);
                                  }
 
-        | HASFLAG htags stringlist 
+        | HASFLAG hftags stringlist 
                                  {
                                      if (!parse_script->support.imap4flags) {
                                        yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
@@ -738,9 +724,9 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      if (!verify_stringlist(parse_script, $3, verify_utf8)) {
                                          YYERROR; /* vu should call yyerror() */
                                      }
-                                     $2 = canon_htags($2);
+                                     $2 = canon_comptags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX &&
+                                     if ($2->match == REGEX &&
                                          !(verify_regexs(parse_script, $3, $2->comparator))) {
                                          YYERROR;
                                      }
@@ -749,25 +735,42 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                  }
 
 
-        | addrorenv aetags stringlist stringlist
+        | ADDRESS atags stringlist stringlist
                                  {
-                                     if (($1 == ADDRESS) &&
-                                         !verify_stringlist(parse_script, $3, verify_addrheader))
-                                         { YYERROR; }
-                                     else if (($1 == ENVELOPE) &&
-                                              !verify_stringlist(parse_script, $3, verify_envelope))
+                                     if (!verify_stringlist(parse_script, $3, verify_addrheader))
                                          { YYERROR; }
                                      $2 = canon_aetags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX)
+                                     if ($2->comptags.match == REGEX)
                                      {
-                                         if (!( verify_regexs(parse_script, $4, $2->comparator)))
+                                         if (!( verify_regexs(parse_script, $4, $2->comptags.comparator)))
                                          { YYERROR; }
                                      }
 #endif
-                                     $$ = build_address($1, $2, $3, $4);
+                                     $$ = build_address(ADDRESS, $2, $3, $4);
                                      if ($$ == NULL) {
-                                         yyerror(parse_script, "unable to find a compatible comparator");
+                                         yyerror(parse_script, "unable to build address test");
+                                         YYERROR; }
+                                 }
+
+        | ENVELOPE etags stringlist stringlist
+                                 {
+                                     if (!parse_script->support.envelope) {
+                                         yyerror(parse_script, "envelope MUST be enabled with \"require\"");
+                                         YYERROR; }
+                                     if (!verify_stringlist(parse_script, $3, verify_envelope))
+                                         { YYERROR; }
+                                     $2 = canon_aetags($2);
+#ifdef ENABLE_REGEX
+                                     if ($2->comptags.match == REGEX)
+                                     {
+                                         if (!( verify_regexs(parse_script, $4, $2->comptags.comparator)))
+                                         { YYERROR; }
+                                     }
+#endif
+                                     $$ = build_address(ENVELOPE, $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         yyerror(parse_script, "unable to build envelope test");
                                          YYERROR; }
                                  }
 
@@ -784,9 +787,9 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
                                      $2 = canon_btags($2);
 #ifdef ENABLE_REGEX
-                                     if ($2->comptag == REGEX)
+                                     if ($2->comptags.match == REGEX)
                                      {
-                                         if (!(verify_regexs(parse_script, $3, $2->comparator)))
+                                         if (!(verify_regexs(parse_script, $3, $2->comptags.comparator)))
                                          { YYERROR; }
                                      }
 #endif
@@ -813,21 +816,13 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
                                    $$ = build_date(DATE, $2, $3, $5);
                                    if ($$ == NULL) {
-                                     yyerror(parse_script, "unable to find a compatible comparator");
+                                     yyerror(parse_script, "unable to build date test");
                                      YYERROR; }
                                  }
-        | CURRENTDATE dttags STRING stringlist
+        | CURRENTDATE cdtags STRING stringlist
                                  {if (!parse_script->support.date)
                                      { yyerror(parse_script, "date MUST be enabled with \"require\"");
                                        YYERROR; }
-
-                                   if ($2->index != 0) {
-                                     yyerror(parse_script, "index argument is not allowed in currentdate");
-                                     YYERROR; }
-
-                                   if ($2->zonetag == ORIGINALZONE) {
-                                     yyerror(parse_script, "originalzone argument is not allowed in currentdate");
-                                     YYERROR; }
 
                                    $2->date_part = verify_date_part(parse_script, $3);
                                    if ($2->date_part == -1)
@@ -837,7 +832,7 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
                                    $$ = build_date(CURRENTDATE, $2, NULL, $4);
                                    if ($$ == NULL) {
-                                     yyerror(parse_script, "unable to find a compatible comparator");
+                                     yyerror(parse_script, "unable to build currentdate test");
                                      YYERROR; }
                                  }
         | MAILBOXEXISTS stringlist   {if (!parse_script->support.mailbox)
@@ -883,122 +878,88 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
         | error                  { $$ = NULL; }
         ;
 
-addrorenv: ADDRESS               { $$ = ADDRESS; }
-        | ENVELOPE               {if (!parse_script->support.envelope)
-                                      {yyerror(parse_script, "envelope MUST be enabled with \"require\""); YYERROR;}
-                                  else{$$ = ENVELOPE; }
-                                 }
-
-        ;
-
-aetags: /* empty */              { $$ = new_aetags(); }
-        | aetags addrparttag     { $$ = $1;
+atags: /* empty */               { $$ = new_aetags(); }
+        | atags addrparttag      { $$ = $1;
                                    if ($$->addrtag != -1) {
                         yyerror(parse_script, "duplicate or conflicting address part tag");
                         YYERROR; }
                                    else { $$->addrtag = $2; } }
-        | aetags comptag         { $$ = $1;
-                                   if ($$->comptag != -1) {
+        | atags comptags
+        | atags idxtags
+        ;
+
+etags: /* empty */               { $$ = new_aetags(); }
+        | etags addrparttag      { $$ = $1;
+                                   if ($$->addrtag != -1) {
+                        yyerror(parse_script, "duplicate or conflicting address part tag");
+                        YYERROR; }
+                                   else { $$->addrtag = $2; } }
+        | etags comptags
+        ;
+
+/* $0 is the symbol which precedes comptags (e.g. aetags).
+   We typecast this pointer into struct comptags *
+*/
+comptags: match                  { struct comptags *ctags = $<ctag>0;
+                                   if (ctags->match != -1) {
                         yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2; } }
-        | aetags relcomp STRING{ $$ = $1;
-                                   if ($$->comptag != -1) {
+                                   else { ctags->match = $1; } }
+        | relcomp STRING         { struct comptags *ctags = $<ctag>0;
+                                   if (ctags->match != -1) {
                         yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2;
-                                   $$->relation = verify_relat(parse_script, $3);
-                                   if ($$->relation==-1)
+                                   else { ctags->match = $1;
+                                   ctags->relation = verify_relat(parse_script, $2);
+                                   if (ctags->relation==-1)
                                      {YYERROR; /*vr called yyerror()*/ }
                                    } }
-        | aetags COMPARATOR STRING { $$ = $1;
-                                   if ($$->comparator != NULL) {
+        | COMPARATOR STRING      { struct comptags *ctags = $<ctag>0;
+                                   if (ctags->comparator != NULL) {
                                      yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
-                                   else if (!strcmp($3, "i;ascii-numeric") &&
+                                   else if (!strcmp($2, "i;ascii-numeric") &&
                                             !parse_script->support.i_ascii_numeric) {
                         yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");
                         YYERROR; }
-                                   else { $$->comparator = $3; } }
-        | aetags INDEX NUMBER   { $$ = $1;
-                                   if (!parse_script->support.index)
-                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
-                                        YYERROR; }
-                                   if ($$->index != 0) {
-                                     yyerror(parse_script, "duplicate index argument"); YYERROR; }
-                                   if ($3 <= 0) {
-                                     yyerror(parse_script, "invalid index value"); YYERROR; }
-                                   else { $$->index = $3; } }
-        | aetags LAST           { $$ = $1;
-                                   if (!parse_script->support.index)
-                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
-                                        YYERROR; }
-                                   if ($$->index == 0) {
-                                     yyerror(parse_script, "index argument is required"); YYERROR; }
-                                   else if ($$->index < 0) {
-                                     yyerror(parse_script, "duplicate last argument"); YYERROR; }
-                                   else { $$->index *= -1; } }
+                                   else { ctags->comparator = $2; } }
         ;
 
-htags: /* empty */               { $$ = new_htags(); }
-        | htags comptag          { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2; } }
-        | htags relcomp STRING { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2;
-                                   $$->relation = verify_relat(parse_script, $3);
-                                   if ($$->relation==-1)
-                                     {YYERROR; /*vr called yyerror()*/ }
-                                   } }
-        | htags COMPARATOR STRING { $$ = $1;
-                                   if ($$->comparator != NULL) {
-                         yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
-                                   else if (!strcmp($3, "i;ascii-numeric") &&
-                                            !parse_script->support.i_ascii_numeric) {
-                         yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
-                                   else {
-                                     $$->comparator = $3; } }
-        | htags INDEX NUMBER    { $$ = $1;
+/* $0 is the symbol which precedes idxtags (e.g. aetags).
+   We typecast this pointer into struct comptags *
+*/
+idxtags: INDEX NUMBER            { struct comptags *ctags = $<ctag>0;
                                    if (!parse_script->support.index)
                                       { yyerror(parse_script, "index MUST be enabled with \"require\"");
                                         YYERROR; }
-                                   if ($$->index != 0) {
+                                   if (ctags->index != 0) {
                                      yyerror(parse_script, "duplicate index argument"); YYERROR; }
-                                   if ($3 <= 0) {
+                                   if ($2 <= 0) {
                                      yyerror(parse_script, "invalid index value"); YYERROR; }
-                                   else { $$->index = $3; } }
-        | htags LAST            { $$ = $1;
+                                   else { ctags->index = $2; } }
+        | LAST                   { struct comptags *ctags = $<ctag>0;
                                    if (!parse_script->support.index)
                                       { yyerror(parse_script, "index MUST be enabled with \"require\"");
                                         YYERROR; }
-                                   if ($$->index == 0) {
+                                   if (ctags->index == 0) {
                                      yyerror(parse_script, "index argument is required"); YYERROR; }
-                                   else if ($$->index < 0) {
+                                   else if (ctags->index < 0) {
                                      yyerror(parse_script, "duplicate last argument"); YYERROR; }
-                                   else { $$->index *= -1; } }
+                                   else { ctags->index *= -1; } }
         ;
 
-mtags: /* empty */               { $$ = new_mtags(); }
-        | mtags comptag          { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2; } }
-        | mtags relcomp STRING { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2;
-                                   $$->relation = verify_relat(parse_script, $3);
-                                   if ($$->relation==-1)
-                                     {YYERROR; /*vr called yyerror()*/ }
-                                   } }
-        | mtags COMPARATOR STRING { $$ = $1;
-                                   if ($$->comparator != NULL) {
-                         yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
-                                   else if (!strcmp($3, "i;ascii-numeric") &&
-                                            !parse_script->support.i_ascii_numeric) {
-                         yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
-                                   else {
-                                     $$->comparator = $3; } }
+htags: /* empty */               { $$ = new_comptags(); }
+        | htags comptags
+        | htags idxtags
+        ;
+
+strtags:/* empty */              { $$ = new_comptags(); }
+        | strtags comptags
+        ;
+
+hftags:/* empty */               { $$ = new_comptags(); }
+        | hftags comptags
+        ;
+
+mtags: /* empty */               { $$ = new_comptags(); }
+        | mtags comptags
         ;
 
 btags: /* empty */               { $$ = new_btags(); }
@@ -1020,84 +981,35 @@ btags: /* empty */               { $$ = new_btags(); }
                                        $$->transform = CONTENT;
                                        $$->content_types = $3;
                                    } }
-        | btags comptag          { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2; } }
-        | btags relcomp STRING { $$ = $1;
-                                   if ($$->comptag != -1) {
-                        yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2;
-                                   $$->relation = verify_relat(parse_script, $3);
-                                   if ($$->relation==-1)
-                                     {YYERROR; /*vr called yyerror()*/ }
-                                   } }
-        | btags COMPARATOR STRING { $$ = $1;
-                                   if ($$->comparator != NULL) {
-                         yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
-                                   else if (!strcmp($3, "i;ascii-numeric") &&
-                                            !parse_script->support.i_ascii_numeric) {
-                         yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
-                                   else {
-                                     $$->comparator = $3; } }
+        | btags comptags
         ;
 
 dttags: /* empty */              { $$ = new_dttags(); }
-        | dttags comptag         { $$ = $1;
-                                   if ($$->comptag != -1) {
-                                     yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else { $$->comptag = $2; } }
-
-        | dttags relcomp STRING  { $$ = $1;
-                                   if ($$->comptag != -1) {
-                                     yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
-                                   else {
-                                     $$->comptag = $2;
-                                     $$->relation = verify_relat(parse_script, $3);
-                                     if ($$->relation == -1) {
-                                       YYERROR; /*vr called yyerror()*/ } } }
-
-        | dttags COMPARATOR STRING { $$ = $1;
-                                    if ($$->comparator != NULL) {
-                                      yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
-                                    else if (!strcmp($3, "i;ascii-numeric") &&
-                                      !parse_script->support.i_ascii_numeric) {
-                                      yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
-                                    else { $$->comparator = $3; } }
-
-        | dttags INDEX NUMBER   { $$ = $1;
-                                   if (!parse_script->support.index)
-                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
-                                        YYERROR; }
-                                   if ($$->index != 0) {
-                                     yyerror(parse_script, "duplicate index argument"); YYERROR; }
-                                   if ($3 <= 0) {
-                                     yyerror(parse_script, "invalid index value"); YYERROR; }
-                                   else { $$->index = $3; } }
-
-        | dttags LAST           { $$ = $1;
-                                   if (!parse_script->support.index)
-                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
-                                        YYERROR; }
-                                   if ($$->index == 0) {
-                                     yyerror(parse_script, "index argument is required"); YYERROR; }
-                                   else if ($$->index < 0) {
-                                     yyerror(parse_script, "duplicate last argument"); YYERROR; }
-                                   else { $$->index *= -1; } }
-
-        | dttags ZONE STRING     { $$ = $1;
-                                   if ($$->zonetag != -1) {
-                                     yyerror(parse_script, "duplicate zone tag"); YYERROR; }
-                                   else {
-                                     if (verify_zone(parse_script, $3) == -1) {
-                                       YYERROR; /*vr called yyerror()*/ }
-                                     else { $$->zone = $3;
-                                            $$->zonetag = ZONE; } } }
-
         | dttags ORIGINALZONE    { $$ = $1;
                                    if ($$->zonetag != -1) {
                                      yyerror(parse_script, "duplicate zone tag"); YYERROR; }
                                    else { $$->zonetag = ORIGINALZONE; } }
+        | dttags zone
+        | dttags comptags
+        | dttags idxtags
+        ;
+
+cdtags: /* empty */              { $$ = new_dttags(); }
+        | cdtags zone
+        | cdtags comptags
+        ;
+
+/* $0 is the symbol which precedes zone (e.g. dttags).
+   We typecast this pointer into struct comptags *
+*/
+zone: ZONE STRING                { struct dttags *dttags = $<dttag>0;
+                                   if (dttags->zonetag != -1) {
+                                     yyerror(parse_script, "duplicate zone tag"); YYERROR; }
+                                   else {
+                                     if (verify_zone(parse_script, $2) == -1) {
+                                       YYERROR; /*vr called yyerror()*/ }
+                                     else { dttags->zone = $2;
+                                            dttags->zonetag = ZONE; } } }
         ;
 
 addrparttag: ALL                 { $$ = ALL; }
@@ -1114,7 +1026,7 @@ addrparttag: ALL                 { $$ = ALL; }
                                    }
                                    $$ = DETAIL; }
         ;
-comptag: IS                      { $$ = IS; }
+match: IS                        { $$ = IS; }
         | CONTAINS               { $$ = CONTAINS; }
         | MATCHES                { $$ = MATCHES; }
         | REGEX                  { if (!parse_script->support.regex) {
@@ -1241,10 +1153,10 @@ static test_t *build_address(int t, struct aetags *ae,
     assert((t == ADDRESS) || (t == ENVELOPE));
 
     if (ret) {
-        ret->u.ae.index = ae->index;
-        ret->u.ae.comptag = ae->comptag;
-        ret->u.ae.relation=ae->relation;
-        ret->u.ae.comparator=xstrdup(ae->comparator);
+        ret->u.ae.comptag = ae->comptags.match;
+        ret->u.ae.relation=ae->comptags.relation;
+        ret->u.ae.comparator=xstrdup(ae->comptags.comparator);
+        ret->u.ae.index = ae->comptags.index;
         ret->u.ae.sl = sl;
         ret->u.ae.pl = pl;
         ret->u.ae.addrpart = ae->addrtag;
@@ -1254,7 +1166,7 @@ static test_t *build_address(int t, struct aetags *ae,
     return ret;
 }
 
-static test_t *build_header(int t, struct htags *h,
+static test_t *build_header(int t, struct comptags *c,
                             strarray_t *sl, strarray_t *pl)
 {
     test_t *ret = new_test(t);  /* can be HEADER or HASFLAG or STRINGT */
@@ -1262,13 +1174,13 @@ static test_t *build_header(int t, struct htags *h,
     assert((t == HEADER) || (t == HASFLAG) || (t == STRINGT));
 
     if (ret) {
-        ret->u.h.index = h->index;
-        ret->u.h.comptag = h->comptag;
-        ret->u.h.relation=h->relation;
-        ret->u.h.comparator=xstrdup(h->comparator);
+        ret->u.h.comptag = c->match;
+        ret->u.h.relation = c->relation;
+        ret->u.h.comparator = xstrdup(c->comparator);
+        ret->u.h.index = c->index;
         ret->u.h.sl = sl;
         ret->u.h.pl = pl;
-        free_htags(h);
+        free_comptags(c, 1);
     }
     return ret;
 }
@@ -1280,9 +1192,9 @@ static test_t *build_body(int t, struct btags *b, strarray_t *pl)
     assert(t == BODY);
 
     if (ret) {
-        ret->u.b.comptag = b->comptag;
-        ret->u.b.relation = b->relation;
-        ret->u.b.comparator = xstrdup(b->comparator);
+        ret->u.b.comptag = b->comptags.match;
+        ret->u.b.relation = b->comptags.relation;
+        ret->u.b.comparator = xstrdup(b->comptags.comparator);
         ret->u.b.transform = b->transform;
         ret->u.b.offset = b->offset;
         ret->u.b.content_types = b->content_types; b->content_types = NULL;
@@ -1292,7 +1204,7 @@ static test_t *build_body(int t, struct btags *b, strarray_t *pl)
     return ret;
 }
 
-static test_t *build_mailboxtest(int t, struct mtags *m,
+static test_t *build_mailboxtest(int t, struct comptags *c,
                                  const char *extname, const char *keyname,
                                  strarray_t *keylist)
 {
@@ -1302,12 +1214,12 @@ static test_t *build_mailboxtest(int t, struct mtags *m,
         ret->u.mbx.extname = xstrdupnull(extname);
         ret->u.mbx.keyname = xstrdupnull(keyname);
         ret->u.mbx.keylist = keylist;
-        if (m) {
-            canon_mtags(m);
-            ret->u.mbx.comptag = m->comptag;
-            ret->u.mbx.relation = m->relation;
-            ret->u.mbx.comparator = xstrdup(m->comparator);
-            free_mtags(m);
+        if (c) {
+            canon_comptags(c);
+            ret->u.mbx.comptag = c->match;
+            ret->u.mbx.relation = c->relation;
+            ret->u.mbx.comparator = xstrdup(c->comparator);
+            free_comptags(c, 1);
         }
     }
 
@@ -1356,7 +1268,7 @@ static commandlist_t *build_denotify(int t, struct dtags *d)
     assert(t == DENOTIFY);
 
     if (ret) {
-        ret->u.d.comptag = d->comptag;
+        ret->u.d.comptag = d->match;
         ret->u.d.relation=d->relation;
         ret->u.d.pattern = d->pattern; d->pattern = NULL;
         ret->u.d.priority = d->priority;
@@ -1441,12 +1353,12 @@ static test_t *build_date(int t, struct dttags *dt,
     assert(t == DATE || t == CURRENTDATE);
 
     if (ret) {
-        ret->u.dt.index = dt->index;
+        ret->u.dt.comptag = dt->comptags.match;
+        ret->u.dt.relation = dt->comptags.relation;
+        ret->u.dt.comparator = xstrdup(dt->comptags.comparator);
+        ret->u.dt.index = dt->comptags.index;
         ret->u.dt.zone = (dt->zone ? xstrdup(dt->zone) : NULL);
-        ret->u.dt.comparator = xstrdup(dt->comparator);
         ret->u.dt.zonetag = dt->zonetag;
-        ret->u.dt.comptag = dt->comptag;
-        ret->u.dt.relation = dt->relation;
         ret->u.dt.date_part = dt->date_part;
         ret->u.dt.header_name = (hn ? xstrdup(hn) : NULL);
         ret->u.dt.kl = kl;
@@ -1493,95 +1405,68 @@ static struct aetags *new_aetags(void)
 {
     struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
 
-    r->index = 0;
-    r->addrtag = r->comptag = r->relation=-1;
-    r->comparator=NULL;
+    init_comptags(&r->comptags);
+    r->addrtag = -1;
 
     return r;
 }
 
 static struct aetags *canon_aetags(struct aetags *ae)
 {
+    canon_comptags(&ae->comptags);
     if (ae->addrtag == -1) { ae->addrtag = ALL; }
-    if (ae->comparator == NULL) {
-        ae->comparator = xstrdup("i;ascii-casemap");
-    }
-    if (ae->comptag == -1) { ae->comptag = IS; }
     return ae;
 }
 
 static void free_aetags(struct aetags *ae)
 {
-    free(ae->comparator);
-     free(ae);
+    free_comptags(&ae->comptags, 0);
+    free(ae);
 }
 
-static struct mtags *new_mtags(void)
+static struct comptags *new_comptags(void)
 {
-    struct mtags *m = (struct mtags *) xmalloc(sizeof(struct mtags));
+    struct comptags *c = (struct comptags *) xmalloc(sizeof(struct comptags));
 
-    m->comptag = m->relation= -1;
-
-    m->comparator = NULL;
-
-    return m;
+    return init_comptags(c);
 }
 
-static struct mtags *canon_mtags(struct mtags *m)
+static struct comptags *init_comptags(struct comptags *c)
 {
-    if (m->comparator == NULL) {
-        m->comparator = xstrdup("i;ascii-casemap");
-    }
-    if (m->comptag == -1) { m->comptag = IS; }
-    return m;
+    c->match = c->relation = -1;
+    c->comparator = NULL;
+    c->index = 0;
+
+    return c;
 }
 
-static void free_mtags(struct mtags *m)
+static struct comptags *canon_comptags(struct comptags *c)
 {
-    free(m->comparator);
-    free(m);
+    if (c->match == -1) c->match = IS;
+    if (c->comparator == NULL) c->comparator = xstrdup("i;ascii-casemap");
+    return c;
 }
 
-static struct htags *new_htags(void)
+static void free_comptags(struct comptags *c, int destroy)
 {
-    struct htags *r = (struct htags *) xmalloc(sizeof(struct htags));
-
-    r->index = 0;
-    r->comptag = r->relation= -1;
-
-    r->comparator = NULL;
-
-    return r;
-}
-
-static struct htags *canon_htags(struct htags *h)
-{
-    if (h->comparator == NULL) {
-        h->comparator = xstrdup("i;ascii-casemap");
-    }
-    if (h->comptag == -1) { h->comptag = IS; }
-    return h;
-}
-
-static void free_htags(struct htags *h)
-{
-    free(h->comparator);
-    free(h);
+    free(c->comparator);
+    if (destroy) free(c);
 }
 
 static struct btags *new_btags(void)
 {
     struct btags *r = (struct btags *) xmalloc(sizeof(struct btags));
 
-    r->transform = r->offset = r->comptag = r->relation = -1;
+    init_comptags(&r->comptags);
+    r->transform = r->offset = -1;
     r->content_types = NULL;
-    r->comparator = NULL;
 
     return r;
 }
 
 static struct btags *canon_btags(struct btags *b)
 {
+    canon_comptags(&b->comptags);
     if (b->transform == -1) { b->transform = TEXT; }
     if (b->content_types == NULL) {
         b->content_types = strarray_new();
@@ -1592,15 +1477,13 @@ static struct btags *canon_btags(struct btags *b)
         }
     }
     if (b->offset == -1) { b->offset = 0; }
-    if (b->comparator == NULL) { b->comparator = xstrdup("i;ascii-casemap"); }
-    if (b->comptag == -1) { b->comptag = IS; }
     return b;
 }
 
 static void free_btags(struct btags *b)
 {
+    free_comptags(&b->comptags, 0);
     if (b->content_types) { strarray_free(b->content_types); }
-    free(b->comparator);
     free(b);
 }
 
@@ -1654,11 +1537,9 @@ static struct itags *new_itags() {
 static struct dttags *new_dttags(void)
 {
     struct dttags *dt = (struct dttags *) xmalloc(sizeof(struct dttags));
-    dt->comptag = -1;
-    dt->index = 0;
+
+    init_comptags(&dt->comptags);
     dt->zonetag = -1;
-    dt->relation = -1;
-    dt->comparator = NULL;
     dt->zone = NULL;
     dt->date_part = -1;
     return dt;
@@ -1673,12 +1554,8 @@ static struct dttags *canon_dttags(struct dttags *dt)
     struct tm tm;
     time_t t;
 
-    if (dt->comparator == NULL) {
-        dt->comparator = xstrdup("i;ascii-casemap");
-    }
-    if (dt->index == 0) {
-        dt->index = 1;
-    }
+    canon_comptags(&dt->comptags);
+    if (dt->comptags.index == 0) dt->comptags.index = 1;
     if (dt->zonetag == -1) {
         t = time(NULL);
         localtime_r(&t, &tm);
@@ -1689,15 +1566,12 @@ static struct dttags *canon_dttags(struct dttags *dt)
         dt->zone = xstrdup(zone);
         dt->zonetag = ZONE;
     }
-    if (dt->comptag == -1) {
-        dt->comptag = IS;
-    }
     return dt;
 }
 
 static void free_dttags(struct dttags *dt)
 {
-    free(dt->comparator);
+    free_comptags(&dt->comptags, 0);
     free(dt->zone);
     free(dt);
 }
@@ -1726,7 +1600,7 @@ static struct ntags *canon_ntags(struct ntags *n)
 static struct dtags *canon_dtags(struct dtags *d)
 {
     if (d->priority == -1) { d->priority = ANY; }
-    if (d->comptag == -1) { d->comptag = ANY; }
+    if (d->match == -1) { d->match = ANY; }
        return d;
 }
 
@@ -1743,7 +1617,7 @@ static struct dtags *new_dtags(void)
 {
     struct dtags *r = (struct dtags *) xzmalloc(sizeof(struct dtags));
 
-    r->comptag = r->priority= r->relation = -1;
+    r->match = r->priority= r->relation = -1;
 
     return r;
 }
