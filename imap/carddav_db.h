@@ -122,4 +122,7 @@ int carddav_abort(struct carddav_db *carddavdb);
 /* create carddav_data from vparse_card */
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
+/* release memory used by struct carddav_data */
+void carddav_data_fini(struct carddav_data *cdata);
+
 #endif /* CARDDAV_DB_H */

@@ -2569,10 +2569,13 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
 	r = carddav_write(carddavdb, cdata, 0);
 
+	carddav_data_fini(cdata);
+
 	vparse_free(&vparser);
     }
 
 done:
+    carddav_data_fini(cdata);
     message_free_body(body);
     free(body);
 

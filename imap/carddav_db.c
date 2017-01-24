@@ -669,5 +669,12 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 		strarray_append(&cdata->member_uids, item+9);
 	}
     }
+}
 
+EXPORTED void carddav_data_fini(struct carddav_data *cdata)
+{
+    if (!cdata) return;
+    strarray_fini(&cdata->emails);
+    strarray_fini(&cdata->member_uids);
+    memset(cdata, 0, sizeof *cdata);
 }

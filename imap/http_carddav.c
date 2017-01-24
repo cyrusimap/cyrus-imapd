@@ -938,6 +938,8 @@ static int report_card_multiget(struct transaction_t *txn,
 
 	    propfind_by_resource(fctx, cdata);
 
+	    carddav_data_fini(cdata);
+
 	    my_carddav_close(fctx->davdb);
 	}
     }
@@ -1159,5 +1161,6 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
     append_removestage(stage);
 
 done:
+    carddav_data_fini(cdata);
     return ret;
 }
