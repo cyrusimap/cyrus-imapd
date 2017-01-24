@@ -6984,6 +6984,7 @@ static void sched_deliver_local(const char *recipient,
     if (ical) icalcomponent_free(ical);
     mailbox_close(&inbox);
     mailbox_close(&mailbox);
+    caldav_data_fini(cdata);
     if (caldavdb) caldav_close(caldavdb);
 }
 

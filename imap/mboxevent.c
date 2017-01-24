@@ -796,6 +796,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 		caldavdb = caldav_open_mailbox(mailbox, 0);
 		caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
+		caldav_data_fini(cdata);
 		caldav_close(caldavdb);
 	    }
 	}

@@ -929,3 +929,9 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
 
     return res;
 }
+
+EXPORTED void caldav_data_fini(struct caldav_data *cdata)
+{
+    /* not currently anything malloced */
+    memset(cdata, 0, sizeof *cdata);
+}

@@ -2667,6 +2667,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     }
 
 done:
+    caldav_data_fini(cdata);
     message_free_body(body);
     free(body);
 

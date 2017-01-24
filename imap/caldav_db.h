@@ -167,4 +167,7 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
 
 char *caldav_mboxname(const char *userid, const char *name);
 
+/* release memory used by struct caldav_data */
+void caldav_data_fini(struct caldav_data *cdata);
+
 #endif /* CALDAV_DB_H */
