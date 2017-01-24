@@ -64,6 +64,9 @@ static void jmap_auth(const char *userid);
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
 
+static int jmap_initreq(jmap_req_t *req);
+static void jmap_finireq(jmap_req_t *req);
+
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap", 1 /* auth */,
@@ -255,12 +258,18 @@ static int jmap_post(struct transaction_t *txn,
         req.idmap = &idmap;
         req.txn = txn;
 
+        /* Initialize request context */
+        jmap_initreq(&req);
+
         /* Read the modseq counters again, just in case something changed. */
         r = mboxname_read_counters(inboxname, &req.counters);
         if (r) goto done;
 
         /* Call the message processor. */
         r = mp->proc(&req);
+
+        /* Finalize request context */
+        jmap_finireq(&req);
 
         if (r) {
             conversations_abort(&req.cstate);
@@ -301,39 +310,26 @@ struct _mboxcache_rec {
     int rw;
 };
 
-struct _req_context {
-    ptrarray_t *cache;
-};
-
-EXPORTED int jmap_initreq(jmap_req_t *req)
+static int jmap_initreq(jmap_req_t *req)
 {
-    struct _req_context *ctx = xzmalloc(sizeof(struct _req_context));
-    ctx->cache = ptrarray_new();
-    req->rock = ctx;
+    req->mboxes = ptrarray_new();
     return 0;
 }
 
-EXPORTED void jmap_finireq(jmap_req_t *req)
+static void jmap_finireq(jmap_req_t *req)
 {
-    struct _req_context *ctx = (struct _req_context *) req->rock;
-
-    if (!ctx) return;
-
-    assert(ctx->cache->count == 0);
-    ptrarray_free(ctx->cache);
-
-    free(ctx);
-    req->rock = NULL;
+    assert(req->mboxes->count == 0);
+    ptrarray_free(req->mboxes);
+    req->mboxes = NULL;
 }
 
 EXPORTED int jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw)
 {
     int i, r;
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
     struct _mboxcache_rec *rec;
 
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
+    for (i = 0; i < req->mboxes->count; i++) {
+        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
         if (!strcmp(name, rec->mbox->name)) {
             if (rw && !rec->rw) {
                 /* Lock promotions are not supported */
@@ -356,7 +352,7 @@ EXPORTED int jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **m
     rec->mbox = *mboxp;
     rec->refcount = 1;
     rec->rw = rw;
-    ptrarray_add(cache, rec);
+    ptrarray_add(req->mboxes, rec);
 
     return 0;
 }
@@ -365,11 +361,10 @@ EXPORTED int jmap_isopenmbox(jmap_req_t *req, const char *name)
 {
 
     int i;
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
     struct _mboxcache_rec *rec;
 
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
+    for (i = 0; i < req->mboxes->count; i++) {
+        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
         if (!strcmp(name, rec->mbox->name))
             return 1;
     }
@@ -379,19 +374,18 @@ EXPORTED int jmap_isopenmbox(jmap_req_t *req, const char *name)
 
 EXPORTED void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
 {
-    ptrarray_t* cache = ((struct _req_context*)req->rock)->cache;
     struct _mboxcache_rec *rec = NULL;
     int i;
 
-    for (i = 0; i < cache->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(cache, i);
+    for (i = 0; i < req->mboxes->count; i++) {
+        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
         if (rec->mbox == *mboxp)
             break;
     }
-    assert(i < cache->count);
+    assert(i < req->mboxes->count);
 
     if (!(--rec->refcount)) {
-        ptrarray_remove(cache, i);
+        ptrarray_remove(req->mboxes, i);
         mailbox_close(&rec->mbox);
         free(rec);
     }

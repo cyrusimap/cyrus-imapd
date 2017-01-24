@@ -519,8 +519,6 @@ static int getMailboxes(jmap_req_t *req)
     };
     construct_hash_table(data.roles, 8, 0);
 
-    jmap_initreq(req);
-
     /* Determine current state. */
     state = jmapmbox_getstate(req);
 
@@ -605,7 +603,6 @@ done:
         free_hash_table(data.props, NULL);
         free(data.props);
     }
-    jmap_finireq(req);
     return 0;
 }
 
@@ -1182,8 +1179,6 @@ static int setMailboxes(jmap_req_t *req)
     char *parentname = NULL;
     json_t *state, *create, *update, *destroy;
 
-    jmap_initreq(req);
-
     mbentry_t *inboxentry = NULL;
     mboxlist_lookup(req->inboxname, &inboxentry, NULL);
 
@@ -1444,7 +1439,6 @@ done:
     free(parentname);
     mboxlist_entry_free(&inboxentry);
     if (set) json_decref(set);
-    jmap_finireq(req);
     return r;
 }
 
@@ -1589,8 +1583,6 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_t *oldstate, *newstate;
     const char *since;
 
-    jmap_initreq(req);
-
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
 
@@ -1651,7 +1643,6 @@ static int getMailboxUpdates(jmap_req_t *req)
     }
 
 done:
-    jmap_finireq(req);
     return r;
 }
 
@@ -3344,8 +3335,6 @@ static int getMessageList(jmap_req_t *req)
     json_int_t i = 0;
     size_t total, total_threads;
 
-    jmap_initreq(req);
-
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
     json_t *unsupported = json_pack("[]");
@@ -3465,7 +3454,6 @@ static int getMessageList(jmap_req_t *req)
 done:
     if (messageids) json_decref(messageids);
     if (threadids) json_decref(threadids);
-    jmap_finireq(req);
     return r;
 }
 
@@ -3481,8 +3469,6 @@ static int getMessageUpdates(jmap_req_t *req)
     json_t *oldstate, *newstate;
     struct getmsglist_window window;
     const char *since;
-
-    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -3557,7 +3543,6 @@ done:
     if (threads) json_decref(threads);
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
-    jmap_finireq(req);
     return r;
 }
 
@@ -3574,8 +3559,6 @@ static int getThreadUpdates(jmap_req_t *req)
     struct getmsglist_window window;
     const char *since;
     conversation_t *conv = NULL;
-
-    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -3687,7 +3670,6 @@ done:
     if (changed) json_decref(changed);
     if (removed) json_decref(removed);
     if (threads) json_decref(threads);
-    jmap_finireq(req);
     return r;
 }
 
@@ -3845,8 +3827,6 @@ static int getSearchSnippets(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     size_t i;
 
-    jmap_initreq(req);
-
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
 
@@ -3899,7 +3879,6 @@ static int getSearchSnippets(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    jmap_finireq(req);
     return r;
 }
 
@@ -3966,8 +3945,6 @@ static int getThreads(jmap_req_t *req)
     const char *s;
     struct buf buf = BUF_INITIALIZER;
     size_t i;
-
-    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -4036,7 +4013,6 @@ static int getThreads(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    jmap_finireq(req);
     return r;
 }
 
@@ -4049,8 +4025,6 @@ static int getMessages(jmap_req_t *req)
     size_t i;
     json_t *ids, *val, *properties, *res, *item;
     hash_table *props = NULL;
-
-    jmap_initreq(req);
 
     /* ids */
     ids = json_object_get(req->args, "ids");
@@ -4145,7 +4119,6 @@ done:
     }
     json_decref(list);
     json_decref(notfound);
-    jmap_finireq(req);
     return r;
 }
 
@@ -5769,8 +5742,6 @@ static int setMessages(jmap_req_t *req)
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
 
-    jmap_initreq(req);
-
     state = json_object_get(req->args, "ifInState");
     if (JNOTNULL(state)) {
         const char *s = json_string_value(state);
@@ -5921,7 +5892,6 @@ static int setMessages(jmap_req_t *req)
 
 done:
     if (set) json_decref(set);
-    jmap_finireq(req);
     return r;
 }
 
@@ -6034,8 +6004,6 @@ static int importMessages(jmap_req_t *req)
     json_t *invalid, *invalidmbox;
     struct buf buf = BUF_INITIALIZER;
     const char *id;
-
-    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -6150,7 +6118,6 @@ done:
     json_decref(created);
     json_decref(notcreated);
     buf_free(&buf);
-    jmap_finireq(req);
     return r;
 }
 
@@ -6161,8 +6128,6 @@ static int getIdentities(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     const char *s;
     size_t i;
-
-    jmap_initreq(req);
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -6234,6 +6199,5 @@ static int getIdentities(jmap_req_t *req)
 
 done:
     buf_free(&buf);
-    jmap_finireq(req);
     return r;
 }

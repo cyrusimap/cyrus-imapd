@@ -66,8 +66,8 @@ typedef struct jmap_req {
     struct transaction_t *txn;
     struct mboxname_counters counters;
 
-    /* Owned by message processors */
-    void *rock;
+    /* Owned by JMAP HTTP handler */
+    ptrarray_t *mboxes;
 } jmap_req_t;
 
 typedef struct jmap_msg {
@@ -81,8 +81,6 @@ extern jmap_msg_t jmap_contact_messages[];
 extern jmap_msg_t jmap_calendar_messages[];
 
 /* Request-scoped mailbox cache */
-extern int  jmap_initreq(jmap_req_t *req); /* FIXME make static */
-extern void jmap_finireq(jmap_req_t *req);
 extern int  jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
