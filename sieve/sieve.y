@@ -871,14 +871,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                             $3, verify_header)) {
                                          YYERROR; /* vh should call yyerror() */
                                      }
+                                     $2 = canon_comptags($2);
+
                                      if (!verify_patternlist(parse_script,
                                                              $4, $2)) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_header(HEADER,
-                                                       canon_comptags($2),
-                                                       $3, $4);
+                                     $$ = build_header(HEADER, $2, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build header test");
@@ -893,14 +893,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                  "variables MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
+                                     $2 = canon_comptags($2);
+
                                      if (!verify_patternlist(parse_script,
                                                              $4, $2)) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_header(STRINGT,
-                                                       canon_comptags($2),
-                                                       $3, $4);
+                                     $$ = build_header(STRINGT, $2, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build string test");
@@ -928,14 +928,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                             verify_identifier)) {
                                          YYERROR; /* vi should call yyerror() */
                                      }
+                                     $2 = canon_comptags($2);
+
                                      if (!verify_patternlist(parse_script,
                                                              $4, $2)) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_header(HASFLAG,
-                                                       canon_comptags($2),
-                                                       $3, $4);
+                                     $$ = build_header(HASFLAG, $2, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build hasflag test");
@@ -950,15 +950,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                  "imap4flags MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
+                                     $2 = canon_comptags($2);
+
                                      if (!verify_patternlist(parse_script,
                                                              $3, $2)) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
-                                     $2 = canon_comptags($2);
 
-                                     $$ = build_header(HASFLAG,
-                                                       canon_comptags($2),
-                                                       NULL, $3);
+                                     $$ = build_header(HASFLAG, $2, NULL, $3);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build hasflag test");
@@ -972,14 +971,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                             verify_addrheader)) {
                                          YYERROR; /* vah should call yyerror() */
                                      }
+                                     $2 = canon_aetags($2);
+
                                      if (!verify_patternlist(parse_script, $4,
                                                              &($2->comptags))) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_address(ADDRESS,
-                                                        canon_aetags($2),
-                                                        $3, $4);
+                                     $$ = build_address(ADDRESS, $2, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build address test");
@@ -998,14 +997,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                             verify_envelope)) {
                                          YYERROR;
                                      }
+                                     $2 = canon_aetags($2);
+
                                      if (!verify_patternlist(parse_script, $4,
                                                              &($2->comptags))) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_address(ENVELOPE,
-                                                        canon_aetags($2),
-                                                        $3, $4);
+                                     $$ = build_address(ENVELOPE, $2, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build envelope test");
@@ -1020,12 +1019,14 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                  "body MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
+                                     $2 = canon_btags($2);
+
                                      if (!verify_patternlist(parse_script, $3,
                                                              &($2->comptags))) {
                                          YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_body(BODY, canon_btags($2), $3);
+                                     $$ = build_body(BODY, $2, $3);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build body test");
