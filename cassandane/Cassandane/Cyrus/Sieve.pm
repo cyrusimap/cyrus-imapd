@@ -335,7 +335,7 @@ sub badscript_common
     ($res, $errs) = $self->compile_sieve_script('badreject1',
 	"reject \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 1: reject MUST be enabled/, $errs);
+    $self->assert_matches(qr/line 1: reject extension MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject2',
 	"require [\"reject\"];\nreject\n");
@@ -352,7 +352,7 @@ sub badscript_common
     ($res, $errs) = $self->compile_sieve_script('badfileinto1',
 	"fileinto \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 1: fileinto MUST be enabled/, $errs);
+    $self->assert_matches(qr/line 1: fileinto extension MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto2',
 	"require [\"fileinto\"];\nfileinto\n");
@@ -367,7 +367,7 @@ sub badscript_common
     ($res, $errs) = $self->compile_sieve_script('badfileinto4',
 	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 2: copy MUST be enabled/, $errs);
+    $self->assert_matches(qr/line 2: copy extension MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto5',
 	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n");
