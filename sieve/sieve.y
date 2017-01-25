@@ -735,15 +735,8 @@ dtags: /* empty */               { $$ = new_dtags(); }
                                      }
                                      else $$->priority = $2;
                                  }
-        | dtags match STRING
+        | dtags matchtags STRING
                                  {
-                                     if ($$->comptags.match != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "match-type");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$->comptags.match = $2;
                                      $$->pattern = $3;
 
                                      strarray_t sa = STRARRAY_INITIALIZER;
@@ -754,24 +747,6 @@ dtags: /* empty */               { $$ = new_dtags(); }
                                          YYERROR; /* vp should call yyerror() */
                                      }
                                      strarray_fini(&sa);
-                                 }
-        | dtags relmatch STRING
-                                 {
-                                     $$ = $1;
-                                     if ($$->comptags.match != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "match-type");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else {
-                                         $$->comptags.match = $2;
-                                         $$->comptags.relation =
-                                             verify_relat(parse_script, $3);
-                                         if ($$->comptags.relation == -1) {
-                                             YYERROR; /*vr called yyerror()*/
-                                         }
-                                     }
                                  }
         ;
 
@@ -1260,7 +1235,8 @@ atags: /* empty */               { $$ = new_aetags(); }
                                      }
                                      else $$->addrtag = $2;
                                  }
-        | atags comptags
+        | atags matchtags
+        | atags comparator
         | atags idxtags
         ;
 
@@ -1276,13 +1252,14 @@ etags: /* empty */               { $$ = new_aetags(); }
                                      }
                                      else $$->addrtag = $2;
                                  }
-        | etags comptags
+        | etags matchtags
+        | etags comparator
         ;
 
 /* $0 is the symbol which precedes comptags (e.g. aetags).
    We typecast this pointer into struct comptags *
 */
-comptags: match
+matchtags: match
                                  {
                                      struct comptags *ctags = $<ctag>0;
                                      if (ctags->match != -1) {
@@ -1311,7 +1288,12 @@ comptags: match
                                          }
                                      }
                                  }
-        | COMPARATOR STRING
+        ;
+
+/* $0 is the symbol which precedes comparator (e.g. aetags).
+   We typecast this pointer into struct comptags *
+*/
+comparator: COMPARATOR STRING
                                  {
                                      struct comptags *ctags = $<ctag>0;
                                      if (ctags->comparator != NULL) {
@@ -1382,20 +1364,24 @@ idxtags: INDEX NUMBER
         ;
 
 htags: /* empty */               { $$ = new_comptags(); }
-        | htags comptags
+        | htags matchtags
+        | htags comparator
         | htags idxtags
         ;
 
 strtags:/* empty */              { $$ = new_comptags(); }
-        | strtags comptags
+        | strtags matchtags
+        | strtags comparator
         ;
 
 hftags:/* empty */               { $$ = new_comptags(); }
-        | hftags comptags
+        | hftags matchtags
+        | hftags comparator
         ;
 
 mtags: /* empty */               { $$ = new_comptags(); }
-        | mtags comptags
+        | mtags matchtags
+        | mtags comparator
         ;
 
 btags: /* empty */               { $$ = new_btags(); }
@@ -1435,7 +1421,8 @@ btags: /* empty */               { $$ = new_btags(); }
                                          $$->content_types = $3;
                                      }
                                  }
-        | btags comptags
+        | btags matchtags
+        | btags comparator
         ;
 
 dttags: /* empty */              { $$ = new_dttags(); }
@@ -1451,13 +1438,15 @@ dttags: /* empty */              { $$ = new_dttags(); }
                                      else $$->zonetag = ORIGINALZONE;
                                  }
         | dttags zone
-        | dttags comptags
+        | dttags matchtags
+        | dttags comparator
         | dttags idxtags
         ;
 
 cdtags: /* empty */              { $$ = new_dttags(); }
         | cdtags zone
-        | cdtags comptags
+        | cdtags matchtags
+        | cdtags comparator
         ;
 
 /* $0 is the symbol which precedes zone (e.g. dttags).
