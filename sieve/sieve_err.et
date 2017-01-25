@@ -64,4 +64,26 @@ ec SIEVE_DONE,
 
 ec SIEVE_SCRIPT_RELOADED,
    "Sieve script was loaded in the past"
+
+
+# Parse errors
+
+ec SIEVE_MISSING_REQUIRE,
+   "%s extension MUST be enabled with \"require\" command"
+
+ec SIEVE_MISSING_TAG,
+   "%s tag is required"
+
+ec SIEVE_DUPLICATE_TAG,
+   "duplicate/conflicting %s tag"
+
+ec SIEVE_DUPLICATE_ARG,
+   "duplicate %s argument"
+
+ec SIEVE_INVALID_VALUE,
+   "invalid %s value"
+
+ec SIEVE_BUILD_FAILURE,
+   "unable to build %s"
+
 end
