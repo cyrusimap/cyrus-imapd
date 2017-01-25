@@ -129,7 +129,6 @@ struct dttags {
     struct comptags comptags;  /* MUST be first so we can typecast */
     int zonetag;
     char *zone;
-    int date_part;
 };
 
 struct ftags {
@@ -152,7 +151,8 @@ static test_t *build_address(int t, struct aetags *ae,
 static test_t *build_header(int t, struct comptags *c,
                             strarray_t *sl, strarray_t *pl);
 static test_t *build_body(int t, struct btags *b, strarray_t *pl);
-static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
+static test_t *build_date(int t, struct dttags *dt,
+                          char *hn, int part, strarray_t *kl);
 static test_t *build_mailboxtest(int t, struct comptags *c, const char *extname,
                                  const char *keyname, strarray_t *keylist);
 
@@ -277,7 +277,7 @@ extern void sieverestart(FILE *f);
 %type <cl> commands command action elsif block
 %type <sl> utf8list stringlist strings
 %type <test> test
-%type <nval> match relmatch sizetag addrparttag copy rtags creat
+%type <nval> match relmatch sizetag addrparttag copy rtags creat datepart
 %type <testl> testlist tests
 %type <ctag> htags strtags hftags mtags
 %type <aetag> atags etags
@@ -1038,22 +1038,24 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
         | SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
                                    $$->u.sz.n = $3; }
 
-        | DATE dttags STRING STRING stringlist
+        | DATE dttags STRING datepart stringlist
                                  {
                                      if (!parse_script->support.date) {
                                          yyerror(parse_script,
                                                  "date MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
+                                     if (!verify_header(parse_script, $3)) {
+                                         YYERROR; /* vh should call yyerror() */
+                                     }
+                                     $2 = canon_dttags($2);
 
-                                     $2->date_part =
-                                         verify_date_part(parse_script, $4);
-                                     if ($2->date_part == -1) {
-                                         YYERROR; /* vdp called yyerror() */
+                                     if (!verify_patternlist(parse_script, $5,
+                                                             &($2->comptags))) {
+                                         YYERROR; /* vp should call yyerror() */
                                      }
 
-                                     $$ = build_date(DATE,
-                                                     canon_dttags($2), $3, $5);
+                                     $$ = build_date(DATE, $2, $3, $4, $5);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build date test");
@@ -1061,22 +1063,22 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      }
                                  }
 
-        | CURRENTDATE cdtags STRING stringlist
+        | CURRENTDATE cdtags datepart stringlist
                                  {
                                      if (!parse_script->support.date) {
                                          yyerror(parse_script,
                                                  "date MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
+                                     $2 = canon_dttags($2);
 
-                                     $2->date_part =
-                                         verify_date_part(parse_script, $3);
-                                     if ($2->date_part == -1) {
-                                         YYERROR; /* vdp called yyerror() */
+                                     if (!verify_patternlist(parse_script, $4,
+                                                             &($2->comptags))) {
+                                         YYERROR; /* vp should call yyerror() */
                                      }
 
                                      $$ = build_date(CURRENTDATE,
-                                                     canon_dttags($2), NULL, $4);
+                                                     $2, NULL, $3, $4);
                                      if ($$ == NULL) {
                                          yyerror(parse_script,
                                                  "unable to build currentdate test");
@@ -1383,6 +1385,15 @@ zone: ZONE STRING
                                      else {
                                          dttags->zone = $2;
                                          dttags->zonetag = ZONE;
+                                     }
+                                 }
+        ;
+
+datepart: STRING
+                                 {
+                                     $$ = verify_date_part(parse_script, $1);
+                                     if ($$ == -1) {
+                                         YYERROR; /* vdp called yyerror() */
                                      }
                                  }
         ;
@@ -1779,7 +1790,7 @@ static commandlist_t *build_include(int t, struct itags *i, char* script)
 }
 
 static test_t *build_date(int t, struct dttags *dt,
-                          char *hn, strarray_t *kl)
+                          char *hn, int part, strarray_t *kl)
 {
     test_t *ret = new_test(t);
     assert(t == DATE || t == CURRENTDATE);
@@ -1791,7 +1802,7 @@ static test_t *build_date(int t, struct dttags *dt,
         ret->u.dt.index = dt->comptags.index;
         ret->u.dt.zone = (dt->zone ? xstrdup(dt->zone) : NULL);
         ret->u.dt.zonetag = dt->zonetag;
-        ret->u.dt.date_part = dt->date_part;
+        ret->u.dt.date_part = part;
         ret->u.dt.header_name = (hn ? xstrdup(hn) : NULL);
         ret->u.dt.kl = kl;
         free_dttags(dt);
@@ -1972,7 +1983,6 @@ static struct dttags *new_dttags(void)
     init_comptags(&dt->comptags);
     dt->zonetag = -1;
     dt->zone = NULL;
-    dt->date_part = -1;
     return dt;
 }
 
