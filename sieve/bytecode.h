@@ -190,14 +190,14 @@ enum bytecode_comps {
 /* currently one enum so as to help determine where values are being misused.
  * we have left placeholders incase we need to add more later to the middle */
 enum bytecode_tags {
-    /* Size Tests */
+    /* Size Tests (0-3) */
     B_OVER,
     B_UNDER,
 
     B_SIZE_PLACEHOLDER_1,
     B_SIZE_PLACEHOLDER_2,
 
-    /* Relational Match Types */
+    /* Relational Match Types (4-11) */
     B_GT,               /* require relational */
     B_GE,               /* require relational */
     B_LT,               /* require relational */
@@ -208,7 +208,7 @@ enum bytecode_tags {
     B_RELATIONAL_PLACEHOLDER_1,
     B_RELATIONAL_PLACEHOLDER_2,
 
-    /* Priorities */
+    /* Priorities (12-19) */
     B_LOW,              /* require notify */
     B_NORMAL,           /* require notify */
     B_HIGH,             /* require notify */
@@ -219,7 +219,7 @@ enum bytecode_tags {
     B_PRIORITY_PLACEHOLDER_3,
     B_PRIORITY_PLACEHOLDER_4,
 
-    /* Address Parts */
+    /* Address Parts (20-28) */
     B_ALL,
     B_LOCALPART,
     B_DOMAIN,
@@ -231,7 +231,7 @@ enum bytecode_tags {
     B_ADDRESS_PLACEHOLDER_3,
     B_ADDRESS_PLACEHOLDER_4,
 
-    /* Comparators */
+    /* Comparators (29-35) */
     B_ASCIICASEMAP,
     B_OCTET,
     B_ASCIINUMERIC,     /* require comparator-i;ascii-numeric */
@@ -241,7 +241,7 @@ enum bytecode_tags {
     B_COMPARATOR_PLACEHOLDER_3,
     B_COMPARATOR_PLACEHOLDER_4,
 
-    /* Match Types */
+    /* Match Types (36-45) */
     B_IS,
     B_CONTAINS,
     B_MATCHES,
@@ -254,7 +254,7 @@ enum bytecode_tags {
     B_MATCH_PLACEHOLDER_3,
     B_MATCH_PLACEHOLDER_4,
 
-    /* Body Transforms */
+    /* Body Transforms (46-53) */
     B_RAW,              /* require body */
     B_TEXT,             /* require body */
     B_CONTENT,          /* require body */
@@ -265,7 +265,7 @@ enum bytecode_tags {
     B_TRANSFORM_PLACEHOLDER_4,
     B_TRANSFORM_PLACEHOLDER_5,
 
-    /* Script locations */
+    /* Script locations (54-59) */
     B_PERSONAL,         /* require include */
     B_GLOBAL,           /* require include */
 
@@ -274,14 +274,14 @@ enum bytecode_tags {
     B_LOCATION_PLACEHOLDER_3,
     B_LOCATION_PLACEHOLDER_4,
 
-    /* Zones */
+    /* Zones (60-63) */
     B_TIMEZONE,
     B_ORIGINALZONE,
 
     B_ZONE_PLACEHOLDER_1,
     B_ZONE_PLACEHOLDER_2,
 
-    /* Date Parts */
+    /* Date Parts (64-80) */
     B_YEAR,
     B_MONTH,
     B_DAY,
