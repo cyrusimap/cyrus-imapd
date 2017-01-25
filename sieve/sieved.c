@@ -676,7 +676,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
                    ntohl(d[i].value), ntohl(d[i+1].value), ntohl(d[i+2].value));
             i+=3;
 
-            i = unwrap_string(d, i+1, &data, &len);
+            i = unwrap_string(d, i, &data, &len);
 
             printf("           ({%d}%s)\n", len, (!data ? "[nil]" : data));
             break;
