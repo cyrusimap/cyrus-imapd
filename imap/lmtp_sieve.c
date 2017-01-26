@@ -999,7 +999,7 @@ static int listcompare(const char *text,
 
     /* search for email address in addressbook */
     uids = carddav_getemail2uids(ctx->carddavdb, text, mboxname);
-    if (strarray_size(uids)) ret = 0;
+    ret = strarray_size(uids);
 
     strarray_free(uids);
     free(mboxname);
