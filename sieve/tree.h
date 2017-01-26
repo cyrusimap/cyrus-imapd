@@ -68,7 +68,7 @@ struct Test {
     int type;
     union {
         testlist_t *tl; /* anyof, allof */
-        strarray_t *sl; /* exists */
+        strarray_t *sl; /* exists, valid_ext_list */
         struct { /* it's a header or hasflag or string test */
             int index;
             int comptag;

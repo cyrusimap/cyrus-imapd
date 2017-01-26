@@ -279,6 +279,7 @@ extern void sieverestart(FILE *f);
 %token <nval> STRINGT SET LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
 %token <nval> SETFLAG ADDFLAG REMOVEFLAG HASFLAG
 %token ADDHEADER DELETEHEADER
+%token VALIDEXTLIST
 
 %type <cl> commands command action elsif block
 %type <sl> optstringlist stringlist strings
@@ -935,6 +936,7 @@ block: '{' commands '}'          { $$ = $2; }
 test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
         | ALLOF testlist         { $$ = new_test(ALLOF); $$->u.tl = $2; }
         | EXISTS stringlist      { $$ = new_test(EXISTS); $$->u.sl = $2; }
+        | VALIDEXTLIST stringlist{ $$ = new_test(VALIDEXTLIST); $$->u.sl = $2; }
         | SFALSE                 { $$ = new_test(SFALSE); }
         | STRUE                  { $$ = new_test(STRUE); }
 

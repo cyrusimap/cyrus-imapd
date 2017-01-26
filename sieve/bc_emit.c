@@ -238,6 +238,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
 
     case BC_EXISTS:
+    case BC_VALIDEXTLIST:
     {
         int ret;
         ret = bc_stringlist_emit(fd, codep, bc);

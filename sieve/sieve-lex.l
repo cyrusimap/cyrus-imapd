@@ -120,6 +120,7 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>size           return SIZE;
 <INITIAL>hasflag        return yylval->nval = HASFLAG;
 <INITIAL>string         return yylval->nval = STRINGT;
+<INITIAL>valid_ext_list return VALIDEXTLIST;
 <INITIAL>reject         return REJCT;
 <INITIAL>ereject        return EREJECT;
 <INITIAL>fileinto       return FILEINTO;

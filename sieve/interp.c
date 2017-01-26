@@ -280,6 +280,11 @@ EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v
     return SIEVE_OK;
 }
 
+EXPORTED void sieve_register_listvalidator(sieve_interp_t *interp, sieve_list_validator *f)
+{
+    interp->isvalidlist = f;
+}
+
 EXPORTED void sieve_register_listcompare(sieve_interp_t *interp, sieve_list_comparator *f)
 {
     interp->listcompare = f;

@@ -228,6 +228,10 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         printf("exists");
         i=write_list(ntohl(d[i+1].len), i+2, d);
         break;
+    case BC_VALIDEXTLIST:
+        printf("valid_ext_list");
+        i=write_list(ntohl(d[i+1].len), i+2, d);
+        break;
     case BC_SIZE:
         printf("size");
         if (ntohl(d[i+1].value)==B_OVER) {

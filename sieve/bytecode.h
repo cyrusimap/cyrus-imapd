@@ -190,7 +190,8 @@ enum bytecode_comps {
     BC_METADATAEXISTS,
     BC_SERVERMETADATA,  /* require servermetadata */
     BC_SERVERMETADATAEXISTS,
-    BC_STRING	        /* require variables */
+    BC_STRING,          /* require variables */
+    BC_VALIDEXTLIST     /* require extlists */
 };
 
 /* currently one enum so as to help determine where values are being misused.

@@ -1757,6 +1757,36 @@ envelope_err:
         break;
     }
 
+    case BC_VALIDEXTLIST:/*22*/
+    {
+        int listi=i+1;
+        int currh;
+
+        res=1;
+
+        list_len=ntohl(bc[listi].len);
+        list_end=ntohl(bc[listi+1].value)/4;
+
+        currh=listi+2;
+
+        for(x=0; x<list_len && res; x++)
+        {
+            const char *str;
+
+            currh = unwrap_string(bc, currh, &str, NULL);
+
+            if (requires & BFE_VARIABLES) {
+                str = parse_string(str, variables);
+            }
+
+            if(interp->isvalidlist(str) != SIEVE_OK)
+                res = 0;
+        }
+
+        i=list_end; /* adjust for short-circuit */
+        break;
+    }
+
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",

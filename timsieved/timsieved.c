@@ -429,6 +429,7 @@ static int build_sieve_interp(void)
         return TIMSIEVE_FAIL;
     }
 
+    sieve_register_listvalidator(interp, (sieve_list_validator *) &timsieved_generic_cb);
     sieve_register_listcompare(interp, (sieve_list_comparator *) &timsieved_generic_cb);
 
     sieve_register_notify(interp, &timsieved_notify_cb);

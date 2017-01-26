@@ -322,6 +322,11 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         retval->data[codep++].op = BC_EXISTS;
         codep= bc_stringlist_generate(codep, retval, t->u.sl);
         break;
+    case VALIDEXTLIST:/* BC_VALIDEXTLIST { listnames : string list } */
+        if(!atleast(retval,codep+1)) return -1;
+        retval->data[codep++].op = BC_VALIDEXTLIST;
+        codep= bc_stringlist_generate(codep, retval, t->u.sl);
+        break;
     case ANYOF:/* BC_ANYOF { tests : test list } */
         if(!atleast(retval,codep+1)) return -1;
         retval->data[codep++].op = BC_ANYOF;
