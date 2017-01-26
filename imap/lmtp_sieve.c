@@ -957,6 +957,57 @@ static sieve_vacation_t vacation = {
     &send_response,             /* send_response() */
 };
 
+#ifdef WITH_DAV
+#include <libxml/uri.h>
+
+static int listcompare(const char *text,
+                       size_t tlen __attribute__((unused)),
+                       const char *list,
+                       strarray_t *match_vars __attribute__((unused)),
+                       void *rock)
+{
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) rock;
+    const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
+    const char *addrbook_urn_abbrev = ":addrbook:";
+    const char *abook;
+    char *mboxname;
+    strarray_t *uids;
+    int ret = 1;
+
+    /* percent-decode list URI */
+    list = xmlURIUnescapeString(list, strlen(list), NULL);
+
+    if (!strncmp(list, addrbook_urn_full, strlen(addrbook_urn_full))) {
+        abook = list + strlen(addrbook_urn_full);
+    }
+    else if (!strncmp(list, addrbook_urn_abbrev, strlen(addrbook_urn_abbrev))) {
+        abook = list + strlen(addrbook_urn_abbrev);
+    }
+    else return -1;
+
+    /* MUST match default addressbook case-insensitively */
+    if (!strcasecmp(abook, "Default")) abook = "Default";
+
+    if (!ctx->carddavdb) {
+        /* open user's CardDAV DB */
+        ctx->carddavdb = carddav_open_userid(ctx->userid);
+        if (!ctx->carddavdb) return -1;
+    }
+
+    /* construct mailbox name of addressbook */
+    mboxname = carddav_mboxname(ctx->userid, abook);
+
+    /* search for email address in addressbook */
+    uids = carddav_getemail2uids(ctx->carddavdb, text, mboxname);
+    if (strarray_size(uids)) ret = 0;
+
+    strarray_free(uids);
+    free(mboxname);
+
+    return ret;
+}
+#endif /* WITH_DAV */
+
 static int sieve_parse_error_handler(int lineno, const char *msg,
                                      void *ic __attribute__((unused)),
                                      void *sc)
@@ -982,7 +1033,7 @@ static int sieve_execute_error_handler(const char *msg,
     return SIEVE_OK;
 }
 
-sieve_interp_t *setup_sieve(void)
+sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 {
     sieve_interp_t *interp = NULL;
     int res;
@@ -998,7 +1049,7 @@ sieve_interp_t *setup_sieve(void)
         sieve_dir = NULL;
     }
 
-    interp = sieve_interp_alloc(NULL);
+    interp = sieve_interp_alloc(ctx);
     assert(interp != NULL);
 
     sieve_register_redirect(interp, &sieve_redirect);
@@ -1025,7 +1076,9 @@ sieve_interp_t *setup_sieve(void)
         syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
         fatal("sieve_register_vacation()", EC_SOFTWARE);
     }
-
+#ifdef WITH_DAV
+    sieve_register_listcompare(interp, &listcompare);
+#endif
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 

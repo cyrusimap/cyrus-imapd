@@ -63,6 +63,8 @@ struct sieve_interp {
     sieve_get_mailboxexists *getmailboxexists;
     sieve_get_metadata *getmetadata;
 
+    sieve_list_comparator *listcompare;
+
     sieve_parse_error *err;
 
     /* site-specific imapflags for mark/unmark */

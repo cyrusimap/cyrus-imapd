@@ -178,6 +178,10 @@ int script_require(sieve_script_t *s, char *req)
         s->support.regex = 1;
         return 1;
 #endif
+    } else if (!strcmp("extlists", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)) {
+        s->support.extlists = 1;
+        return 1;
     } else if (!strcmp("subaddress", req) &&
                (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) {
         s->support.subaddress = 1;

@@ -139,6 +139,8 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
             strlcat(i->extensions, " regex", EXT_LEN);
 #endif
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)
+            strlcat(i->extensions, " extlists", EXT_LEN);
 
         /* add misc extensions */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
@@ -276,6 +278,11 @@ EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v
 
     interp->vacation = v;
     return SIEVE_OK;
+}
+
+EXPORTED void sieve_register_listcompare(sieve_interp_t *interp, sieve_list_comparator *f)
+{
+    interp->listcompare = f;
 }
 
 EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)

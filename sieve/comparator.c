@@ -51,6 +51,7 @@
 #include <string.h>
 
 #include "comparator.h"
+#include "interp.h"
 #include "tree.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
@@ -543,8 +544,8 @@ static comparator_t *lookup_rel(int relation)
     return ret;
 }
 
-EXPORTED comparator_t *lookup_comp(sieve_interp_t *i __attribute__((unused)),
-                                   int comp, int mode, int relation, void **comprock)
+EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
+                                   int relation, void **comprock)
 {
     comparator_t *ret;
 
@@ -553,6 +554,11 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i __attribute__((unused)),
 #if VERBOSE
     printf("comp%d mode%d relat%d     \n", comp, mode, relation);
 #endif
+    if (mode == B_LIST) {
+        *comprock = (void **) i->interp_context;
+        return (comparator_t *) i->listcompare;
+    }
+
     switch (comp)
       {
       case B_OCTET:

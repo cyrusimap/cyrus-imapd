@@ -153,6 +153,7 @@ static int printComparison(bytecode_input_t *d ,int i)
     case B_CONTAINS:printf("Contains"); break;
     case B_MATCHES: printf("Matches"); break;
     case B_REGEX: printf("Regex"); break;
+    case B_LIST: printf("List"); break;
     case B_COUNT:
         printf("Count");
 

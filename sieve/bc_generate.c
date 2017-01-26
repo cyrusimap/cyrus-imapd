@@ -216,6 +216,9 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
         retval->data[codep++].value = B_REGEX;
         break;
 #endif
+    case LIST:
+        retval->data[codep++].value = B_LIST;
+        break;
     case COUNT:
         retval->data[codep++].value = B_COUNT;
         break;

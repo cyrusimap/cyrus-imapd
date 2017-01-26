@@ -791,8 +791,10 @@ int deliver(message_data_t *msgdata, char *authuser,
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            sieve_interp_t *interp = setup_sieve();
+            struct sieve_interp_ctx ctx = { mbname_userid(mbname), NULL };
+            sieve_interp_t *interp = setup_sieve(&ctx);
             r = run_sieve(mbname, interp, &mydata);
+            if (ctx.carddavdb) carddav_close(ctx.carddavdb);
             sieve_interp_free(&interp);
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */

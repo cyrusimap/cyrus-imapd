@@ -80,6 +80,9 @@ typedef int sieve_get_envelope(void *message_context,
                                const char ***contents);
 typedef int sieve_get_include(void *script_context, const char *script,
                               int isglobal, char *fpath, size_t size);
+typedef int sieve_list_comparator(const char *text, size_t tlen,
+                                  const char *list, strarray_t *match_vars,
+                                  void *rock);
 
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
@@ -175,6 +178,9 @@ void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f)
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
+
+void sieve_register_listcompare(sieve_interp_t *interp,
+                                sieve_list_comparator *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg,
                               void *interp_context,

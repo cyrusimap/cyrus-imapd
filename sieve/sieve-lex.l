@@ -155,6 +155,7 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>:contains      return CONTAINS;
 <INITIAL>:matches       return MATCHES;
 <INITIAL>:regex         return REGEX;
+<INITIAL>:list          return LIST;
 <INITIAL>:count         return COUNT;
 <INITIAL>:value         return VALUE;
 <INITIAL>:over          return OVER;

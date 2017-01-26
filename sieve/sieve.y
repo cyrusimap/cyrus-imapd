@@ -263,7 +263,7 @@ extern void sieverestart(FILE *f);
 %token MARK UNMARK FLAGS
 %token NOTIFY DENOTIFY
 %token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE BODY
-%token COMPARATOR IS CONTAINS MATCHES REGEX COUNT VALUE OVER UNDER
+%token COMPARATOR IS CONTAINS MATCHES REGEX LIST COUNT VALUE OVER UNDER
 %token GT GE LT LE EQ NE
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token RAW TEXT CONTENT
@@ -300,6 +300,7 @@ extern void sieverestart(FILE *f);
 %type <sval> flagtags
 %type <nval> flagaction
 %type <nval> ahtags
+%type <nval> listtag
 
 %name-prefix "sieve"
 %defines
@@ -1299,6 +1300,7 @@ atags: /* empty */               { $$ = new_aetags(); }
                                      else $$->addrtag = $2;
                                  }
         | atags matchtags
+        | atags listmatch
         | atags comparator
         | atags idxtags
         ;
@@ -1316,6 +1318,7 @@ etags: /* empty */               { $$ = new_aetags(); }
                                      else $$->addrtag = $2;
                                  }
         | etags matchtags
+        | etags listmatch
         | etags comparator
         ;
 
@@ -1349,6 +1352,33 @@ matchtags: match
                                          if (ctags->relation == -1) {
                                              YYERROR; /*vr called yyerror()*/
                                          }
+                                     }
+                                 }
+        ;
+
+/* $0 is the symbol which precedes comparator (e.g. aetags).
+   We typecast this pointer into struct comptags *
+*/
+listmatch: listtag
+                                 {
+                                     struct comptags *ctags = $<ctag>0;
+                                     if (ctags->match != -1) {
+                                         parse_error(parse_script,
+                                                     SIEVE_DUPLICATE_TAG,
+                                                     "match-type");
+                                         YYERROR; /* pe should call yyerror() */
+                                     }
+                                     else ctags->match = $1;
+                                 }
+        ;
+
+listtag: LIST
+                                 {
+                                     if (!parse_script->support.extlists) {
+                                         parse_error(parse_script,
+                                                     SIEVE_MISSING_REQUIRE,
+                                                     "extlists");
+                                         YYERROR; /* pe should call yyerror() */
                                      }
                                  }
         ;
@@ -1431,12 +1461,14 @@ idxtags: INDEX NUMBER
 
 htags: /* empty */               { $$ = new_comptags(); }
         | htags matchtags
+        | htags listmatch
         | htags comparator
         | htags idxtags
         ;
 
 strtags:/* empty */              { $$ = new_comptags(); }
         | strtags matchtags
+        | strtags listmatch
         | strtags comparator
         ;
 

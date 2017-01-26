@@ -107,7 +107,8 @@ typedef union
  * version 0x08 scripts implemented DATE and INDEX extensions
  * version 0x09 scripts implemented IMAP4FLAGS extension
  * version 0x10 scripts implemented Mailbox and Metadata (RFC5490)
- * version 0x11 scripts implemented Variables (RFC5229) and Ext Reject (RFC5429)
+ * version 0x11 scripts implemented Variables (RFC5229), eReject (RFC5429),
+ *                                  and External Lists (RFC 6134)
  */
 #define BYTECODE_VERSION 0x11
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -253,11 +254,11 @@ enum bytecode_tags {
     B_REGEX,            /* require regex */
     B_COUNT,            /* require relational */
     B_VALUE,            /* require relational */
+    B_LIST,             /* require extlists */
 
     B_MATCH_PLACEHOLDER_1,
     B_MATCH_PLACEHOLDER_2,
     B_MATCH_PLACEHOLDER_3,
-    B_MATCH_PLACEHOLDER_4,
 
     /* Body Transforms (46-53) */
     B_RAW,              /* require body */
