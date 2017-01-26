@@ -1368,7 +1368,7 @@ listmatch: listtag
                                                      "match-type");
                                          YYERROR; /* pe should call yyerror() */
                                      }
-                                     else ctags->match = $1;
+                                     else ctags->match = LIST;
                                  }
         ;
 
@@ -1380,6 +1380,7 @@ listtag: LIST
                                                      "extlists");
                                          YYERROR; /* pe should call yyerror() */
                                      }
+                                     $$ = 1;
                                  }
         ;
 
