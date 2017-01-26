@@ -1315,6 +1315,9 @@ comparator: COMPARATOR STRING
 
 /* $0 is the symbol which precedes idxtags (e.g. aetags).
    We typecast this pointer into struct comptags *
+
+   Note: This rule forces :index to occur before :last
+   even though RFC 5228 states that tagged arguments can appear in any order.
 */
 idxtags: INDEX NUMBER
                                  {
@@ -1903,10 +1906,10 @@ static test_t *build_date(int t, struct dttags *dt,
         ret->u.dt.relation = dt->comptags.relation;
         ret->u.dt.comparator = xstrdup(dt->comptags.comparator);
         ret->u.dt.index = dt->comptags.index;
-        ret->u.dt.zone = (dt->zone ? xstrdup(dt->zone) : NULL);
+        ret->u.dt.zone = xstrdupnull(dt->zone);
         ret->u.dt.zonetag = dt->zonetag;
         ret->u.dt.date_part = part;
-        ret->u.dt.header_name = (hn ? xstrdup(hn) : NULL);
+        ret->u.dt.header_name = xstrdupnull(hn);
         ret->u.dt.kl = kl;
         free_dttags(dt);
     }
