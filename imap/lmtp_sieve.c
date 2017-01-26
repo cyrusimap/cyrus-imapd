@@ -601,6 +601,7 @@ static void dump_header(const char *name, const char *value, void *rock)
 {
     /* Q-encode the value */
     char *mimehdr = charset_encode_mimeheader(value, strlen(value));
+    char *freeme = mimehdr;
     size_t maxlen = 78 - (strlen(name) + 2);
 
     /* write header name */
@@ -630,7 +631,7 @@ static void dump_header(const char *name, const char *value, void *rock)
     /* write remainder of value */
     fprintf((FILE *) rock, "%s\r\n", mimehdr);
 
-    free(mimehdr);
+    free(freeme);
 }
 
 static deliver_data_t *setup_special_delivery(deliver_data_t *mydata)
