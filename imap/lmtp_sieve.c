@@ -960,49 +960,53 @@ static sieve_vacation_t vacation = {
 #ifdef WITH_DAV
 #include <libxml/uri.h>
 
-static int listcompare(const char *text,
-                       size_t tlen __attribute__((unused)),
-                       const char *list,
-                       strarray_t *match_vars __attribute__((unused)),
-                       void *rock)
+static int listcompare(const char *text, size_t tlen __attribute__((unused)),
+                       const char *list, strarray_t *match_vars, void *rock)
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) rock;
     const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
     const char *addrbook_urn_abbrev = ":addrbook:";
-    const char *abook;
-    char *mboxname;
-    strarray_t *uids;
-    int ret = 1;
+    const char *abook = NULL;
+    int ret = 0;
 
     /* percent-decode list URI */
-    list = xmlURIUnescapeString(list, strlen(list), NULL);
+    char *uri = xmlURIUnescapeString(list, strlen(list), NULL);
 
-    if (!strncmp(list, addrbook_urn_full, strlen(addrbook_urn_full))) {
-        abook = list + strlen(addrbook_urn_full);
+    if (!strncmp(uri, addrbook_urn_full, strlen(addrbook_urn_full))) {
+        abook = uri + strlen(addrbook_urn_full);
     }
-    else if (!strncmp(list, addrbook_urn_abbrev, strlen(addrbook_urn_abbrev))) {
-        abook = list + strlen(addrbook_urn_abbrev);
-    }
-    else return -1;
-
-    /* MUST match default addressbook case-insensitively */
-    if (!strcasecmp(abook, "Default")) abook = "Default";
-
-    if (!ctx->carddavdb) {
-        /* open user's CardDAV DB */
-        ctx->carddavdb = carddav_open_userid(ctx->userid);
-        if (!ctx->carddavdb) return -1;
+    else if (!strncmp(uri, addrbook_urn_abbrev, strlen(addrbook_urn_abbrev))) {
+        abook = uri + strlen(addrbook_urn_abbrev);
     }
 
-    /* construct mailbox name of addressbook */
-    mboxname = carddav_mboxname(ctx->userid, abook);
+    if (abook) {
+        /* MUST match default addressbook case-insensitively */
+        if (!strcasecmp(abook, "Default")) abook = "Default";
 
-    /* search for email address in addressbook */
-    uids = carddav_getemail2uids(ctx->carddavdb, text, mboxname);
-    ret = strarray_size(uids);
+        if (!ctx->carddavdb) {
+            /* open user's CardDAV DB */
+            ctx->carddavdb = carddav_open_userid(ctx->userid);
+        }
+        if (ctx->carddavdb) {
+            /* construct mailbox name of addressbook */
+            char *mboxname = carddav_mboxname(ctx->userid, abook);
 
-    strarray_free(uids);
-    free(mboxname);
+            /* search for email address in addressbook */
+            strarray_t *uids =
+                carddav_getemail2uids(ctx->carddavdb, text, mboxname);
+            ret = strarray_size(uids);
+
+            strarray_free(uids);
+            free(mboxname);
+        }
+    }
+
+    free(uri);
+
+    if (ret && match_vars) {
+        /* found a match - set $0 */
+        strarray_add(match_vars, text);
+    }
 
     return ret;
 }
