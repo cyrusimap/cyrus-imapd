@@ -56,8 +56,6 @@
 #include "libconfig.h"
 #include "times.h"
 
-#define EXT_LEN 4096
-
 /* build a sieve interpretor */
 EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
 {
@@ -72,85 +70,100 @@ EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
     i = (sieve_interp_t *) xzmalloc(sizeof(sieve_interp_t));
 
     i->interp_context = interp_context;
-    i->extensions[0] = '\0';
+    i->extensions = NULL;
 
     i->time = time(NULL);
 
     return i;
 }
 
-EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
+EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
 {
-    if (i->extensions[0] == '\0') {
+    if (i->extensions == NULL) {
         unsigned long config_sieve_extensions =
             config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+        struct buf buf = BUF_INITIALIZER;
+
+        /* strarray of ManageSieve capability/value pairs */
+        i->extensions = strarray_new();
+        
+        /* Add EXTLISTS capability */
+        strarray_append(i->extensions, "SIEVE");
 
         /* add comparators */
-        strlcat(i->extensions, "comparator-i;ascii-numeric", EXT_LEN);
+        buf_setcstr(&buf, "comparator-i;ascii-numeric");
 
         /* add actions */
         if (i->fileinto &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
-            strlcat(i->extensions, " fileinto", EXT_LEN);
+            buf_appendcstr(&buf, " fileinto");
         if (i->reject &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
-            strlcat(i->extensions, " reject ereject", EXT_LEN);
+            buf_appendcstr(&buf, " reject ereject");
         if (i->vacation &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
-            strlcat(i->extensions, " vacation vacation-seconds", EXT_LEN);
+            buf_appendcstr(&buf, " vacation vacation-seconds");
         else if (i->vacation &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
-            strlcat(i->extensions, " vacation", EXT_LEN);
+            buf_appendcstr(&buf, " vacation");
         if (i->markflags &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))
-            strlcat(i->extensions, " imapflags", EXT_LEN);
+            buf_appendcstr(&buf, " imapflags");
         if (i->notify &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
-            strlcat(i->extensions, " notify", EXT_LEN);
+            buf_appendcstr(&buf, " notify");
         if (i->getinclude &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
-            strlcat(i->extensions, " include", EXT_LEN);
+            buf_appendcstr(&buf, " include");
         if (i->addheader &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
-            strlcat(i->extensions, " editheader", EXT_LEN);
+            buf_appendcstr(&buf, " editheader");
 
         /* add tests */
         if (i->getenvelope &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
-            strlcat(i->extensions, " envelope", EXT_LEN);
+            buf_appendcstr(&buf, " envelope");
         if (i->getbody &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
-            strlcat(i->extensions, " body", EXT_LEN);
+            buf_appendcstr(&buf, " body");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)
-            strlcat(i->extensions, " imap4flags", EXT_LEN);
+            buf_appendcstr(&buf, " imap4flags");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
-            strlcat(i->extensions, " date", EXT_LEN);
+            buf_appendcstr(&buf, " date");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)
-            strlcat(i->extensions, " mailbox", EXT_LEN);
+            buf_appendcstr(&buf, " mailbox");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)
-            strlcat(i->extensions, " mboxmetadata", EXT_LEN);
+            buf_appendcstr(&buf, " mboxmetadata");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)
-            strlcat(i->extensions, " servermetadata", EXT_LEN);
+            buf_appendcstr(&buf, " servermetadata");
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
-            strlcat(i->extensions, " relational", EXT_LEN);
+            buf_appendcstr(&buf, " relational");
 #ifdef ENABLE_REGEX
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
-            strlcat(i->extensions, " regex", EXT_LEN);
+            buf_appendcstr(&buf, " regex");
 #endif
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)
-            strlcat(i->extensions, " extlists", EXT_LEN);
+            buf_appendcstr(&buf, " extlists");
 
         /* add misc extensions */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
-            strlcat(i->extensions, " subaddress", EXT_LEN);
+            buf_appendcstr(&buf, " subaddress");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
-            strlcat(i->extensions, " copy", EXT_LEN);
+            buf_appendcstr(&buf, " copy");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)
-            strlcat(i->extensions, " index", EXT_LEN);
+            buf_appendcstr(&buf, " index");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)
-            strlcat(i->extensions, " variables", EXT_LEN);
+            buf_appendcstr(&buf, " variables");
+
+        strarray_appendm(i->extensions, buf_release(&buf));
+
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) {
+            /* Add EXTLISTS capability */
+            strarray_append(i->extensions, "EXTLISTS");
+            strarray_append(i->extensions, "urn:ietf:params:sieve:addrbook");
+        }
     }
 
     return i->extensions;
@@ -160,6 +173,7 @@ EXPORTED int sieve_interp_free(sieve_interp_t **interp)
 {
     if (*interp) {
         free((*interp)->lastitem);
+        strarray_free((*interp)->extensions);
         free(*interp);
         *interp = NULL;
     }

@@ -77,7 +77,7 @@ struct sieve_interp {
 
     /* context to pass along */
     void *interp_context;
-    char extensions[4096];//the number comes from interp.c EXT_LEN
+    strarray_t *extensions;
 
     /* time when allocated */
     time_t time;

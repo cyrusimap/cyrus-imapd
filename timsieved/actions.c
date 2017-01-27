@@ -176,7 +176,8 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
                  int starttls_done, int authenticated, sasl_ssf_t sasl_ssf)
 {
     const char *sasllist;
-    int mechcount;
+    int mechcount, i;
+    strarray_t *extensions;
 
     /* implementation */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -200,11 +201,16 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
                       &sasllist,
                       NULL, &mechcount) == SASL_OK/* && mechcount > 0*/)
     {
-      prot_printf(conn,"%s",sasllist);
+        prot_printf(conn,"%s",sasllist);
     }
 
     /* Sieve capabilities */
-    prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions(interp));
+    extensions = sieve_listextensions(interp);
+    for (i = 0; i < strarray_size(extensions); i += 2) {
+        /* capability/value pairs */
+        prot_printf(conn,"\"%s\" \"%s\"\r\n",
+                    strarray_nth(extensions, i), strarray_nth(extensions, i+1));
+    }
 
     if (tls_enabled() && !starttls_done && !authenticated) {
         prot_puts(conn, "\"STARTTLS\"\r\n");

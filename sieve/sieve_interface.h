@@ -219,7 +219,7 @@ int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
                            void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-const char *sieve_listextensions(sieve_interp_t *i);
+strarray_t *sieve_listextensions(sieve_interp_t *i);
 
 /* Create a bytecode structure given a parsed commandlist */
 int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s);
