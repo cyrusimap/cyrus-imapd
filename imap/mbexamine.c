@@ -93,7 +93,7 @@ extern int optind;
 extern char *optarg;
 
 /* current namespace */
-static struct namespace recon_namespace;
+static struct namespace mbexamine_namespace;
 
 /* forward declarations */
 static int do_examine(struct findall_data *data, void *rock);
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbexamine", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&mbexamine_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EC_CONFIG);
     }
@@ -162,14 +162,11 @@ int main(int argc, char **argv)
 
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0, cb, NULL);
+        mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, NULL);
     }
 
     for (i = optind; i < argc; i++) {
-        /* Handle virtdomains and separators in mailboxname */
-        char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
-        mboxlist_findall(&recon_namespace, intname, 1, 0, 0, cb, NULL);
-        free(intname);
+        mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, NULL);
     }
 
     mboxlist_close();
@@ -208,7 +205,7 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
     const char *name = mbname_intname(data->mbname);
@@ -374,7 +371,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
     const char *name = mbname_intname(data->mbname);
@@ -447,7 +444,7 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(data->mbname, &mbexamine_namespace, "cyrus");
     printf("Examining %s...", extname);
 
     const char *name = mbname_intname(data->mbname);
