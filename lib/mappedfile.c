@@ -439,7 +439,11 @@ EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
     const char *dir = dirname(copy);
     int r = 0;
 
+#if defined(O_DIRECTORY)
     int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(dir, O_RDONLY, 0600);
+#endif
     if (dirfd < 0) {
         syslog(LOG_ERR, "IOERROR: mappedfile opendir (%s, %s): %m", mf->fname, newname);
         r = dirfd;
