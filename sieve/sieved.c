@@ -568,6 +568,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
     for(i++; i<bc_len;) 
     {
         int op;
+        int list = 0;
         int copy = 0;
         int create = 0;
         int supports_variables = 0;
@@ -622,12 +623,15 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("FILEINTO COPY(%d) CREATE(%d) FOLDER({%d}%s)\n",copy,create,len,data);
             break;
 
-        case B_REDIRECT: /*20*/
+        case B_REDIRECT: /*32*/
+            list = ntohl(d[i++].value);
+            /* fall through */
+        case B_REDIRECT_COPY: /*20*/
             copy = ntohl(d[i++].value);
             /* fall through */
         case B_REDIRECT_ORIG: /*5*/
             i = unwrap_string(d, i, &data, &len);
-            printf("REDIRECT COPY(%d) ADDRESS({%d}%s)\n",copy,len,data);
+            printf("REDIRECT COPY(%d) LIST(%d) ADDRESS({%d}%s)\n",copy,list,len,data);
             break;
 
         case B_IF:/*6*/

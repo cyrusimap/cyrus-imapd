@@ -170,6 +170,7 @@ struct Commandlist {
         struct { /* it's a redirect action */
             char *address;
             int copy;
+            int list;
         } r;
         struct { /* it's a vacation action */
             char *subject;

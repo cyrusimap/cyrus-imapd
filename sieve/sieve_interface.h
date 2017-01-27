@@ -112,6 +112,7 @@ typedef struct sieve_vacation {
 
 typedef struct sieve_redirect_context {
     const char *addr;
+    int is_ext_list :1;
 } sieve_redirect_context_t;
 
 typedef struct sieve_reject_context {

@@ -145,6 +145,11 @@ struct stags {
     int mod10; /* :length */
 };
 
+struct rtags {
+    int copy;
+    int list;
+};
+
 static char *check_reqs(sieve_script_t *script, strarray_t *sl);
 
 static test_t *build_address(int t, struct aetags *ae,
@@ -162,7 +167,7 @@ static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
 static commandlist_t *build_keep(int t, struct ftags *f);
 static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder);
-static commandlist_t *build_redirect(int t, int c, char *a);
+static commandlist_t *build_redirect(int t, struct rtags *r, char *a);
 static commandlist_t *build_include(int, struct itags *, char*);
 static commandlist_t *build_set(int t, struct stags *s,
                                 char *variable, char *value);
@@ -209,6 +214,10 @@ static struct stags *new_stags(void);
 static struct stags *canon_stags(struct stags *s);
 static void free_stags(struct stags *s);
 
+static struct rtags *new_rtags(void);
+static struct rtags *canon_rtags(struct rtags *r);
+static void free_rtags(struct rtags *r);
+
 static int verify_stringlist(sieve_script_t*, strarray_t *sl,
                              int (*verify)(sieve_script_t*, char *));
 static int verify_patternlist(sieve_script_t *parse_script,
@@ -224,6 +233,7 @@ static int verify_zone(sieve_script_t*, char *s);
 static int verify_date_part(sieve_script_t *parse_script, char *dp);
 static int verify_utf8(sieve_script_t*, char *s);
 static int verify_identifier(sieve_script_t*, char *s);
+static int verify_list(sieve_script_t*, char *s);
 
 static void parse_error(sieve_script_t *parse_script, int err, ...);
 void yyerror(sieve_script_t*, const char *msg);
@@ -254,6 +264,7 @@ extern void sieverestart(FILE *f);
     struct dttags *dttag;
     struct ftags *ftag;
     struct stags *stag;
+    struct rtags *rtag;
 }
 
 %token <nval> NUMBER
@@ -284,7 +295,7 @@ extern void sieverestart(FILE *f);
 %type <cl> commands command action elsif block
 %type <sl> optstringlist stringlist strings
 %type <test> test
-%type <nval> match relmatch sizetag addrparttag copy rtags creat datepart
+%type <nval> match relmatch sizetag addrparttag copy creat datepart
 %type <testl> testlist tests
 %type <ctag> htags strtags hftags mtags
 %type <aetag> atags etags
@@ -297,6 +308,7 @@ extern void sieverestart(FILE *f);
 %type <nval> priority
 %type <ftag> ftags
 %type <stag> stags
+%type <rtag> rtags
 %type <nval> mod40 mod30 mod20 mod10
 %type <sval> flagtags
 %type <nval> flagaction
@@ -397,10 +409,16 @@ action: REJCT STRING
 
         | REDIRECT rtags STRING
                                  {
-                                     if (!verify_address(parse_script, $3)) {
+                                     if ($2->list) {
+                                         if (!verify_list(parse_script, $3)) {
+                                             YYERROR; /* vl should call yyerror() */
+                                         }
+                                     }
+                                     else if (!verify_address(parse_script, $3)) {
                                          YYERROR; /* va should call yyerror() */
                                      }
-                                     $$ = build_redirect(REDIRECT, $2, $3);
+                                     $$ = build_redirect(REDIRECT,
+                                                         canon_rtags($2), $3);
                                  }
 
         | KEEP ftags             { $$ = build_keep(KEEP,canon_ftags($2)); }
@@ -1729,17 +1747,28 @@ ftags: /* empty */               { $$ = new_ftags(); }
                                  }
         ;
 
-rtags: /* empty */               { $$ = 0; }
+rtags: /* empty */               { $$ = new_rtags(); }
         | rtags copy
                                  {
                                      $$ = $1;
-                                     if ($$) {
+                                     if ($$->copy) {
                                          parse_error(parse_script,
                                                      SIEVE_DUPLICATE_TAG,
                                                      ":copy");
                                          YYERROR; /* pe should call yyerror() */
                                      }
-                                     else $$ = $2;
+                                     else $$->copy = $2;
+                                 }
+        | rtags listtag
+                                 {
+                                     $$ = $1;
+                                     if ($$->list) {
+                                         parse_error(parse_script,
+                                                     SIEVE_DUPLICATE_TAG,
+                                                     ":list");
+                                         YYERROR; /* pe should call yyerror() */
+                                     }
+                                     else $$->list = $2;
                                  }
         ;
 
@@ -1971,15 +2000,18 @@ static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder)
     return ret;
 }
 
-static commandlist_t *build_redirect(int t, int copy, char *address)
+static commandlist_t *build_redirect(int t, struct rtags *r, char *address)
 {
     commandlist_t *ret = new_command(t);
 
     assert(t == REDIRECT);
 
     if (ret) {
-        ret->u.r.copy = copy;
+        ret->u.r.copy = r->copy;
+        ret->u.r.list = r->list;
         ret->u.r.address = address;
+
+        free_rtags(r);
     }
     return ret;
 }
@@ -2334,6 +2366,13 @@ static struct ftags *canon_ftags(struct ftags *f)
     return f;
 }
 
+static void free_ftags(struct ftags *f)
+{
+    if (!f) return;
+    strarray_free(f->flags);
+    free(f);
+}
+
 static struct stags *new_stags(void)
 {
     struct stags *s = (struct stags *) xmalloc(sizeof(struct stags));
@@ -2356,11 +2395,24 @@ static void free_stags(struct stags *s)
     free(s);
 }
 
-static void free_ftags(struct ftags *f)
+static struct rtags *new_rtags(void)
 {
-    if (!f) return;
-    strarray_free(f->flags);
-    free(f);
+    struct rtags *r = (struct rtags *) xmalloc(sizeof(struct rtags));
+
+    r->copy = 0;
+    r->list = 0;
+
+    return r;
+}
+
+static struct rtags *canon_rtags(struct rtags *r)
+{
+    return r;
+}
+
+static void free_rtags(struct rtags *r)
+{
+    free(r);
 }
 
 static int verify_identifier(sieve_script_t *parse_script, char *s)
@@ -2693,6 +2745,19 @@ static int verify_utf8(sieve_script_t *parse_script, char *s)
     if ((buf != endbuf) || trailing) {
         snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
                  "string '%s': not valid utf8", s);
+        yyerror(parse_script, parse_script->sieveerr);
+        return 0;
+    }
+
+    return 1;
+}
+
+static int verify_list(sieve_script_t *parse_script, char *s)
+{
+    if (parse_script->interp.isvalidlist &&
+        parse_script->interp.isvalidlist(s) != SIEVE_OK) {
+        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
+                 "list '%s': is not valid/supported", s);
         yyerror(parse_script, parse_script->sieveerr);
         return 0;
     }

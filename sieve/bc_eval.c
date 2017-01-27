@@ -1893,6 +1893,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
          * older code, which will then parse the older parameters and should
          * require only a minimal set of changes to support any new extension.
          */
+        int list = 0;
         int copy = 0;
         int create = 0;
         strarray_t *actionflags = NULL;
@@ -2026,7 +2027,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_REDIRECT:/*20*/
+        case B_REDIRECT:/*32*/
+            list = ntohl(bc[ip].value);
+            ip+=1;
+
+            /* fall through */
+        case B_REDIRECT_COPY:/*20*/
             copy = ntohl(bc[ip].value);
             ip+=1;
 
@@ -2039,7 +2045,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 data = parse_string(data, variables);
             }
 
-            res = do_redirect(actions, data, !copy);
+            res = do_redirect(actions, data, list, !copy);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Redirect can not be used with Reject";

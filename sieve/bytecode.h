@@ -148,7 +148,7 @@ enum bytecode {
     B_RETURN,           /* require include */
 
     B_FILEINTO_COPY,    /* legacy fileinto w/o support for :flags */
-    B_REDIRECT,
+    B_REDIRECT_COPY,    /* legacy redirect w/o support for :list */
 
     B_VACATION,         /* require vacation */
 
@@ -165,7 +165,9 @@ enum bytecode {
     B_ADDHEADER,        /* require editheader */
     B_DELETEHEADER,     /* require editheader */
 
-    B_EREJECT           /* require ereject */
+    B_EREJECT,          /* require ereject */
+
+    B_REDIRECT
 };
 
 enum bytecode_comps {
