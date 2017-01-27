@@ -170,4 +170,23 @@ sub test_setacl_emptyid
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
 }
 
+sub test_setacl_badrights
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.badrights");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $origacl = $admintalk->getacl("user.cassandane.badrights");
+
+    $admintalk->setacl("user.cassandane.badrights", "cassandane", "b");
+    $self->assert_str_equals('bad', $admintalk->get_last_completion_response());
+
+    my $newacl = $admintalk->getacl("user.cassandane.badrights");
+    $self->assert_deep_equals($origacl, $newacl);
+}
+
 1;
