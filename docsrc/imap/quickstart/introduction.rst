@@ -8,7 +8,7 @@ Cyrus IMAP is a `Carnegie Mellon University`_ (|CMU|) software
 development project for a highly scalable enterprise mail system.
 
 Cyrus IMAP is one of two primary software development projects
-undertaken by the Cyrus project -- the other one being :ref:`sasl`.
+undertaken by the Cyrus project -- the other one being :ref:`cyrussasl:sasl-index`.
 
 The project as a whole started in 1994 and has its roots in replacing
 the Andrew Mail System (|AMS|) that |CMU| had been using, and has
