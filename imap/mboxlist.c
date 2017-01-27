@@ -933,6 +933,7 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
 {
     mbentry_t *mbentry = NULL;
     int r;
+    int mask;
 
     char *defaultacl;
     char *identifier;
@@ -968,7 +969,9 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
         p = rights;
         while (*p && !Uisspace(*p)) p++;
         if (*p) *p++ = '\0';
-        cyrus_acl_set(out, identifier, ACL_MODE_SET, cyrus_acl_strtomask(rights),
+        cyrus_acl_strtomask(rights, &mask);
+        /* XXX and if strtomask fails? */
+        cyrus_acl_set(out, identifier, ACL_MODE_SET, mask,
                       (cyrus_acl_canonproc_t *)0, (void *)0);
         identifier = p;
     }
@@ -1892,9 +1895,11 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 /*
  * Check if the admin rights are present in the 'rights'
  */
-static int mboxlist_have_admin_rights(const char* rights) {
-    int access = cyrus_acl_strtomask(rights);
-    int have_admin_access = access & ACL_ADMIN;
+static int mboxlist_have_admin_rights(const char *rights) {
+    int access, have_admin_access;
+
+    cyrus_acl_strtomask(rights, &access);
+    have_admin_access = access & ACL_ADMIN;
 
     return have_admin_access;
 }
@@ -1927,6 +1932,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     int isidentifiermbox = 0;
     int anyoneuseracl = 1;
     int ensure_owner_rights = 0;
+    int mask;
     const char *mailbox_owner = NULL;
     struct mailbox *mailbox = NULL;
     char *newacl = NULL;
@@ -2035,10 +2041,11 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                 }
             }
 
-            if (cyrus_acl_set(&newacl, identifier, mode,
-                              cyrus_acl_strtomask(rights),
-                              ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
-                              (void *)mailbox_owner)) {
+            r = cyrus_acl_strtomask(rights, &mask);
+
+            if (!r && cyrus_acl_set(&newacl, identifier, mode, mask,
+                                    ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
+                                    (void *)mailbox_owner)) {
                 r = IMAP_INVALID_IDENTIFIER;
             }
         } else {

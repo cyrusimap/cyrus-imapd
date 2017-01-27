@@ -2321,7 +2321,8 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
             userid++;
         }
 
-        rights = cyrus_acl_strtomask(rightstr);
+        cyrus_acl_strtomask(rightstr, &rights);
+        /* XXX and if strtomask fails? */
 
         /* Add ace XML element for this userid/right pair */
         ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
@@ -9658,6 +9659,7 @@ static void parse_acl(hash_table *table, const char *origacl)
     for (thisid = acl; *thisid; thisid = nextid) {
         struct userid_rights *id_rights;
         int is_negative = 0;
+        int mask;
 
         rights = strchr(thisid, '\t');
         if (!rights) {
@@ -9683,8 +9685,10 @@ static void parse_acl(hash_table *table, const char *origacl)
             hash_insert(thisid, id_rights, table);
         }
 
-        if (is_negative) id_rights->negative |= cyrus_acl_strtomask(rights);
-        else id_rights->positive |= cyrus_acl_strtomask(rights);
+        cyrus_acl_strtomask(rights, &mask);
+        /* XXX and if strtomask fails? */
+        if (is_negative) id_rights->negative |= mask;
+        else id_rights->positive |= mask;
     }
 
     free(acl);

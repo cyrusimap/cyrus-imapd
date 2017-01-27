@@ -47,20 +47,59 @@
 
 #include <config.h>
 #include <stdio.h>
-#include "acl.h"
-#include "libcyr_cfg.h"
+#include <syslog.h>
+#include "lib/acl.h"
+#include "lib/libcyr_cfg.h"
+#include "lib/util.h"
+#include "imap/imap_err.h"
 
-/* convert a string to an acl bit vector
+/* check a string, with meaningful description of error */
+EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
+{
+    const char *rights = "lrswipckxtedan0123456789";
+    const char *p;
+
+    for (p = str; *p; p++) {
+        if (strchr(rights, *p) == NULL) {
+            struct buf errbuf = BUF_INITIALIZER;
+
+            syslog(LOG_DEBUG, "%s: unrecognised right '%c' in string \"%s\"",
+                              __func__, *p, str);
+
+            buf_printf(&errbuf, "The %c right is not supported", *p);
+            *errstr = buf_release(&errbuf);
+            return IMAP_INVALID_RIGHTS;
+        }
+    }
+
+    return 0;
+}
+
+/* Convert a string to an acl bit vector
+ *
+ * Sets mask to all the valid ACL rights found in str, even if
+ * invalid rights were found.
+ *
+ * Returns IMAP_INVALID_RIGHTS if invalid rights were found,
+ * or 0 otherwise.
+ *
+ * Note that a string containing only invalid rights will result
+ * in a mask of 0 (i.e. "no rights"), so be mindful of the
+ * ramifications if ignoring the return value.
  */
-EXPORTED int cyrus_acl_strtomask(const char *str)
+EXPORTED int cyrus_acl_strtomask(const char *str, int *mask)
 {
     const char *deleteright = libcyrus_config_getstring(CYRUSOPT_DELETERIGHT);
+    const char *p;
     long legacy_create = 0;
     long legacy_delete = 0;
     long result = 0;
+    int r = 0;
 
-    while (*str) {
-        switch (*str) {
+    for (p = str; *p; p++) {
+        int nomatch = 0;
+
+        switch (*p) {
             case 'l': result |= ACL_LOOKUP; break;
             case 'r': result |= ACL_READ; break;
             case 's': result |= ACL_SETSEEN; break;
@@ -87,9 +126,10 @@ EXPORTED int cyrus_acl_strtomask(const char *str)
             case '7': result |= ACL_USER7; break;
             case '8': result |= ACL_USER8; break;
             case '9': result |= ACL_USER9; break;
+            default: nomatch = 1; break;
         }
 
-        if (*str++ == *deleteright) {
+        if (*p == *deleteright) {
             switch (*deleteright) {
             case 'c': /* legacy CREATE macro - build member rights */
                 legacy_create |= ACL_DELETEMBOX; break;
@@ -97,6 +137,12 @@ EXPORTED int cyrus_acl_strtomask(const char *str)
                 legacy_delete |= ACL_DELETEMBOX; break;
             default: result |= ACL_DELETEMBOX; break;
             }
+        }
+        else if (nomatch) {
+            /* unrecognised right character, bad! */
+            syslog(LOG_INFO, "%s: ACL string \"%s\" contains unrecognised right '%c'",
+                             __func__, str, *p);
+            r = IMAP_INVALID_RIGHTS;
         }
     }
 
@@ -107,7 +153,8 @@ EXPORTED int cyrus_acl_strtomask(const char *str)
     if (!(result & legacy_create)) result |= legacy_create;
     if (!(result & legacy_delete)) result |= legacy_delete;
 
-    return (result);
+    *mask = result;
+    return r;
 }
 
 /* convert an acl bit vector to a string

@@ -234,8 +234,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     config_fulldirhash = config_getswitch(IMAPOPT_FULLDIRHASH);
 
     /* look up and canonify the implicit rights of mailbox owners */
-    config_implicitrights =
-        cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
+    cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS),
+                        &config_implicitrights);
+    /* XXX and if strtomask fails? */
 
     config_metapartition_files = config_getbitfield(IMAPOPT_METAPARTITION_FILES);
 

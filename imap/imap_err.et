@@ -119,6 +119,9 @@ ec IMAP_PARTITION_UNKNOWN,
 ec IMAP_INVALID_IDENTIFIER,
    "Invalid identifier"
 
+ec IMAP_INVALID_RIGHTS,
+   "Invalid rights"
+
 ec IMAP_MESSAGE_CONTAINSNULL,
    "Message contains NUL characters"
 

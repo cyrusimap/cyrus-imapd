@@ -3686,7 +3686,8 @@ static void init_annotation_definitions(void)
         ae->attribs = normalise_attribs(&state, i);
 
         if (!(p = get_token(&state, NULL))) goto bad;
-        ae->extra_rights = cyrus_acl_strtomask(p);
+        cyrus_acl_strtomask(p, &ae->extra_rights);
+        /* XXX and if strtomask fails? */
 
         p = tok_next(&state.tok);
         if (p) {
