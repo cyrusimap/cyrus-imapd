@@ -96,8 +96,11 @@
 
 typedef int cyrus_acl_canonproc_t(void *rock, const char *identifier, int rights);
 
+/* check a string, with meaningful description of error */
+extern int cyrus_acl_checkstr(const char *str, char **errstr);
+
 /* convert a string to an acl bit vector */
-extern int cyrus_acl_strtomask(const char *str);
+extern int cyrus_acl_strtomask(const char *str, int *mask);
 
 /*  cyrus_acl_masktostr(acl, dst)
  * convert an acl bit vector to a string

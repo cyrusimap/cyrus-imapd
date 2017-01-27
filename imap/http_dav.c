@@ -1596,7 +1596,8 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	    userid++;
 	}
 
-	rights = cyrus_acl_strtomask(rightstr);
+	cyrus_acl_strtomask(rightstr, &rights);
+	/* XXX and if strtomask fails? */
 
 	/* Add ace XML element for this userid/right pair */
 	ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);

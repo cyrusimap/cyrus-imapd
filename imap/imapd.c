@@ -7132,6 +7132,18 @@ static void cmd_setacl(char *tag, const char *name,
 
     /* local mailbox */
     if (!r) {
+	char *err;
+
+	/* send BAD response if rights string contains unrecognised chars */
+	if (rights && *rights) {
+	    r = cyrus_acl_checkstr(rights, &err);
+	    if (r) {
+		prot_printf(imapd_out, "%s BAD %s\r\n", tag, err);
+		free(err);
+		return;
+	    }
+	}
+
 	r = mboxlist_setacl(&imapd_namespace, mailboxname, identifier, rights,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    proxy_userid, imapd_authstate);

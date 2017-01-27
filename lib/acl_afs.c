@@ -59,7 +59,6 @@
 
 /*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
- * 'acl' must be writable, but is restored to its original condition.
  */
 EXPORTED int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
 {
@@ -88,7 +87,10 @@ EXPORTED int cyrus_acl_myrights(struct auth_state *auth_state, const char *origa
 	    thisid++;
 	}
 	if (auth_memberof(auth_state, thisid)) {
-	    *acl_ptr |= cyrus_acl_strtomask(rights);
+	    int mask;
+	    cyrus_acl_strtomask(rights, &mask);
+	    /* XXX and if strtomask fails? */
+	    *acl_ptr |= mask;
 	}
     }
 
@@ -155,7 +157,8 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
 	*nextid++ = '\0';
 
 	if (strcmp(identifier, thisid) == 0) {
-	    oldaccess = cyrus_acl_strtomask(rights);
+	    cyrus_acl_strtomask(rights, &oldaccess);
+	    /* XXX and if strtomask fails? */
 	    break;
 	}
 	rights[-1] = '\t';
