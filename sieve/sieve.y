@@ -936,7 +936,6 @@ block: '{' commands '}'          { $$ = $2; }
 test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
         | ALLOF testlist         { $$ = new_test(ALLOF); $$->u.tl = $2; }
         | EXISTS stringlist      { $$ = new_test(EXISTS); $$->u.sl = $2; }
-        | VALIDEXTLIST stringlist{ $$ = new_test(VALIDEXTLIST); $$->u.sl = $2; }
         | SFALSE                 { $$ = new_test(SFALSE); }
         | STRUE                  { $$ = new_test(STRUE); }
 
@@ -1284,6 +1283,18 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                                      "servermetadataexists test");
                                          YYERROR; /* pe should call yyerror() */
                                      }
+                                 }
+
+        | VALIDEXTLIST stringlist
+                                 {
+                                     if (!parse_script->support.extlists) {
+                                         parse_error(parse_script,
+                                                     SIEVE_MISSING_REQUIRE,
+                                                     "extlists");
+                                         YYERROR; /* pe should call yyerror() */
+                                     }
+                                     $$ = new_test(VALIDEXTLIST);
+                                     $$->u.sl = $2;
                                  }
 
         | error                  { $$ = NULL; }
