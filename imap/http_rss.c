@@ -349,6 +349,12 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
 
     /* Locate the mailbox */
     if (*mboxname) {
+        /* Translate external (URL) mboxname to internal */
+        for (; len > 0; len--) {
+            if (mboxname[len-1] == '/') mboxname[len-1] = '.';
+            else if (mboxname[len-1] == '.') mboxname[len-1] = '^';
+        }
+
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
@@ -484,7 +490,16 @@ static int do_list(const char *name, void *rock)
 
         if (href) {
             /* Add selectable feed with link */
-            snprintf(path, sizeof(path), ".rss.%s", node->name);
+            struct buf *mboxname = &lrock->txn->buf;
+
+            /* Translate internal mboxname to external (URL) */
+            buf_setcstr(mboxname, node->name);
+            for (; len > 0; len--) {
+                if (mboxname->s[len-1] == '.') mboxname->s[len-1] = '/';
+                else if (mboxname->s[len-1] == '^') mboxname->s[len-1] = '.';
+            }
+
+            snprintf(path, sizeof(path), "/rss/%s", buf_cstring(mboxname));
             buf_printf(buf, "<li><a href=\"%s\">%s</a>",
                        href, shortname);
         }
@@ -539,10 +554,17 @@ static int list_feeds(struct transaction_t *txn)
     struct node root = { "", 0, NULL, NULL };
 
     if (template_file) {
+        struct buf *path = &txn->buf;
+
+        buf_reset(path);
+        prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
+        if (prefix) buf_printf(path, "%s/", prefix);
+        buf_appendcstr(path, template_file);
+
         /* See if template exists and contains feedlist variable */
-        if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
+        if (!stat(buf_cstring(path), &sbuf) && S_ISREG(sbuf.st_mode) &&
             (size_t) sbuf.st_size >= varlen &&
-            (fd = open(template_file, O_RDONLY)) != -1) {
+            (fd = open(buf_cstring(path), O_RDONLY)) != -1) {
             const char *p;
             unsigned long len;
 
