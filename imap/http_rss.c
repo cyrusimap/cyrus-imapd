@@ -156,6 +156,8 @@ static int meth_get(struct transaction_t *txn,
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
+    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(txn->req_uri->path,
                             &txn->req_tgt, &txn->error.desc))) {
