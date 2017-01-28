@@ -594,7 +594,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
 
-    for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
+    for (hdr = hop_by_hop; *hdr && strcasecmp(name, *hdr); hdr++);
 
     if (!*hdr) {
         if (!strcmp(name, "max-forwards")) {
