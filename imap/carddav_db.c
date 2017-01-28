@@ -774,13 +774,15 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
             int ispref = 0;
             struct vparse_param *param;
             for (param = ventry->params; param; param = param->next) {
-                if (!strcasecmp(param->name, "type") && !strcasecmp(param->value, "pref"))
+                if (!strcasecmp(param->name, "type") &&
+                    !strcasecmp(param->value, "pref"))
                     ispref = 1;
             }
             strarray_append(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
         }
-        else if (!strcasecmp(name, "x-addressbookserver-member")) {
+        else if (!strcasecmp(name, "member") ||
+                 !strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, "");
@@ -792,7 +794,8 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data
             strarray_append(&member_uids, propval+9);
             strarray_append(&member_uids, param->value);
         }
-        else if (!strcasecmp(name, "x-addressbookserver-kind")) {
+        else if (!strcasecmp(name, "kind") ||
+                 !strcasecmp(name, "x-addressbookserver-kind")) {
             if (!strcasecmp(propval, "group"))
                 cdata->kind = CARDDAV_KIND_GROUP;
             /* default case is CARDDAV_KIND_CONTACT */
