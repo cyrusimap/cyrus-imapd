@@ -370,7 +370,11 @@ int scan_me(struct findall_data *data, void *rock)
     struct scan_rock *srock = (struct scan_rock *) rock;
 
     if (verbose) {
-        printf("Working on %s...\n", name);
+        printf("\n%-40s\t%10s\t%6s\t%s\n",
+               "Mailbox Name", "Msg UID", "Status", "Virus Name");
+        printf("----------------------------------------\t"
+               "----------\t------\t"
+               "--------------------------------------------------\n");
     }
 
     r = mailbox_open_iwl(name, &mailbox);
@@ -395,7 +399,7 @@ int scan_me(struct findall_data *data, void *rock)
     if (notify) {
         char *owner = mboxname_to_userid(name);
         if (owner) {
-            if (!strcmp(owner, user->owner)) {
+            if (user && !strcmp(owner, user->owner)) {
                 i_mbox = user;
             } else {
                 /* new owner (Inbox) */
@@ -471,9 +475,10 @@ unsigned virus_check(struct mailbox *mailbox,
 
     if (r) {
         if (verbose) {
-            printf("Virus detected in %s message %u: %s\n",
+            printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
                    (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
-                   record->uid, virname);
+                   virname);
+
         }
         if (disinfect) {
             if (notify && i_mbox) {
@@ -496,7 +501,6 @@ void append_notifications()
     while ((i_mbox = user)) {
         if (i_mbox->msgs) {
             FILE *f = fdopen(fd, "w+");
-            size_t ownerlen;
             struct infected_msg *msg;
             char buf[8192], datestr[RFC822_DATETIME_MAX+1];
             time_t t;
@@ -504,6 +508,8 @@ void append_notifications()
             struct appendstate as;
             struct body *body = NULL;
             long msgsize;
+            mbname_t *mbname = mbname_from_userid(i_mbox->owner);
+
 
             fprintf(f, "Return-Path: <>\r\n");
             t = time(NULL);
@@ -516,15 +522,13 @@ void append_notifications()
             fprintf(f, "From: Mail System Administrator <%s>\r\n",
                     config_getstring(IMAPOPT_POSTMASTER));
             /* XXX  Need to handle virtdomains */
-            fprintf(f, "To: <%s>\r\n", i_mbox->owner+5);
+            fprintf(f, "To: <%s>\r\n", mbname_userid(mbname));
             fprintf(f, "MIME-Version: 1.0\r\n");
             fprintf(f, "Subject: Automatically deleted mail\r\n");
 
-            ownerlen = strlen(i_mbox->owner);
-
             while ((msg = i_mbox->msgs)) {
                 fprintf(f, "\r\n\r\nThe following message was deleted from mailbox "
-                        "'Inbox%s'\r\n", msg->mboxname+ownerlen);
+                        "'Inbox%s'\r\n", msg->mboxname+4);  /* skip "user" */
                 fprintf(f, "because it was infected with virus '%s'\r\n\r\n",
                         msg->virname);
                 fprintf(f, "\tMessage-ID: %s\r\n", msg->msgid);
@@ -549,8 +553,9 @@ void append_notifications()
             msgsize = ftell(f);
 
             /* send MessageAppend event notification */
-            append_setup(&as, i_mbox->owner, NULL, NULL, 0, NULL, NULL, 0,
+            append_setup(&as, mbname_intname(mbname), NULL, NULL, 0, NULL, NULL, 0,
                          EVENT_MESSAGE_APPEND);
+            mbname_free(&mbname);
 
             pout = prot_new(fd, 0);
             prot_rewind(pout);
