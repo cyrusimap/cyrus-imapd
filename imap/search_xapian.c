@@ -56,6 +56,7 @@
 
 #include "assert.h"
 #include "bitvector.h"
+#include "bloom.h"
 #include "global.h"
 #include "ptrarray.h"
 #include "user.h"
@@ -1858,8 +1859,7 @@ out:
 
 struct mbfilter {
     const char *userid;
-    struct conversations_state *cstate;
-    int batchcount;
+    struct bloom bloom;
     struct db *indexeddb;
     struct txn **tid;
     const strarray_t *destpaths;
@@ -1870,7 +1870,7 @@ static void free_mbfilter(struct mbfilter *filter)
 {
     if (filter->tid) cyrusdb_abort(filter->indexeddb, *filter->tid);
     cyrusdb_close(filter->indexeddb);
-    conversations_commit(&filter->cstate);
+    bloom_free(&filter->bloom);
 }
 
 static int copyindexed_cb(void *rock,
@@ -1894,25 +1894,27 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
     /* we can't get here without GUID keys */
     assert(!strncmp(cyrusid, "*G*", 3));
 
-    /* release the conversations DB every 1024 records */
-    if (filter->cstate && filter->batchcount > 1024)
-        conversations_commit(&filter->cstate);
+    return bloom_check(&filter->bloom, cyrusid+3, strlen(cyrusid+3));
+}
 
-    filter->batchcount++;
-
-    /* only open when needed */
-    if (!filter->cstate)
-        assert(!conversations_open_user(filter->userid, &filter->cstate));
-
-    return conversations_guid_exists(filter->cstate, cyrusid+3);
+static int bloomadd_cb(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data __attribute__((unused)),
+                       size_t datalen __attribute__((unused)))
+{
+    struct bloom *bloom = (struct bloom *)rock;
+    if (keylen > 41 && !memchr(key+41, '[', keylen-41))
+        bloom_add(bloom, key+1, 40);
+    return 0;
 }
 
 static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths,
-                         const char *userid, int flags, struct mbfilter *filter)
+                         const char *userid, int flags, struct mbfilter *filter, int bloom)
 {
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
     int i;
+    struct conversations_state *cstate = NULL;
 
     memset(filter, 0, sizeof(struct mbfilter));
     filter->destpaths = destpaths;
@@ -1952,7 +1954,22 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
         goto done;
     }
 
+    if (bloom) {
+        /* assume a 4 million maximum records */
+        bloom_init(&filter->bloom, 4000000, 0.01);
+
+        r = conversations_open_user(userid, &cstate);
+        if (r) {
+            printf("ERROR: failed to open conversations for %s\n", userid);
+            goto done;
+        }
+
+        r = cyrusdb_foreach(cstate->db, "G", 1, NULL, bloomadd_cb, &filter->bloom, NULL);
+    }
+
 done:
+    conversations_commit(&cstate);
+
     return r;
 }
 
@@ -1963,7 +1980,7 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 1);
     if (r) goto done;
 
     if (verbose)
@@ -2090,7 +2107,7 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0);
     if (r) goto done;
 
     if (verbose)
@@ -2119,7 +2136,7 @@ static int search_compress(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0);
     if (r) goto done;
 
     if (verbose)
