@@ -8,6 +8,9 @@
 /*
  * Refer to bloom.h for documentation on the public interfaces.
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <assert.h>
 #include <fcntl.h>
@@ -59,7 +62,7 @@ static int bloom_check_add(struct bloom * bloom,
   register unsigned int x;
   register unsigned int i;
 
-  for (i = 0; i < bloom->hashes; i++) {
+  for (i = 0; i < (unsigned)bloom->hashes; i++) {
     x = (a + i*b) % bloom->bits;
     if (test_bit_set_bit(bloom->bf, x, add)) {
       hits++;
@@ -75,13 +78,13 @@ static int bloom_check_add(struct bloom * bloom,
 
 
 int bloom_init_size(struct bloom * bloom, int entries, double error,
-                    unsigned int cache_size)
+                    unsigned int cache_size __attribute__((unused)))
 {
   return bloom_init(bloom, entries, error);
 }
 
 
-int bloom_init(struct bloom * bloom, int entries, double error)
+EXPORTED int bloom_init(struct bloom * bloom, int entries, double error)
 {
   bloom->ready = 0;
 
@@ -117,13 +120,13 @@ int bloom_init(struct bloom * bloom, int entries, double error)
 }
 
 
-int bloom_check(struct bloom * bloom, const void * buffer, int len)
+EXPORTED int bloom_check(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 0);
 }
 
 
-int bloom_add(struct bloom * bloom, const void * buffer, int len)
+EXPORTED int bloom_add(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 1);
 }
@@ -141,7 +144,7 @@ void bloom_print(struct bloom * bloom)
 }
 
 
-void bloom_free(struct bloom * bloom)
+EXPORTED void bloom_free(struct bloom * bloom)
 {
   if (bloom->ready) {
     free(bloom->bf);
