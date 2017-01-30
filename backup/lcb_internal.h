@@ -41,6 +41,7 @@
  *
  */
 
+#include "lib/sqldb.h"
 #include "lib/xsha1.h"
 
 #include "imap/partlist.h"
