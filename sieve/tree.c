@@ -208,6 +208,8 @@ void free_tree(commandlist_t *cl)
 	    if (cl->u.v.subject) free(cl->u.v.subject);
 	    if (cl->u.v.addresses) strarray_free(cl->u.v.addresses);
 	    if (cl->u.v.message) free(cl->u.v.message);
+	    free(cl->u.v.handle);
+	    free(cl->u.v.from);
 	    break;
 	    
 	case SETFLAG:

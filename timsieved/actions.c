@@ -76,7 +76,7 @@
 extern int sieved_userisadmin;
 static char *sieve_dir_config = NULL;
 
-static const char *sieved_userid = NULL;
+static char *sieved_userid = NULL;
 
 int actions_init(void)
 {
@@ -103,8 +103,10 @@ int actions_setuser(const char *userid)
   int result;  
 
   char *sieve_dir = (char *) xzmalloc(size+1);
-  
+
+  if (sieved_userid) free(sieved_userid);
   sieved_userid = xstrdup(userid);
+
   user = (char *) userid;
   if (config_virtdomains && strchr(user, '@')) {
       /* split the user and domain */

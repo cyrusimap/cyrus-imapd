@@ -5398,6 +5398,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	mboxname_userid_to_parts(userid, &parts);
 	parts.box = xstrdupnull(config_getstring(IMAPOPT_CALENDARPREFIX));
 	mboxname_parts_to_internal(&parts, mailboxname);
+	free((char *) parts.box); /* n.b. casting away constness */
 	mboxname_free_parts(&parts);
 
 	r = http_mlookup(mailboxname, &mbentry, NULL);
@@ -7692,7 +7693,7 @@ static void sched_reply(const char *userid,
 {
     int r, rights = 0;
     mbentry_t *mbentry = NULL;
-    const char *outboxname;
+    char *outboxname;
     icalcomponent *ical;
     struct sched_data *sched_data;
     struct auth_state *authstate;
@@ -7747,6 +7748,7 @@ static void sched_reply(const char *userid,
 	rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
 	mboxlist_entry_free(&mbentry);
     }
+    free(outboxname);
 
     if (!(rights & DACL_REPLY)) {
 	/* DAV:need-privileges */

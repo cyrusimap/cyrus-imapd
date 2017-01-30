@@ -885,7 +885,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
-    SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(server_key_file, server_cert_file));
+    DH* dh_freeme = load_dh_param(server_key_file, server_cert_file);
+    SSL_CTX_set_tmp_dh(s_ctx, dh_freeme);
 #endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
@@ -988,6 +989,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     tls_serverengine = 1;
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    DH_free(dh_freeme);
+#endif
     return (0);
 }
 
