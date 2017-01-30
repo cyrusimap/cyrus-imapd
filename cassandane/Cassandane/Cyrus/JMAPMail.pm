@@ -2575,6 +2575,7 @@ sub test_acl
     $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
 }
 
+=comment
 sub test_getmessagelist
     :JMAP :min_version_3_0
 {
@@ -2867,6 +2868,7 @@ sub test_getmessagelist
     @ids = reverse sort ($foo, $bar);
     $self->assert_deep_equals(\@ids, $res->[0][1]->{messageIds});
 }
+=cut
 
 sub test_getmessagelist_collapse
     :JMAP :min_version_3_0
