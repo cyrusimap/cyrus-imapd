@@ -92,7 +92,7 @@ extern int optind;
 extern char *optarg;
 
 /* current namespace */
-static struct namespace recon_namespace;
+static struct namespace mbtool_namespace;
 
 /* forward declarations */
 static int do_cmd(struct findall_data *data, void *rock);
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&mbtool_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EC_CONFIG);
     }
@@ -148,7 +148,7 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        mboxlist_findall(&recon_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
+        mboxlist_findall(&mbtool_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
     }
 
     mboxlist_close();
@@ -177,7 +177,7 @@ static int do_timestamp(const mbname_t *mbname)
     signals_poll();
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(mbname, &recon_namespace, "cyrus");
+    const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
     printf("Working on %s...\n", extname);
 
     const char *name = mbname_intname(mbname);
