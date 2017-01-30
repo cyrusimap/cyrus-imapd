@@ -55,7 +55,6 @@
 #include "ptrarray.h"
 #include "quota.h"
 #include "sequence.h"
-#include "sqldb.h"
 #include "util.h"
 
 #define MAX_MAILBOX_NAME 490
