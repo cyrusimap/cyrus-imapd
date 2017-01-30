@@ -1856,11 +1856,6 @@ out:
     return 0;
 }
 
-struct mbdata {
-    uint32_t uidvalidity;
-    bitvector_t uids;
-};
-
 struct mbfilter {
     const char *userid;
     struct conversations_state *cstate;
