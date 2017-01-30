@@ -108,7 +108,6 @@ int main(int argc, char **argv)
 {
     int opt, i, r;
     int cmd = 0;
-    char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -149,11 +148,7 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        /* Handle virtdomains and separators in mailboxname */
-        char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
-        mboxlist_findall(&recon_namespace, buf, 1, 0, 0,
-                         do_cmd, &cmd);
-        free(intname);
+        mboxlist_findall(&recon_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
     }
 
     mboxlist_close();
