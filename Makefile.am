@@ -723,6 +723,7 @@ include_HEADERS = \
 	lib/auth.h \
 	lib/auth_pts.h \
 	lib/bitvector.h \
+	lib/bloom.h \
 	lib/bsearch.h \
 	lib/bufarray.h \
 	lib/charset.h \
@@ -748,6 +749,7 @@ include_HEADERS = \
 	lib/mappedfile.h \
 	lib/mkgmtime.h \
 	lib/mpool.h \
+	lib/murmurhash2.h \
 	lib/nonblock.h \
 	lib/parseaddr.h \
 	lib/retry.h \
@@ -1336,6 +1338,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/auth_pts.c \
 	lib/auth_unix.c \
 	lib/bitvector.c \
+	lib/bloom.c \
 	lib/bsearch.c \
 	lib/charset.c \
 	lib/command.c \
@@ -1355,6 +1358,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/libcyr_cfg.c \
 	lib/lsort.c \
 	lib/mappedfile.c \
+	lib/murmurhash.c \
 	lib/mkgmtime.c \
 	lib/parseaddr.c \
 	lib/prot.c \
