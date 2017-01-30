@@ -452,27 +452,23 @@ int main(int argc, char **argv)
     else if (options.mode == CTLBU_MODE_ALL) {
         /* loop over entire backups.db */
         struct db *backups_db = NULL;
-        struct txn *tid = NULL;
 
-        r = backupdb_open(&backups_db, &tid);
+        r = backupdb_open(&backups_db, NULL);
 
         if (!r)
             r = cyrusdb_foreach(backups_db, NULL, 0, NULL,
                                 cmd_func[cmd], &options,
-                                &tid);
+                                NULL);
 
-        if (backups_db) {
-            if (tid) cyrusdb_abort(backups_db, tid);
+        if (backups_db)
             cyrusdb_close(backups_db);
-        }
     }
     else if (options.mode == CTLBU_MODE_DOMAIN) {
         /* loop over domains named on command line */
         struct db *backups_db = NULL;
-        struct txn *tid = NULL;
         int i;
 
-        r = backupdb_open(&backups_db, &tid);
+        r = backupdb_open(&backups_db, NULL);
 
         for (i = optind; i < argc && !r; i++) {
             options.domain = argv[i];
@@ -480,35 +476,29 @@ int main(int argc, char **argv)
             r = cyrusdb_foreach(backups_db, NULL, 0,
                                 domain_filter,
                                 cmd_func[cmd], &options,
-                                &tid);
+                                NULL);
         }
 
-        if (backups_db) {
-            if (tid) cyrusdb_abort(backups_db, tid);
+        if (backups_db)
             cyrusdb_close(backups_db);
-        }
-
     }
     else if (options.mode == CTLBU_MODE_PREFIX) {
         /* loop over prefixes named on command line */
         struct db *backups_db = NULL;
-        struct txn *tid = NULL;
         int i;
 
-        r = backupdb_open(&backups_db, &tid);
+        r = backupdb_open(&backups_db, NULL);
 
         for (i = optind; i < argc && !r; i++) {
             r = cyrusdb_foreach(backups_db,
                                 argv[i], strlen(argv[i]),
                                 NULL,
                                 cmd_func[cmd], &options,
-                                &tid);
+                                NULL);
         }
 
-        if (backups_db) {
-            if (tid) cyrusdb_abort(backups_db, tid);
+        if (backups_db)
             cyrusdb_close(backups_db);
-        }
     }
     else {
         /* loop over backups named on command line */
