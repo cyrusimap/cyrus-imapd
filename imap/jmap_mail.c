@@ -2323,6 +2323,8 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                     free(unfolded);
                     buf_trim(&buf);
                     cid = buf_cstring(&buf);
+                } else {
+                    cid = NULL;
                 }
             }
             json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
