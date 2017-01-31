@@ -293,6 +293,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
 static void backupd_reset(void)
 {
+    open_backups_list_close(&backupd_open_backups, 0);
+
     proc_cleanup();
 
     if (backupd_in) {
