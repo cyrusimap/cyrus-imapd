@@ -3326,10 +3326,31 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         buf_reset(&txn->zbuf);
 
         do {
+	    int zr;
+
+	    if (!zstrm->avail_out) {
+		unsigned pending;
+
+		zr = deflatePending(zstrm, &pending, Z_NULL);
+		if (zr != Z_OK) {
+		    /* something went wrong */
+		    syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+		    fatal("zlib: Error while compressing data", EC_SOFTWARE);
+		}
+
+		buf_ensure(&txn->zbuf, pending);
+	    }
+
             zstrm->next_out = (Bytef *) txn->zbuf.s + txn->zbuf.len;
             zstrm->avail_out = txn->zbuf.alloc - txn->zbuf.len;
 
-            deflate(zstrm, flush);
+            zr = deflate(zstrm, flush);
+            if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
+		/* something went wrong */
+		syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+                fatal("zlib: Error while compressing data", EC_SOFTWARE);
+            }
+
             txn->zbuf.len = txn->zbuf.alloc - zstrm->avail_out;
 
         } while (!zstrm->avail_out);
