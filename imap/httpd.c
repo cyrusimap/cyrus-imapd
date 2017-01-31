@@ -4441,7 +4441,7 @@ static int meth_get(struct transaction_t *txn,
         tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
 
-        while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path))
+        while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);
 
         if (!token) return HTTP_NOT_FOUND;
