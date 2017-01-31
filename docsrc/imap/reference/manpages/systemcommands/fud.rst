@@ -23,15 +23,57 @@ provides information about when a user last read their mail, when mail
 last arrived in a user's mailbox, and how many messages are recent for
 that user.
 
-Note that for **fud** to run properly you must set ``proto=udp`` in its
-:cyrusman:`cyrus.conf(5)` services entry.  ``prefork=1`` is also
-recommended.
+**fud** |default-conf-text|
 
 **fud** will automatically proxy any and all FUD requests to the
 appropriate backend server if it is runing on a Cyrus Murder frontend
 machine.
 
-**fud** |default-conf-text|
+To set up the FUD daemon, add this to your cyrus.conf:
+
+``fud           cmd="fud" listen="fud" prefork=1 proto="udp"``
+
+and to /etc/services:
+
+``fud             4201/udp                        # Cyrus IMAP FUD Daemon``
+
+Client
+------
+
+There is no specific FUD client. This shows how one might access FUD.
+
+::
+
+    #!/usr/bin/perl
+
+    use Socket;
+
+    print( "Enter fud hostname: " );
+    $hostname = <>;
+    chomp( $hostname );
+
+    print( "Enter username to query: " );
+    $username = <>;
+    chomp( $username );
+
+    socket( FUD, PF_INET, SOCK_DGRAM, getprotobyname( "udp" ) )
+       or die( "failed to create udp socket: $!" );
+
+    $ipaddr = inet_aton( $hostname );
+    $portaddr = sockaddr_in( '4201', $ipaddr );
+
+    $fud_query = $username . '|user.' . $username;
+
+    send( FUD, "$fud_query", 0, $portaddr ) == length( $fud_query )
+       or die( "failed to send fud query: $!" );
+
+    recv( FUD, $fud_response, 512, 0 )
+       or die( "recv() failed: $!" );
+
+    print( "FUD responded: $fud_response\n" );
+
+    exit( 0 );
+
 
 Options
 =======
