@@ -1509,6 +1509,7 @@ dist_man8_MANS = \
 	man/master.8 \
 	man/mbexamine.8 \
 	man/mbpath.8 \
+	man/mbtool.8 \
 	man/notifyd.8 \
 	man/pop3d.8 \
 	man/quota.8 \
