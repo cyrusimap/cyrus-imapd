@@ -526,8 +526,11 @@ EXPORTED int backup_compact(const char *name,
                         fprintf(out, "error reading chunk at offset %jd, byte %i: %s\n",
                                 chunk->offset, prot_bytes_in(in), error);
 
-                    r = IMAP_IOERROR;
-                    goto error;
+                    /* chunk is corrupt, discard the rest of it and get on with
+                     * the next.  the next replication will fill in anything that
+                     * was lost.
+                     */
+                    goto next_chunk;
                 }
 
                 break;
@@ -561,6 +564,7 @@ EXPORTED int backup_compact(const char *name,
                 }
             }
         }
+next_chunk:
 
         // if we're due to start a new chunk
         if (compact->append_state && compact->append_state->mode) {
