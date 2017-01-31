@@ -219,7 +219,7 @@ int do_cmd(struct findall_data *data, void *rock)
     if (!data) return 0;
     int *valp = (int *)rock;
 
-    if (*valp == CMD_TIME)
+    if (*valp == CMD_TIME && data->mbname != NULL)
         return do_timestamp(data->mbname);
 
     return 0;
