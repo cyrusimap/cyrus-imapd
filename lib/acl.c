@@ -59,6 +59,9 @@ EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
     const char *rights = "lrswipckxtedan0123456789";
     const char *p;
 
+    /* ignore leading plus/minus */
+    if (*str == '-' || *str == '+') str++;
+
     for (p = str; *p; p++) {
         if (strchr(rights, *p) == NULL) {
             struct buf errbuf = BUF_INITIALIZER;
