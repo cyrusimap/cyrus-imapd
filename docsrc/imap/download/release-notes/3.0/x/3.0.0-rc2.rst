@@ -1,0 +1,153 @@
+:tocdepth: 3
+
+====================================
+Cyrus IMAP 3.0.0 rc2 Release Notes
+====================================
+
+.. WARNING::
+
+    Cyrus IMAP 3.0 is under active development, and subject to change.
+
+    Do **NOT** use this version unless you're a developer of sorts.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.0-rc2.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.0-rc2.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.0-rc2.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.0-rc2.tar.gz.sig
+
+.. _relnotes-3.0.0-rc2-changes:
+
+Major changes since the 2.5.x series
+====================================
+
+*   The source repository has moved to :ref:`GitHub <github-guide>`, Bugzilla and Phabricator
+    have been deprecated.  Their issue lists are being imported into GitHub.
+
+*   Support added for FastMail-style conversations (threaded messages).
+    (See the ``conversations`` options in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
+
+*   Optional Xapian_ integration for faster and shinier search. Note that this requires custom
+    patches to Xapian, in this release. (See the ``search_engine`` option in
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`, and ``doc/README.xapian`` in the
+    source distribution.)) Compiling Xapian support requires gcc 4.9 or later.
+
+*   Archive support has arrived! Requires addition of an archive partition. (See ``archive_*``
+    options in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
+
+*   Basic JMAP_ support. (See ``httpmodules`` in
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
+
+*   ClamAV_ integration for AntiVirus support is now working again.
+
+*   Dropped support for Berkeley DB.
+
+*   The handling of configure options has changed, dropping support for
+    ``--with-cyrus-prefix`` and ``--with-service-path`` in favour of the more conventional
+    ``--prefix``, ``--bindir``, ``--sbindir``, and ``--libexecdir``.
+
+*   Binaries executed by the :ref:`master(8) <imap-reference-manpages-systemcommands-master>`
+    service process are now installed to ``--libexecdir``.  Other binaries are installed to
+    ``--bindir`` and/or ``--sbindir``.
+
+    The ``make installbinsymlinks`` target can be used to set up symlinks to everything in
+    ``--bindir``, if you need that in your environment.
+
+*   Added support for replicating mailboxes/users to a particular partition.  ``sync_client``
+    now accepts a ``-p`` option.
+
+*   The ``defaultdomain`` setting in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+    now defaults to "internal" (was: NULL)
+
+*   Added experimental backup service.  See :ref:`Cyrus Backups <cyrus-backups>`
+
+*   Support for Apple's Push service (XAPPLEPUSH).  See :ref:`Cyrus Eventsource <cyrus-eventsource>`
+
+*   Sieve now supports special use folders.  See :ref:`Cyrus Sieve <cyrus-sieve-specialuse>`
+
+*   Sieve now supports the following :ref:`extensions <cyrus-sieve-extensions>`:
+
+    * :rfc:`5490` Checking Mailbox Status and Accessing Mailbox Metadata
+    * :rfc:`5229` Variables
+
+*   Sieve bytecode is now automatically recompiled when it is detected to be missing or out of date
+
+*   New numeric header available for sorting: X-Spam-Score
+
+*   Added IMIP notification support to :ref:`notifyd(8) <imap-reference-manpages-systemcommands-notifyd>`.
+    See ``imipnotifier`` in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+
+*   Optimised CRC32 implementation
+
+*   Added support for reverse ACLs, enabling faster LIST response.  See ``reverseacls`` in
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+
+*   Added cross-domain sharing support.  See ``crossdomains`` and ``crossdomains_onlyother``
+    in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+
+*   Added experimental object storage for mail data, with preliminary support for OpenIO and
+    Caringo backends.  See configure.ac ``--enable-objectstore``, and the ``object_storage_*``,
+    ``openio_*`` and ``caringo_*`` options in
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`.
+
+*   Configurable POP3 UIDL format for compatibility with other mail servers.  Supports
+    Courier Mail Server and Dovecot formats, in addition to Cyrus formats.  See ``uidl_format``
+    in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+
+*   Under ``delete_mode: delayed``, only the 20 most recently deleted mailboxes are kept
+    for any given name.
+
+*   Documentation cleanup: we are moving toward having a single restructured text source for man
+    pages and html/text documentation, which are pre-generated for inclusion in release tarballs.
+    If you wish to rebuild these, or are building from a git clone in which they are not
+    pregenerated, you will need to install ``sphinx-build``, and the perl module
+    ``Pod::POM::View::Restructured``.  The top level Makefile now has ``man`` and ``doc`` targets
+    for building these.
+
+*   Added support for OpenSSL 1.1.0.
+
+*   Replication now supports incremental partial updates, so massive updates (such as
+    mail imports) won't stall replication for other users.  See ``sync_batchsize`` in
+    :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
+
+*   The mailbox cache minor version has been incremented to store a GUID for each body part.
+
+Updates to default configuration
+================================
+
+*   ``unixhierarchysep`` (``/``) is now ``on`` by default (instead of netnews style ``.``)
+
+*   ``altnamespace`` is now ``on`` by default (was ``off``)
+
+*   ``virtdomains`` is now ``userid`` by default (was ``off``)
+
+Significant bugfixes
+====================
+
+*   Lots of fixes to caldav and carddav.
+
+    Includes the addition of a new daemon (calalarmd) which periodically processes a global
+    database containing the "next" alarm for each item, and sends the relevant mboxevents.
+    (See configure.ac ``--with-calalarmd``)
+
+*   Replication reliability fixes.
+
+*   Improved ``LIST-EXTENDED``: more imap tests now succeed.
+
+*   Extensive cleanup of mailbox name handling
+
+*   ``master`` now requests a sane maximum number of open file descriptors, and only
+    complains if this isn't allowed.
+
+*   Fixes to compiling on Solaris (thanks Jens Erat, Marty Lee)
+
+*   Improved handling of mailbox renames during replication
+
+
+.. _Xapian: https://xapian.org
+.. _ClamAV: https://www.clamav.net
+.. _JMAP: http://jmap.io
