@@ -1403,15 +1403,7 @@ fi
 if test "x$enable_murder" = "xyes"; then
         AC_DEFINE(USE_MURDER,[],[Build with Murder functionality])
 fi
-dnl
-dnl see if we're compiling with calendar alarm support
-dnl
-AC_ARG_ENABLE(calalarmd,
-        [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
-AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
-if test "x$enable_calalarmd" = "xyes"; then
-        AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
-fi
+
 dnl
 dnl see if we're compiling with HTTP support
 dnl
@@ -1559,6 +1551,20 @@ AC_SUBST(HTTP_LIBS)
 if test "x$enable_http" = "xyes"; then
         AC_DEFINE(USE_HTTPD,[],[Build with HTTP functionality])
 fi
+
+dnl
+dnl see if we're compiling with calendar alarm support
+dnl
+AC_ARG_ENABLE(calalarmd,
+        [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
+if test "x$enable_calalarmd" = "xyes"; then
+    if test "x$enable_http" = "xyes"; then
+	AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
+    else
+	AC_MSG_ERROR([--enable-calalarmd requires --enable-http])
+    fi
+fi
+AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
 
 dnl
 dnl see if we're compiling replication support programs
