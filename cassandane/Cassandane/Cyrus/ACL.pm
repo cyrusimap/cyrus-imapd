@@ -140,6 +140,85 @@ sub test_move
     $self->assert($talk->get_last_error() =~ m/permission denied/i);
 }
 
+sub test_setacl_badacl
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "ylrswipcd");
+    $self->assert_str_equals('bad', $admintalk->get_last_completion_response());
+}
+
+sub test_setacl_addacl
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "lrswipkxtecdn");
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "+a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_setacl_rmacl
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "lrswipkxtecdan");
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "-a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_setacl_addacl_exists
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "lrswipkxtecdan");
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "+a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_setacl_rmacl_unexists
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.emptyid");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # send an empty identifier for SETACL
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "lrswipkxtecdn");
+    $admintalk->setacl("user.cassandane.emptyid", "foo", "-a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
 sub test_reconstruct
 {
     my ($self) = @_;
