@@ -23,7 +23,6 @@ Installation Using Packages
     :glob:
 
     installation/distributions/*
-    installation/obs
 
 Build and Install Yourself
 ==========================

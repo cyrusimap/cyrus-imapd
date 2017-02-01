@@ -97,23 +97,4 @@ configured by default as an administrator for Cyrus IMAP:
 
 Next, continue with :ref:`imap-configuring-the-mta`.
 
-Other Versions of Cyrus IMAP
-----------------------------
-
-The following guides walk you through providing you with a version of
-the Cyrus IMAP software that is no longer mainstream, and as such the
-level of technical detail is advanced.
-
-*   :ref:`imap-installation-rhel-last-stable`
-*   :ref:`imap-installation-rhel-last-stable-next`
-*   :ref:`imap-installation-rhel-current-stable`
-*   :ref:`imap-installation-rhel-current-stable-next`
-*   :ref:`imap-installation-rhel-latest-development`
-
-.. toctree::
-    :glob:
-    :hidden:
-
-    rhel/*
-
 .. _Red Hat, Inc.: https://redhat.com
