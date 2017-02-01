@@ -106,22 +106,3 @@ configured by default as an administrator for Cyrus IMAP:
     Connection closed.
 
 Next, continue with :ref:`imap-configuring-the-mta`.
-
-Other Versions of Cyrus IMAP
-----------------------------
-
-The following guides walk you through providing you with a version of
-the Cyrus IMAP software that is no longer mainstream, and as such the
-level of technical detail is advanced.
-
-*   :ref:`imap-installation-fedora-last-stable`
-*   :ref:`imap-installation-fedora-last-stable-next`
-*   :ref:`imap-installation-fedora-current-stable`
-*   :ref:`imap-installation-fedora-current-stable-next`
-*   :ref:`imap-installation-fedora-latest-development`
-
-.. toctree::
-    :glob:
-    :hidden:
-
-    fedora/*

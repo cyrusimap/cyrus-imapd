@@ -51,7 +51,7 @@ You should at this moment be able to authenticate against
 
 You should get an ``0: OK "Success."`` message.
 
-.. todo:: 
+.. todo::
     If this does not succeed, see ref:`sasl-troubleshooting-saslauthd`.
 
 Start the service, and ensure the service starts up when the system
@@ -89,22 +89,3 @@ configured by default as an administrator for Cyrus IMAP:
     Connection closed.
 
 Next, continue with :ref:`imap-configuring-the-mta`.
-
-Other Versions of Cyrus IMAP
-----------------------------
-
-The following guides walk you through providing you with a version of
-the Cyrus IMAP software that is no longer mainstream, and as such the
-level of technical detail is advanced.
-
-*   :ref:`imap-installation-centos-last-stable`
-*   :ref:`imap-installation-centos-last-stable-next`
-*   :ref:`imap-installation-centos-current-stable`
-*   :ref:`imap-installation-centos-current-stable-next`
-*   :ref:`imap-installation-centos-latest-development`
-
-.. toctree::
-    :glob:
-    :hidden:
-
-    centos/*
