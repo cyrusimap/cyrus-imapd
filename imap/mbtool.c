@@ -129,6 +129,12 @@ int main(int argc, char **argv)
         }
     }
 
+    /* must provide a command */
+    if (!cmd) usage();
+
+    /* must provide some mailboxes */
+    if (optind == argc) usage();
+
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
@@ -143,10 +149,6 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    if (optind == argc) {
-        usage();
-    }
-
     for (i = optind; i < argc; i++) {
         mboxlist_findall(&mbtool_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
     }
@@ -159,8 +161,12 @@ int main(int argc, char **argv)
 
 static void usage(void)
 {
-    fprintf(stderr,
-            "usage: mbtool [-C <alt_config>] mailbox...\n");
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    mbtool [options] -t mailbox...\n");
+    fprintf(stderr, "\nCommands:\n");
+    fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
+    fprintf(stderr, "\nOptions:\n");
+    fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
     exit(EC_USAGE);
 }
 
