@@ -518,7 +518,8 @@ static struct meth_params caldav_params = {
 
 /* Namespace for CalDAV collections */
 struct namespace_t namespace_calendar = {
-    URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
+    URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav",
+    http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_CALENDAR,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
 #ifdef HAVE_VPATCH
@@ -557,7 +558,8 @@ struct namespace_t namespace_calendar = {
 
 /* Namespace for Freebusy Read URL */
 struct namespace_t namespace_freebusy = {
-    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */,
+    URL_NS_FREEBUSY, 0, "/freebusy", NULL,
+    http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_CALENDAR,
     ALLOW_READ,
     NULL, NULL, NULL, NULL, NULL,

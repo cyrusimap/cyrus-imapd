@@ -116,7 +116,8 @@ static struct mime_type_t isched_mime_types[] = {
 };
 
 struct namespace_t namespace_ischedule = {
-    URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
+    URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI,
+    http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
     isched_init, NULL, NULL, isched_shutdown, NULL,
@@ -145,7 +146,8 @@ struct namespace_t namespace_ischedule = {
 };
 
 struct namespace_t namespace_domainkey = {
-    URL_NS_DOMAINKEY, 0, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
+    URL_NS_DOMAINKEY, 0, "/domainkeys", "/.well-known/domainkey",
+    http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     NULL, NULL, NULL, NULL, NULL,

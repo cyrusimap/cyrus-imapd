@@ -438,7 +438,8 @@ struct namespace_t {
     unsigned enabled;           /* Is this namespace enabled? */
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
-    unsigned need_auth;         /* Do we need to auth for this namespace? */
+    int (*need_auth)(struct transaction_t *); /* Run prior unauthorized requests */
+    unsigned auth_schemes;      /* Bitmask of allowed auth schemes, 0 for any */
     int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *); /* Function run during service startup */
@@ -536,5 +537,7 @@ extern int check_precond(struct transaction_t *txn,
                          const char *etag, time_t lastmod);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
+extern int http_allow_noauth(struct transaction_t *txn);
+extern int http_allow_noauth_get(struct transaction_t *txn);
 
 #endif /* HTTPD_H */

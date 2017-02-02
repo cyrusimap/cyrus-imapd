@@ -657,7 +657,8 @@ const struct known_meth_t http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */,
+    URL_NS_DEFAULT, 1, "", NULL,
+    http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     NULL, NULL, NULL, NULL, NULL,
@@ -1678,6 +1679,11 @@ static int examine_request(struct transaction_t *txn)
         return HTTP_SERVER_ERROR;
     }
 
+    /* See if this namespace whitelists auth schemes */
+    if (namespace->auth_schemes) {
+        avail_auth_schemes = namespace->auth_schemes & avail_auth_schemes;
+    }
+
     /* Perform authentication, if necessary */
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
         if (httpd_userid) {
@@ -1742,17 +1748,8 @@ static int examine_request(struct transaction_t *txn)
     buf_reset(&txn->buf);
 
     /* Request authentication, if necessary */
-    switch (txn->meth) {
-    case METH_GET:
-    case METH_HEAD:
-        /* Let method processing function decide if auth is needed */
-        break;
-
-    default:
-        if (!httpd_userid && namespace->need_auth) {
-            /* Authentication required */
-            ret = HTTP_UNAUTHORIZED;
-        }
+    if (!httpd_userid && namespace->need_auth(txn)) {
+        ret = HTTP_UNAUTHORIZED;
     }
 
     if (ret) return client_need_auth(txn, r);
@@ -4737,4 +4734,24 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
     }
 
     return rights;
+}
+
+/* Allow unauthenticated GET/HEAD, deny all other unauthenticated requests */
+EXPORTED int http_allow_noauth_get(struct transaction_t *txn)
+{
+    /* Inverse logic: True means we *require* authentication */
+    switch (txn->meth) {
+    case METH_GET:
+    case METH_HEAD:
+        /* Let method processing function decide if auth is needed */
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+/* Allow unauthenticated requests */
+EXPORTED int http_allow_noauth(struct transaction_t *txn __attribute__((unused)))
+{
+    return 0;
 }

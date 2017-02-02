@@ -91,7 +91,8 @@ static int action_conf(struct transaction_t *txn);
 
 /* Namespace for admin service */
 struct namespace_t namespace_admin = {
-    URL_NS_ADMIN, 1, "/admin", NULL, 1 /* auth */,
+    URL_NS_ADMIN, 1, "/admin", NULL,
+    http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     admin_init, NULL, NULL, NULL, NULL,

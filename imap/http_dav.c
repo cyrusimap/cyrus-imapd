@@ -270,7 +270,8 @@ static struct meth_params princ_params = {
 
 /* Namespace for WebDAV principals */
 struct namespace_t namespace_principal = {
-    URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
+    URL_NS_PRINCIPAL, 0, "/dav/principals", NULL,
+    http_allow_noauth_get, /*authschemes*/0,
     /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
     &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown, &dav_premethod,
@@ -8894,7 +8895,8 @@ struct meth_params notify_params = {
 
 /* Namespace for WebDAV notifcation collections */
 struct namespace_t namespace_notify = {
-    URL_NS_NOTIFY, 0, "/dav/notifications", NULL, 1 /* auth */,
+    URL_NS_NOTIFY, 0, "/dav/notifications", NULL,
+    http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),

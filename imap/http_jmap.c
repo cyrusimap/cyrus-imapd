@@ -69,7 +69,8 @@ static void jmap_finireq(jmap_req_t *req);
 
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
-    URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap", 1 /* auth */,
+    URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap",
+    http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
     &jmap_init, &jmap_auth, NULL, NULL, NULL,
