@@ -4073,6 +4073,13 @@ static int getMessages(jmap_req_t *req)
         json_t *msg = NULL;
         struct mailbox *mbox = NULL;
 
+        if (strlen(id) && id[0] == '#') {
+            if (!(id = (const char *) hash_lookup(id+1, req->idmap))) {
+                r = IMAP_NOTFOUND;
+                goto doneloop;
+            }
+        }
+
         r = jmapmsg_find(req, id, &mboxname, &uid);
         if (r) goto doneloop;
 
@@ -6101,6 +6108,9 @@ static int importMessages(jmap_req_t *req)
         }
 
         json_object_set_new(created, id, mymsg);
+
+        char *mymsgid = xstrdupnull(json_string_value(json_object_get(mymsg, "id")));
+        hash_insert(id, mymsgid, req->idmap); /* idmap takes ownership */
     }
 
     /* Prepare the response */
