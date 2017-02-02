@@ -1,3 +1,5 @@
+.. _imap-features-metadata-partitions:
+
 ===========================
 Mailbox Metadata Partitions
 ===========================

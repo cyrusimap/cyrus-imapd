@@ -48,6 +48,8 @@ One per user:
 * `Subscriptions (<userid>.sub)`_
 * `Search Indexes (cyrus.squat, <userid>.xapianactive)`_
 
+.. _imap-concepts-deployment-db-mailboxes:
+
 Mailbox List (mailboxes.db)
 ---------------------------
 
@@ -59,6 +61,8 @@ This database contains the master list of all mailboxes on the system. The datab
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
 
+.. _imap-concepts-deployment-db-annotations:
+
 Annotations (annotations.db)
 ----------------------------
 
@@ -69,6 +73,8 @@ This database contains mailbox and server annotations. The database is indexed b
     Data: <Value Size (4 bytes)><Value>\0<Content-Type>\0<Timestamp (4 bytes)>
 
 File type can be `twoskip`_  (default), `skiplist`_, or `lmdb`_.
+
+.. _imap-concepts-deployment-db-quotas:
 
 Quotas (quotas.db)
 ------------------
@@ -93,6 +99,8 @@ Newer versions are stored as a DList file with keys for each type of quota, and 
 
 The translation to/from this data record format is handled by the quota_legacy cyrusdb backend.
 
+.. _imap-concepts-deployment-db-deliver:
+
 Duplicate Delivery (deliver.db)
 -------------------------------
 
@@ -104,6 +112,8 @@ This database is used for duplicate delivery suppression, retrieving usenet arti
 
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `lmdb`_.
 
+
+.. _imap-concepts-deployment-db-tls:
 
 TLS cache (tls_sessions.db)
 ---------------------------
@@ -117,6 +127,8 @@ This database caches SSL/TLS sessions so that subsequent connections using the s
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `lmdb`_.
 
 
+.. _imap-concepts-deployment-db-pts:
+
 PTS cache (ptscache.db)
 -----------------------
 
@@ -128,6 +140,8 @@ This database caches authentication state records, resulting in shorter authenti
 
 File type can be: `twoskip`_ (default), `skiplist`_, or `lmdb`_.
 
+
+.. _imap-concepts-deployment-db-status:
 
 STATUS cache (statuscache.db)
 -----------------------------
@@ -141,6 +155,8 @@ This database caches IMAP STATUS information resulting in less I/O when the STAT
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `lmdb`_.
 
 
+.. _imap-concepts-deployment-db-userdeny:
+
 User Access (user_deny.db)
 --------------------------
 
@@ -152,6 +168,7 @@ This database contains a list of users that are denied access to Cyrus services.
 
 File type can be: `flat`_ (default), `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
 
+.. _imap-concepts-deployment-db-backups:
 
 Backups (backups.db)
 --------------------
@@ -160,6 +177,8 @@ This database maps userids to the location of their backup files.  It only exist
 on Cyrus Backup servers (compiled with the `--enable-backup` configure option).
 
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
+
+.. _imap-concepts-deployment-db-conversations:
 
 Conversations (<userid>.conversations)
 --------------------------------------
@@ -176,15 +195,23 @@ that folder.
 
 File type can be: `skiplist`_ (default), `sql`_, `twoskip`_, or `lmdb`_.
 
+.. _imap-concepts-deployment-db-counters:
+
 Counters (<userid>.counters)
 ----------------------------
 
 File format not selectable.
 
+TODO
+
+.. _imap-concepts-deployment-db-fetchnews:
+
 News database (fetchnews.db)
 ----------------------------
 
 File format not selectable.
+
+.. _imap-concepts-deployment-db-search:
 
 Search Indexes (cyrus.squat, <userid>.xapianactive)
 ---------------------------------------------------
@@ -193,6 +220,8 @@ This is either cyrus.squat in each folder, or if you're using xapian a single
 <userid>.xapianactive file listing active databases by tier name and number.
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
+
+.. _imap-concepts-deployment-db-zoneinfo:
 
 Zoneinfo db (zoneinfo.db)
 -------------------------
@@ -210,6 +239,8 @@ alias).  The format of each record is as follows::
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
 
+.. _imap-concepts-deployment-db-seen:
+
 Seen State (<userid>.seen)
 --------------------------
 
@@ -220,6 +251,8 @@ This database is a per-user database and maintains the list of messages that the
     Data: <Version>SP<Last Read Time>SP<Last Read UID>SP<Last Change Time>SP<List of Read UIDs>
 
 File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
+
+.. _imap-concepts-deployment-db-sub:
 
 Subscriptions (<userid>.sub)
 ----------------------------
@@ -232,6 +265,16 @@ This database is a per-user database and contains the list of mailboxes to which
 
 File type can be: `flat`_ (default), `skiplist`_, `twoskip`_, or `lmdb`_.
 
+.. _imap-concepts-deployment-db-xapianactive:
+
+Search Index DB List (<userid>.xapianactive)
+--------------------------------------------
+
+TODO
+
+
+.. _imap-concepts-deployment-db-mboxkey:
+
 Mailbox Keys (<userid>.mboxkey)
 -------------------------------
 
@@ -242,6 +285,8 @@ This database is a per-user database and contains the list of mailbox access key
     Data: <Version (2 bytes)><Access Key (multi-byte)>
 
 File type can be: `twoskip`_ (default), `skiplist`_, or `lmdb`_.
+
+.. _imap-concepts-deployment-db-userdav:
 
 DAV Index (<userid>.dav)
 ------------------------
@@ -356,4 +401,5 @@ robustness that a SQL server provides, so the tradeoff is less compelling.
 quotalegacy
 -----------
 
-Only valid for the `Quotas (quotas.db)`_.
+Only valid for the `Quotas (quotas.db)`_.  Has the advantage of
+virtually no lock contention.

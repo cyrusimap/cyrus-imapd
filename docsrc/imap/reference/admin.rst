@@ -18,10 +18,12 @@ Management
 .. toctree::
     :maxdepth: 2
 
+    admin/locations
     admin/murder/murder
     admin/access-control
     admin/nntp
     admin/protlayer
+    admin/quotas
     admin/sieve
     admin/backups
     admin/sop
@@ -37,7 +39,3 @@ Management
     Archive partition
     Conversations
     DAV / HTTP
-
-
-
-

@@ -1,17 +1,10 @@
-..  Note to documentation authors, this document is also included as the
-    imap features access control page (as a copy).
+.. _imap-admin-access-control-lists:
 
 ==============
 Access Control
 ==============
 
-.. NOTE::
-
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`51`.
-
-Cyrus IMAP features powerful access control compliant with :rfc:`2086`,
+Cyrus IMAP features rich access control compliant with :rfc:`2086`,
 :rfc:`4314`, :rfc:`5257` and :rfc:`5464`.
 
 .. toctree::
@@ -37,3 +30,4 @@ Two means exist to suppress sharing folders between users:
     :ref:`imap-features-namespaces-other-users` by enabling
     ``disable_user_namespace`` in :cyrusman:`imapd.conf(5)`.
 
+Back to :ref:`imap-admin`

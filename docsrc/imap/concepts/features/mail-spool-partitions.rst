@@ -1,3 +1,5 @@
+.. _imap-features-mail-spool-partitions:
+
 =====================
 Mail Spool Partitions
 =====================
