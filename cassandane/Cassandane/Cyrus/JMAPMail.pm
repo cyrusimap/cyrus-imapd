@@ -3888,10 +3888,10 @@ sub test_importmessages
     $inbox = $self->getinbox()->{id};
     $self->assert_not_null($inbox);
 
-    xlog "import message from blob $blobid";
+    xlog "import and get message from blob $blobid";
     $res = $jmap->Request([['importMessages', {
         messages => {
-            "#1" => {
+            "1" => {
                 blobId => $blobid,
                 mailboxIds => [ $drafts ],
                 isUnread => JSON::true,
@@ -3900,11 +3900,14 @@ sub test_importmessages
                 isDraft => JSON::true,
             },
         },
-    }, "R1"]]);
+    }, "R1"], ["getMessages", { ids => ["#1"] }, "R2" ]]);
 
     $self->assert_str_equals("messagesImported", $res->[0][0]);
-    $msg = $res->[0][1]->{created}{"#1"};
+    $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
+
+    $self->assert_str_equals("messages", $res->[1][0]);
+    $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
 
     xlog "load message";
     $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
