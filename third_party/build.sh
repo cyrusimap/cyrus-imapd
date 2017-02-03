@@ -57,6 +57,7 @@ git submodule update
   git clean -f -x -d
   ./bootstrap
   ./configure --enable-silent-rules --prefix=$PREFIX
+  cd xapian-core
   make $MAKEOPTS
   sudo make install
 )
