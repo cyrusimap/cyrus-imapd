@@ -1,7 +1,7 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -193,8 +193,7 @@ static int bc_relation_generate(int codep, bytecode_info_t *retval, int relat)
  * will always write out 3 words
  * returns the next code location or -1 on error. */
 static int bc_comparator_generate(int codep, bytecode_info_t *retval,
-                                  int comptag, int relat,
-                                  const char *comparator)
+                                  int comptag, int relat, int collation)
 {
     assert(retval != NULL);
 
@@ -233,34 +232,32 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
     /*relation*/
     codep = bc_relation_generate(codep, retval, relat);
 
-    if (!comparator) return codep;
+    if (!collation) return codep;
 
-    /* comparator (value specified with :comparator) */
+    /* collation (value specified with :comparator) */
     if (!atleast(retval, codep + 1)) return -1;
 
-    /* xxx perhaps extend comparator.h to have
-       lookup_comp return an index, and then
-       lookup_by_index return the actual comparator?
-
-       we can then eliminate the comptag above, too. */
-
-    if (!strcmp (comparator, "i;octet"))
+    switch (collation) {
+    case OCTET:
         retval->data[codep++].value = B_OCTET;
-    else if (!strcmp (comparator, "i;ascii-casemap"))
+        break;
+    case ASCIICASEMAP:
         retval->data[codep++].value = B_ASCIICASEMAP;
-    else if (!strcmp (comparator, "i;ascii-numeric"))
+        break;
+    case ASCIINUMERIC:
         retval->data[codep++].value = B_ASCIINUMERIC;
+        break;
+
+    default:
+        return -1;
+    }
 
     return codep;
 }
 
 static int bc_zone_generate(int codep, bytecode_info_t *retval,
-                            int zonetag, const char *zone)
+                            int zonetag, int zone)
 {
-        unsigned hours;
-        unsigned minutes;
-        char sign;
-
         assert(retval != NULL);
 
         /* zonetag */
@@ -268,14 +265,9 @@ static int bc_zone_generate(int codep, bytecode_info_t *retval,
 
         switch (zonetag) {
         case ZONE:
-                retval->data[codep++].value = B_TIMEZONE;
-
                 /* time-zone offset in minutes */
-                if (!atleast(retval, codep + 1) ||
-                    sscanf(zone, "%c%02u%02u", &sign, &hours, &minutes) != 3)
-                    return -1;
-
-                retval->data[codep++].value = (sign == '-' ? -1 : 1) * (hours * 60) + minutes;
+                retval->data[codep++].value = B_TIMEZONE;
+                retval->data[codep++].value = zone;
                 break;
         case ORIGINALZONE:
                 retval->data[codep++].value = B_ORIGINALZONE;
@@ -363,24 +355,24 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         }
 
         if (t->type == HEADER) {
-        /* index */
-        if(!atleast(retval,codep + 1)) return -1;
-        retval->data[codep++].value = t->u.h.index;
+            /* index */
+            if(!atleast(retval,codep + 1)) return -1;
+            retval->data[codep++].value = t->u.hhs.comp.index;
         }
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
-                                       t->u.h.comptag,
-                                       t->u.h.relation,
-                                       t->u.h.comparator);
+                                       t->u.hhs.comp.match,
+                                       t->u.hhs.comp.relation,
+                                       t->u.hhs.comp.collation);
         if (codep == -1) return -1;
 
         /* haystacks */
-        codep = bc_stringlist_generate(codep, retval, t->u.h.sl);
+        codep = bc_stringlist_generate(codep, retval, t->u.hhs.sl);
         if (codep == -1) return -1;
 
         /* pattern */
-        codep = bc_stringlist_generate(codep, retval, t->u.h.pl);
+        codep = bc_stringlist_generate(codep, retval, t->u.hhs.pl);
         if (codep == -1) return -1;
         break;
     case ADDRESS:
@@ -400,13 +392,13 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* index */
         if (t->type == ADDRESS) {
-                if(!atleast(retval,codep+1)) return -1;
-                retval->data[codep++].value = t->u.ae.index;
+            if(!atleast(retval,codep+1)) return -1;
+            retval->data[codep++].value = t->u.ae.comp.index;
         }
 
-        codep = bc_comparator_generate(codep, retval,t->u.ae.comptag,
-                                       t->u.ae.relation,
-                                       t->u.ae.comparator);
+        codep = bc_comparator_generate(codep, retval,t->u.ae.comp.match,
+                                       t->u.ae.comp.relation,
+                                       t->u.ae.comp.collation);
         if (codep == -1) return -1;
 
         if(!atleast(retval,codep+1)) return -1;
@@ -451,9 +443,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         retval->data[codep++].op = BC_BODY;
 
-        codep = bc_comparator_generate(codep, retval,t->u.b.comptag,
-                                       t->u.b.relation,
-                                       t->u.b.comparator);
+        codep = bc_comparator_generate(codep, retval,t->u.b.comp.match,
+                                       t->u.b.comp.relation,
+                                       t->u.b.comp.collation);
         if (codep == -1) return -1;
 
         if(!atleast(retval,codep+2)) return -1;
@@ -500,8 +492,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* index */
         if (DATE == t->type) {
-                if(!atleast(retval,codep + 1)) return -1;
-                retval->data[codep++].value = t->u.dt.index;
+            if(!atleast(retval,codep + 1)) return -1;
+            retval->data[codep++].value = t->u.dt.comp.index;
         }
 
         /* zone */
@@ -512,39 +504,39 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
-                                       t->u.dt.comptag,
-                                       t->u.dt.relation,
-                                       t->u.dt.comparator);
+                                       t->u.dt.comp.match,
+                                       t->u.dt.comp.relation,
+                                       t->u.dt.comp.collation);
         if (codep == -1) return -1;
 
         /* date-part */
         if(!atleast(retval,codep + 1)) return -1;
         switch (t->u.dt.date_part) {
-        case YEAR:
+        case YEARP:
                 retval->data[codep++].value = B_YEAR;
                 break;
-        case MONTH:
+        case MONTHP:
                 retval->data[codep++].value = B_MONTH;
                 break;
-        case DAY:
+        case DAYP:
                 retval->data[codep++].value = B_DAY;
                 break;
-        case DATE:
+        case DATEP:
                 retval->data[codep++].value = B_DATE;
                 break;
         case JULIAN:
                 retval->data[codep++].value = B_JULIAN;
                 break;
-        case HOUR:
+        case HOURP:
                 retval->data[codep++].value = B_HOUR;
                 break;
-        case MINUTE:
+        case MINUTEP:
                 retval->data[codep++].value = B_MINUTE;
                 break;
-        case SECOND:
+        case SECONDP:
                 retval->data[codep++].value = B_SECOND;
                 break;
-        case TIME:
+        case TIMEP:
                 retval->data[codep++].value = B_TIME;
                 break;
         case ISO8601:
@@ -553,10 +545,10 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         case STD11:
                 retval->data[codep++].value = B_STD11;
                 break;
-        case ZONE:
+        case ZONEP:
                 retval->data[codep++].value = B_ZONE;
                 break;
-        case WEEKDAY:
+        case WEEKDAYP:
                 retval->data[codep++].value = B_WEEKDAY;
                 break;
         }
@@ -578,7 +570,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep++].op = BC_MAILBOXEXISTS;
         /* XXX ops ? */
-        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
@@ -589,18 +581,18 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
-                                       t->u.mbx.comptag,
-                                       t->u.mbx.relation,
-                                       t->u.mbx.comparator);
+                                       t->u.mm.comp.match,
+                                       t->u.mm.comp.relation,
+                                       t->u.mm.comp.collation);
         if (codep == -1) return -1;
 
         if (!atleast(retval, codep+4)) return -1;
-        retval->data[codep++].len = t->u.mbx.extname ? (int)strlen(t->u.mbx.extname) : -1;
-        retval->data[codep++].str = t->u.mbx.extname;
-        retval->data[codep++].len = t->u.mbx.keyname ? (int)strlen(t->u.mbx.keyname) : -1;
-        retval->data[codep++].str = t->u.mbx.keyname;
+        retval->data[codep++].len = t->u.mm.extname ? (int)strlen(t->u.mm.extname) : -1;
+        retval->data[codep++].str = t->u.mm.extname;
+        retval->data[codep++].len = t->u.mm.keyname ? (int)strlen(t->u.mm.keyname) : -1;
+        retval->data[codep++].str = t->u.mm.keyname;
 
-        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
@@ -608,9 +600,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
     case METADATAEXISTS:
         if (!atleast(retval, codep+3)) return -1;
         retval->data[codep++].op = BC_METADATAEXISTS;
-        retval->data[codep++].len = t->u.mbx.extname ? (int)strlen(t->u.mbx.extname) : -1;
-        retval->data[codep++].str = t->u.mbx.extname;
-        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        retval->data[codep++].len = t->u.mm.extname ? (int)strlen(t->u.mm.extname) : -1;
+        retval->data[codep++].str = t->u.mm.extname;
+        codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
@@ -621,16 +613,16 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,
-                                       t->u.mbx.comptag,
-                                       t->u.mbx.relation,
-                                       t->u.mbx.comparator);
+                                       t->u.mm.comp.match,
+                                       t->u.mm.comp.relation,
+                                       t->u.mm.comp.collation);
         if (codep == -1) return -1;
 
         if (!atleast(retval, codep+2)) return -1;
-        retval->data[codep++].len = t->u.mbx.keyname ? (int)strlen(t->u.mbx.keyname) : -1;
-        retval->data[codep++].str = t->u.mbx.keyname;
+        retval->data[codep++].len = t->u.mm.keyname ? (int)strlen(t->u.mm.keyname) : -1;
+        retval->data[codep++].str = t->u.mm.keyname;
 
-        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
@@ -638,7 +630,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
     case SERVERMETADATAEXISTS:
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep++].op = BC_SERVERMETADATAEXISTS;
-        codep = bc_stringlist_generate(codep,retval,t->u.mbx.keylist);
+        codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
 
         break;
@@ -736,9 +728,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
                 /* comparator */
                 codep = bc_comparator_generate(codep, retval,
-                                               c->u.d.comptag,
-                                               c->u.d.relation,
-                                               NULL);
+                                               c->u.d.comp.match,
+                                               c->u.d.comp.relation,
+                                               0);
                 if (codep == -1) return -1;
 
                 if(c->u.d.pattern) {
@@ -1020,12 +1012,12 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 */
                 if (!atleast(retval, codep+2)) return -1;
                 retval->data[codep++].op = B_DELETEHEADER;
-                retval->data[codep++].value = c->u.dh.index;
+                retval->data[codep++].value = c->u.dh.comp.index;
 
                 codep = bc_comparator_generate(codep, retval,
-                                               c->u.dh.comptag,
-                                               c->u.dh.relation,
-                                               c->u.dh.comparator);
+                                               c->u.dh.comp.match,
+                                               c->u.dh.comp.relation,
+                                               c->u.dh.comp.collation);
                 if (codep == -1) return -1;
 
                 if (!atleast(retval, codep+2)) return -1;

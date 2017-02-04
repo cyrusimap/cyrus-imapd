@@ -2,7 +2,7 @@
 /* sieve.y -- sieve parser
  * Larry Greenfield
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,6 +42,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/*
+ * Yacc definitions
+ */
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -67,9 +71,8 @@
 
 #define ERR_BUF_SIZE 1024
 
-/*
- * Definitions
- */
+int getdatepart = 0;   /* used to send start state feedback to lexer */
+static comp_t *ctags;  /* used for accessing comp_t* in a test/command union */
 
 extern int addrparse(sieve_script_t*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -78,857 +81,261 @@ extern void addr_delete_buffer(YY_BUFFER_STATE);
 
 extern int sievelineno;
 
-struct vtags {
-    int seconds;
-    strarray_t *addresses;
-    char *subject;
-    char *from;
-    char *handle;
-    int mime;
-};
+void sieveerror_c(sieve_script_t *parse_script, int code, ...);
 
-struct comptags {
-    int match;
-    int relation;
-    char *comparator;  /* only used where comparator can be defined */
-    int index;         /* only used where index extension is defined */
-};
+static int check_reqs(sieve_script_t *script, strarray_t *sl);
 
-struct aetags {
-    struct comptags comptags;  /* MUST be first so we can typecast */
-    int addrtag;
-};
-
-struct btags {
-    struct comptags comptags;  /* MUST be first so we can typecast */
-    int transform;
-    int offset;
-    strarray_t *content_types;
-};
-
-struct ntags {
-    char *method;
-    char *id;
-    strarray_t *options;
-    int priority;
-    char *message;
-};
-
-struct dtags {
-    struct comptags comptags;  /* MUST be first so we can typecast */
-    void *pattern;
-    int priority;
-};
-
-struct itags {
-    int location;
-    int once;
-    int optional;
-};
-
-struct dttags {
-    struct comptags comptags;  /* MUST be first so we can typecast */
-    int zonetag;
-    char *zone;
-};
-
-struct ftags {
-    int copy;
-    int create;
-    strarray_t *flags;
-};
-
-struct stags {
-    int mod40; /* :lower or :upper */
-    int mod30; /* :lowerfirst or :upperfirst */
-    int mod20; /* :quotewildcard */
-    int mod10; /* :length */
-};
-
-struct rtags {
-    int copy;
-    int list;
-};
-
-static char *check_reqs(sieve_script_t *script, strarray_t *sl);
-
-static test_t *build_address(int t, struct aetags *ae,
-                             strarray_t *sl, strarray_t *pl);
-static test_t *build_header(int t, struct comptags *c,
-                            strarray_t *sl, strarray_t *pl);
-static test_t *build_body(int t, struct btags *b, strarray_t *pl);
-static test_t *build_date(int t, struct dttags *dt,
-                          char *hn, int part, strarray_t *kl);
-static test_t *build_mailboxtest(int t, struct comptags *c, const char *extname,
-                                 const char *keyname, strarray_t *keylist);
-
-static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
-static commandlist_t *build_notify(int t, struct ntags *n);
-static commandlist_t *build_denotify(int t, struct dtags *n);
-static commandlist_t *build_keep(int t, struct ftags *f);
-static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder);
-static commandlist_t *build_redirect(int t, struct rtags *r, char *a);
-static commandlist_t *build_include(int, struct itags *, char*);
-static commandlist_t *build_set(int t, struct stags *s,
+static commandlist_t *build_fileinto(sieve_script_t*,
+                                     commandlist_t *c, char *folder);
+static commandlist_t *build_redirect(sieve_script_t*,
+                                     commandlist_t *c, char *addr);
+static commandlist_t *build_reject(sieve_script_t*, int t, char *message);
+static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
+static commandlist_t *build_flag(sieve_script_t* ,
+                                 commandlist_t *c, strarray_t *flags);
+static commandlist_t *build_notify(commandlist_t *c);
+static commandlist_t *build_denotify(commandlist_t *c);
+static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
+static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
                                 char *variable, char *value);
-static commandlist_t *build_flag(int t, char *variable, strarray_t *flags);
-static commandlist_t *build_addheader(int t, int index, char *name, char *value);
-static commandlist_t *build_deleteheader(int t, struct comptags *dh,
+static commandlist_t *build_addheader(sieve_script_t*, commandlist_t *c,
+                                      char *name, char *value);
+static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
-static struct aetags *new_aetags(void);
-static struct aetags *canon_aetags(struct aetags *ae);
-static void free_aetags(struct aetags *ae);
-
-static struct comptags *new_comptags(void);
-static struct comptags *init_comptags(struct comptags *c);
-static struct comptags *canon_comptags(struct comptags *c);
-static void free_comptags(struct comptags *c, int destroy);
-
-static struct btags *new_btags(void);
-static struct btags *canon_btags(struct btags *b);
-static void free_btags(struct btags *b);
-
-static struct vtags *new_vtags(void);
-static struct vtags *canon_vtags(sieve_script_t *script, struct vtags *v);
-static void free_vtags(struct vtags *v);
-
-static struct ntags *new_ntags(void);
-static struct ntags *canon_ntags(struct ntags *n);
-static void free_ntags(struct ntags *n);
-
-static struct dtags *new_dtags(void);
-static struct dtags *canon_dtags(struct dtags *d);
-static void free_dtags(struct dtags *d);
-
-static struct itags *new_itags(void);
-
-static struct dttags *new_dttags(void);
-static struct dttags *canon_dttags(struct dttags *dt);
-static void free_dttags(struct dttags *b);
-
-static struct ftags *new_ftags(void);
-static struct ftags *canon_ftags(struct ftags *f);
-static void free_ftags(struct ftags *f);
-
-static struct stags *new_stags(void);
-static struct stags *canon_stags(struct stags *s);
-static void free_stags(struct stags *s);
-
-static struct rtags *new_rtags(void);
-static struct rtags *canon_rtags(struct rtags *r);
-static void free_rtags(struct rtags *r);
+static test_t *build_address(sieve_script_t*, test_t *t,
+                             strarray_t *sl, strarray_t *pl);
+static test_t *build_envelope(sieve_script_t*, test_t *t,
+                              strarray_t *sl, strarray_t *pl);
+static test_t *build_header(sieve_script_t*, test_t *t,
+                            strarray_t *sl, strarray_t *pl);
+static test_t *build_body(sieve_script_t*, test_t *t, strarray_t *pl);
+static test_t *build_stringt(sieve_script_t*, test_t *t,
+                             strarray_t *sl, strarray_t *pl);
+static test_t *build_hasflag(sieve_script_t*, test_t *t,
+                             strarray_t *sl, strarray_t *pl);
+static test_t *build_date(sieve_script_t*, test_t *t,
+                          char *hn, int part, strarray_t *kl);
+static test_t *build_mbox_meta(sieve_script_t*,
+                               test_t *t, const char *extname,
+                               const char *keyname, strarray_t *keylist);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl,
                              int (*verify)(sieve_script_t*, char *));
-static int verify_patternlist(sieve_script_t *parse_script,
-                              strarray_t *sl, struct comptags *c,
+static int verify_patternlist(sieve_script_t*, strarray_t *sl, comp_t *c,
                               int (*verify)(sieve_script_t*, char *));
-static int verify_mailbox(sieve_script_t*, char *s);
 static int verify_address(sieve_script_t*, char *s);
-static int verify_header(sieve_script_t*, char *s);
-static int verify_addrheader(sieve_script_t*, char *s);
-static int verify_envelope(sieve_script_t*, char *s);
-static int verify_relat(sieve_script_t*, char *s);
-static int verify_zone(sieve_script_t*, char *s);
-static int verify_date_part(sieve_script_t *parse_script, char *dp);
 static int verify_utf8(sieve_script_t*, char *s);
-static int verify_identifier(sieve_script_t*, char *s);
-static int verify_list(sieve_script_t*, char *s);
 
-static void parse_error(sieve_script_t *parse_script, int err, ...);
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
 extern void sieverestart(FILE *f);
 
-#define YYERROR_VERBOSE /* i want better error messages! */
+#define YYERROR_VERBOSE /* I want better error messages! */
 
 /* byacc default is 500, bison default is 10000 - go with the
    larger to support big sieve scripts (see Bug #3461) */
 #define YYSTACKSIZE 10000
 %}
 
+
+%name-prefix "sieve"
+%defines
+%destructor  { free_tree($$); } commands command action elsif block
+
+%parse-param { sieve_script_t *parse_script }
+%lex-param   { sieve_script_t *parse_script }
+%pure-parser
+
 %union {
     int nval;
     char *sval;
     strarray_t *sl;
+    comp_t *ctag;
     test_t *test;
     testlist_t *testl;
     commandlist_t *cl;
-    struct vtags *vtag;
-    struct aetags *aetag;
-    struct comptags *ctag;
-    struct btags *btag;
-    struct ntags *ntag;
-    struct dtags *dtag;
-    struct itags *itag;
-    struct dttags *dttag;
-    struct ftags *ftag;
-    struct stags *stag;
-    struct rtags *rtag;
 }
 
 %token <nval> NUMBER
 %token <sval> STRING
-%token IF ELSIF ELSE
-%token REJCT EREJECT FILEINTO REDIRECT KEEP STOP DISCARD VACATION REQUIRE
-%token MARK UNMARK FLAGS
-%token NOTIFY DENOTIFY
-%token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE BODY
-%token COMPARATOR IS CONTAINS MATCHES REGEX LIST COUNT VALUE OVER UNDER
-%token GT GE LT LE EQ NE
-%token ALL LOCALPART DOMAIN USER DETAIL
-%token RAW TEXT CONTENT
-%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME SECONDS
-%token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
-%token INCLUDE PERSONAL GLOBAL RETURN OPTIONAL ONCE
-%token COPY
-%token DATE CURRENTDATE INDEX LAST ZONE ORIGINALZONE
-%token MAILBOXEXISTS CREATE
-%token METADATA METADATAEXISTS
-%token SERVERMETADATA SERVERMETADATAEXISTS
-%token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 WEEKDAY
-%token <nval> STRINGT SET LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
-%token <nval> SETFLAG ADDFLAG REMOVEFLAG HASFLAG
-%token ADDHEADER DELETEHEADER
-%token VALIDEXTLIST
-
-%type <cl> commands command action elsif block
 %type <sl> optstringlist stringlist strings
-%type <test> test
-%type <nval> match relmatch sizetag addrparttag copy creat datepart
+%type <cl> commands command action
 %type <testl> testlist tests
-%type <ctag> htags strtags hftags mtags
-%type <aetag> atags etags
-%type <btag> btags
-%type <vtag> vtags
-%type <ntag> ntags
-%type <dtag> dtags
-%type <itag> itags
-%type <dttag> dttags cdtags
-%type <nval> priority
-%type <ftag> ftags
-%type <stag> stags
-%type <rtag> rtags
+%type <test> test
+
+/* standard control commands - RFC 5228 */
+%token IF ELSIF ELSE REQUIRE STOP
+%type <cl> elsif block
+
+/* standard action commands - RFC 5228 */
+%token DISCARD KEEP FILEINTO REDIRECT
+%type <cl> ktags ftags rtags
+
+/* standard tests - RFC 5228 */
+%token ANYOF ALLOF EXISTS NOT SFALSE STRUE SIZE
+%token HEADER ADDRESS ENVELOPE COMPARATOR
+%token <nval> OVER UNDER
+%token <nval> ALL LOCALPART DOMAIN
+%token <nval> IS CONTAINS MATCHES
+%token <nval> OCTET ASCIICASEMAP ASCIINUMERIC
+%type <test> htags atags etags
+%type <nval> matchtag collation sizetag addrparttag
+
+/* regex - draft-murchison-sieve-regex */
+%token <nval> REGEX
+
+/* copy - RFC 3894 */
+%token COPY
+
+/* body - RFC 5173 */
+%token BODY
+%token <nval> RAW TEXT CONTENT
+%type <test> btags
+%type <nval> transform
+
+/* variables - RFC 5229 */
+%token STRINGT SET
+%token <nval> LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
+%type <test> strtags
+%type <cl> stags
 %type <nval> mod40 mod30 mod20 mod10
-%type <sval> flagtags
+
+/* vacation - RFC 5230 */
+%token VACATION DAYS SUBJECT FROM ADDRESSES MIME HANDLE
+%type <cl> vtags
+
+/* vacation-seconds - RFC 6131 */
+%token SECONDS
+
+ /* relational - RFC 5231 */
+%token <nval> COUNT VALUE GT GE LT LE EQ NE
+%type <nval> relmatch relation
+
+/* imap[4]flags - RFC 5232 */
+%token FLAGS HASFLAG
+%token <nval> SETFLAG ADDFLAG REMOVEFLAG
+%type <test> hftags
+%type <cl> flagtags
 %type <nval> flagaction
-%type <nval> ahtags
+
+/* imapflags - draft-melnikov-sieve-imapflags */
+%token <nval> MARK UNMARK
+%type <nval> flagmark
+
+/* subaddress - RFC 5233 */
+%token <nval> USER DETAIL
+%type <nval> subaddress
+
+/* date - RFC 5260 */
+%token DATE CURRENTDATE ORIGINALZONE ZONE
+%token <nval> TIMEZONE
+%token <nval> YEARP MONTHP DAYP DATEP JULIAN
+%token <nval> HOURP MINUTEP SECONDP TIMEP ISO8601 STD11 ZONEP WEEKDAYP
+%type <test> dttags cdtags
+%type <nval> datepart
+
+/* index - RFC 5260 */
+%token INDEX LAST
+
+/* editheader - RFC 5293 */
+%token ADDHEADER DELETEHEADER
+%type <cl> ahtags dhtags
+ //%type <ctag> dhgetcomp
+
+/* [e]reject - RFC 5429 */
+%token <nval> REJCT EREJECT
+%type <nval> reject
+
+/* enotify - RFC 5435 */
+%token NOTIFY METHOD OPTIONS MESSAGE
+%token <nval> ENCODEDURL
+%type <cl> ntags
+%type <nval> mod15
+
+/* notify - draft-martin-sieve-notify */
+%token DENOTIFY ID ANY
+%token <nval> LOW NORMAL HIGH
+%type <cl> dtags
+%type <nval> priority
+
+/* mailbox - RFC 5490 */
+%token MAILBOXEXISTS CREATE
+%type <test> mtags
+
+/* mboxmetadata - RFC 5490 */
+%token METADATA METADATAEXISTS
+
+/* servermetadata - RFC 5490 */
+%token SERVERMETADATA SERVERMETADATAEXISTS
+
+/* extlists - RFC 6134 */
+%token VALIDEXTLIST
+%token <nval> LIST
 %type <nval> listtag
 
-%name-prefix "sieve"
-%defines
-%destructor { free_tree($$); } commands command action elsif block
+/* include - RFC 6609 */
+%token INCLUDE OPTIONAL ONCE RETURN
+%token <nval> PERSONAL GLOBAL
+%type <cl> itags
+%type <nval> location
 
-%parse-param { sieve_script_t *parse_script }
-%lex-param { sieve_script_t *parse_script }
-%pure-parser
-
-
-/*
- * Rules
- */
 
 %%
 
-start: reqs                     { parse_script->cmds = NULL; }
-        | reqs commands         { parse_script->cmds = $2; }
+/*
+ * Yacc rules
+ *
+ * NOTE: In several place we use the inherited attribute $0,
+ * which gives us access to the symbol to the left of the current rule.
+ * This allows us to pass values "forward" by reference.
+ */
+
+start: reqs                      { parse_script->cmds = NULL; }
+        | reqs commands          { parse_script->cmds = $2; }
         ;
+
 
 reqs: /* empty */
         | require reqs
         ;
 
-require: REQUIRE stringlist ';'
-                                {
-                                    char *err = check_reqs(parse_script, $2);
-                                    if (err) {
-                                        yyerror(parse_script, err);
-                                        free(err);
-                                        YYERROR;
-                                    }
-                                }
+
+/*
+ * Control commands
+ */
+require: REQUIRE stringlist ';'  {
+                                     if (!check_reqs(parse_script, $2)) {
+                                         YYERROR; /* cr should call yyerror() */
+                                     }
+                                 }
         ;
 
-commands: command               { $$ = $1; }
-        | command commands      { $1->next = $2; $$ = $1; }
+commands: command                { $$ = $1; }
+        | command commands       { $1->next = $2; $$ = $1; }
         ;
 
-command: action ';'             { $$ = $1; }
-        | IF test block elsif   { $$ = new_if($2, $3, $4); }
-        | error ';'             { $$ = new_command(STOP); }
+
+command:  action ';'             { $$ = $1; }
+        | IF test block elsif    { $$ = new_if($2, $3, $4); }
+        | error ';'              { $$ = new_command(STOP, parse_script); }
         ;
+
 
 elsif: /* empty */               { $$ = NULL; }
         | ELSIF test block elsif { $$ = new_if($2, $3, $4); }
         | ELSE block             { $$ = $2; }
         ;
 
-action: REJCT STRING
-                                 {
-                                     if (!parse_script->support.reject) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "reject");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_utf8(parse_script, $2)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$ = new_command(REJCT);
-                                     $$->u.reject = $2;
-                                 }
 
-        | EREJECT STRING         {
-                                     if (!parse_script->support.ereject) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "ereject");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_utf8(parse_script, $2)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$ = new_command(EREJECT);
-                                     $$->u.reject = $2;
-                                 }
-
-        | FILEINTO ftags STRING
-                                 {
-                                     if (!parse_script->support.fileinto) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "fileinto");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_mailbox(parse_script, $3)) {
-                                         YYERROR; /* vm should call yyerror() */
-                                     }
-                                     $$ = build_fileinto(FILEINTO,
-                                                         canon_ftags($2), $3);
-                                 }
-
-        | REDIRECT rtags STRING
-                                 {
-                                     if ($2->list) {
-                                         if (!verify_list(parse_script, $3)) {
-                                             YYERROR; /* vl should call yyerror() */
-                                         }
-                                     }
-                                     else if (!verify_address(parse_script, $3)) {
-                                         YYERROR; /* va should call yyerror() */
-                                     }
-                                     $$ = build_redirect(REDIRECT,
-                                                         canon_rtags($2), $3);
-                                 }
-
-        | KEEP ftags             { $$ = build_keep(KEEP,canon_ftags($2)); }
-        | STOP                   { $$ = new_command(STOP); }
-        | DISCARD                { $$ = new_command(DISCARD); }
-
-        | VACATION vtags STRING
-                                 {
-                                     if (!parse_script->support.vacation) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "vacation");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (($2->mime == -1) &&
-                                         !verify_utf8(parse_script, $3)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$ = build_vacation(VACATION,
-                                                         canon_vtags(parse_script, $2),
-                                                         $3);
-                                 }
-
-        | flagaction flagtags stringlist
-                                 {
-                                     if (!(parse_script->support.imapflags ||
-                                           parse_script->support.imap4flags)) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imap[4]flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!parse_script->support.variables) {
-                                         verify_flaglist($3);
-                                     }
-                                     if (!$3->count) strarray_add($3, "");
-                                     $$ = build_flag($1, $2, $3);
-                                 }
-
-         | MARK
-                                 {
-                                     if (!parse_script->support.imapflags) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imapflags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = new_command(MARK);
-                                 }
-
-         | UNMARK
-                                 {
-                                     if (!parse_script->support.imapflags) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imapflags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = new_command(UNMARK);
-                                 }
-
-         | NOTIFY ntags
-                                 {
-                                     if (!parse_script->support.notify) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "notify");
-                                         $$ = new_command(NOTIFY);
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = build_notify(NOTIFY, canon_ntags($2));
-                                 }
-
-         | DENOTIFY dtags
-                                 {
-                                     if (!parse_script->support.notify) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "notify");
-                                         $$ = new_command(DENOTIFY);
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = build_denotify(DENOTIFY,
-                                                         canon_dtags($2));
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "denotify action");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-         | INCLUDE itags STRING
-                                 {
-                                     if (!parse_script->support.include) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "include");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     int i;
-                                     for (i = 0; $3[i] != '\0'; i++) {
-                                         if ($3[i] == '/') {
-                                             parse_error(parse_script,
-                                                         SIEVE_INVALID_VALUE,
-                                                         "script-name");
-                                             YYERROR; /* pe should call yyerror() */
-                                             break;
-                                         }
-                                     }
-                                     $$ = build_include(INCLUDE, $2, $3);
-                                 }
-
-         | RETURN
-                                 {
-                                     if (!parse_script->support.include) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "include");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = new_command(RETURN);
-                                 }
-
-         | SET stags STRING STRING
-                                 {
-                                     if (!parse_script->support.variables) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "variables");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_identifier(parse_script, $3)) {
-                                         YYERROR; /* vi should call yyerror() */
-                                     }
-                                     if (!verify_utf8(parse_script, $4)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$ = build_set(SET, canon_stags($2), $3, $4);
-                                 }
-
-        | ADDHEADER ahtags STRING STRING {
-                                   if (!parse_script->support.editheader) {
-                                     yyerror(parse_script, "editheader MUST be enabled with \"require\"");
-                                     YYERROR;
-                                   }
-                                   if (!verify_header(parse_script, $3)) {
-                                     YYERROR; /* vh should call yyerror() */
-                                   }
-                                   if (!verify_utf8(parse_script, $4)) {
-                                     YYERROR; /* vu should call yyerror() */
-                                   }
-                                   $$ = build_addheader(ADDHEADER, $2, $3, $4);
-                                 }
+block: '{' commands '}'          { $$ = $2; }
+        | '{' '}'                { $$ = NULL; }
         ;
 
-        | DELETEHEADER htags STRING optstringlist {
-                                   if (!parse_script->support.editheader) {
-                                     yyerror(parse_script, "editheader MUST be enabled with \"require\"");
-                                     YYERROR;
-                                   }
-                                   else if (!verify_header(parse_script, $3)) {
-                                     YYERROR; /* vh should call yyerror() */
-                                   }
-                                   else if (!strcasecmp("Received", $3) ||
-                                            !strcasecmp("Auto-Submitted", $3)) {
-                                     yyerror(parse_script, "MUST NOT delete Received or Auto-Submitted headers");
-                                     YYERROR;
-                                   }
-                                   else if (!verify_stringlist(parse_script, $4, verify_utf8)) {
-                                     YYERROR; /* vu should call yyerror() */
-                                   }
-                                   else {
-                                     $2 = canon_comptags($2);
-                                     $$ = build_deleteheader(DELETEHEADER, $2, $3, $4);
-                                   }
-                                 }
-        ;
-
-ahtags: /* empty */              { $$ = 1; }
-        | LAST                   { $$ = -1; }
-        ;
-
-flagaction: ADDFLAG
-        | SETFLAG
-        | REMOVEFLAG
-        ;
-
-flagtags: /* empty */            { $$ = NULL; }
-        | flagtags STRING
-                                 {
-                                     if (!(parse_script->support.imap4flags)) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imap4flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if ($1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_ARG,
-                                                     "variablename");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!is_identifier($2)) {
-                                         YYERROR; /* id should call yyerror() */
-                                     }
-                                     $$ = $2;
-                                 }
-        ;
-
-stags: /* empty */               { $$ = new_stags(); }
-        | stags mod40
-                                 {
-                                     if ($$->mod40) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "precedence 40 modifier");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->mod40 = $2;
-                                 }
-        | stags mod30
-                                 {
-                                     if ($$->mod30) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "precedence 30 modifier");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->mod30 = $2;
-                                 }
-        | stags mod20
-                                 {
-                                     if ($$->mod20) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "precedence 20 modifier");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->mod20 = $2;
-                                 }
-/* TODO: :encodeurl
-   Requires "enotify" extension, which has not been implemented yet.
-
-   RFC 5435 (Sieve Extension: Notifications)
-   6.  Modifier encodeurl to the 'set' Action
-
-   Usage:  ":encodeurl"
-
-   When the Sieve script specifies both "variables" [Variables] and
-   "enotify" capabilities in the "require", a new "set" action modifier
-   (see [Variables]) ":encodeurl" becomes available to Sieve scripts.
-   This modifier performs percent-encoding of any octet in the string
-   that doesn't belong to the "unreserved" set (see [URI]).  The
-   percent-encoding procedure is described in [URI].
-
-   The ":encodeurl" modifier has precedence 15.
-
-   Example 6:
-   require ["enotify", "variables"];
-
-   set :encodeurl "body_param" "Safe body&evil=evilbody";
-
-   notify "mailto:tim@example.com?body=${body_param}";
-
-*/
-        | stags mod10
-                                 {
-                                     if ($$->mod10) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "precedence 10 modifier");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->mod10 = $2;
-                                 }
-;
-
-mod40:  LOWER
-        | UPPER
-        ;
-mod30:  LOWERFIRST
-        | UPPERFIRST
-        ;
-mod20:  QUOTEWILDCARD
-        ;
-mod10:  LENGTH
-        ;
-
-itags: /* empty */               { $$ = new_itags(); }
-        | itags PERSONAL
-                                 {
-                                     if ($$->location != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "location");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->location = PERSONAL;
-                                 }
-        | itags GLOBAL
-                                 {
-                                     if ($$->location != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "location");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->location = GLOBAL;
-                                 }
-        | itags ONCE
-                                 {
-                                     if ($$->once != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":once");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->once = 1;
-                                 }
-        | itags OPTIONAL
-                                 { if ($$->optional != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":optional");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->optional = 1;
-                                 }
-        ;
-
-ntags: /* empty */               { $$ = new_ntags(); }
-        | ntags ID STRING
-                                 {
-                                     if ($$->id != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":id");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->id = $3;
-                                 }
-        | ntags METHOD STRING
-                                 {
-                                     if ($$->method != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":method");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->method = $3;
-                                 }
-        | ntags OPTIONS stringlist
-                                 {
-                                     if ($$->options != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":options");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->options = $3;
-                                 }
-        | ntags priority
-                                 {
-                                     if ($$->priority != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "priority");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->priority = $2;
-                                 }
-        | ntags MESSAGE STRING
-                                 {
-                                     if ($$->message != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":message");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->message = $3;
-                                 }
-        ;
-
-dtags: /* empty */               { $$ = new_dtags(); }
-        | dtags priority
-                                 {
-                                     if ($$->priority != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "priority");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->priority = $2;
-                                 }
-        | dtags matchtags STRING
-                                 {
-                                     $$->pattern = $3;
-
-                                     strarray_t sa = STRARRAY_INITIALIZER;
-                                     strarray_appendm(&sa, $3);
-                                     if (!verify_patternlist(parse_script, &sa,
-                                                             &($$->comptags),
-                                                             NULL)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-                                     strarray_fini(&sa);
-                                 }
-        ;
-
-priority: LOW                   { $$ = LOW; }
-        | NORMAL                { $$ = NORMAL; }
-        | HIGH                  { $$ = HIGH; }
-        ;
-
-vtags: /* empty */               { $$ = new_vtags(); }
-        | vtags DAYS NUMBER
-                                 {
-                                     if ($$->seconds != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "period");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->seconds = $3 * DAY2SEC;
-                                 }
-        | vtags SECONDS NUMBER
-                                 {
-                                     if (!parse_script->support.vacation_seconds) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "vacation-seconds");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if ($$->seconds != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "period");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$->seconds = $3;
-                                 }
-        | vtags ADDRESSES stringlist
-                                 {
-                                     if ($$->addresses != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":addresses");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_stringlist(parse_script, $3,
-                                                            verify_address)) {
-                                         YYERROR;
-                                     }
-                                     $$->addresses = $3;
-                                 }
-        | vtags SUBJECT STRING
-                                 {
-                                     if ($$->subject != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":subject");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_utf8(parse_script, $3)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$->subject = $3;
-                                 }
-        | vtags FROM STRING
-                                 {
-                                     if ($$->from != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":from");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_address(parse_script, $3)) {
-                                         YYERROR; /* va should call yyerror() */
-                                     }
-                                     $$->from = $3;
-                                 }
-        | vtags HANDLE STRING
-                                 {
-                                     if ($$->handle != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":handle");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_utf8(parse_script, $3)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $$->handle = $3;
-                                 }
-        | vtags MIME
-                                 {
-                                     if ($$->mime != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":mime");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$->mime = MIME;
-                                 }
-        ;
 
 optstringlist: /* empty */       { $$ = strarray_new(); }
         | stringlist             { $$ = $1; }
 ;
+
 
 stringlist: '[' strings ']'      { $$ = $2; }
         | STRING                 {
@@ -936,6 +343,7 @@ stringlist: '[' strings ']'      { $$ = $2; }
                                     strarray_appendm($$, $1);
                                  }
         ;
+
 
 strings: STRING                  {
                                     $$ = strarray_new();
@@ -947,831 +355,631 @@ strings: STRING                  {
                                  }
         ;
 
-block: '{' commands '}'          { $$ = $2; }
-        | '{' '}'                { $$ = NULL; }
+
+/*
+ * Action commands
+ */
+action:   STOP                   { $$ = new_command(STOP, parse_script);    }
+        | DISCARD                { $$ = new_command(DISCARD, parse_script); }
+        | KEEP ktags             { $$ = $2; }
+        | FILEINTO ftags STRING  {
+                                     $$ = build_fileinto(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bf should call yyerror() */
+                                     }
+                                 }
+        | REDIRECT rtags STRING  {
+                                     $$ = build_redirect(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* br should call yyerror() */
+                                     }
+                                 }
+        | SET stags STRING STRING
+                                 {
+                                     $$ = build_set(parse_script, $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bs should call yyerror() */
+                                     }
+                                 }
+
+        | VACATION vtags STRING  {
+                                     $$ = build_vacation(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bv should call yyerror() */
+                                     }
+                                 }
+        /* SET/ADD/REMOVEFLAG */
+        | flagaction flagtags stringlist
+                                 {
+                                     $$ = build_flag(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bf should call yyerror() */
+                                     }
+                                 }
+        /* MARK/UNMARK */
+        | flagmark
+                                 {
+                                     $$ = new_command($1, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+
+       | ADDHEADER ahtags STRING STRING
+                                 {
+                                     $$ = build_addheader(parse_script,
+                                                          $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bah should call yyerror() */
+                                     }
+                                 }
+
+        | DELETEHEADER dhtags STRING optstringlist
+                                 {
+                                     $$ = build_deleteheader(parse_script,
+                                                             $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bdh should call yyerror() */
+                                     }
+                                 }
+
+        | reject STRING          {
+                                     $$ = build_reject(parse_script, $1, $2);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* br should call yyerror() */
+                                     }
+                                 }
+        | NOTIFY ntags           { $$ = build_notify($2); }
+        | DENOTIFY dtags         { $$ = build_denotify($2); }
+        | INCLUDE itags STRING   {
+                                     $$ = build_include(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bi should call yyerror() */
+                                     }
+                                 }
+        | RETURN                 {
+                                     $$ = new_command(RETURN, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
         ;
 
-test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
-        | ALLOF testlist         { $$ = new_test(ALLOF); $$->u.tl = $2; }
-        | EXISTS stringlist      { $$ = new_test(EXISTS); $$->u.sl = $2; }
-        | SFALSE                 { $$ = new_test(SFALSE); }
-        | STRUE                  { $$ = new_test(STRUE); }
 
-        | HEADER htags stringlist stringlist
-                                 {
-                                     if (!verify_stringlist(parse_script,
-                                                            $3, verify_header)) {
-                                         YYERROR; /* vh should call yyerror() */
-                                     }
-                                     $2 = canon_comptags($2);
+/* KEEP tagged arguments */
+ktags: /* empty */               { $$ = new_command(KEEP, parse_script); }
+        | ktags flags
+        ;
 
-                                     if (!verify_patternlist(parse_script,
-                                                             $4, $2,
-                                                             verify_utf8)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
 
-                                     $$ = build_header(HEADER, $2, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "header test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | STRINGT strtags stringlist stringlist
-                                 {
-                                     if (!parse_script->support.variables) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "variables");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_stringlist(parse_script,
-                                                            $3, verify_utf8)) {
-                                         YYERROR; /* vu should call yyerror() */
-                                     }
-                                     $2 = canon_comptags($2);
-
-                                     if (!verify_patternlist(parse_script,
-                                                             $4, $2,
-                                                             verify_utf8)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_header(STRINGT, $2, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "string test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-/* Per RFC 5232, the variables list (penultimate argument) is optional,
-   but defining the grammar this way results in a shift/reduce conflict.
-   Therefore, we have to flatten the grammar into two rules.
-*/
-        | HASFLAG hftags stringlist stringlist
-                                 {
+/* :flags */
+flags: FLAGS stringlist          {
                                      if (!parse_script->support.imap4flags) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imap4flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!parse_script->support.variables) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "variables");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_stringlist(parse_script, $3,
-                                                            verify_identifier)) {
-                                         YYERROR; /* vi should call yyerror() */
-                                     }
-                                     $2 = canon_comptags($2);
-
-                                     if (!verify_patternlist(parse_script,
-                                                             $4, $2,
-                                                             verify_utf8)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_header(HASFLAG, $2, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "hasflag test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | HASFLAG hftags stringlist
-                                 {
-                                     if (!parse_script->support.imap4flags) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imap4flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $2 = canon_comptags($2);
-
-                                     if (!verify_patternlist(parse_script,
-                                                             $3, $2,
-                                                             verify_utf8)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_header(HASFLAG, $2, NULL, $3);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "hasflag test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | ADDRESS atags stringlist stringlist
-                                 {
-                                     if (!verify_stringlist(parse_script, $3,
-                                                            verify_addrheader)) {
-                                         YYERROR; /* vah should call yyerror() */
-                                     }
-                                     $2 = canon_aetags($2);
-
-                                     if (!verify_patternlist(parse_script, $4,
-                                                             &($2->comptags),
-                                                             NULL)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_address(ADDRESS, $2, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "address test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | ENVELOPE etags stringlist stringlist
-                                 {
-                                     if (!parse_script->support.envelope) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "envelope");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_stringlist(parse_script, $3,
-                                                            verify_envelope)) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
                                          YYERROR;
                                      }
-                                     $2 = canon_aetags($2);
 
-                                     if (!verify_patternlist(parse_script, $4,
-                                                             &($2->comptags),
-                                                             NULL)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
+                                     /* $0 refers to ktags or ftags */
+                                     commandlist_t *c = $<cl>0;
+                                     strarray_t **flags = (c->type == KEEP) ?
+                                         &c->u.k.flags : &c->u.f.flags;
 
-                                     $$ = build_address(ENVELOPE, $2, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "envelope test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | BODY btags stringlist
-                                 {
-                                     if (!parse_script->support.body) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "body");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $2 = canon_btags($2);
-
-                                     if (!verify_patternlist(parse_script, $3,
-                                                             &($2->comptags),
-                                                             verify_utf8)) {
-                                         YYERROR; /* vp should call yyerror() */
+                                     if (*flags != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":flags");
+                                         YYERROR;
                                      }
 
-                                     $$ = build_body(BODY, $2, $3);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "body test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | NOT test               { $$ = new_test(NOT); $$->u.t = $2; }
-        | SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
-                                   $$->u.sz.n = $3; }
-
-        | DATE dttags STRING datepart stringlist
-                                 {
-                                     if (!parse_script->support.date) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "date");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (!verify_header(parse_script, $3)) {
-                                         YYERROR; /* vh should call yyerror() */
-                                     }
-                                     $2 = canon_dttags($2);
-
-                                     if (!verify_patternlist(parse_script, $5,
-                                                             &($2->comptags),
-                                                             NULL)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_date(DATE, $2, $3, $4, $5);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "date test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | CURRENTDATE cdtags datepart stringlist
-                                 {
-                                     if (!parse_script->support.date) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "date");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $2 = canon_dttags($2);
-
-                                     if (!verify_patternlist(parse_script, $4,
-                                                             &($2->comptags),
-                                                             NULL)) {
-                                         YYERROR; /* vp should call yyerror() */
-                                     }
-
-                                     $$ = build_date(CURRENTDATE,
-                                                     $2, NULL, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "currentdate test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | MAILBOXEXISTS stringlist
-                                 {
-                                     if (!parse_script->support.mailbox) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "mailbox");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = build_mailboxtest(MAILBOXEXISTS, NULL,
-                                                            NULL, NULL, $2);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "mailboxexists test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | METADATA mtags STRING STRING stringlist
-                                 {
-                                     if (!parse_script->support.mboxmetadata) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "mboxmetadata");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = build_mailboxtest(METADATA,
-                                                            $2, $3, $4, $5);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "metadata test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | METADATAEXISTS STRING stringlist
-                                 {
-                                     if (!parse_script->support.mboxmetadata) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "mboxmetadata");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = build_mailboxtest(METADATAEXISTS,
-                                                            NULL, $2, NULL, $3);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "metadataexists test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | SERVERMETADATA mtags STRING stringlist
-                                 {
-                                     if (!parse_script->support.servermetadata) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "servermetadata");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = build_mailboxtest(SERVERMETADATA,
-                                                            $2, NULL, $3, $4);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "servermetadata test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | SERVERMETADATAEXISTS stringlist
-                                 {
-                                     if (!parse_script->support.servermetadata) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "servermetadata");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = build_mailboxtest(SERVERMETADATAEXISTS,
-                                                            NULL, NULL, NULL, $2);
-                                     if ($$ == NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_BUILD_FAILURE,
-                                                     "servermetadataexists test");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                 }
-
-        | VALIDEXTLIST stringlist
-                                 {
-                                     if (!parse_script->support.extlists) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "extlists");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = new_test(VALIDEXTLIST);
-                                     $$->u.sl = $2;
-                                 }
-
-        | error                  { $$ = NULL; }
-        ;
-
-atags: /* empty */               { $$ = new_aetags(); }
-        | atags addrparttag
-                                 {
-                                     $$ = $1;
-                                     if ($$->addrtag != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "address-part");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->addrtag = $2;
-                                 }
-        | atags matchtags
-        | atags listmatch
-        | atags comparator
-        | atags idxtags
-        ;
-
-etags: /* empty */               { $$ = new_aetags(); }
-        | etags addrparttag
-                                 {
-                                     $$ = $1;
-                                     if ($$->addrtag != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "address-part");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->addrtag = $2;
-                                 }
-        | etags matchtags
-        | etags listmatch
-        | etags comparator
-        ;
-
-/* $0 is the symbol which precedes comptags (e.g. aetags).
-   We typecast this pointer into struct comptags *
-*/
-matchtags: match
-                                 {
-                                     struct comptags *ctags = $<ctag>0;
-                                     if (ctags->match != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "match-type");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else ctags->match = $1;
-                                 }
-        | relmatch STRING
-                                 {
-                                     struct comptags *ctags = $<ctag>0;
-                                     if (ctags->match != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "match-type");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else {
-                                         ctags->match = $1;
-                                         ctags->relation =
-                                             verify_relat(parse_script, $2);
-                                         if (ctags->relation == -1) {
-                                             YYERROR; /*vr called yyerror()*/
-                                         }
-                                     }
-                                 }
-        ;
-
-/* $0 is the symbol which precedes comparator (e.g. aetags).
-   We typecast this pointer into struct comptags *
-*/
-listmatch: listtag
-                                 {
-                                     struct comptags *ctags = $<ctag>0;
-                                     if (ctags->match != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "match-type");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else ctags->match = LIST;
-                                 }
-        ;
-
-listtag: LIST
-                                 {
-                                     if (!parse_script->support.extlists) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "extlists");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = 1;
-                                 }
-        ;
-
-/* $0 is the symbol which precedes comparator (e.g. aetags).
-   We typecast this pointer into struct comptags *
-*/
-comparator: COMPARATOR STRING
-                                 {
-                                     struct comptags *ctags = $<ctag>0;
-                                     if (ctags->comparator != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":comparator");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else if (!strcmp($2, "i;ascii-numeric") &&
-                                              !parse_script->support.i_ascii_numeric) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "comparator-i;ascii-numeric");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else ctags->comparator = $2;
-                                 }
-        ;
-
-/* $0 is the symbol which precedes idxtags (e.g. aetags).
-   We typecast this pointer into struct comptags *
-
-   Note: This rule forces :index to occur before :last
-   even though RFC 5228 states that tagged arguments can appear in any order.
-*/
-idxtags: INDEX NUMBER
-                                 {
-                                     struct comptags *ctags = $<ctag>0;
-                                     if (!parse_script->support.index) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "index");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (ctags->index != 0) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":index");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if ($2 <= 0) {
-                                         parse_error(parse_script,
-                                                     SIEVE_INVALID_VALUE,
-                                                     ":index");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else ctags->index = $2;
-                                 }
-        | LAST
-                                 { struct comptags *ctags = $<ctag>0;
-                                     if (!parse_script->support.index) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "index");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if (ctags->index == 0) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_TAG,
-                                                     ":index");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else if (ctags->index < 0) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":last");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else ctags->index *= -1;
-                                 }
-        ;
-
-htags: /* empty */               { $$ = new_comptags(); }
-        | htags matchtags
-        | htags listmatch
-        | htags comparator
-        | htags idxtags
-        ;
-
-strtags:/* empty */              { $$ = new_comptags(); }
-        | strtags matchtags
-        | strtags listmatch
-        | strtags comparator
-        ;
-
-hftags:/* empty */               { $$ = new_comptags(); }
-        | hftags matchtags
-        | hftags comparator
-        ;
-
-mtags: /* empty */               { $$ = new_comptags(); }
-        | mtags matchtags
-        | mtags comparator
-        ;
-
-btags: /* empty */               { $$ = new_btags(); }
-        | btags RAW
-                                 {
-                                     $$ = $1;
-                                     if ($$->transform != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "transform");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->transform = RAW;
-                                 }
-        | btags TEXT
-                                 {
-                                     $$ = $1;
-                                     if ($$->transform != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "transform");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->transform = TEXT;
-                                 }
-        | btags CONTENT stringlist
-                                 {
-                                     $$ = $1;
-                                     if ($$->transform != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     "transform");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else {
-                                         $$->transform = CONTENT;
-                                         $$->content_types = $3;
-                                     }
-                                 }
-        | btags matchtags
-        | btags comparator
-        ;
-
-dttags: /* empty */              { $$ = new_dttags(); }
-        | dttags ORIGINALZONE
-                                 {
-                                     $$ = $1;
-                                     if ($$->zonetag != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":originalzone");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->zonetag = ORIGINALZONE;
-                                 }
-        | dttags zone
-        | dttags matchtags
-        | dttags comparator
-        | dttags idxtags
-        ;
-
-cdtags: /* empty */              { $$ = new_dttags(); }
-        | cdtags zone
-        | cdtags matchtags
-        | cdtags comparator
-        ;
-
-/* $0 is the symbol which precedes zone (e.g. dttags).
-   We typecast this pointer into struct comptags *
-*/
-zone: ZONE STRING
-                                 {
-                                     struct dttags *dttags = $<dttag>0;
-                                     if (dttags->zonetag != -1) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":zone");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else if (verify_zone(parse_script, $2) == -1) {
-                                         YYERROR; /*vr called yyerror()*/
-                                     }
-                                     else {
-                                         dttags->zone = $2;
-                                         dttags->zonetag = ZONE;
-                                     }
-                                 }
-        ;
-
-datepart: STRING
-                                 {
-                                     $$ = verify_date_part(parse_script, $1);
-                                     if ($$ == -1) {
-                                         YYERROR; /* vdp called yyerror() */
-                                     }
-                                 }
-        ;
-
-addrparttag: ALL                 { $$ = ALL; }
-        | LOCALPART              { $$ = LOCALPART; }
-        | DOMAIN                 { $$ = DOMAIN; }
-        | USER
-                                 {
-                                     if (!parse_script->support.subaddress) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "subaddress");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = USER;
-                                 }
-        | DETAIL
-                                 {
-                                     if (!parse_script->support.subaddress) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "subaddress");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = DETAIL;
-                                 }
-        ;
-match: IS                        { $$ = IS; }
-        | CONTAINS               { $$ = CONTAINS; }
-        | MATCHES                { $$ = MATCHES; }
-        | REGEX
-                                 {
-                                     if (!parse_script->support.regex) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "regex");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = REGEX;
-                                 }
-        ;
-
-relmatch: COUNT
-                                 {
-                                     if (!parse_script->support.relational) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "relational");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = COUNT;
-                                 }
-        | VALUE
-                                 {
-                                     if (!parse_script->support.relational) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "relational");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = VALUE;
-                                 }
-        ;
-
-
-sizetag: OVER                    { $$ = OVER; }
-        | UNDER                  { $$ = UNDER; }
-        ;
-
-copy: COPY
-                                 {
-                                     if (!parse_script->support.copy) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "copy");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = 1;
-                                 }
-        ;
-
-creat:  CREATE
-                                 {
-                                     if (!parse_script->support.mailbox) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "mailbox");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     $$ = 1;
-                                 }
-        ;
-
-ftags: /* empty */               { $$ = new_ftags(); }
-        | ftags copy
-                                 {
-                                     $$ = $1;
-                                     if ($$->copy) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":copy");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->copy = $2;
-                                 }
-        | ftags creat
-                                 {
-                                     $$ = $1;
-                                     if ($$->create) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":create");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     else $$->create = $2;
-                                 }
-        | ftags FLAGS stringlist
-                                 {
-                                     if (!parse_script->support.imap4flags) {
-                                         parse_error(parse_script,
-                                                     SIEVE_MISSING_REQUIRE,
-                                                     "imap4flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-                                     if ($$->flags != NULL) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":flags");
-                                         YYERROR; /* pe should call yyerror() */
-                                     }
-
-                                     $$ = $1;
                                      if (!parse_script->support.variables) {
-                                         verify_flaglist($3);
+                                         verify_flaglist($2);
                                      }
-                                     if (!$3->count) strarray_add($3, "");
-                                     $$->flags = $3;
+
+                                     if (!strarray_size($2)) {
+                                         strarray_add($2, "");
+                                     }
+                                     *flags = $2;
                                  }
         ;
 
-rtags: /* empty */               { $$ = new_rtags(); }
+
+/* FILEINTO tagged arguments */
+ftags: /* empty */               {
+                                     $$ = new_command(FILEINTO, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | ftags CREATE           {
+                                     if (!parse_script->support.mailbox) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mailbox");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.f.create) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":create");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.f.create = 1;
+                                 }
+        | ftags copy
+        | ftags flags
+        ;
+
+
+/* :copy */
+copy: COPY                       {
+                                     if (!parse_script->support.copy) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "copy");
+                                         YYERROR;
+                                     }
+
+                                     /* $0 refers to ftags or rtags */
+                                     commandlist_t *c = $<cl>0;
+                                     int *copy = (c->type == FILEINTO) ?
+                                         &c->u.f.copy : &c->u.r.copy;
+
+                                     if (*copy) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":copy");
+                                         YYERROR;
+                                     }
+
+                                     *copy = 1;
+                                 }
+        ;
+
+
+/* REDIRECT tagged arguments */
+rtags: /* empty */               { $$ = new_command(REDIRECT, parse_script); }
+        | rtags listtag          {
+                                     if ($$->u.r.list) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":list");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.r.list = 1;
+                                 }
         | rtags copy
-                                 {
-                                     $$ = $1;
-                                     if ($$->copy) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":copy");
-                                         YYERROR; /* pe should call yyerror() */
+        ;
+
+
+/* SET tagged arguments */
+stags: /* empty */               {
+                                     $$ = new_command(SET, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
                                      }
-                                     else $$->copy = $2;
                                  }
-        | rtags listtag
-                                 {
-                                     $$ = $1;
-                                     if ($$->list) {
-                                         parse_error(parse_script,
-                                                     SIEVE_DUPLICATE_TAG,
-                                                     ":list");
-                                         YYERROR; /* pe should call yyerror() */
+        | stags mod40            {
+                                     if ($$->u.s.mod40) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "precedence 40 modifier");
+                                         YYERROR;
                                      }
-                                     else $$->list = $2;
+
+                                     $$->u.s.mod40 = $2;
+                                 }
+        | stags mod30            {
+                                     if ($$->u.s.mod30) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "precedence 30 modifier");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.s.mod30 = $2;
+                                 }
+        | stags mod20            {
+                                     if ($$->u.s.mod20) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "precedence 20 modifier");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.s.mod20 = $2;
+                                 }
+        | stags mod15            {
+                                     if ($$->u.s.mod15) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "precedence 15 modifier");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.s.mod15 = $2;
+                                 }
+        | stags mod10            {
+                                     if ($$->u.s.mod10) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "precedence 10 modifier");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.s.mod10 = $2;
                                  }
         ;
 
+
+/* SET modifiers */
+mod40:    LOWER
+        | UPPER
+        ;
+
+mod30:    LOWERFIRST
+        | UPPERFIRST
+        ;
+
+mod20:    QUOTEWILDCARD
+        ;
+
+mod15:    ENCODEDURL             { 
+                                     if (!parse_script->support.enotify) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "enotify");
+                                         YYERROR;
+                                     }
+                                 }
+        ;
+
+mod10:    LENGTH
+        ;
+
+
+/* VACATION tagged arguments */
+vtags: /* empty */               {
+                                     $$ = new_command(VACATION, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | vtags DAYS NUMBER      {
+                                     if ($$->u.v.seconds != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "period");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.v.seconds = $3 * DAY2SEC;
+                                 }
+        | vtags SECONDS NUMBER   {
+                                     if (!parse_script->support.vacation_seconds) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "vacation-seconds");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.v.seconds != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "period");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.v.seconds = $3;
+                                 }
+        | vtags SUBJECT STRING   {
+                                     if ($$->u.v.subject != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":subject");
+                                         YYERROR;
+                                     }
+                                     if (!verify_utf8(parse_script, $3)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+
+                                     $$->u.v.subject = $3;
+                                 }
+        | vtags FROM STRING      {
+                                     if ($$->u.v.from != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":from");
+                                         YYERROR;
+                                     }
+                                     if (!verify_address(parse_script, $3)) {
+                                         YYERROR; /* va should call yyerror() */
+                                     }
+
+                                     $$->u.v.from = $3;
+                                 }
+        | vtags ADDRESSES stringlist
+                                 {
+                                     if ($$->u.v.addresses != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":addresses");
+                                         YYERROR;
+                                     }
+                                     if (!verify_stringlist(parse_script, $3,
+                                                            verify_address)) {
+                                         YYERROR; /* va should call yyerror() */
+                                     }
+
+                                     $$->u.v.addresses = $3;
+                                 }
+        | vtags MIME             {
+                                     if ($$->u.v.mime != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":mime");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.v.mime = 1;
+                                 }
+        | vtags HANDLE STRING    {
+                                     if ($$->u.v.handle != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":handle");
+                                         YYERROR;
+                                     }
+                                     if (!verify_utf8(parse_script, $3)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+
+                                     $$->u.v.handle = $3;
+                                 }
+        ;
+
+
+/* SET/ADD/REMOVEFLAG */
+flagaction: SETFLAG
+        | ADDFLAG
+        | REMOVEFLAG
+        ;
+
+
+/* SET/ADD/REMOVEFLAG tagged arguments */
+flagtags: /* empty */            {
+                                     /* $0 refers to flagaction */
+                                     $$ = new_command($<nval>0, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | flagtags STRING        {
+                                     if (!(parse_script->support.imap4flags)) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.fl.variable) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_ARG,
+                                                      "variablename");
+                                         YYERROR;
+                                     }
+                                     if (!is_identifier($2)) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_INVALID_VALUE,
+                                                      "variablename");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.fl.variable = $2;
+                                 }
+        ;
+
+
+/* MARK/UNMARK */
+flagmark: MARK
+        | UNMARK
+        ;
+
+
+/* ADDHEADER tagged arguments */
+ahtags: /* empty */              {
+                                     $$ = new_command(ADDHEADER, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | ahtags LAST            {
+                                     if ($$->u.ah.index < 0) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":last");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.ah.index = -1;
+                                 }
+        ;
+
+
+/* DELETEHEADER tagged arguments */
+dhtags: /* empty */              {
+                                     $$ = new_command(DELETEHEADER,
+                                                      parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+
+        | dhtags { ctags = &($1->u.dh.comp); } matchtype
+        | dhtags { ctags = &($1->u.dh.comp); } listmatch
+        | dhtags { ctags = &($1->u.dh.comp); } comparator
+        | dhtags { ctags = &($1->u.dh.comp); } idxtags
+        ;
+
+
+/* REJECT/EREJECT */
+reject:   REJCT
+        | EREJECT
+        ;
+
+
+/* NOTIFY tagged arguments */
+ntags: /* empty */               {
+                                     $$ = new_command(NOTIFY, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | ntags ID STRING        {
+                                     if ($$->u.n.id != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":id");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.id = $3;
+                                 }
+        | ntags METHOD STRING    {
+                                     if ($$->u.n.method != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":method");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.method = $3;
+                                 }
+
+        | ntags OPTIONS stringlist
+                                 {
+                                     if ($$->u.n.options != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":options");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.options = $3;
+                                 }
+        | ntags priority         {
+                                     if ($$->u.n.priority != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "priority");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.priority = $2;
+                                 }
+        | ntags MESSAGE STRING   {
+                                     if ($$->u.n.message != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":message");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.message = $3;
+                                 }
+        ;
+
+
+/* :priority */
+priority: LOW
+        | NORMAL
+        | HIGH
+        ;
+
+
+/* DENOTIFY tagged arguments */
+dtags: /* empty */               {
+                                     $$ = new_command(DENOTIFY, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | dtags priority         {
+                                     if ($$->u.d.priority != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "priority");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.d.priority = $2;
+                                 }
+
+        | dtags { ctags = &($1->u.d.comp); } matchtype STRING {
+                                     strarray_t sa = STRARRAY_INITIALIZER;
+                                     strarray_appendm(&sa, $4);
+                                     if (!verify_patternlist(parse_script, &sa,
+                                                             &($$->u.d.comp),
+                                                             NULL)) {
+                                         YYERROR;
+                                     }
+                                     strarray_fini(&sa);
+
+                                     $$->u.d.pattern = $4;
+                                 }
+        ;
+
+
+/* INCLUDE tagged arguments */
+itags: /* empty */               {
+                                     $$ = new_command(INCLUDE, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nc should call yyerror() */
+                                     }
+                                 }
+        | itags location         {
+                                     if ($$->u.inc.location != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "location");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.inc.location = $2;
+                                 }
+        | itags ONCE             {
+                                     if ($$->u.inc.once != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":once");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.inc.once = 1;
+                                 }
+        | itags OPTIONAL         {
+                                     if ($$->u.inc.optional != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":optional");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.inc.optional = 1;
+                                 }
+        ;
+
+
+/* location tags */
+location: PERSONAL
+        | GLOBAL
+        ;
+
+
+/*
+ * Test commands
+ */
 testlist: '(' tests ')'          { $$ = $2; }
         ;
 
@@ -1779,11 +987,573 @@ tests: test                      { $$ = new_testlist($1, NULL); }
         | test ',' tests         { $$ = new_testlist($1, $3); }
         ;
 
+test:     ANYOF testlist         {
+                                     $$ = new_test(ANYOF, parse_script);
+                                     $$->u.tl = $2;
+                                 }
+        | ALLOF testlist         {
+                                     $$ = new_test(ALLOF, parse_script);
+                                     $$->u.tl = $2;
+                                 }
+        | EXISTS stringlist      {
+                                     $$ = new_test(EXISTS, parse_script);
+                                     $$->u.sl = $2;
+                                 }
+        | NOT test               {
+                                     $$ = new_test(NOT, parse_script);
+                                     $$->u.t  = $2;
+                                 }
+        | SFALSE                 { $$ = new_test(SFALSE, parse_script); }
+        | STRUE                  { $$ = new_test(STRUE, parse_script);  }
+
+        | SIZE sizetag NUMBER    {
+                                     $$ = new_test(SIZE, parse_script);
+                                     $$->u.sz.t = $2;
+                                     $$->u.sz.n = $3;
+                                 }
+
+        | HEADER htags stringlist stringlist
+                                 {
+                                     $$ = build_header(parse_script, $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bh should call yyerror() */
+                                     }
+                                 }
+
+        | ADDRESS atags stringlist stringlist
+                                 {
+                                     $$ = build_address(parse_script,
+                                                         $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* ba should call yyerror() */
+                                     }
+                                 }
+
+        | ENVELOPE etags stringlist stringlist
+                                 {
+                                     $$ = build_envelope(parse_script,
+                                                         $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* ba should call yyerror() */
+                                     }
+                                 }
+        | BODY btags stringlist  {
+                                     $$ = build_body(parse_script, $2, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bb should call yyerror() */
+                                     }
+                                 }
+
+        | STRINGT strtags stringlist stringlist
+                                 {
+                                     $$ = build_stringt(parse_script,
+                                                        $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bh should call yyerror() */
+                                     }
+                                 }
+
+        /* Per RFC 5232, the variables list (penultimate argument) is optional,
+         * but defining the grammar this way results in a shift/reduce conflict.
+         * Therefore, we have to flatten the grammar into two rules.
+        */
+        | HASFLAG hftags stringlist stringlist
+                                 {
+                                     $$ = build_hasflag(parse_script,
+                                                        $2, $3, $4);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bh should call yyerror() */
+                                     }
+                                 }
+
+        | HASFLAG hftags stringlist
+                                 {
+                                     $$ = build_hasflag(parse_script,
+                                                        $2, NULL, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bh should call yyerror() */
+                                     }
+                                 }
+
+        /* getdatepart variable is used to change the start state of the lexer */
+        | DATE dttags STRING { getdatepart = 1; } datepart stringlist
+                                 {
+                                     $$ = build_date(parse_script,
+                                                     $2, $3, $5, $6);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bd should call yyerror() */
+                                     }
+                                 }
+
+        /* getdatepart variable is used to change the start state of the lexer */
+        | CURRENTDATE cdtags { getdatepart = 1; } datepart stringlist
+                                 {
+                                     $$ = build_date(parse_script,
+                                                     $2, NULL, $4, $5);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bd should call yyerror() */
+                                     }
+                                 }
+
+        | MAILBOXEXISTS stringlist
+                                 {
+                                     $$ = new_test(MAILBOXEXISTS, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+
+                                     $$ = build_mbox_meta(parse_script,
+                                                          NULL, NULL, NULL, $2);
+                                 }
+
+        | METADATA mtags STRING STRING stringlist
+                                 {
+                                     $$ = build_mbox_meta(parse_script,
+                                                          $2, $3, $4, $5);
+                                 }
+
+        | METADATAEXISTS STRING stringlist
+                                 {
+                                     $$ = new_test(METADATAEXISTS, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+
+                                     $$ = build_mbox_meta(parse_script,
+                                                          NULL, $2, NULL, $3);
+                                 }
+
+        | SERVERMETADATA mtags STRING stringlist
+                                 {
+                                     $$ = build_mbox_meta(parse_script,
+                                                          $2, NULL, $3, $4);
+                                 }
+
+        | SERVERMETADATAEXISTS stringlist
+                                 {
+                                     $$ = new_test(SERVERMETADATAEXISTS,
+                                                   parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+
+                                     $$ = build_mbox_meta(parse_script,
+                                                          $$, NULL, NULL, $2);
+                                 }
+
+        | VALIDEXTLIST stringlist
+                                 {
+                                     $$ = new_test(VALIDEXTLIST, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+
+                                     $$->u.sl = $2;
+                                 }
+
+        | error                  { $$ = NULL; }
+        ;
+
+
+/* SIZE tagged arguments */
+sizetag:  OVER
+        | UNDER
+        ;
+
+
+/* HEADER tagged arguments */
+htags: /* empty */               { $$ = new_test(HEADER, parse_script); }
+        | htags { ctags = &($1->u.hhs.comp); } matchtype
+        | htags { ctags = &($1->u.hhs.comp); } listmatch
+        | htags { ctags = &($1->u.hhs.comp); } comparator
+        | htags { ctags = &($1->u.hhs.comp); } idxtags
+        ;
+
+
+/* All match-types except for :list */
+matchtype: matchtag              {
+                                     if (ctags->match != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "match-type");
+                                         YYERROR;
+                                     }
+
+                                     ctags->match = $1;
+                                 }
+        | relmatch relation
+                                 {
+                                     if (!parse_script->support.relational) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "relational");
+                                         YYERROR;
+                                     }
+
+                                     if (ctags->match != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "match-type");
+                                         YYERROR;
+                                     }
+
+                                     ctags->match = $1;
+                                     ctags->relation = $2;
+                                 }
+        ;
+
+
+/* match-type tags */
+matchtag: IS
+        | CONTAINS
+        | MATCHES
+        | REGEX                  {
+                                     if (!parse_script->support.regex) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "regex");
+                                         YYERROR;
+                                     }
+                                 }
+        ;
+
+
+/* Relational match-type tags */
+relmatch: COUNT
+        | VALUE
+        ;
+
+
+/* relational-match */
+relation: EQ
+        | NE
+        | GT
+        | GE
+        | LT
+        | LE
+        ;
+
+
+/* :list match-type */
+listmatch: listtag               {
+                                     if (ctags->match != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "match-type");
+                                         YYERROR;
+                                     }
+
+                                     ctags->match = LIST;
+                                 }
+        ;
+
+
+/* :list */
+listtag: LIST                    {
+                                     if (!parse_script->support.extlists) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "extlists");
+                                         YYERROR;
+                                     }
+                                 }
+        ;
+
+
+/* :comparator */
+comparator: COMPARATOR collation
+                                 {
+                                     if (ctags->collation != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":comparator");
+                                         YYERROR;
+                                     }
+
+                                     
+                                     ctags->collation = $2;
+                                 }
+        ;
+
+
+/* comparator-types */
+collation: OCTET
+        | ASCIICASEMAP
+        | ASCIINUMERIC           {
+                                     if (!parse_script->support.i_ascii_numeric) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "comparator-i;ascii-numeric");
+                                         YYERROR;
+                                     }
+                                 }
+        ;
+
+
+/* Index tags */
+idxtags: INDEX NUMBER
+                                 {
+                                     if (!parse_script->support.index) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "index");
+                                         YYERROR;
+                                     }
+
+                                     if (ctags->index != 0) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":index");
+                                         YYERROR;
+                                     }
+
+                                     ctags->index = $2;
+                                 }
+        | LAST
+                                 {
+                                     if (!parse_script->support.index) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "index");
+                                         YYERROR;
+                                     }
+
+                                     if (ctags->index == 0) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_TAG,
+                                                      ":index");
+                                         YYERROR;
+                                     }
+                                     if (ctags->index < 0) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":last");
+                                         YYERROR;
+                                     }
+
+                                     ctags->index *= -1;
+                                 }
+        ;
+
+
+/* ADDRESS tagged arguments */
+atags: /* empty */               { $$ = new_test(ADDRESS, parse_script); }
+        | atags addrpart
+        | atags { ctags = &($1->u.ae.comp); } matchtype
+        | atags { ctags = &($1->u.ae.comp); } listmatch
+        | atags { ctags = &($1->u.ae.comp); } comparator
+        | atags { ctags = &($1->u.ae.comp); } idxtags
+        ;
+
+
+/* address-part */
+addrpart: addrparttag           {
+                                     /* $0 refers to a test_t* (ADDR/ENV)*/
+                                     test_t *test = $<test>0;
+
+                                     if (test->u.ae.addrpart != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "address-part");
+                                         YYERROR;
+                                     }
+
+                                     test->u.ae.addrpart = $1;
+                                 }
+
+
+/* address-part tags */
+addrparttag: ALL
+        | LOCALPART
+        | DOMAIN
+        | subaddress             {
+                                     if (!parse_script->support.subaddress) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "subaddress");
+                                         YYERROR;
+                                     }
+                                 }
+        ;
+
+
+/* subaddress-part tags */
+subaddress: USER
+        | DETAIL
+        ;
+
+
+/* ENVELOPE tagged arguments */
+etags: /* empty */               {
+                                     $$ = new_test(ENVELOPE, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | etags addrpart
+        | etags { ctags = &($1->u.ae.comp); } matchtype
+        | etags { ctags = &($1->u.ae.comp); } listmatch
+        | etags { ctags = &($1->u.ae.comp); } comparator
+        ;
+
+
+/* BODY tagged arguments */
+btags: /* empty */               {
+                                     $$ = new_test(BODY, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | btags transform        {
+                                     if ($$->u.b.transform != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "transform");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.b.transform = $2;
+                                 }
+
+        | btags CONTENT stringlist
+                                 {
+                                     if ($$->u.b.transform != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "transform");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.b.transform = $2;
+                                     $$->u.b.content_types = $3;
+                                 }
+
+        | btags { ctags = &($1->u.b.comp); } matchtype
+        | btags { ctags = &($1->u.b.comp); } comparator
+        ;
+
+
+/* body-transform tags */
+transform: RAW
+        | TEXT
+        ;
+
+
+/* STRING tagged arguments */
+strtags: /* empty */             {
+                                     $$ = new_test(STRINGT, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+
+        | strtags { ctags = &($1->u.hhs.comp); } matchtype
+        | strtags { ctags = &($1->u.hhs.comp); } listmatch
+        | strtags { ctags = &($1->u.hhs.comp); } comparator
+        ;
+
+
+/* HASFLAG tagged arguments */
+hftags: /* empty */              {
+                                     $$ = new_test(HASFLAG, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | hftags { ctags = &($1->u.hhs.comp); } matchtype
+        | hftags { ctags = &($1->u.hhs.comp); } comparator
+        ;
+
+
+/* DATE tagged arguments */
+dttags: /* empty */              {
+                                     $$ = new_test(DATE, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | dttags ORIGINALZONE    {
+                                     if ($$->u.dt.zonetag != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":originalzone");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.dt.zonetag = ORIGINALZONE;
+                                 }
+        | dttags zone
+        | dttags { ctags = &($1->u.dt.comp); } matchtype
+        | dttags { ctags = &($1->u.dt.comp); } comparator
+        | dttags { ctags = &($1->u.dt.comp); } idxtags
+        ;
+
+
+/* :zone */
+zone: ZONE TIMEZONE              {
+                                     /* $0 refers to a test_t* ([CURRENT]DATE)*/
+                                     test_t *test = $<test>0;
+
+                                     if (test->u.dt.zonetag != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":zone");
+                                         YYERROR;
+                                     }
+
+                                     test->u.dt.zonetag = ZONE;
+                                     test->u.dt.zone = $2;
+                                 }
+        ;
+
+
+/* CURRENTDATE tagged arguments */
+cdtags: /* empty */              {
+                                     $$ = new_test(CURRENTDATE, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | cdtags zone
+        | cdtags { ctags = &($1->u.dt.comp); } matchtype
+        | cdtags { ctags = &($1->u.dt.comp); } comparator
+        ;
+
+
+/* date-parts */
+datepart: YEARP
+        | MONTHP
+        | DAYP
+        | DATEP
+        | JULIAN
+        | HOURP
+        | MINUTEP
+        | SECONDP
+        | TIMEP
+        | ISO8601
+        | STD11
+        | ZONEP
+        | WEEKDAYP
+        ;
+
+
+/* METADATA/SERVERMETADATA tagged arguments */
+mtags: /* empty */               {
+                                     /* $0 refers to [SERVER]METADATA */
+                                     $$ = new_test($<nval>0, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+
+        | mtags { ctags = &($1->u.mm.comp); } matchtype
+        | mtags { ctags = &($1->u.mm.comp); } comparator
+        ;
 %%
 
 
 /*
- * Actions
+ * Yacc actions
  */
 
 void yyerror(sieve_script_t *parse_script, const char *msg)
@@ -1796,636 +1566,31 @@ void yyerror(sieve_script_t *parse_script, const char *msg)
     }
 }
 
-static void parse_error(sieve_script_t *parse_script, int err, ...)
+
+static void vsieveerror_f(sieve_script_t *parse_script,
+                          const char *fmt, va_list args)
+{
+    buf_reset(&parse_script->sieveerr);
+    buf_vprintf(&parse_script->sieveerr, fmt, args);
+    yyerror(parse_script, buf_cstring(&parse_script->sieveerr));
+}
+
+void sieveerror_f(sieve_script_t *parse_script, const char *fmt, ...)
 {
     va_list args;
 
-    va_start(args, err);
-    vsnprintf(parse_script->sieveerr, ERR_BUF_SIZE, error_message(err), args);
-    yyerror(parse_script, parse_script->sieveerr);
+    va_start(args, fmt);
+    vsieveerror_f(parse_script, fmt, args);
     va_end(args);
 }
 
-static char *check_reqs(sieve_script_t *parse_script, strarray_t *sa)
+void sieveerror_c(sieve_script_t *parse_script, int code, ...)
 {
-    char *s;
-    struct buf errs = BUF_INITIALIZER;
-    char *res;
-
-    while ((s = strarray_shift(sa))) {
-        if (!script_require(parse_script, s)) {
-            if (!errs.len)
-                buf_printf(&errs,
-                           "Unsupported feature(s) in \"require\": \"%s\"", s);
-            else buf_printf(&errs, ", \"%s\"", s);
-        }
-        free(s);
-    }
-    strarray_free(sa);
-
-    res = buf_release(&errs);
-    if (!res[0]) {
-        free(res);
-        return NULL;
-    }
-
-    return res;
-}
-
-static test_t *build_address(int t, struct aetags *ae,
-                             strarray_t *sl, strarray_t *pl)
-{
-    test_t *ret = new_test(t);  /* can be either ADDRESS or ENVELOPE */
-
-    assert((t == ADDRESS) || (t == ENVELOPE));
-
-    if (ret) {
-        ret->u.ae.comptag = ae->comptags.match;
-        ret->u.ae.relation=ae->comptags.relation;
-        ret->u.ae.comparator=xstrdup(ae->comptags.comparator);
-        ret->u.ae.index = ae->comptags.index;
-        ret->u.ae.sl = sl;
-        ret->u.ae.pl = pl;
-        ret->u.ae.addrpart = ae->addrtag;
-        free_aetags(ae);
-
-    }
-    return ret;
-}
-
-static test_t *build_header(int t, struct comptags *c,
-                            strarray_t *sl, strarray_t *pl)
-{
-    test_t *ret = new_test(t);  /* can be HEADER or HASFLAG or STRINGT */
-
-    assert((t == HEADER) || (t == HASFLAG) || (t == STRINGT));
-
-    if (ret) {
-        ret->u.h.comptag = c->match;
-        ret->u.h.relation = c->relation;
-        ret->u.h.comparator = xstrdup(c->comparator);
-        ret->u.h.index = c->index;
-        ret->u.h.sl = sl;
-        ret->u.h.pl = pl;
-        free_comptags(c, 1);
-    }
-    return ret;
-}
-
-static test_t *build_body(int t, struct btags *b, strarray_t *pl)
-{
-    test_t *ret = new_test(t);  /* can be BODY */
-
-    assert(t == BODY);
-
-    if (ret) {
-        ret->u.b.comptag = b->comptags.match;
-        ret->u.b.relation = b->comptags.relation;
-        ret->u.b.comparator = xstrdup(b->comptags.comparator);
-        ret->u.b.transform = b->transform;
-        ret->u.b.offset = b->offset;
-        ret->u.b.content_types = b->content_types; b->content_types = NULL;
-        ret->u.b.pl = pl;
-        free_btags(b);
-    }
-    return ret;
-}
-
-static test_t *build_mailboxtest(int t, struct comptags *c,
-                                 const char *extname, const char *keyname,
-                                 strarray_t *keylist)
-{
-    test_t *ret = new_test(t);
-
-    if (ret) {
-        ret->u.mbx.extname = xstrdupnull(extname);
-        ret->u.mbx.keyname = xstrdupnull(keyname);
-        ret->u.mbx.keylist = keylist;
-        if (c) {
-            canon_comptags(c);
-            ret->u.mbx.comptag = c->match;
-            ret->u.mbx.relation = c->relation;
-            ret->u.mbx.comparator = xstrdup(c->comparator);
-            free_comptags(c, 1);
-        }
-    }
-
-    return ret;
-}
-
-static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == VACATION);
-
-    if (ret) {
-        ret->u.v.subject = v->subject; v->subject = NULL;
-        ret->u.v.from = v->from; v->from = NULL;
-        ret->u.v.handle = v->handle; v->handle = NULL;
-        ret->u.v.seconds = v->seconds;
-        ret->u.v.mime = v->mime;
-        ret->u.v.addresses = v->addresses; v->addresses = NULL;
-        free_vtags(v);
-        ret->u.v.message = reason;
-    }
-    return ret;
-}
-
-static commandlist_t *build_notify(int t, struct ntags *n)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == NOTIFY);
-       if (ret) {
-        ret->u.n.method = n->method; n->method = NULL;
-        ret->u.n.id = n->id; n->id = NULL;
-        ret->u.n.options = n->options; n->options = NULL;
-        ret->u.n.priority = n->priority;
-        ret->u.n.message = n->message; n->message = NULL;
-        free_ntags(n);
-    }
-    return ret;
-}
-
-static commandlist_t *build_denotify(int t, struct dtags *d)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == DENOTIFY);
-
-    if (ret) {
-        ret->u.d.comptag = d->comptags.match;
-        ret->u.d.relation = d->comptags.relation;
-        ret->u.d.pattern = xstrdupnull(d->pattern);
-        ret->u.d.priority = d->priority;
-        free_dtags(d);
-    }
-    return ret;
-}
-
-static commandlist_t *build_keep(int t, struct ftags *f)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == KEEP);
-
-    if (ret) {
-        ret->u.k.copy = f->copy;
-        ret->u.k.flags = f->flags; f->flags = NULL;
-        free_ftags(f);
-    }
-    return ret;
-}
-
-static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == FILEINTO);
-
-    if (ret) {
-        ret->u.f.copy = f->copy;
-        ret->u.f.create = f->create;
-        ret->u.f.flags = f->flags; f->flags = NULL;
-        if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-            ret->u.f.folder = xmalloc(5 * strlen(folder) + 1);
-            UTF8_to_mUTF7(ret->u.f.folder, folder);
-        }
-        else {
-            ret->u.f.folder = xstrdup(folder);
-        }
-        free_ftags(f);
-    }
-    return ret;
-}
-
-static commandlist_t *build_redirect(int t, struct rtags *r, char *address)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == REDIRECT);
-
-    if (ret) {
-        ret->u.r.copy = r->copy;
-        ret->u.r.list = r->list;
-        ret->u.r.address = address;
-
-        free_rtags(r);
-    }
-    return ret;
-}
-
-static commandlist_t *build_include(int t, struct itags *i, char* script)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == INCLUDE);
-
-    if (i->location == -1) i->location = PERSONAL;
-    if (i->once == -1) i->once = 0;
-    if (i->optional == -1) i->optional = 0;
-
-    if (ret) {
-        ret->u.inc.location = i->location;
-        ret->u.inc.once = i->once;
-        ret->u.inc.optional = i->optional;
-        ret->u.inc.script = script;
-        free(i);
-    }
-    return ret;
-}
-
-static test_t *build_date(int t, struct dttags *dt,
-                          char *hn, int part, strarray_t *kl)
-{
-    test_t *ret = new_test(t);
-    assert(t == DATE || t == CURRENTDATE);
-
-    if (ret) {
-        ret->u.dt.comptag = dt->comptags.match;
-        ret->u.dt.relation = dt->comptags.relation;
-        ret->u.dt.comparator = xstrdup(dt->comptags.comparator);
-        ret->u.dt.index = dt->comptags.index;
-        ret->u.dt.zone = xstrdupnull(dt->zone);
-        ret->u.dt.zonetag = dt->zonetag;
-        ret->u.dt.date_part = part;
-        ret->u.dt.header_name = xstrdupnull(hn);
-        ret->u.dt.kl = kl;
-        free_dttags(dt);
-    }
-    return ret;
-}
-
-static commandlist_t *build_set(int t, struct stags *s,
-                                char *variable, char *value)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == SET);
-
-    if (ret) {
-        ret->u.s.mod40 = s->mod40;
-        ret->u.s.mod30 = s->mod30;
-        ret->u.s.mod20 = s->mod20;
-        ret->u.s.mod10 = s->mod10;
-        ret->u.s.variable = xstrdup(variable);
-        ret->u.s.value = xstrdup(value);
-
-        free_stags(s);
-    }
-
-    return ret;
-}
-
-static commandlist_t *build_flag(int t, char *variable, strarray_t *flags)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == SETFLAG || t == ADDFLAG || t == REMOVEFLAG);
-
-    if (ret) {
-        ret->u.fl.variable = xstrdup(variable ? variable : "");
-        ret->u.fl.flags = flags;
-    }
-
-    return ret;
-}
-
-static commandlist_t *build_addheader(int t, int index, char *name, char *value)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == ADDHEADER);
-
-    if (ret) {
-        ret->u.ah.index = index;
-        ret->u.ah.name = xstrdup(name);
-        ret->u.ah.value = xstrdup(value);
-    }
-
-    return ret;
-}
-
-static commandlist_t *build_deleteheader(int t, struct comptags *dh,
-                                         char *name, strarray_t *values)
-{
-    commandlist_t *ret = new_command(t);
-
-    assert(t == DELETEHEADER);
-
-    if (ret) {
-        ret->u.dh.comptag = dh->match;
-        ret->u.dh.relation = dh->relation;
-        ret->u.dh.comparator = xstrdup(dh->comparator);
-        ret->u.dh.index = dh->index;
-        ret->u.dh.name = xstrdup(name);
-        ret->u.dh.values = values;
-        free_comptags(dh, 1);
-    }
-
-    return ret;
-}
-
-static struct aetags *new_aetags(void)
-{
-    struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
-
-    init_comptags(&r->comptags);
-    r->addrtag = -1;
-
-    return r;
-}
-
-static struct aetags *canon_aetags(struct aetags *ae)
-{
-    canon_comptags(&ae->comptags);
-    if (ae->addrtag == -1) { ae->addrtag = ALL; }
-    return ae;
-}
-
-static void free_aetags(struct aetags *ae)
-{
-    free_comptags(&ae->comptags, 0);
-    free(ae);
-}
-
-static struct comptags *new_comptags(void)
-{
-    struct comptags *c = (struct comptags *) xmalloc(sizeof(struct comptags));
-
-    return init_comptags(c);
-}
-
-static struct comptags *init_comptags(struct comptags *c)
-{
-    c->match = c->relation = -1;
-    c->comparator = NULL;
-    c->index = 0;
-
-    return c;
-}
-
-static struct comptags *canon_comptags(struct comptags *c)
-{
-    if (c->match == -1) c->match = IS;
-    if (c->comparator == NULL) c->comparator = xstrdup("i;ascii-casemap");
-    return c;
-}
-
-static void free_comptags(struct comptags *c, int destroy)
-{
-    free(c->comparator);
-    if (destroy) free(c);
-}
-
-static struct btags *new_btags(void)
-{
-    struct btags *r = (struct btags *) xmalloc(sizeof(struct btags));
-
-    init_comptags(&r->comptags);
-    r->transform = r->offset = -1;
-    r->content_types = NULL;
-
-    return r;
-}
-
-static struct btags *canon_btags(struct btags *b)
-{
-    canon_comptags(&b->comptags);
-    if (b->transform == -1) b->transform = TEXT;
-    if (b->content_types == NULL) {
-        b->content_types = strarray_new();
-        if (b->transform == RAW) strarray_append(b->content_types, "");
-        else strarray_append(b->content_types, "text");
-    }
-    if (b->offset == -1) b->offset = 0;
-    return b;
-}
-
-static void free_btags(struct btags *b)
-{
-    free_comptags(&b->comptags, 0);
-    if (b->content_types) strarray_free(b->content_types);
-    free(b);
-}
-
-static struct vtags *new_vtags(void)
-{
-    struct vtags *r = (struct vtags *) xmalloc(sizeof(struct vtags));
-
-    r->seconds = -1;
-    r->addresses = NULL;
-    r->subject = NULL;
-    r->from = NULL;
-    r->handle = NULL;
-    r->mime = -1;
-
-    return r;
-}
-
-static struct vtags *canon_vtags(sieve_script_t *parse_script, struct vtags *v)
-{
-    assert(parse_script->interp.vacation != NULL);
-
-    if (v->seconds == -1) v->seconds = 7 * DAY2SEC;
-    if (v->seconds < parse_script->interp.vacation->min_response)
-        v->seconds = parse_script->interp.vacation->min_response;
-    if (v->seconds > parse_script->interp.vacation->max_response)
-        v->seconds = parse_script->interp.vacation->max_response;
-    if (v->mime == -1) v->mime = 0;
-
-    return v;
-}
-
-static void free_vtags(struct vtags *v)
-{
-    strarray_free(v->addresses);
-    free(v->subject);
-    free(v->from);
-    free(v->handle);
-    free(v);
-}
-
-static struct itags *new_itags()
-{
-    struct itags *r = (struct itags *) xmalloc(sizeof(struct itags));
-
-    r->once = -1;
-    r->location = -1;
-    r->optional = -1;
-
-    return r;
-}
-
-static struct dttags *new_dttags(void)
-{
-    struct dttags *dt = (struct dttags *) xmalloc(sizeof(struct dttags));
-
-    init_comptags(&dt->comptags);
-    dt->zonetag = -1;
-    dt->zone = NULL;
-    return dt;
-}
-
-static struct dttags *canon_dttags(struct dttags *dt)
-{
-    char zone[6];
-    int gmoffset;
-    int hours;
-    int minutes;
-    struct tm tm;
-    time_t t;
-
-    canon_comptags(&dt->comptags);
-    if (dt->comptags.index == 0) dt->comptags.index = 1;
-    if (dt->zonetag == -1) {
-        t = time(NULL);
-        localtime_r(&t, &tm);
-        gmoffset = gmtoff_of(&tm, t) / 60;
-        hours = abs(gmoffset) / 60;
-        minutes = abs(gmoffset) % 60;
-        snprintf(zone, 6, "%c%02d%02d",
-                 (gmoffset >= 0 ? '+' : '-'), hours, minutes);
-        dt->zone = xstrdup(zone);
-        dt->zonetag = ZONE;
-    }
-    return dt;
-}
-
-static void free_dttags(struct dttags *dt)
-{
-    free_comptags(&dt->comptags, 0);
-    free(dt->zone);
-    free(dt);
-}
-
-
-static struct ntags *new_ntags(void)
-{
-    struct ntags *r = (struct ntags *) xmalloc(sizeof(struct ntags));
-
-    r->method = NULL;
-    r->id = NULL;
-    r->options = NULL;
-    r->priority = -1;
-    r->message = NULL;
-
-    return r;
-}
-
-static struct ntags *canon_ntags(struct ntags *n)
-{
-    if (n->priority == -1) n->priority = NORMAL;
-    if (n->message == NULL) n->message = xstrdup("$from$: $subject$");
-    if (n->method == NULL) n->method = xstrdup("default");
-    return n;
-}
-static struct dtags *canon_dtags(struct dtags *d)
-{
-    canon_comptags(&d->comptags);
-    if (d->priority == -1) d->priority = ANY;
-    return d;
-}
-
-static void free_ntags(struct ntags *n)
-{
-    free(n->method);
-    free(n->id);
-    strarray_free(n->options);
-    free(n->message);
-    free(n);
-}
-
-static struct dtags *new_dtags(void)
-{
-    struct dtags *r = (struct dtags *) xzmalloc(sizeof(struct dtags));
-
-    init_comptags(&r->comptags);
-    r->comptags.comparator = xstrdup("i;ascii-casemap");
-    r->priority = -1;
-
-    return r;
-}
-
-static void free_dtags(struct dtags *d)
-{
-    if (!d) return;
-    free_comptags(&d->comptags, 0);
-    free(d);
-}
-
-static struct ftags *new_ftags(void)
-{
-    struct ftags *f = (struct ftags *) xzmalloc(sizeof(struct ftags));
-    return f;
-}
-
-static struct ftags *canon_ftags(struct ftags *f)
-{
-    return f;
-}
-
-static void free_ftags(struct ftags *f)
-{
-    if (!f) return;
-    strarray_free(f->flags);
-    free(f);
-}
-
-static struct stags *new_stags(void)
-{
-    struct stags *s = (struct stags *) xmalloc(sizeof(struct stags));
-
-    s->mod40 = 0;
-    s->mod30 = 0;
-    s->mod20 = 0;
-    s->mod10 = 0;
-
-    return s;
-}
-
-static struct stags *canon_stags(struct stags *s)
-{
-    return s;
-}
-
-static void free_stags(struct stags *s)
-{
-    free(s);
-}
-
-static struct rtags *new_rtags(void)
-{
-    struct rtags *r = (struct rtags *) xmalloc(sizeof(struct rtags));
-
-    r->copy = 0;
-    r->list = 0;
-
-    return r;
-}
-
-static struct rtags *canon_rtags(struct rtags *r)
-{
-    return r;
-}
-
-static void free_rtags(struct rtags *r)
-{
-    free(r);
-}
-
-static int verify_identifier(sieve_script_t *parse_script, char *s)
-{
-    /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
-
-    if (!is_identifier(s)) {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "string '%s': not a valid sieve identifier", s);
-        yyerror(parse_script, parse_script->sieveerr);
-        return 0;
-    }
-    return 1;
+    va_list args;
+
+    va_start(args, code);
+    vsieveerror_f(parse_script, error_message(code), args);
+    va_end(args);
 }
 
 static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa,
@@ -2433,10 +1598,67 @@ static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa,
 {
     int i;
 
-    for (i = 0 ; i < sa->count ; i++) {
-        if (!verify(parse_script, sa->data[i])) return 0;
+    for (i = 0 ; i < strarray_size(sa) ; i++) {
+        if (!verify(parse_script, (char *) strarray_nth(sa, i))) return 0;
     }
     return 1;
+}
+
+#ifdef ENABLE_REGEX
+static int verify_regexlist(sieve_script_t *parse_script,
+                            const strarray_t *sa, int collation)
+{
+    int i, ret = 0;
+    regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
+    int cflags = REG_EXTENDED | REG_NOSUB;
+
+#ifdef HAVE_PCREPOSIX_H
+    /* support UTF8 comparisons */
+    cflags |= REG_UTF8;
+#endif
+
+    if (collation == ASCIICASEMAP) {
+        cflags |= REG_ICASE;
+    }
+
+    for (i = 0 ; i < strarray_size(sa) ; i++) {
+        if ((ret = regcomp(reg, strarray_nth(sa, i), cflags)) != 0) {
+            size_t errbuf_size = regerror(ret, reg, NULL, 0);
+
+            buf_reset(&parse_script->sieveerr);
+            buf_ensure(&parse_script->sieveerr, errbuf_size);
+            (void) regerror(ret, reg,
+                            (char *) buf_base(&parse_script->sieveerr),
+                            errbuf_size);
+            yyerror(parse_script, buf_cstring(&parse_script->sieveerr));
+            break;
+        }
+    }
+
+    free(reg);
+
+    return (ret == 0);
+}
+#else
+
+static int verify_regexlist(sieve_script_t *parse_script __attribute__((unused)),
+                            const strarray_t *sa __attribute__((unused)),
+                            char *comp __attribute__((unused)))
+{
+    return 0;
+}
+#endif /* ENABLE_REGEX */
+
+static int verify_patternlist(sieve_script_t *parse_script,
+                              strarray_t *sa, comp_t *c,
+                              int (*verify)(sieve_script_t*, char *))
+{
+    if (verify && !verify_stringlist(parse_script, sa, verify)) return 0;
+
+    canon_comptags(c);
+
+    return (c->match == REGEX) ?
+        verify_regexlist(parse_script, sa, c->collation) : 1;
 }
 
 static int verify_address(sieve_script_t *parse_script, char *s)
@@ -2444,9 +1666,7 @@ static int verify_address(sieve_script_t *parse_script, char *s)
     parse_script->addrerr[0] = '\0';    /* paranoia */
     YY_BUFFER_STATE buffer = addr_scan_string(s);
     if (addrparse(parse_script)) {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "address '%s': %s", s, parse_script->addrerr);
-        yyerror(parse_script, parse_script->sieveerr);
+        sieveerror_f(parse_script, "address '%s': %s", s, parse_script->addrerr);
         addr_delete_buffer(buffer);
         return 0;
     }
@@ -2473,9 +1693,7 @@ static int verify_header(sieve_script_t *parse_script, char *hdr)
            ;  controls, SP, and
            ;  ":". */
         if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-            snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                     "header '%s': not a valid header", hdr);
-            yyerror(parse_script, parse_script->sieveerr);
+            sieveerror_f(parse_script, "header '%s': not a valid header", hdr);
             return 0;
         }
         h++;
@@ -2504,9 +1722,8 @@ static int verify_addrheader(sieve_script_t *parse_script, char *hdr)
         if (!strcmp(*h, hdr)) return 1;
     }
 
-    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-             "header '%s': not a valid header for an address test", hdr);
-    yyerror(parse_script, parse_script->sieveerr);
+    sieveerror_f(parse_script,
+                 "header '%s': not a valid header for an address test", hdr);
     return 0;
 }
 
@@ -2518,146 +1735,9 @@ static int verify_envelope(sieve_script_t *parse_script, char *env)
         return 1;
     }
 
-    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-             "env-part '%s': not a valid part for an envelope test", env);
-    yyerror(parse_script, parse_script->sieveerr);
+    sieveerror_f(parse_script,
+                 "env-part '%s': not a valid part for an envelope test", env);
     return 0;
-}
-
-static int verify_relat(sieve_script_t *parse_script, char *r)
-{
-    /* this really should have been a token to begin with.*/
-    lcase(r);
-    if (!strcmp(r, "gt")) return GT;
-    else if (!strcmp(r, "ge")) return GE;
-    else if (!strcmp(r, "lt")) return LT;
-    else if (!strcmp(r, "le")) return LE;
-    else if (!strcmp(r, "ne")) return NE;
-    else if (!strcmp(r, "eq")) return EQ;
-    else {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "flag '%s': not a valid relational operation", r);
-        yyerror(parse_script, parse_script->sieveerr);
-        return -1;
-    }
-}
-
-static int verify_zone(sieve_script_t *parse_script, char *tz)
-{
-    int valid = 0;
-    unsigned hours;
-    unsigned minutes;
-    char sign;
-
-    if (sscanf(tz, "%c%02u%02u", &sign, &hours, &minutes) != 3) {
-        valid |= -1;
-    }
-
-    // test sign
-    switch (sign) {
-    case '+':
-    case '-':
-        break;
-
-    default:
-        valid |= -1;
-        break;
-    }
-
-    // test minutes
-    if (minutes > 59) {
-            valid |= -1;
-    }
-
-    if (valid != 0) {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "flag '%s': not a valid timezone offset", tz);
-        yyerror(parse_script, parse_script->sieveerr);
-    }
-
-    return valid;
-}
-
-static int verify_date_part(sieve_script_t *parse_script, char *dp)
-{
-    lcase(dp);
-    if (!strcmp(dp, "year")) return YEAR;
-    else if (!strcmp(dp, "month")) return MONTH;
-    else if (!strcmp(dp, "day")) return DAY;
-    else if (!strcmp(dp, "date")) return DATE;
-    else if (!strcmp(dp, "julian")) return JULIAN;
-    else if (!strcmp(dp, "hour")) return HOUR;
-    else if (!strcmp(dp, "minute")) return MINUTE;
-    else if (!strcmp(dp, "second")) return SECOND;
-    else if (!strcmp(dp, "time")) return TIME;
-    else if (!strcmp(dp, "iso8601")) return ISO8601;
-    else if (!strcmp(dp, "std11")) return STD11;
-    else if (!strcmp(dp, "zone")) return ZONE;
-    else if (!strcmp(dp, "weekday")) return WEEKDAY;
-    else {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "'%s': not a valid date-part", dp);
-        yyerror(parse_script, parse_script->sieveerr);
-    }
-
-    return -1;
-}
-
-#ifdef ENABLE_REGEX
-static int verify_regex(sieve_script_t *parse_script, char *s, int cflags)
-{
-    int ret;
-    regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
-
-    if ((ret = regcomp(reg, s, cflags)) != 0) {
-        (void) regerror(ret, reg, parse_script->sieveerr, ERR_BUF_SIZE);
-        yyerror(parse_script, parse_script->sieveerr);
-        free(reg);
-        return 0;
-    }
-    free(reg);
-    return 1;
-}
-
-static int verify_regexs(sieve_script_t *parse_script,
-                         const strarray_t *sa, char *comp)
-{
-    int i;
-    int cflags = REG_EXTENDED | REG_NOSUB;
-
-#ifdef HAVE_PCREPOSIX_H
-    /* support UTF8 comparisons */
-    cflags |= REG_UTF8;
-#endif
-
-    if (!strcmp(comp, "i;ascii-casemap")) {
-        cflags |= REG_ICASE;
-    }
-
-    for (i = 0 ; i < sa->count ; i++) {
-        if ((verify_regex(parse_script, sa->data[i], cflags)) == 0)
-            return 0;
-    }
-    return 1;
-}
-#else
-
-static int verify_regexs(sieve_script_t *parse_script __attribute__((unused)),
-                         const strarray_t *sa __attribute__((unused)),
-                         char *comp __attribute__((unused)))
-{
-    return 0;
-}
-#endif /* ENABLE_REGEX */
-
-static int verify_patternlist(sieve_script_t *parse_script,
-                              strarray_t *sa, struct comptags *c,
-                              int (*verify)(sieve_script_t*, char *))
-{
-    if (verify && !verify_stringlist(parse_script, sa, verify)) return 0;
-
-    return (c->match == REGEX) ?
-        verify_regexs(parse_script, sa, c->comparator) : 1;
 }
 
 /*
@@ -2743,9 +1823,7 @@ static int verify_utf8(sieve_script_t *parse_script, char *s)
     }
 
     if ((buf != endbuf) || trailing) {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "string '%s': not valid utf8", s);
-        yyerror(parse_script, parse_script->sieveerr);
+        sieveerror_f(parse_script, "string '%s': not valid utf8", s);
         return 0;
     }
 
@@ -2756,11 +1834,368 @@ static int verify_list(sieve_script_t *parse_script, char *s)
 {
     if (parse_script->interp.isvalidlist &&
         parse_script->interp.isvalidlist(s) != SIEVE_OK) {
-        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                 "list '%s': is not valid/supported", s);
-        yyerror(parse_script, parse_script->sieveerr);
+        sieveerror_f(parse_script, "list '%s': is not valid/supported", s);
         return 0;
     }
 
     return 1;
 }
+
+static int check_reqs(sieve_script_t *parse_script, strarray_t *sa)
+{
+    char *s;
+    struct buf *errs = &parse_script->sieveerr;
+    int ret = 1, sep = ':';
+
+    buf_setcstr(errs, "Unsupported feature(s) in \"require\"");
+    while ((s = strarray_shift(sa))) {
+        if (!script_require(parse_script, s)) {
+            buf_printf(errs, "%c \"%s\"", sep, s);
+            ret = 0;
+            sep = ',';
+        }
+        free(s);
+    }
+    strarray_free(sa);
+
+    if (ret == 0) yyerror(parse_script, buf_cstring(&parse_script->sieveerr));
+
+    return ret;
+}
+
+static commandlist_t *build_fileinto(sieve_script_t *parse_script,
+                                     commandlist_t *c, char *folder)
+{
+    assert(c && c->type == FILEINTO);
+
+    if (!verify_mailbox(parse_script, folder)) return NULL;
+
+    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+        c->u.f.folder = xmalloc(5 * strlen(folder) + 1);
+        UTF8_to_mUTF7(c->u.f.folder, folder);
+    }
+    else c->u.f.folder = xstrdup(folder);
+
+    return c;
+}
+
+static commandlist_t *build_redirect(sieve_script_t *parse_script,
+                                     commandlist_t *c, char *address)
+{
+    assert(c && c->type == REDIRECT);
+
+    if (c->u.r.list) {
+        if (!verify_list(parse_script, address)) return NULL;
+    }
+    else if (!verify_address(parse_script, address)) return NULL;
+
+    c->u.r.address = xstrdup(address);
+
+    return c;
+}
+
+static int verify_identifier(sieve_script_t *parse_script, char *s)
+{
+    /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
+
+    if (!is_identifier(s)) {
+        sieveerror_f(parse_script,
+                     "string '%s': not a valid sieve identifier", s);
+        return 0;
+    }
+    return 1;
+}
+
+static commandlist_t *build_set(sieve_script_t *parse_script,
+                                commandlist_t *c, char *variable, char *value)
+{
+    assert(c && c->type == SET);
+
+    if (!verify_identifier(parse_script, variable)) return NULL;
+    if (!verify_utf8(parse_script, value)) return NULL;
+
+    c->u.s.variable = xstrdup(variable);
+    c->u.s.value = xstrdup(value);
+
+    return c;
+}
+
+static commandlist_t *build_vacation(sieve_script_t *parse_script,
+                                     commandlist_t *c, char *message)
+{
+    int min = parse_script->interp.vacation->min_response;
+    int max = parse_script->interp.vacation->max_response;
+
+    assert(c && c->type == VACATION);
+
+    if ((c->u.v.mime == -1) && !verify_utf8(parse_script, message)) return NULL;
+
+    c->u.v.from = xstrdupnull(c->u.v.from);
+    c->u.v.handle = xstrdupnull(c->u.v.handle);
+    c->u.v.subject = xstrdupnull(c->u.v.subject);
+    c->u.v.message = xstrdup(message);
+
+    if (c->u.v.seconds == -1) c->u.v.seconds = 7 * DAY2SEC;
+    if (c->u.v.seconds < min) c->u.v.seconds = min;
+    if (c->u.v.seconds > max) c->u.v.seconds = max;
+    if (c->u.v.mime == -1) c->u.v.mime = 0;
+
+    return c;
+}
+
+static commandlist_t *build_flag(sieve_script_t *parse_script,
+                                 commandlist_t *c, strarray_t *flags)
+{
+    assert(c &&
+           (c->type == SETFLAG || c->type == ADDFLAG || c->type == REMOVEFLAG));
+
+    if (!parse_script->support.variables && !verify_flaglist(flags)) return NULL;
+
+    if (!strarray_size(flags)) strarray_add(flags, "");
+    c->u.fl.flags = flags;
+    c->u.fl.variable = xstrdupsafe(c->u.fl.variable);
+
+    return c;
+}
+
+static commandlist_t *build_addheader(sieve_script_t *parse_script,
+                                      commandlist_t *c, char *name, char *value)
+{
+    assert(c && c->type == ADDHEADER);
+
+    if (!verify_header(parse_script, name)) return NULL;
+    if (!verify_utf8(parse_script, value)) return NULL;
+
+    if (c->u.ah.index == 0) c->u.ah.index = 1;
+    c->u.ah.name = xstrdup(name);
+    c->u.ah.value = xstrdup(value);
+
+    return c;
+}
+
+static commandlist_t *build_deleteheader(sieve_script_t *parse_script,
+                                         commandlist_t *c,
+                                         char *name, strarray_t *values)
+{
+    assert(c && c->type == DELETEHEADER);
+
+    if (!strcasecmp("Received", name) || !strcasecmp("Auto-Submitted", name)) {
+        sieveerror_f(parse_script,
+                     "MUST NOT delete Received or Auto-Submitted headers");
+        return NULL;
+    }
+    if (!verify_header(parse_script, name)) {
+        return NULL;
+    }
+    if (!verify_patternlist(parse_script, values, &c->u.dh.comp, verify_utf8)) {
+        return NULL;
+    }
+
+    c->u.dh.name = xstrdup(name);
+    c->u.dh.values = values;
+
+    return c;
+}
+
+static commandlist_t *build_reject(sieve_script_t *parse_script,
+                                   int t, char *message)
+{
+    commandlist_t *c;
+
+    assert(t == REJCT || t == EREJECT);
+
+    if (!verify_utf8(parse_script, message)) return NULL;
+
+    if ((c = new_command(t, parse_script))) c->u.reject = xstrdup(message);
+
+    return c;
+}
+
+static commandlist_t *build_notify(commandlist_t *c)
+{
+    assert(c && c->type == NOTIFY);
+
+    if (c->u.n.priority == -1) c->u.n.priority = NORMAL;
+    c->u.n.id = xstrdup(c->u.n.id);
+    c->u.n.message =
+        xstrdup(c->u.n.message ? c->u.n.message : "$from$: $subject$");
+    c->u.n.method = xstrdup(c->u.n.method ? c->u.n.method : "default");
+
+    return c;
+}
+
+static commandlist_t *build_denotify(commandlist_t *t)
+{
+    assert(t && t->type == DENOTIFY);
+
+    canon_comptags(&t->u.d.comp);
+    if (t->u.d.priority == -1) t->u.d.priority = ANY;
+    t->u.d.pattern = xstrdup(t->u.d.pattern);
+
+    return t;
+}
+
+static commandlist_t *build_include(sieve_script_t *parse_script,
+                                    commandlist_t *c, char* script)
+{
+    assert(c && c->type == INCLUDE);
+
+    if (strchr(script, '/')) {
+        sieveerror_c(parse_script, SIEVE_INVALID_VALUE, "script-name");
+        return NULL;
+    }
+
+    c->u.inc.script = xstrdup(script);
+    if (c->u.inc.once == -1) c->u.inc.once = 0;
+    if (c->u.inc.location == -1) c->u.inc.location = PERSONAL;
+    if (c->u.inc.optional == -1) c->u.inc.optional = 0;
+
+    return c;
+}
+
+static test_t *build_hhs(sieve_script_t *parse_script, test_t *t,
+                         strarray_t *sl, strarray_t *pl)
+{
+    assert(t);
+
+    if (!verify_patternlist(parse_script, pl, &t->u.hhs.comp, verify_utf8))
+        return NULL;
+
+    t->u.hhs.sl = sl;
+    t->u.hhs.pl = pl;
+
+    return t;
+}
+
+static test_t *build_header(sieve_script_t *parse_script, test_t *t,
+                            strarray_t *sl, strarray_t *pl)
+{
+    assert(t && t->type == HEADER);
+
+    if (!verify_stringlist(parse_script, sl, verify_header)) return NULL;
+
+    return build_hhs(parse_script, t, sl, pl);
+}
+
+static test_t *build_stringt(sieve_script_t *parse_script, test_t *t,
+                             strarray_t *sl, strarray_t *pl)
+{
+    assert(t && t->type == STRINGT);
+
+    if (!verify_stringlist(parse_script, sl, verify_utf8)) return NULL;
+
+    return build_hhs(parse_script, t, sl, pl);
+}
+
+static test_t *build_hasflag(sieve_script_t *parse_script, test_t *t,
+                             strarray_t *sl, strarray_t *pl)
+{
+    assert(t && t->type == HASFLAG);
+
+    if (sl) {
+        if (!parse_script->support.variables) {
+            sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, "variables");
+            return NULL;
+        }
+
+        if (!verify_stringlist(parse_script, sl, verify_identifier)) return NULL;
+    }
+
+    return build_hhs(parse_script, t, sl, pl);
+}
+
+static test_t *build_ae(sieve_script_t *parse_script, test_t *t,
+                        strarray_t *sl, strarray_t *pl)
+{
+    assert(t);
+
+    if (!verify_patternlist(parse_script, pl, &t->u.ae.comp, NULL)) return NULL;
+
+    if (t->u.ae.addrpart == -1) t->u.ae.addrpart = ALL;
+    t->u.ae.sl = sl;
+    t->u.ae.pl = pl;
+
+    return t;
+}
+
+static test_t *build_address(sieve_script_t *parse_script, test_t *t,
+                             strarray_t *sl, strarray_t *pl)
+{
+    assert(t && t->type == ADDRESS);
+
+    if (!verify_stringlist(parse_script, sl, verify_addrheader)) return NULL;
+
+    return build_ae(parse_script, t, sl, pl);
+}
+
+static test_t *build_envelope(sieve_script_t *parse_script, test_t *t,
+                              strarray_t *sl, strarray_t *pl)
+{
+    assert(t && t->type == ENVELOPE);
+
+    if (!verify_stringlist(parse_script, sl, verify_envelope)) return NULL;
+
+    return build_ae(parse_script, t, sl, pl);
+}
+
+static test_t *build_body(sieve_script_t *parse_script,
+                          test_t *t, strarray_t *pl)
+{
+    assert(t && (t->type == BODY));
+
+    if (!verify_patternlist(parse_script, pl, &t->u.b.comp, verify_utf8))
+        return NULL;
+
+    if (t->u.b.offset == -1) t->u.b.offset = 0;
+    if (t->u.b.transform == -1) t->u.b.transform = TEXT;
+    if (t->u.b.content_types == NULL) {
+        t->u.b.content_types = strarray_new();
+        strarray_append(t->u.b.content_types,
+                        (t->u.b.transform == RAW) ? "" : "text");
+    }
+    t->u.b.pl = pl;
+
+    return t;
+}
+
+static test_t *build_date(sieve_script_t *parse_script,
+                          test_t *t, char *hn, int part, strarray_t *kl)
+{
+    assert(t && (t->type == DATE || t->type == CURRENTDATE));
+
+    if (hn && !verify_header(parse_script, hn)) return NULL;
+    if (!verify_patternlist(parse_script, kl, &t->u.dt.comp, NULL)) return NULL;
+
+    if (t->u.dt.comp.index == 0) t->u.dt.comp.index = 1;
+    if (t->u.dt.zonetag == -1) {
+        struct tm tm;
+        time_t now = time(NULL);
+
+        localtime_r(&now, &tm);
+        t->u.dt.zone = gmtoff_of(&tm, now) / 60;
+        t->u.dt.zonetag = ZONE;
+    }
+
+    t->u.dt.date_part = part;
+    t->u.dt.header_name = xstrdupnull(hn);
+    t->u.dt.kl = kl;
+
+    return t;
+}
+
+static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
+                               test_t *t, const char *extname,
+                               const char *keyname, strarray_t *keylist)
+{
+    assert(t && (t->type == MAILBOXEXISTS ||
+                 t->type == METADATA || t->type == METADATAEXISTS ||
+                 t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS));
+
+    canon_comptags(&t->u.mm.comp);
+    t->u.mm.extname = xstrdupnull(extname);
+    t->u.mm.keyname = xstrdupnull(keyname);
+    t->u.mm.keylist = keylist;
+
+    return t;
+}
+

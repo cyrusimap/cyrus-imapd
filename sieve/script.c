@@ -1,7 +1,7 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -247,6 +247,8 @@ EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     s->script_context = script_context;
     /* clear all support bits */
     memset(&s->support, 0, sizeof(struct sieve_support));
+    /* initialize error buffer */
+    buf_init(&s->sieveerr);
 
     s->err = 0;
 
@@ -363,6 +365,7 @@ done:
 EXPORTED void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
+        buf_free(&(*s)->sieveerr);
         if ((*s)->cmds)
             free_tree((*s)->cmds);
         free(*s);

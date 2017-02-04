@@ -1,7 +1,7 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -49,29 +49,110 @@
 #include "xmalloc.h"
 
 #include "tree.h"
+#include "script.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
 
-tag_t *new_tag(int type, char *s)
+extern void sieveerror_c(sieve_script_t *parse_script, int code, ...);
+
+static void init_comptags(comp_t *c)
 {
-    tag_t *p = (tag_t *) xzmalloc(sizeof(tag_t));
-    p->type = type;
-    p->arg = s;
-    return p;
+    c->match = c->relation = c->collation = -1;
 }
 
-taglist_t *new_taglist(tag_t *t, taglist_t *n)
+comp_t *canon_comptags(comp_t *c)
 {
-    taglist_t *p = (taglist_t *) xzmalloc(sizeof(taglist_t));
-    p->t = t;
-    p->next = n;
-    return p;
+    if (c->match == -1) c->match = IS;
+    if (c->collation == -1) c->collation = ASCIICASEMAP;
+    return c;
 }
 
-test_t *new_test(int type)
+test_t *new_test(int type, sieve_script_t *parse_script)
 {
     test_t *p = (test_t *) xzmalloc(sizeof(test_t));
+    const char *capability = "";
+    int supported = 1;
+
     p->type = type;
+
+    switch (p->type) {
+    case HEADER:
+        init_comptags(&p->u.hhs.comp);
+        break;
+
+    case HASFLAG:
+        capability = "imap4flags";
+        supported = parse_script->support.imap4flags;
+
+        init_comptags(&p->u.hhs.comp);
+        break;
+
+    case STRINGT:
+        capability = "variables";
+        supported = parse_script->support.variables;
+
+        init_comptags(&p->u.hhs.comp);
+        break;
+
+    case ENVELOPE:
+        capability = "envelope";
+        supported = parse_script->support.envelope;
+
+    case ADDRESS:
+        init_comptags(&p->u.ae.comp);
+        p->u.ae.addrpart = -1;
+        break;
+
+    case BODY:
+        capability = "body";
+        supported = parse_script->support.body;
+
+        init_comptags(&p->u.b.comp);
+        p->u.b.transform = p->u.b.offset = -1;
+        break;
+
+    case DATE:
+    case CURRENTDATE:
+        capability = "date";
+        supported = parse_script->support.date;
+
+        init_comptags(&p->u.dt.comp);
+        p->u.dt.zonetag = -1;
+        break;
+
+    case MAILBOXEXISTS:
+        capability = "mailbox";
+        supported = parse_script->support.mailbox;
+        break;
+
+    case METADATA:
+        init_comptags(&p->u.mm.comp);
+
+    case METADATAEXISTS:
+        capability = "mboxmetadata";
+        supported = parse_script->support.mboxmetadata;
+        break;
+
+    case SERVERMETADATA:
+        init_comptags(&p->u.mm.comp);
+
+    case SERVERMETADATAEXISTS:
+        capability = "servermetadata";
+        supported = parse_script->support.servermetadata;
+        break;
+
+    case VALIDEXTLIST:
+        capability = "extlists";
+        supported = parse_script->support.extlists;
+        break;
+    }
+
+    if (!supported) {
+        sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, capability);
+        free_test(p);
+        return NULL;
+    }
+
     return p;
 }
 
@@ -83,22 +164,104 @@ testlist_t *new_testlist(test_t *t, testlist_t *n)
     return p;
 }
 
-commandlist_t *new_command(int type)
+commandlist_t *new_command(int type, sieve_script_t *parse_script)
 {
     commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
+    const char *capability = "";
+    int supported = 1;
+
     p->type = type;
     p->next = NULL;
+
+    switch (type) {
+    case FILEINTO:
+        capability = "fileinto";
+        supported = parse_script->support.fileinto;
+        break;
+
+    case REJCT:
+        capability = "reject";
+        supported = parse_script->support.reject;
+        break;
+
+    case EREJECT:
+        capability = "ereject";
+        supported = parse_script->support.ereject;
+        break;
+
+    case VACATION:
+        capability = "vacation";
+        supported = parse_script->support.vacation;
+
+        p->u.v.seconds = p->u.v.mime = -1;
+        break;
+
+    case SETFLAG:
+    case ADDFLAG:
+    case REMOVEFLAG:
+        capability = "imap[4]flags";
+        supported =
+            parse_script->support.imapflags || parse_script->support.imap4flags;
+        break;
+
+    case MARK:
+    case UNMARK:
+        capability = "imapflags";
+        supported = parse_script->support.imapflags;
+        break;
+
+    case DENOTIFY:
+        init_comptags(&p->u.d.comp);
+        p->u.d.comp.collation = ASCIICASEMAP;
+
+    case NOTIFY:
+        capability = "notify";
+        supported = parse_script->support.notify;
+
+        p->u.n.priority = -1;
+        break;
+
+    case INCLUDE:
+        p->u.inc.once = p->u.inc.location = p->u.inc.optional = -1;
+
+    case RETURN:
+        capability = "include";
+        supported = parse_script->support.include;
+        break;
+
+    case SET:
+        capability = "variables";
+        supported = parse_script->support.variables;
+        break;
+
+    case DELETEHEADER:
+        init_comptags(&p->u.dh.comp);
+
+    case ADDHEADER:
+        capability = "editheader";
+        supported = parse_script->support.editheader;
+        break;
+    }
+
+    if (!supported) {
+        sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, capability);
+        free_tree(p);
+        return NULL;
+    }
+
     return p;
 }
 
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
 {
     commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
+
     p->type = IF;
     p->u.i.t = t;
     p->u.i.do_then = y;
     p->u.i.do_else = n;
     p->next = NULL;
+
     return p;
 }
 
@@ -139,20 +302,18 @@ void free_test(test_t *t)
 
     case HASFLAG:
     case HEADER:
-        free(t->u.h.comparator);
-        strarray_free(t->u.h.sl);
-        strarray_free(t->u.h.pl);
+    case STRINGT:
+        strarray_free(t->u.hhs.sl);
+        strarray_free(t->u.hhs.pl);
         break;
 
     case ADDRESS:
     case ENVELOPE:
-        free(t->u.ae.comparator);
         strarray_free(t->u.ae.sl);
         strarray_free(t->u.ae.pl);
         break;
 
     case BODY:
-        free(t->u.b.comparator);
         strarray_free(t->u.b.content_types);
         strarray_free(t->u.b.pl);
         break;
@@ -165,8 +326,6 @@ void free_test(test_t *t)
         free(t->u.dt.header_name);
         /* fall-through */
     case CURRENTDATE:
-        free(t->u.dt.comparator);
-        free(t->u.dt.zone);
         strarray_free(t->u.dt.kl);
         break;
 
@@ -175,10 +334,9 @@ void free_test(test_t *t)
     case METADATAEXISTS:
     case SERVERMETADATA:
     case SERVERMETADATAEXISTS:
-        free(t->u.mbx.extname);
-        free(t->u.mbx.keyname);
-        strarray_free(t->u.mbx.keylist);
-        free(t->u.mbx.comparator);
+        free(t->u.mm.extname);
+        free(t->u.mm.keyname);
+        strarray_free(t->u.mm.keylist);
         break;
     }
 
@@ -227,6 +385,8 @@ void free_tree(commandlist_t *cl)
             free(cl->u.v.subject);
             strarray_free(cl->u.v.addresses);
             free(cl->u.v.message);
+            free(cl->u.v.from);
+            free(cl->u.v.handle);
             break;
 
         case KEEP:
@@ -248,12 +408,16 @@ void free_tree(commandlist_t *cl)
         case DENOTIFY:
             if (cl->u.d.pattern) {
 #ifdef ENABLE_REGEX
-                if (cl->u.d.comptag == REGEX) {
+                if (cl->u.d.comp.match == REGEX) {
                     regfree((regex_t *) cl->u.d.pattern);
                 }
 #endif
                 free(cl->u.d.pattern);
             }
+            break;
+
+        case DELETEHEADER:
+            strarray_free(cl->u.dh.values);
             break;
         }
 

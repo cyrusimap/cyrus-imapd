@@ -1,7 +1,7 @@
 /* script.h -- script definition
  * Larry Greenfield
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -49,36 +49,38 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "tree.h"
+#include "util.h"
 
 struct sieve_script {
     sieve_interp_t interp;
 
     /* was a "require" done for these? */
     struct sieve_support {
-        int fileinto       : 1;
-        int reject         : 1;
-        int ereject        : 1;
-        int envelope       : 1;
-        int body           : 1;
-        int vacation       : 1;
-        int imapflags      : 1;
-        int notify         : 1;
-        int regex          : 1;
-        int subaddress     : 1;
-        int relational     : 1;
-        int i_ascii_numeric: 1;
-        int include        : 1;
-        int copy           : 1;
-        int date           : 1;
-        int index          : 1;
+        int fileinto        : 1;
+        int reject          : 1;
+        int ereject         : 1;
+        int envelope        : 1;
+        int body            : 1;
+        int vacation        : 1;
+        int imapflags       : 1;
+        int notify          : 1;
+        int regex           : 1;
+        int subaddress      : 1;
+        int relational      : 1;
+        int i_ascii_numeric : 1;
+        int include         : 1;
+        int copy            : 1;
+        int date            : 1;
+        int index           : 1;
         int vacation_seconds: 1;
-        int imap4flags     : 1;
-        int mailbox        : 1;
-        int mboxmetadata   : 1;
-        int servermetadata : 1;
-        int variables      : 1;
-        int editheader     : 1;
-        int extlists       : 1;
+        int imap4flags      : 1;
+        int mailbox         : 1;
+        int mboxmetadata    : 1;
+        int servermetadata  : 1;
+        int variables       : 1;
+        int editheader      : 1;
+        int extlists        : 1;
+        int enotify         : 1;
     } support;
 
     void *script_context;
@@ -86,7 +88,7 @@ struct sieve_script {
 
     int err;
     char addrerr[500]; /* buffer for address parser error messages */
-    char sieveerr[1024];
+    struct buf sieveerr;
 };
 
 typedef struct sieve_bytecode sieve_bytecode_t;
@@ -109,4 +111,4 @@ struct sieve_execute {
 
 int script_require(sieve_script_t *s, char *req);
 
-#endif
+#endif /*  SIEVE_SCRIPT_H */
