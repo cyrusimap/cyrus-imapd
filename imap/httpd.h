@@ -183,7 +183,8 @@ enum {
     AUTH_BASIC = 0,
     AUTH_DIGEST,
     AUTH_SPNEGO,
-    AUTH_NTLM
+    AUTH_NTLM,
+    AUTH_BEARER
 };
 
 /* Auth scheme flags */
@@ -447,6 +448,7 @@ struct namespace_t {
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
     int (*premethod)(struct transaction_t *); /* Func run prior to any method */
+    int (*bearer)(const char*, char *, size_t); /* Run to authenticate Bearer */
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear
@@ -487,6 +489,7 @@ extern struct backend **backend_cached;
 extern struct protstream *httpd_in;
 extern struct protstream *httpd_out;
 extern int https;
+extern sasl_conn_t *httpd_saslconn;
 extern int httpd_tls_done;
 extern int httpd_timeout;
 extern int httpd_userisadmin;

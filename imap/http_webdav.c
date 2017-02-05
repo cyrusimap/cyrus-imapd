@@ -235,7 +235,7 @@ struct namespace_t namespace_drive = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL),
     &my_webdav_init, &my_webdav_auth, my_webdav_reset, &my_webdav_shutdown,
-    &dav_premethod,
+    &dav_premethod, /*bearer*/NULL,
     {
         { &meth_acl,            &webdav_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */

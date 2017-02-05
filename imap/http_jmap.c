@@ -73,7 +73,7 @@ struct namespace_t namespace_jmap = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
-    &jmap_init, &jmap_auth, NULL, NULL, NULL,
+    &jmap_init, &jmap_auth, NULL, NULL, NULL, /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

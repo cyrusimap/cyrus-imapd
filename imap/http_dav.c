@@ -275,6 +275,7 @@ struct namespace_t namespace_principal = {
     /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
     &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown, &dav_premethod,
+    /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -8901,7 +8902,7 @@ struct namespace_t namespace_notify = {
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),
     NULL, NULL, NULL, NULL,
-    &dav_premethod,
+    &dav_premethod, /*bearer*/NULL,
     {
         { &meth_acl,            &notify_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */

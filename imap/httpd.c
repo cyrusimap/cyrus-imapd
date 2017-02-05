@@ -569,6 +569,7 @@ struct auth_scheme_t auth_schemes[] = {
       &digest_send_success, digest_recv_success },
     { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", AUTH_BASE64, NULL, NULL },
     { AUTH_NTLM, "NTLM", "NTLM", AUTH_NEED_PERSIST | AUTH_BASE64, NULL, NULL },
+    { AUTH_BEARER, "Bearer", NULL, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST, NULL, NULL },
     { -1, NULL, NULL, 0, NULL, NULL }
 };
 
@@ -661,7 +662,7 @@ struct namespace_t namespace_default = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -1681,7 +1682,12 @@ static int examine_request(struct transaction_t *txn)
 
     /* See if this namespace whitelists auth schemes */
     if (namespace->auth_schemes) {
-        avail_auth_schemes = namespace->auth_schemes & avail_auth_schemes;
+        avail_auth_schemes = (namespace->auth_schemes & avail_auth_schemes);
+
+        /* Bearer auth must be advertised and supported by the namespace */
+        if ((namespace->auth_schemes & (1<<AUTH_BEARER)) && namespace->bearer) {
+            avail_auth_schemes |= (1<<AUTH_BEARER);
+        }
     }
 
     /* Perform authentication, if necessary */
@@ -3836,7 +3842,6 @@ static void auth_success(struct transaction_t *txn, const char *userid)
     }
 }
 
-
 /* Perform HTTP Authentication based on the given credentials ('creds').
  * Returns the selected auth scheme and any server challenge in 'chal'.
  * May be called multiple times if auth scheme requires multiple steps.
@@ -4016,6 +4021,30 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
     }
+    else if (scheme->idx == AUTH_BEARER) {
+        /* Bearer authentication */
+        assert(txn->req_tgt.namespace->bearer);
+
+        if (!clientin) {
+            /* Create initial challenge (base64 buffer is static) */
+            snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
+            chal->param = base64;
+            chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
+            return status;
+        }
+
+        /* Call namespace bearer authentication.
+         * We are working with base64 buffer, so the namespace can
+         * write the canonicalized userid into the buffer */
+        base64[0] = 0;
+        status = txn->req_tgt.namespace->bearer(clientin, base64, BASE64_BUF_SIZE);
+        if (status) return status;
+        user = base64;
+
+        /* Successful authentication - fall through */
+        httpd_extrafolder = NULL;
+        httpd_extradomain = NULL;
+    }
     else {
         /* SASL-based authentication (Digest, Negotiate, NTLM) */
         const char *serverout = NULL;
@@ -4068,13 +4097,15 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          */
     }
 
-    /* Get the userid from SASL - already canonicalized */
-    status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
-    if (status != SASL_OK) {
-        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
-        return status;
+    if (scheme->idx != AUTH_BEARER) {
+        /* Get the userid from SASL - already canonicalized */
+        status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
+        if (status != SASL_OK) {
+            syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+            return status;
+        }
+        user = (const char *) canon_user;
     }
-    user = (const char *) canon_user;
 
     if (saslprops.authid) free(saslprops.authid);
     saslprops.authid = xstrdup(user);
