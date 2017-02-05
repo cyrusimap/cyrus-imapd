@@ -352,7 +352,7 @@ static int index_single_message(const char *mboxname, uint32_t uid)
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r) goto out;
 
-    r = rx->begin_mailbox(rx, mailbox, /*incremental*/1);
+    r = rx->begin_mailbox(rx, mailbox, SEARCH_UPDATE_INCREMENTAL);
     if (r) goto out;
     begun = 1;
 

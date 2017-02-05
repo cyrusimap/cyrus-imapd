@@ -1442,7 +1442,7 @@ out:
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
                                 struct mailbox *mailbox,
-                                int flags __attribute__((unused)))
+                                int flags)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     char *fname = activefile_fname(mailbox->name);
@@ -1463,10 +1463,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * identical API */
     mailbox_unlock_index(mailbox, NULL);
 
-    /* XXX - if not incremental, we actually want to throw away all existing up to
-     * this point and write a new one, so we should launch a new file and then
-     * reindex using the same algorithm as the "compress" codepath.  The
-     * problem is that the index is per user, not per mailbox */
+    /* we're using "not incremental" to mean "check that the GUID of every message
+     * in the mailbox is present in an index rather than trusting the UID ranges */
 
     /* we grab an activefile writelock to index.  Strictly we don't need it, but
      * doing this guarantees we never write under a client which is reading, which
@@ -1510,9 +1508,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     /* read the indexed data from every directory so know what still needs indexing */
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
-    r = read_indexed(tr->activedirs, mailbox->name, mailbox->i.uidvalidity,
-                     tr->oldindexed, tr->super.verbose);
-    if (r) goto out;
+
+    if ((flags & SEARCH_UPDATE_INCREMENTAL)) {
+        r = read_indexed(tr->activedirs, mailbox->name, mailbox->i.uidvalidity,
+                         tr->oldindexed, tr->super.verbose);
+        if (r) goto out;
+    }
 
     /* XXX - and of course we have to lock again! (XXX - no support for the nonblocking bit
      * on this second lock... *sigh*)  We don't have the flags to know that we wanted it */
