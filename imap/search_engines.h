@@ -158,6 +158,7 @@ extern void search_end_search(search_builder_t *);
 
 #define SEARCH_UPDATE_INCREMENTAL (1<<0)
 #define SEARCH_UPDATE_NONBLOCKING (1<<1)
+#define SEARCH_UPDATE_BATCH (1<<2)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,

@@ -207,17 +207,16 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int batch_size = search_batch_size();
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     const message_t *msg;
-    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
     r = rx->begin_mailbox(rx, mailbox, flags);
     if (r) goto done;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-    mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
+    if (flags & SEARCH_UPDATE_INCREMENTAL) mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        if (incremental && batch.count >= batch_size) {
+        if ((flags & SEARCH_UPDATE_BATCH) && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
                    batch.count, mailbox->name);
             was_partial = 1;

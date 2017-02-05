@@ -96,6 +96,7 @@ const int SKIP_FUZZ = 60;
 
 static int verbose = 0;
 static int incremental_mode = 0;
+static int batch_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int running_daemon = 0;
@@ -170,6 +171,8 @@ static int index_one(const char *name, int blocking)
 
     if (incremental_mode)
         flags |= SEARCH_UPDATE_INCREMENTAL;
+    if (batch_mode)
+        flags |= SEARCH_UPDATE_BATCH;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -828,6 +831,7 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN) usage(argv[0]);
             mode = ROLLING;
             incremental_mode = 1; /* always incremental if rolling */
+            batch_mode = 1;
             break;
 
         case 'S':               /* sleep time in seconds */
