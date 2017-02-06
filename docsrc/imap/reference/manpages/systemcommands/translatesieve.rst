@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **translatesieve** [**-f**] [**-a**] [**-u**] [**-n**] [**-v**] [*/etc/imapd.conf*]
+    **translatesieve** [**-f**] [**-a**] [**-u**] [**-n**] [**-v**] [**-C** *imapd.conf*]
 
 Description
 ===========
@@ -32,6 +32,8 @@ flag, **-u** for ``unixhierarchysep: yes`` or **-a** for
 
 A "Dry run" mode is available via **-n** and you are strongly encouraged
 to use this.
+
+**translatesieve** |default-conf-text|
 
 Must be run as the cyrus user.
 
@@ -61,6 +63,10 @@ Options
 .. option:: -v
 
   Verbose mode.  Note: -n implies -v.
+
+.. option:: -C config-file
+
+    |cli-dash-c-text|
 
 See Also
 ========

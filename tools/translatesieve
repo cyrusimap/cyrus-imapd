@@ -50,11 +50,12 @@ use warnings;
 
 use Getopt::Std;
 
-my $OPT_WasUnix    = 0;
-my $OPT_WasAlt     = 0;
+my $OPT_WasUnix = 0;
+my $OPT_WasAlt  = 0;
+my $imapdconf   = "/etc/imapd.conf";
 
 my %Opts;
-getopts('vnhua', \%Opts);
+getopts('vnhuaC:', \%Opts);
 usage() if $Opts{h};
 
 my $OPT_NoAction = $Opts{n};
@@ -63,6 +64,7 @@ my $OPT_Verbose = $Opts{v} || $Opts{n};
 my $OPT_Force   = 1 if $Opts{f};
 $OPT_WasUnix    = 1 if $Opts{u};
 $OPT_WasAlt     = 1 if $Opts{a};
+$imapdconf      = $Opts{C} if $Opts{C};
 
 $| = 1;
 
@@ -70,7 +72,6 @@ $| = 1;
 # change ownership as appropriate?
 die "must not run as root" if ($< == 0);
 
-my $imapdconf = shift || "/etc/imapd.conf";
 my $sievedir = "/usr/sieve";
 my $userprefix = "Other Users";
 my $sharedprefix = "Shared Folders";
@@ -98,13 +99,14 @@ sub ouch {
 
 sub usage {
     die <<EOF
-usage: $0 [-v] [-n] [-u] [-a] [imapd.conf]
+usage: $0 [-v] [-n] [-u] [-a] [-C imapd.conf]
 
        -v verbose
        -n no change - just show what would be done
        -f keep going on errors
        -u previous configuration used "unixhierarchysep: yes"
        -a previous configuration used "altnamespace: yes"
+       -C use configuration file specified, rather than default
 
 NOTE: if imapd.conf is not provided, it will be read from the default
 location.  On a normal system this will be /etc/imapd.conf.  The *new*
