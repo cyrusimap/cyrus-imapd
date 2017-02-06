@@ -1779,7 +1779,7 @@ envelope_err:
                 str = parse_string(str, variables);
             }
 
-            if(interp->isvalidlist(str) != SIEVE_OK)
+            if(interp->isvalidlist(interp->interp_context, str) != SIEVE_OK)
                 res = 0;
         }
 

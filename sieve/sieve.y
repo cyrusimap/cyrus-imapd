@@ -1833,7 +1833,8 @@ static int verify_utf8(sieve_script_t *parse_script, char *s)
 static int verify_list(sieve_script_t *parse_script, char *s)
 {
     if (parse_script->interp.isvalidlist &&
-        parse_script->interp.isvalidlist(s) != SIEVE_OK) {
+        parse_script->interp.isvalidlist(parse_script->interp.interp_context, s)
+        != SIEVE_OK) {
         sieveerror_f(parse_script, "list '%s': is not valid/supported", s);
         return 0;
     }

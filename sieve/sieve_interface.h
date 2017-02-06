@@ -80,7 +80,7 @@ typedef int sieve_get_envelope(void *message_context,
                                const char ***contents);
 typedef int sieve_get_include(void *script_context, const char *script,
                               int isglobal, char *fpath, size_t size);
-typedef int sieve_list_validator(const char *list);
+typedef int sieve_list_validator(void *interp_context, const char *list);
 typedef int sieve_list_comparator(const char *text, size_t tlen,
                                   const char *list, strarray_t *match_vars,
                                   void *rock);
