@@ -9,8 +9,8 @@ export PKG_CONFIG_PATH="$LIBSDIR/lib/x86_64-linux-gnu/pkgconfig:$LIBSDIR/lib/pkg
 export CFLAGS="-g -fPIC -W -Wall -Wextra"
 export PATH="$LIBSDIR/bin:$PATH"
 autoreconf -v -i
-echo "./configure --prefix=$TARGET $CONFIGOPTS"
-./configure --prefix=$TARGET $CONFIGOPTS
+echo "./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5"
+./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5
 make lex-fix
 make -j 8
 make -j 8 check
