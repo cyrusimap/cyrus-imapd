@@ -629,6 +629,10 @@ static int getCalendars(struct jmap_req *req)
         int size = json_array_size(want);
         for (i = 0; i < size; i++) {
             const char *id = json_string_value(json_array_get(want, i));
+            if (id && id[0] == '#') {
+                id = hash_lookup(id + 1, &req->idmap->calendars);
+            }
+            if (!id) continue;
             rock.rows = 0;
             char *mboxname = caldav_mboxname(req->userid, id);
             r = mboxlist_mboxtree(mboxname, &getcalendars_cb, &rock, MBOXTREE_SKIP_CHILDREN);
@@ -956,7 +960,7 @@ static int setCalendars(struct jmap_req *req)
             record = json_pack("{s:s}", "id", uid);
             json_object_set_new(created, key, record);
             /* hash_insert takes ownership of uid. */
-            hash_insert(key, uid, req->idmap);
+            hash_insert(key, uid, &req->idmap->calendars);
         }
 
         if (json_object_size(created)) {
@@ -980,10 +984,17 @@ static int setCalendars(struct jmap_req *req)
         json_object_foreach(update, uid, arg) {
 
             /* Validate uid */
-            if (!uid || !strlen(uid) || *uid == '#') {
-                json_t *err= json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->calendars);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
             if (jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -1093,10 +1104,17 @@ static int setCalendars(struct jmap_req *req)
 
             /* Validate uid */
             const char *uid = json_string_value(juid);
-            if (!uid || !strlen(uid) || *uid == '#') {
-                json_t *err= json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->calendars);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notDestroyed, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
             if (jmap_calendar_ishidden(uid)) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -1406,6 +1424,10 @@ static int getCalendarEvents(struct jmap_req *req)
         for (i = 0; i < size; i++) {
             rock.rows = 0;
             const char *id = json_string_value(json_array_get(want, i));
+            if (id && id[0] == '#') {
+                id = hash_lookup(id + 1, &req->idmap->calendarevents);
+            }
+            if (!id) continue;
             r = caldav_get_events(db, NULL, id, &getcalendarevents_cb, &rock);
             if (r || !rock.rows) {
                 json_array_append_new(notfound, json_string(id));
@@ -1560,7 +1582,7 @@ static int jmap_write_calendarevent(json_t *event,
         if (pe > 0 && !strlen(calendarId)) {
             json_array_append_new(invalid, json_string("calendarId"));
         } else if (pe > 0 && *calendarId == '#') {
-            const char *id = (const char *) hash_lookup(calendarId, req->idmap);
+            const char *id = (const char *) hash_lookup(calendarId + 1, &req->idmap->calendars);
             if (id != NULL) {
                 calendarId = id;
             } else {
@@ -1846,7 +1868,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
             /* Report calendar event as created. */
             json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
-            hash_insert(key, uid, req->idmap);
+            hash_insert(key, uid, &req->idmap->calendarevents);
         }
 
         if (json_object_size(created)) {
@@ -1872,11 +1894,18 @@ static int setCalendarEvents(struct jmap_req *req)
         json_object_foreach(update, uid, arg) {
             const char *val = NULL;
 
-            /* Validate uid. JMAP update does not allow creation uids here. */
-            if (!uid || !strlen(uid) || *uid == '#') {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
+            /* Validate uid. */
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->calendarevents);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
 
             if ((val = (char *) json_string_value(json_object_get(arg, "uid")))) {
@@ -1924,12 +1953,19 @@ static int setCalendarEvents(struct jmap_req *req)
 
         json_array_foreach(destroy, index, juid) {
             size_t error_count;
-            /* Validate uid. JMAP destroy does not allow reference uids. */
+            /* Validate uid. */
             const char *uid = json_string_value(juid);
-            if (!uid || !uid || !strlen(uid) || *uid == '#') {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->calendarevents);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notDestroyed, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
 
             /* Destroy the calendar event. */

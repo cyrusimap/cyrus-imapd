@@ -565,6 +565,14 @@ static int getMailboxes(jmap_req_t *req)
                 json_decref(notFound);
                 goto done;
             }
+            if (id[0] == '#') {
+                const char *newid = hash_lookup(id + 1, &req->idmap->mailboxes);
+                if (!newid) {
+                    json_array_append_new(notFound, json_string(id));
+                    continue;
+                }
+                id = newid;
+            }
             /* Lookup mailbox by uniqueid. */
             char *mboxname = mboxlist_find_uniqueid(id, req->userid);
             if (mboxname) {
@@ -817,7 +825,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
                 int iserr = 0;
                 /* Check if parentId is a creation id. If so, look up its uid. */
                 if (*parentId == '#') {
-                    const char *t = hash_lookup(parentId+1, req->idmap);
+                    const char *t = hash_lookup(parentId + 1, &req->idmap->mailboxes);
                     if (t) {
                         parentId = t;
                     } else {
@@ -1225,7 +1233,7 @@ static int setMailboxes(jmap_req_t *req)
 
                 // check that parentId reference exists
                 const char *parentId = json_string_value(json_object_get(arg, "parentId"));
-                if (parentId && *parentId == '#' && !hash_lookup(parentId + 1, req->idmap))
+                if (parentId && *parentId == '#' && !hash_lookup(parentId + 1, &req->idmap->mailboxes))
                     continue;
 
                 didsome = 1;
@@ -1260,7 +1268,7 @@ static int setMailboxes(jmap_req_t *req)
                 json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
 
                 /* hash_insert takes ownership of uid */
-                hash_insert(key, uid, req->idmap);
+                hash_insert(key, uid, &req->idmap->mailboxes);
                 free(strarray_remove(&todo, i--));
             }
 
@@ -1293,10 +1301,17 @@ static int setMailboxes(jmap_req_t *req)
             json_t *err = NULL;
 
             /* Validate uid */
-            if (!uid || !strlen(uid) || *uid == '#') {
-                json_t *err= json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->mailboxes);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notUpdated, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
 
             /* Update mailbox. */
@@ -1345,10 +1360,17 @@ static int setMailboxes(jmap_req_t *req)
 
             /* Validate uid. */
             const char *uid = json_string_value(juid);
-            if (!uid || !strlen(uid) || *uid == '#') {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
+            if (!uid) {
                 continue;
+            }
+            if (uid && uid[0] == '#') {
+                const char *newuid = hash_lookup(uid + 1, &req->idmap->mailboxes);
+                if (!newuid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notDestroyed, uid, err);
+                    continue;
+                }
+                uid = newuid;
             }
 
             /* Do not allow to remove INBOX. */
@@ -4073,11 +4095,13 @@ static int getMessages(jmap_req_t *req)
         json_t *msg = NULL;
         struct mailbox *mbox = NULL;
 
-        if (strlen(id) && id[0] == '#') {
-            if (!(id = (const char *) hash_lookup(id+1, req->idmap))) {
+        if (id[0] == '#') {
+            const char *newid = hash_lookup(id + 1, &req->idmap->messages);
+            if (!newid) {
                 r = IMAP_NOTFOUND;
                 goto doneloop;
             }
+            id = newid;
         }
 
         r = jmapmsg_find(req, id, &mboxname, &uid);
@@ -4092,7 +4116,11 @@ static int getMessages(jmap_req_t *req)
         jmap_closembox(req, &mbox);
 
 doneloop:
-        if (r == IMAP_NOTFOUND) r = 0;
+        if (r == IMAP_NOTFOUND) {
+            json_array_append_new(notfound, json_string(id));
+            r = 0;
+            continue;
+        }
         if (mboxname) free(mboxname);
         if (msg) {
             json_array_append_new(list, msg);
@@ -5315,7 +5343,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
 
         id = json_string_value(val);
         if (id && *id == '#') {
-            id = hash_lookup(id, req->idmap);
+            id = hash_lookup(id + 1, &req->idmap->mailboxes);
         }
         if (!id) continue;
 
@@ -5536,7 +5564,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     json_array_foreach(json_object_get(msg, "mailboxIds"), i, val) {
         id = json_string_value(val);
         if (id && *id == '#') {
-            id = hash_lookup(id, req->idmap);
+            id = hash_lookup(id + 1, &req->idmap->mailboxes);
         }
         if (!id) {
             struct buf buf = BUF_INITIALIZER;
@@ -5630,7 +5658,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
             char *name = NULL;
             id = json_string_value(val);
             if (id && *id == '#') {
-                id = hash_lookup(id, req->idmap);
+                id = hash_lookup(id + 1, &req->idmap->mailboxes);
             }
             if (id && (name = mboxlist_find_uniqueid(id, req->userid))) {
                 json_object_set_new(dstmailboxes, id, json_string(name));
@@ -5801,7 +5829,7 @@ static int setMessages(jmap_req_t *req)
             }
 
             json_object_set_new(created, key, json_pack("{s:s}", "id", msgid));
-            hash_insert(key, msgid, req->idmap); // hash takes ownership of msgid
+            hash_insert(key, msgid, &req->idmap->messages); // hash takes ownership of msgid
         }
 
         if (json_object_size(created)) {
@@ -5824,6 +5852,20 @@ static int setMessages(jmap_req_t *req)
 
         json_object_foreach(update, id, msg) {
             json_t *invalid = json_pack("[]");
+            /* Validate id */
+            if (!id) {
+                continue;
+            }
+            if (id && id[0] == '#') {
+                const char *newid = hash_lookup(id + 1, &req->idmap->mailboxes);
+                if (!newid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notUpdated, id, err);
+                    continue;
+                }
+                id = newid;
+            }
+            /* Update message */
             if ((r = jmapmsg_update(req, id, msg, invalid))) {
                 json_decref(invalid);
                 if (r == IMAP_NOTFOUND) {
@@ -5865,6 +5907,20 @@ static int setMessages(jmap_req_t *req)
 
         json_array_foreach(destroy, i, id) {
             const char *msgid = json_string_value(id);
+            /* Validate msgid */
+            if (!msgid) {
+                continue;
+            }
+            if (msgid && msgid[0] == '#') {
+                const char *newmsgid = hash_lookup(msgid + 1, &req->idmap->mailboxes);
+                if (!newmsgid) {
+                    json_t *err = json_pack("{s:s}", "type", "notFound");
+                    json_object_set_new(notDestroyed, msgid, err);
+                    continue;
+                }
+                msgid = newmsgid;
+            }
+            /* Delete message */
             if ((r = jmapmsg_delete(req, msgid))) {
                 if (r == IMAP_NOTFOUND) {
                     json_t *err = json_pack("{s:s}", "type", "notFound");
@@ -6040,7 +6096,7 @@ static int importMessages(jmap_req_t *req)
             char *name = NULL;
             const char *mboxid = json_string_value(val);
             if (mboxid && *mboxid == '#') {
-                mboxid = hash_lookup(mboxid, req->idmap);
+                mboxid = hash_lookup(mboxid + 1, &req->idmap->mailboxes);
             }
             if (!mboxid || !(name = mboxlist_find_uniqueid(mboxid, req->userid))) {
                 buf_printf(&buf, ".mailboxIds[%zu]", i);
@@ -6110,7 +6166,7 @@ static int importMessages(jmap_req_t *req)
         json_object_set_new(created, id, mymsg);
 
         char *mymsgid = xstrdupnull(json_string_value(json_object_get(mymsg, "id")));
-        hash_insert(id, mymsgid, req->idmap); /* idmap takes ownership */
+        hash_insert(id, mymsgid, &req->idmap->messages); /* idmap takes ownership */
     }
 
     /* Prepare the response */

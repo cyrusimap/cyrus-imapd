@@ -54,12 +54,21 @@
 
 extern struct namespace jmap_namespace;
 
+struct jmap_idmap {
+    struct hash_table mailboxes;
+    struct hash_table messages;
+    struct hash_table calendars;
+    struct hash_table calendarevents;
+    struct hash_table contactgroups;
+    struct hash_table contacts;
+};
+
 typedef struct jmap_req {
     const char           *userid;
     const char           *inboxname;
     struct conversations_state *cstate;
     struct auth_state    *authstate;
-    struct hash_table    *idmap;
+    struct jmap_idmap    *idmap;
     json_t               *args;
     json_t               *response;
     const char           *tag;

@@ -166,7 +166,14 @@ static int jmap_post(struct transaction_t *txn,
     const char **hdr;
     json_t *req, *resp = NULL;
     json_error_t jerr;
-    struct hash_table idmap;
+    struct jmap_idmap idmap = {
+        HASH_TABLE_INITIALIZER,
+        HASH_TABLE_INITIALIZER,
+        HASH_TABLE_INITIALIZER,
+        HASH_TABLE_INITIALIZER,
+        HASH_TABLE_INITIALIZER,
+        HASH_TABLE_INITIALIZER
+    };
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf, *inboxname = NULL;
@@ -195,7 +202,12 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* Allocate map to store uids */
-    construct_hash_table(&idmap, 1024, 0);
+    construct_hash_table(&idmap.mailboxes, 64, 0);
+    construct_hash_table(&idmap.messages, 64, 0);
+    construct_hash_table(&idmap.calendars, 64, 0);
+    construct_hash_table(&idmap.calendarevents, 64, 0);
+    construct_hash_table(&idmap.contactgroups, 64, 0);
+    construct_hash_table(&idmap.contacts, 64, 0);
 
     /* Parse the JSON request */
     req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
@@ -296,7 +308,12 @@ static int jmap_post(struct transaction_t *txn,
     free(buf);
 
   done:
-    free_hash_table(&idmap, free);
+    free_hash_table(&idmap.mailboxes, free);
+    free_hash_table(&idmap.messages, free);
+    free_hash_table(&idmap.calendars, free);
+    free_hash_table(&idmap.calendarevents, free);
+    free_hash_table(&idmap.contactgroups, free);
+    free_hash_table(&idmap.contacts, free);
     free(inboxname);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
