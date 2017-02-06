@@ -174,7 +174,7 @@ static strarray_t *activefile_filter(const strarray_t *active, const strarray_t 
         if (!item || strarray_find(tiers, item->tier, 0) >= 0
                   || strarray_find(tiers, name, 0) >= 0
                   || !xapian_rootdir(item->tier, partition))
-            strarray_append(res, strarray_nth(active, i));
+            strarray_append(res, name);
         activeitem_free(item);
     }
 
