@@ -129,7 +129,7 @@ sub test_setcalendars
 
     xlog "create calendar";
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
@@ -142,7 +142,7 @@ sub test_setcalendars
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{created});
 
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
@@ -194,7 +194,7 @@ sub test_setcalendars_state
     my $res = $jmap->Request([
             ['setCalendars', {
                     ifInState => "badstate",
-                    create => { "#1" => { name => "foo" }}
+                    create => { "1" => { name => "foo" }}
                 }, "R1"]
         ]);
     $self->assert_str_equals($res->[0][0], 'error');
@@ -204,7 +204,7 @@ sub test_setcalendars_state
     $res = $jmap->Request([
             ['setCalendars', {
                     ifInState => "987654321",
-                    create => { "#1" => { name => "foo" }}
+                    create => { "1" => { name => "foo" }}
                 }, "R1"]
         ]);
     $self->assert_str_equals($res->[0][0], 'error');
@@ -212,7 +212,7 @@ sub test_setcalendars_state
 
     xlog "create calendar";
     $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
@@ -221,7 +221,7 @@ sub test_setcalendars_state
     ]);
     $self->assert_not_null($res);
 
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "update calendar $id with current state";
@@ -295,13 +295,13 @@ sub test_getcalendarupdates
     xlog "create calendar";
     my $res = $jmap->Request([
             ['setCalendars', { create => {
-                        "#1" => {
+                        "1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
                             isVisible => \1
                         },
-                        "#2" => {
+                        "2" => {
                             name => "bar",
                             color => "aqua",
                             sortOrder => 3,
@@ -311,8 +311,8 @@ sub test_getcalendarupdates
     ]);
     $self->assert_not_null($res);
 
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "get calendar updates without changes";
@@ -398,11 +398,11 @@ sub test_setcalendars_error
 
     xlog "create calendar with missing mandatory attributes";
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {}}}, "R1"]
+            ['setCalendars', { create => { "1" => {}}}, "R1"]
     ]);
     $self->assert_not_null($res);
-    my $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [
             "name", "color", "sortOrder", "isVisible"
@@ -410,7 +410,7 @@ sub test_setcalendars_error
 
     xlog "create calendar with invalid optional attributes";
     $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo", color => "coral",
                             sortOrder => 2, isVisible => \1,
                             mayReadFreeBusy => \0, mayReadItems => \0,
@@ -419,8 +419,8 @@ sub test_setcalendars_error
                             mayDelete => \0
              }}}, "R1"]
     ]);
-    $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [
             "mayReadFreeBusy", "mayReadItems", "mayAddItems",
@@ -439,14 +439,14 @@ sub test_setcalendars_error
 
     xlog "create calendar";
     $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
                             isVisible => \1
              }}}, "R1"]
     ]);
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "update calendar with immutable optional attributes";
     $res = $jmap->Request([
@@ -490,14 +490,14 @@ sub test_setcalendars_badname
     my $badname = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum tincidunt risus quis urna aliquam sollicitudin. Pellentesque aliquet nisl ut neque viverra pellentesque. Donec tincidunt eros at ante malesuada porta. Nam sapien arcu, vehicula non posuere.";
 
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => $badname, color => "aqua",
                             sortOrder => 1, isVisible => \1
             }}}, "R1"]
     ]);
     $self->assert_not_null($res);
-    my $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, ["name"]);
 }
@@ -1002,9 +1002,9 @@ sub createandget_event
     my $jmap = $self->{jmap};
 
     xlog "create event";
-    my $res = $jmap->Request([['setCalendarEvents', {create => {"#1" => $event}}, "R1"]]);
+    my $res = $jmap->Request([['setCalendarEvents', {create => {"1" => $event}}, "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get calendar event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
@@ -1037,12 +1037,12 @@ sub createcalendar
 
     xlog "create calendar";
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo", color => "coral", sortOrder => 1, isVisible => \1
              }}}, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{created});
-    return $res->[0][1]{created}{"#1"}{id};
+    return $res->[0][1]{created}{"1"}{id};
 }
 
 
@@ -1629,35 +1629,35 @@ sub test_setcalendarevents_isallday
     xlog "create event (with erroneous start)";
     $event->{start} = "2015-10-06T16:45:00",
     $res = $jmap->Request([['setCalendarEvents', { create => {
-        "#1" => $event,
+        "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"#1"}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
 
     xlog "create event (with erroneous timeZone)";
     $event->{start} = "2015-10-06T00:00:00";
     $event->{timeZone} = "Europe/Vienna";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-        "#1" => $event,
+        "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"#1"}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
 
     xlog "create event (with erroneous duration)";
     $event->{start} = "2015-10-06T00:00:00";
     $event->{timeZone} = undef;
     $event->{duration} = "PT15M";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-        "#1" => $event,
+        "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"#1"}{type}, "invalidProperties");
+    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
 
     xlog "create event";
     $event->{start} = "2015-10-06T00:00:00";
     $event->{timeZone} = undef;
     $event->{duration} = "P1D";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-        "#1" => $event,
+        "1" => $event,
     }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"#1"});
+    $self->assert_not_null($res->[0][1]{created}{"1"});
 }
 
 sub test_setcalendarevents_move
@@ -1671,20 +1671,20 @@ sub test_setcalendarevents_move
     xlog "create calendars A and B";
     my $res = $jmap->Request([
             ['setCalendars', { create => {
-                        "#1" => {
+                        "1" => {
                             name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
                         },
-                        "#2" => {
+                        "2" => {
                             name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
                         }
              }}, "R1"]
     ]);
-    my $calidA = $res->[0][1]{created}{"#1"}{id};
-    my $calidB = $res->[0][1]{created}{"#2"}{id};
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
 
     xlog "create event in calendar $calidA";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calidA,
                             "title" => "foo",
                             "description" => "foo's description",
@@ -1694,7 +1694,7 @@ sub test_setcalendarevents_move
                         }
                     }}, "R1"]]);
     my $state = $res->[0][1]{newState};
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
@@ -1745,21 +1745,21 @@ sub test_getcalendareventupdates
     xlog "create calendars A and B";
     my $res = $jmap->Request([
             ['setCalendars', { create => {
-                        "#1" => {
+                        "1" => {
                             name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
                         },
-                        "#2" => {
+                        "2" => {
                             name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
                         }
              }}, "R1"]
     ]);
-    my $calidA = $res->[0][1]{created}{"#1"}{id};
-    my $calidB = $res->[0][1]{created}{"#2"}{id};
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calidA,
                             "title" => "1",
                             "description" => "",
@@ -1767,7 +1767,7 @@ sub test_getcalendareventupdates
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
                         },
-                        "#2" => {
+                        "2" => {
                             "calendarId" => $calidB,
                             "title" => "2",
                             "description" => "",
@@ -1776,8 +1776,8 @@ sub test_getcalendareventupdates
                             "start" => "2015-10-06T00:00:00",
                         }
                     }}, "R1"]]);
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
@@ -1916,21 +1916,21 @@ sub test_getcalendareventlist
     xlog "create calendars A and B";
     my $res = $jmap->Request([
             ['setCalendars', { create => {
-                        "#1" => {
+                        "1" => {
                             name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
                         },
-                        "#2" => {
+                        "2" => {
                             name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
                         }
              }}, "R1"]
     ]);
-    my $calidA = $res->[0][1]{created}{"#1"}{id};
-    my $calidB = $res->[0][1]{created}{"#2"}{id};
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calidA,
                             "title" => "foo",
                             "description" => "bar",
@@ -1940,7 +1940,7 @@ sub test_getcalendareventlist
                             "timeZone" => "Etc/GMT+1",
                             "duration" => "PT1H",
                         },
-                        "#2" => {
+                        "2" => {
                             "calendarId" => $calidB,
                             "title" => "foo",
                             "description" => "",
@@ -1950,8 +1950,8 @@ sub test_getcalendareventlist
                             "duration" => "P2D",
                         }
                     }}, "R1"]]);
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get unfiltered calendar event list";
     $res = $jmap->Request([ ['getCalendarEventList', { }, "R1"] ]);
@@ -2004,7 +2004,7 @@ sub test_getcalendareventlist_datetime
     xlog "create events";
     my $res = $jmap->Request([['setCalendarEvents', { create => {
                         # Start: 2016-01-01T08:00:00Z End: 2016-01-01T09:00:00Z
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "1",
                             "description" => "",
@@ -2067,7 +2067,7 @@ sub test_getcalendareventlist_datetime
     # Create an infinite recurring datetime event
     $res = $jmap->Request([['setCalendarEvents', { create => {
                         # Start: 2017-01-01T08:00:00Z End: eternity
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "e",
                             "description" => "",
@@ -2109,7 +2109,7 @@ sub test_getcalendareventlist_date
     xlog "create events";
     my $res = $jmap->Request([['setCalendarEvents', { create => {
                         # Start: 2016-01-01 End: 2016-01-03
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "1",
                             "description" => "",
@@ -2194,7 +2194,7 @@ sub test_getcalendareventlist_date
     # Create an infinite recurring datetime event
     $res = $jmap->Request([['setCalendarEvents', { create => {
                         # Start: 2017-01-01T08:00:00Z End: eternity
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "2",
                             "description" => "",
@@ -2235,15 +2235,15 @@ sub test_setcalendarevents_caldav
     xlog "create calendar";
     my $res = $jmap->Request([
             ['setCalendars', { create => {
-                        "#1" => {
+                        "1" => {
                             name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true
                         }
              }}, "R1"]]);
-    my $calid = $res->[0][1]{created}{"#1"}{id};
+    my $calid = $res->[0][1]{created}{"1"}{id};
 
     xlog "create event in calendar";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "foo",
                             "description" => "",
@@ -2254,7 +2254,7 @@ sub test_setcalendarevents_caldav
                             "timeZone" => undef,
                         }
                     }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get x-href of event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
@@ -2378,7 +2378,7 @@ sub test_setcalendarevents_schedule_request
 
     xlog "send invitation as organizer to attendee";
     my $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => "Default",
                             "title" => "foo",
                             "description" => "foo's description",
@@ -2391,7 +2391,7 @@ sub test_setcalendarevents_schedule_request
                             "participants" => $participants,
                         }
                     }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
@@ -2427,7 +2427,7 @@ sub test_setcalendarevents_schedule_reply
 
     xlog "create event";
     my $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => "Default",
                             "title" => "foo",
                             "description" => "foo's description",
@@ -2440,7 +2440,7 @@ sub test_setcalendarevents_schedule_reply
                             "participants" => $participants,
                         }
                     }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     # clean notification cache
     $self->{instance}->getnotify();
@@ -2476,15 +2476,15 @@ sub test_setcalendarevents_schedule_cancel
 
     xlog "create calendar";
     my $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo", color => "coral", sortOrder => 1, isVisible => \1
              }}}, "R1"]
     ]);
-    my $calid = $res->[0][1]{created}{"#1"}{id};
+    my $calid = $res->[0][1]{created}{"1"}{id};
 
     xlog "send invitation as organizer";
     $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "#1" => {
+                        "1" => {
                             "calendarId" => $calid,
                             "title" => "foo",
                             "description" => "foo's description",
@@ -2510,7 +2510,7 @@ sub test_setcalendarevents_schedule_cancel
                             },
                         }
                     }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
 
     # clean notification cache
@@ -2528,6 +2528,41 @@ sub test_setcalendarevents_schedule_cancel
 
     $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
     $self->assert($ical =~ "METHOD:CANCEL");
+}
+
+sub test_creationids
+:JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create and get calendar and event";
+    my $res = $jmap->Request([
+        ['setCalendars', { create => { "1" => {
+            name => "foo",
+            color => "coral",
+            sortOrder => 2,
+            isVisible => \1,
+        }}}, 'R1'],
+        ['setCalendarEvents', { create => { "1" => {
+            "calendarId" => "#1",
+            "title" => "bar",
+            "description" => "description",
+            "showAsFree" => JSON::false,
+            "isAllDay" => JSON::true,
+            "start" => "2015-10-06T00:00:00",
+        }}}, "R2"],
+        ['getCalendarEvents', {ids => ["#1"]}, "R3"],
+        ['getCalendars', {ids => ["#1"]}, "R4"],
+    ]);
+    my $event = $res->[2][1]{list}[0];
+    $self->assert_str_equals("bar", $event->{title});
+
+    my $calendar = $res->[3][1]{list}[0];
+    $self->assert_str_equals("foo", $calendar->{name});
+
+    $self->assert_str_equals($calendar->{id}, $event->{calendarId});
 }
 
 1;

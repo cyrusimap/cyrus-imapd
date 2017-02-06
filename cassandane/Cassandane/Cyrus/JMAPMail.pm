@@ -292,7 +292,7 @@ sub test_getmailboxes_nocalendars
 
     xlog "create calendar";
     $res = $jmap->Request([
-            ['setCalendars', { create => { "#1" => {
+            ['setCalendars', { create => { "1" => {
                             name => "foo",
                             color => "coral",
                             sortOrder => 2,
@@ -323,7 +323,7 @@ sub test_setmailboxes
 
     xlog "create mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "foo",
                             parentId => $inbox->{id},
                             role => undef
@@ -333,7 +333,7 @@ sub test_setmailboxes
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_str_not_equals($res->[0][1]{newState}, $state);
     $self->assert_not_null($res->[0][1]{created});
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get mailbox $id";
     $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
@@ -407,17 +407,17 @@ sub test_setmailboxes_name_collision
     xlog "create three mailboxes named foo";
     $res = $jmap->Request([
             ['setMailboxes', { create =>
-                    { "#1" => {
+                    { "1" => {
                             name => "foo",
                             parentId => $inbox->{id},
                             role => undef
                         },
-                        "#2" => {
+                        "2" => {
                             name => "foo",
                             parentId => $inbox->{id},
                             role => undef
                         },
-                        "#3" => {
+                        "3" => {
                             name => "foo",
                             parentId => $inbox->{id},
                             role => undef
@@ -425,9 +425,9 @@ sub test_setmailboxes_name_collision
     ]);
     $self->assert_not_null($res->[0][1]{created});
 
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
-    my $id3 = $res->[0][1]{created}{"#3"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id3 = $res->[0][1]{created}{"3"}{id};
 
     xlog "get mailbox $id1";
     $res = $jmap->Request([['getMailboxes', { ids => [$id1] }, "R1"]]);
@@ -537,7 +537,7 @@ sub test_setmailboxes_role
 
     xlog "try to create mailbox with inbox role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "foo",
                             parentId => $inbox->{id},
                             role => "inbox"
@@ -545,14 +545,14 @@ sub test_setmailboxes_role
     ]);
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    my $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "role" ]);
 
     xlog "create mailbox with trash role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "foo",
                             parentId => undef,
                             role => "trash"
@@ -562,7 +562,7 @@ sub test_setmailboxes_role
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
 
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get mailbox $id";
     $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
@@ -576,27 +576,27 @@ sub test_setmailboxes_role
 
     xlog "try to create another mailbox with trash role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "bar",
                             parentId => $inbox->{id},
                             role => "trash"
              }}}, "R1"]
     ]);
-    $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "role" ]);
 
     xlog "create mailbox with x-bam role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "baz",
                             parentId => undef,
                             role => "x-bam"
              }}}, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{created});
-    $id = $res->[0][1]{created}{"#1"}{id};
+    $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get mailbox $id";
     $res = $jmap->Request([['getMailboxes', { ids => [$id] }, "R1"]]);
@@ -615,27 +615,27 @@ sub test_setmailboxes_role
 
     xlog "try to create another mailbox with the x-bam role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "bar",
                             parentId => $inbox->{id},
                             role => "x-bam"
              }}}, "R1"]
     ]);
-    $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "role" ]);
 
     xlog "try to create a mailbox with an unknown, non-x role";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "bam",
                             parentId => $inbox->{id},
                             role => "unknown"
              }}}, "R1"]
     ]);
-    $errType = $res->[0][1]{notCreated}{"#1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"#1"}{properties};
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "role" ]);
 
@@ -805,13 +805,13 @@ sub test_getmailboxupdates
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $drafts = $res->[0][1]{created}{"#1"}{id};
+    $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
     xlog "get mailbox updates";
@@ -1668,7 +1668,7 @@ sub test_setmessages_draft
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1677,7 +1677,7 @@ sub test_setmessages_draft
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
@@ -1746,13 +1746,13 @@ sub test_setmessages_inreplytoid
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
@@ -1781,7 +1781,7 @@ sub test_setmessages_attachedmessages
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1790,7 +1790,7 @@ sub test_setmessages_attachedmessages
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
@@ -1841,7 +1841,7 @@ sub test_uploadzero
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1850,7 +1850,7 @@ sub test_uploadzero
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $data = $jmap->Upload("", "text/plain");
     $self->assert_matches(qr/^Gda39a3ee5e6b4b0d3255bfef95601890/, $data->{blobId});
@@ -1858,7 +1858,7 @@ sub test_uploadzero
     $self->assert_str_equals("text/plain", $data->{type});
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "#2" => {
+      ['setMessages', { create => { "2" => {
         mailboxIds => [$draftsmbox],
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -1885,7 +1885,7 @@ sub test_upload
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1894,7 +1894,7 @@ sub test_upload
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $data = $jmap->Upload("a message with some text", "text/rubbish");
     $self->assert_matches(qr/^G44911b55c3b83ca05db9659d7a8e8b7b/, $data->{blobId});
@@ -1902,7 +1902,7 @@ sub test_upload
     $self->assert_str_equals("text/rubbish", $data->{type});
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "#2" => {
+      ['setMessages', { create => { "2" => {
         mailboxIds => [$draftsmbox],
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -1929,7 +1929,7 @@ sub test_uploadcharset
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1938,7 +1938,7 @@ sub test_uploadcharset
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $data = $jmap->Upload("some test with utf8", "text/plain; charset=utf-8");
 
@@ -1957,7 +1957,7 @@ sub test_uploadbin
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -1966,7 +1966,7 @@ sub test_uploadbin
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $logofile = abs_path('data/logo.gif');
     open(FH, "<$logofile");
@@ -1976,7 +1976,7 @@ sub test_uploadbin
     my $data = $jmap->Upload($binary, "image/gif");
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "#2" => {
+      ['setMessages', { create => { "2" => {
         mailboxIds => [$draftsmbox],
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -2095,7 +2095,7 @@ sub test_setmessages_attachments
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -2104,7 +2104,7 @@ sub test_setmessages_attachments
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
@@ -2161,7 +2161,7 @@ sub test_setmessages_flagged
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -2170,7 +2170,7 @@ sub test_setmessages_flagged
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $drafts = $res->[0][1]{created}{"#1"}{id};
+    my $drafts = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$drafts],
@@ -2199,7 +2199,7 @@ sub test_setmessages_invalid_mailaddr
     # XXX Why do we have to do this? Shouldn't Cyrus provision the Outbox?
     xlog "create outbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "outbox"
@@ -2208,7 +2208,7 @@ sub test_setmessages_invalid_mailaddr
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $outbox = $res->[0][1]{created}{"#1"}{id};
+    my $outbox = $res->[0][1]{created}{"1"}{id};
 
     xlog "Send a message with invalid replyTo property";
     my $draft =  {
@@ -2247,12 +2247,12 @@ sub test_setmessages_mailboxids
 
     my $res = $jmap->Request([
         ['setMailboxes', { create => {
-            "#1" => { name => "outbox", parentId => undef, role => "outbox" },
-            "#2" => { name => "drafts", parentId => undef, role => "drafts" },
+            "1" => { name => "outbox", parentId => undef, role => "outbox" },
+            "2" => { name => "drafts", parentId => undef, role => "drafts" },
         }}, "R1"]
     ]);
-    my $outboxid = $res->[0][1]{created}{"#1"}{id};
-    my $draftsid = $res->[0][1]{created}{"#2"}{id};
+    my $outboxid = $res->[0][1]{created}{"1"}{id};
+    my $draftsid = $res->[0][1]{created}{"2"}{id};
     $self->assert_not_null($outboxid);
     $self->assert_not_null($draftsid);
 
@@ -2312,17 +2312,17 @@ sub test_setmessages_move
     xlog "Create test mailboxes";
     my $res = $jmap->Request([
         ['setMailboxes', { create => {
-            "#a" => { name => "a", parentId => undef },
-            "#b" => { name => "b", parentId => undef },
-            "#c" => { name => "c", parentId => undef },
-            "#d" => { name => "d", parentId => undef },
+            "a" => { name => "a", parentId => undef },
+            "b" => { name => "b", parentId => undef },
+            "c" => { name => "c", parentId => undef },
+            "d" => { name => "d", parentId => undef },
         }}, "R1"]
     ]);
     $self->assert_num_equals( 4, scalar keys %{$res->[0][1]{created}} );
-    my $a = $res->[0][1]{created}{"#a"}{id};
-    my $b = $res->[0][1]{created}{"#b"}{id};
-    my $c = $res->[0][1]{created}{"#c"}{id};
-    my $d = $res->[0][1]{created}{"#d"}{id};
+    my $a = $res->[0][1]{created}{"a"}{id};
+    my $b = $res->[0][1]{created}{"b"}{id};
+    my $c = $res->[0][1]{created}{"c"}{id};
+    my $d = $res->[0][1]{created}{"d"}{id};
 
     xlog "Generate a message via IMAP";
     my %exp_sub;
@@ -2370,7 +2370,7 @@ sub test_setmessages_update
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
@@ -2379,7 +2379,7 @@ sub test_setmessages_update
     $self->assert_str_equals($res->[0][0], 'mailboxesSet');
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
-    my $drafts = $res->[0][1]{created}{"#1"}{id};
+    my $drafts = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
         mailboxIds => [$drafts],
@@ -2425,16 +2425,16 @@ sub test_setmessages_destroy
                 'setMailboxes',
                 {
                     create => {
-                        "#1" => {
+                        "1" => {
                             name     => "drafts",
                             parentId => undef,
                             role     => "drafts"
                         },
-                        "#2" => {
+                        "2" => {
                             name     => "foo",
                             parentId => undef,
                         },
-                        "#3" => {
+                        "3" => {
                             name     => "bar",
                             parentId => undef,
                         },
@@ -2448,9 +2448,9 @@ sub test_setmessages_destroy
     $self->assert_str_equals( $res->[0][2], 'R1' );
     $self->assert_not_null( $res->[0][1]{created} );
     my $mailboxids = [
-        $res->[0][1]{created}{"#1"}{id},
-        $res->[0][1]{created}{"#2"}{id},
-        $res->[0][1]{created}{"#3"}{id},
+        $res->[0][1]{created}{"1"}{id},
+        $res->[0][1]{created}{"2"}{id},
+        $res->[0][1]{created}{"3"}{id},
     ];
 
     xlog "Create a draft";
@@ -3144,13 +3144,13 @@ sub test_getthreads
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    my $drafts = $res->[0][1]{created}{"#1"}{id};
+    my $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
     xlog "generating message A";
@@ -3262,13 +3262,13 @@ sub test_getmessageupdates
     # FIXME mailbox changes also bump the state of messages
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     xlog "get message updates (expect error)";
     $res = $jmap->Request([['getMessageUpdates', { sinceState => 0 }, "R1"]]);
@@ -3526,20 +3526,20 @@ EOF
 
     xlog "create drafts mailbox";
     my $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    my $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
     xlog "import message from blob $blobid";
     eval {
         $jmap->Request([['importMessages', {
             messages => {
-                "#1" => {
+                "1" => {
                     blobId => $blobid,
                     mailboxIds => [ $draftsmbox ],
                     isUnread => JSON::true,
@@ -3570,13 +3570,13 @@ sub test_getthreadonemsg
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
     xlog "get thread state";
@@ -3608,7 +3608,7 @@ EOF
     xlog "import message from blob $blobid";
     $res = $jmap->Request([['importMessages', {
         messages => {
-            "#1" => {
+            "1" => {
                 blobId => $blobid,
                 mailboxIds => [ $draftsmbox ],
                 isUnread => JSON::true,
@@ -3642,13 +3642,13 @@ sub test_getthreadupdates
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $draftsmbox = $res->[0][1]{created}{"#1"}{id};
+    $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
     xlog "get thread state";
@@ -3876,13 +3876,13 @@ sub test_importmessages
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
-            ['setMailboxes', { create => { "#1" => {
+            ['setMailboxes', { create => { "1" => {
                             name => "drafts",
                             parentId => undef,
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $drafts = $res->[0][1]{created}{"#1"}{id};
+    $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
     $inbox = $self->getinbox()->{id};
@@ -3917,7 +3917,7 @@ sub test_importmessages
     xlog "import existing message (expect message exists error)";
     $res = $jmap->Request([['importMessages', {
         messages => {
-            "#1" => {
+            "1" => {
                 blobId => $blobid,
                 mailboxIds => [ $drafts ],
                 isUnread => JSON::true,
@@ -3928,12 +3928,12 @@ sub test_importmessages
         },
     }, "R1"]]);
     $self->assert_str_equals("messagesImported", $res->[0][0]);
-    $self->assert_str_equals("messageExists", $res->[0][1]->{notCreated}{"#1"}{type});
+    $self->assert_str_equals("messageExists", $res->[0][1]->{notCreated}{"1"}{type});
 
     xlog "import existing message into new mailbox";
     $res = $jmap->Request([['importMessages', {
         messages => {
-            "#1" => {
+            "1" => {
                 blobId => $blobid,
                 mailboxIds => [ $drafts, $inbox ],
                 isUnread => JSON::true,
@@ -3944,12 +3944,47 @@ sub test_importmessages
         },
     }, "R1"]]);
     $self->assert_str_equals("messagesImported", $res->[0][0]);
-    $msg = $res->[0][1]->{created}{"#1"};
+    $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
 
     xlog "load message";
     $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]->{mailboxIds}});
 }
+
+sub test_creationids
+:JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create and get mailbox and message";
+    my $res = $jmap->Request([
+        ['setMailboxes', { create => { "1" => {
+            name => "foo",
+            parentId => undef,
+            role => "drafts",
+        }}}, 'R1'],
+        ['setMessages', { create => { "1" => {
+            mailboxIds => ['#1'],
+            from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+            to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
+            subject => "Memo",
+            textBody => "I'm givin' ya one last chance ta surrenda!",
+        }}}, 'R2'],
+        ['getMessages', {ids => ["#1"]}, "R3"],
+        ['getMailboxes', {ids => ["#1"]}, "R4"],
+    ]);
+    my $msg = $res->[2][1]{list}[0];
+    $self->assert_str_equals("Memo", $msg->{subject});
+
+    my $mbox = $res->[3][1]{list}[0];
+    $self->assert_str_equals("foo", $mbox->{name});
+
+    $self->assert_str_equals($mbox->{id}, $msg->{mailboxIds}[0]);
+}
+
+
 
 1;

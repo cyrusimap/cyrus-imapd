@@ -71,14 +71,14 @@ sub test_setcontacts_multicontact
 
     my $res = $jmap->Request([['setContacts', {
         create => {
-            "#1" => {firstName => "first", lastName => "last"},
-            "#2" => {firstName => "second", lastName => "last"},
+            "1" => {firstName => "first", lastName => "last"},
+            "2" => {firstName => "second", lastName => "last"},
         }}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id1, 'notacontact']}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -129,12 +129,12 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][1]{newState}, $state);
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
 
-    xlog "create contact #1";
-    $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    xlog "create contact 1";
+    $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
 
     xlog "get contact updates";
     $res = $jmap->Request([['getContactUpdates', {
@@ -150,12 +150,12 @@ sub test_getcontactupdates
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact #2";
-    $res = $jmap->Request([['setContacts', {create => {"#2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
+    xlog "create contact 2";
+    $res = $jmap->Request([['setContacts', {create => {"2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact updates (since last change)";
     $res = $jmap->Request([['getContactUpdates', {
@@ -205,7 +205,7 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact #1, update contact #2";
+    xlog "destroy contact 1, update contact 2";
     $res = $jmap->Request([['setContacts', {
                     destroy => [$id1],
                     update => {$id2 => {firstName => "foo"}}
@@ -226,7 +226,7 @@ sub test_getcontactupdates
     $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
     $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
 
-    xlog "destroy contact #2";
+    xlog "destroy contact 2";
     $res = $jmap->Request([['setContacts', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
@@ -243,20 +243,20 @@ sub test_setcontactgroups
 
     xlog "create contacts";
     my $res = $jmap->Request([['setContacts', {create => {
-                        "#1" => { firstName => "foo", lastName => "last1" },
-                        "#2" => { firstName => "bar", lastName => "last2" }
+                        "1" => { firstName => "foo", lastName => "last1" },
+                        "2" => { firstName => "bar", lastName => "last2" }
                     }}, "R1"]]);
-    my $contact1 = $res->[0][1]{created}{"#1"}{id};
-    my $contact2 = $res->[0][1]{created}{"#1"}{id};
+    my $contact1 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"1"}{id};
 
     xlog "create contact group with no contact ids";
     $res = $jmap->Request([['setContactGroups', {create => {
-                        "#1" => {name => "group1"}
+                        "1" => {name => "group1"}
                     }}, "R2"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R2');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "get contact group $id";
     $res = $jmap->Request([['getContactGroups', { ids => [$id] }, "R3"]]);
@@ -308,7 +308,7 @@ sub test_getcontactlist
 
     xlog "create contacts";
     my $res = $jmap->Request([['setContacts', {create => {
-                        "#1" =>
+                        "1" =>
                         {
                             firstName => "foo", lastName => "last1",
                             emails => [{
@@ -316,7 +316,7 @@ sub test_getcontactlist
                                     value => "foo\@example.com"
                                 }]
                         },
-                        "#2" =>
+                        "2" =>
                         {
                             firstName => "bar", lastName => "last2",
                             emails => [{
@@ -338,7 +338,7 @@ sub test_getcontactlist
                                 }],
                             isFlagged => JSON::true
                         },
-                        "#3" =>
+                        "3" =>
                         {
                             firstName => "baz", lastName => "last3",
                             addresses => [{
@@ -352,31 +352,31 @@ sub test_getcontactlist
                                     isDefault => JSON::false
                                 }]
                         },
-                        "#4" => {firstName => "bam", lastName => "last4",
+                        "4" => {firstName => "bam", lastName => "last4",
                                  isFlagged => JSON::false }
                     }}, "R1"]]);
 
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
-    my $id3 = $res->[0][1]{created}{"#3"}{id};
-    my $id4 = $res->[0][1]{created}{"#4"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id3 = $res->[0][1]{created}{"3"}{id};
+    my $id4 = $res->[0][1]{created}{"4"}{id};
 
     xlog "create contact groups";
     $res = $jmap->Request([['setContactGroups', {create => {
-                        "#1" => {name => "group1", contactIds => [$id1, $id2]},
-                        "#2" => {name => "group2", contactIds => [$id3]},
-                        "#3" => {name => "group3", contactIds => [$id4]}
+                        "1" => {name => "group1", contactIds => [$id1, $id2]},
+                        "2" => {name => "group2", contactIds => [$id3]},
+                        "3" => {name => "group3", contactIds => [$id4]}
                     }}, "R1"]]);
 
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $group1 = $res->[0][1]{created}{"#1"}{id};
-    my $group2 = $res->[0][1]{created}{"#2"}{id};
-    my $group3 = $res->[0][1]{created}{"#3"}{id};
+    my $group1 = $res->[0][1]{created}{"1"}{id};
+    my $group2 = $res->[0][1]{created}{"2"}{id};
+    my $group3 = $res->[0][1]{created}{"3"}{id};
 
     xlog "get unfiltered contact list";
     $res = $jmap->Request([ ['getContactList', { }, "R1"] ]);
@@ -480,30 +480,30 @@ sub test_getcontactgroupupdates
 
     xlog "create contacts";
     my $res = $jmap->Request([['setContacts', {create => {
-                        "#a" => {firstName => "a", lastName => "a"},
-                        "#b" => {firstName => "b", lastName => "b"},
-                        "#c" => {firstName => "c", lastName => "c"},
-                        "#d" => {firstName => "d", lastName => "d"}
+                        "a" => {firstName => "a", lastName => "a"},
+                        "b" => {firstName => "b", lastName => "b"},
+                        "c" => {firstName => "c", lastName => "c"},
+                        "d" => {firstName => "d", lastName => "d"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $contactA = $res->[0][1]{created}{"#a"}{id};
-    my $contactB = $res->[0][1]{created}{"#b"}{id};
-    my $contactC = $res->[0][1]{created}{"#c"}{id};
-    my $contactD = $res->[0][1]{created}{"#d"}{id};
+    my $contactA = $res->[0][1]{created}{"a"}{id};
+    my $contactB = $res->[0][1]{created}{"b"}{id};
+    my $contactC = $res->[0][1]{created}{"c"}{id};
+    my $contactD = $res->[0][1]{created}{"d"}{id};
 
     xlog "get contact groups state";
     $res = $jmap->Request([['getContactGroups', {}, "R2"]]);
     my $state = $res->[0][1]{state};
 
-    xlog "create contact group #1";
+    xlog "create contact group 1";
     $res = $jmap->Request([['setContactGroups', {create => {
-                        "#1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
+                        "1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id1 = $res->[0][1]{created}{"#1"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
 
 
     xlog "get contact group updates";
@@ -520,13 +520,13 @@ sub test_getcontactgroupupdates
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact group #2";
+    xlog "create contact group 2";
     $res = $jmap->Request([['setContactGroups', {create => {
-                        "#2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
+                        "2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id2 = $res->[0][1]{created}{"#2"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact group updates (since last change)";
     $res = $jmap->Request([['getContactGroupUpdates', {
@@ -576,7 +576,7 @@ sub test_getcontactgroupupdates
     $self->assert_str_equals($res->[0][1]{changed}[0], $id2);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact group #1, update contact group #2";
+    xlog "destroy contact group 1, update contact group 2";
     $res = $jmap->Request([['setContactGroups', {
                     destroy => [$id1],
                     update => {$id2 => {name => "second (updated)"}}
@@ -597,7 +597,7 @@ sub test_getcontactgroupupdates
     $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
     $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
 
-    xlog "destroy contact group #2";
+    xlog "destroy contact group 2";
     $res = $jmap->Request([['setContactGroups', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactGroupsSet');
@@ -616,11 +616,11 @@ sub test_setcontacts
         lastName => "last"
     };
 
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => $contact }}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => $contact }}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     # get expands default values, so do the same manually
     $contact->{id} = $id;
@@ -927,11 +927,11 @@ sub test_setcontacts_state
     my $jmap = $self->{jmap};
 
     xlog "create contact";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog "get contact $id";
@@ -994,11 +994,11 @@ sub test_setcontacts_importance_later
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -1029,11 +1029,11 @@ sub test_setcontacts_importance_upfront
     my $jmap = $self->{jmap};
 
     xlog "create with importance in initial create";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -1064,11 +1064,11 @@ sub test_setcontacts_importance_multiedit
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -1099,11 +1099,11 @@ sub test_setcontacts_importance_zero_multi
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -1134,11 +1134,11 @@ sub test_setcontacts_importance_zero_byself
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->Request([['setContacts', {create => {"#1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->Request([['setContacts', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'contactsSet');
     $self->assert_str_equals($res->[0][2], 'R1');
-    my $id = $res->[0][1]{created}{"#1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
 
     my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
@@ -1159,6 +1159,29 @@ sub test_setcontacts_importance_zero_byself
     $self->assert_str_equals($fetch->[0][2], 'R4');
     $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'first');
     $self->assert_num_equals($fetch->[0][1]{list}[0]{"x-importance"}, 0);
+}
+
+sub test_creationids
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create and get contact group and contact";
+    my $res = $jmap->Request([
+        ['setContacts', {create => { "1" => { firstName => "foo", lastName => "last1" }, }}, "R2"],
+        ['setContactGroups', {create => { "1" => {name => "group1", contactIds => ["#1"]} }}, "R2"],
+        ['getContacts', {ids => ["#1"]}, "R3"],
+        ['getContactGroups', {ids => ["#1"]}, "R4"],
+    ]);
+    my $contact = $res->[2][1]{list}[0];
+    $self->assert_str_equals("foo", $contact->{firstName});
+
+    my $group = $res->[3][1]{list}[0];
+    $self->assert_str_equals("group1", $group->{name});
+
+    $self->assert_str_equals($contact->{id}, $group->{contactIds}[0]);
 }
 
 1;
