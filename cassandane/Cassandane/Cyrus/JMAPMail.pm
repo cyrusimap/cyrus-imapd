@@ -933,8 +933,8 @@ sub test_getmessages
         ),
         messageid => 'fake.123456789@local',
         extra_headers => [
-            ['X-Tra', "foo bar\r\n baz"],
-            ['Sender', "Bla <blu\@local>"],
+            ['x-tra', "foo bar\r\n baz"],
+            ['sender', "Bla <blu\@local>"],
         ],
         body => $body
     );
@@ -959,8 +959,8 @@ sub test_getmessages
     $self->assert_equals($msg->{isDraft}, JSON::false);
 
     my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
+    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
     $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
@@ -992,7 +992,7 @@ sub test_getmessages
     $self->assert_not_null($msg->{size});
 
     xlog "fetch again but only some properties";
-    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ['sender', 'headers.X-Tra', 'isUnread'] }, "R1"]]);
+    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ['sender', 'headers.x-tra', 'isUnread'] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
     $hdrs = $msg->{headers};
     $self->assert_null($msg->{mailboxIds});
@@ -1003,7 +1003,7 @@ sub test_getmessages
             email => "blu\@local"
     });
     $self->assert_null($hdrs->{'Message-ID'});
-    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
 }
 
 sub test_getmessages_mimeencode
@@ -1041,9 +1041,9 @@ sub test_getmessages_mimeencode
         ),
         messageid => 'fake.123456789@local',
         extra_headers => [
-            ['X-Tra', "foo bar\r\n baz"],
-            ['Sender', "Bla <blu\@local>"],
-            ['X-Mood', '=?UTF-8?Q?I feel =E2=98=BA?='],
+            ['x-tra', "foo bar\r\n baz"],
+            ['sender', "Bla <blu\@local>"],
+            ['x-mood', '=?UTF-8?Q?I feel =E2=98=BA?='],
         ],
         body => $body
     );
@@ -1060,7 +1060,7 @@ sub test_getmessages_mimeencode
     my $msg = $res->[1][1]->{list}[0];
 
     $self->assert_str_equals("If you can read this you understand the example.", $msg->{subject});
-    $self->assert_str_equals("I feel \N{WHITE SMILING FACE}", $msg->{headers}{"X-Mood"});
+    $self->assert_str_equals("I feel \N{WHITE SMILING FACE}", $msg->{headers}{"x-mood"});
     $self->assert_str_equals("Keld J\N{LATIN SMALL LETTER O WITH STROKE}rn Simonsen", $msg->{from}[0]{name});
     $self->assert_str_equals("Tom To", $msg->{to}[0]{name});
 }
@@ -1110,8 +1110,8 @@ sub test_getmessages_fetchmessages
         ),
         messageid => 'fake.123456789@local',
         extra_headers => [
-            ['X-Tra', "foo bar\r\n baz"],
-            ['Sender', "Bla <blu\@local>"],
+            ['x-tra', "foo bar\r\n baz"],
+            ['sender', "Bla <blu\@local>"],
         ],
         body => $body
     );
@@ -1135,8 +1135,8 @@ sub test_getmessages_fetchmessages
     $self->assert_equals($msg->{isDraft}, JSON::false);
 
     my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
+    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
     $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
@@ -1168,7 +1168,7 @@ sub test_getmessages_fetchmessages
     $self->assert_not_null($msg->{size});
 
     xlog "fetch again but only some properties";
-    $res = $jmap->Request([['getMessageList', { fetchMessages => $JSON::true, fetchMessageProperties => ['sender', 'headers.X-Tra', 'isUnread']  }, "R1"]]);
+    $res = $jmap->Request([['getMessageList', { fetchMessages => $JSON::true, fetchMessageProperties => ['sender', 'headers.x-tra', 'isUnread']  }, "R1"]]);
     $self->assert_num_equals(scalar @{$res}, 2);
     $self->assert_str_equals($res->[0][0], "messageList");
     $self->assert_str_equals($res->[1][0], "messages");
@@ -1185,7 +1185,7 @@ sub test_getmessages_fetchmessages
             email => "blu\@local"
     });
     $self->assert_null($hdrs->{'Message-ID'});
-    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
 }
 
 sub test_getmessages_threads
@@ -1233,8 +1233,8 @@ sub test_getmessages_threads
         ),
         messageid => 'fake.123456789@local',
         extra_headers => [
-            ['X-Tra', "foo bar\r\n baz"],
-            ['Sender', "Bla <blu\@local>"],
+            ['x-tra', "foo bar\r\n baz"],
+            ['sender', "Bla <blu\@local>"],
         ],
         body => $body
     );
@@ -1264,8 +1264,8 @@ sub test_getmessages_threads
     $self->assert_equals($msg->{isDraft}, JSON::false);
 
     my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'Message-ID'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'X-Tra'}, 'foo bar baz');
+    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
+    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
     $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
@@ -1580,7 +1580,7 @@ sub test_getmessages_body_multi
     $self->assert_num_equals(1, scalar keys %{$msg->{attachedMessages}});
     my $submsg = (values %{$msg->{attachedMessages}})[0];
 
-    $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'Message-ID'});
+    $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'message-id'});
     $self->assert_deep_equals({
             name => "Ava T. Nguyen",
             email => "Ava.Nguyen\@local"
@@ -1699,7 +1699,7 @@ sub test_setmessages_draft
         textBody => "I'm givin' ya one last chance ta surrenda!",
         htmlBody => "Oh!!! I <em>hate</em> that Rabbit.",
         headers => {
-            "Foo" => "bar\nbaz\nbam",
+            "foo" => "bar\nbaz\nbam",
         }
     };
 
@@ -1721,7 +1721,7 @@ sub test_setmessages_draft
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
     $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
-    $self->assert_str_equals($msg->{headers}->{Foo}, $draft->{headers}->{Foo});
+    $self->assert_str_equals($msg->{headers}->{foo}, $draft->{headers}->{foo});
     $self->assert_equals($msg->{isDraft}, JSON::true);
     $self->assert_equals($msg->{isFlagged}, JSON::false);
 }
@@ -2652,7 +2652,7 @@ sub test_getmessagelist
         date => $dtbar,
         body => $bodybar,
         extra_headers => [
-            ['X-Tra', "baz"],
+            ['x-tra', "baz"],
         ],
     );
     $self->make_message("bar", %params) || die;
@@ -2808,7 +2808,7 @@ sub test_getmessagelist
     xlog "filter by header";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            header => [ "X-Tra" ],
+            header => [ "x-tra" ],
         },
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
@@ -2817,7 +2817,7 @@ sub test_getmessagelist
     xlog "filter by header and value";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            header => [ "X-Tra", "bam" ],
+            header => [ "x-tra", "bam" ],
         },
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
