@@ -51,6 +51,7 @@
 #define TIMSIEVE_NOMEM -2
 #define TIMSIEVE_BADPORT -5
 #define TIMSIEVE_NOEXIST -6
+#define TIMSIEVE_EXISTS -7
 
 
 #define TRUE 1

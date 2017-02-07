@@ -75,6 +75,14 @@ int putscript(struct protstream *conn, const struct buf *name,
               const struct buf *data, int verify_only);
 
 /*
+ * Rename the script with name 'oldname' to 'newname'
+ *
+ */
+
+int renamescript(struct protstream *conn,
+                 const struct buf *oldname, const struct buf *newname);
+
+/*
  * Delete the script with name 'name'
  *
  */
