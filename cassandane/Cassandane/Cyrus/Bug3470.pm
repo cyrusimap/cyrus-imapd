@@ -119,7 +119,7 @@ sub test_list_percent
             '/',
             'Drafts'
           ]
-    ], "LIST data mismatch: "  . Dumper($alldata));
+    ], "LIST data mismatch: "  . Dumper($alldata, \@inbox_flags));
 }
 
 #
