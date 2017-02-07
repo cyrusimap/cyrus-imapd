@@ -37,3 +37,9 @@ Resources
     :maxdepth: 1
 
     developer/libraries
+
+Releasing
+=========
+
+.. toctree::
+    developer/releasing
