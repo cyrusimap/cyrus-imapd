@@ -2230,7 +2230,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     /* replyTo */
     if (_wantprop(props, "replyTo")) {
         json_t *reply_to = json_null();
-        if (json_object_get(headers, "Reply-To")) {
+        if (json_object_get(headers, "reply-to")) {
             reply_to = emailer_from_addr(body->reply_to);
         }
         json_object_set_new(msg, "replyTo", reply_to);
