@@ -2042,20 +2042,27 @@ static int extract_headers(const char *key, const char *val, void *rock)
     json_t *headers = (json_t*) rock;
     json_t *curval;
     char *decodedval = NULL;
+    char *lckey = xstrdup(key);
+    char *p;
+    for (p = lckey; *p; p++) {
+        *p = tolower(*p);
+    }
 
     if (isspace(*val)) val++;
 
     decodedval = charset_decode_mimeheader(val, CHARSET_SNIPPET);
-    if (!decodedval) return 0;
+    if (!decodedval) goto done;
 
-    if ((curval = json_object_get(headers, key))) {
+    if ((curval = json_object_get(headers, lckey))) {
         char *newval = strconcat(json_string_value(curval), "\n", decodedval, NULL);
-        json_object_set_new(headers, key, json_string(newval));
+        json_object_set_new(headers, lckey, json_string(newval));
         free(newval);
     } else {
-        json_object_set_new(headers, key, json_string(decodedval));
+        json_object_set_new(headers, lckey, json_string(decodedval));
     }
 
+done:
+    free(lckey);
     free(decodedval);
     return  0;
 }
