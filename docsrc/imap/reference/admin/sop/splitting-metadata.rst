@@ -2,10 +2,11 @@ Splitting Metadata from Partitions
 ==================================
 
 .. important::
-   This only applies to Cyrus IMAP version 2.4 and 2.5
+   This only applies to Cyrus IMAP version 2.3 and later
 
 .. todo::
    Find out when exactly the metapartition-* options were added to imapd.conf
+   N.B.: Added in 2.3.0
 
 The traditional layout for a Cyrus IMAP mailbox spool directory is to include the mailbox message data and mailbox metadata in the same directory tree. The mailbox message data and mailbox metadata differ in size and frequency of updating, which in larger deployments may justify using different storage layers for each.
 
@@ -32,4 +33,3 @@ To transition from the traditional Cyrus IMAP mailbox spool directory tree layou
      Rename all mailboxes, using the new partition as the location for the renamed mailbox. One example rename command is included below::
  
          cyradm> renamemailbox user/john.doe@example.org user/john.doe@example.org splitmeta
- 
