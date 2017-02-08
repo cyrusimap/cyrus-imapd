@@ -240,6 +240,13 @@ ec HTTP_NETWORK_AUTH,
 
 
 
+# Indicating Hints (draft-ietf-httpbis=early-hints)
+
+ce HTTP_EARLY_HINTS,
+    "103 Early Hints"
+
+
+
 # WebDAV (RFC 2518/4918)
 
 ec HTTP_PROCESSING,
