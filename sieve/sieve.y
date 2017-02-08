@@ -93,7 +93,8 @@ static commandlist_t *build_reject(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t* ,
                                  commandlist_t *c, strarray_t *flags);
-static commandlist_t *build_notify(commandlist_t *c);
+static commandlist_t *build_notify(sieve_script_t *parse_script,
+                                   commandlist_t *c, int t, char *method);
 static commandlist_t *build_denotify(commandlist_t *c);
 static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
 static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
@@ -240,15 +241,14 @@ extern void sieverestart(FILE *f);
 /* editheader - RFC 5293 */
 %token ADDHEADER DELETEHEADER
 %type <cl> ahtags dhtags
- //%type <ctag> dhgetcomp
 
 /* [e]reject - RFC 5429 */
 %token <nval> REJCT EREJECT
 %type <nval> reject
 
 /* enotify - RFC 5435 */
-%token NOTIFY METHOD OPTIONS MESSAGE
-%token <nval> ENCODEDURL
+%token METHOD OPTIONS MESSAGE IMPORTANCE
+%token <nval> NOTIFY ENOTIFY ENCODEURL
 %type <cl> ntags
 %type <nval> mod15
 
@@ -405,7 +405,7 @@ action:   STOP                   { $$ = new_command(STOP, parse_script);    }
                                      }
                                  }
 
-       | ADDHEADER ahtags STRING STRING
+        | ADDHEADER ahtags STRING STRING
                                  {
                                      $$ = build_addheader(parse_script,
                                                           $2, $3, $4);
@@ -429,7 +429,21 @@ action:   STOP                   { $$ = new_command(STOP, parse_script);    }
                                          YYERROR; /* br should call yyerror() */
                                      }
                                  }
-        | NOTIFY ntags           { $$ = build_notify($2); }
+        | NOTIFY ntags STRING
+                                 {
+                                     $$ = build_notify(parse_script,
+                                                       $2, ENOTIFY, $3);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bn should call yyerror() */
+                                     }
+                                 }
+        | NOTIFY ntags           {
+                                     $$ = build_notify(parse_script,
+                                                       $2, NOTIFY, NULL);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bn should call yyerror() */
+                                     }
+                                 }
         | DENOTIFY dtags         { $$ = build_denotify($2); }
         | INCLUDE itags STRING   {
                                      $$ = build_include(parse_script, $2, $3);
@@ -627,7 +641,7 @@ mod30:    LOWERFIRST
 mod20:    QUOTEWILDCARD
         ;
 
-mod15:    ENCODEDURL             { 
+mod15:    ENCODEURL              { 
                                      if (!parse_script->support.enotify) {
                                          sieveerror_c(parse_script,
                                                       SIEVE_MISSING_REQUIRE,
@@ -829,14 +843,66 @@ reject:   REJCT
         ;
 
 
-/* NOTIFY tagged arguments */
+/* NOTIFY tagged arguments
+ *
+ * Haven't been able to find a way to split the allowed tags for enotify
+ * and legacy notify without creating a shift/reduce conflict, so we
+ * try to police it during parsing.  Note that this allows :importance
+ * and :low/:normal/:high to be used with the incorrect notify flavor.
+ */
 ntags: /* empty */               {
                                      $$ = new_command(NOTIFY, parse_script);
                                      if ($$ == NULL) {
                                          YYERROR; /* nc should call yyerror() */
                                      }
                                  }
+
+        /* enotify-only tagged arguments */
+        | ntags FROM STRING      {
+                                     if ($$->type == NOTIFY) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_UNEXPECTED_TAG,
+                                                      ":from");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.n.from != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":from");
+                                         YYERROR;
+                                     }
+
+                                     $$->type = ENOTIFY;
+                                     $$->u.n.from = $3;
+                                 }
+
+        | ntags IMPORTANCE priority
+                                 {
+                                     if ($$->type == NOTIFY) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_UNEXPECTED_TAG,
+                                                      ":importance");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.n.priority != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":importance");
+                                         YYERROR;
+                                     }
+
+                                     $$->type = ENOTIFY;
+                                     $$->u.n.priority = $3;
+                                 }
+
+        /* legacy-only tagged arguments */
         | ntags ID STRING        {
+                                     if ($$->type == ENOTIFY) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_UNEXPECTED_TAG,
+                                                      ":id");
+                                         YYERROR;
+                                     }
                                      if ($$->u.n.id != NULL) {
                                          sieveerror_c(parse_script,
                                                       SIEVE_DUPLICATE_TAG,
@@ -844,9 +910,16 @@ ntags: /* empty */               {
                                          YYERROR;
                                      }
 
+                                     $$->type = NOTIFY;
                                      $$->u.n.id = $3;
                                  }
         | ntags METHOD STRING    {
+                                     if ($$->type == ENOTIFY) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_UNEXPECTED_TAG,
+                                                      ":method");
+                                         YYERROR;
+                                     }
                                      if ($$->u.n.method != NULL) {
                                          sieveerror_c(parse_script,
                                                       SIEVE_DUPLICATE_TAG,
@@ -854,7 +927,37 @@ ntags: /* empty */               {
                                          YYERROR;
                                      }
 
+                                     $$->type = NOTIFY;
                                      $$->u.n.method = $3;
+                                 }
+        | ntags priority         {
+                                     if ($$->type == ENOTIFY) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_UNEXPECTED_TAG,
+                                                      "priority");
+                                         YYERROR;
+                                     }
+                                     if ($$->u.n.priority != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      "priority");
+                                         YYERROR;
+                                     }
+
+                                     $$->type = NOTIFY;
+                                     $$->u.n.priority = $2;
+                                 }
+
+        /* common tagged arguments */
+        | ntags MESSAGE STRING   {
+                                     if ($$->u.n.message != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":message");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.n.message = $3;
                                  }
 
         | ntags OPTIONS stringlist
@@ -868,30 +971,10 @@ ntags: /* empty */               {
 
                                      $$->u.n.options = $3;
                                  }
-        | ntags priority         {
-                                     if ($$->u.n.priority != -1) {
-                                         sieveerror_c(parse_script,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "priority");
-                                         YYERROR;
-                                     }
-
-                                     $$->u.n.priority = $2;
-                                 }
-        | ntags MESSAGE STRING   {
-                                     if ($$->u.n.message != NULL) {
-                                         sieveerror_c(parse_script,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":message");
-                                         YYERROR;
-                                     }
-
-                                     $$->u.n.message = $3;
-                                 }
         ;
 
 
-/* :priority */
+/* priority tag or :importance value */
 priority: LOW
         | NORMAL
         | HIGH
@@ -2012,15 +2095,46 @@ static commandlist_t *build_reject(sieve_script_t *parse_script,
     return c;
 }
 
-static commandlist_t *build_notify(commandlist_t *c)
+static commandlist_t *build_notify(sieve_script_t *parse_script,
+                                   commandlist_t *c, int t, char *method)
 {
-    assert(c && c->type == NOTIFY);
+    assert(c && (t == NOTIFY || t == ENOTIFY));
 
+    if (t == ENOTIFY) {
+        if (!parse_script->support.enotify) {
+            sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, "enotify");
+            return NULL;
+        }
+        if (c->u.n.id != NULL) {
+            sieveerror_c(parse_script, SIEVE_UNEXPECTED_TAG, ":id");
+            return NULL;
+        }
+        if (c->u.n.method != NULL) {
+            sieveerror_c(parse_script, SIEVE_UNEXPECTED_TAG, ":method");
+            return NULL;
+        }
+
+        c->u.n.method = xstrdup(method);
+    }
+    else {
+        if (!parse_script->support.notify) {
+            sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, "notify");
+            return NULL;
+        }
+        if (c->u.n.from != NULL) {
+            sieveerror_c(parse_script, SIEVE_UNEXPECTED_TAG, ":from");
+            return NULL;
+        }
+
+        c->u.n.method = xstrdup(c->u.n.method ? c->u.n.method : "default");
+    }
+
+    c->type = t;
     if (c->u.n.priority == -1) c->u.n.priority = NORMAL;
-    c->u.n.id = xstrdup(c->u.n.id);
+    c->u.n.id = xstrdupnull(c->u.n.id);
+    c->u.n.from = xstrdupnull(c->u.n.from);
     c->u.n.message =
         xstrdup(c->u.n.message ? c->u.n.message : "$from$: $subject$");
-    c->u.n.method = xstrdup(c->u.n.method ? c->u.n.method : "default");
 
     return c;
 }

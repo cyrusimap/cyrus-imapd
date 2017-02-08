@@ -2246,13 +2246,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
+        case B_ENOTIFY:/*33*/
         case B_NOTIFY:/*12*/
         {
-            const char * id;
-            const char * method;
+            const char *id = NULL;
+            const char *from = NULL;
+            const char *method;
             const char **options = NULL;
             const char *priority = NULL;
-            const char * message;
+            const char *message;
             int pri;
 
             /* method */
@@ -2265,12 +2267,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
              * the "notify" action.
              */
 
-            /* id */
-            ip = unwrap_string(bc, ip, &id, NULL);
-
-	    /* draft-ietf-sieve-notify-12:
-	     * Changes since draft-ietf-sieve-notify-00
-	     * Removed the :id parameter to the notify action. */
+            if (op == B_ENOTIFY) {
+                /* from */
+                ip = unwrap_string(bc, ip, &from, NULL);
+            }
+            else {
+                /* id */
+                ip = unwrap_string(bc, ip, &id, NULL);
+            }
 
             /*options*/
             options=bc_makeArray(bc, &ip);
@@ -2304,7 +2308,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 message = parse_string(message, variables);
             }
 
-            res = do_notify(notify_list, id, method, options,
+            res = do_notify(notify_list, id, from, method, options,
                             priority, message);
 
             break;

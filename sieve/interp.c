@@ -111,7 +111,7 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " imapflags");
         if (i->notify &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
-            buf_appendcstr(&buf, " notify");
+            buf_appendcstr(&buf, " notify enotify");
         if (i->getinclude &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
             buf_appendcstr(&buf, " include");

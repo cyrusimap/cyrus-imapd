@@ -74,6 +74,9 @@ ec SIEVE_MISSING_REQUIRE,
 ec SIEVE_MISSING_TAG,
    "%s tag is required"
 
+ec SIEVE_UNEXPECTED_TAG,
+   "unexpected %s tag"
+
 ec SIEVE_DUPLICATE_TAG,
    "duplicate/conflicting %s tag"
 

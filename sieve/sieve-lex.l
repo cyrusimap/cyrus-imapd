@@ -99,6 +99,7 @@ weekday         [W|w][E|e][E|e][D|d][A|a][Y|y]
 %state QSTRING
 %state QCOLLATION
 %state QRELATION
+%state QIMPORTANCE
 %state QTIMEZONE
 %state QDATEPART
 
@@ -362,7 +363,18 @@ weekday         [W|w][E|e][E|e][D|d][A|a][Y|y]
 <INITIAL>:method              return METHOD;
 <INITIAL>:options             return OPTIONS;
 <INITIAL>:message             return MESSAGE;
-<INITIAL>:encodedurl          return yylval->nval = ENCODEDURL;
+<INITIAL>:encodeurl          return yylval->nval = ENCODEURL;
+<INITIAL>:importance          { BEGIN QIMPORTANCE; return IMPORTANCE; }
+
+<QIMPORTANCE>[ \t\n\r] ;      /* ignore whitespace */
+<QIMPORTANCE>\"1\"            { BEGIN INITIAL; return yylval->nval = HIGH;   }
+<QIMPORTANCE>\"2\"            { BEGIN INITIAL; return yylval->nval = NORMAL; }
+<QIMPORTANCE>\"3\"            { BEGIN INITIAL; return yylval->nval = LOW;    }
+<QIMPORTANCE>\"[^\"]*\"       {
+                                  BEGIN INITIAL;
+                                  sieveerror_f(parse_script,
+                                               "invalid importance %s", yytext);
+                              }
 
     /* notify - draft-martin-sieve-notify */
 <INITIAL>denotify             return DENOTIFY;

@@ -164,6 +164,14 @@ int script_require(sieve_script_t *s, char *req)
         } else {
             return 0;
         }
+    } else if (!strcmp("enotify",req)) {
+        if (s->interp.notify &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
+            s->support.enotify = 1;
+            return 1;
+        } else {
+            return 0;
+        }
     } else if (!strcmp("include", req)) {
         if (s->interp.getinclude &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE)) {

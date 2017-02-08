@@ -64,6 +64,7 @@ typedef enum {
     ACTION_REMOVEFLAG,
     ACTION_MARK,
     ACTION_UNMARK,
+    ACTION_ENOTIFY,
     ACTION_NOTIFY,
     ACTION_DENOTIFY
 } action_t;
@@ -103,6 +104,7 @@ struct Action {
 typedef struct notify_list_s {
     int isactive;
     const char *id;
+    const char *from;
     const char *method;
     const char **options;
     const char *priority;
@@ -131,7 +133,7 @@ int do_addflag(action_list_t *m, const char *flag);
 int do_removeflag(action_list_t *m, const char *flag);
 int do_mark(action_list_t *m);
 int do_unmark(action_list_t *m);
-int do_notify(notify_list_t *n, const char *id,
+int do_notify(notify_list_t *n, const char *id, const char *from,
               const char *method, const char **options,
               const char *priority, const char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,

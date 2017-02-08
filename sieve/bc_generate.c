@@ -809,23 +809,36 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 break;
 
             case NOTIFY:
-                /* NOTIFY
+            case ENOTIFY:
+            {
+                /* (E)NOTIFY
                    (STRING: len + dataptr)
                    (STRING: len + dataptr)
                    stringlist
                    (STRING: len + dataptr)
                    (STRING: len + dataptr)
-                   method/id /options list/priority/message
+                   method/(from|id) /options list/priority/message
                 */
+                int op;
+                char *str;
+
+                if (c->type == ENOTIFY) {
+                    op = B_ENOTIFY;
+                    str = c->u.n.from;
+                }
+                else {
+                    op = B_NOTIFY;
+                    str = c->u.n.id;
+                }
 
                 if (!atleast(retval, codep+5)) return -1;
-                retval->data[codep++].op = B_NOTIFY;
+                retval->data[codep++].op = op;
 
                 retval->data[codep++].len = strlen(c->u.n.method);
                 retval->data[codep++].str = c->u.n.method;
 
-                retval->data[codep++].len = c->u.n.id ? (int)strlen(c->u.n.id) : -1;
-                retval->data[codep++].str = c->u.n.id;
+                retval->data[codep++].len = str ? (int)strlen(str) : -1;
+                retval->data[codep++].str = str;
 
                 codep = bc_stringlist_generate(codep,retval,c->u.n.options);
                 if (codep == -1) return -1;
@@ -851,7 +864,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
                 retval->data[codep++].len = strlen(c->u.n.message);
                 retval->data[codep++].str = c->u.n.message;
-                break;
+            }
+            break;
 
             case VACATION:
                 /* VACATION
@@ -942,7 +956,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 break;
 
             case SET:
-            {
                 /* SET
                    BITFIELD modifiers
                    STRING variable
@@ -972,6 +985,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                     retval->data[codep].value |= BFV_QUOTEWILDCARD;
                     break;
                 }
+                switch(c->u.s.mod15) {
+                case ENCODEURL:
+                    retval->data[codep].value |= BFV_ENCODEURL;
+                    break;
+                }
                 switch(c->u.s.mod10) {
                 case LENGTH:
                     retval->data[codep].value |= BFV_LENGTH;
@@ -982,11 +1000,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].str = c->u.s.variable;
                 retval->data[codep++].len = strlen(c->u.s.value);
                 retval->data[codep++].str = c->u.s.value;
-            }
-            break;
+                break;
 
             case ADDHEADER:
-            {
                 /* ADDHEADER
                    NUMBER index
                    STRING name
@@ -999,11 +1015,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].str = c->u.ah.name;
                 retval->data[codep++].len = strlen(c->u.ah.value);
                 retval->data[codep++].str = c->u.ah.value;
-            }
-            break;
+                break;
 
             case DELETEHEADER:
-            {
                 /* DELETEHEADER
                    NUMBER index
                    COMPARATOR
@@ -1026,8 +1040,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
                 codep = bc_stringlist_generate(codep, retval, c->u.dh.values);
                 if (codep == -1) return -1;
-            }
-            break;
+                break;
 
             case IF:
             {

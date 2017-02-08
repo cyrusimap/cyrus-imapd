@@ -167,7 +167,9 @@ enum bytecode {
 
     B_EREJECT,          /* require ereject */
 
-    B_REDIRECT
+    B_REDIRECT,
+
+    B_ENOTIFY           /* require enotify */
 };
 
 enum bytecode_comps {

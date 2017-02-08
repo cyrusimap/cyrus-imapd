@@ -681,7 +681,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
             i=write_list(ntohl(d[i].len),i+1,d);
             break;
 
-        case B_DENOTIFY:/*12*/
+        case B_DENOTIFY:/*13*/
             printf("DENOTIFY\n");
             printf("            PRIORITY(%d) Comparison type %d (relat %d)\n",
                    ntohl(d[i].value), ntohl(d[i+1].value), ntohl(d[i+2].value));
@@ -692,25 +692,28 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("           ({%d}%s)\n", len, (!data ? "[nil]" : data));
             break;
 
-        case B_NOTIFY: /*13*/
+        case B_ENOTIFY: /*33*/
+        case B_NOTIFY: /*12*/
             i = unwrap_string(d, i, &data, &len);
 
             printf("NOTIFY METHOD({%d}%s)\n",len,data);
 
             i = unwrap_string(d, i, &data, &len);
 
-            printf("            ID({%d}%s) OPTIONS ", len,
-                   (!data ? "[nil]" : data));
+            printf("            %s({%d}%s) OPTIONS ",
+                   (op == B_ENOTIFY ? "FROM" : "ID"),
+                   len, (!data ? "[nil]" : data));
 
             i=write_list(ntohl(d[i].len),i+1,d);
 
-            printf("            PRIORITY(%d)\n", ntohl(d[i].value));
+            printf("            %s(%d)\n",
+                   (op == B_ENOTIFY ? "IMPORTANCE" : "PRIORITY"),
+                   ntohl(d[i].value));
             i++;
 
             i = unwrap_string(d, i, &data, &len);
 
             printf("            MESSAGE({%d}%s)\n", len, data);
-
             break;
 
         case B_VACATION_ORIG:/*14*/
@@ -768,9 +771,10 @@ static void dump2(bytecode_input_t *d, int bc_len)
             i = unwrap_string(d, i, &data, &len);
             printf("SET ");
             printf("LOWER(%d) UPPER(%d) LOWERFIRST(%d) UPPERFIRST(%d) "
-                   "QUOTEWILDCARD(%d) LENGTH(%d)\n",
-		   m & BFV_LOWER, m & BFV_UPPER, m & BFV_LOWERFIRST,
-		   m & BFV_UPPERFIRST, m & BFV_QUOTEWILDCARD, m & BFV_LENGTH);
+                   "QUOTEWILDCARD(%d) ENCODEURL(%d) LENGTH(%d)\n",
+		   m & BFV_LOWER, m & BFV_UPPER,
+                   m & BFV_LOWERFIRST, m & BFV_UPPERFIRST,
+                   m & BFV_QUOTEWILDCARD, m & BFV_ENCODEURL, m & BFV_LENGTH);
             printf("              VARS({%d}%s)", len, data);
             i = unwrap_string(d, i, &data, &len);
             printf(" VALS({%d}%s)\n", len, data);

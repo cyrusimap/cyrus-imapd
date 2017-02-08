@@ -355,11 +355,11 @@ int do_unmark(action_list_t *a)
     return 0;
 }
 
-/* notify
+/* (e)notify
  *
  * incompatible with: none
  */
-int do_notify(notify_list_t *a, const char *id,
+int do_notify(notify_list_t *a, const char *id, const char *from,
               const char *method, const char **options,
               const char *priority, const char *message)
 {
@@ -379,6 +379,7 @@ int do_notify(notify_list_t *a, const char *id,
     b->next = a;
     a->isactive = 1;
     a->id = id;
+    a->from = from;
     a->method = method;
     a->options = options;
     a->priority = priority;

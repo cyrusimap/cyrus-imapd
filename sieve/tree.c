@@ -211,14 +211,18 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         break;
 
     case DENOTIFY:
-        init_comptags(&p->u.d.comp);
-        p->u.d.comp.collation = ASCIICASEMAP;
-
-    case NOTIFY:
         capability = "notify";
         supported = parse_script->support.notify;
-
+        init_comptags(&p->u.d.comp);
+        p->u.d.comp.collation = ASCIICASEMAP;
         p->u.n.priority = -1;
+        break;
+
+    case NOTIFY:
+    case ENOTIFY:
+        /* actual type and availability will be determined by parser */
+        supported = 1;
+        p->type = p->u.n.priority = -1;
         break;
 
     case INCLUDE:
@@ -398,11 +402,13 @@ void free_tree(commandlist_t *cl)
         case RETURN:
             break;
 
+        case ENOTIFY:
         case NOTIFY:
-            if (cl->u.n.method) free(cl->u.n.method);
-            if (cl->u.n.id) free(cl->u.n.id);
-            if (cl->u.n.options) strarray_free(cl->u.n.options);
-            if (cl->u.n.message) free(cl->u.n.message);
+            free(cl->u.n.method);
+            free(cl->u.n.id);
+            free(cl->u.n.from);
+            strarray_free(cl->u.n.options);
+            free(cl->u.n.message);
             break;
 
         case DENOTIFY:

@@ -129,7 +129,7 @@ struct Commandlist {
             int mod40; /* :lower or :upper */
             int mod30; /* :lowerfirst or :upperfirst */
             int mod20; /* :quotewildcard */
-            int mod15; /* :encodedurl */
+            int mod15; /* :encodeurl */
             int mod10; /* :length */
             char *variable;
             char *value;
@@ -162,9 +162,10 @@ struct Commandlist {
             char *handle;
             int mime;
         } v;
-        struct { /* it's a notify action */
+        struct { /* it's an (e)notify action */
             char *method;
             char *id;
+            char *from;
             strarray_t *options;
             int priority;
             char *message;

@@ -64,6 +64,7 @@ struct sieve_script {
         int vacation        : 1;
         int imapflags       : 1;
         int notify          : 1;
+        int enotify         : 1;
         int regex           : 1;
         int subaddress      : 1;
         int relational      : 1;
@@ -80,7 +81,6 @@ struct sieve_script {
         int variables       : 1;
         int editheader      : 1;
         int extlists        : 1;
-        int enotify         : 1;
     } support;
 
     void *script_context;

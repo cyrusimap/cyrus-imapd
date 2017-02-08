@@ -868,10 +868,11 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             filelen += ret;
             break;
 
+        case B_ENOTIFY:
         case B_NOTIFY:
-            /* method string, id string, options string list,
-               priotity, Message String */
-            /*method and id*/
+            /* method string, (id|from) string, options string list,
+               priority, Message String */
+            /*method and (id|from)*/
             for(i=0; i<2; i++) {
                 len = bc->data[codep++].len;
                 if(write_int(fd,len) == -1)
