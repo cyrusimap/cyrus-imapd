@@ -2246,10 +2246,12 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     }
     /* date */
     if (_wantprop(props, "date")) {
-        time_t t;
         char datestr[RFC3339_DATETIME_MAX];
+        time_t t = record->internaldate;
 
-        time_from_rfc822(body->date, &t);
+        if (is_embedded)
+            time_from_rfc822(body->date, &t);
+
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(msg, "date", json_string(datestr));
     }
