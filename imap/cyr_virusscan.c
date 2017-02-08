@@ -130,6 +130,12 @@ void *clamav_init()
     unsigned int sigs = 0;
     int r;
 
+    /* initialise ClamAV library */
+    if ((r = cl_init(0)) != CL_SUCCESS) {
+        syslog(LOG_ERR, "cl_init: %s", cl_strerror(r));
+        fatal("Failed to initialise ClamAV library", EC_SOFTWARE);
+    }
+
     struct clamav_state *st = xzmalloc(sizeof(struct clamav_state));
     if (st == NULL) {
       fatal("memory allocation failed", EC_SOFTWARE);
