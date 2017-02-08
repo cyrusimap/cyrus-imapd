@@ -4,25 +4,22 @@
 Running a basic server
 ======================
 
-Now you have :ref:`compiled and installed Cyrus <imapinstallguide>`, it's time to get real.
+Once you have :ref:`compiled and installed Cyrus <imapinstallguide>`, you can configure your environment and start Cyrus.
 
-At the end of this guide, you will be up and running with a local instance of Cyrus. It will have with basic incoming and outgoing mail flow, with caldav and carddav support.
-
-.. todo::
-    Bron says: I don't care if it's a docker image with everything else and a checkout of a point in time, but it would be great to have everyone with a "real" environment that you can run a Cyrus master build in and actually use as an email / caldav / carddav server with all the bits and pieces.
+At the end of this guide, you will be up and running with a local instance of Cyrus. It will have with basic incoming and outgoing mail flow, with CalDAV and CardDAV support.
 
 .. note::
-    These instructions are for Ubuntu, specifically Ubuntu 15.04. For other operating systems, dependency names in package managers may differ, but the main concepts remain the same.
+    These instructions are for Ubuntu 15.04. For other operating systems, dependency names in package managers may differ, but the main concepts remain the same.
 
-    Please note that **this guide is meant to get you a working environment quickly, not to allow you to customize everything from the get go**.
+    Please note that **this guide is meant to get you a working environment quickly, not to allow you to customize everything**.
 
-    This guide will set up Cyrus to work with the Sendmail SMTP server - and there will be no instructions for using Postfix. Once you have a working environment, you are encouraged to experiment further and set up Postfix instead of Sendmail, use different kinds of authentication schemes, etc.
+    This guide will set up Cyrus to work with the Sendmail SMTP server - and there will be no instructions for using Postfix. Once you have a working environment, you are welcome to experiment further and set up a different MTA or use different kinds of authentication schemes, etc.
 
 
 1. Update your system
 ----------------------
 
-First things first, let's update our existing system to ensure everything is current. This may take some time; you can check `Hacker News`_ in the meantime :-)
+First update the system to ensure everything is current. This may take some time; you can check `Hacker News`_ in the meantime.
 
 ::
 
@@ -34,7 +31,7 @@ First things first, let's update our existing system to ensure everything is cur
 2. Install Cyrus 3rd party dependencies
 ---------------------------------------
 
-Now, let's install libraries and tools used by Cyrus IMAP. This includes a C compiler, some Perl libraries (used for Cyrus's command line utilities such as cyradm) or C clients for various databases (ie Mysql, Postgresql, etc). Just like the previous command, this one may take a few minutes to complete. But it's worth it!
+Install libraries and tools used by Cyrus IMAP. This includes a C compiler, some Perl libraries (used for Cyrus's command line utilities such as cyradm) or C clients for various databases (ie Mysql, Postgresql, etc). Just like the previous command, this one may take a few minutes to complete.
 
 .. code-block:: bash
 
@@ -64,7 +61,7 @@ Now let's create a **special user account just for the Cyrus server** to sandbox
 
 Now, let's set up **SASL**. This will allow you to connect to your local IMAP server and login, just like any IMAP user would before checking for new emails.
 
-Create a ``saslauth`` group and add the ``cyrus`` user to the group, so Cyrus can access SASL.
+Create a ``saslauth`` group and add the ``cyrus`` user to the group, so Cyrus can access SASL. (on Debian, this group is called 'sasl': adjust the following commands to suit.)
 
 ::
 
@@ -81,7 +78,7 @@ Start the SASL auth daemon:
 
     /etc/init.d/saslauthd start
 
-Great! Now, we'll create the IMAP user inside SASL. This is the user you'll use to login to the IMAP server later on.
+Now, we'll create the IMAP user inside SASL. This is the user you'll use to login to the IMAP server later on.
 
 ::
 
@@ -94,9 +91,6 @@ You can replace ``secret`` with a more suitable password you want and ``imapuser
     testsaslauthd -u imapuser -p secret
 
 You should get an ``0: OK "Success."`` message.
-
-.. note::
-    For some reason I don't understand yet, setting up a user like this doesn't seem to be persistent on my machine. This means I have to create the user with saslpasswd2 every time I restart my PC. This may or may not apply to you too.
 
 
 5. Enabling mail delivery with LMTP
@@ -125,9 +119,9 @@ And right below ``MAILER_DEFINITIONS``, add this:
 
     MAILER(`cyrusv2')dnl
 
-This enables the **cyrusv2** mailer for local mail delivery. In case you're wondering, cyrusv2 stands for Cyrus v2.x, which means this is meant to work with versions 2.x of Cyrus IMAP. It may or may not work with Cyrus 3.x too.
+This enables the **cyrusv2** mailer for local mail delivery. This is a sendmail property that tells sendmail it's talking to Cyrus. (Cyrus 3.x works with this property, despite the naming confusion.)
 
-Next, we run a script that takes the ``/etc/mail/sendmail.mc`` file and and prepares it for use by Sendmail. This may take some time. In the meantime, you are encouraged to read the `IMAP spec`_ one more time, because, you know, it's a fun read :-)
+Next, we run a script that takes the ``/etc/mail/sendmail.mc`` file and and prepares it for use by Sendmail. This may take some time.
 
 ::
 
@@ -144,11 +138,6 @@ One last thing we need to do for LMTP to work with Sendmail is to create a folde
     sudo chown cyrus:mail /var/run/cyrus/socket
     sudo chmod 750 /var/run/cyrus/socket
 
-.. note::
-    For some reason, the /var/run/cyrus/socket folder disappears when I reboot my PC. I need to recreate it when I reboot. You may or may not have to do that too.
-
-.. _IMAP spec: http://tools.ietf.org/html/rfc3501
-
 6. Protocol ports
 -----------------
 Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/services``. Make sure that these lines are present and add them if they are missing:
@@ -160,13 +149,11 @@ Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/
     imap      143/tcp
     imsp      406/tcp
     nntps     563/tcp
-    acap      674/tcp
     imaps     993/tcp
     pop3s     995/tcp
     kpop      1109/tcp
     lmtp      2003/tcp
     sieve     4190/tcp
-    fud       4201/udp
 
 7. Configuring Cyrus
 --------------------
@@ -247,13 +234,11 @@ Before you launch Cyrus for the first time, create the Cyrus directory structure
 
     sudo ./master/master -d
 
-Check ``/var/log/syslog`` for errors so you can quickly understand potential problems.
+Check ``/var/log/syslog`` for errors so you can quickly understand any problems.
 
 When you're ready, you can create init scripts to start and stop your daemons. This
 https://www.linux.com/learn/managing-linux-daemons-init-scripts is old, but has a good
 explanation of the concepts required.
-
-Time to cheer!
 
 Optional: Setting up SSL certificates
 -------------------------------------
@@ -302,31 +287,31 @@ Make sure to replace `imapuser` with whatever user you set up with saslpasswd2 b
 Sending a test email
 --------------------
 
-We will now send a test email to our local development environment to see if everything works as expected:
+We will send a test email to our local development environment to check if:
 
-* Sendmail should accept the incoming email,
-* LMTP should transmit the email to Cyrus IMAP,
-* You should be able to see the email stored on your filesystem.
+* Sendmail accepts the incoming email,
+* LMTP transmits the email to Cyrus IMAP,
+* You can see the email stored on your filesystem.
 
-But first, let's create a mailbox that we will send the test email to. We'll call this test mailbox `example@localhost`.
+But first, create a mailbox to send the test email to. We'll call this test mailbox `example@localhost`.
 
 ::
 
-    echo 'createmailbox user.example@localhost' | cyradm -u imapuser -w secret localhost
+    echo 'createmailbox user/example@localhost' | cyradm -u imapuser -w secret localhost
 
-Notice how we seem to be creating a mailbox named `user.example@localhost`. In fact, Cyrus understands this to be `example@localhost`, so we're fine. As usual, adjust the password via the `-w` option to the password you set above.
+We seem to be creating a mailbox named `user/example@localhost`. In fact, Cyrus understands this to be a user called `example@localhost`. As usual, adjust the password via the `-w` option to the password you set above.
 
-If you have explicitly enabled `unixhierarchysep` in `/etc/imapd.conf`, you should replace `user.example@localhost` with `user/example@localhost`. You can read more about unixhierarchysep in :cyrusman:`imapd.conf(5)`.
+If you have explicitly disabled `unixhierarchysep` in `/etc/imapd.conf` (it is enabled by default in 3.0+), you should replace `user/example@localhost` with `user.example@localhost`. You can read more about unixhierarchysep in :cyrusman:`imapd.conf(5)`.
 
-Also, note that the command above might produce some weird looking output, such as:
+The command will produce the following output:
 
 ::
 
     localhost> localhost>
 
-This happens because cyradm is normally used interactively, with a prompt. We aren't using a prompt, so this output is fine and expected.
+This happens because cyradm is normally used interactively, with a prompt. We aren't using a prompt, so this output is expected.
 
-Now that the mailbox exists, we'll send it an email. We won't be using Fastmail or Yahoo Mail or Google Mail. No, no. We will use the good old telnet with raw SMTP commands. Let's do this!
+Now that the mailbox exists, we can send an email using telnet with raw SMTP commands.
 
 First, connect to the Sendmail SMTP server:
 
@@ -362,17 +347,34 @@ If you see a message like **250 2.0.0 ... Message accepted for delivery**, you d
 
 If not, you may want to check `syslog` to see if any error messages show up and go through the previous steps again.
 
-You should also be able to hook up a regular mail client to your shiny new mailserver and access the mailbox for example@localhost via IMAP and see the message.
+To let the example user log in via IMAP on a normal mail client, you need to add them to SASL (as before)::
 
-Checking carddav
-----------------
+    echo 'mypassword' | saslpasswd2 -p -c example
 
-To be written.
+Check your two users are there::
 
-Checking caldav
----------------
+    sasldblistusers2
 
-To be written.
+You can now configure a mail client to access your new mailserver and connect to the mailbox for example@localhost via IMAP and see the message.
+
+Checking CardDAV and CardDAV
+----------------------------
+
+Modify ``/etc/cyrus.conf`` and add this line to the services::
+
+    http        cmd="httpd" listen="http" prefork=0
+
+Modify ``/etc/imapd.conf`` and add this line::
+
+    httpmodules: caldav carddav
+
+
+Running the following commands should return you sample entry addressbook and calendar entry for the sample example user::
+
+    curl -u example@[hostname]:mypassword -i -X PROPFIND -H 'Depth: 1' http://localhost:8080/dav/addressbooks/user/example@[hostname]/Default
+
+    curl -u example@[hostname]:mypassword -i -X PROPFIND -H 'Depth: 1' http://localhost:8080/dav/principals/user/example@[hostname]/
+
 
 ----
 
@@ -411,6 +413,22 @@ Make sure that you have started Sendmail, which you can do like this:
 ::
 
     /etc/init.d/sendmail start
+
+My IMAP server (master) can't authenticate users to SASL
+########################################################
+
+Check that the groups setting on your cyrus user is correct.
+
+Ubuntu uses `saslauth` group, Debian uses `sasl` group.
+
+Check the output of `groups cyrus` to see what groups it currently belongs to.
+
+Incorrect groups settings results in saslauthd reporting permission failures::
+
+    SASL cannot connect to saslauthd server: Permission denied
+    SASL unable to open Berkeley db /etc/sasldb2: Permission denied
+
+Master will need to be restarted if you needed to change the groups.
 
 Something is not working but I can't figure out why
 ###################################################

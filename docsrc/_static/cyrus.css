@@ -133,16 +133,16 @@ ol.arabic li {
 	line-height: 110%
 }
 
-p.caption {
+nav.wy-nav-side p.caption {
     font-style: italic;
 }
 
-.caption-text {
+nav.wy-nav-side p.caption-text {
     font-size: 60%
 }
 
 nav.wy-nav-side p.caption {
-    font-size: 150%
+    font-size: 100%
 }
 
 /* For bold-italic and italic inside other formatting styles */
@@ -175,7 +175,7 @@ nav.wy-nav-side p.caption {
 
 .pageheader li {
     float: left;
-    margin: 0 0 0 10px; 
+    margin: 0 0 0 10px;
 }
 
 .pageheader li a {
@@ -221,4 +221,12 @@ nav.wy-nav-side p.caption {
     width: 100%;
     height: 100%;
     background-color: #2d9dcb;
+}
+
+.wy-table-responsive table td, .wy-table-responsive table th {
+    white-space: normal;
+}
+
+h4 {
+    font-style: italic;
 }

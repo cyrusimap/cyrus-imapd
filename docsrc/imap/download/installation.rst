@@ -7,10 +7,14 @@ IMAP Installation Guide
 Cyrus IMAP packages are shipped with every major distribution, including
 but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
 Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS. They are not
-guaranteed to be up to date!
+guaranteed to be up to date.
 
 Upgrading
 ==========
+
+Instructions are provided for upgrading using Cyrus tarball packages or from git.
+If you'd like to upgrade using platform packages, check with your package provider
+for upgrade instructions.
 
 .. toctree::
     upgrade

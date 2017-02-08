@@ -9,6 +9,9 @@ Upgrading to 3.0
     This guide assumes that you are familiar and comfortable with administration of a
     Cyrus installation, and system administration in general.
 
+    It assumes you are intalling from source or tarball. If you want to install from package,
+    use the upgrade instructions from the package provider.
+
 ..  contents:: Upgrading: an overview
     :local:
 
@@ -20,7 +23,7 @@ Things to consider **before** you begin:
 Installation from tarball
 #########################
 
-It takes some time before platform packages are up to date. It is likely you will need to install from our packaged tarball, at least initially. We provide a full list of libraries that Debian requires, but we aren't able to test all platforms: you may find you need to install additional or different libraries to support v3.0.
+You will need to install from our packaged tarball. We provide a full list of libraries that Debian requires, but we aren't able to test all platforms: you may find you need to install additional or different libraries to support v3.0.
 
 How are you planning on upgrading?
 ##################################
@@ -32,8 +35,8 @@ installation to replicate data to a new 3.0 installation and failover to the new
 ready. The replication protocol has been kept backwards compatible.
 
 If you are upgrading in place, you will need to shut down Cyrus entirely while you install the new package.  If your
-old installation was using berkeley DB format databases, you will need to convert or upgrade the databases **before**
-you upgrade.  Cyrus v3.0 does not support berkeley at all.
+old installation was using Berkeley DB format databases, you will need to convert or upgrade the databases **before**
+you upgrade.  Cyrus v3.0 does not support Berkeley DB at all.
 
 We strongly recommend that you read this entire document before upgrading.
 
@@ -42,7 +45,7 @@ We strongly recommend that you read this entire document before upgrading.
 
 Download the release :ref:`3.0 package tarball<install-diy>`.
 
-Fetch the libraries for your platform. The list for Debian is::
+Fetch the libraries for your platform. The full list (including all optional packages) for Debian is::
 
     sudo apt-get install -y autoconf automake autotools-dev bash-completion bison build-essential comerr-dev \
     debhelper flex g++ git gperf groff heimdal-dev libbsd-resource-perl libclone-perl libconfig-inifiles-perl \
