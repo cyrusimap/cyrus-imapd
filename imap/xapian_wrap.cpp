@@ -63,16 +63,6 @@ static Xapian::Stopper *get_stopper()
     return stopper;
 }
 
-static int snippet_length;
-
-/* ====================================================================== */
-
-void xapian_init(void)
-{
-    /* do nothing */
-    snippet_length =  config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
-}
-
 /* ====================================================================== */
 
 int xapian_compact_dbs(const char *dest, const char **sources)
@@ -913,7 +903,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         enquire.set_query(xapian_snipgen_build_query(snipgen));
 
         snippet = enquire.get_mset(0, 0).snippet(text,
-                snippet_length,
+                config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH),
                 *snipgen->stemmer,
                 Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH|
                 Xapian::MSet::SNIPPET_EXHAUSTIVE,

@@ -655,7 +655,18 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    Note that the partition specified by this option must also be
    specified as \fIpartition-name\fR, where you substitute 'name'
-   for the alphanumeric string you set \fIdefaultpartition\fR to. */
+   for the alphanumeric string you set \fIdefaultpartition\fR to.
+
+   This option MUST be specified for xapian search. */
+
+{ "defaultsearchtier", "", STRING }
+/* Name of the default tier that messages will be indexed to. Search
+   indexes can be organized in tiers to allow index storage in different
+   directories and physical media. See the man page of squatter for
+   details. The default search tier also requires the definition
+   of an according \fIsearchtierpartition-name\fR entry.
+.PP
+   This option MUST be specified for xapian search. */
 
 { "defaultserver", NULL, STRING }
 /* The backend server name used by default for new mailboxes.  If not
@@ -1831,6 +1842,26 @@ If all partitions are over that limit, this feature is not used anymore.
    attempts to always fill search_snippet_length bytes in the
    generated snippet. */
 
+{ "search_stopword_path", NULL, STRING }
+/* The absolute base path to the search stopword lists. If not specified,
+   no stopwords will be taken into account during search indexing. Currently,
+   the only supported and default stop word file is english.list. */
+
+# Commented out - there's no such thing as "searchtierpartition-name",
+# but we need this for the man page
+# { "searchtierpartition-name", NULL, STRING }
+/* The pathname where to store the xapian search indexes of \fIsearchtier\fR
+   for mailboxes of partition \fIname\fR. This must be configured for the
+   \fIdefaultsearchtier\fR and any additional search tier (see squatter for
+   details).
+.PP
+   For example: if \fIdefaultpartition\fR is defined as part1 and
+   \fIdefaultsearchtier\fR as tier1 then the configuration must contain
+   an entry \fItier1partitionname-part1\fR that defines the path where to
+   store this tier1's search index for the part1 partition.
+.PP
+   This option MUST be specified for xapian search. */
+
 { "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
 /* The cyrusdb backend to use for the seen state. */
 
@@ -2336,9 +2367,6 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
-{ "defaultsearchtier", "", STRING }
-/* Name of the default tier that messages will be indexed to */
-
 { "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
 /* The cyrusdb backend to use for zoneinfo. */
 
@@ -2399,11 +2427,6 @@ product version in the capabilities */
 
 { "fastmailsharing", 0, SWITCH }
 /* If enabled, use FastMail style sharing (oldschool full server paths) */
-
-{ "search_stopword_path", NULL, STRING }
-/* The absolute base path to the search stopword lists. If not specified,
-   no stopwords will be taken into account during search indexing. Currently,
-   the only supported and default stop word file is english.list. */
 
 /*
 .SH SEE ALSO

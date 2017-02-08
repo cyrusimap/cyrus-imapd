@@ -97,6 +97,30 @@ static int xapian_basedir(const char *tier, const char *mboxname, const char *pa
                           const char *root, char **basedir);
 
 /* ====================================================================== */
+static int check_config(void)
+{
+    int r = 0;
+    const char *s;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        syslog(LOG_ERR, "ERROR: conversations required but not enabled");
+        return IMAP_NOTFOUND;
+    }
+    s = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
+    if (!s || !strlen(s)) {
+        syslog(LOG_ERR, "ERROR: no default search tier configured");
+        r = IMAP_PARTITION_UNKNOWN;
+    }
+    s = config_getstring(IMAPOPT_DEFAULTPARTITION);
+    if (!s || !strlen(s)) {
+        syslog(LOG_ERR, "ERROR: no default partition configured");
+        r = IMAP_PARTITION_UNKNOWN;
+    }
+
+    return r;
+}
+
+/* ====================================================================== */
 
 /* the "activefile" file lists the tiers and generations of all the
  * currently active search databases.  The format is space separated
@@ -960,10 +984,9 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     if (bb->db == NULL)
         return IMAP_NOTFOUND;       /* there's no index for this user */
 
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
-        syslog(LOG_ERR, "Xapian search requires enabled conversations");
-        return IMAP_NOTFOUND;
-    }
+    /* Validate config */
+    r = check_config();
+    if (r) return r;
 
     optimise_nodes(NULL, bb->root);
     qq = opnode_to_query(bb->db, bb->root);
@@ -1060,7 +1083,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     strarray_t *active = NULL;
     int r;
 
-    xapian_init();
+    r = check_config();
+    if (r) goto out;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -1178,6 +1202,9 @@ static const char *xapian_rootdir(const char *tier, const char *partition)
         partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     confkey = strconcat(tier, "searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
+    if (!root) {
+        syslog(LOG_ERR, "undefined search partition: %s", confkey);
+    }
     free(confkey);
     return root;
 }
@@ -1487,14 +1514,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      */
     active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
     if (!active || !active->count) {
-        syslog(LOG_ERR, "IOERROR: can't determine xapianactive files");
         goto out;
     }
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it */
     tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2);
     if (!tr->activedirs || !tr->activedirs->count) {
-        syslog(LOG_ERR, "IOERROR: can't determine xapianactive directories");
         goto out;
     }
 
@@ -1602,7 +1627,7 @@ static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
 
-    xapian_init();
+    if (check_config()) return NULL;
 
     tr = xzmalloc(sizeof(xapian_update_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_update;
@@ -1763,7 +1788,7 @@ static search_text_receiver_t *begin_snippets(void *internalised,
 {
     xapian_snippet_receiver_t *tr;
 
-    xapian_init();
+    if (check_config()) return NULL;
 
     tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_snippets;
@@ -2188,7 +2213,8 @@ static int compact_dbs(const char *userid, const char *tempdir,
         goto out;
     }
 
-    xapian_init();
+    r = check_config();
+    if (r) goto out;
 
     /* take an exclusive lock on the activefile file */
     active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);

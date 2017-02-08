@@ -50,8 +50,6 @@ typedef struct xapian_db xapian_db_t;
 typedef struct xapian_query xapian_query_t;
 typedef struct xapian_snipgen xapian_snipgen_t;
 
-extern void xapian_init(void);
-
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
 
