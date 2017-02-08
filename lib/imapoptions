@@ -655,9 +655,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    Note that the partition specified by this option must also be
    specified as \fIpartition-name\fR, where you substitute 'name'
-   for the alphanumeric string you set \fIdefaultpartition\fR to.
-
-   This option MUST be specified for xapian search. */
+   for the alphanumeric string you set \fIdefaultpartition\fR to. */
 
 { "defaultsearchtier", "", STRING }
 /* Name of the default tier that messages will be indexed to. Search

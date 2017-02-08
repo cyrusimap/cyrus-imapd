@@ -111,11 +111,6 @@ static int check_config(void)
         syslog(LOG_ERR, "ERROR: no default search tier configured");
         r = IMAP_PARTITION_UNKNOWN;
     }
-    s = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    if (!s || !strlen(s)) {
-        syslog(LOG_ERR, "ERROR: no default partition configured");
-        r = IMAP_PARTITION_UNKNOWN;
-    }
 
     return r;
 }
@@ -1198,8 +1193,14 @@ static const char *xapian_rootdir(const char *tier, const char *partition)
 {
     char *confkey;
     const char *root;
-    if (!partition)
+
+    if (!partition) {
         partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
+        if (!partition) {
+            syslog(LOG_ERR, "no default partition configured");
+            return NULL;
+        }
+    }
     confkey = strconcat(tier, "searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
     if (!root) {
