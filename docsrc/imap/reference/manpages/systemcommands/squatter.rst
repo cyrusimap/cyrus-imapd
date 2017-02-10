@@ -13,10 +13,18 @@ Synopsis
 
 .. parsed-literal::
 
-    **squatter** [ **-C** *config-file* ] [ **-r** ] [ **-s** ] [ **-i** ] [ **-a** ] [ **-v** ] *mailbox*...
-    **squatter** [ **-C** *config-file* ] [ **-r** ] [ **-s** ] [ **-i** ] [ **-a** ] [ **-v** ]  **-u** *user*...
-    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-s** ] [ **-d** ] [ **-n** *channel* ] **-R**
-    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-s** ] **-f** *synclogfile*
+    general:
+    **squatter** [ **-C** *config-file* ] [**mode**] [**options**] [**source**]
+
+    i.e.:
+    **squatter** [ **-C** *config-file* ] [**-v**]
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  *mailbox*...
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]   **-u** *user*...
+    **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
+    **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
+    **squatter** [ **-C** *config-file* ] **-I** *file* 
+    **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ]
+    
 
 
 Description
@@ -40,22 +48,42 @@ appended to the mailbox after **squatter** is run, will NOT be included
 in the index.  To include new messages in the index, **squatter** must
 be run again.
 
-In the first synopsis, **squatter** recursively indexes the specified
-mailbox(es), incrementally updating indexes.
+In the first synopsis, **squatter** indexes all mailboxes.
 
-In the second synopsis, **squatter** recurses from the specified user(s),
-rather than from specified mailbox(es).
+In the second synopsis, **squatter** indexes the specified mailbox(es).
 
-In the third synopsis, **squatter** runs in rolling mode.  In this mode
-**squatter** backgrounds itself and runs as a daemon, listening to a
-sync log channel (chosen using **-n** option, and set up using the
-*sync_log_channels* setting in :cyrusman:`imapd.conf(5)`).  Very soon
-after messages are delivered or uploaded to mailboxes **squatter** will
-incrementally index the affected mailbox.
+In the third synopsis, **squatter** indexes the specified user(s)
+mailbox(es).
 
-In the fourth synopsis, **squatter** reads a single sync log file and
+For any of those three source modes (default=all, mailbox, user) one
+may optionally specify **-r** to recurse from the specified start, or
+**-a** to limit action only to mailboxes which have the shared
+*/vendor/cmu/cyrus-imapd/squat* annotation set to "true".
+
+In the fourth synopsis, **squatter** runs in rolling mode.  In this mode
+**squatter** backgrounds itself and runs as a daemon (unless **-d** is
+set), listening to a sync log channel (chosen using **-n** option, and
+set up using the *sync_log_channels* setting in
+:cyrusman:`imapd.conf(5)`).  Very soon after messages are delivered or
+uploaded to mailboxes **squatter** will incrementally index the
+affected mailbox.
+
+In the fifth synopsis, **squatter** reads a single sync log file and
 performs incremental indexing on the mailboxes listed therein.  This is
 sometimes useful for cleaning up after problems with rolling mode.
+
+In the sixth synopsis, **squatter** reads *file* containing *mailbox*
+*uid* tuples and performs indexing on the specified messages.
+
+In the seventh synopsis, **squatter** will compact indices from
+*srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
+expunged records (**-F**) in the process.  The optional **-T** flag may
+be used to specify a directory to use for temporary files.  The **-o**
+flag may be used to direct that a single index be copied, rather than
+compressed, from *srctier* to *desttier*.
+
+For all modes, the **-S** option may be specified, causing squatter to
+pause *seconds* seconds after each mailbox, to smooth loads.
 
 .. Note::
     Incremental updates are very inefficient with the SQUAT search
@@ -82,85 +110,6 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -R
-
-    Run in rolling mode; **squatter** runs as a daemon listening to a
-    sync log channel and continuously incrementally indexing mailboxes.
-    See also **-d** and **-n**.
-    |v3-new-feature|
-
-.. option:: -S seconds
-
-    After processing each mailbox, sleep for "seconds" before continuing.
-    Can be used to provide some load balancing.  Accepts fractional amounts.
-    |v3-new-feature|
-
-.. option:: -T directory
-
-    When indexing, work on a temporary copy of the search engine databases
-    in *directory*.  That directory would typically be on some very
-    fast filesystem, like an SSD or tmpfs.  This option may not work with all
-    search engines, but it's only effect is to speed up initial indexing.
-    |v3-new-feature|
-
-.. option:: -u
-
-    Extra options refer to usernames (e.g. foo@bar.com) rather than
-    mailbox names.
-    |v3-new-feature|
-
-.. option:: -d
-
-    In rolling mode, don't background and do emit log messages on
-    standard error.  Useful for debugging.
-    |v3-new-feature|
-
-.. option:: -f synclogfile
-
-    Read the *synclogfile* and incrementally index all the mailboxes
-    listed therein, then exit.
-    |v3-new-feature|
-
-.. option:: -n channel
-
-    In rolling mode, specify the name of the sync log *channel* that
-    **squatter** will listen to.  The default is "squatter".
-    |v3-new-feature|
-
-.. option:: -o
-
-    In compact mode, if only one source database is selected, just copy
-    it to the destination rather than compacting.
-    |v3-new-feature|
-
-.. option:: -F
-
-    In compact mode, filter the resulting database to only include
-    messages which are not expunged in mailboxes with existing
-    name/uidvalidity.
-    |v3-new-feature|
-
-.. option:: -A
-
-    In compact mode, audit the resulting database to ensure that every
-    non-expunged message in all the user's mailboxes which is specified
-    by cyrus.indexed.db is present in the xapian database.
-    |v3-new-feature|
-
-.. option:: -r
-
-    Recursively create indexes for all sub-mailboxes of the mailboxes or
-    mailbox prefixes given as arguments.
-
-.. option:: -s
-
-    Skip mailboxes whose index file is older than their current squat
-    file (within a small time delta).
-
-.. option:: -i
-
-    Incremental updates where indexes already exist.
-
 .. option:: -a
 
     Only create indexes for mailboxes which have the shared
@@ -175,9 +124,105 @@ Options
     inherit one), then the mailbox is not indexed. In other words, the
     implicit value of */vendor/cmu/cyrus-imapd/squat* is "false".
 
+.. option:: -d
+
+    In rolling mode, don't background and do emit log messages on
+    standard error.  Useful for debugging.
+    |v3-new-feature|
+
+.. option:: -F
+
+    In compact mode, filter the resulting database to only include
+    messages which are not expunged in mailboxes with existing
+    name/uidvalidity.
+    |v3-new-feature|
+
+.. option:: -f synclogfile
+
+    Read the *synclogfile* and incrementally index all the mailboxes
+    listed therein, then exit.
+    |v3-new-feature|
+
+.. option:: -h
+
+    Display this usage information.
+    
+.. option:: -I file
+
+    Read from *file* and index individual messages described by
+    mailbox/uid tuples contained therein.
+
+.. option:: -i
+
+    Incremental updates where indexes already exist.
+
+.. option:: -N name
+
+    Only index mailboxes beginning with *name* while iterating through
+    the mailbox list derived from other options.
+
+.. option:: -n channel
+
+    In rolling mode, specify the name of the sync log *channel* that
+    **squatter** will listen to.  The default is "squatter".  This
+    channel **must** be defined in :cyrusman:`imapd.conf(5)` before
+    being used.
+    |v3-new-feature|
+
+.. option:: -o
+
+    In compact mode, if only one source database is selected, just copy
+    it to the destination rather than compacting.
+    |v3-new-feature|
+
+.. option:: -R
+
+    Run in rolling mode; **squatter** runs as a daemon listening to a
+    sync log channel and continuously incrementally indexing mailboxes.
+    See also **-d** and **-n**.
+    |v3-new-feature|
+
+.. option:: -r
+
+    Recursively create indexes for all sub-mailboxes of the user,
+    mailboxes or mailbox prefixes given as arguments.
+
+.. option:: -S seconds
+
+    After processing each mailbox, sleep for "seconds" before continuing.
+    Can be used to provide some load balancing.  Accepts fractional amounts.
+    |v3-new-feature|
+
+.. option:: -T directory
+
+    When indexing, work on a temporary copy of the search engine
+    databases in *directory*.  That directory would typically be on
+    some very fast filesystem, like an SSD or tmpfs.  This option may
+    not work with all search engines, but it's only effect is to speed
+    up initial indexing.
+    |v3-new-feature|
+
+.. option:: -t srctier...
+
+    In compact mode, the source tier(s) for the compacted indices.
+    At least one source tier must be specified in compact mode.
+    |v3-new-feature|
+
+.. option:: -u
+
+    Extra options refer to usernames (e.g. foo@bar.com) rather than
+    mailbox names.
+    |v3-new-feature|
+
 .. option:: -v
 
     Increase the verbosity of progress/status messages.
+
+.. option:: -z desttier
+
+    In compact mode, the destination tier for the compacted indices.
+    This must be specified in compact mode.
+    |v3-new-feature|
 
 Examples
 ========
@@ -210,7 +255,7 @@ The following command-line settings were added in version 3.0:
 
     .. parsed-literal::
 
-        **-S** *<seconds>*, **-T** *<directory>*, **-f** *<synclogfile>*, **-n** *<channel>*
+        **-S** *<seconds>*, **-T** *<directory>*, **-f** *<synclogfile>*, **-n** *<channel>*, **-t** *srctier*..., **-z** *desttier*
 
 Files
 =====
