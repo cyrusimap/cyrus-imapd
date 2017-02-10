@@ -111,6 +111,7 @@ struct conv_guidrec {
     const char      *mboxname;
     uint32_t        uid;
     const char      *part;
+    conversation_id_t cid;
 };
 
 struct conv_sender {
@@ -188,6 +189,8 @@ extern int conversations_guid_foreach(struct conversations_state *state,
                                       const char *guidrep,
                                       int(*cb)(const conv_guidrec_t*,void*),
                                       void *rock);
+extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
+                                                       const char *guidrep);
 
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,

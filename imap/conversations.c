@@ -1592,7 +1592,7 @@ struct guid_foreach_rock {
     void *cbrock;
 };
 
-static int _guid_one(const char *s, struct guid_foreach_rock *frock)
+static int _guid_one(const char *s, struct guid_foreach_rock *frock, conversation_id_t cid)
 {
     const char *p, *err;
     conv_guidrec_t rec;
@@ -1600,6 +1600,9 @@ static int _guid_one(const char *s, struct guid_foreach_rock *frock)
 
     p = strchr(s, ':');
     if (!p) return IMAP_INTERNAL;
+
+    /* cid */
+    rec.cid = cid;
 
     /* mboxname */
     int r = parseuint32(s, &err, &res);
@@ -1646,7 +1649,7 @@ static int _guid_cb(void *rock,
         strarray_t *recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
         int i;
         for (i = 0; i < recs->count; i++) {
-            r = _guid_one(strarray_nth(recs, i), frock);
+            r = _guid_one(strarray_nth(recs, i), frock, /*cid*/0);
             if (r) break;
         }
         strarray_free(recs);
@@ -1657,8 +1660,15 @@ static int _guid_cb(void *rock,
     if (key[41] != ':')
         return IMAP_INTERNAL;
 
+    conversation_id_t cid = 0;
+    if (datalen >= 16) {
+        const char *p = data;
+        r = parsehex(p, &p, 16, &cid);
+        if (r) return r;
+    }
+
     char *freeme = xstrndup(key+42, keylen-42);
-    r = _guid_one(freeme, frock);
+    r = _guid_one(freeme, frock, cid);
     free(freeme);
 
     return r;
@@ -1680,6 +1690,25 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
 
     return r;
 }
+
+static int _getcid(const conv_guidrec_t *rec, void *rock)
+{
+    conversation_id_t *cidp = (conversation_id_t *)rock;
+    if (!rec->part) {
+        *cidp = rec->cid;
+        return CYRUSDB_DONE;
+    }
+    return 0;
+}
+
+EXPORTED conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
+                                                         const char *guidrep)
+{
+    conversation_id_t cid = 0;
+    conversations_guid_foreach(state, guidrep, _getcid, &cid);
+    return cid;
+}
+
 
 static int conversations_guid_setitem(struct conversations_state *state, const char *guidrep,
                                       const char *item, int add)
