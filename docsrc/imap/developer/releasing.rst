@@ -113,6 +113,17 @@ meantime, you will end up with a mess.
 11. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
     remote is named "ci")
 
+Bundling the cyruslibs Xapian fork
+==================================
+
+1. Change to the path of the cyruslibs repository.
+2. If you haven't yet, run ``./build.sh`` to build the libraries.
+3. Change to the xapian/xapian-core directory.
+4. Optionally run ``make check``. This can take a long time. You might also
+   want to run the Cassandane SearchFuzzy tests to validate interop with Cyrus.
+5. Build the distribution source tarball: ``make dist``
+6. Sign the distribution tarball: ``gpg --sign -b xapian-core-<version>.tar.xz``
+7. FIXME -- probably we should rename the tarball and tag the git repo?
 
 Releasing
 =========
