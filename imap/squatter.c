@@ -111,20 +111,42 @@ static void shut_down(int code) __attribute__((noreturn));
 static int usage(const char *name)
 {
     fprintf(stderr,
-            "usage: %s [-C <alt_config>] [-v] [-s] [-a] [mailbox...]\n",
-            name);
-    fprintf(stderr,
-            "usage: %s [-C <alt_config>] [-v] [-s] [-a] -u user...\n",
-            name);
-    fprintf(stderr,
-            "       %s [-C <alt_config>] [-v] [-s] [-a] -r mailbox [...]\n",
-            name);
-    fprintf(stderr,
-            "       %s [-C <alt_config>] [-v] [-s] [-d] [-n channel] -R\n",
-            name);
-    fprintf(stderr,
-            "       %s [-C <alt_config>] [-v] [-s] -f synclogfile\n",
-            name);
+            "usage: %s [mode] [options] [source]\n"
+            "\n"
+            "Mode flags: \n"
+            "  none        index [source] (default)\n"
+            "  -a          index [source] using /squat annotations\n"
+            "  -r          index [source] recursively\n"
+            "  -f file     index from synclog file\n"
+            "  -I file     index mbox/uids in file\n"
+            "  -R          start rolling indexer\n"
+            "  -z tier     compact to tier\n"
+            "\n"
+            "Index mode options:\n"
+            "  -i          index incrementally\n"
+            "  -N name     index mailbox names starting with name\n"
+            "  -S seconds  sleep seconds between indexing mailboxes\n"
+            "\n"
+            "Index sources:\n"
+            "  none        all mailboxes (default)\n"
+            "  mailbox...  index mailboxes\n"
+            "  -u user...  index mailboxes of users\n"
+            "\n"
+            "Rolling indexer options:\n"
+            "  -n channel  listen to channel\n"
+            "  -d          don't background process\n"
+            "\n"
+            "Compact mode options:\n"
+            "  -t tier...  compact to tiers\n"
+            "  -F          filter during compaction\n"
+            "  -T dir      use temporary directory dir during compaction\n"
+            "  -X          reindex during compaction\n"
+            "  -o          copy db rather compacting\n"
+            "\n"
+            "General options:\n"
+            "  -v          be verbose\n"
+            "  -h          show usage\n",
+        name);
 
     exit(EC_USAGE);
 }
@@ -803,7 +825,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
@@ -921,6 +943,9 @@ int main(int argc, char **argv)
         case 'u':
             user_mode = 1;
             break;
+
+        case 'h':
+            usage("squatter");
 
         default:
             usage("squatter");
