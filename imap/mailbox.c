@@ -3447,6 +3447,7 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
 	/* send the MessageExpunge or MessageExpire event notification */
 	mboxevent_extract_mailbox(mboxevent, mailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox->name, 0);
 	mboxevent_set_numunseen(mboxevent, mailbox, -1);
 	mboxevent_notify(mboxevent);
     }
