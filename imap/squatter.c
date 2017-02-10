@@ -137,7 +137,7 @@ static int usage(const char *name)
             "  -d          don't background process\n"
             "\n"
             "Compact mode options:\n"
-            "  -t tier...  compact to tiers\n"
+            "  -t tier...  compact from tiers\n"
             "  -F          filter during compaction\n"
             "  -T dir      use temporary directory dir during compaction\n"
             "  -X          reindex during compaction\n"
