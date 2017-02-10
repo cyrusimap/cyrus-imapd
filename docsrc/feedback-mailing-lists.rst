@@ -21,10 +21,6 @@ Mailing Lists
     This is a mailing list for the use of Cyrus developers and package
     maintainers, for all the Cyrus software.
 
-* cyrus-bugzilla@lists.andrew.cmu.edu (no archive)
-
-    This is the bugzilla event list.
-
 Archives
 --------
 

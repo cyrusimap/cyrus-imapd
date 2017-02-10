@@ -1,7 +1,9 @@
 Reporting Bugs
 ==============
 
-Bug reports can be logged in our `Bugzilla issue tracker <http://bugzilla.cyrusimap.org/>`__. Please bear in mind registration is required.
+Bug reports can be logged in our `GitHub issue tracker
+<https://github.com/cyrusimap/cyrus-imapd/issues>`__.
+Please bear in mind registration is required.
 When reporting a bug, please prepare to provide the following information;
 
 * Your platform, and if applicable, your distribution and the distribution version.
