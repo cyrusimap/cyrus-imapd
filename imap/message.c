@@ -3371,6 +3371,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     }
 
     if (!record->silent) {
+        if (!record->cid) record->cid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
         if (!record->cid) record->cid = arrayu64_max(&matchlist);
         if (!record->cid) record->cid = generate_conversation_id(record);
     }
