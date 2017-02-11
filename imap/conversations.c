@@ -1711,7 +1711,7 @@ EXPORTED conversation_id_t conversations_guid_cid_lookup(struct conversations_st
 
 
 static int conversations_guid_setitem(struct conversations_state *state, const char *guidrep,
-                                      const char *item, int add)
+                                      const char *item, conversation_id_t cid, int add)
 {
     struct buf key = BUF_INITIALIZER;
     buf_setcstr(&key, "G");
@@ -1747,7 +1747,13 @@ static int conversations_guid_setitem(struct conversations_state *state, const c
     buf_appendcstr(&key, item);
 
     if (add) {
-        r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key), "", 0, &state->txn);
+        char val[17];
+        size_t len = 0;
+        if (cid) {
+            snprintf(val, 17, "%016llx", cid);
+            len = 16;
+        }
+        r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key), val, len, &state->txn);
     }
     else {
         r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key), &state->txn, /*force*/1);
@@ -1773,7 +1779,7 @@ static int _guid_addbody(struct conversations_state *state, struct body *body,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), add);
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), /*cid*/0, add);
         buf_free(&buf);
 
         if (r) return r;
@@ -1809,7 +1815,8 @@ static int conversations_set_guid(struct conversations_state *state,
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    r = conversations_guid_setitem(state, message_guid_encode(&record->guid), base, add);
+    r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
+                                   base, record->cid, add);
     if (!r) r = _guid_addbody(state, body, base, add);
 
     message_free_body(body);
