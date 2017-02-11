@@ -3554,6 +3554,65 @@ EOF
     $self->assert_matches(qr/Message contains bare newlines/, $error);
 }
 
+sub test_import_setdate
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $message = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test message
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test message.
+EOF
+    $message =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($message, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    my $date = '2016-12-07T11:11:12Z';
+    xlog "import message from blob $blobid";
+    $res = eval {
+        $jmap->Request([['importMessages', {
+            messages => {
+                "1" => {
+                    blobId => $blobid,
+                    mailboxIds => [ $draftsmbox ],
+                    isUnread => JSON::true,
+                    isFlagged => JSON::false,
+                    isAnswered => JSON::false,
+                    isDraft => JSON::true,
+                    date => $date,
+                },
+            },
+        }, "R1"], ['getMessages', {ids => ["#1"]}, "R2"]]);
+    };
+
+    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    my $msg = $res->[0][1]->{created}{"1"};
+    $self->assert_not_null($msg);
+
+    $self->assert_str_equals("messages", $res->[1][0]);
+    $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($date, $res->[1][1]{list}[0]->{date});
+}
+
 sub test_getthreadonemsg
     :JMAP :min_version_3_0
 {
