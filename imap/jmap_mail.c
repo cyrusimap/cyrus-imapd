@@ -5327,7 +5327,7 @@ done:
     return r;
 }
 
-static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
+static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, time_t internaldate,
                          int(*writecb)(jmap_req_t*, FILE*, void*), void *rock,
                          char **msgid)
 {
@@ -5337,13 +5337,14 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     char *mboxname = NULL;
     const char *id;
     struct stagemsg *stage = NULL;
-    time_t now = time(NULL);
     struct mailbox *mbox = NULL;
     struct index_record record;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
     size_t len, i, msgcount = 0;
     int r = HTTP_SERVER_ERROR;
+
+    if (!internaldate) internaldate = time(NULL);
 
     /* Pick the mailbox to create the message in, prefer Drafts */
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
@@ -5390,7 +5391,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
     if (r) goto done;
 
     /* Write the message to the filesystem */
-    if (!(f = append_newstage(mbox->name, now, 0, &stage))) {
+    if (!(f = append_newstage(mbox->name, internaldate, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
         r = HTTP_SERVER_ERROR;
         goto done;
@@ -5434,7 +5435,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags,
         r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
                 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
         if (r) goto done;
-        r = append_fromstage(&as, &body, stage, now, NULL, 0, NULL);
+        r = append_fromstage(&as, &body, stage, internaldate, NULL, 0, NULL);
         if (r) {
             append_abort(&as);
             goto done;
@@ -5566,6 +5567,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
 {
     const char *id = NULL;
     json_t *val;
+    time_t internaldate = 0;
     int have_mbox = 0;
     int system_flags = 0;
     size_t i;
@@ -5616,10 +5618,16 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
         return 0;
     }
 
+    /* check for internaldate */
+    const char *datestr = json_string_value(json_object_get(msg, "date"));
+    if (datestr) {
+        time_from_iso8601(datestr, &internaldate);
+    }
+
     if (json_object_get(msg, "isFlagged") == json_true())
         system_flags |= FLAG_FLAGGED;
 
-    return jmapmsg_write(req, json_object_get(msg, "mailboxIds"), system_flags,
+    return jmapmsg_write(req, json_object_get(msg, "mailboxIds"), system_flags, internaldate,
                          (int(*)(jmap_req_t*,FILE*,void*)) jmapmsg_to_mime,
                          msg, msgid);
 }
@@ -6008,6 +6016,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     int system_flags = 0;
     char *mboxname = NULL;
     uint32_t uid;
+    time_t internaldate = 0;
     int r;
 
     blobid = json_string_value(json_object_get(msg, "blobId"));
@@ -6030,7 +6039,13 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (json_object_get(msg, "isUnread") != json_true())
         system_flags |= FLAG_SEEN;
 
-    r = jmapmsg_write(req, mailboxids, system_flags,
+    /* check for internaldate */
+    const char *datestr = json_string_value(json_object_get(msg, "date"));
+    if (datestr) {
+        time_from_iso8601(datestr, &internaldate);
+    }
+
+    r = jmapmsg_write(req, mailboxids, system_flags, internaldate,
                       jmapmsg_import_cb, &data, &msgid);
     if (r) goto done;
 
@@ -6093,6 +6108,7 @@ static int importMessages(jmap_req_t *req)
         int b;
         size_t i;
         json_t *val;
+        const char *s;
 
         buf_printf(&buf, "messages[%s]", id);
         prefix = buf_cstring(&buf);
@@ -6101,6 +6117,17 @@ static int importMessages(jmap_req_t *req)
         readprop_full(msg, prefix, "isFlagged", 1, invalid, "b", &b);
         readprop_full(msg, prefix, "isUnread", 1, invalid, "b", &b);
         readprop_full(msg, prefix, "isAnswered", 1, invalid, "b", &b);
+
+        int pe = readprop_full(msg, prefix, "date", 0, invalid, "s", &s);
+        if (pe > 0) {
+            struct tm date;
+            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &date);
+            if (!p || *p) {
+                char *val = strconcat(prefix, ".date", (char *)NULL);
+                json_array_append_new(invalid, json_string(val));
+                free(val);
+            }
+        }
         json_array_foreach(json_object_get(msg, "mailboxIds"), i, val) {
             char *name = NULL;
             const char *mboxid = json_string_value(val);
