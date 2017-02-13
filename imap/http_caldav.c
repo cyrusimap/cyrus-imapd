@@ -4092,7 +4092,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
                 }
-                else sched_request(userid, organizer, oldical, ical);
+                else {
+                    schedule_address = xstrdupnull(organizer);
+                    sched_request(userid, organizer, oldical, ical);
+                }
             }
             else {
                 /* Attendee scheduling object resource */
@@ -4108,8 +4111,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
 #endif
                 else {
-                    sched_reply(userid, strarray_nth(&schedule_addresses, 0),
-                                oldical, ical);
+                    schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
+                    sched_reply(userid, schedule_address, oldical, ical);
                 }
             }
             free(userid);
