@@ -38,19 +38,22 @@ will be adding three search partitions.
 
     defaultpartition: main
     partition-main: /var/spool/imap
-    partition-fast: /var/spool/imapfast
-    partition-archive: /var/spool/imaparchive
+    partition-am: /var/spool/imap-am
+    partition-nz: /var/spool/imap-nz
+    partition-shared: /var/spool/imap-shared
     metapartition_files: header index cache expunge squat annotations
     metapartition-main: /var/spool/imapmeta/main
-    metapartition-fast: /var/spool/imapmeta/fast
-    metapartition-archive: /var/spool/imapmeta/archive
+    metapartition-am: /var/spool/imapmeta/am
+    metapartition-nz: /var/spool/imapmeta/nz
+    metapartition-shared: /var/spool/imapmeta/shared
     search_engine: xapian
     search_index_headers: no
     search_batchsize: 8192
     defaultsearchtier: temp
     tempsearchpartition-main: /var/spool/search/main
-    tempsearchpartition-fast: /var/spool/search/fast
-    tempsearchpartition-archive: /var/spool/search/archive
+    tempsearchpartition-am: /var/spool/search/am
+    tempsearchpartition-nz: /var/spool/search/nz
+    tempsearchpartition-shared: /var/spool/search/shared
 
 These settings are in :cyrusman:`imapd.conf(5)`:
 

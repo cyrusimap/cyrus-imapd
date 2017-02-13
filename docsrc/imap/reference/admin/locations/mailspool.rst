@@ -44,14 +44,17 @@ use cases.
 
 To define additional mail spools, add more ``partition-name`` entries
 to :cyrusman:`imapd.conf(5)` as needed.  Building on our sample, above,
-for example:
+for example, let's imagine we want to migrate users to new partitions
+split by first character of the user's last name, and add a partition
+for shared mailboxes (see :ref:`imap-features-namespaces-shared`):
 
 * Sample::
 
     defaultpartition: main
     partition-main: /var/spool/imap
-    partition-fast: /var/spool/imapfast
-    partition-archive: /var/spool/imaparchive
+    partition-am: /var/spool/imap-am
+    partition-nz: /var/spool/imap-nz
+    partition-shared: /var/spool/imap-shared
 
 Metadata Partitions
 ===================
@@ -84,9 +87,11 @@ Again, building on our examples above:
 
     defaultpartition: main
     partition-main: /var/spool/imap
-    partition-fast: /var/spool/imapfast
-    partition-archive: /var/spool/imaparchive
+    partition-am: /var/spool/imap-am
+    partition-nz: /var/spool/imap-nz
+    partition-shared: /var/spool/imap-shared
     metapartition_files: header index cache expunge squat annotations
     metapartition-main: /var/spool/imapmeta/main
-    metapartition-fast: /var/spool/imapmeta/fast
-    metapartition-archive: /var/spool/imapmeta/archive
+    metapartition-am: /var/spool/imapmeta/am
+    metapartition-nz: /var/spool/imapmeta/nz
+    metapartition-shared: /var/spool/imapmeta/shared
