@@ -1357,13 +1357,11 @@ static int caldav_delete_cal(struct transaction_t *txn,
             return HTTP_SERVER_ERROR;
         }
 
-        if (!schedule_address) {
-            get_schedule_addresses(txn, &schedule_addresses);
-        }
-        else {
+        if (schedule_address) {
             strarray_appendm(&schedule_addresses, schedule_address);
             schedule_address = NULL;
         }
+        get_schedule_addresses(txn, &schedule_addresses);
 
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
@@ -4077,13 +4075,11 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = record_to_ical(mailbox, &record, &schedule_address);
             }
 
-            if (!schedule_address) {
-                get_schedule_addresses(txn, &schedule_addresses);
-            }
-            else {
+            if (schedule_address) {
                 strarray_appendm(&schedule_addresses, schedule_address);
                 schedule_address = NULL;
             }
+            get_schedule_addresses(txn, &schedule_addresses);
 
             char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
