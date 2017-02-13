@@ -3147,4 +3147,92 @@ EOF
   );
 }
 
+sub test_recurring_freebusy
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4319-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event Every Week
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+RRULE:FREQ=WEEKLY
+EXDATE;TZID=Australia/Melbourne:20160907T153000
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Melbourne:20160914T153000
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160914T183000
+TRANSP:OPAQUE
+SUMMARY:An Event Every Week once
+DTSTART;TZID=Australia/Melbourne:20160914T163000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  my ($Data) = $CalDAV->GetFreeBusy($CalendarId);
+
+  $self->assert(@$Data > 50);
+  $self->assert_str_equals("Etc/UTC", $Data->[0]{timeZone});
+  $self->assert_str_equals("Etc/UTC", $Data->[1]{timeZone});
+  $self->assert_str_equals("Etc/UTC", $Data->[2]{timeZone});
+  # and so on
+  $self->assert_str_equals("PT3H", $Data->[0]{duration});
+  $self->assert_str_equals("PT2H", $Data->[1]{duration});
+  $self->assert_str_equals("PT3H", $Data->[2]{duration});
+  # etc
+  $self->assert_str_equals("2016-08-31T05:30:00", $Data->[0]{start});
+  $self->assert_str_equals("2016-09-14T06:30:00", $Data->[1]{start});
+  $self->assert_str_equals("2016-09-21T05:30:00", $Data->[2]{start});
+}
+
 1;
