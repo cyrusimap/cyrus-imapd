@@ -4039,9 +4039,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
     case ICAL_VPOLL_COMPONENT:
-        if (organizer && _scheduling_enabled(txn, mailbox) &&
-            /* XXX  Hack for Outlook */
-            icalcomponent_get_first_invitee(comp)) {
+        /* XXX  Hack for Outlook */
+        if (organizer && icalcomponent_get_first_invitee(comp)) {
             /* Scheduling object resource */
             strarray_t schedule_addresses = STRARRAY_INITIALIZER;
             int r;
@@ -4094,7 +4093,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     schedule_address = xstrdupnull(organizer);
-                    sched_request(userid, organizer, oldical, ical);
+                    if (_scheduling_enabled(txn, mailbox))
+                        sched_request(userid, organizer, oldical, ical);
                 }
             }
             else {
@@ -4112,7 +4112,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
-                    sched_reply(userid, schedule_address, oldical, ical);
+                    if (_scheduling_enabled(txn, mailbox))
+                        sched_reply(userid, schedule_address, oldical, ical);
                 }
             }
             free(userid);
