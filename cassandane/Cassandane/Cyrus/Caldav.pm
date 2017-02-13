@@ -3063,4 +3063,88 @@ EOF
   );
 }
 
+sub test_reply_scheduleaddress
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+	user => "cassandane%example.com",
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:friend\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:othercas\@example.com
+ORGANIZER;CN=Test User:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'othercas@example.com');
+
+  # we don't say anything when we add a NEEDS-ACTION item
+  $self->assert_caldav_notified();
+
+  $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'othercas@example.com');
+
+  # we sent a reply from the correct address
+  $self->assert_caldav_notified(
+    {
+      method => 'REPLY',
+      recipient => 'friend@example.com',
+      event => {
+        participants => {
+          'othercas@example.com' => {
+            'scheduleStatus' => 'accepted',
+            'email' => 'othercas@example.com',
+          },
+        },
+      },
+    },
+  );
+}
+
 1;
