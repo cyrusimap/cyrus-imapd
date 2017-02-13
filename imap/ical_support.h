@@ -95,6 +95,7 @@ extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
 
 extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                                                 icalcomponent_kind kind,
+                                                                int *is_recurring,
                                                                 void (*comp_cb)(icalcomponent*,
                                                                                 void*),
                                                                 void *cb_rock);

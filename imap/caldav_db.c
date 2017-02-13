@@ -655,7 +655,8 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
     cdata->comp_flags.transp = transp;
 
     /* Get span of component set and check for managed attachments */
-    span = icalrecurrenceset_get_utc_timespan(ical, kind, &check_mattach_cb, &mattach);
+    span = icalrecurrenceset_get_utc_timespan(ical, kind, &recurring,
+                                              &check_mattach_cb, &mattach);
 
     cdata->dtstart = icaltime_as_ical_string(span.start);
     cdata->dtend = icaltime_as_ical_string(span.end);

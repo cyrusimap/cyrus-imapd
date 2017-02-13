@@ -728,6 +728,7 @@ static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, voi
 /* Determine the UTC time span of all components within ical of type kind. */
 struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                                          icalcomponent_kind kind,
+                                                         int *is_recurring,
                                                          void (*comp_cb)(icalcomponent*,
                                                                          void*),
                                                          void *cb_rock)
@@ -810,6 +811,8 @@ struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
         if (comp_cb) comp_cb(comp, cb_rock);
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+    if (is_recurring) *is_recurring = recurring;
 
     return span;
 }

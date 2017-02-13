@@ -2470,7 +2470,7 @@ void icalcomponent_add_required_timezones(icalcomponent *ical)
     /* Determine recurrence span. */
     comp = icalcomponent_get_first_real_component(ical);
     span = icalrecurrenceset_get_utc_timespan(ical, icalcomponent_isa(comp),
-                                              NULL, NULL);
+                                              NULL, NULL, NULL);
 
     /* Remove all VTIMEZONE components for known TZIDs. This operation is
      * a bit hairy: we could expunge a timezone which is in use by an ical
