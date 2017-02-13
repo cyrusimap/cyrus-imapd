@@ -728,14 +728,14 @@ static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, voi
 /* Determine the UTC time span of all components within ical of type kind. */
 struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                                          icalcomponent_kind kind,
-                                                         int *is_recurring,
+                                                         unsigned *is_recurring,
                                                          void (*comp_cb)(icalcomponent*,
                                                                          void*),
                                                          void *cb_rock)
 {
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
-    int recurring = 0;
+    unsigned recurring = 0;
 
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
@@ -755,7 +755,7 @@ struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY) ||
             icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
             /* Recurring - find widest time range that includes events */
-            int expand = recurring = 1;
+            unsigned expand = recurring = 1;
 
             if (rrule) {
                 struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
