@@ -34,9 +34,32 @@ If you're familiar with replication, and your current installation is 2.4 or new
 installation to replicate data to a new 3.0 installation and failover to the new installation when you're
 ready. The replication protocol has been kept backwards compatible.
 
-If you are upgrading in place, you will need to shut down Cyrus entirely while you install the new package.  If your
-old installation was using Berkeley DB format databases, you will need to convert or upgrade the databases **before**
-you upgrade.  Cyrus v3.0 does not support Berkeley DB at all.
+If you are upgrading in place, you will need to shut down Cyrus
+entirely while you install the new package.  If your old installation
+was using Berkeley DB format databases, you will need to convert or
+upgrade the databases **before** you upgrade.  Cyrus v3.0 does not
+support Berkeley DB at all.
+
+Do What As Who?
+###############
+
+Since the various files, databases, directories, etc. used by Cyrus
+must be readable and writable as the ``cyrus`` user, please make sure
+to **always** perform Cyrus commands *as* the ``cyrus`` user, and not
+as ``root``.  In our documentation, we will always reference Cyrus
+commands in this form -- :cyrusman:`cyr_info(8)` -- before using
+examples of them, so you'll know that those commands **must** be run as
+the ``cyrus`` user.
+
+Doing so in most systems is as simple as using either the ``su`` or
+``sudo`` commands, like so::
+
+    su cyrus -c "/usr/local/bin/cyr_info conf-lint -C /etc/imapd.conf -M /etc/cyrus.conf"
+    sudo -u cyrus /usr/local/bin/cyr_info conf-lint -C /etc/imapd.conf -M /etc/cyrus.conf
+
+In this document, however, there are also several command examples which
+*should* or **must** be run as ``root``.  These are always standard \*nix
+commands, such as ``rsync`` or ``scp``.
 
 We strongly recommend that you read this entire document before upgrading.
 
@@ -73,12 +96,13 @@ Follow the :ref:`general install instructions <basicserver>`.
 3. Shut down existing Cyrus
 ---------------------------
 
-Shut down your existing Cyrus installation with its init script or whatever method you normally use.
+Shut down your existing Cyrus installation with its init script or
+whatever method you normally use.
 
 This is necessary to guarantee a clean data snapshot.
 
-4. Backup existing data
------------------------
+4. Backup and Copy existing data
+--------------------------------
 
 We recommend backing up all your data before continuing.
 
@@ -90,26 +114,76 @@ We recommend backing up all your data before continuing.
 (You do already have a backup strategy in place, right? Once you're on 3.0, you can
 consider using the new inbuilt :ref:`backup tools <cyrus-backups>`.)
 
+Copy all of this to the new instance, using ``rsync`` or similar tools.
+
+.. note::
+
+    Cyrus keeps its data and databases in various locations, some of
+    which may be tailored by your configuration.  Please consult
+    :ref:`imap-admin-locations` for guidance on where data lives in your
+    current installation.
+
+For example, to copy from an existing Debian or Ubuntu installation
+using their standard locations, you might execute this series of
+commands on the *new* server (where "oldimap" is the name of the old
+server)::
+
+    rsync -aHv oldimap:/var/lib/cyrus/. /var/lib/cyrus/.
+    rsync -aHv oldimap:/var/spool/cyrus/. /var/spool/cyrus/.
+
+You don't need to copy the following databases as Cyrus 3.0 will
+recreate these for you automatically:
+
+* duplicate delivery (deliver.db),
+* TLS cache (tls_sessions.db),
+* PTS cache (ptscache.db),
+* STATUS cache (statuscache.db).
+
+.. note::
+    You may wish to consider relocating these four databases to ephemeral
+    storage, such as ``/run/cyrus`` (Debian/Ubuntu) or ``/var/run/cyrus``
+    or whatever suitable tmpfs is provided on your distro.  It will place
+    less IO load on your disks and run faster.
+
+.. warning::
+    Please be warned that some packages place tasks such as ``tlsprune``
+    (:cyrusman:`tls_prune(8)`) in the ``START{}`` stanza of
+    :cyrusman:`cyrus.conf(5)`.  This will cause a startup problem if the
+    ``tls_sessions_db`` is not present.  The solution to this is to
+    remove the ``tlsprune`` task from ``START{}`` and schedule it in
+    ``EVENTS{}``, further down.
+
+
 5. Copy config files and update
 -------------------------------
 
-Check to see if your imapd.conf file contains any deprecated options::
+Again, check the locations on your specific installation.  For example,
+on FreeBSD systems, the configuration files :cyrusman:`imapd.conf(5)`
+and :cyrusman:`cyrus.conf(5)` are in ``/usr/local/etc``, rather than
+``/etc/``.  Run this command on the *old* server::
+
+    scp /etc/cyrus.conf /etc/imapd.conf newimap:/etc/
+
+Using the :cyrusman:`cyr_info(8)` command, check to see if your
+imapd.conf file contains any deprecated options. Run this command on
+the new server::
 
     cyr_info conf-lint -C <path to imapd.conf> -M <path to cyrus.conf>
 
 You need to provide both imapd.conf and cyrus.conf so that conf-lint knows
 the names of all your services and can check service-specific overrides.
 
-To check your entire system's configuration you can use conf-all. This command
-takes all the system defaults, along with anything you have provided overrides for
-in your config files::
+To check your entire system's configuration you can use the conf-all
+action. This command takes all the system defaults, along with anything
+you have provided overrides for in your config files::
 
     cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf>
 
 **Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
 defaults have changed in :cyrusman:`imapd.conf(5)`. Implications are
 outlined in the Note in :ref:`imap-admin-namespaces-mode` and
-:ref:`imap-switching-alt-namespace-mode`.
+:ref:`imap-switching-alt-namespace-mode`.  Please also see "Sieve Scripts,"
+below.
 
 * unixhierarchysep: on
 * altnamespace: on
@@ -127,27 +201,25 @@ outlined in the Note in :ref:`imap-admin-namespaces-mode` and
    directive(s), you can convert these to per-user special-use annotations
    in your new install with the :cyrusman:`cvt_xlist_specialuse(8)` tool
 
-You don't need to copy the following databases as Cyrus 3.0 will
-recreate these for you automatically:
+* Sieve Scripts
 
-* duplicate delivery (deliver.db),
-* TLS cache (tls_sessions.db),
-* PTS cache (ptscache.db),
-* STATUS cache (statuscache.db).
+    Since defaults for options: ``unixhierarchysep:`` and
+    ``altnamespace:`` have changed in :cyrusman:`imapd.conf(5)`, you
+    may very likely need to modify any sieve scripts already on your
+    system.  Fear not, there's a tool for this task, called
+    :cyrusman:`translatesieve(8)`.  This tool can handle situations
+    where either or both of these settings need change. Please consult
+    the man page for details.
 
-.. note::
-    You may wish to consider relocating these four databases to ephemeral
-    storage, such as ``/run/cyrus`` (Debian/Ubuntu) or ``/var/run/cyrus``
-    or whatever suitable tmpfs is provided on your distro.  It will place
-    less IO load on your disks and run faster.
+    Consider the following example, where the prior configuration was
+    already using ``altnamespace: on``, but was *not* using
+    ``unixhierarchysep: on``::
 
-.. note::
-    Please be warned that some packages place tasks such as ``tlsprune``
-    (:cyrusman:`tls_prune(8)`) in the ``START{}`` stanza of
-    :cyrusman:`cyrus.conf(5)`.  This will cause a startup problem if the
-    ``tls_sessions_db`` is not present.  The solution to this is to
-    remove the ``tlsprune`` task from ``START{}`` and schedule it in
-    ``EVENTS{}``, further down.
+        # su cyrus -c "/usr/lib/cyrus/upgrade/translatesieve -a"
+        you are using /var/lib/imap/sieve as your sieve directory.
+        translating sievedir /var/lib/imap/sieve... converting separator from '.' to '/'
+        not changing name space.
+        done
 
 .. warning::
 
@@ -172,7 +244,6 @@ recreate these for you automatically:
 .. note::
     The :cyrusman:`cvt_cyrusdb(8)` command does not accept relative paths.
 
-
 7. Start new 3.0 Cyrus and verify
 ---------------------------------
 
@@ -188,6 +259,12 @@ start the new Cyrus up with your regular init script.
 If something has gone wrong, contact us on the :ref:`mailing list <feedback>`.
 You can revert to backups and keep processing mail using your old version
 until you're able to finish your 3.0 installation.
+
+.. note::
+
+    If you've disable your system startup scripts, as recommended in
+    step 2, remember to re-enable them.  Use something like ``systemctl
+    enable cyrus-imapd`` or ``update-rc.d cyrus-imapd enable``
 
 8. Reconstruct databases and cache
 ----------------------------------
