@@ -89,15 +89,10 @@ pause *seconds* seconds after each mailbox, to smooth loads.
     Incremental updates are very inefficient with the SQUAT search
     engine.  If using SQUAT for large and active mailboxes, you should
     run **squatter** periodically as an EVENT in ``cyrus.conf(5)``.
-    Incremental updates are much more efficient with Sphinx, so if using
-    Sphinx you should run **squatter -R** as a START in
-    ``cyrus.conf(5)``.
 
 .. Note::
     Messages and mailboxes that have not been indexed CAN still be
-    SEARCHed, just not as quickly as those with an index.  Also,
-    some advanced features of Sphinx like stemming will not work unless
-    messages have been indexed.
+    SEARCHed, just not as quickly as those with an index.
 
 **squatter** |default-conf-text|
 
