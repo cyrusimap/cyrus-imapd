@@ -38,6 +38,7 @@ Man pages
     systemcommands/cyr_info
     systemcommands/cyr_sequence    
     systemcommands/cyr_synclog
+    systemcommands/cyr_virusscan
     systemcommands/cyradm
     systemcommands/cyrdump
     systemcommands/deliver
