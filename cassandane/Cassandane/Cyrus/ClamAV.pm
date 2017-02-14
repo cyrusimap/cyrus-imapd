@@ -59,6 +59,11 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    if (not $self->{instance}->{buildinfo}->{dependency}->{clamav}) {
+        xlog "clamav not enabled. Skipping tests.";
+        return;
+    }
+    $self->{test_clamav} = 1;
 }
 
 sub tear_down
@@ -70,6 +75,7 @@ sub tear_down
 sub test_aaasetup
 {
     my ($self) = @_;
+    return if not $self->{test_clamav};
 
     # does everything set up and tear down cleanly?
     $self->assert(1);
@@ -78,6 +84,7 @@ sub test_aaasetup
 sub test_remove_infected
 {
     my ($self) = @_;
+    return if not $self->{test_clamav};
 
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
