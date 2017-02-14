@@ -7513,14 +7513,14 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     switch (ret) {
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
-        if (cdata->organizer && (flags & NEW_STAG)) {
-            txn->resp_body.stag = sched_tag;
-        }
+        if (cdata->organizer) {
+            if (flags & NEW_STAG) txn->resp_body.stag = sched_tag;
 
-        if (!(flags & PREFER_REP)) {
-            /* iCal data has been rewritten - don't return validators */
-            txn->resp_body.lastmod = 0;
-            txn->resp_body.etag = NULL;
+            if (!(flags & PREFER_REP)) {
+                /* iCal data has been rewritten - don't return validators */
+                txn->resp_body.lastmod = 0;
+                txn->resp_body.etag = NULL;
+            }
         }
         break;
     }
