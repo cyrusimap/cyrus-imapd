@@ -101,7 +101,7 @@ function createCalendar(baseurl) {
         props.appendChild(prop);
     }
 
-    if (create.tzid.value.length !== 0) {
+    if (create.tzid && create.tzid.value.length !== 0) {
         prop = doc.createElementNS(XML_CALDAV_NS, "C:calendar-timezone-id");
         prop.appendChild(doc.createTextNode(create.tzid.value));
         props.appendChild(prop);
