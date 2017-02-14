@@ -635,10 +635,8 @@ static void my_caldav_init(struct buf *serverinfo)
     if (config_allowsched) {
         namespace_calendar.allow |= ALLOW_CAL_SCHED;
 
-#ifndef HAVE_SCHEDULING_PARAMS
-        /* Need to set this to parse CalDAV Scheduling parameters */
+        /* Always treat unknown parameters as IANA */
         ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
-#endif
     }
 
     if (config_getswitch(IMAPOPT_CALDAV_ALLOWATTACH))
