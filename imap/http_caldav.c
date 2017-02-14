@@ -7260,6 +7260,7 @@ static int report_fb_query(struct transaction_t *txn,
         }
     }
 
+    fctx->depth++;
     cal = busytime_query_local(txn, fctx, txn->req_tgt.mbentry->name,
                                0, NULL, NULL, NULL);
 
