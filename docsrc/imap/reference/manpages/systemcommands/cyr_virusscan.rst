@@ -70,7 +70,94 @@ Options
 Examples
 ========
 
-Examples needed.
+.. parsed-literal::
+
+    **cyr_virusscan**
+
+..
+
+        Scan all mailboxes, printing report on the screen.  Do not
+        remove infected messages.
+
+.. only:: html
+
+    ::
+
+        Using ClamAV virus scanner
+        Loaded 5789330 virus signatures.
+
+        Mailbox Name                            	   Msg UID	Status	Virus Name
+        ----------------------------------------	----------	------	--------------------------------------------------
+        user.betty                              	    185395	  READ	Heuristics.Phishing.Email.SpoofedDomain
+
+        Mailbox Name                            	   Msg UID	Status	Virus Name
+        ----------------------------------------	----------	------	--------------------------------------------------
+        user.betty.Bank stuff                   	         9	  READ	Html.Phishing.Bank-1172
+        user.betty.Bank stuff                   	        10	  READ	Html.Phishing.Bank-1172
+        user.betty.Bank stuff                   	        11	  READ	Html.Phishing.Bank-1172
+
+        Mailbox Name                            	   Msg UID	Status	Virus Name
+        ----------------------------------------	----------	------	--------------------------------------------------
+        user.bovik                                	     17426	  READ	Email.Trojan.Trojan-1051
+
+.. parsed-literal::
+
+    **cyr_virusscan** -r -n user/bovik
+
+..
+
+        Scan mailbox *user/bovik*, removing infected messages and append
+        notifications to bovik's inbox.
+
+.. only:: html
+
+    ::
+
+        Mailbox Name                            	   Msg UID	Status	Virus Name
+        ----------------------------------------	----------	------	--------------------------------------------------
+        user.bovik                                	   17426	  READ	Email.Trojan.Trojan-1051
+
+.. only:: html
+
+        A message like this would end up in bovik's inbox:
+
+    ::
+
+        The following message was deleted from mailbox 'Inbox.bovik'
+        because it was infected with virus 'Email.Trojan.Trojan-1051'
+
+            Message-ID: <201308131519.r7DFJM9K083763@tselina.kiev.ua>
+            Date: Tue, 13 Aug 2013 18:19:22 +0300 (EEST)
+            From: ("FEDEX Thomas Cooper" NIL "thomas_cooper94" "themovieposterpage.com")
+            Subject: Problem with the delivery of parcel
+            IMAP UID: 17426
+
+..
+
+.. parsed-literal::
+
+        **cyr_virusscan** -r -n -s 'SUBJECT "Fedex"' user/bovik
+
+..
+
+        Search mailbox user/bovik for messages which have Fedex in the
+        subject line, removing them all, and appending notifications to
+        Bovik's inbox.
+        
+.. only:: html
+
+    ::
+
+        Mailbox Name                            	   Msg UID	Status	Virus Name
+        ----------------------------------------	----------	------	--------------------------------------------------
+        user.bovik                                	   17185	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                	   17203	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                	   17338	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                	   17373	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                	   19238	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                	   19268	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+
+..
 
 History
 =======
