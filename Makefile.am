@@ -1500,6 +1500,7 @@ dist_man8_MANS = \
 	man/cyr_expire.8 \
 	man/cyr_info.8 \
 	man/cyr_synclog.8 \
+	man/cyr_virusscan.8 \
 	man/deliver.8 \
 	man/fud.8 \
 	man/idled.8 \

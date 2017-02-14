@@ -40,6 +40,12 @@ cyrdump
 cyr_expire
 ++++++++++
 
+cyr_virusscan
++++++++++++++
+
+Tool to disinfect mailboxes by operation of external virus scanning
+library or provided IMAP SEARCH string.
+
 fetchnews
 +++++++++
 
@@ -89,4 +95,3 @@ upgradesieve
 ++++++++++++
 
 absolutely ancient (upgrade from 1.6.13), probably should be obsoleted entirely 
-
