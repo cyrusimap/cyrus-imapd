@@ -3247,6 +3247,33 @@ sub test_getidentities
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
 }
 
+sub test_emptyids
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+
+    $imaptalk->create("INBOX.foo") || die;
+
+    $res = $jmap->Request([['getMailboxes', { ids => [] }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->Request([['getThreads', { ids => [] }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->Request([['getMessages', { ids => [] }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->Request([['getIdentities', { ids => [] }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->Request([['getSearchSnippets', { messageIds => [], filter => { text => "foo" } }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+}
+
 sub test_getmessageupdates
     :JMAP :min_version_3_0
 {
