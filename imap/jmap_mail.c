@@ -3866,7 +3866,9 @@ static int getSearchSnippets(jmap_req_t *req)
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
         validatefilter(filter, "filter", invalid);
-    } else {
+    }
+    else {
+        /* FIXME spec currently allows filter to be null */
         json_array_append_new(invalid, json_string("filter"));
     }
 
@@ -3879,7 +3881,7 @@ static int getSearchSnippets(jmap_req_t *req)
             buf_reset(&buf);
         }
     }
-    if (json_array_size(messageids) == 0) {
+    if (JNOTNULL(messageids) && !json_is_array(messageids)) {
         json_array_append_new(invalid, json_string("messageIds"));
     }
 
@@ -3990,7 +3992,7 @@ static int getThreads(jmap_req_t *req)
             buf_reset(&buf);
         }
     }
-    if (json_array_size(threadids) == 0) {
+    if (JNOTNULL(threadids) && !json_is_array(threadids)) {
         json_array_append_new(invalid, json_string("ids"));
     }
 
@@ -4060,7 +4062,7 @@ static int getMessages(jmap_req_t *req)
 
     /* ids */
     ids = json_object_get(req->args, "ids");
-    if (ids && json_array_size(ids)) {
+    if (ids && json_is_array(ids)) {
         json_array_foreach(ids, i, val) {
             if (json_typeof(val) != JSON_STRING) {
                 struct buf buf = BUF_INITIALIZER;
@@ -4070,7 +4072,7 @@ static int getMessages(jmap_req_t *req)
                 continue;
             }
         }
-    } else {
+    } else if (JNOTNULL(ids)) {
         json_array_append_new(invalid, json_string("ids"));
     }
 
@@ -6140,7 +6142,7 @@ static int importMessages(jmap_req_t *req)
             }
             free(name);
         }
-        if (!json_array_size(json_object_get(msg, "mailboxIds"))) {
+        if (json_array_size(json_object_get(msg, "mailboxIds")) == 0) {
             buf_printf(&buf, ".mailboxIds");
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         }
@@ -6244,7 +6246,7 @@ static int getIdentities(jmap_req_t *req)
             buf_reset(&buf);
         }
     }
-    if (JNOTNULL(ids) && json_array_size(ids) == 0) {
+    if (JNOTNULL(ids) && !json_is_array(ids)) {
         json_array_append_new(invalid, json_string("ids"));
     }
 
@@ -6282,7 +6284,7 @@ static int getIdentities(jmap_req_t *req)
                 json_array_append(identities, me);
             }
         }
-    } else {
+    } else if (!JNOTNULL(ids)) {
         json_array_append(identities, me);
     }
     json_decref(me);
