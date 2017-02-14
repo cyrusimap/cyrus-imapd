@@ -823,4 +823,22 @@
 		</substitution>
 
 	</substitutions>
+
+    <calendardatafilter>ATTENDEE:X-CALENDARSERVER-DTSTAMP</calendardatafilter>
+    <calendardatafilter>ATTENDEE:X-CALENDARSERVER-AUTO</calendardatafilter>
+    <calendardatafilter>ATTENDEE:X-CALENDARSERVER-RESET-PARTSTAT</calendardatafilter>
+    <calendardatafilter>CALSCALE</calendardatafilter>
+    <calendardatafilter>PRODID</calendardatafilter>
+    <calendardatafilter>DTSTAMP</calendardatafilter>
+    <calendardatafilter>CREATED</calendardatafilter>
+    <calendardatafilter>LAST-MODIFIED</calendardatafilter>
+    <calendardatafilter>X-WR-CALNAME</calendardatafilter>
+    <calendardatafilter>CLASS=PUBLIC</calendardatafilter>
+    <calendardatafilter>PRIORITY=0</calendardatafilter>
+    <calendardatafilter>TRANSP=OPAQUE</calendardatafilter>
+    <calendardatafilter>SEQUENCE=0</calendardatafilter>
+
+    <addressdatafilter>PRODID</addressdatafilter>
+    <addressdatafilter>REV</addressdatafilter>
+
 </serverinfo>
