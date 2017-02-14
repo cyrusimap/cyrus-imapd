@@ -6837,6 +6837,10 @@ int meth_put(struct transaction_t *txn, void *params)
         if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
     }
 
+    /* Make sure mailbox type is correct */
+    if (txn->req_tgt.mbentry->mbtype != txn->req_tgt.namespace->mboxtype)
+        return HTTP_FORBIDDEN;
+
     /* Make sure Content-Range isn't specified */
     if (spool_getheader(txn->req_hdrs, "Content-Range"))
         return HTTP_BAD_REQUEST;
