@@ -6481,12 +6481,16 @@ static int report_cal_query(struct transaction_t *txn,
                 /* XXX  Need to pass this to query for floating time */
                 syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
                 tzdata = xmlNodeGetContent(node);
-                ical = icalparser_parse_string((const char *) tzdata);
-                if (ical) {
-                    tz = icalcomponent_get_first_component(ical,
-                                                           ICAL_VTIMEZONE_COMPONENT);
+                if (tzdata) {
+                    ical = icalparser_parse_string((const char *) tzdata);
+                    xmlFree(tzdata);
                 }
-                if (!tz || icalcomponent_get_first_real_component(ical)) {
+
+                /* Validate the iCal data */
+                if (!ical || !icalrestriction_check(ical) ||
+                    icalcomponent_get_first_real_component(ical) ||
+                    !(tz = icalcomponent_get_first_component(ical,
+                                                             ICAL_VTIMEZONE_COMPONENT))) {
                     txn->error.precond = CALDAV_VALID_DATA;
                     ret = HTTP_FORBIDDEN;
                 }
@@ -6496,7 +6500,6 @@ static int report_cal_query(struct transaction_t *txn,
                     icaltimezone_set_component(calfilter.tz, tz);
                 }
 
-                if (tzdata) xmlFree(tzdata);
                 if (ical) icalcomponent_free(ical);
                 if (ret) return ret;
             }
@@ -6507,10 +6510,16 @@ static int report_cal_query(struct transaction_t *txn,
                 syslog(LOG_WARNING, "REPORT calendar-query w/tzid");
                 tzid = xmlNodeGetContent(node);
 
-                /* XXX  Need to load timezone */
+                if (tzid) {
+                    calfilter.tz =
+                        icaltimezone_get_builtin_timezone_from_tzid((const char *) tzid);
+                    xmlFree(tzid);
 
-                if (tzid) xmlFree(tzid);
-                if (ret) return ret;
+                    if (!calfilter.tz) {
+                        txn->error.precond = CALDAV_VALID_TIMEZONE;
+                        return HTTP_FORBIDDEN;
+                    }
+                }
             }
         }
     }
