@@ -49,6 +49,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
+use Net::CalDAVTalk;
 
 my $basedir;
 my $binary;
@@ -1496,12 +1497,28 @@ sub set_up
     $self->SUPER::set_up();
 
     my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    $ENV{JMAP_ALWAYS_FULL} = 1;
 
     for (1..40) {
         my $name = sprintf("user%02d", $_);
+        my $displayname = sprintf("User %02d", $_);
         $admintalk->create("user.$name");
         $admintalk->setacl("user.$name", admin => 'lrswipkxtecda');
         $admintalk->setacl("user.$name", $name => 'lrswipkxtecd');
+
+        my $CalDAV = Net::CalDAVTalk->new(
+            user => $name,
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+
+        $CalDAV->UpdateAddressSet($displayname, "$name\@example.com");
     }
 }
 
