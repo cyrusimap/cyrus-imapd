@@ -1338,7 +1338,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (r) goto done;
     }
 
-    if (cdata->organizer && _scheduling_enabled(txn, mailbox)) {
+    if (cdata->organizer) {
         /* Scheduling object resource */
         strarray_t schedule_addresses = STRARRAY_INITIALIZER;
         const char **hdr;
@@ -1367,12 +1367,16 @@ static int caldav_delete_cal(struct transaction_t *txn,
         char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            sched_request(userid, cdata->organizer, ical, NULL);
+            schedule_address = xstrdupnull(cdata->organizer);
+            if (_scheduling_enabled(txn, mailbox))
+                sched_request(userid, schedule_address, ical, NULL);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
-            sched_reply(userid, strarray_nth(&schedule_addresses, 0), ical, NULL);
+            schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
+            if (_scheduling_enabled(txn, mailbox) && schedule_address)
+                sched_reply(userid, schedule_address, ical, NULL);
         }
 
         free(userid);
@@ -3953,8 +3957,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         prop = icalcomponent_get_first_property(nextcomp,
                                                 ICAL_ORGANIZER_PROPERTY);
         if (prop) nextorg = icalproperty_get_organizer(prop);
-        if ( (!organizer && nextorg)
-             || (organizer && (!nextorg || strcmp(organizer, nextorg)))) {
+        /* if no toplevel organizer, use the one from here */
+        if (!organizer && nextorg) organizer = nextorg;
+        if (nextorg && strcmp(organizer, nextorg)) {
             txn->error.precond = CALDAV_SAME_ORGANIZER;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -4035,8 +4040,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
     case ICAL_VPOLL_COMPONENT:
-        /* XXX  Hack for Outlook */
-        if (organizer && icalcomponent_get_first_invitee(comp)) {
+        if (organizer) {
             /* Scheduling object resource */
             strarray_t schedule_addresses = STRARRAY_INITIALIZER;
             int r;
@@ -4088,7 +4092,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     schedule_address = xstrdupnull(organizer);
                     if (_scheduling_enabled(txn, mailbox))
-                        sched_request(userid, organizer, oldical, ical);
+                        sched_request(userid, schedule_address, oldical, ical);
                 }
             }
             else {
@@ -4106,7 +4110,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
-                    if (_scheduling_enabled(txn, mailbox))
+                    if (_scheduling_enabled(txn, mailbox) && schedule_address)
                         sched_reply(userid, schedule_address, oldical, ical);
                 }
             }
