@@ -18,7 +18,6 @@ Synopsis
     **cyr_info** [OPTIONS] conf-all
     **cyr_info** [OPTIONS] conf-lint
     **cyr_info** [OPTIONS] proc
-    **cyr_info** [OPTIONS] reid *mailbox*
 
 Description
 ===========
@@ -55,16 +54,6 @@ configuring Cyrus easier.
 .. option:: proc
 
     Print all currently connected processes in the proc directory
-
-.. option:: reid
-
-    .. parsed-literal::
-
-        **cyr_info** [OPTIONS] reid *mailbox*
-
-    Create a new unique ID for mailbox *mailbox*.  The *mailbox*
-    argument is required.
-
 
 Options
 =======

@@ -69,7 +69,7 @@ struct service_item {
 
 static void usage(void)
 {
-    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command [mailbox]\n");
+    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "If you give a service name, it will show config as if you were\n");
     fprintf(stderr, "running that service, i.e. imap\n");
@@ -81,7 +81,6 @@ static void usage(void)
     fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
-    fprintf(stderr, "  * reid [mbox]   - create new unique ID for mailbox [mbox]\n");
     cyrus_done();
     exit(-1);
 }
@@ -347,42 +346,6 @@ static void do_lint(void)
     }
 }
 
-static void do_reid(const char *mboxname)
-{
-    struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
-    int r;
-
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
-    r = mailbox_open_iwl(mboxname, &mailbox);
-    if (r) return;
-
-    mailbox_make_uniqueid(mailbox);
-
-    r = mboxlist_lookup(mboxname, &mbentry, NULL);
-    if (r) return;
-
-    free(mbentry->uniqueid);
-    mbentry->uniqueid = xstrdup(mailbox->uniqueid);
-
-    mboxlist_update(mbentry, 0);
-
-    mailbox_close(&mailbox);
-
-    mboxlist_close();
-    mboxlist_done();
-
-    annotatemore_close();
-    annotate_done();
-
-    printf("did reid %s\n", mboxname);
-}
-
 int main(int argc, char *argv[])
 {
     extern char *optarg;
@@ -429,11 +392,6 @@ int main(int argc, char *argv[])
         do_defconf();
     else if (!strcmp(argv[optind], "conf-lint"))
         do_lint();
-    else if (!strcmp(argv[optind], "reid")) {
-        if (optind + 1 >= argc)
-            usage();
-        do_reid(argv[optind+1]);
-    }
     else
         usage();
 
