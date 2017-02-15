@@ -969,6 +969,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The name of the per-message annotation, if any, to store message
    previews. */
 
+{ "jmap_inlinedcids_annot", NULL, STRING }
+/* The name of the per-message annotation, if any, that stores a
+   JSON object, mapping RFC2392 Content-IDs referenced in HTML bodies
+   to the respective HTML body part number.
+
+   Note that the Content-ID keys must be URL-unescaped and enclosed in
+   angular brackets, as defined in RFC2392. */
+
 { "jmap_preview_length", 64, INT }
 /* The maximum byte length of dynamically generated message previews. Previews
    stored in jmap_preview_annot take precedence. */

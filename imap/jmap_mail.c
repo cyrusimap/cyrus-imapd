@@ -2301,6 +2301,30 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     if (_wantprop(props, "attachments")) {
         int i;
         json_t *atts = json_pack("[]");
+        json_t *inlinedcids = NULL;
+
+        /* Load the message annotation with the hash of cid: urls */
+        const char *annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT);
+        if (annot) {
+            buf_reset(&buf);
+            if (!strncmp(annot, "/shared/", 8)) {
+                annotatemore_msg_lookup(mbox->name, record->uid, annot+7, /*userid*/"", &buf);
+            }
+            else if (!strncmp(annot, "/private/", 9)) {
+                annotatemore_msg_lookup(mbox->name, record->uid, annot+7, req->userid, &buf);
+            }
+            else {
+                annotatemore_msg_lookup(mbox->name, record->uid, annot, "", &buf);
+            }
+            if (buf_len(&buf)) {
+                json_error_t jerr;
+                inlinedcids = json_loads(buf_base(&buf), buf_len(&buf), &jerr);
+                if (!inlinedcids) {
+                    syslog(LOG_ERR, "jmap: annotation %s for message %s:%d has bogus value",
+                            annot, mbox->name, record->uid);
+                }
+            }
+        }
 
         for (i = 0; i < bodies.atts.count; i++) {
             struct body *part = ptrarray_nth(&bodies.atts, i);
@@ -2361,8 +2385,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
             free(freeme);
 
-            /* isInline - XXX might check for presence of cid in html body */
-            json_object_set_new(att, "isInline", json_boolean(cid));
+            /* isInline */
+            if (inlinedcids && cid && json_object_get(inlinedcids, cid)) {
+                json_object_set_new(att, "isInline", json_true());
+            }
+            else {
+                json_object_set_new(att, "isInline", json_false());
+            }
 
             /* width, height */
             for (j = 0; j < sizeof(imgprops) / sizeof(imgprops[0]); j++) {
@@ -2389,6 +2418,8 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             atts = json_null();
         }
         json_object_set_new(msg, "attachments", atts);
+
+        if (inlinedcids) json_decref(inlinedcids);
     }
 
     /* attachedMessages */
