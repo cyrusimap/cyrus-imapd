@@ -92,7 +92,9 @@ struct scan_rock {
     struct index_state *idx_state;
     uint32_t msgno;
     char userid[MAX_MAILBOX_NAME];
-    int infected;
+    int user_infected;
+    int total_infected;
+    int mailboxes_scanned;
 };
 
 /* globals for getopt routines */
@@ -347,6 +349,13 @@ int main (int argc, char *argv[]) {
     mboxlist_close();
     mboxlist_done();
 
+    if (verbose) {
+        printf("\n%d mailboxes scanned, %d infected messages %s\n",
+               srock.mailboxes_scanned,
+               srock.total_infected,
+               disinfect ? "removed" : "found");
+    }
+
     if (srock.searchargs) freesearchargs(srock.searchargs);
     else if (engine.destroy) engine.destroy(engine.state);
 
@@ -390,7 +399,7 @@ int scan_me(struct findall_data *data, void *rock)
     if (strcmp(srock->userid, userid) != 0) {
         /* different user, reset infected count */
         strlcpy(srock->userid, userid, sizeof(srock->userid));
-        srock->infected = 0;
+        srock->user_infected = 0;
     }
 
     r = mailbox_open_iwl(name, &mailbox);
@@ -444,6 +453,8 @@ int scan_me(struct findall_data *data, void *rock)
     if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
     else mailbox_close(&mailbox);
 
+    srock->mailboxes_scanned++;
+
     return 0;
 }
 
@@ -492,14 +503,15 @@ unsigned virus_check(struct mailbox *mailbox,
     if (r) {
         if (verbose) {
             /* print header again if user has changed */
-            if (!srock->infected) print_header();
+            if (!srock->user_infected) print_header();
 
             printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
                    (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
                    virname);
         }
 
-        srock->infected ++;
+        srock->user_infected ++;
+        srock->total_infected ++;
 
         if (disinfect) {
             if (email_notification && i_mbox) {
