@@ -109,7 +109,7 @@ int email_notification = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
 
-int verbose = 1;
+int verbose = 0;
 
 /* abstract definition of a virus scan engine */
 struct scan_engine {
@@ -143,24 +143,25 @@ void *clamav_init()
 
     struct clamav_state *st = xzmalloc(sizeof(struct clamav_state));
     if (st == NULL) {
-      fatal("memory allocation failed", EC_SOFTWARE);
+        fatal("memory allocation failed", EC_SOFTWARE);
     }
 
     st->av_engine = cl_engine_new();
     if ( ! st->av_engine ) {
-      fatal("Failed to initialize AV engine", EC_SOFTWARE);
+        fatal("Failed to initialize AV engine", EC_SOFTWARE);
     }
 
     /* load all available databases from default directory */
+    if (verbose) puts("Loading virus signatures...");
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
         syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
         fatal(cl_strerror(r), EC_SOFTWARE);
     }
 
-    if (verbose) printf("Loaded %d virus signatures.\n", sigs);
+    printf("Loaded %d virus signatures.\n", sigs);
 
     /* build av_engine */
-    if((r = cl_engine_compile(st->av_engine))) {
+    if ((r = cl_engine_compile(st->av_engine))) {
         syslog(LOG_ERR,
                "Database initialization error: %s", cl_strerror(r));
         cl_engine_free(st->av_engine);
@@ -254,7 +255,7 @@ int main (int argc, char *argv[]) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((option = getopt(argc, argv, "C:s:rn")) != EOF) {
+    while ((option = getopt(argc, argv, "C:s:rnv")) != EOF) {
         switch (option) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -270,6 +271,10 @@ int main (int argc, char *argv[]) {
 
         case 'n':
             email_notification = 1;
+            break;
+
+        case 'v':
+            verbose ++;
             break;
 
         case 'h':
@@ -311,7 +316,7 @@ int main (int argc, char *argv[]) {
         }
     }
     else {
-        if (verbose) printf("Using %s virus scanner\n", engine.name);
+        printf("Using %s virus scanner\n", engine.name);
 
         if (engine.init) engine.state = engine.init();
     }
@@ -349,12 +354,10 @@ int main (int argc, char *argv[]) {
     mboxlist_close();
     mboxlist_done();
 
-    if (verbose) {
-        printf("\n%d mailboxes scanned, %d infected messages %s\n",
-               srock.mailboxes_scanned,
-               srock.total_infected,
-               disinfect ? "removed" : "found");
-    }
+    printf("\n%d mailboxes scanned, %d infected messages %s\n",
+           srock.mailboxes_scanned,
+           srock.total_infected,
+           disinfect ? "removed" : "found");
 
     if (srock.searchargs) freesearchargs(srock.searchargs);
     else if (engine.destroy) engine.destroy(engine.state);
@@ -366,7 +369,7 @@ int main (int argc, char *argv[]) {
 
 int usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ]\n"
+    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] [-v]\n"
            "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
     printf("\t -s imap-search-string  Rather than scanning for viruses,\n"
@@ -374,6 +377,7 @@ int usage(char *name)
            "\t    Useful for removing messages without a distinct signature, such as Phish.\n");
     printf("\t -r remove infected messages\n");
     printf("\t -n notify mailbox owner of deleted messages via email\n");
+    printf("\t -v verbose output\n");
     exit(0);
 }
 
@@ -449,6 +453,7 @@ int scan_me(struct findall_data *data, void *rock)
 
     srock->i_mbox = i_mbox;
 
+    if (verbose) printf("Scanning %s...\n", name);
     mailbox_expunge(mailbox, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
     if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
     else mailbox_close(&mailbox);
@@ -501,14 +506,12 @@ unsigned virus_check(struct mailbox *mailbox,
     }
 
     if (r) {
-        if (verbose) {
-            /* print header again if user has changed */
-            if (!srock->user_infected) print_header();
+        /* print header if this is the first infection seen for this user */
+        if (verbose || !srock->user_infected) print_header();
 
-            printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
-                   (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
-                   virname);
-        }
+        printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
+               (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
+               virname);
 
         srock->user_infected ++;
         srock->total_infected ++;

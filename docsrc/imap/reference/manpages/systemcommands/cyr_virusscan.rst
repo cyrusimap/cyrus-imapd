@@ -14,7 +14,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_virusscan** [ **-C** *config-file* ] [ **-s** *imap-search-string* ] [ **-r** [ **-n**] ] [ *mboxpattern1* ... ]
+    **cyr_virusscan** [ **-C** *config-file* ] [ **-s** *imap-search-string* ] [ **-r** [ **-n**] ] [**-v**] [ *mboxpattern1* ... ]
 
 Description
 ===========
@@ -66,6 +66,10 @@ Options
 
     Rather than scanning for viruses, messages matching the search
     criteria will be treated as infected.
+
+.. option:: -v
+
+    Produce more verbose output
 
 Examples
 ========
