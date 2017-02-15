@@ -72,7 +72,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-int caladdress_lookup(const char *addr, struct caldav_sched_param *param, const char *myuserid)
+int caladdress_lookup(const char *addr,
+                      struct caldav_sched_param *param, const char *myuserid)
 {
     const char *userid = addr, *p;
     int islocal = 1, found = 1;
@@ -82,7 +83,8 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param, const 
     if (!addr) return HTTP_NOT_FOUND;
 
     if (myuserid) {
-        const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        const char *annotname =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
         char *mailboxname = caldav_mboxname(myuserid, NULL);
         struct buf mybuf = BUF_INITIALIZER;
         int r = annotatemore_lookupmask(mailboxname, annotname,
