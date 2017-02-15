@@ -626,6 +626,8 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
     cdata->comp_type = mykind;
     cdata->comp_flags.status = status;
 
+    cdata->organizer = NULL;
+
     /* Get organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
@@ -633,8 +635,17 @@ EXPORTED int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *c
         if (cdata->organizer && !strncasecmp(cdata->organizer, "mailto:", 7))
             cdata->organizer += 7;
     }
-    else
-        cdata->organizer = NULL;
+    /* maybe it's only on a sub event */
+    icalcomponent *nextcomp;
+    while (!cdata->organizer &&
+           (nextcomp = icalcomponent_get_next_component(ical, kind))) {
+        prop = icalcomponent_get_first_property(nextcomp, ICAL_ORGANIZER_PROPERTY);
+        if (prop) {
+            cdata->organizer = icalproperty_get_organizer(prop);
+            if (cdata->organizer && !strncasecmp(cdata->organizer, "mailto:", 7))
+                cdata->organizer += 7;
+        }
+    }
 
     /* Get transparency */
     prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
