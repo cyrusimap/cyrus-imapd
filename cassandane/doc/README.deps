@@ -53,6 +53,7 @@ Cassandane needs the following software to work:
     Allows Cyrus to generate core dumps at all
     CPAN package http://search.cpan.org/dist/BSD-Resource/
     Ubuntu package libbsd-resource-perl
+    RH/CentOS package perl-BSD-Resource
 
  * Test::Unit
     Unit testing framework for Perl
@@ -91,6 +92,7 @@ Cassandane needs the following software to work:
     Perl 5 module to talk to NNTP (RFC977) server
     CPAN package http://search.cpan.org/~rva/NNTPClient-0.37/
     Ubuntu package libnews-nntpclient-perl
+    RH/CentOS package perl-NNTPClient
 
  * IO::Socket::INET6
     Object interface for AF_INET|AF_INET6 domain sockets
@@ -126,3 +128,7 @@ Debian/Ubuntu copypasta:
        libio-socket-inet6-perl libnet-server-perl \
        libunix-syslog-perl libnews-nntpclient-perl \
        libfile-chdir-perl libio-stringy-perl
+
+Fedora copypasta:
+   # there's heaps more to add here... needs to be tested
+    dnf install perl-String-CRC32 perl-File-chdir perl-Unix-Syslog perl-Net-Server
