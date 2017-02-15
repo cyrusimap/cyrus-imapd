@@ -64,6 +64,7 @@
 #include "util.h"
 #include "sync_log.h"
 #include "times.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -90,6 +91,8 @@ struct scan_rock {
     struct searchargs *searchargs;
     struct index_state *idx_state;
     uint32_t msgno;
+    char userid[MAX_MAILBOX_NAME];
+    int infected;
 };
 
 /* globals for getopt routines */
@@ -365,6 +368,14 @@ int usage(char *name)
     exit(0);
 }
 
+static void print_header(void)
+{
+    printf("\n%-40s\t%10s\t%6s\t%s\n",
+           "Mailbox Name", "Msg UID", "Status", "Virus Name");
+    printf("----------------------------------------\t"
+           "----------\t------\t"
+           "--------------------------------------------------\n");
+}
 
 int scan_me(struct findall_data *data, void *rock)
 {
@@ -373,14 +384,13 @@ int scan_me(struct findall_data *data, void *rock)
     int r;
     struct infected_mbox *i_mbox = NULL;
     const char *name = mbname_intname(data->mbname);
+    const char *userid = mbname_userid(data->mbname);
     struct scan_rock *srock = (struct scan_rock *) rock;
 
-    if (verbose) {
-        printf("\n%-40s\t%10s\t%6s\t%s\n",
-               "Mailbox Name", "Msg UID", "Status", "Virus Name");
-        printf("----------------------------------------\t"
-               "----------\t------\t"
-               "--------------------------------------------------\n");
+    if (strcmp(srock->userid, userid) != 0) {
+        /* different user, reset infected count */
+        strlcpy(srock->userid, userid, sizeof(srock->userid));
+        srock->infected = 0;
     }
 
     r = mailbox_open_iwl(name, &mailbox);
@@ -481,11 +491,16 @@ unsigned virus_check(struct mailbox *mailbox,
 
     if (r) {
         if (verbose) {
+            /* print header again if user has changed */
+            if (!srock->infected) print_header();
+
             printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
                    (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
                    virname);
-
         }
+
+        srock->infected ++;
+
         if (disinfect) {
             if (email_notification && i_mbox) {
                 create_digest(i_mbox, mailbox, record, virname);

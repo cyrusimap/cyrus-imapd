@@ -89,9 +89,6 @@ Examples
         Mailbox Name                            	   Msg UID	Status	Virus Name
         ----------------------------------------	----------	------	--------------------------------------------------
         user.betty                              	    185395	  READ	Heuristics.Phishing.Email.SpoofedDomain
-
-        Mailbox Name                            	   Msg UID	Status	Virus Name
-        ----------------------------------------	----------	------	--------------------------------------------------
         user.betty.Bank stuff                   	         9	  READ	Html.Phishing.Bank-1172
         user.betty.Bank stuff                   	        10	  READ	Html.Phishing.Bank-1172
         user.betty.Bank stuff                   	        11	  READ	Html.Phishing.Bank-1172
