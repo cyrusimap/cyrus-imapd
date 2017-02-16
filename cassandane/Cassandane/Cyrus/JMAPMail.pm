@@ -2153,6 +2153,7 @@ sub test_setmessages_attachments
     #   definition file and in cassandane.ini's cyrus config
     # - run an annotator daemon or set the annotation via IMAP
     #$self->assert_equals(JSON::true, $att2->{isInline});
+    $self->assert_null($att2->{width});
     $self->assert_null($att2->{height});
 }
 
