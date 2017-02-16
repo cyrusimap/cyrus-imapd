@@ -3132,6 +3132,30 @@ sub test_getmessagelist_snippets
     my $snippet = $res->[1][1]{list}[0];
     $self->assert_not_null($snippet);
     $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Message</mark> A"));
+
+    xlog "fetch message and snippet with no filter";
+    $res = $jmap->Request([['getMessageList', {
+        fetchSearchSnippets => JSON::true,
+    }, "R1"]]);
+
+    $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_null($snippet->{subject});
+    $self->assert_null($snippet->{preview});
+
+    xlog "fetch message and snippet with no text filter";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            operator => "OR",
+            conditions => [{isUnread => JSON::true}, {isUnread => JSON::false}]
+        },
+        fetchSearchSnippets => JSON::true,
+    }, "R1"]]);
+
+    $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_null($snippet->{subject});
+    $self->assert_null($snippet->{preview});
 }
 
 sub test_getthreads
