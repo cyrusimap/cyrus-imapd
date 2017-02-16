@@ -49,10 +49,30 @@ use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
 
+my %eicar_attached = (
+    mime_type => "multipart/mixed",
+    mime_boundary => "boundary",
+    body => ""
+	. "--boundary\r\n"
+	. "Content-Type: text/plain\r\n"
+	. "\r\n"
+	. "body"
+	. "\r\n"
+	. "--boundary\r\n"
+	. "Content-Disposition: attachment; filename=eicar.txt;\r\n"
+	. "Content-Type: text/plain\r\n"
+	. "\r\n"
+	# This is the EICAR AV test file:
+	# http://www.eicar.org/83-0-Anti-Malware-Testfile.html
+	. 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+	. "\r\n"
+	. "--boundary\r\n",
+);
+
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ }, @_);
+    return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
 sub set_up
@@ -63,6 +83,12 @@ sub set_up
         xlog "clamav not enabled. Skipping tests.";
         return;
     }
+
+    # set up a shared folder that's easy to write to
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared.folder');
+    $admintalk->setacl('shared.folder', 'cassandane' => 'lrswipkxtecd');
+
     $self->{test_clamav} = 1;
 }
 
@@ -91,36 +117,25 @@ sub test_remove_infected
     my $talk = $self->{store}->get_client();
     $talk->select("INBOX");
     $self->assert_num_equals(1, $talk->uid());
+    $talk->select("shared.folder");
+    $self->assert_num_equals(1, $talk->uid());
 
-    my $body = ""
-    . "--boundary\r\n"
-    . "Content-Type: text/plain\r\n"
-    . "\r\n"
-    . "body"
-    . "\r\n"
-    . "--boundary\r\n"
-    . "Content-Disposition: attachment; filename=eicar.txt;\r\n"
-    . "Content-Type: text/plain\r\n"
-    . "\r\n"
-    # This is the EICAR AV test file:
-    # http://www.eicar.org/83-0-Anti-Malware-Testfile.html
-    . 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
-    . "\r\n"
-    . "--boundary\r\n";
+    # put some test messages in INBOX (and verify)
+    $self->{store}->set_folder("INBOX");
+    my %cass_exp;
+    $cass_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $cass_exp{2} = $self->make_message("clean", uid => 2);
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
 
-    my %exp;
+    # put some test messages in shared.folder (and verify)
+    $self->{store}->set_folder("shared.folder");
+    my %shared_exp;
+    $shared_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $shared_exp{2} = $self->make_message("clean", uid => 2);
+    $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
 
-    $exp{1} = $self->make_message("eicar attached",
-				       mime_type => "multipart/mixed",
-				       mime_boundary => "boundary",
-				       body => $body);
-
-    $exp{2} = $self->make_message("clean");
-
-    $self->check_messages(\%exp, ( keyed_on => 'uid' ));
-
+    # run cyr_virusscan
     my $out = "$self->{instance}->{basedir}/$self->{_name}-cyr_virusscan.stdout";
-
     $self->{instance}->run_command(
 	{ cyrus => 1,
 	  redirects => { 'stdout' => $out },
@@ -128,6 +143,7 @@ sub test_remove_infected
 
     # check the output
     # user.cassandane				         1  UNREAD  Eicar-Test-Signature
+    # shared.folder				         1  UNREAD  Eicar-Test-Signature
     {
 	local $/;
 	open my $fh, '<', $out
@@ -139,8 +155,15 @@ sub test_remove_infected
     # XXX is there a better way than hard coding UID:1 ?
     $self->assert_matches(qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
 			  $out);
+    $self->assert_matches(qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+			  $out);
 
-    # make sure the infected one was expunged, but the clean one wasn't
-    delete $exp{1};
-    $self->check_messages(\%exp, ( keyed_on => 'uid' ));
+    # make sure the infected ones were expunged, but the clean ones weren't
+    $self->{store}->set_folder("INBOX");
+    delete $cass_exp{1};
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
+
+    $self->{store}->set_folder("shared.folder");
+    delete $shared_exp{1};
+    $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
 }
