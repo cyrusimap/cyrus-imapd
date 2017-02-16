@@ -2110,6 +2110,34 @@ static conversation_id_t jmap_decode_thrid(const char *thrid)
     return cid;
 }
 
+static json_t *jmapmsg_annot_read(const jmap_req_t *req,
+                                  const char *mboxname, uint32_t uid,
+                                  const char *annot)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *annotvalue = NULL;
+
+    if (!strncmp(annot, "/shared/", 8)) {
+        annotatemore_msg_lookup(mboxname, uid, annot+7, /*userid*/"", &buf);
+    }
+    else if (!strncmp(annot, "/private/", 9)) {
+        annotatemore_msg_lookup(mboxname, uid, annot+7, req->userid, &buf);
+    }
+    else {
+        annotatemore_msg_lookup(mboxname, uid, annot, "", &buf);
+    }
+    if (buf_len(&buf)) {
+        json_error_t jerr;
+        if (!(annotvalue = json_loads(buf_base(&buf), buf_len(&buf), &jerr))) {
+            syslog(LOG_ERR, "jmap: annotation %s for message %s:%d has bogus value",
+                    annot, mboxname, uid);
+        }
+    }
+
+    buf_free(&buf);
+    return annotvalue;
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              struct mailbox *mbox,
@@ -2301,29 +2329,17 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     if (_wantprop(props, "attachments")) {
         int i;
         json_t *atts = json_pack("[]");
-        json_t *inlinedcids = NULL;
+        json_t *inlinedcids = NULL, *imgsizes = NULL;
+        const char *annot;
 
         /* Load the message annotation with the hash of cid: urls */
-        const char *annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT);
-        if (annot) {
-            buf_reset(&buf);
-            if (!strncmp(annot, "/shared/", 8)) {
-                annotatemore_msg_lookup(mbox->name, record->uid, annot+7, /*userid*/"", &buf);
-            }
-            else if (!strncmp(annot, "/private/", 9)) {
-                annotatemore_msg_lookup(mbox->name, record->uid, annot+7, req->userid, &buf);
-            }
-            else {
-                annotatemore_msg_lookup(mbox->name, record->uid, annot, "", &buf);
-            }
-            if (buf_len(&buf)) {
-                json_error_t jerr;
-                inlinedcids = json_loads(buf_base(&buf), buf_len(&buf), &jerr);
-                if (!inlinedcids) {
-                    syslog(LOG_ERR, "jmap: annotation %s for message %s:%d has bogus value",
-                            annot, mbox->name, record->uid);
-                }
-            }
+        if ((annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT))) {
+            inlinedcids = jmapmsg_annot_read(req, mbox->name, record->uid, annot);
+        }
+
+        /* Load the message annotation with the hash of image dimensions */
+        if ((annot = config_getstring(IMAPOPT_JMAP_IMAGESIZE_ANNOT))) {
+            imgsizes = jmapmsg_annot_read(req, mbox->name, record->uid, annot);
         }
 
         for (i = 0; i < bodies.atts.count; i++) {
@@ -2334,8 +2350,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             const char *cid;
             strarray_t headers = STRARRAY_INITIALIZER;
             char *freeme;
-            static const char* imgprops[] = { "width", "height" };
-            size_t j;
 
             char *blobid = jmap_blobid(&part->content_guid);
             att = json_pack("{s:s}", "blobId", blobid);
@@ -2394,20 +2408,15 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             }
 
             /* width, height */
-            for (j = 0; j < sizeof(imgprops) / sizeof(imgprops[0]); j++) {
-                const char *pname;
-                char *annot;
-
-                pname = imgprops[j];
-                annot = strconcat(part->part_id, ".", pname, NULL);
-
-                buf_reset(&buf);
-                annotatemore_msg_lookup(mbox->name, record->uid, annot, req->userid, &buf);
-                json_object_set_new(att, pname, buf_len(&buf) ?
-                        json_integer(str2uint64(buf_cstring(&buf))) :
-                        json_null());
-                free(annot);
+            json_t *width = json_null(), *height = json_null(), *dim;
+            if (imgsizes && (dim = json_object_get(imgsizes, part->part_id))) {
+                if (json_array_size(dim) >= 2) {
+                    width = json_incref(json_array_get(dim, 0));
+                    height = json_incref(json_array_get(dim, 1));
+                }
             }
+            json_object_set_new(att, "width", width);
+            json_object_set_new(att, "height", height);
 
             charset_free(&ascii);
             strarray_fini(&headers);

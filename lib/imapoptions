@@ -969,12 +969,32 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The name of the per-message annotation, if any, to store message
    previews. */
 
+{ "jmap_imagesize_annot", NULL, STRING }
+/* The name of the per-message annotation, if any, that stores a
+   JSON object, mapping message part numbers of MIME image types
+   to an array of their image dimensions. The array must have at
+   least two entries, where the first entry denotes the width
+   and the second entry the height of the image. Any additional
+   values are ignored.
+
+   For example, if message part 1.2 contains an image of width 300
+   and height 200, then the value of this annotation would be:
+
+   { "1.2" : [ 300, 200 ] }
+   */
+
 { "jmap_inlinedcids_annot", NULL, STRING }
 /* The name of the per-message annotation, if any, that stores a
    JSON object, mapping RFC2392 Content-IDs referenced in HTML bodies
    to the respective HTML body part number.
 
-   Note that the Content-ID keys must be URL-unescaped and enclosed in
+   For example, if message part 1.2 contains HTML and references an
+   inlined image at "cid:foo", then the value of this annotation
+   would be:
+
+   { "<foo>" : "1.2" }
+
+   Note that the Content-ID key must be URL-unescaped and enclosed in
    angular brackets, as defined in RFC2392. */
 
 { "jmap_preview_length", 64, INT }
