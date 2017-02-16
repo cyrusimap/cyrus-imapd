@@ -4265,6 +4265,7 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 {
     xmlChar *attr;
     xmlNodePtr node;
+    unsigned type = 0;
     struct filter_profile_t profile =
         { 1 /* allof */, COLLATION_ASCII,
           CALDAV_SUPP_FILTER, CALDAV_SUPP_COLLATION,
@@ -4316,27 +4317,29 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                     error->desc = "VCALENDAR can only be toplevel component";
                     break;
                 case ICAL_VEVENT_COMPONENT:
-                    *comp_types |= CAL_COMP_VEVENT;
+                    type = CAL_COMP_VEVENT;
                     break;
                 case ICAL_VTODO_COMPONENT:
-                    *comp_types |= CAL_COMP_VTODO;
+                    type = CAL_COMP_VTODO;
                     break;
                 case ICAL_VJOURNAL_COMPONENT:
-                    *comp_types |= CAL_COMP_VJOURNAL;
+                    type = CAL_COMP_VJOURNAL;
                     break;
                 case ICAL_VFREEBUSY_COMPONENT:
-                    *comp_types |= CAL_COMP_VFREEBUSY;
+                    type = CAL_COMP_VFREEBUSY;
                     break;
                 case ICAL_VAVAILABILITY_COMPONENT:
-                    *comp_types |= CAL_COMP_VAVAILABILITY;
+                    type = CAL_COMP_VAVAILABILITY;
                     break;
                 case ICAL_VPOLL_COMPONENT:
-                    *comp_types |= CAL_COMP_VPOLL;
+                    type = CAL_COMP_VPOLL;
                     break;
                 default:
                     *flags |= PARSE_ICAL;
                     break;
                 }
+
+                *comp_types |= type;
                 break;
 
             default:
@@ -4379,7 +4382,11 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 error->desc = DAV_FILTER_ISNOTDEF_ERR;
                 error->node = xmlCopyNode(root, 1);
             }
-            else (*comp)->not_defined = 1;
+            else {
+                *flags |= PARSE_ICAL;
+                (*comp)->not_defined = 1;
+                if (type) *comp_types &= ~type;
+            }
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
             if ((*comp)->range) {
@@ -4708,8 +4715,8 @@ static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
        It doesn't appear that libical currently deals with them.
     */
 
-    if (ical && !comp) return compfilter->not_defined;
-    if (compfilter->not_defined) return 0;
+    if (compfilter->not_defined) return (comp == NULL);
+
     if (!(compfilter->range || compfilter->prop || compfilter->comp)) return 1;
 
     /* Test each instance of this component (logical OR) */
