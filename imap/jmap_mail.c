@@ -3891,6 +3891,49 @@ done:
     return r;
 }
 
+static int filter_contains_text(json_t *filter)
+{
+    if (JNOTNULL(filter)) {
+        json_t *val;
+        size_t i;
+
+        if (JNOTNULL(json_object_get(filter, "text"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "subject"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "body"))) {
+            return 1;
+        }
+
+        /* We don't generate snippets for headers, but we
+         * might find header text in the body or subject again. */
+        if (JNOTNULL(json_object_get(filter, "header"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "from"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "to"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "cc"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "bcc"))) {
+            return 1;
+        }
+
+        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            if (filter_contains_text(val)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int getSearchSnippets(jmap_req_t *req)
 {
     int r;
@@ -3907,10 +3950,6 @@ static int getSearchSnippets(jmap_req_t *req)
     if (JNOTNULL(filter)) {
         validatefilter(filter, "filter", invalid);
     }
-    else {
-        /* FIXME spec currently allows filter to be null */
-        json_array_append_new(invalid, json_string("filter"));
-    }
 
     /* messageIds */
     messageids = json_object_get(req->args, "messageIds");
@@ -3921,7 +3960,7 @@ static int getSearchSnippets(jmap_req_t *req)
             buf_reset(&buf);
         }
     }
-    if (JNOTNULL(messageids) && !json_is_array(messageids)) {
+    if (!json_is_array(messageids)) {
         json_array_append_new(invalid, json_string("messageIds"));
     }
 
@@ -3934,9 +3973,21 @@ static int getSearchSnippets(jmap_req_t *req)
     }
     json_decref(invalid);
 
-    /* Render snippets */
-    r = jmapmsg_snippets(req, filter, messageids, &snippets, &notfound);
-    if (r) goto done;
+    if (JNOTNULL(filter) && filter_contains_text(filter)) {
+        /* Render snippets */
+        r = jmapmsg_snippets(req, filter, messageids, &snippets, &notfound);
+        if (r) goto done;
+    } else {
+        /* Trivial, snippets cant' match */
+        snippets = json_pack("[]");
+        notfound = json_null();
+
+        json_array_foreach(messageids, i, val) {
+            json_array_append_new(snippets, json_pack("{s:s s:n s:n}",
+                        "messageId", json_string_value(val),
+                        "subject", "preview"));
+        }
+    }
 
     /* Prepare response. */
     res = json_pack("{}");
