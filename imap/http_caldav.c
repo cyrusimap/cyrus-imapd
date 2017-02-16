@@ -4187,11 +4187,13 @@ static void parse_timerange(xmlNodePtr node,
                             struct icalperiodtype **range, struct error_t *error)
 {
     xmlChar *attr;
+    int count = 0;
 
     *range = xzmalloc(sizeof(struct icalperiodtype));
 
     attr = xmlGetProp(node, BAD_CAST "start");
     if (attr) {
+        count++;
         (*range)->start = icaltime_from_string((char *) attr);
         xmlFree(attr);
     }
@@ -4202,6 +4204,7 @@ static void parse_timerange(xmlNodePtr node,
 
     attr = xmlGetProp(node, BAD_CAST "end");
     if (attr) {
+        count++;
         (*range)->end = icaltime_from_string((char *) attr);
         xmlFree(attr);
     }
@@ -4210,7 +4213,7 @@ static void parse_timerange(xmlNodePtr node,
             icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
     }
 
-    if (!is_valid_timerange((*range)->start, (*range)->end)) {
+    if (!count || !is_valid_timerange((*range)->start, (*range)->end)) {
         error->precond = CALDAV_VALID_FILTER;
         error->desc = "Invalid time-range";
         error->node = xmlCopyNode(node->parent, 1);
