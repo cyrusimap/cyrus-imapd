@@ -400,9 +400,14 @@ int scan_me(struct findall_data *data, void *rock)
     const char *userid = mbname_userid(data->mbname);
     struct scan_rock *srock = (struct scan_rock *) rock;
 
-    if (strcmp(srock->userid, userid) != 0) {
-        /* different user, reset infected count */
+    /* reset infected count when user changes, without choking
+     * on shared mailboxes, which don't have a user. */
+    if (userid != NULL && strcmp(srock->userid, userid) != 0) {
         strlcpy(srock->userid, userid, sizeof(srock->userid));
+        srock->user_infected = 0;
+    }
+    else if (userid == NULL && *srock->userid != '\0') {
+        memset(srock->userid, 0, sizeof(srock->userid));
         srock->user_infected = 0;
     }
 
