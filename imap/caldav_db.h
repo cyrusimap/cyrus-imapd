@@ -85,6 +85,8 @@ enum {
     CAL_COMP_VCALENDAR =        (1<<15)
 };
 
+#define CAL_COMP_REAL            0xff   /* All "real" components */
+
 struct caldav_db;
 
 struct comp_flags {

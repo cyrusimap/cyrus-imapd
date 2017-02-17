@@ -4765,6 +4765,11 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     if (calfilter->comp_types) {
         /* Check comp-filter vs component type of resource */
         if (!(cdata->comp_type & calfilter->comp_types)) return 0;
+        if (calfilter->comp->allof &&
+            (cdata->comp_type & CAL_COMP_REAL) !=
+            (calfilter->comp_types & CAL_COMP_REAL)) {
+            return 0;
+        }
     }
 
     if (calfilter->flags & PARSE_ICAL) {
