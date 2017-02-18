@@ -119,6 +119,10 @@ Cassandane needs the following software to work:
     I/O on in-core objects like strings and arrays
     Ubuntu package libio-stringy-perl
 
+ * Math::Int64
+    64 bit integer module for calculating conversation IDs
+    cpan Math::Int64
+
 
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha-perl \

@@ -50,6 +50,8 @@ use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
 use Cassandane::Util::SHA;
 
+use Math::Int64;
+
 our @EXPORT = qw(base_subject);
 
 sub new
@@ -446,16 +448,15 @@ sub get_guid
 sub make_cid
 {
     my ($self) = @_;
-    no warnings 'portable';  # Support for 64-bit ints required
 
     my $sha1 = sha1($self->as_string());
-    my $cid = 0;
+    my $cid = Math::Int64::uint64(0);
     for (0..7) {
         $cid <<= 8;
         $cid |= ord(substr($sha1, $_, 1));
     }
-    $cid ^= 0x91f3d9e10b690b12; # chosen by fair dice roll
-    my $res = sprintf("%016x", $cid);
+    $cid ^= Math::Int64::string_to_uint64("0x91f3d9e10b690b12", 16); # chosen by fair dice roll
+    my $res = lc Math::Int64::uint64_to_string($cid, 16);
     return $res;
 }
 
