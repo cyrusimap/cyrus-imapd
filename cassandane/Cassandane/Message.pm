@@ -457,7 +457,7 @@ sub make_cid
     }
     $cid ^= Math::Int64::string_to_uint64("0x91f3d9e10b690b12", 16); # chosen by fair dice roll
     my $res = lc Math::Int64::uint64_to_string($cid, 16);
-    return $res;
+    return sprintf("%016s", $res);
 }
 
 # Handy accessors
