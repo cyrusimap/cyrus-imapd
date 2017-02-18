@@ -3936,7 +3936,7 @@ static int filter_contains_text(json_t *filter)
 
 static int getSearchSnippets(jmap_req_t *req)
 {
-    int r;
+    int r = 0;
     json_t *filter, *messageids, *val, *snippets, *notfound, *res, *item;
     const char *s;
     struct buf buf = BUF_INITIALIZER;
