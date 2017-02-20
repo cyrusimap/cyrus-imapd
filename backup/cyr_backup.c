@@ -376,6 +376,10 @@ int main(int argc, char **argv)
         break;
     }
 
+    /* verify the backup */
+    if (!r)
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, options.verbose, stdout);
+
     /* run command */
     if (!r && cmd_func[cmd])
         r = cmd_func[cmd](backup, &options);
