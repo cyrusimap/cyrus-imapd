@@ -38,7 +38,7 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-PROGRAMS=	lemming gdbtramp
+PROGRAMS=	lemming gdbtramp crash
 
 CC=		gcc
 COPTFLAGS=	-g -O0
@@ -56,6 +56,11 @@ gdbtramp_SOURCE=    gdbtramp.c
 gdbtramp_OBJS=	    $(gdbtramp_SOURCE:.c=.o)
 gdbtramp: $(gdbtramp_OBJS)
 	$(LINK.c) -o $@ $(gdbtramp_OBJS)
+
+crash_SOURCE=       crash.c
+crash_OBJS=         $(crash_SOURCE:.c=.o)
+crash: $(crash_OBJS)
+	$(LINK.c) -o $@ $(crash_OBJS)
 
 clean:
 	$(RM) $(PROGRAMS) *.o
