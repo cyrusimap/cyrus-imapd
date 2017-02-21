@@ -96,12 +96,17 @@ sub _test_core_files_with_size
     $self->assert_matches(qr/Core files found/, $err);
 
     my $core = "$instance->{basedir}/conf/cores/core.$pid";
-    $self->assert(-s $core > $alloc);
+    if (not -f $core) {
+	$core = "$instance->{basedir}/conf/cores/core";
+    }
+    $self->assert(-f $core);
+    my $size = -s $core;
 
     # clean up the core we expected, so we don't barf on it existing!
     unlink $core or die "unlink $core: $!";
-
     # but don't clean up any other unexpected cores!
+
+    $self->assert($size > $alloc);
 }
 
 sub test_core_files_1KB
