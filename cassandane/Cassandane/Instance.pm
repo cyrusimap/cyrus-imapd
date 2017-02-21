@@ -1565,8 +1565,8 @@ sub _fork_command
     chdir($cd)
 	or die "Cannot cd to $cd: $!";
 
-    # ulimit -c 102400
-    setrlimit(RLIMIT_CORE, 102400*1024, 102400*1024);
+    # ulimit -c ...
+    setrlimit(RLIMIT_CORE, 100*1024*1024, 100*1024*1024); # 100MB
 
     # TODO: do any setuid, umask, or environment futzing here
 
