@@ -3973,7 +3973,7 @@ static int getSearchSnippets(jmap_req_t *req)
     }
     json_decref(invalid);
 
-    if (JNOTNULL(filter) && filter_contains_text(filter)) {
+    if (json_array_size(messageids) && filter_contains_text(filter)) {
         /* Render snippets */
         r = jmapmsg_snippets(req, filter, messageids, &snippets, &notfound);
         if (r) goto done;
