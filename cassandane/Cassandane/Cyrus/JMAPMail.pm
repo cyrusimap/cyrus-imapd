@@ -2579,7 +2579,6 @@ sub test_acl
     $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
 }
 
-=comment
 sub test_getmessagelist
     :JMAP :min_version_3_0
 {
@@ -2706,7 +2705,7 @@ sub test_getmessagelist
     xlog "filter mailboxes";
     $res = $jmap->Request([['getMessageList', {
         filter => {
-            operator => 'AND',
+            operator => 'OR',
             conditions => [
                 {
                     inMailbox => $mboxa,
@@ -2759,8 +2758,7 @@ sub test_getmessagelist
             ],
         },
     }, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
-    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
 
     xlog "filter by before";
     my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
@@ -2872,7 +2870,6 @@ sub test_getmessagelist
     @ids = reverse sort ($foo, $bar);
     $self->assert_deep_equals(\@ids, $res->[0][1]->{messageIds});
 }
-=cut
 
 sub test_getmessagelist_collapse
     :JMAP :min_version_3_0
