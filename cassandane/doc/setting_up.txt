@@ -103,6 +103,12 @@ at all.  This section documents those steps.
 
     # echo 1 >/proc/sys/fs/suid_dumpable
 
+    Finally, some Linux systems might require to unlimit the size of
+    core dumps. As suid_dumpable, this shouldn't normally be set on
+    production systems.
+
+    # ulimit -c unlimited
+
 Now, to run Cassandane use this command
 
     gnb> cd ~/my/cassandane/workarea
