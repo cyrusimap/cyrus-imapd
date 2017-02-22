@@ -4430,13 +4430,13 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             if (prop) {
                 if ((*comp)->prop) prop->next = (*comp)->prop;
                 (*comp)->prop = prop;
-            }
-            if (prop->match) {
-                if (prop->other || prop->match->next) {
-                    error->precond = CALDAV_SUPP_FILTER;
-                    error->desc = prop->match->next ? "Multiple text-match" :
-                        "time-range can NOT be combined with text-match";
-                    error->node = xmlCopyNode(node, 1);
+                if (prop->match) {
+                    if (prop->other || prop->match->next) {
+                        error->precond = CALDAV_SUPP_FILTER;
+                        error->desc = prop->match->next ? "Multiple text-match" :
+                            "time-range can NOT be combined with text-match";
+                        error->node = xmlCopyNode(node, 1);
+                    }
                 }
             }
         }
