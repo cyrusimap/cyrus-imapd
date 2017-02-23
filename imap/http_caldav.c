@@ -1283,7 +1283,12 @@ static void get_schedule_addresses(struct transaction_t *txn,
     /* allow override of schedule-address per-message (FM specific) */
     const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
 
-    if (hdr) strarray_append(addresses, hdr[0]);
+    if (hdr) {
+        if (!strncasecmp(hdr[0], "mailto:", 7))
+            strarray_append(addresses, hdr[0]+7);
+        else
+            strarray_append(addresses, hdr[0]);
+    }
     else {
         /* find schedule address based on the destination calendar's user */
 
