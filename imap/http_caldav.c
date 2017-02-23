@@ -5274,7 +5274,9 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
         xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                                        name, ns, NULL, 0);
         buf_reset(&fctx->buf);
-        buf_printf(&fctx->buf, "mailto:%s", buf_cstring(&buf));
+        const char *address = buf_cstring(&buf);
+        if (!strncasecmp(address, "mailto:", 7)) address += 7;
+        buf_printf(&fctx->buf, "mailto:%s", address);
         xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
 
