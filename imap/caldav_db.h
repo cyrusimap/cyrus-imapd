@@ -138,6 +138,13 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
                            struct caldav_data **result,
                            int tombstones);
 
+/* lookup an entry from 'caldavdb' by mailbox and IMAP uid
+   (optionally inside a transaction for updates) */
+int caldav_lookup_imapuid(struct caldav_db *caldavdb,
+                          const char *mailbox, int uid,
+                          struct caldav_data **result,
+                          int tombstones);
+
 /* lookup an entry from 'caldavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,

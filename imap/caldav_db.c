@@ -345,6 +345,33 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     return r;
 }
 
+#define CMD_SELIMAPUID CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
+
+EXPORTED int caldav_lookup_imapuid(struct caldav_db *caldavdb,
+                           const char *mailbox, int imap_uid,
+                           struct caldav_data **result,
+                           int tombstones)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
+        { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
+        { NULL,        SQLITE_NULL,    { .s = NULL          } } };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, tombstones, NULL, NULL };
+    int r;
+
+    *result = memset(&cdata, 0, sizeof(struct caldav_data));
+
+    r = sqldb_exec(caldavdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    cdata.dav.mailbox = mailbox;
+    cdata.dav.imap_uid = imap_uid;
+
+    return r;
+}
+
 
 #define CMD_SELUID CMD_READFIELDS \
     " WHERE ical_uid = :ical_uid AND mailbox != :inbox AND alive = 1;"
