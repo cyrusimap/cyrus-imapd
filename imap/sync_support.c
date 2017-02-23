@@ -191,7 +191,7 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
     *++end = '\0';
 
     /* status gets the capability string */
-    syslog(LOG_INFO, "imap_sasl_parsesuccess(): found capability string: %s", start);
+    syslog(LOG_DEBUG, "imap_sasl_parsesuccess(): found capability string: %s", start);
     *status = start;
 
     /* there's no base64 data, so return NULL */
