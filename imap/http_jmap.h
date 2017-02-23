@@ -102,4 +102,12 @@ extern int jmap_findblob(jmap_req_t *req, const char *blobid,
                          struct body **body, const struct body **part);
 extern char *jmap_blobid(const struct message_guid *guid);
 
+/* JMAP states */
+extern json_t* jmap_getstate(int mbtype, struct jmap_req *req);
+extern int jmap_bumpstate(int mbtype, struct jmap_req *req);
+extern int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req);
+
+/* Helpers for DAV-based JMAP types */
+extern char *jmap_xhref(const char *mboxname, const char *resource);
+
 #endif /* HTTP_JMAP_H */

@@ -957,3 +957,112 @@ done:
 
     return ret;
 }
+
+static int JNOTNULL(json_t *item)
+{
+   if (!item) return 0;
+   if (json_is_null(item)) return 0;
+   return 1;
+}
+
+EXPORTED int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
+    if (JNOTNULL(state)) {
+        const char *s = json_string_value(state);
+        if (!s) {
+            return -1;
+        }
+        modseq_t clientState = atomodseq_t(s);
+        switch (mbtype) {
+         case MBTYPE_CALENDAR:
+             return clientState != req->counters.caldavmodseq;
+         case MBTYPE_ADDRESSBOOK:
+             return clientState != req->counters.carddavmodseq;
+         default:
+             return clientState != req->counters.mailmodseq;
+        }
+    }
+    return 0;
+}
+
+EXPORTED json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    modseq_t modseq;
+
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
+    }
+
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    state = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+
+    return state;
+}
+
+EXPORTED int jmap_bumpstate(int mbtype, struct jmap_req *req) {
+    int r = 0;
+    modseq_t modseq;
+    char *mboxname = mboxname_user_mbox(req->userid, NULL);
+
+    /* Read counters. */
+    r = mboxname_read_counters(mboxname, &req->counters);
+    if (r) goto done;
+
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
+    }
+
+    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype, 1);
+    r = mboxname_read_counters(mboxname, &req->counters);
+    if (r) goto done;
+
+done:
+    free(mboxname);
+    return r;
+}
+
+EXPORTED char *jmap_xhref(const char *mboxname, const char *resource)
+{
+    /* XXX - look up root path from namespace? */
+    struct buf buf = BUF_INITIALIZER;
+    char *userid = mboxname_to_userid(mboxname);
+
+    const char *prefix = NULL;
+    if (mboxname_isaddressbookmailbox(mboxname, 0)) {
+        prefix = namespace_addressbook.prefix;
+    }
+    else if (mboxname_iscalendarmailbox(mboxname, 0)) {
+        prefix = namespace_calendar.prefix;
+    }
+
+    if (strchr(userid, '@') || !httpd_extradomain) {
+        buf_printf(&buf, "%s/%s/%s/%s", prefix, USER_COLLECTION_PREFIX,
+                   userid, strrchr(mboxname, '.')+1);
+    }
+    else {
+        buf_printf(&buf, "%s/%s/%s@%s/%s", prefix, USER_COLLECTION_PREFIX,
+                   userid, httpd_extradomain, strrchr(mboxname, '.')+1);
+    }
+    if (resource)
+        buf_printf(&buf, "/%s", resource);
+    free(userid);
+    return buf_release(&buf);
+}
+

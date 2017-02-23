@@ -58,6 +58,7 @@
 #include "hash.h"
 #include "http_carddav.h"
 #include "http_dav.h"
+#include "http_jmap.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxname.h"
@@ -65,8 +66,6 @@
 #include "util.h"
 #include "vcard_support.h"
 #include "xmalloc.h"
-
-#include "jmap_common.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -272,6 +271,124 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text) 
 }
 
 /* FIXME DUPLICATE END */
+
+/*
+ * FIXME Refactored JMAP filter into contacts, since we don't
+ * need it anymore for calendar events. You are next, contacts!
+ */
+
+enum jmap_filter_kind {
+    JMAP_FILTER_KIND_COND = 0,
+    JMAP_FILTER_KIND_OPER
+};
+
+enum jmap_filter_op   {
+    JMAP_FILTER_OP_NONE = 0,
+    JMAP_FILTER_OP_AND,
+    JMAP_FILTER_OP_OR,
+    JMAP_FILTER_OP_NOT
+};
+
+typedef struct jmap_filter {
+    enum jmap_filter_kind kind;
+    enum jmap_filter_op op;
+    struct jmap_filter **conditions;
+    size_t n_conditions;
+    void *cond;
+} jmap_filter;
+
+typedef void* jmap_filterparse_cb(json_t* arg, const char* prefix, json_t*invalid);
+typedef int   jmap_filtermatch_cb(void* cond, void* rock);
+typedef void  jmap_filterfree_cb(void* cond);
+
+static int jmap_filter_match(jmap_filter *f, jmap_filtermatch_cb *match, void *rock)
+{
+    if (f->kind == JMAP_FILTER_KIND_OPER) {
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            int m = jmap_filter_match(f->conditions[i], match, rock);
+            if (m && f->op == JMAP_FILTER_OP_OR) {
+                return 1;
+            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
+                return 0;
+            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
+                return 0;
+            }
+        }
+        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
+    } else {
+        return match(f->cond, rock);
+    }
+}
+
+static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
+{
+    size_t i;
+    for (i = 0; i < f->n_conditions; i++) {
+        jmap_filter_free(f->conditions[i], freecond);
+    }
+    if (f->conditions) free(f->conditions);
+    if (f->cond && freecond) {
+        freecond(f->cond);
+    }
+    free(f);
+}
+
+static jmap_filter *jmap_filter_parse(json_t *arg,
+                                      const char *prefix,
+                                      json_t *invalid,
+                                      jmap_filterparse_cb *parse)
+{
+    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
+    int pe;
+    const char *val;
+    struct buf buf = BUF_INITIALIZER;
+    int iscond = 1;
+
+    /* operator */
+    pe = readprop_full(arg, prefix, "operator", 0 /*mandatory*/, invalid, "s", &val);
+    if (pe > 0) {
+        f->kind = JMAP_FILTER_KIND_OPER;
+        if (!strncmp("AND", val, 3)) {
+            f->op = JMAP_FILTER_OP_AND;
+        } else if (!strncmp("OR", val, 2)) {
+            f->op = JMAP_FILTER_OP_OR;
+        } else if (!strncmp("NOT", val, 3)) {
+            f->op = JMAP_FILTER_OP_NOT;
+        } else {
+            buf_printf(&buf, "%s.%s", prefix, "operator");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    iscond = f->kind == JMAP_FILTER_KIND_COND;
+
+    /* conditions */
+    json_t *conds = json_object_get(arg, "conditions");
+    if (conds && !iscond && json_array_size(conds)) {
+        f->n_conditions = json_array_size(conds);
+        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
+        size_t i;
+        for (i = 0; i < f->n_conditions; i++) {
+            json_t *cond = json_array_get(conds, i);
+            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
+            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf), invalid, parse);
+            buf_reset(&buf);
+        }
+    } else if (JNOTNULL(conds)) {
+        buf_printf(&buf, "%s.%s", prefix, "conditions");
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    if (iscond) {
+        f->cond = parse(arg, prefix, invalid);
+    }
+
+    buf_free(&buf);
+    return f;
+}
+
 /*****************************************************************************
  * JMAP Contacts API
  ****************************************************************************/

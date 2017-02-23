@@ -74,8 +74,6 @@
 #include "xmalloc.h"
 #include "xstrnchr.h"
 
-#include "jmap_common.h"
-
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
