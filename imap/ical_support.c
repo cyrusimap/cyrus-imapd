@@ -327,8 +327,14 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
             };
             if (!recur_span.end) recur_span.end = eternity;
 
-            if (!span_compare_range(&recur_span, &range_span))
+            if (!span_compare_range(&recur_span, &range_span)) {
                 rrule_itr = icalrecur_iterator_new(recur, dtstart);
+#ifdef HAVE_RECUR_ITERATOR_START
+                if (icaltime_compare(range.start, dtstart) > 0) {
+                    icalrecur_iterator_set_start(rrule_itr, range.start);
+                }
+#endif
+            }
         }
     }
 

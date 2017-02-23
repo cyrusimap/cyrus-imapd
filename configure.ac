@@ -1492,11 +1492,6 @@ dnl
                 AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
                 AC_MSG_NOTICE([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
 
-        AC_CHECK_LIB(ical, icalcomponent_new_vpatch,
-                AC_DEFINE(HAVE_VPATCH,[],
-                        [Build VPATCH support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support patching iCalendar objects.  Consider upgrading to libical >= 2.1]))
-
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported, [
                 PKG_CHECK_MODULES([ICU4C], [icu-i18n], [
                         AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])
@@ -1506,6 +1501,15 @@ dnl
                         AC_MSG_ERROR([Need ICU4C for RSCALE support in httpd]))
                 ],
                 AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
+
+        AC_CHECK_LIB(ical, icalcomponent_new_vpatch,
+                AC_DEFINE(HAVE_VPATCH,[],
+                        [Build VPATCH support into httpd?]),
+                AC_MSG_NOTICE([Your version of libical can not support patching iCalendar objects.  Consider upgrading to libical >= 2.1]))
+
+        AC_CHECK_LIB(ical, icalrecur_iterator_set_start,
+                AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
+                        [Do we have support for setting start point of recurrences?]))
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
