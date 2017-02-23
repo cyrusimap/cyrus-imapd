@@ -244,6 +244,10 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
     if (mastercomp) {
         dtstart = icalcomponent_get_dtstart(mastercomp);
         event_length = icalcomponent_get_duration(mastercomp);
+        if (icaldurationtype_is_null_duration(event_length) &&
+            icaltime_is_date(dtstart)) {
+            event_length = icaldurationtype_from_int(60 * 60 * 24);  /* P1D */
+        }
 
         /* add any RDATEs first, since EXDATE items can override them */
         icalproperty *prop;
