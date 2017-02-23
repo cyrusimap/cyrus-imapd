@@ -4151,6 +4151,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
 
 struct comp_filter {
+    unsigned comp_type;
     xmlChar *name;              /* need this for X- components */
     unsigned depth;
     icalcomponent_kind kind;
@@ -4265,7 +4266,6 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 {
     xmlChar *attr;
     xmlNodePtr node;
-    unsigned type = 0;
     struct filter_profile_t profile =
         { 1 /* allof */, COLLATION_ASCII,
           CALDAV_SUPP_FILTER, CALDAV_SUPP_COLLATION,
@@ -4317,29 +4317,29 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                     error->desc = "VCALENDAR can only be toplevel component";
                     break;
                 case ICAL_VEVENT_COMPONENT:
-                    type = CAL_COMP_VEVENT;
+                    (*comp)->comp_type = CAL_COMP_VEVENT;
                     break;
                 case ICAL_VTODO_COMPONENT:
-                    type = CAL_COMP_VTODO;
+                    (*comp)->comp_type = CAL_COMP_VTODO;
                     break;
                 case ICAL_VJOURNAL_COMPONENT:
-                    type = CAL_COMP_VJOURNAL;
+                    (*comp)->comp_type = CAL_COMP_VJOURNAL;
                     break;
                 case ICAL_VFREEBUSY_COMPONENT:
-                    type = CAL_COMP_VFREEBUSY;
+                    (*comp)->comp_type = CAL_COMP_VFREEBUSY;
                     break;
                 case ICAL_VAVAILABILITY_COMPONENT:
-                    type = CAL_COMP_VAVAILABILITY;
+                    (*comp)->comp_type = CAL_COMP_VAVAILABILITY;
                     break;
                 case ICAL_VPOLL_COMPONENT:
-                    type = CAL_COMP_VPOLL;
+                    (*comp)->comp_type = CAL_COMP_VPOLL;
                     break;
                 default:
                     *flags |= PARSE_ICAL;
                     break;
                 }
 
-                *comp_types |= type;
+                *comp_types |= (*comp)->comp_type;
                 break;
 
             default:
@@ -4385,7 +4385,10 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             else {
                 *flags |= PARSE_ICAL;
                 (*comp)->not_defined = 1;
-                if (type) *comp_types &= ~type;
+                if ((*comp)->comp_type) {
+                    *comp_types &= ~(*comp)->comp_type;
+                    (*comp)->comp_type = 0;
+                }
             }
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
@@ -4706,6 +4709,8 @@ static int apply_compfilter(struct comp_filter *compfilter, icalcomponent *ical,
     int pass = 0;
     icalcomponent *comp = NULL;
 
+    if (compfilter->comp_type &&
+        (compfilter->comp_type != cdata->comp_type)) return 0;
     if (ical) {
         if (compfilter->kind == ICAL_VCALENDAR_COMPONENT) comp = ical;
         else comp = icalcomponent_get_first_component(ical, compfilter->kind);
@@ -4763,7 +4768,8 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     icalcomponent *ical = fctx->obj;
 
     if (calfilter->comp_types) {
-        /* Check comp-filter vs component type of resource */
+        /* Check if we can short-circuit based on
+           comp-filter(s) vs component type of resource */
         if (!(cdata->comp_type & calfilter->comp_types)) return 0;
         if (calfilter->comp->allof &&
             (cdata->comp_type & CAL_COMP_REAL) !=
@@ -4772,7 +4778,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
         }
     }
 
-    if (calfilter->flags & PARSE_ICAL) {
+    if ((calfilter->flags & PARSE_ICAL) || cdata->comp_flags.recurring) {
         /* Load message containing the resource and parse iCal data */
         if (!ical) {
             if (!fctx->msg_buf.len)
@@ -5145,15 +5151,10 @@ static int expand_cb(icalcomponent *comp,
     }
 
     if (!recurid) {
-        /* Master component */
-        if (!icaltime_compare(start, dtstart)) {
-            /* First instance -
-               remove component from existing ical (we can use it as-is)  */
-            icalcomponent_remove_component(ical, comp);
-        }
-        else {
-            /* Clone the component and set RECURRENCE-ID */
-            comp = icalcomponent_new_clone(comp);
+        /* Clone the master component */
+        comp = icalcomponent_new_clone(comp);
+        if (icaltime_compare(start, dtstart)) {
+            /* Not the first instance - set RECURRENCE-ID */
             icalcomponent_set_recurrenceid(comp, start);
         }
     }
