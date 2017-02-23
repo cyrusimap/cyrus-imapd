@@ -102,6 +102,7 @@ struct search_query {
     int need_ids;
     int need_expunge;
     int want_expunged;
+    uint32_t want_mbtype;
     int verbose;
 
     /*

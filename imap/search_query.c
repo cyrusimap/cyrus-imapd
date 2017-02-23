@@ -262,14 +262,20 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 {
     search_folder_t *folder;
 
-    if (mboxname_isdeletedmailbox(mboxname, 0))
+    if (mboxname_isdeletedmailbox(mboxname, 0) &&
+        !(query->want_mbtype & MBTYPE_DELETED)) {
         return NULL;
+    }
 
-    if (mboxname_iscalendarmailbox(mboxname, 0))
+    if (mboxname_iscalendarmailbox(mboxname, 0) &&
+       !(query->want_mbtype & MBTYPE_CALENDAR)) {
         return NULL;
+    }
 
-    if (mboxname_isaddressbookmailbox(mboxname, 0))
+    if (mboxname_isaddressbookmailbox(mboxname, 0) &&
+       !(query->want_mbtype & MBTYPE_ADDRESSBOOK)) {
         return NULL;
+    }
 
     folder = query_get_folder(query, mboxname);
     if (uidvalidity) {
@@ -323,6 +329,7 @@ static int query_begin_index(search_query_t *query,
         init.authstate = query->searchargs->authstate;
         init.out = query->state->out;
         init.want_expunged = query->want_expunged;
+        init.want_mbtype = query->want_mbtype;
 
         r = index_open(mboxname, &init, statep);
         if (r == IMAP_PERMISSION_DENIED) r = IMAP_MAILBOX_NONEXISTENT;

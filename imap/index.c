@@ -307,6 +307,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->out = init->out;
         state->userid = xstrdupnull(init->userid);
         state->want_dav = init->want_dav;
+        state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
 
         state->myrights = cyrus_acl_myrights(init->authstate,
@@ -321,6 +322,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
         if (state->want_dav && (state->mailbox->mbtype & MBTYPES_DAV)) {
             /* User logged in using imapmagicplus token "dav" */
+        }
+        else if (state->mailbox->mbtype == state->want_mbtype) {
+            /* Caller explicitly asks for this NONIMAP type */
         }
         else {
             r = IMAP_MAILBOX_BADTYPE;
