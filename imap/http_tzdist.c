@@ -728,12 +728,14 @@ static int meth_get(struct transaction_t *txn,
                 if (p[-1] == '/') *--p = '\0';
 
                 /* Check for sub-action */
-                p = strrchr(tgt->resource, '/');
-                if (p && !strcmp(p+1, "observances")) {
-                    action = &action_expand;
-                    *p = '\0';
+                p = strstr(tgt->resource, "observances");
+                if (!p) {
+                    action = &action_get;
                 }
-                else action = &action_get;
+                else if (p[-1] == '/') {
+                    *--p = '\0';
+                    action = &action_expand;
+                }
 
                 /* XXX  Hack - probably need to check for %2F vs '/'
                    Count the number of "levels".  Current tzid have max of 3. */
