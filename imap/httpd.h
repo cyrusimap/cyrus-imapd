@@ -128,7 +128,9 @@ enum {
     URL_NS_TZDIST,
     URL_NS_RSS,
     URL_NS_DBLOOKUP,
+#ifdef WITH_JMAP
     URL_NS_JMAP,
+#endif
     URL_NS_ADMIN,
     URL_NS_APPLEPUSH
 };
@@ -469,7 +471,9 @@ extern struct namespace_t namespace_drive;
 extern struct namespace_t namespace_ischedule;
 extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
+#ifdef WITH_JMAP
 extern struct namespace_t namespace_jmap;
+#endif
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
 extern struct namespace_t namespace_admin;

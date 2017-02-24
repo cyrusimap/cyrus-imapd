@@ -291,11 +291,13 @@ static struct mime_type_t caldav_mime_types[] = {
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
+#ifdef WITH_JMAP
     { "application/event+json; charset=utf-8", NULL, "jevent",
       (struct buf* (*)(void *)) &icalcomponent_as_jevent_string,
       (void * (*)(const struct buf*)) &jevent_string_as_icalcomponent,
       NULL, NULL, NULL
     },
+#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
