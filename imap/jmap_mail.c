@@ -5112,7 +5112,7 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
                 break;
             }
         }
-    } else if (prop && json_typeof(prop) != JSON_ARRAY) {
+    } else if (prop && json_typeof(prop) != JSON_OBJECT) {
         json_array_append_new(invalid, json_string("headers"));
     }
 
