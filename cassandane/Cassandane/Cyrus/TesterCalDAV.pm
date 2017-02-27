@@ -1518,7 +1518,10 @@ sub set_up
             expandurl => 1,
         );
 
-        $CalDAV->UpdateAddressSet($displayname, "$name\@example.com");
+	eval {
+	    # this fails on older Cyruses -- but don't crash during set_up!
+	    $CalDAV->UpdateAddressSet($displayname, "$name\@example.com");
+	};
     }
 }
 
