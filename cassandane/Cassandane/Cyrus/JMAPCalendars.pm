@@ -1953,9 +1953,12 @@ sub test_getcalendareventlist
     my $id1 = $res->[0][1]{created}{"1"}{id};
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
     xlog "get unfiltered calendar event list";
     $res = $jmap->Request([ ['getCalendarEventList', { }, "R1"] ]);
-    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
 
     xlog "get filtered calendar event list with flat filter";
@@ -1990,6 +1993,43 @@ sub test_getcalendareventlist
     $self->assert_num_equals($res->[0][1]{total}, 1);
     $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
     $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+
+    xlog "filter by calendar $calidA";
+    $res = $jmap->Request([ ['getCalendarEventList', {
+                    "filter" => {
+                        "inCalendars" => [ $calidA ],
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+
+    xlog "filter by calendar $calidA or $calidB";
+    $res = $jmap->Request([ ['getCalendarEventList', {
+                    "filter" => {
+                        "inCalendars" => [ $calidA, $calidB ],
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{calendarEventIds}});
+
+    xlog "filter by calendar NOT in $calidA and $calidB";
+    $res = $jmap->Request([['getCalendarEventList', {
+                    "filter" => {
+                        "operator" => "NOT",
+                        "conditions" => [{
+                            "inCalendars" => [ $calidA, $calidB ],
+                        }],
+                    }}, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{calendarEventIds}});
+
+    xlog "limit results";
+    $res = $jmap->Request([ ['getCalendarEventList', { limit => 1 }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+
+    xlog "skip result a position 1";
+    $res = $jmap->Request([ ['getCalendarEventList', { position => 1 }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
 }
 
 sub test_getcalendareventlist_datetime
@@ -2015,6 +2055,9 @@ sub test_getcalendareventlist_datetime
                             "duration" => "PT1H",
                         },
                     }}, "R1"]]);
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     # Exact start and end match
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2120,6 +2163,9 @@ sub test_getcalendareventlist_date
                         },
                     }}, "R1"]]);
 
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
     # Match on start and end day
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
@@ -2221,8 +2267,121 @@ sub test_getcalendareventlist_date
                     },
                 }, "R1"]]);
     $self->assert_num_equals($res->[0][1]{total}, 1);
-
 }
+
+sub test_getcalendareventlist_text
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->Request([['setCalendarEvents', { create => {
+                        "1" => {
+                            "calendarId" => 'Default',
+                            "title" => "foo",
+                            "description" => "bar",
+                            "locations" => {
+                                "loc1" => {
+                                    name => "baz",
+                                },
+                            },
+                            "showAsFree" => JSON::false,
+                            "start"=> "2016-01-01T09:00:00",
+                            "duration"=> "PT1H",
+                            "timeZone" => "Europe/London",
+                            "isAllDay"=> JSON::false,
+                            "replyTo" => { imip => "mailto:tux\@local" },
+                            "participants" => {
+                                "tux\@local" => {
+                                    name => "",
+                                    email => "tux\@local",
+                                    roles => ["owner"],
+                                    locationId => "loc1",
+                                },
+                                "qux\@local" => {
+                                    name => "Quuks",
+                                    email => "qux\@local",
+                                    roles => ["attendee"],
+                                },
+                            },
+                            recurrenceRule => {
+                                frequency => "monthly",
+                                count => 12,
+                            },
+                            "recurrenceOverrides" => {
+                                "2016-04-01T10:00:00" => {
+                                    "description" => "blah",
+                                    "locations/loc1/name" => "blep",
+                                },
+                                "2016-05-01T10:00:00" => {
+                                    "title" => "boop",
+                                },
+                            },
+                        },
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    return;
+
+    my %textqueries = (
+        title => "foo",
+        title => "boop",
+        description => "bar",
+        description => "blah",
+        location => "baz",
+        location => "blep",
+        owner => "tux",
+        owner => "tux\@local",
+        attendee => "qux",
+        attendee => "qux\@local",
+        attendee => "Quuks",
+    );
+
+    while (my ($propname, $propval) = each %textqueries) {
+
+        # Assert that catch-all text search matches
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        "filter" => {
+                            "text" => $propval,
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+
+        # Sanity check catch-all text search
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        "filter" => {
+                            "text" => "nope",
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(0, $res->[0][1]{total});
+
+        # Assert that search by property name matches
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        "filter" => {
+                            $propname => $propval,
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+
+        # Sanity check property name search
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        "filter" => {
+                            $propname => "nope",
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(0, $res->[0][1]{total});
+    }
+}
+
 
 sub test_setcalendarevents_caldav
     :JMAP :min_version_3_0
