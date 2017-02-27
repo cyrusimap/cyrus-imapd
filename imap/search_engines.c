@@ -116,7 +116,7 @@ EXPORTED const char *search_part_as_string(int part)
     static const char *names[SEARCH_NUM_PARTS] = {
         /* ANY */NULL, "FROM", "TO", "CC",
         "BCC", "SUBJECT", "LISTID", "TYPE",
-        "HEADERS", "BODY"
+        "HEADERS", "BODY", "LOCATION"
     };
 
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);

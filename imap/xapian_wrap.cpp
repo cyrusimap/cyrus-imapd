@@ -107,7 +107,8 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "L",                /* LISTID */
         "Y",                /* TYPE */
         "H",                /* HEADERS */
-        "D",                 /* BODY */
+        "D",                /* BODY */
+        "O"                 /* LOCATION */
     },
     // Version 1: Stem using STEM_SOME with stopwords
     {
@@ -121,6 +122,7 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "XY",                /* TYPE */
         "XH",                /* HEADERS */
         "",                  /* BODY */
+        "XO"                 /* LOCATION */
     }
 };
 
@@ -137,7 +139,8 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_ALL,   /* LISTID */
         Xapian::QueryParser::STEM_ALL,   /* TYPE */
         Xapian::QueryParser::STEM_ALL,   /* HEADERS */
-        Xapian::QueryParser::STEM_ALL    /* BODY */
+        Xapian::QueryParser::STEM_ALL,   /* BODY */
+        Xapian::QueryParser::STEM_ALL    /* LOCATION */
     },
     // Version 1: Stem bodies using STEM_SOME with stopwords
     {
@@ -150,7 +153,8 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_ALL,   /* LISTID */
         Xapian::QueryParser::STEM_ALL,   /* TYPE */
         Xapian::QueryParser::STEM_ALL,   /* HEADERS */
-        Xapian::QueryParser::STEM_SOME   /* BODY */
+        Xapian::QueryParser::STEM_SOME,  /* BODY */
+        Xapian::QueryParser::STEM_SOME   /* LOCATION */
     }
 };
 
@@ -167,7 +171,8 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_ALL,   /* LISTID */
         Xapian::TermGenerator::STEM_ALL,   /* TYPE */
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
-        Xapian::TermGenerator::STEM_ALL    /* BODY */
+        Xapian::TermGenerator::STEM_ALL,   /* BODY */
+        Xapian::TermGenerator::STEM_ALL    /* LOCATION */
     },
     // Version 1: Stem bodies using STEM_SOME with stopwords
     {
@@ -180,7 +185,8 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_ALL,   /* LISTID */
         Xapian::TermGenerator::STEM_ALL,   /* TYPE */
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
-        Xapian::TermGenerator::STEM_SOME   /* BODY */
+        Xapian::TermGenerator::STEM_SOME,  /* BODY */
+        Xapian::TermGenerator::STEM_SOME   /* LOCATION */
     }
 };
 

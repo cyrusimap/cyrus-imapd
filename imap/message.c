@@ -4624,3 +4624,27 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
     free(tmp);
     return r;
 }
+
+EXPORTED int message_get_type(message_t *m, const char **strp)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    *strp = m->body->type;
+    return 0;
+}
+
+EXPORTED int message_get_subtype(message_t *m, const char **strp)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    *strp = m->body->subtype;
+    return 0;
+}
+
+EXPORTED int message_get_encoding(message_t *m, int *encp)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    *encp = m->body->charset_enc;
+    return 0;
+}

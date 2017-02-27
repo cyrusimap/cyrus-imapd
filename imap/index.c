@@ -53,6 +53,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+/* For iCalendar indexing */
+#include <libical/ical.h>
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
@@ -4712,6 +4715,110 @@ static void append_alnum(struct buf *buf, const char *ss)
     }
 }
 
+static int index_icalmessage(message_t *msg, struct getsearchtext_rock *str)
+{
+    icalcomponent *comp = NULL, *ical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    const char *s;
+    int r, enc = 0;
+
+    /* Parse the message into an iCalendar object */
+    r = message_get_encoding(msg, &enc);
+    if (r) return r;
+    r = message_get_field(msg, "rawbody", MESSAGE_RAW, &buf);
+    if (r) return r;
+    ical = icalparser_parse_string(buf_cstring(&buf));
+    if (!ical) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    buf_reset(&buf);
+
+    for (comp = icalcomponent_get_first_real_component(ical);
+         comp;
+         comp = icalcomponent_get_next_component(ical, icalcomponent_isa(comp))) {
+
+        icalproperty *prop;
+        icalparameter *param;
+
+        /* description */
+        if ((s = icalcomponent_get_description(comp))) {
+            buf_setcstr(&buf, s);
+            charset_t utf8 = charset_lookupname("utf-8");
+            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+            charset_extract(extract_cb, str, &buf, utf8, enc, "calendar",
+                            str->charset_flags);
+            str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+            charset_free(&utf8);
+            buf_reset(&buf);
+        }
+
+        /* summary */
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY))) {
+            if ((s = icalproperty_get_summary(prop))) {
+                buf_setcstr(&buf, s);
+                stuff_part(str->receiver, SEARCH_PART_SUBJECT, &buf);
+                buf_reset(&buf);
+            }
+        }
+
+        /* organizer */
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))) {
+            if ((s = icalproperty_get_organizer(prop))) {
+                if (!strncasecmp(s, "mailto:", 7)) {
+                    s += 7;
+                }
+                param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+                if (param) {
+                    buf_printf(&buf, "\"%s\" <%s>", icalparameter_get_cn(param), s);
+                } else {
+                    buf_setcstr(&buf, s);
+                }
+                stuff_part(str->receiver, SEARCH_PART_FROM, &buf);
+                buf_reset(&buf);
+            }
+        }
+
+        /* attendees */
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+            if ((s = icalproperty_get_attendee(prop))) {
+                if (!strncasecmp(s, "mailto:", 7)) {
+                    s += 7;
+                }
+                param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+                if (buf.len) {
+                    buf_appendcstr(&buf, ", ");
+                }
+                if (param) {
+                    buf_printf(&buf, "\"%s\" <%s>", icalparameter_get_cn(param), s);
+                } else {
+                    buf_appendcstr(&buf, s);
+                }
+            }
+        }
+        if (buf.len) {
+            stuff_part(str->receiver, SEARCH_PART_TO, &buf);
+            buf_reset(&buf);
+        }
+
+        /* location */
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY))) {
+            if ((s = icalproperty_get_location(prop))) {
+                buf_setcstr(&buf, s);
+                stuff_part(str->receiver, SEARCH_PART_LOCATION, &buf);
+                buf_reset(&buf);
+            }
+        }
+    }
+
+done:
+    buf_free(&buf);
+    if (ical) icalcomponent_free(ical);
+    return r;
+}
+
 EXPORTED int index_getsearchtext(message_t *msg,
                                  search_text_receiver_t *receiver,
                                  int snippet)
@@ -4720,9 +4827,17 @@ EXPORTED int index_getsearchtext(message_t *msg,
     struct buf buf = BUF_INITIALIZER;
     int format = MESSAGE_SEARCH;
     strarray_t types = STRARRAY_INITIALIZER;
+    const char *type = NULL, *subtype = NULL;
     int i;
     int r;
 
+    /* Determine Content-Type */
+    r = message_get_type(msg, &type);
+    if (r) return r;
+    r = message_get_subtype(msg, &subtype);
+    if (r) return r;
+
+    /* Set up search receiver */
     r = receiver->begin_message(receiver, msg);
     if (r) return r;
 
@@ -4735,55 +4850,63 @@ EXPORTED int index_getsearchtext(message_t *msg,
         format = MESSAGE_SNIPPET;
     }
 
-    message_foreach_text_section(msg, getsearchtext_cb, &str);
+    /* Choose index scheme for Content=Type */
+    if (!strcasecmp(type, "TEXT") && !strcasecmp(subtype, "CALENDAR")) {
+        /* An iCalendar entry. */
+        index_icalmessage(msg, &str);
+    }
+    else {
+        /* A regular message */
+        message_foreach_text_section(msg, getsearchtext_cb, &str);
 
-    if (!message_get_field(msg, "From", format, &buf))
-        stuff_part(receiver, SEARCH_PART_FROM, &buf);
+        if (!message_get_field(msg, "From", format, &buf))
+            stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
-    if (!message_get_field(msg, "To", format, &buf))
-        stuff_part(receiver, SEARCH_PART_TO, &buf);
+        if (!message_get_field(msg, "To", format, &buf))
+            stuff_part(receiver, SEARCH_PART_TO, &buf);
 
-    if (!message_get_field(msg, "Cc", format, &buf))
-        stuff_part(receiver, SEARCH_PART_CC, &buf);
+        if (!message_get_field(msg, "Cc", format, &buf))
+            stuff_part(receiver, SEARCH_PART_CC, &buf);
 
-    if (!message_get_field(msg, "Bcc", format, &buf))
-        stuff_part(receiver, SEARCH_PART_BCC, &buf);
+        if (!message_get_field(msg, "Bcc", format, &buf))
+            stuff_part(receiver, SEARCH_PART_BCC, &buf);
 
-    if (!message_get_field(msg, "Subject", format, &buf))
-        stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
+        if (!message_get_field(msg, "Subject", format, &buf))
+            stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
-    if (!message_get_field(msg, "List-Id", format, &buf))
-        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
-    if (!message_get_field(msg, "Mailing-List", format, &buf))
-        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        if (!message_get_field(msg, "List-Id", format, &buf))
+            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        if (!message_get_field(msg, "Mailing-List", format, &buf))
+            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
 
-    if (!message_get_leaf_types(msg, &types) && types.count) {
-        /* We add three search terms: the type, subtype, and a combined
-         * type+subtype string.  We carefully control punctuation to
-         * ensure that each word in indexed as a single term.  For
-         * example if the original message has "application/x-pdf" then
-         * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
+        if (!message_get_leaf_types(msg, &types) && types.count) {
+            /* We add three search terms: the type, subtype, and a combined
+             * type+subtype string.  We carefully control punctuation to
+             * ensure that each word in indexed as a single term.  For
+             * example if the original message has "application/x-pdf" then
+             * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
 
-        receiver->begin_part(receiver, SEARCH_PART_TYPE);
-        for (i = 0 ; i < types.count ; i+= 2) {
-            buf_reset(&buf);
+            receiver->begin_part(receiver, SEARCH_PART_TYPE);
+            for (i = 0 ; i < types.count ; i+= 2) {
+                buf_reset(&buf);
 
-            if (i) buf_putc(&buf, ' ');
+                if (i) buf_putc(&buf, ' ');
 
-            /* type */
-            append_alnum(&buf, types.data[i]);
-            buf_putc(&buf, ' ');
-            /* subtype */
-            append_alnum(&buf, types.data[i+1]);
-            buf_putc(&buf, ' ');
-            /* combined type_subtype */
-            append_alnum(&buf, types.data[i]);
-            buf_putc(&buf, '_');
-            append_alnum(&buf, types.data[i+1]);
+                /* type */
+                append_alnum(&buf, types.data[i]);
+                buf_putc(&buf, ' ');
+                /* subtype */
+                append_alnum(&buf, types.data[i+1]);
+                buf_putc(&buf, ' ');
+                /* combined type_subtype */
+                append_alnum(&buf, types.data[i]);
+                buf_putc(&buf, '_');
+                append_alnum(&buf, types.data[i+1]);
 
-            receiver->append_text(receiver, &buf);
+                receiver->append_text(receiver, &buf);
+            }
+            receiver->end_part(receiver, SEARCH_PART_TYPE);
         }
-        receiver->end_part(receiver, SEARCH_PART_TYPE);
     }
 
     r = receiver->end_message(receiver);
