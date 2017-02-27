@@ -64,6 +64,7 @@
 #include "ical_support.h"
 #include "imap_err.h"
 #include "jmap_ical.h"
+#include "search_query.h"
 #include "stristr.h"
 #include "times.h"
 #include "util.h"
@@ -2123,409 +2124,372 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     return r;
 }
 
-typedef struct calevent_filter {
-    hash_table *calendars;
-    icaltimetype after;
-    icaltimetype before;
-    const char *text;
-    const char *summary;
-    const char *description;
-    const char *location;
-    const char *owner;
-    const char *attendee;
-} calevent_filter;
-
-static int calevent_filter_match_textprop_value(icalproperty *prop,
-                                                const char *text)
+static void match_fuzzy(search_expr_t *parent, const char *s, const char *name)
 {
-    const char *val = icalproperty_get_value_as_string(prop);
-    /* XXX better text matching than stristr */
-    if (val && stristr(val, text) != NULL) {
-        return 1;
+    search_expr_t *e;
+    const search_attr_t *attr = search_attr_find(name);
+
+    e = search_expr_new(parent, SEOP_FUZZYMATCH);
+    e->attr = attr;
+    e->value.s = xstrdup(s);
+    if (!e->value.s) {
+        e->op = SEOP_FALSE;
+        e->attr = NULL;
     }
-    return 0;
 }
 
-static int calevent_filter_match_textprop_x(icalcomponent *comp,
-                                           const char *text,
-                                           const char *name)
+static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
+                                  search_expr_t *parent)
 {
-    icalproperty *prop;
-    icalcomponent *ical;
+    search_expr_t *this, *e;
+    const char *s;
+    size_t i;
+    json_t *val, *arg;
 
-    if (icalcomponent_isa(comp) != ICAL_VEVENT_COMPONENT) {
-        return 0;
+    if (!JNOTNULL(filter)) {
+        return search_expr_new(parent, SEOP_TRUE);
     }
 
-    ical = icalcomponent_get_parent(comp);
-    if (!ical || icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT) {
-        return 0;
-    }
+    if ((s = json_string_value(json_object_get(filter, "operator")))) {
+        enum search_op op = SEOP_UNKNOWN;
 
-    /* Look for text in any VEVENT of comp. */
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-
-        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
-
-            if (strcmp(icalproperty_get_x_name(prop), name)) {
-                continue;
-            }
-            if (calevent_filter_match_textprop_value(prop, text)) {
-                return 1;
-            }
+        if (!strcmp("AND", s)) {
+            op = SEOP_AND;
+        } else if (!strcmp("OR", s)) {
+            op = SEOP_OR;
+        } else if (!strcmp("NOT", s)) {
+            op = SEOP_NOT;
         }
-    }
 
-    return 0;
-}
+        this = search_expr_new(parent, op);
+        e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
-/* Match text with icalproperty kind in VEVENT comp and its recurrences. */
-static int calevent_filter_match_textprop(icalcomponent *comp,
-                                          const char *text,
-                                          icalproperty_kind kind)
-{
-    icalproperty *prop;
-    icalcomponent *ical;
+        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            buildsearch(req, val, e);
+        }
+    } else {
+        this = search_expr_new(parent, SEOP_AND);
 
-    if (icalcomponent_isa(comp) != ICAL_VEVENT_COMPONENT) {
-        return 0;
-    }
-
-    ical = icalcomponent_get_parent(comp);
-    if (!ical || icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT) {
-        return 0;
-    }
-
-    /* Look for text in any VEVENT of comp. */
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-
-        for (prop = icalcomponent_get_first_property(comp, kind);
-             prop;
-             prop = icalcomponent_get_next_property(comp, kind)) {
-
-            if (calevent_filter_match_textprop_value(prop, text)) {
-                return 1;
+        if ((arg = json_object_get(filter, "inCalendars"))) {
+            e = search_expr_new(this, SEOP_OR);
+            json_array_foreach(arg, i, val) {
+                const char *id = json_string_value(val);
+                search_expr_t *m = search_expr_new(e, SEOP_MATCH);
+                m->attr = search_attr_find("folder");
+                m->value.s = caldav_mboxname(req->userid, id);
             }
         }
+
+        if ((s = json_string_value(json_object_get(filter, "text")))) {
+            e = search_expr_new(this, SEOP_OR);
+            match_fuzzy(e, s, "body");
+            match_fuzzy(e, s, "subject");
+            match_fuzzy(e, s, "from");
+            match_fuzzy(e, s, "to");
+            match_fuzzy(e, s, "location");
+        }
+        if ((s = json_string_value(json_object_get(filter, "title")))) {
+            match_fuzzy(this, s, "subject");
+        }
+        if ((s = json_string_value(json_object_get(filter, "description")))) {
+            match_fuzzy(this, s, "body");
+        }
+        if ((s = json_string_value(json_object_get(filter, "location")))) {
+            match_fuzzy(this, s, "location");
+        }
+        if ((s = json_string_value(json_object_get(filter, "owner")))) {
+            match_fuzzy(this, s, "from");
+        }
+        if ((s = json_string_value(json_object_get(filter, "attendee")))) {
+            match_fuzzy(this, s, "to");
+        }
     }
 
-    return 0;
+    return this;
 }
 
-typedef struct calevent_filter_rock {
-    icalcomponent *ical;
-    struct caldav_data *cdata;
-} calevent_filter_rock;
-
-/* Match the VEVENTs contained in VCALENDAR component ical against filter. */
-static int calevent_filter_match(void *vf, void *rock)
+static void filter_timerange(json_t *filter, time_t *before, time_t *after)
 {
-    calevent_filter *f = (calevent_filter *) vf;
-    calevent_filter_rock *cfrock = (calevent_filter_rock*) rock;
+    *before = caldav_eternity;
+    *after = caldav_epoch;
 
-    icalcomponent *ical = cfrock->ical;
-    struct caldav_data *cdata = cfrock->cdata;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-
-    /* Locate main VEVENT. */
-    icalcomponent *comp;
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-            break;
-        }
-    }
-    if (!comp) {
-        return 0;
+    if (!JNOTNULL(filter)) {
+        return;
     }
 
-    /* calendars */
-    if (f->calendars && !hash_lookup(cdata->dav.mailbox, f->calendars)) {
-        return 0;
-    }
-    /* after */
-    if (icaltime_as_timet_with_zone(f->after, utc) != caldav_epoch) {
-        /* String compare to match caldav_foreach_timerange */
-        if (strcmp(cdata->dtend, icaltime_as_ical_string(f->after)) <= 0) {
-            return 0;
-        }
-    }
-    /* before */
-    if (icaltime_as_timet_with_zone(f->before, utc) != caldav_eternity) {
-        /* String compare to match caldav_foreach_timerange */
-        if (strcmp(cdata->dtstart, icaltime_as_ical_string(f->before)) >= 0) {
-            return 0;
-        }
-    }
-    /* text */
-    if (f->text) {
-        int m = calevent_filter_match_textprop(comp, f->text, ICAL_SUMMARY_PROPERTY);
-        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_DESCRIPTION_PROPERTY);
-        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_LOCATION_PROPERTY);
-        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_ORGANIZER_PROPERTY);
-        if (!m) m = calevent_filter_match_textprop(comp, f->text, ICAL_ATTENDEE_PROPERTY);
-
-        if (!m) m = calevent_filter_match_textprop_x(comp, f->text, JMAPICAL_XPROP_LOCATION);
-        if (!m) m = calevent_filter_match_textprop_x(comp, f->text, "X-APPLE-STRUCTURED-LOCATION");
-
-        if (!m) {
-            return 0;
-        }
-    }
-    if ((f->summary && !calevent_filter_match_textprop(comp, f->summary, ICAL_SUMMARY_PROPERTY)) ||
-        (f->description && !calevent_filter_match_textprop(comp, f->description, ICAL_DESCRIPTION_PROPERTY)) ||
-        (f->location && !calevent_filter_match_textprop(comp, f->location, ICAL_LOCATION_PROPERTY)) ||
-        (f->owner && !calevent_filter_match_textprop(comp, f->owner, ICAL_ORGANIZER_PROPERTY)) ||
-        (f->attendee && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ATTENDEE_PROPERTY)
-                     && !calevent_filter_match_textprop(comp, f->attendee, ICAL_ORGANIZER_PROPERTY))) {
-        return 0;
-    }
-
-    /* All matched. */
-    return 1;
-}
-
-/* Free the memory allocated by this calendar event filter. */
-static void calevent_filter_free(void *vf)
-{
-    calevent_filter *f = (calevent_filter*) vf;
-    if (f->calendars) {
-        free_hash_table(f->calendars, NULL);
-        free(f->calendars);
-    }
-    free(f);
-}
-
-static void
-calevent_filter_gettimerange(jmap_filter *f, time_t *before, time_t *after)
-{
-    if (!f) return;
-
-    if (f->kind == JMAP_FILTER_KIND_OPER) {
+    if (json_object_get(filter, "conditions")) {
+        json_t *val;
         size_t i;
         time_t bf, af;
 
-        for (i = 0; i < f->n_conditions; i++) {
+        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            const char *op = json_string_value(json_object_get(filter, "operator"));
             bf = caldav_eternity;
             af = caldav_epoch;
 
-            calevent_filter_gettimerange(f->conditions[i], &bf, &af);
+            filter_timerange(val, &bf, &af);
 
             if (bf != caldav_eternity) {
-                switch (f->op) {
-                    case JMAP_FILTER_OP_OR:
-                        if (*before == caldav_eternity || *before < bf)
-                            *before = bf;
-                        break;
-                    case JMAP_FILTER_OP_AND:
-                        if (*before == caldav_eternity || *before > bf)
-                            *before = bf;
-                        break;
-                    case JMAP_FILTER_OP_NOT:
-                        if (*after == caldav_epoch || *after < bf)
-                            *after = bf;
-                        break;
-                    default: /* unknown operator */ ;
+                if (!strcmp(op, "OR")) {
+                    if (*before == caldav_eternity || *before < bf) {
+                        *before = bf;
+                    }
+                }
+                else if (!strcmp(op, "AND")) {
+                    if (*before == caldav_eternity || *before > bf) {
+                        *before = bf;
+                    }
+                }
+                else if (!strcmp(op, "NOT")) {
+                    if (*after == caldav_epoch || *after < bf) {
+                        *after = bf;
+                    }
                 }
             }
 
             if (af != caldav_epoch) {
-                switch (f->op) {
-                    case JMAP_FILTER_OP_OR:
-                        if (*after == caldav_epoch || *after > af)
-                            *after = af;
-                        break;
-                    case JMAP_FILTER_OP_AND:
-                        if (*after == caldav_epoch || *after < af)
-                            *after = af;
-                        break;
-                    case JMAP_FILTER_OP_NOT:
-                        if (*before == caldav_eternity || *before < af)
-                            *before = af;
-                        break;
-                    default: /* unknown operator */ ;
+                if (!strcmp(op, "OR")) {
+                    if (*after == caldav_epoch || *after > af) {
+                        *after = af;
+                    }
+                }
+                else if (!strcmp(op, "AND")) {
+                    if (*after == caldav_epoch || *after < af) {
+                        *after = af;
+                    }
+                }
+                else if (!strcmp(op, "NOT")) {
+                    if (*before == caldav_eternity || *before < af) {
+                        *before = af;
+                    }
                 }
             }
         }
     } else {
-        calevent_filter *cond = (calevent_filter *) f->cond;
-        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        const char *sb = json_string_value(json_object_get(filter, "before"));
+        const char *sa = json_string_value(json_object_get(filter, "after"));
 
-        *before = icaltime_as_timet_with_zone(cond->before, utc);
-        *after = icaltime_as_timet_with_zone(cond->after, utc);
+        if (!sb || time_from_iso8601(sb, before) == -1) {
+            *before = caldav_eternity;
+        }
+        if (!sa || time_from_iso8601(sa, after) == -1) {
+            *after = caldav_epoch;
+        }
     }
 }
 
-
-/* Parse the JMAP calendar event FilterOperator or FilterCondition in arg.
- * Report any invalid properties in invalid, prefixed by prefix.
- * Return NULL on error. */
-static void *calevent_filter_parse(json_t *arg,
-                                   const char *prefix,
-                                   json_t *invalid)
+static int jmapevent_search(jmap_req_t *req, json_t *filter,
+                            size_t limit, size_t pos,
+                            size_t *total, json_t **eventids)
 {
-    calevent_filter *f = (calevent_filter *) xzmalloc(sizeof(struct calevent_filter));
-    int pe;
-    const char *val;
-    struct buf buf = BUF_INITIALIZER;
+    int r, i;
+    struct searchargs *searchargs = NULL;
+    struct index_init init;
+    struct index_state *state = NULL;
+    search_query_t *query = NULL;
+    struct caldav_db *db = NULL;
+    time_t before, after;
+    char *icalbefore = NULL, *icalafter = NULL;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct sortcrit sortcrit;
 
-    /* inCalendars */
-    json_t *cals = json_object_get(arg, "inCalendars");
-    if (cals && json_array_size(cals)) {
-        f->calendars = xmalloc(sizeof(hash_table));
-        construct_hash_table(f->calendars, json_array_size(cals), 0);
-        size_t i;
-        json_t *uid;
-        json_array_foreach(cals, i, uid) {
-            const char *id = json_string_value(uid);
-            if (id && strlen(id) && (*id != '#')) {
-                hash_insert(id, (void *)1, f->calendars);
-            } else {
-                buf_printf(&buf, "%s.calendars[%zu]", prefix, i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-    } else if (JNOTNULL(cals)) {
-        buf_printf(&buf, "%s.%s", prefix, "inCalendars");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
+    /* Initialize return values */
+    *eventids = json_pack("[]");
+    *total = 0;
+
+    /* Determine the filter timerange, if any */
+    filter_timerange(filter, &before, &after);
+    if (before != caldav_eternity) {
+        icaltimetype t = icaltime_from_timet_with_zone(before, 0, utc);
+        icalbefore = icaltime_as_ical_string_r(t);
+    }
+    if (after != caldav_epoch) {
+        icaltimetype t = icaltime_from_timet_with_zone(after, 0, utc);
+        icalafter = icaltime_as_ical_string_r(t);
     }
 
-    /* after */
-    if (JNOTNULL(json_object_get(arg, "after"))) {
-        pe = readprop_full(arg, prefix, "after", 1, invalid, "s", &val);
-        if (pe > 0) {
-            if (!utcdate_to_icaltime(val, &f->after)) {
-                buf_printf(&buf, "%s.%s", prefix, "after");
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-    } else {
-        f->after = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
-    }
-
-    /* before */
-    if (JNOTNULL(json_object_get(arg, "before"))) {
-        pe = readprop_full(arg, prefix, "before", 1, invalid, "s", &val);
-        if (pe > 0) {
-            if (!utcdate_to_icaltime(val, &f->before)) {
-                buf_printf(&buf, "%s.%s", prefix, "before");
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-    } else {
-        f->before = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
-    }
-
-    /* text */
-    if (JNOTNULL(json_object_get(arg, "text"))) {
-        pe = readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
-    }
-
-    /* summary */
-    if (JNOTNULL(json_object_get(arg, "summary"))) {
-        pe = readprop_full(arg, prefix, "summary", 0, invalid, "s", &f->summary);
-    }
-
-    /* description */
-    if (JNOTNULL(json_object_get(arg, "description"))) {
-        pe = readprop_full(arg, prefix, "description", 0, invalid, "s", &f->description);
-    }
-
-    /* location */
-    if (JNOTNULL(json_object_get(arg, "location"))) {
-        pe = readprop_full(arg, prefix, "location", 0, invalid, "s", &f->location);
-    }
-
-    /* owner */
-    if (JNOTNULL(json_object_get(arg, "owner"))) {
-        pe = readprop_full(arg, prefix, "owner", 0, invalid, "s", &f->owner);
-    }
-
-    /* attendee */
-    if (JNOTNULL(json_object_get(arg, "attendee"))) {
-        pe = readprop_full(arg, prefix, "attendee", 0, invalid, "s", &f->attendee);
-    }
-
-    buf_free(&buf);
-
-    return f;
-}
-
-struct caleventlist_rock {
-    jmap_filter *filter;
-    size_t position;
-    size_t limit;
-    size_t total;
-    json_t *events;
-
-    struct mailbox *mailbox;
-};
-
-static int getcalendareventlist_cb(void *rock, struct caldav_data *cdata) {
-    struct caleventlist_rock *crock = (struct caleventlist_rock*) rock;
-    struct index_record record;
-    icalcomponent *ical = NULL;
-    int r = 0;
-
-    if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
-        return 0;
-    }
-
-    /* Open mailbox. */
-    if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
-        mailbox_close(&crock->mailbox);
-        r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
-        if (r) goto done;
-    }
-
-    /* Load record. */
-    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
-
-    /* Load VEVENT from record. */
-    ical = record_to_ical(crock->mailbox, &record, NULL);
-    if (!ical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
-                cdata->dav.imap_uid, crock->mailbox->name);
+    /* Open the CalDAV database */
+    db = caldav_open_userid(req->userid);
+    if (!db) {
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
         r = IMAP_INTERNAL;
         goto done;
     }
 
-    /* Match the event against the filter and update statistics. */
-    struct calevent_filter_rock cfrock;
-    cfrock.cdata = cdata;
-    cfrock.ical = ical;
-    if (crock->filter && !jmap_filter_match(crock->filter,
-                                            &calevent_filter_match,
-                                            &cfrock)) {
-        goto done;
-    }
-    crock->total++;
-    if (crock->position > crock->total) {
-        goto done;
-    }
-    if (crock->limit && crock->limit >= json_array_size(crock->events)) {
-        goto done;
-    }
+    /* FIXME shortcut for filters that only filter by mailbox and timerange */
 
-    /* All done. Add the event identifier. */
-    json_array_append_new(crock->events, json_string(cdata->ical_uid));
+    /* Build searchargs */
+    searchargs = new_searchargs(NULL, GETSEARCH_CHARSET_FIRST,
+            &jmap_namespace, req->userid, req->authstate, 0);
+    searchargs->root = buildsearch(req, filter, NULL);
+
+    /* Need some stable sort criteria for windowing */
+    memset(&sortcrit, 0, sizeof(struct sortcrit));
+    sortcrit.flags = SORT_REVERSE;
+    sortcrit.key = SORT_ARRIVAL;
+
+    /* Run the search query */
+    memset(&init, 0, sizeof(init));
+    init.userid = req->userid;
+    init.authstate = req->authstate;
+    init.want_expunged = 0;
+    init.want_mbtype = MBTYPE_CALENDAR;
+
+    r = index_open(req->inboxname, &init, &state);
+    if (r) goto done;
+
+    query = search_query_new(state, searchargs);
+    query->sortcrit = &sortcrit;
+    query->multiple = 1;
+    query->need_ids = 1;
+    query->want_expunged = 0;
+    query->want_mbtype = MBTYPE_CALENDAR;
+    r = search_query_run(query);
+    if (r && r != IMAP_NOTFOUND) goto done;
+    r = 0;
+
+    /* Aggregate result */
+    for (i = 0 ; i < query->merged_msgdata.count; i++) {
+        MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+        struct caldav_data *cdata;
+
+        if (!folder) continue;
+
+        /* Fetch the CalDAV db record */
+        r = caldav_lookup_imapuid(db, folder->mboxname, md->uid, &cdata, 0);
+        if (r) continue;
+
+        /* Filter by timerange, if any */
+        if (icalbefore && strcmp(cdata->dtstart, icalbefore) >= 0) {
+            continue;
+        }
+        if (icalafter && strcmp(cdata->dtend, icalafter) <= 0) {
+            continue;
+        }
+
+        /* It's a legit search hit... */
+        *total = *total + 1;
+
+        /* ...probably outside the search window? */
+        if (limit && json_array_size(*eventids) + 1 > limit) {
+            continue;
+        }
+        if (pos >= *total) {
+            continue;
+        }
+
+        /* Add the search result */
+        json_array_append_new(*eventids, json_string(cdata->ical_uid));
+    }
 
 done:
-    if (ical) icalcomponent_free(ical);
+    if (state) {
+        state->mailbox = NULL;
+        index_close(&state);
+    }
+    if (searchargs) freesearchargs(searchargs);
+    if (query) search_query_free(query);
+    if (db) caldav_close(db);
+    free(icalbefore);
+    free(icalafter);
     return r;
+}
+
+static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    icaltimetype timeval;
+    const char *s;
+    json_t *arg, *val;
+    size_t i;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        json_array_append_new(invalid, json_string(prefix));
+        return;
+    }
+
+    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
+
+        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
+            buf_printf(&buf, "%s.%s", prefix, "operator");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        arg = json_object_get(filter, "conditions");
+        if (!json_array_size(arg)) {
+            buf_printf(&buf, "%s.conditions", prefix);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        json_array_foreach(arg, i, val) {
+            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
+            validatefilter(val, buf_cstring(&buf), invalid);
+            buf_reset(&buf);
+        }
+    }
+    else {
+        arg = json_object_get(filter, "inCalendars");
+        if (arg && json_array_size(arg)) {
+            size_t i;
+            json_t *uid;
+            json_array_foreach(arg, i, uid) {
+                const char *id = json_string_value(uid);
+                if (!id || id[0] == '#') {
+                    buf_printf(&buf, "%s.calendars[%zu]", prefix, i);
+                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                    buf_reset(&buf);
+                }
+            }
+        }
+        else if (JNOTNULL(arg) && !json_array_size(arg)) {
+            buf_printf(&buf, "%s.%s", prefix, "inCalendars");
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+
+        if (JNOTNULL(json_object_get(filter, "after"))) {
+            if (readprop_full(filter, prefix, "after", 1, invalid, "s", &s) > 0) {
+                if (!utcdate_to_icaltime(s, &timeval)) {
+                    buf_printf(&buf, "%s.%s", prefix, "after");
+                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                    buf_reset(&buf);
+                }
+            }
+        }
+        if (JNOTNULL(json_object_get(filter, "before"))) {
+            if (readprop_full(filter, prefix, "before", 1, invalid, "s", &s) > 0) {
+                if (!utcdate_to_icaltime(s, &timeval)) {
+                    buf_printf(&buf, "%s.%s", prefix, "before");
+                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                    buf_reset(&buf);
+                }
+            }
+        }
+
+        if (JNOTNULL(json_object_get(filter, "text"))) {
+            readprop_full(filter, prefix, "text", 1, invalid, "s", &s);
+        }
+        if (JNOTNULL(json_object_get(filter, "summary"))) {
+            readprop_full(filter, prefix, "summary", 1, invalid, "s", &s);
+        }
+        if (JNOTNULL(json_object_get(filter, "description"))) {
+            readprop_full(filter, prefix, "description", 1, invalid, "s", &s);
+        }
+        if (JNOTNULL(json_object_get(filter, "location"))) {
+            readprop_full(filter, prefix, "location", 1, invalid, "s", &s);
+        }
+        if (JNOTNULL(json_object_get(filter, "owner"))) {
+            readprop_full(filter, prefix, "owner", 1, invalid, "s", &s);
+        }
+        if (JNOTNULL(json_object_get(filter, "attendee"))) {
+            readprop_full(filter, prefix, "attendee", 1, invalid, "s", &s);
+        }
+    }
+
+    buf_free(&buf);
 }
 
 static int getCalendarEventList(struct jmap_req *req)
@@ -2534,18 +2498,8 @@ static int getCalendarEventList(struct jmap_req *req)
     json_t *invalid;
     int dofetch = 0;
     json_t *filter;
-    struct caleventlist_rock rock;
-    struct caldav_db *db;
-    time_t before, after;
-
-    memset(&rock, 0, sizeof(struct caleventlist_rock));
-
-    db = caldav_open_userid(req->userid);
-    if (!db) {
-        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
+    size_t total = 0;
+    json_t *events = NULL;
 
     /* Parse and validate arguments. */
     invalid = json_pack("[]");
@@ -2553,7 +2507,7 @@ static int getCalendarEventList(struct jmap_req *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        rock.filter = jmap_filter_parse(filter, "filter", invalid, calevent_filter_parse);
+        validatefilter(filter, "filter", invalid);
     }
 
     /* position */
@@ -2564,7 +2518,6 @@ static int getCalendarEventList(struct jmap_req *req)
             json_array_append_new(invalid, json_string("position"));
         }
     }
-    rock.position = pos;
 
     /* limit */
     json_int_t limit = 0;
@@ -2574,7 +2527,6 @@ static int getCalendarEventList(struct jmap_req *req)
             json_array_append_new(invalid, json_string("limit"));
         }
     }
-    rock.limit = limit;
 
     /* fetchCalendarEvents */
     if (JNOTNULL(json_object_get(req->args, "fetchCalendarEvents"))) {
@@ -2589,29 +2541,17 @@ static int getCalendarEventList(struct jmap_req *req)
     }
     json_decref(invalid);
 
-    rock.events = json_pack("[]");
-    before = caldav_eternity;
-    after = caldav_epoch;
-    calevent_filter_gettimerange(rock.filter, &before, &after);
-
-    if (before != caldav_eternity || after != caldav_epoch) {
-        /* Fast path. Filter by timerange. */
-        r = caldav_foreach_timerange(db, NULL, after, before,
-                getcalendareventlist_cb, &rock);
-    } else {
-        /* Inspect every entry in this accounts mailboxes. */
-        r = caldav_foreach(db, NULL, getcalendareventlist_cb, &rock);
-    }
-    if (rock.mailbox) mailbox_close(&rock.mailbox);
+    /* Call search */
+    r = jmapevent_search(req, filter, limit, pos, &total, &events);
     if (r) goto done;
 
     /* Prepare response. */
     json_t *eventList = json_pack("{}");
     json_object_set_new(eventList, "accountId", json_string(req->userid));
     json_object_set_new(eventList, "state", jmap_getstate(MBTYPE_CALENDAR, req));
-    json_object_set_new(eventList, "position", json_integer(rock.position));
-    json_object_set_new(eventList, "total", json_integer(rock.total));
-    json_object_set(eventList, "calendarEventIds", rock.events);
+    json_object_set_new(eventList, "position", json_integer(pos));
+    json_object_set_new(eventList, "total", json_integer(total));
+    json_object_set(eventList, "calendarEventIds", events);
     if (filter) json_object_set(eventList, "filter", filter);
 
     json_t *item = json_pack("[]");
@@ -2624,15 +2564,13 @@ static int getCalendarEventList(struct jmap_req *req)
     if (dofetch) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", rock.events);
+        json_object_set(subreq.args, "ids", events);
         r = getCalendarEvents(&subreq);
         json_decref(subreq.args);
     }
 
 done:
-    if (rock.filter) jmap_filter_free(rock.filter, calevent_filter_free);
-    if (rock.events) json_decref(rock.events);
-    if (db) caldav_close(db);
+    if (events) json_decref(events);
     return r;
 }
 
