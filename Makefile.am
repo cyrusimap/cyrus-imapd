@@ -1229,13 +1229,13 @@ if JMAP
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
+	imap/jmap_calendar.c \
 	imap/jmap_common.c \
 	imap/jmap_common.h \
-	imap/jmap_mail.c \
 	imap/jmap_contact.c \
-	imap/jmap_calendar.c \
 	imap/jmap_ical.c \
-	imap/jmap_ical.h
+	imap/jmap_ical.h \
+	imap/jmap_mail.c
 endif
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
