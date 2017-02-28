@@ -102,6 +102,7 @@ void shut_down(int code);
 
 enum {
     CMD_TIME = 1,
+    CMD_REID = 2,
 };
 
 int main(int argc, char **argv)
@@ -114,14 +115,19 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:t")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:rt")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
 
+        case 'r':
+            if (cmd == 0) cmd = CMD_REID;
+            else usage();
+            break;
         case 't':
-            cmd = CMD_TIME;
+            if (cmd == 0) cmd = CMD_TIME;
+            else usage();
             break;
 
         default:
@@ -143,6 +149,9 @@ int main(int argc, char **argv)
         fatal(error_message(r), EC_CONFIG);
     }
 
+    annotate_init(NULL, NULL);
+    annotatemore_open();
+
     mboxlist_init(0);
     mboxlist_open(NULL);
 
@@ -156,14 +165,18 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
+    annotatemore_close();
+    annotate_done();
+
     exit(0);
 }
 
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    mbtool [options] -t mailbox...\n");
+    fprintf(stderr, "    mbtool [options] {-r|-t} mailbox...\n");
     fprintf(stderr, "\nCommands:\n");
+    fprintf(stderr, "    -r    create new unique IDs for specified mailboxes\n");
     fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
@@ -220,6 +233,38 @@ static int do_timestamp(const mbname_t *mbname)
     return r;
 }
 
+static int do_reid(const mbname_t *mbname)
+{
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+    mbentry_t *mbentry = NULL;
+
+    /* Convert internal name to external */
+    const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
+    printf("Working on %s...\n", extname);
+
+    const char *name = mbname_intname(mbname);
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) return r;
+
+    mailbox_make_uniqueid(mailbox);
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) return r;
+
+    free(mbentry->uniqueid);
+    mbentry->uniqueid = xstrdup(mailbox->uniqueid);
+
+    mboxlist_update(mbentry, 0);
+
+    mailbox_close(&mailbox);
+
+    /* printf("did reid %s\n", mboxname); */
+    return r;
+}
+
+
 int do_cmd(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
@@ -227,6 +272,9 @@ int do_cmd(struct findall_data *data, void *rock)
 
     if (*valp == CMD_TIME && data->mbname != NULL)
         return do_timestamp(data->mbname);
+
+    if (*valp == CMD_REID && data->mbname != NULL)
+        return do_reid(data->mbname);
 
     return 0;
 }
