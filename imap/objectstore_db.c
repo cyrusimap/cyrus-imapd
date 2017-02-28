@@ -49,6 +49,7 @@
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "util.h"
+#include "sqldb.h"
 #include "sqlite3.h"
 #include "objectstore_db.h"
 
