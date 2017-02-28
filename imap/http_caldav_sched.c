@@ -72,6 +72,10 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+static const char *get_organizer(icalcomponent *comp);
+static int partstat_changed(icalcomponent *oldcomp,
+                            icalcomponent *newcomp, const char *attendee);
+
 int caladdress_lookup(const char *addr,
                       struct caldav_sched_param *param, const char *myuserid)
 {
@@ -1552,7 +1556,7 @@ static int deliver_merge_request(const char *attendee,
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     icalparameter *param;
-    const char *tzid, *recurid;
+    const char *tzid, *recurid, *organizer = NULL;
 
     /* Add each VTIMEZONE of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
@@ -1593,7 +1597,10 @@ static int deliver_merge_request(const char *attendee,
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
-    if (comp) kind = icalcomponent_isa(comp);
+    if (comp) {
+        kind = icalcomponent_isa(comp);
+        organizer = get_organizer(comp);
+    }
     for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         prop =
             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
@@ -1625,6 +1632,7 @@ static int deliver_merge_request(const char *attendee,
             old_seq = icalcomponent_get_sequence(comp);
             new_seq = icalcomponent_get_sequence(itip);
             if (new_seq > old_seq) deliver_inbox = 1;
+            else if (partstat_changed(comp, itip, organizer)) deliver_inbox = 1;
 
             /* Copy over any COMPLETED, PERCENT-COMPLETE,
                or TRANSP properties */
@@ -2285,6 +2293,8 @@ static int check_changes_any(icalcomponent *old,
     else if (propcmp(old, comp, ICAL_LOCATION_PROPERTY))
         is_changed = 1;
     else if (propcmp(old, comp, ICAL_DESCRIPTION_PROPERTY))
+        is_changed = 1;
+    else if (partstat_changed(old, comp, get_organizer(comp)))
         is_changed = 1;
 
     if (needs_actionp) *needs_actionp = needs_action;
