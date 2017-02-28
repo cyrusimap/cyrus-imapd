@@ -2208,7 +2208,8 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
     return this;
 }
 
-static void filter_timerange(json_t *filter, time_t *before, time_t *after)
+static void filter_timerange(json_t *filter, time_t *before, time_t *after,
+                             int *skip_search)
 {
     *before = caldav_eternity;
     *after = caldav_epoch;
@@ -2227,7 +2228,7 @@ static void filter_timerange(json_t *filter, time_t *before, time_t *after)
             bf = caldav_eternity;
             af = caldav_epoch;
 
-            filter_timerange(val, &bf, &af);
+            filter_timerange(val, &bf, &af, skip_search);
 
             if (bf != caldav_eternity) {
                 if (!strcmp(op, "OR")) {
@@ -2275,7 +2276,52 @@ static void filter_timerange(json_t *filter, time_t *before, time_t *after)
         if (!sa || time_from_iso8601(sa, after) == -1) {
             *after = caldav_epoch;
         }
+
+        if (json_object_get(filter, "text") ||
+            json_object_get(filter, "title") ||
+            json_object_get(filter, "description") ||
+            json_object_get(filter, "location") ||
+            json_object_get(filter, "owner") ||
+            json_object_get(filter, "attendee")) {
+
+            *skip_search = 0;
+        }
     }
+}
+
+struct by_timerange_data {
+    hash_table *by_timerange;  /* hash of all UIDs within timerange */
+    json_t *eventids;          /* windowed search result, if skip_search is true */
+    size_t seen;               /* seen uids inside and outside of window */
+    size_t limit;              /* window limit */
+    size_t pos;                /* window start position */
+    int skip_search;
+};
+
+static int by_timerange_cb(void *rock, struct caldav_data *cdata)
+{
+    struct by_timerange_data *d = rock;
+
+    if (!cdata->dav.alive) {
+        return 0;
+    }
+
+    /* Keep track of this event */
+    hash_insert(cdata->ical_uid, (void*)1, d->by_timerange);
+    d->seen++;
+
+    if (d->skip_search) {
+        /* Is it within the search window? */
+        if (d->pos > d->seen) {
+            return 0;
+        }
+        if (d->limit && json_array_size(d->eventids) >= d->limit) {
+            return 0;
+        }
+        /* Add the event to the result list */
+        json_array_append_new(d->eventids, json_string(cdata->ical_uid));
+    }
+    return 0;
 }
 
 static int jmapevent_search(jmap_req_t *req, json_t *filter,
@@ -2290,15 +2336,17 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
     struct caldav_db *db = NULL;
     time_t before, after;
     char *icalbefore = NULL, *icalafter = NULL;
+    hash_table *by_timerange = NULL;
+    int skip_search = 1;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
-    struct sortcrit sortcrit;
+    struct sortcrit *sortcrit = NULL;
 
     /* Initialize return values */
     *eventids = json_pack("[]");
     *total = 0;
 
     /* Determine the filter timerange, if any */
-    filter_timerange(filter, &before, &after);
+    filter_timerange(filter, &before, &after, &skip_search);
     if (before != caldav_eternity) {
         icaltimetype t = icaltime_from_timet_with_zone(before, 0, utc);
         icalbefore = icaltime_as_ical_string_r(t);
@@ -2306,6 +2354,9 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
     if (after != caldav_epoch) {
         icaltimetype t = icaltime_from_timet_with_zone(after, 0, utc);
         icalafter = icaltime_as_ical_string_r(t);
+    }
+    if (!icalbefore && !icalafter) {
+        skip_search = 0;
     }
 
     /* Open the CalDAV database */
@@ -2316,7 +2367,26 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
         goto done;
     }
 
-    /* FIXME shortcut for filters that only filter by mailbox and timerange */
+    /* Filter events by timerange */
+    if (before != caldav_eternity || after != caldav_epoch) {
+        by_timerange = xzmalloc(sizeof(hash_table));
+        construct_hash_table(by_timerange, 64, 0);
+
+        struct by_timerange_data cbdata = {
+            by_timerange, *eventids, 0, limit, pos, skip_search
+        };
+        r = caldav_foreach_timerange(db, NULL, after, before, by_timerange_cb, &cbdata);
+        if (r) goto done;
+
+        *total = cbdata.seen;
+    }
+
+    /* Can we skip search? */
+    if (skip_search) goto done;
+
+    /* Reset search results */
+    *total = 0;
+    json_array_clear(*eventids);
 
     /* Build searchargs */
     searchargs = new_searchargs(NULL, GETSEARCH_CHARSET_FIRST,
@@ -2324,9 +2394,10 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
     searchargs->root = buildsearch(req, filter, NULL);
 
     /* Need some stable sort criteria for windowing */
-    memset(&sortcrit, 0, sizeof(struct sortcrit));
-    sortcrit.flags = SORT_REVERSE;
-    sortcrit.key = SORT_ARRIVAL;
+    sortcrit = xzmalloc(2 * sizeof(struct sortcrit));
+    sortcrit[0].flags |= SORT_REVERSE;
+    sortcrit[0].key = SORT_ARRIVAL;
+    sortcrit[1].key = SORT_SEQUENCE;
 
     /* Run the search query */
     memset(&init, 0, sizeof(init));
@@ -2339,7 +2410,7 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
     if (r) goto done;
 
     query = search_query_new(state, searchargs);
-    query->sortcrit = &sortcrit;
+    query->sortcrit = sortcrit;
     query->multiple = 1;
     query->need_ids = 1;
     query->want_expunged = 0;
@@ -2361,10 +2432,7 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
         if (r) continue;
 
         /* Filter by timerange, if any */
-        if (icalbefore && strcmp(cdata->dtstart, icalbefore) >= 0) {
-            continue;
-        }
-        if (icalafter && strcmp(cdata->dtend, icalafter) <= 0) {
+        if (by_timerange && !hash_lookup(cdata->ical_uid, by_timerange)) {
             continue;
         }
 
@@ -2388,7 +2456,12 @@ done:
         state->mailbox = NULL;
         index_close(&state);
     }
+    if (by_timerange) {
+        free_hash_table(by_timerange, NULL);
+        free(by_timerange);
+    }
     if (searchargs) freesearchargs(searchargs);
+    if (sortcrit) freesortcrit(sortcrit);
     if (query) search_query_free(query);
     if (db) caldav_close(db);
     free(icalbefore);
