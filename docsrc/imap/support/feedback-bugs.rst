@@ -14,6 +14,7 @@ When reporting a bug, please provide the following information;
 * If relevant, are you in a murder configuration? (In which case please provide information for all hosts) 
 * What did you do?
 * What did you expect to happen, and what actually happened?
+* If Cyrus crashed, can you provide a backtrace of the core dump? (see FAQ)
 
 .. note::
     **Cyrus IMAP Version**
