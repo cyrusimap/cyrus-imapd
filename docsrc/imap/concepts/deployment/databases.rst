@@ -185,7 +185,7 @@ Conversations (<userid>.conversations)
 
 This file contains all the message-id fields from every email that has been seen
 in the past three months, mapping to the conversation IDs in which this message
-ID has been seen, and the timestampe when it was last seen.
+ID has been seen, and the timestamp when it was last seen.
 
 It also has a records for each conversation ID with details about which folders
 have that converations ID in them, and counts of messages and flags.

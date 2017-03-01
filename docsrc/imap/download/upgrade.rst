@@ -279,7 +279,7 @@ To upgrade all the mailboxes to the latest version. This will take hours, possib
     reconstruct -V max
 
 New configuration: if turning on conversations, you need to create conversations.db for each user.
-This is required for jmap.::
+(This is required for jmap).::
 
      ctl_conversationsdb -b -r
 

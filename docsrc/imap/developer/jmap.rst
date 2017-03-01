@@ -12,9 +12,16 @@ Cyrus administration
 Compile JMAP support into Cyrus
 -------------------------------
 
-Set the ``--enable-http`` option when running autoconf to enable JMAP (and DAV) support in Cyrus. Once installed, the ``jmap`` module must be enabled in ``imapd.conf``, such as
+1. Set the ``--enable-http`` option when running autoconf to enable JMAP (and DAV) support in Cyrus.
 
-    ``httpmodules: caldav jmap tzdist``
+2. Enable :ref:`conversation support <imap-concepts-deployment-db-conversations>`
+
+    * In :cyrusman:`imapd.conf(5)`, set ``conversations: 1``, ``conversations_db: twoskip``
+    * Create a conversations.db for each user: ``ctl_conversationsdb -b -r``
+
+3. JMAP depends on Xapian. This needs to be manually compiled due to extra patches needing to be applied. Our :ref:`Xapian install guide <imapinstall-xapian>` shows how.
+
+4. Once installed, the ``jmap`` module must be enabled in :cyrusman:`imapd.conf(5)`: ``httpmodules: caldav jmap tzdist``
 
 JMAP client
 ===========
@@ -101,7 +108,7 @@ Working
 
 * **Contacts**
     * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
-    
+
 * **Calendars**
     * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
 
@@ -111,7 +118,7 @@ In Progress
 -----------
 
 * **Messages**
-    * *getMessages*: works mostly. 
+    * *getMessages*: works mostly.
     * *setMessages*: supports to create drafts, send mails. Does not support creation of messages in multiple mailboxes, or any mailbox moves.
     * *getMailboxes*: mostly working, except conversations.
     * *setMailboxes*: mostly working
@@ -143,12 +150,12 @@ Not yet implemented
 * **Events**
     * The JMAP event service hooks into notifications, so that’s almost done.
     * What’s missing is the service layer (Bron knows more).
-    
+
 * **Messages**
     * Search snippets
     * Conversations
     * Anything else not mentioned in the "In Progress" section above
-    
+
 * **Phrase-Matching search**
     * The JMAP filters require phrase matching for text properties, but as a placeholder we currently only support case-insensitive substring search. We are working on Sphinx/Xapian integration.
 
@@ -157,10 +164,10 @@ Needs improvement
 
 * **Lookup message by guid**
     * We use message guids as JMAP message ids. Currently, that requires O(n), where n is the number of records across all a users mailboxes. That really should become O(1) or O(lgN)
-    
+
 * **Lookup mailbox by unique-id**
-    * We use mailbox unique-ids for JMAP mailbox ids. Currently, the lookup is O(n) (n is the number of a users mailboxes). Should be O(1) or O(lgN) 
-    
+    * We use mailbox unique-ids for JMAP mailbox ids. Currently, the lookup is O(n) (n is the number of a users mailboxes). Should be O(1) or O(lgN)
+
 * **Filters**
     * Message filters currently build on a very naive filter implementation. As a
       consequence, filtering messages is slooooow. We are working on Xapian
@@ -168,9 +175,9 @@ Needs improvement
     * Calendar and contacts similarly use naive filters but typically operate
       on a significantly smaller database. Still, we are working on speeding up
       these filters as well.
-      
+
 * **Error reporting**
-    * The JMAP spec requires all invalid properties of a request to be reported. 
-    * Contacts fail at the first property error. 
-    * Calendars and Messages try hard to report all erroneous properties. 
+    * The JMAP spec requires all invalid properties of a request to be reported.
+    * Contacts fail at the first property error.
+    * Calendars and Messages try hard to report all erroneous properties.
     * None of the JMAP error handlers report an error description.
