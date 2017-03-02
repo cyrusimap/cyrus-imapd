@@ -29,37 +29,45 @@ For basic reStructured Text operations, we are using Sphinx version 1.3.6:
 
 You will also need the perl package, which is used to build some docs from their Perl source:
 
-* Pod::POM::View::Restructured    
+* Pod::POM::View::Restructured
 
 For editing and preview
 
 * `geany <http://www.geany.org>`_
     * Has a full feature set
     * Minimal syntax highlighting for .rst files.
-    
-* `retext <http://sourceforge.net/projects/retext>`_ (`Windows install instructions <http://sourceforge.net/p/retext/wiki/Windows%20Install%20of%20ReText/>`_) 
+
+* `retext <http://sourceforge.net/projects/retext>`_ (`Windows install instructions <http://sourceforge.net/p/retext/wiki/Windows%20Install%20of%20ReText/>`_)
     * Built-in preview mode.
     * Struggles with templates
-    
-* or any text editor  
+
+* or any text editor
     * No preview capability
     * Some editors have syntax highlighting support for .rst files.
-  
+
 For interaction with the repositories
 
 * git
 * git-stuff
 
-Checking the files
+Building the files
 ==================
-    
-For a full-fledged test generating Sphinx output, from the checkout directory run::
+
+The best way to build the documentation is to use the toplevel Makefile (generated as part of
+:ref:`building the source <imapinstallguide>`)::
+
+    make doc
+
+This runs ``make doc-html doc-text man`` and places the relevant output in ``doc/html/``, ``doc/text/`` and ``man/`` directories.
+
+If you don't have a full source build environment and just want to manage the documentation
+on its own, from the `docsrc/`` directory run::
 
     make clean init man html
-    
-This generates the manpages and the html files. Look at the results in ``build``. 
 
-Run make with no arguments for a list of available output targets.
+This generates the manpages and the html files. The results are in ``build``.
+
+Run ``make`` with no arguments for a list of available output targets.
 
 Submitting updates
 ==================
@@ -90,7 +98,7 @@ In HTML output, this generates a link to the referenced document.
 
 Usage: ``:rfc:`<number>```
 
-Example: ``:rfc:`3501``` produces :rfc:`3501`. 
+Example: ``:rfc:`3501``` produces :rfc:`3501`.
 
 cyrusman
 --------
@@ -101,7 +109,7 @@ Currently we support sections 1, 5 and 8. These look for their man pages in the 
 
 Usage: ``:cyrusman:`<command>(<section>)``` or ``:cyrusman:`<configfile>.conf(5)```
 
-Example: ``:cyrusman:`imapd.conf(5)``` produces :cyrusman:`imapd.conf(5)`. 
+Example: ``:cyrusman:`imapd.conf(5)``` produces :cyrusman:`imapd.conf(5)`.
 
 imap_current_stable_version
 ---------------------------
@@ -120,7 +128,7 @@ For Unix manual, or "man" pages, we follow the conventions laid out in the man p
 .. note::
 
     Conventional section names include NAME, SYNOPSIS, CONFIGURATION, DESCRIPTION, OPTIONS, EXIT STATUS, RETURN VALUE, ERRORS, ENVIRONMENT, FILES, VERSIONS, CONFORMING TO, NOTES, BUGS, EXAMPLE, AUTHORS, and SEE ALSO. The following conventions apply to the SYNOPSIS section and can be used as a guide in other sections.
-    
+
 | **bold text** - type exactly as shown.
 | *italic text*	- replace with appropriate argument.
 | [-abc]	- any or all arguments within [ ] are optional.
@@ -129,7 +137,7 @@ For Unix manual, or "man" pages, we follow the conventions laid out in the man p
 | [expression] ... - entire expression within [ ] is repeatable.
 
 .. note::
-    
+
     Exact rendering may vary depending on the output device. For instance, man will usually not be able to render italics when running in a terminal, and will typically use underlined or coloured text instead. The command or function illustration is a pattern that should match all possible invocations. In some cases it is advisable to illustrate several exclusive invocations as is shown in the SYNOPSIS section of this manual page.
 
 Synopsis
@@ -140,8 +148,8 @@ In reStructured Text, this means a SYNOPSIS section might look like this::
     Synopsis
     ========
 
-        **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] 
-                [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ] 
+        **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ]
+                [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ]
                 [ *mailbox-pattern*... ]
 
 Rendering output like this:
@@ -205,4 +213,3 @@ EXAMPLES
 
     tech.Commits 0 2
     tech.Commits.archive 0 4
-    
