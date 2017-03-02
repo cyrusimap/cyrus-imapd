@@ -56,6 +56,7 @@ Install and configure Cassandane
         sudo cpan -i Net::CardDAVTalk
         sudo cpan -i Net::CalDAVTalk
         sudo cpan -i Mail::JMAPTalk
+        sudo cpan -i Math::Int64
 
 3. Install Cassandane
 
@@ -179,5 +180,3 @@ Read the script to see other options. If you're having problems, add more ``-v``
 Running with -v -v is very noisy, but gives a lot more data.  For example: all IMAP telemetry.
 
 Also helpful to run ``sudo tail -f /var/log/syslog``, and examine  /var/tmp/cass as root to examine log files and disk structures for failed tests.
-
-
