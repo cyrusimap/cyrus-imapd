@@ -12,7 +12,9 @@ Cyrus administration
 Compile JMAP support into Cyrus
 -------------------------------
 
-1. Set the ``--enable-http`` option when running autoconf to enable JMAP (and DAV) support in Cyrus.
+1. Enable JMAP (and DAV) in Cyrus:
+
+    * ``./configure --enable-http --enable-jmap`` along with your other configuration options.
 
 2. Enable :ref:`conversation support <imap-concepts-deployment-db-conversations>`
 
