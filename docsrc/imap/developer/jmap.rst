@@ -107,25 +107,19 @@ Working
 -------
 
 * **Contacts**
-    * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
+    * All JMAP methods are implemented. JMAP blobs are not supported.
 
 * **Calendars**
-    * Mostly. All JMAP methods are implemented. JMAP blobs are not supported.
-
-If you encounter any bug for these object types, please let us know.
-
-In Progress
------------
+    * All JMAP methods are implemented. JMAP blobs are not supported.
 
 * **Messages**
-    * *getMessages*: works mostly.
-    * *setMessages*: supports to create drafts, send mails. Does not support creation of messages in multiple mailboxes, or any mailbox moves.
-    * *getMailboxes*: mostly working, except conversations.
-    * *setMailboxes*: mostly working
-    * *getMessageList*: supports filters
-
-In general, messages are minimally supported and are under development.
-
+    * Most JMAP methods are implemented. The following methods are not planned for implementation:
+      * copyMessages
+      * reportMessages
+      * getVacationResponse
+      * setVacationResponse
+      * getIdentityUpdates
+      * setIdentities
 
 Not yet implemented
 -------------------
@@ -133,51 +127,12 @@ Not yet implemented
 * **Authentication**
     * Cyrus does not yet implement the JMAP authentication workflow. All the JMAP methods in httpd currently require an account logged in via Basic Authentication.
 
-* **Attachments**
-    * Attachments and JMAP blobs are not implemented. There are technical
-      reasons for this and we are working on it. As a workaround, you might
-      make use of the ``x-href`` properties, to obtain the respective JMAP
-      object in iCalendar, vcard or mail representation.
-
 * **Multi-user accounts**
-    All the current JMAP code operates on the userid currently authenticated
+    All the current JMAP method operate with the account currently authenticated
     to Cyrus httpd. That is, the `‘accountId`` property in JMAP requests is
-    not really supported.
-
+    not supported.
 
 * **Remote mailboxes**
 
 * **Events**
-    * The JMAP event service hooks into notifications, so that’s almost done.
-    * What’s missing is the service layer (Bron knows more).
-
-* **Messages**
-    * Search snippets
-    * Conversations
-    * Anything else not mentioned in the "In Progress" section above
-
-* **Phrase-Matching search**
-    * The JMAP filters require phrase matching for text properties, but as a placeholder we currently only support case-insensitive substring search. We are working on Sphinx/Xapian integration.
-
-Needs improvement
------------------
-
-* **Lookup message by guid**
-    * We use message guids as JMAP message ids. Currently, that requires O(n), where n is the number of records across all a users mailboxes. That really should become O(1) or O(lgN)
-
-* **Lookup mailbox by unique-id**
-    * We use mailbox unique-ids for JMAP mailbox ids. Currently, the lookup is O(n) (n is the number of a users mailboxes). Should be O(1) or O(lgN)
-
-* **Filters**
-    * Message filters currently build on a very naive filter implementation. As a
-      consequence, filtering messages is slooooow. We are working on Xapian
-      integration. Until then, you might not want to filter for messages.
-    * Calendar and contacts similarly use naive filters but typically operate
-      on a significantly smaller database. Still, we are working on speeding up
-      these filters as well.
-
-* **Error reporting**
-    * The JMAP spec requires all invalid properties of a request to be reported.
-    * Contacts fail at the first property error.
-    * Calendars and Messages try hard to report all erroneous properties.
-    * None of the JMAP error handlers report an error description.
+    * The JMAP event service hooks into notifications, but the JMAP event service is not implemented.
