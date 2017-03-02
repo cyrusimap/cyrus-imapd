@@ -190,8 +190,7 @@ sub test_settings
     $self->assert_not_null($jdata->{downloadUrl});
     $self->assert_not_null($jdata->{uploadUrl});
 }
-=pod
-FIXME
+
 sub test_login_wrongpass
     :JMAP :min_version_3_0
 {
@@ -216,42 +215,10 @@ sub test_login_wrongpass
       content => encode_json({
         loginId => $data->{loginId},
         type => "password",
-        password => $jmap->{password} . "xxx",
+        password => "bad",
       }),
     });
-    $self->assert_str_equals('401', $res->{status});
+    $self->assert_str_equals('410', $res->{status});
 }
-
-sub test_login_unknown
-    :JMAP :min_version_3_0
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    xlog "Request loginId";
-    my $data = $jmap->AuthRequest({
-       username => "foo",
-       clientName => "client",
-       clientVersion => "1",
-       deviceName => "casstest",
-    });
-    $self->assert_not_null($data->{loginId});
-
-    xlog "Request access token";
-    my $res = $jmap->ua->post($jmap->authuri(), {
-      headers => {
-        'Content-Type'  => "application/json",
-      },
-      content => encode_json({
-        loginId => $data->{loginId},
-        type => "password",
-        password => "bar",
-      }),
-    });
-    $self->assert_str_equals('401', $res->{status});
-}
-=cut
-
 
 1;
