@@ -46,7 +46,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.06;
+use Mail::JMAPTalk 0.07;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -97,6 +97,9 @@ sub test_login
     $self->assert_equals(JSON::true, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
 
+    xlog "Set API url to $data->{apiUrl}";
+    $jmap->{url} = $data->{apiUrl};
+
     xlog "Send some authenticated JMAP request";
     my $Request = {
       headers => {
@@ -105,6 +108,7 @@ sub test_login
       },
       content => encode_json([['getMailboxes', {}, "R1"]]),
     };
+
     my $Response = $jmap->ua->post($jmap->uri(), $Request);
     if ($ENV{DEBUGJMAP}) {
         warn "JMAP " . Dumper($Request, $Response);
