@@ -218,7 +218,7 @@ sub test_login_wrongpass
         password => "bad",
       }),
     });
-    $self->assert_str_equals('410', $res->{status});
+    $self->assert_str_equals('403', $res->{status});
 }
 
 1;
