@@ -750,7 +750,8 @@ struct xapian_snipgen
 {
     Xapian::Stem *stemmer;
     Xapian::Database *db;
-    std::vector<std::string> *matches;
+    std::vector<std::string> *loose_terms;
+    std::vector<std::string> *phrases;
     struct buf *buf;
     const char *hi_start;
     const char *hi_end;
@@ -818,7 +819,8 @@ void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
     snipgen->db->close();
     delete snipgen->stemmer;
-    delete snipgen->matches;
+    delete snipgen->loose_terms;
+    delete snipgen->phrases;
     delete snipgen->db;
     buf_destroy(snipgen->buf);
     free(snipgen);
@@ -828,34 +830,43 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
 {
     std::vector<std::string> terms;
     Xapian::TermGenerator term_generator;
-
-    term_generator.set_stemmer(*snipgen->stemmer);
-    term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
-            ~Xapian::TermGenerator::FLAG_CJK_WORDS);
-
-
-    for(size_t i = 0; i < snipgen->matches->size(); ++i)
-    {
-        std::string match = snipgen->matches->at(i);
-        /* An entry in matches might consist of multiple space-separated
-         * words, which would require them to be parsed as phrases. But
-         * neither the former nor the current snippet generator support
-         * termcover for phrases. So split them into loose terms. */
-        term_generator.index_text(Xapian::Utf8Iterator(match.c_str()));
-    }
-
-    const Xapian::Document & doc = term_generator.get_document();
-
-    Xapian::TermIterator it = doc.termlist_begin();
-    while (it != doc.termlist_end()) {
-        terms.push_back(*it);
-        it++;
-    }
-
     std::vector<Xapian::Query> v;
-    for(size_t i = 0; i < terms.size(); ++i)
-    {
-        v.push_back(Xapian::Query(terms[i]));
+
+    if (snipgen->loose_terms) {
+        /* Add loose query terms */
+        term_generator.set_stemmer(*snipgen->stemmer);
+        term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
+                ~Xapian::TermGenerator::FLAG_CJK_WORDS);
+
+        for(size_t i = 0; i < snipgen->loose_terms->size(); ++i)
+        {
+            std::string match = snipgen->loose_terms->at(i);
+            term_generator.index_text(Xapian::Utf8Iterator(match.c_str()));
+        }
+
+        const Xapian::Document & doc = term_generator.get_document();
+        Xapian::TermIterator it = doc.termlist_begin();
+        while (it != doc.termlist_end()) {
+            terms.push_back(*it);
+            it++;
+        }
+
+        for(size_t i = 0; i < terms.size(); ++i)
+        {
+            v.push_back(Xapian::Query(terms[i]));
+        }
+    }
+
+    if (snipgen->phrases) {
+        /* Add phrase queries */
+        unsigned flags = Xapian::QueryParser::FLAG_PHRASE|
+                         Xapian::QueryParser::FLAG_CJK_WORDS;
+        Xapian::QueryParser queryparser;
+        queryparser.set_stemmer(*snipgen->stemmer);
+        for(size_t i = 0; i < snipgen->phrases->size(); ++i) {
+            std::string phrase = snipgen->phrases->at(i);
+            v.push_back(queryparser.parse_query(phrase, flags));
+        }
     }
 
     return Xapian::Query(Xapian::Query::OP_OR, v.begin(), v.end());
@@ -865,10 +876,20 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
 {
     int r = 0;
 
-    if (!snipgen->matches) {
-        snipgen->matches = new std::vector<std::string>();
+    size_t len = strlen(match);
+    int is_phrase = len > 1 && match[0] == '"' && match[len-1] == '"';
+
+    if (is_phrase) {
+        if (!snipgen->phrases) {
+            snipgen->phrases = new std::vector<std::string>();
+        }
+        snipgen->phrases->push_back(std::string(match));
+    } else {
+        if (!snipgen->loose_terms) {
+            snipgen->loose_terms = new std::vector<std::string>();
+        }
+        snipgen->loose_terms->push_back(std::string(match));
     }
-    snipgen->matches->push_back(std::string(match));
 
     return r;
 }
@@ -895,7 +916,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 {
     int r = 0;
 
-    if (!snipgen->matches) {
+    if (!snipgen->loose_terms && !snipgen->phrases) {
         buf_reset(snipgen->buf);
         buf_reset(buf);
         buf_cstring(buf);
@@ -921,8 +942,11 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         buf_setcstr(buf, snippet.c_str());
         buf_cstring(buf);
 
-        delete snipgen->matches;
-        snipgen->matches = NULL;
+        delete snipgen->loose_terms;
+        snipgen->loose_terms = NULL;
+
+        delete snipgen->phrases;
+        snipgen->phrases = NULL;
 
     } catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
