@@ -931,6 +931,7 @@ static int setCalendars(struct jmap_req *req)
                     0 /* highestmodseq */, buf_cstring(&acl),
                     NULL /* uniqueid */, 0 /* local_only */,
                     NULL /* mboxptr */);
+
             buf_free(&acl);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
@@ -953,6 +954,7 @@ static int setCalendars(struct jmap_req *req)
                 free(mboxname);
                 goto done;
             }
+
             free(mboxname);
 
             /* Report calendar as created. */

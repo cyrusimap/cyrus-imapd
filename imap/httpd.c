@@ -4044,6 +4044,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Successful authentication - fall through */
         httpd_extrafolder = NULL;
         httpd_extradomain = NULL;
+        httpd_authstate = auth_newstate(user);
     }
     else {
         /* SASL-based authentication (Digest, Negotiate, NTLM) */
