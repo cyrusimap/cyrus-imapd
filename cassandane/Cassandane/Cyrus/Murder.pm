@@ -52,7 +52,7 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ murder => 1 }, @_);
+    return $class->SUPER::new({ murder => 1, adminstore => 1 }, @_);
 }
 
 sub set_up
@@ -326,6 +326,36 @@ sub test_move_to_nonexistent
     # it should fail nicely
     $self->assert_str_equals('no', $frontend->get_last_completion_response());
     $self->assert_matches(qr/Mailbox does not exist/, $frontend->get_last_error());
+}
+
+sub test_rename_with_location
+    :AllowMoves
+{
+    my ($self) = @_;
+
+    my $frontend_adminstore = $self->{frontend_adminstore}->get_client();
+
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    xlog "backend2 servername: $backend2_servername";
+
+    # not allowed to change mailbox name if location also specified
+    $frontend_adminstore->rename('user.cassandane', 'user.foo', "$backend2_servername!");
+    $self->assert_str_equals('no', $frontend_adminstore->get_last_completion_response());
+
+    # but can change location if mailbox name remains the same
+    $frontend_adminstore->rename('user.cassandane', 'user.cassandane', "$backend2_servername!");
+    # XXX need to check for "* NO USER cassandane (some error)" untagged response
+    $self->assert_str_equals('ok', $frontend_adminstore->get_last_completion_response());
+
+    # verify that it moved
+    my $backend1_store = $self->{backend1_store}->get_client();
+    $backend1_store->select('INBOX');
+    $self->assert_str_equals('no', $backend1_store->get_last_completion_response());
+
+    my $backend2_store = $self->{backend2_store}->get_client();
+    $backend2_store->select('INBOX');
+    $self->assert_str_equals('ok', $backend2_store->get_last_completion_response());
 }
 
 1;

@@ -1932,4 +1932,10 @@ sub install_old_mailbox
     return "user.$user.version$version";
 }
 
+sub get_servername
+{
+    my ($self) = @_;
+
+    return $self->{config}->get('servername');
+}
 1;
