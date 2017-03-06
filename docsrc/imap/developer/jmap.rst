@@ -137,4 +137,4 @@ Not yet implemented
 * **Remote mailboxes**
 
 * **Events**
-    * The JMAP event service hooks into notifications, but the JMAP event service is not implemented.
+    * Changes on mailbox entries trigger notifications. However, the JMAP event service is not implemented.
