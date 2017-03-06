@@ -2326,8 +2326,6 @@ sub test_getcalendareventlist_text
     xlog "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    return;
-
     my %textqueries = (
         title => "foo",
         title => "boop",
