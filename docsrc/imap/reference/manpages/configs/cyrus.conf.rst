@@ -40,22 +40,27 @@ Blank lines and lines beginning with \`\`#'' are ignored.
 Section Descriptions
 ====================
 
-The paragraphs below detail the three sections (**START**,
-**SERVICES**, **EVENTS**) that can be placed in the ``/etc/cyrus.conf``
+The paragraphs below detail the four sections (**START**, **SERVICES**,
+**EVENTS**, **DEAMON**) that can be placed in the ``/etc/cyrus.conf``
 file.  The arguments that are available for each entry within the
 section are described, and each argument's default value is shown.
 
-Arguments can appear in any order.
-Some arguments have no default value, these are listed with
-\`\`<no default>''.  For string arguments, the value MUST be enclosed in
-double quotes.
+An important distinction exists between **SERVICES** and **DAEMON** ;
+the former have sockets which :cyrusman:`master(8)` will listened on
+(either IP or Unix domain) while the latter do not.  Similarly,
+processes listed in **START** are expected to end and clean up after
+themselves, while those in **DAEMON** will be shutdown by
+:cyrusman:`master(8)`.
+
+Arguments can appear in any order. Some arguments have no default
+value, these are listed with \`\`<no default>''.  For string arguments,
+the value MUST be enclosed in double quotes.
 
 START
 -----
 
-This section lists the processes to run before any
-**SERVICES** are spawned.  This section is typically used to
-initialize databases and start long running daemons.
+This section lists the processes to run before any **SERVICES** are
+spawned.  This section is typically used to initialize databases.
 
 .. parsed-literal::
 
@@ -211,6 +216,23 @@ scheduled cleanup/maintenance.
         If set to a valid time (0000-2359), period is automatically
         set to 1440. This string argument is optional.
 
+DAEMON
+------
+
+This section lists long running daemons to start before any
+**SERVICES** are spawned.  They will be shutdown when
+:cyrusman:`master(8)` is exiting.
+
+.. parsed-literal::
+
+    **cmd=**\ <no default>
+
+..
+
+    The command (with options) to spawn as a child process.  This
+    string argument is required.
+
+
 Examples
 ========
 
@@ -264,4 +286,3 @@ See Also
 :cyrusman:`ctl_deliver(8)`,
 :cyrusman:`tls_prune(8)`,
 :manpage:`hosts_access(5)`
-
