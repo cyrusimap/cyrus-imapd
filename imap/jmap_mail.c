@@ -2792,7 +2792,7 @@ static void match_mailbox(search_expr_t *parent, json_t *mailbox,
 
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("folder");
-    e->value.s = xstrdup(mboxname);
+    e->value.s = mboxname; // takes ownership
 }
 
 static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
