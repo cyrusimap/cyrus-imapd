@@ -3381,11 +3381,13 @@ done:
     free(msgid);
     free_hash_table(&ids, NULL);
     free_hashu64_table(&cids, NULL);
-    freesortcrit(sortcrit);
-    search_query_free(query);
-    state->mailbox = NULL;
-    index_close(&state);
-    freesearchargs(searchargs);
+    if (sortcrit) freesortcrit(sortcrit);
+    if (query) search_query_free(query);
+    if (searchargs) freesearchargs(searchargs);
+    if (state) {
+        state->mailbox = NULL;
+        index_close(&state);
+    }
     if (r) {
         json_decref(*messageids);
         *messageids = NULL;
