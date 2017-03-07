@@ -41,12 +41,12 @@ Section Descriptions
 ====================
 
 The paragraphs below detail the four sections (**START**, **SERVICES**,
-**EVENTS**, **DEAMON**) that can be placed in the ``/etc/cyrus.conf``
+**EVENTS**, **DAEMON**) that can be placed in the ``/etc/cyrus.conf``
 file.  The arguments that are available for each entry within the
 section are described, and each argument's default value is shown.
 
 An important distinction exists between **SERVICES** and **DAEMON** ;
-the former have sockets which :cyrusman:`master(8)` will listened on
+the former have sockets which :cyrusman:`master(8)` will listen on
 (either IP or Unix domain) while the latter do not.  Similarly,
 processes listed in **START** are expected to end and clean up after
 themselves, while those in **DAEMON** will be shutdown by
