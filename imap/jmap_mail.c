@@ -4032,7 +4032,9 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
 
         json_t *ids = json_pack("[]");
         for (thread = conv->thread; thread; thread = thread->next) {
-            json_array_append_new(ids, json_string(jmap_msgid(&thread->guid)));
+            char *msgid = jmap_msgid(&thread->guid);
+            json_array_append_new(ids, json_string(msgid));
+            free(msgid);
         }
 
         json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "messageIds", ids);
