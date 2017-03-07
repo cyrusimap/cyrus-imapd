@@ -11,37 +11,44 @@ Compiling Xapian for Cyrus
 
 Before compiling Cyrus with the ``--enable-Xapian`` option, Xapian must first be patched and compiled.
 
-The version of Xapian used to build the search support into Cyrus was
-2.2, and the patches in the cyrus-imapd repository are against that version.
+The cyrusimap/cyruslibs repository provides a pre-patched copy of 1.5-dev Xapian, ready for use with Cyrus.
+We are working on having the patches integrated upstream.
 
-Thie version of Xapian requires gcc 4.9 or later.
+Xapian requires gcc 4.9 or later.
 
-To build the library:
+To build Xapian, fetch the cyruslibs package which comes with pre-patched Xapian and some other
+dependencies. They are installed in ``/usr/local/cyruslibs`` by default unless overridden on the
+command line.
 
 .. code-block:: bash
 
-    # choose your own adventures here
-    export XAPIAN_DIR=/opt/xapian
-    export CYRUS_DIR=/opt/cyrus
-    export SRC_DIR=/opt/src
+    export CYRUSLIBS="/usr/local/cyruslibs"
+    export PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
+    export LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
+    export XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
 
-    cd $SRC_DIR
-    wget http://oligarchy.co.uk/xapian/1.2.21/xapian-core-1.2.21.tar.xz
-    tar -xf xapian-core-1.2.21.tar.xz
-    cd xapian-core-1.2.21
-    tar -xf $cyrusdir/contrib/xapian_quilt.tar.gz
-    QUILT_PATCHES=xapian_quilt quilt push -a
-    autoreconf -v -i
-    ./configure --prefix=$XAPIAN_DIR
-    make
-    make install
+    git clone git@github.com:cyrusimap/cyruslibs.git
+    cd cyruslibs
+    sh build.sh $CYRUSLIBS_DIR
 
 Then follow on with the Cyrus :ref:`compilation instructions <imapinstallguide>`, adding ``--enable-xapian`` to the flags to ``./configure``
 
 Configuring Xapian
 ==================
 
-Configuration-wise, you'll need to set up sync log to a channel called **squatter**, and at least one search tier.
+Xapian requires a running :cyrusman:`squatter(8)` instance:
+
+* In :cyrusman:`cyrus.conf(5)` set up a daemon squatter to run: ::
+
+    START {
+      # run a rolling squatter
+      squatter cmd="squatter -R"
+    }
+
+* Enable sync logging: Set ``sync_log: on`` in :cyrusman:`imapd.conf(5)`.
+* Add a squatter sync log channel: ``sync_log_channels: squatter`` in :cyrusman:`imapd.conf(5)`.
+
+You also need (at least one) search tier.
 
 ::
 
@@ -53,13 +60,6 @@ Configuration-wise, you'll need to set up sync log to a channel called **squatte
     partition-default: /var/cyrus/spool
     t1searchpartition-default: /var/cyrus/search
 
-And then you'll need to arrange for a rolling squatter to run on startup. In :cyrusman:`cyrus.conf(5)`::
-
-    START {
-      # run a rolling squatter
-      squatter cmd="squatter -R"
-    }
-
-If you want to do more complex search tiers and repacking, you'll  want to read:
+If you want to do more complex search tiers and repacking, you'll want to read:
 
 http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html

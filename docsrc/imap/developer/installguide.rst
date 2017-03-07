@@ -38,7 +38,8 @@ Setting up dependencies
 Compile Cyrus
 ---------------
 
-There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching.
+There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching,
+or if you are :ref:`using jmap <developer-jmap>`.
 
 .. code-block:: bash
 
