@@ -326,20 +326,15 @@ sub test_sharing_samedomain
 
     my $Addressbooks = $talk1->GetAddressBooks();
 
-    $self->assert_deep_equals([
-          {
-            'name' => 'personal',
-            'isReadOnly' => 0,
-            'path' => 'Default',
-            'href' => '/dav/addressbooks/user/user1@example.com/Default/'
-          },
-          {
-            'path' => '/dav/addressbooks/zzzz/user2@example.com/Shared',
-            'href' => '/dav/addressbooks/zzzz/user2@example.com/Shared/',
-            'name' => 'Shared Address Book',
-            'isReadOnly' => 1,
-          }
-        ], $Addressbooks);
+    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Default', $Addressbooks->[0]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
+    $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
+
+    $self->assert_str_equals('Shared Address Book', $Addressbooks->[1]{name});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.com/Shared', $Addressbooks->[1]{path});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.com/Shared/', $Addressbooks->[1]{href});
+    $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
 }
 
 sub test_sharing_crossdomain
@@ -378,20 +373,15 @@ sub test_sharing_crossdomain
 
     my $Addressbooks = $talk1->GetAddressBooks();
 
-    $self->assert_deep_equals([
-          {
-            'name' => 'personal',
-            'isReadOnly' => 0,
-            'path' => 'Default',
-            'href' => '/dav/addressbooks/user/user1@example.com/Default/'
-          },
-          {
-            'path' => '/dav/addressbooks/zzzz/user2@example.org/Shared',
-            'href' => '/dav/addressbooks/zzzz/user2@example.org/Shared/',
-            'name' => 'Shared Address Book',
-            'isReadOnly' => 1
-          }
-        ], $Addressbooks);
+    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Default', $Addressbooks->[0]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
+    $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
+
+    $self->assert_str_equals('Shared Address Book', $Addressbooks->[1]{name});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.org/Shared', $Addressbooks->[1]{path});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.org/Shared/', $Addressbooks->[1]{href});
+    $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
 }
 
 sub test_control_chars
