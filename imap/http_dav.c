@@ -3243,7 +3243,7 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
     if (ctxt) {
         doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body.payload),
                                 buf_len(&txn->req_body.payload), NULL, NULL,
-                                XML_PARSE_NOWARNING);
+                                XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
         xmlFreeParserCtxt(ctxt);
     }
     if (!doc) {
