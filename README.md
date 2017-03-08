@@ -119,7 +119,7 @@ variables, accordingly. For example:
 For Xapian, either make sure to add $CYRUSLIBS/bin to your PATH, or call
 Cyrus ./configure script as follows:
 
-    $ XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5" ./configure [...]
+    $ ./configure XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5" [...]
 
 Then continue to install Cyrus.
 
