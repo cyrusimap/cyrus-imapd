@@ -41,6 +41,12 @@ Compile Cyrus
 There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching,
 or if you are :ref:`using jmap <developer-jmap>`.
 
+.. tip::
+    Passing environment variables as an argument to configure,
+    rather than setting them in the environment before running configure,
+    allows their values to be logged in config.log.  This is useful for diagnosing
+    problems.
+
 .. code-block:: bash
 
     cd /path/to/cyrus-imapd

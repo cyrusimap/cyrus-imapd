@@ -221,6 +221,12 @@ please see:
 
     # :command:`./configure --help`
 
+.. tip::
+    Passing environment variables as an argument to configure,
+    rather than setting them in the environment before running configure,
+    allows their values to be logged in config.log.  This is useful for diagnosing
+    problems.
+
 Optional dependencies
 ---------------------
 
