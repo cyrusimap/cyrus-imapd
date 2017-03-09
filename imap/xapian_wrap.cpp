@@ -90,7 +90,7 @@ int xapian_compact_dbs(const char *dest, const char **sources)
 
 /* ====================================================================== */
 
-#define XAPIAN_STEM_VERSIONS_NUM 2
+#define XAPIAN_STEM_VERSIONS_NUM 3
 #define XAPIAN_STEM_CURRENT_VERSION (XAPIAN_STEM_VERSIONS_NUM-1)
 #define XAPIAN_STEM_VERSION_KEY "cyrus.stem-version"
 
@@ -111,6 +111,20 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "O"                 /* LOCATION */
     },
     // Version 1: Stem using STEM_SOME with stopwords
+    {
+        NULL,
+        "XF",                /* FROM */
+        "XT",                /* TO */
+        "XC",                /* CC */
+        "XB",                /* BCC */
+        "XS",                /* SUBJECT */
+        "XL",                /* LISTID */
+        "XY",                /* TYPE */
+        "XH",                /* HEADERS */
+        "",                  /* BODY */
+        "XO"                 /* LOCATION */
+    },
+    // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
     {
         NULL,
         "XF",                /* FROM */
@@ -155,6 +169,20 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_ALL,   /* HEADERS */
         Xapian::QueryParser::STEM_SOME,  /* BODY */
         Xapian::QueryParser::STEM_SOME   /* LOCATION */
+    },
+    // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
+    {
+        Xapian::QueryParser::STEM_NONE,
+        Xapian::QueryParser::STEM_NONE,  /* FROM */
+        Xapian::QueryParser::STEM_NONE,  /* TO */
+        Xapian::QueryParser::STEM_NONE,  /* CC */
+        Xapian::QueryParser::STEM_NONE,  /* BCC */
+        Xapian::QueryParser::STEM_SOME,  /* SUBJECT */
+        Xapian::QueryParser::STEM_NONE,  /* LISTID */
+        Xapian::QueryParser::STEM_NONE,  /* TYPE */
+        Xapian::QueryParser::STEM_NONE,  /* HEADERS */
+        Xapian::QueryParser::STEM_SOME,  /* BODY */
+        Xapian::QueryParser::STEM_SOME   /* LOCATION */
     }
 };
 
@@ -185,6 +213,20 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_ALL,   /* LISTID */
         Xapian::TermGenerator::STEM_ALL,   /* TYPE */
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
+        Xapian::TermGenerator::STEM_SOME,  /* BODY */
+        Xapian::TermGenerator::STEM_SOME   /* LOCATION */
+    },
+    // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
+    {
+        Xapian::TermGenerator::STEM_NONE,
+        Xapian::TermGenerator::STEM_NONE,  /* FROM */
+        Xapian::TermGenerator::STEM_NONE,  /* TO */
+        Xapian::TermGenerator::STEM_NONE,  /* CC */
+        Xapian::TermGenerator::STEM_NONE,  /* BCC */
+        Xapian::TermGenerator::STEM_SOME,  /* SUBJECT */
+        Xapian::TermGenerator::STEM_NONE,  /* LISTID */
+        Xapian::TermGenerator::STEM_NONE,  /* TYPE */
+        Xapian::TermGenerator::STEM_NONE,  /* HEADERS */
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
         Xapian::TermGenerator::STEM_SOME   /* LOCATION */
     }
