@@ -60,6 +60,7 @@ imap/ctl_conversationsdb
 imap/chk_cyrus
 imap/ctl_cyrusdb
 imap/ctl_deliver
+imap/ctl_jmapauth
 imap/ctl_mboxlist
 imap/ctl_zoneinfo
 imap/cvt_cyrusdb

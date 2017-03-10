@@ -52,6 +52,8 @@
 #include "mailbox.h"
 #include "mboxname.h"
 
+#include "jmapauth.h"
+
 extern struct namespace jmap_namespace;
 
 struct jmap_idmap {

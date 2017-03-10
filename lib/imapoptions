@@ -965,6 +965,18 @@ Blank lines and lines beginning with ``#'' are ignored.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
 
+{ "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
+/* The cyrusdb backend to use for the JMAP authentication database. */
+
+{ "jmapauth_db_path", NULL, STRING }
+/* The absolute path to the JMAP authentication db file.  If not specified,
+   will be confdir/jmapauth.db */
+
+{ "jmapauth_allowsasl", 0, SWITCH }
+/* If enabled, JMAP requests may be authenticated with the enabled
+   SASL auth mechanisms (see sasl_mech_list), including HTTP Basic
+   Authentication (RFC 7617). The default is Bearer only. */
+
 { "jmap_preview_annot", NULL, STRING }
 /* The name of the per-message annotation, if any, to store message
    previews. */

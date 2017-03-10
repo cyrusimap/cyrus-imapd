@@ -1,0 +1,226 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/cunit.h"
+#include "imap/jmapauth.h"
+#include "imap/global.h"
+#include "strarray.h"
+#include "cyrusdb.h"
+#include "libcyr_cfg.h"
+#include "lib/util.h"       /* for VECTOR_SIZE */
+#include "xmalloc.h"
+
+#define DBDIR   "test-dbdir"
+#define DBNAME  DBDIR "/jmapauth.db"
+
+static void test_open(void)
+{
+    int r;
+    struct db *db = NULL;
+
+    r = jmapauth_open(&db, 0, DBNAME);
+    CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
+
+    r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
+    CU_ASSERT_EQUAL(r, 0);
+ 
+    r = jmapauth_close(db);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+static void test_ids(void)
+{
+    struct jmapauth_token *t1, *t2, *t3;
+    char *id1, *id3;
+
+    /* Create two tokens with identical data. They might have different
+       creation times, and secret and session id must differ */
+    t1 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    t2 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+
+    /* Assert that session ids and secrets differ */
+    CU_ASSERT(memcmp(t1->sessionid, t2->sessionid, JMAPAUTH_SESSIONID_LEN));
+    CU_ASSERT(memcmp(t1->secret, t2->secret, JMAPAUTH_SECRET_LEN));
+
+    /* Assert that token ids differ, if only sessionid differs */
+    t3 = xmalloc(sizeof(struct jmapauth_token));
+    memcpy(t3, t1, sizeof(struct jmapauth_token));
+    memcpy(t3->sessionid, t2->sessionid, JMAPAUTH_SESSIONID_LEN);
+
+    id1 = jmapauth_tokenid(t1);
+    CU_ASSERT_PTR_NOT_NULL(id1);
+    id3 = jmapauth_tokenid(t3);
+    CU_ASSERT_PTR_NOT_NULL(id3);
+
+    CU_ASSERT(strcmp(id1, id3));
+
+    jmapauth_token_free(t1);
+    jmapauth_token_free(t2);
+    free(t3);
+    free(id1);
+    free(id3);
+}
+
+static void test_store(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct jmapauth_token *mytok = NULL, *dbtok = NULL;
+    char *tokenid;
+    size_t len;
+
+    r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
+    CU_ASSERT_EQUAL(r, 0);
+
+    mytok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    CU_ASSERT_PTR_NOT_NULL(mytok);
+
+    tokenid = jmapauth_tokenid(mytok);
+    CU_ASSERT_PTR_NOT_NULL(tokenid);
+
+    r = jmapauth_store(db, mytok, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = jmapauth_close(db);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = jmapauth_open(&db, 0, DBNAME);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = jmapauth_fetch(db, tokenid, &dbtok, 0, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_EQUAL(mytok->version, dbtok->version);
+    CU_ASSERT_EQUAL(mytok->kind, dbtok->kind);
+
+    len = JMAPAUTH_SESSIONID_LEN;
+    CU_ASSERT(!memcmp(mytok->sessionid, dbtok->sessionid, len));
+
+    CU_ASSERT(!strcmp(mytok->userid, dbtok->userid));
+    CU_ASSERT_EQUAL(mytok->lastuse, dbtok->lastuse);
+    CU_ASSERT_EQUAL(mytok->expire, dbtok->expire);
+    CU_ASSERT_EQUAL(mytok->flags, dbtok->flags);
+    CU_ASSERT_EQUAL(mytok->datalen, dbtok->datalen);
+
+    len = dbtok->datalen;
+    CU_ASSERT(!memcmp(mytok->data, dbtok->data, len));
+
+    r = jmapauth_close(db);
+    CU_ASSERT_EQUAL(r, 0);
+
+    jmapauth_token_free(dbtok);
+    jmapauth_token_free(mytok);
+    free(tokenid);
+}
+
+static void test_wrongmac(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct jmapauth_token *tok = NULL;
+    char *tokenid;
+
+    r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
+    CU_ASSERT_EQUAL(r, 0);
+
+    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    CU_ASSERT_PTR_NOT_NULL(tok);
+
+    tokenid = jmapauth_tokenid(tok);
+    CU_ASSERT_PTR_NOT_NULL(tokenid);
+
+    r = jmapauth_store(db, tok, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    jmapauth_token_free(tok);
+    tok = NULL;
+
+    r = jmapauth_fetch(db, tokenid, &tok, 0, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    jmapauth_token_free(tok);
+    tok = NULL;
+
+    /* Change the last byte of the trailing MAC */
+    if (tokenid[strlen(tokenid)-1] != 'a')
+        tokenid[strlen(tokenid)-1] = 'a';
+    else
+        tokenid[strlen(tokenid)-1] = 'b';
+
+    r = jmapauth_fetch(db, tokenid, &tok, 0, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_EXISTS);
+
+    r = jmapauth_close(db);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+static void test_expire(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct jmapauth_token *tok = NULL;
+    char *tokenid;
+
+    r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
+    CU_ASSERT_EQUAL(r, 0);
+
+    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, /*ttl*/1);
+    CU_ASSERT_PTR_NOT_NULL(tok);
+
+    tokenid = jmapauth_tokenid(tok);
+    CU_ASSERT_PTR_NOT_NULL(tokenid);
+
+    r = jmapauth_store(db, tok, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    jmapauth_token_free(tok);
+    tok = NULL;
+
+    sleep(1);
+    r = jmapauth_fetch(db, tokenid, &tok, 0, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_EXISTS);
+
+    r = jmapauth_close(db);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+static int set_up(void)
+{
+    int r;
+
+    r = system("rm -rf " DBDIR);
+    if (r)
+        return r;
+
+    r = mkdir(DBDIR, 0777);
+    if (r < 0) {
+        int e = errno;
+        perror(DBDIR);
+        return e;
+    }
+
+    r = mkdir(DBDIR "/db", 0777);
+    if (r < 0) {
+        int e = errno;
+        perror(DBDIR "/db");
+        return e;
+    }
+
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    cyrusdb_init();
+    config_conversations_db = "twoskip";
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    cyrusdb_done();
+    config_conversations_db = NULL;
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}

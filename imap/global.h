@@ -148,6 +148,8 @@ extern const char *config_userdeny_db;
 extern const char *config_zoneinfo_db;
 extern const char *config_conversations_db;
 extern const char *config_backup_db;
+extern const char *config_jmapauth_db;
+extern int config_jmapauth_allowsasl;
 extern int charset_flags;
 extern int charset_snippet_flags;
 

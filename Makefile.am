@@ -151,6 +151,7 @@ sbin_PROGRAMS += \
 	imap/ctl_conversationsdb \
 	imap/ctl_cyrusdb \
 	imap/ctl_deliver \
+	imap/ctl_jmapauth \
 	imap/ctl_mboxlist \
 	imap/cvt_cyrusdb \
 	imap/cyr_df \
@@ -634,6 +635,7 @@ cunit_TESTS = \
 	cunit/guid.testc \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
+	cunit/jmapauth.testc \
 	cunit/libconfig.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
@@ -845,6 +847,9 @@ imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 imap_ctl_deliver_SOURCES = imap/cli_fatal.c imap/ctl_deliver.c imap/mutex_fake.c
 imap_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
 
+imap_ctl_jmapauth_SOURCES = imap/cli_fatal.c imap/ctl_jmapauth.c imap/mutex_fake.c
+imap_ctl_jmapauth_LDADD = $(LD_UTILITY_ADD)
+
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
@@ -980,6 +985,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
+	imap/jmapauth.c \
+	imap/jmapauth.h \
 	imap/mailbox.c \
 	imap/mailbox.h \
 	imap/mbdump.c \
