@@ -290,7 +290,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         config_zoneinfo_db = config_getstring(IMAPOPT_ZONEINFO_DB);
         config_conversations_db = config_getstring(IMAPOPT_CONVERSATIONS_DB);
         config_backup_db = config_getstring(IMAPOPT_BACKUP_DB);
-        config_jmapauth_db = config_getstring(IMAPOPT_BACKUP_DB);
+        config_jmapauth_db = config_getstring(IMAPOPT_JMAPAUTH_DB);
 
         /* configure libcyrus as needed */
         libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
