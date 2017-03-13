@@ -306,8 +306,6 @@ sub _create_instances
 		# tell sync_client how to login
 		sync_authname => 'repluser',
 		sync_password => 'replpass',
-		# Ensure sync_server gives sync_client enough privileges
-		admins => 'admin repluser',
 	    );
 	}
 
@@ -402,7 +400,6 @@ sub _create_instances
 		mupdate_password => 'mupdpass',
 		serverlist =>
 		    "localhost:$backend1_imapd_port localhost:$backend2_imapd_port",
-		admins => 'admin mupduser',
 		proxy_authname => 'mailproxy',
 		proxy_password => 'mailproxy',
 	    );
@@ -477,7 +474,6 @@ sub _create_instances
 	    my $backup_conf = $self->{_config}->clone();
 	    $backup_conf->set(
 		temp_path => '@basedir@/tmp',
-		admins => 'admin repluser',
 		backup_keep_previous => 'yes',
 		'backuppartition-default' => '@basedir@/data/backup',
 	    );

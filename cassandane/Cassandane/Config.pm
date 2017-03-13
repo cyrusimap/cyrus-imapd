@@ -65,7 +65,7 @@ sub default
 {
     if (!defined($default)) {
 	$default = Cassandane::Config->new(
-	    admins => 'admin',
+	    admins => 'admin mailproxy mupduser repluser',
 	    configdirectory => '@basedir@/conf',
 	    syslog_prefix => '@name@',
 	    sievedir => '@basedir@/conf/sieve',
