@@ -7,9 +7,7 @@ Cyrus annotations are based on a draft (http://tools.ietf.org/html/draft-daboo-i
 
 * **/admin** - Sets the administrator email address for the server. (See :cyrusman:`cyradm(8)`)
 
-* **/check** - Boolean value "true" or "false" that indicates whether this mailbox should be checked at regular intervals by the client. The interval in minutes is specified by the
-
-* **/checkperiod** entry. (Draft RFC)
+* **/check** - Boolean value "true" or "false" that indicates whether this mailbox should be checked at regular intervals by the client. The interval in minutes is specified by the ``/checkperiod`` entry. (Draft RFC)
 
 * **/checkperiod** - Numeric value indicating a period of minutes that the client uses to determine the interval of regular 'new mail' checks for the corresponding mailbox. (Draft RFC)
 
