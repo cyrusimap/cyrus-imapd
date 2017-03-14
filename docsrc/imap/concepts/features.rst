@@ -4,14 +4,32 @@
 Features
 ========
 
-The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using technologies based on well-established Open Standards.
+The Cyrus IMAP (Internet Message Access Protocol) server provides
+access to personal mail, system-wide bulletin boards, news-feeds,
+calendar and contacts through the IMAP, NNTP, CalDAV and CardDAV
+protocols. The Cyrus IMAP server is a scalable enterprise groupware
+system designed for use from small to large enterprise environments
+using technologies based on well-established Open Standards.
 
-A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across one or more nodes. It differs from other IMAP server implementations in that it is run on *sealed nodes*, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
+A full Cyrus IMAP implementation allows a seamless mail and bulletin
+board environment to be set up across one or more nodes. It differs
+from other IMAP server implementations in that it is run on *sealed
+nodes*, where users are not normally permitted to log in. The mailbox
+database is stored in parts of the filesystem that are private to the
+Cyrus IMAP system. All user access to mail is through software using
+the IMAP, IMAPS, POP3, POP3S, KPOP, CalDAV and/or CardDAV protocols.
 
-The private mailbox database design gives the Cyrus IMAP server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
+The private mailbox database design gives the Cyrus IMAP server large
+advantages in efficiency, scalability, and administratability. Multiple
+concurrent read/write connections to the same mailbox are permitted.
+The server supports access control lists on mailboxes and storage
+quotas on mailbox hierarchies.
 
+Cyrus IMAP provisionally supports the emerging JMAP protocol standards,
+when built for such.
 
-The following documents show the full power of each feature that is included with Cyrus IMAP.
+The following documents show the full power of each feature that is
+included with Cyrus IMAP.
 
 Exceptions notwithstanding, most of this documentation does not involve
 the :ref:`imap-rfc-support`.
@@ -53,6 +71,17 @@ Message Management
     features/shared-seen-state
     features/server-side-filtering
     features/event-notifications
+
+Calendar and Contact (DAV) Collection Management
+------------------------------------------------
+
+.. toctree::
+    :maxdepth: 1
+
+    features/caldav-collections
+    features/dav-components
+    features/caldav-collection-mgmt
+    features/carddav
 
 Storage
 -------
