@@ -7257,6 +7257,9 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                 }
             } // (destserver)
 
+            if (destserver) free(destserver);
+            if (destpart) free(destpart);
+
             res = pipe_until_tag(s, tag, 0);
 
             /* make sure we've seen the update */
