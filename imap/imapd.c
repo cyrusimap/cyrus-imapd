@@ -7190,6 +7190,13 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         return;
     }
 
+    if (location && strcmp(oldname, newname)) {
+        prot_printf(imapd_out,
+                    "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
+                    tag);
+        return;
+    }
+
     oldintname = mboxname_from_external(oldname, &imapd_namespace, imapd_userid);
     strncpy(oldmailboxname, oldintname, MAX_MAILBOX_NAME);
     free(oldintname);
@@ -7303,13 +7310,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (location && !config_partitiondir(location)) {
         /* invalid partition, assume its a server (remote destination) */
         char *server;
-
-        if (strcmp(oldname, newname)) {
-            prot_printf(imapd_out,
-                        "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
-                        tag);
-            goto done;
-        }
 
         /* dest partition? */
         server = location;
