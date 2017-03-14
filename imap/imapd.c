@@ -7241,28 +7241,29 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                 destpart = xstrdup(location);
             }
 
-            if (destserver) {
-                if (destpart && !strcmp(destserver,config_servername)) {
-                    // XFER
-                    prot_printf(s->out,
-                            "%s XFER \"%s\" \"%s\" %s\r\n",
-                            tag,
-                            oldname,
-                            newname,
-                            location
-                        );
+            if (*destpart == '\0') {
+                free(destpart);
+                destpart = NULL;
+            }
 
-                } else {
-                    // RENAME
-                    prot_printf(s->out,
-                            "%s RENAME \"%s\" \"%s\" %s\r\n",
-                            tag,
-                            oldname,
-                            newname,
-                            location
-                        );
-                }
-            } // (destserver)
+            if (!destserver || !strcmp(destserver, mbentry->server)) {
+                /* same server: proxy a rename */
+                prot_printf(s->out,
+                        "%s RENAME \"%s\" \"%s\" %s\r\n",
+                        tag,
+                        oldname,
+                        newname,
+                        location);
+            } else {
+                /* different server: proxy an xfer */
+                prot_printf(s->out,
+                        "%s XFER \"%s\" %s%s%s\r\n",
+                        tag,
+                        oldname,
+                        destserver,
+                        destpart ? " " : "",
+                        destpart ? destpart : "");
+            }
 
             if (destserver) free(destserver);
             if (destpart) free(destpart);
