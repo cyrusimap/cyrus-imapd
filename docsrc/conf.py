@@ -439,6 +439,17 @@ man_pages = [
     ),
 
         (
+            'imap/reference/manpages/systemcommands/cyr_userseen',
+            'cyr_userseen',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Nic Bernstein (Onlight)'
+                ],
+            8
+    ),
+
+        (
             'imap/reference/manpages/systemcommands/cyr_virusscan',
             'cyr_virusscan',
             u'Cyrus IMAP Documentation',
