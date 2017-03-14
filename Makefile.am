@@ -83,6 +83,7 @@ DISTCLEANFILES = \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
 	imap/http_caldav_js.h \
+	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -219,6 +220,7 @@ AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
 	imap/http_caldav_js.h \
+	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -357,6 +359,8 @@ EXTRA_DIST += \
 	imap/dav_util.h \
 	imap/http_caldav_js.h \
 	imap/http_caldav.js \
+	imap/http_carddav_js.h \
+	imap/http_carddav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
@@ -1186,6 +1190,7 @@ imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
 	imap/http_caldav_js.h \
+	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -1317,6 +1322,9 @@ imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
 # the /dev/null redirection on cd is to prevent shell environments with
 # CDPATH echoing the path change on stdout and consequently into the .h file
 imap/http_caldav_js.h: imap/http_caldav.js
+	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
+
+imap/http_carddav_js.h: imap/http_carddav.js
 	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
 
 if MAINTAINER_MODE

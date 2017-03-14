@@ -88,6 +88,7 @@
 #include "imap/imap_err.h"
 
 static struct carddav_db *auth_carddavdb = NULL;
+static time_t compile_time;
 
 static void my_carddav_init(struct buf *serverinfo);
 static void my_carddav_auth(const char *userid);
@@ -102,6 +103,9 @@ static int carddav_parse_path(const char *path,
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
                         void *destdb, unsigned flags);
+
+static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
+                       struct index_record *record, void *data, void **obj);
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
@@ -288,7 +292,7 @@ static struct meth_params carddav_params = {
     NULL,                                       /* No ACL extensions */
     { CARDDAV_UID_CONFLICT, &carddav_copy },
     NULL,                                       /* No special DELETE handling */
-    NULL,                                       /* No special GET handling */
+    &carddav_get,
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No PATCH handling */
     { POST_SHARE, NULL, NULL },                 /* No special POST handling */
@@ -347,6 +351,8 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     namespace_principal.enabled = 1;
     /* Apple clients check principal resources for these DAV tokens */
     namespace_principal.allow |= ALLOW_CARD;
+
+    compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
 
@@ -612,6 +618,362 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
     struct vparse_card *vcard = (struct vparse_card *)obj;
     return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/0);
 }
+
+
+/*
+ * mboxlist_findall() callback function to list addressbooks
+ */
+
+struct addr_info {
+    char shortname[MAX_MAILBOX_NAME];
+    char displayname[MAX_MAILBOX_NAME];
+    unsigned flags;
+};
+
+enum {
+    ADDR_IS_DEFAULT =    (1<<0),
+    ADDR_CAN_DELETE =    (1<<1),
+    ADDR_CAN_ADMIN =     (1<<2),
+    ADDR_IS_PUBLIC =     (1<<3)
+};
+
+struct list_addr_rock {
+    struct addr_info *addr;
+    unsigned len;
+    unsigned alloc;
+};
+
+static int list_addr_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct list_addr_rock *lrock = (struct list_addr_rock *) rock;
+    struct addr_info *addr;
+    static size_t defaultlen = 0;
+    char *shortname;
+    size_t len;
+    int r, rights, any_rights = 0;
+    static const char *displayname_annot =
+        DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    struct buf displayname = BUF_INITIALIZER;
+
+    if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
+
+    /* Make sure its a addrendar */
+    if (mbentry->mbtype != MBTYPE_ADDRESSBOOK) goto done;
+
+    /* Make sure its readable */
+    rights = httpd_myrights(httpd_authstate, mbentry);
+    if ((rights & DACL_READ) != DACL_READ) goto done;
+
+    shortname = strrchr(mbentry->name, '.') + 1;
+    len = strlen(shortname);
+
+    /* Lookup DAV:displayname */
+    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
+                                httpd_userid, &displayname);
+    /* fall back to the last part of the mailbox name */
+    if (r || !displayname.len) buf_setcstr(&displayname, shortname);
+
+    /* Make sure we have room in our array */
+    if (lrock->len == lrock->alloc) {
+        lrock->alloc += 100;
+        lrock->addr = xrealloc(lrock->addr,
+                              lrock->alloc * sizeof(struct addr_info));
+    }
+
+    /* Add our addressbook to the array */
+    addr = &lrock->addr[lrock->len];
+    strlcpy(addr->shortname, shortname, MAX_MAILBOX_NAME);
+    strlcpy(addr->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
+    addr->flags = 0;
+
+    /* Is this the default addressbook? */
+    if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
+        addr->flags |= ADDR_IS_DEFAULT;
+    }
+
+    /* Can we delete this addrendar? */
+    else if (rights & DACL_RMCOL) {
+        addr->flags |= ADDR_CAN_DELETE;
+    }
+
+    /* Can we admin this addressbook? */
+    if (rights & DACL_ADMIN) {
+        addr->flags |= ADDR_CAN_ADMIN;
+    }
+
+    /* Is this addressbook public? */
+    if (mbentry->acl) {
+        struct auth_state *auth_anyone = auth_newstate("anyone");
+
+        any_rights = cyrus_acl_myrights(auth_anyone, mbentry->acl);
+        auth_freestate(auth_anyone);
+    }
+    if ((any_rights & DACL_READ) == DACL_READ) {
+        addr->flags |= ADDR_IS_PUBLIC;
+    }
+
+    lrock->len++;
+
+done:
+    buf_free(&displayname);
+
+    return 0;
+}
+
+static int addr_compare(const void *a, const void *b)
+{
+    struct addr_info *c1 = (struct addr_info *) a;
+    struct addr_info *c2 = (struct addr_info *) b;
+
+    return strcmp(c1->displayname, c2->displayname);
+}
+
+
+/* Create a HTML document listing all addressbooks available to the user */
+static int list_addressbooks(struct transaction_t *txn)
+{
+    int ret = 0, precond, rights;
+    char mboxlist[MAX_MAILBOX_PATH+1];
+    struct stat sbuf;
+    time_t lastmod;
+    const char *etag, *base_path = txn->req_tgt.path;
+    unsigned level = 0, i;
+    struct buf *body = &txn->resp_body.payload;
+    struct list_addr_rock lrock;
+    const char *proto = NULL;
+    const char *host = NULL;
+#include "imap/http_carddav_js.h"
+
+    /* stat() mailboxes.db for Last-Modified and ETag */
+    snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
+    stat(mboxlist, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld-%ld",
+               compile_time, sbuf.st_mtime, sbuf.st_size);
+
+    /* stat() config file for Last-Modified and ETag */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(lastmod, sbuf.st_mtime);
+    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    etag = buf_cstring(&txn->buf);
+
+    /* Check any preconditions */
+    precond = check_precond(txn, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in ETag, Last-Modified, and Expires */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = lastmod;
+        txn->flags.cc |= CC_REVALIDATE;
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        ret = precond;
+        goto done;
+    }
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth == METH_HEAD) {
+        response_header(HTTP_OK, txn);
+        goto done;
+    }
+
+    /* Send HTML header */
+    buf_reset(body);
+    buf_printf_markup(body, level, HTML_DOCTYPE);
+    buf_printf_markup(body, level++, "<html>");
+    buf_printf_markup(body, level++, "<head>");
+    buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
+    buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
+    buf_appendcstr(body, "//<![CDATA[\n");
+    buf_printf(body, (const char *) http_carddav_js,
+               cyrus_version(), http_carddav_js_len);
+    buf_appendcstr(body, "//]]>\n");
+    buf_printf_markup(body, --level, "</script>");
+    buf_printf_markup(body, level++, "<noscript>");
+    buf_printf_markup(body, level, "<i>*** %s ***</i>",
+                      "JavaScript required to create/modify/delete addressbooks");
+    buf_printf_markup(body, --level, "</noscript>");
+    buf_printf_markup(body, --level, "</head>");
+    buf_printf_markup(body, level++, "<body>");
+
+    write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
+    buf_reset(body);
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+
+    if (rights & DACL_MKCOL) {
+        /* Add "create" form */
+        buf_printf_markup(body, level, "<h2>%s</h2>", "Create New Addressbook");
+        buf_printf_markup(body, level++, "<form name='create'>");
+        buf_printf_markup(body, level++, "<table cellpadding=5>");
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td align=right>Name:</td>");
+        buf_printf_markup(body, level,
+                          "<td><input name=name size=30 maxlength=40></td>");
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td align=right>Description:</td>");
+        buf_printf_markup(body, level,
+                          "<td><input name=desc size=75 maxlength=120></td>");
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td></td>");
+        buf_printf_markup(body, level,
+                          "<td><br><input type=button value='Create'"
+                          " onclick=\"createAddressbook('%s')\">"
+                          " <input type=reset></td>",
+                          base_path);
+        buf_printf_markup(body, --level, "</tr>");
+
+        buf_printf_markup(body, --level, "</table>");
+        buf_printf_markup(body, --level, "</form>");
+
+        buf_printf_markup(body, level, "<br><hr><br>");
+
+        write_body(0, txn, buf_cstring(body), buf_len(body));
+        buf_reset(body);
+    }
+
+    buf_printf_markup(body, level, "<h2>%s</h2>", "Available Addressbooks");
+    buf_printf_markup(body, level++, "<table border cellpadding=5>");
+
+    /* Create base URL for addressbooks */
+    http_proto_host(txn->req_hdrs, &proto, &host);
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
+
+    memset(&lrock, 0, sizeof(struct list_addr_rock));
+    mboxlist_mboxtree(txn->req_tgt.mbentry->name,
+                      list_addr_cb, &lrock, MBOXTREE_SKIP_ROOT);
+
+    /* Sort addressbooks by displayname */
+    qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
+
+    /* Add available addressbooks with action items */
+    for (i = 0; i < lrock.len; i++) {
+        struct addr_info *addr = &lrock.addr[i];
+
+        /* Send a body chunk once in a while */
+        if (buf_len(body) > PROT_BUFSIZE) {
+            write_body(0, txn, buf_cstring(body), buf_len(body));
+            buf_reset(body);
+        }
+
+        /* Addressbook name */
+        buf_printf_markup(body, level++, "<tr>");
+        buf_printf_markup(body, level, "<td>%s%s%s",
+                          (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                          addr->displayname,
+                          (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+#if 0
+        /* Download link */
+        buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
+                          base_path, addr->shortname);
+#endif
+        /* Delete button */
+        buf_printf_markup(body, level,
+                          "<td><input type=button%s value='Delete'"
+                          " onclick=\"deleteAddressbook('%s%s', '%s')\"></td>",
+                          !(addr->flags & ADDR_CAN_DELETE) ? " disabled" : "",
+                          base_path, addr->shortname, addr->displayname);
+
+        /* Public (shared) checkbox */
+        buf_printf_markup(body, level,
+                          "<td><input type=checkbox%s%s name=share"
+                          " onclick=\"shareAddressbook('%s%s', this.checked)\">"
+                          "Public</td>",
+                          !(addr->flags & ADDR_CAN_ADMIN) ? " disabled" : "",
+                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "",
+                          base_path, addr->shortname);
+
+        buf_printf_markup(body, --level, "</tr>");
+    }
+
+    free(lrock.addr);
+
+    /* Finish list */
+    buf_printf_markup(body, --level, "</table>");
+
+    /* Finish HTML */
+    buf_printf_markup(body, --level, "</body>");
+    buf_printf_markup(body, --level, "</html>");
+    write_body(0, txn, buf_cstring(body), buf_len(body));
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+  done:
+    return ret;
+}
+
+
+/* Perform a GET/HEAD request on a CardDAV resource */
+static int carddav_get(struct transaction_t *txn,
+                       struct mailbox *mailbox __attribute__((unused)),
+                       struct index_record *record,
+                       void *data __attribute__((unused)),
+                       void **obj __attribute__((unused)))
+{
+    int rights;
+
+    if (!(txn->req_tgt.collection || txn->req_tgt.userid))
+        return HTTP_NO_CONTENT;
+
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+    if ((rights & DACL_READ) != DACL_READ) {
+        /* DAV:need-privileges */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_READ;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (record && record->uid) {
+        /* GET on a resource */
+        return HTTP_CONTINUE;
+    }
+
+    if (txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    if (txn->req_tgt.collection) {
+        /* Download an entire addressbook collection */
+//        return export_addressbook(txn);
+    }
+    else if (txn->req_tgt.userid) {
+        /* GET a list of addressbook under addressbook-home-set */
+        return list_addressbooks(txn);
+    }
+
+    /* Unknown action */
+    return HTTP_NO_CONTENT;
+}
+
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
