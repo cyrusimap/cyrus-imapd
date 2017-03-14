@@ -7311,13 +7311,14 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (location && !config_partitiondir(location)) {
         /* invalid partition, assume its a server (remote destination) */
         char *server;
+        char *partition;
 
         /* dest partition? */
         server = location;
-        location = strchr(server, '!');
-        if (location) *location++ = '\0';
+        partition = strchr(location, '!');
+        if (partition) *partition++ = '\0';
 
-        cmd_xfer(tag, oldname, server, location);
+        cmd_xfer(tag, oldname, server, partition);
 
         goto done;
     }
