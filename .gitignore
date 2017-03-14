@@ -83,6 +83,7 @@ imap/deliver
 imap/fetchnews
 imap/fud
 imap/http_caldav_js.h
+imap/http_carddav_js.h
 imap/http_err.c
 imap/http_err.h
 imap/httpd
