@@ -8,7 +8,7 @@ is used to clear seen state information for the mail store.
 
 ..  warning::
 
-    This command *does not* take a contraining argument but acts on the
+    This command *does not* take a constraining argument but acts on the
     *entire* mail store, removing *all* user seen state for all
     mailboxes and all users.
 
