@@ -107,7 +107,23 @@ sub print_errors
     my $self = shift;
     return if $self->{_quiet};
 
-    return $self->SUPER::print_errors(@_);
+    my ($result) = @_;
+    return unless my $error_count = $result->error_count();
+    my $msg = "\nThere " .
+              ($error_count == 1 ?
+                "was 1 error"
+              : "were $error_count errors") .
+              ":\n";
+    $self->_print($msg);
+
+    my $i = 0;
+    for my $e (@{$result->errors()}) {
+        chomp(my $e_to_str = $e);
+        $i++;
+        $self->_print("\e[31m$i)\e[0m $e_to_str\n");
+        $self->_print("\nAnnotations:\n", $e->object->annotations())
+          if $e->object->annotations();
+    }
 }
 
 sub print_failures
@@ -115,7 +131,23 @@ sub print_failures
     my $self = shift;
     return if $self->{_quiet};
 
-    return $self->SUPER::print_failures(@_);
+    my ($result) = @_;
+    return unless my $failure_count = $result->failure_count;
+    my $msg = "\nThere " .
+              ($failure_count == 1 ?
+                "was 1 failure"
+              : "were $failure_count failures") .
+              ":\n";
+    $self->_print($msg);
+
+    my $i = 0;
+    for my $f (@{$result->failures()}) {
+        chomp(my $f_to_str = $f);
+        $self->_print("\n") if $i++;
+        $self->_print("\e[33m$i)\e[0m $f_to_str\n");
+        $self->_print("\nAnnotations:\n", $f->object->annotations())
+          if $f->object->annotations();
+    }
 }
 
 1;
