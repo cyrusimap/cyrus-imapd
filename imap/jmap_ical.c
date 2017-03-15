@@ -2551,9 +2551,13 @@ static icalproperty *dtprop_to_ical(icalcomponent *comp,
         remove_icalprop(comp, ICAL_DTEND_PROPERTY);
     }
 
+    /* backwards compatible way to set date or datetime */
+    icalvalue *val = dt.is_date ? icalvalue_new_date(dt) : icalvalue_new_datetime(dt);
+    assert(val);  // no way to return errors from here
+
     /* Set the new property. */
     prop = icalproperty_new(kind);
-    icalproperty_set_value(prop, icalvalue_new_datetime(dt));
+    icalproperty_set_value(prop, val);
     if (tz && !dt.is_utc) {
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
         const char *tzid = icaltimezone_get_location(tz);
