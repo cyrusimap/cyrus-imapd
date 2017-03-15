@@ -620,6 +620,133 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 }
 
 
+static int export_addressbook(struct transaction_t *txn)
+{
+    int ret = 0, r, precond;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct buf *buf = &resp_body->payload;
+    struct mailbox *mailbox = NULL;
+    static char etag[33];
+    static const char *displayname_annot =
+        DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    struct buf attrib = BUF_INITIALIZER;
+    const char **hdr, *sep = "";
+    struct mime_type_t *mime = NULL;
+
+    /* Check requested MIME type:
+       1st entry in caldav_mime_types array MUST be default MIME type */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+        mime = get_accept_type(hdr, carddav_mime_types);
+    else mime = carddav_mime_types;
+    if (!mime) return HTTP_NOT_ACCEPTABLE;
+
+    /* Open mailbox for reading */
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name, error_message(r));
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Check any preconditions */
+    sprintf(etag, "%u-%u-%u",
+            mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    precond = check_precond(txn, etag, mailbox->index_mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_NOT_MODIFIED:
+        /* Fill in ETag, Last-Modified, Expires, and Cache-Control */
+        txn->resp_body.etag = etag;
+        txn->resp_body.lastmod = mailbox->index_mtime;
+        txn->resp_body.maxage = 3600;  /* 1 hr */
+        txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
+
+        if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+        /* We failed a precondition - don't perform the request */
+        ret = precond;
+        goto done;
+    }
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+    txn->flags.vary |= VARY_ACCEPT;
+    txn->resp_body.type = mime->content_type;
+
+    /* Set filename of resource */
+    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
+                                httpd_userid, &attrib);
+    /* fall back to last part of mailbox name */
+    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
+
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
+    txn->resp_body.fname = buf_cstring(&txn->buf);
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth == METH_HEAD) {
+        response_header(HTTP_OK, txn);
+        return 0;
+    }
+
+    /* vCard data in response should not be transformed */
+    txn->flags.cc |= CC_NOTRANSFORM;
+
+    /* Begin (converted) vCard stream */
+    if (mime->begin_stream) sep = mime->begin_stream(buf);
+    else buf_reset(buf);
+    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
+
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        struct vparse_card *vcard;
+
+        /* Map and parse existing vCard resource */
+        vcard = record_to_vcard(mailbox, record);
+
+        if (vcard) {
+            if (r++ && *sep) {
+                /* Add separator, if necessary */
+                buf_reset(buf);
+                buf_printf_markup(buf, 0, sep);
+                write_body(0, txn, buf_cstring(buf), buf_len(buf));
+            }
+
+            struct buf *card_str = mime->from_object(vcard);
+            write_body(0, txn, buf_base(card_str), buf_len(card_str));
+            buf_destroy(card_str);
+
+            vparse_free_card(vcard);
+        }
+    }
+
+    mailbox_iter_done(&iter);
+
+    /* End (converted) vCard stream */
+    if (mime->end_stream) {
+        mime->end_stream(buf);
+        write_body(0, txn, buf_cstring(buf), buf_len(buf));
+    }
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+  done:
+    buf_free(&attrib);
+    mailbox_close(&mailbox);
+
+    return ret;
+}
+
+
 /*
  * mboxlist_findall() callback function to list addressbooks
  */
@@ -878,11 +1005,11 @@ static int list_addressbooks(struct transaction_t *txn)
                           (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
                           addr->displayname,
                           (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
-#if 0
+
         /* Download link */
         buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
                           base_path, addr->shortname);
-#endif
+
         /* Delete button */
         buf_printf_markup(body, level,
                           "<td><input type=button%s value='Delete'"
@@ -963,7 +1090,7 @@ static int carddav_get(struct transaction_t *txn,
 
     if (txn->req_tgt.collection) {
         /* Download an entire addressbook collection */
-//        return export_addressbook(txn);
+        return export_addressbook(txn);
     }
     else if (txn->req_tgt.userid) {
         /* GET a list of addressbook under addressbook-home-set */
