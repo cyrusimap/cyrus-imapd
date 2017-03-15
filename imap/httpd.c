@@ -3261,8 +3261,7 @@ static void multipart_byteranges(struct transaction_t *txn,
 EXPORTED void write_body(long code, struct transaction_t *txn,
                          const char *buf, unsigned len)
 {
-    unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
-    unsigned outlen = len, offset = 0;
+    unsigned outlen = len, offset = 0, last_chunk;
     int do_md5 = (txn->meth == METH_HEAD) ? 0 :
         config_getswitch(IMAPOPT_HTTPCONTENTMD5);
     static MD5_CTX ctx;
@@ -3271,18 +3270,24 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
            code, txn->flags.te, len);
 
-    if (!is_dynamic && len < GZIP_MIN_LEN) {
-        /* Don't compress small static content */
-        txn->resp_body.enc = CE_IDENTITY;
-        txn->flags.te = TE_NONE;
+    if (txn->flags.te & TE_CHUNKED) last_chunk = !(code || len);
+    else {
+        /* Handle static content as last chunk */
+        last_chunk = 1;
+
+        if (len < GZIP_MIN_LEN) {
+            /* Don't compress small static content */
+            txn->resp_body.enc = CE_IDENTITY;
+            txn->flags.te = TE_NONE;
+        }
     }
 
     /* Compress data */
     if (txn->resp_body.enc == CE_BR) {
 #ifdef HAVE_BROTLI
         /* Only flush for static content or on last (zero-length) chunk */
-        unsigned op = (is_dynamic && len) ?
-            BROTLI_OPERATION_FLUSH : BROTLI_OPERATION_FINISH;
+        unsigned op = last_chunk ?
+            BROTLI_OPERATION_FINISH : BROTLI_OPERATION_FLUSH;
         BrotliEncoderState *brotli = txn->conn->brotli;
         const uint8_t *next_in = (const uint8_t *) buf;
         size_t avail_in = (size_t) len;
@@ -3319,7 +3324,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     else if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
 #ifdef HAVE_ZLIB
         /* Only flush for static content or on last (zero-length) chunk */
-        unsigned flush = (is_dynamic && len) ? Z_NO_FLUSH : Z_FINISH;
+        unsigned flush = last_chunk ? Z_FINISH : Z_NO_FLUSH;
         z_stream *zstrm = txn->conn->zstrm;
 
         if (code) deflateReset(zstrm);
@@ -3375,14 +3380,9 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         if (txn->flags.te & ~TE_CHUNKED) {
             /* Transfer-Encoded content MUST be chunked */
             txn->flags.te |= TE_CHUNKED;
-
-            if (!is_dynamic) {
-                /* Handle static content as last chunk */
-                len = 0;
-            }
         }
 
-        if (!(txn->flags.te & TE_CHUNKED)) {
+        if (!txn->flags.te) {
             /* Full/partial body (no encoding).
              *
              * In all cases, 'resp_body.len' is used to specify complete-length
@@ -3464,8 +3464,8 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         prd.source.ptr = s;
         prd.read_callback = http2_data_source_read_cb;
 
-        if (txn->flags.te & TE_CHUNKED) {
-            if (len) {
+        if (txn->flags.te) {
+            if (!last_chunk) {
                 flags = NGHTTP2_FLAG_NONE;
                 if (outlen && (txn->flags.trailer & TRAILER_CMD5)) {
                     MD5Update(&ctx, buf + offset, outlen);
@@ -3493,7 +3493,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
             }
         }
 
-        if (!len && (txn->flags.trailer & TRAILER_CMD5)) {
+        if (last_chunk && (txn->flags.trailer & TRAILER_CMD5)) {
             begin_resp_headers(txn, 0);
             content_md5_hdr(txn, md5);
             end_resp_headers(txn, 0);
@@ -3504,7 +3504,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     }
 #endif /* HAVE_NGHTTP2 */
 
-    if ((txn->flags.te & TE_CHUNKED) && txn->flags.ver == VER_1_1) {
+    if (txn->flags.te && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
         if (outlen) {
             syslog(LOG_DEBUG, "write_body: chunk(%d)", outlen);
@@ -3514,7 +3514,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
             if (txn->flags.trailer & TRAILER_CMD5) MD5Update(&ctx, buf, outlen);
         }
-        if (!len) {
+        if (last_chunk) {
             /* Terminate the HTTP/1.1 body with a zero-length chunk */
             syslog(LOG_DEBUG, "write_body: last chunk");
             prot_puts(httpd_out, "0\r\n");
