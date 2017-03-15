@@ -50,7 +50,7 @@ use Cassandane::Instance;
 sub new
 {
     my $class = shift;
-    my $config = Cassandane::Config::default();
+    my $config = Cassandane::Config::default()->clone();
     $config->set( imap_admins => 'admin imapadmin' );
     return $class->SUPER::new({ config => $config, adminstore => 1 }, @_);
 }
@@ -83,10 +83,10 @@ sub test_imap_admins
     my $imapadmintalk = $self->{imapadminstore}->get_client();
     my $talk = $self->{store}->get_client();
 
-	# we should be able to reconstruct as 'admin', because although
+    # we should be able to reconstruct as 'admin', because although
     # imap_admins overrides admins, we have 'admin' in imap_admins too
     # (it MUST be there for Cassandane itself to work)
-	my $res = $admintalk->_imap_cmd("reconstruct" , 0, {}, "user.cassandane");
+    my $res = $admintalk->_imap_cmd("reconstruct" , 0, {}, "user.cassandane");
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # we should not be able to reconstruct as 'cassandane', because
