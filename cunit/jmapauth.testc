@@ -35,8 +35,8 @@ static void test_ids(void)
 
     /* Create two tokens with identical data. They might have different
        creation times, and secret and session id must differ */
-    t1 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
-    t2 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    t1 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1);
+    t2 = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1);
 
     /* Assert that session ids and secrets differ */
     CU_ASSERT(memcmp(t1->sessionid, t2->sessionid, JMAPAUTH_SESSIONID_LEN));
@@ -72,7 +72,7 @@ static void test_store(void)
     r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
     CU_ASSERT_EQUAL(r, 0);
 
-    mytok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    mytok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1);
     CU_ASSERT_PTR_NOT_NULL(mytok);
 
     tokenid = jmapauth_tokenid(mytok);
@@ -98,7 +98,6 @@ static void test_store(void)
 
     CU_ASSERT(!strcmp(mytok->userid, dbtok->userid));
     CU_ASSERT_EQUAL(mytok->lastuse, dbtok->lastuse);
-    CU_ASSERT_EQUAL(mytok->expire, dbtok->expire);
     CU_ASSERT_EQUAL(mytok->flags, dbtok->flags);
     CU_ASSERT_EQUAL(mytok->datalen, dbtok->datalen);
 
@@ -123,7 +122,7 @@ static void test_wrongmac(void)
     r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
     CU_ASSERT_EQUAL(r, 0);
 
-    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, 0);
+    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1);
     CU_ASSERT_PTR_NOT_NULL(tok);
 
     tokenid = jmapauth_tokenid(tok);
@@ -156,32 +155,20 @@ static void test_wrongmac(void)
 
 static void test_expire(void)
 {
-    int r;
-    struct db *db = NULL;
     struct jmapauth_token *tok = NULL;
-    char *tokenid;
 
-    r = jmapauth_open(&db, CYRUSDB_CREATE, DBNAME);
-    CU_ASSERT_EQUAL(r, 0);
+    config_jmapauth_loginid_ttl = 1;
+    config_jmapauth_token_ttl = 1;
 
-    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1, /*ttl*/1);
+    tok = jmapauth_token_new("foo", JMAPAUTH_LOGINID_KIND, "x", 1);
     CU_ASSERT_PTR_NOT_NULL(tok);
 
-    tokenid = jmapauth_tokenid(tok);
-    CU_ASSERT_PTR_NOT_NULL(tokenid);
-
-    r = jmapauth_store(db, tok, NULL);
-    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT(jmapauth_is_expired(tok) == 0);
+    sleep(2);
+    CU_ASSERT(jmapauth_is_expired(tok));
 
     jmapauth_token_free(tok);
     tok = NULL;
-
-    sleep(1);
-    r = jmapauth_fetch(db, tokenid, &tok, 0, NULL);
-    CU_ASSERT_EQUAL(r, CYRUSDB_EXISTS);
-
-    r = jmapauth_close(db);
-    CU_ASSERT_EQUAL(r, 0);
 }
 
 static int set_up(void)

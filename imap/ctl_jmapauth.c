@@ -94,10 +94,6 @@ static void dump_token(const struct jmapauth_token *tok)
     datetime[RFC3339_DATETIME_MAX] = '\0';
     printf("  lastuse : %s\n", datetime);
 
-    time_to_rfc3339(tok->expire, datetime, RFC3339_DATETIME_MAX);
-    datetime[RFC3339_DATETIME_MAX] = '\0';
-    printf("  expire  : %s\n", tok->expire ? datetime : "never");
-
     printf("  flagged : %s\n", tok->flags ? "yes" : "no");
     printf("  data    : %.*s\n", (int) tok->datalen, (char*) tok->data);
 
@@ -202,7 +198,8 @@ int main(int argc, char **argv)
     const char *tokenid = NULL;
     const char *fname = NULL;
     char kind = 0;
-    time_t expire = 0, lastuse = 0;
+    int expired = 0;
+    time_t lastuse = 0;
     struct mode_data mdata = { BUF_INITIALIZER, 0 };
     int r = 0;
 
@@ -260,7 +257,7 @@ int main(int argc, char **argv)
                 verbose++;
                 break;
             case 'x':
-                expire = time(NULL);
+                expired = 1;
                 break;
             default:
                 usage(argv[0]);
@@ -302,7 +299,7 @@ int main(int argc, char **argv)
         /* Operate on a single token */
         if (mode == LOOKUP) {
             struct jmapauth_token *tok;
-            r = jmapauth_fetch(db, tokenid, &tok, JMAPAUTH_FETCH_EXPIRED, NULL);
+            r = jmapauth_fetch(db, tokenid, &tok, 0, NULL);
             if (r) {
                 fprintf(stderr, "jmapauth_fetch: %s\n", cyrusdb_strerror(r));
                 goto done;
@@ -325,7 +322,7 @@ int main(int argc, char **argv)
             struct txn *tid = NULL;
 
             /* Fetch token */
-            r = jmapauth_fetch(db, tokenid, &tok, JMAPAUTH_FETCH_EXPIRED, &tid);
+            r = jmapauth_fetch(db, tokenid, &tok, 0, &tid);
             if (r) {
                 fprintf(stderr, "jmapauth_fetch: %s\n", cyrusdb_strerror(r));
                 goto done;
@@ -367,7 +364,7 @@ int main(int argc, char **argv)
         }
 
         /* Operate on multiple tokens, either bound to a userid or all */
-        r = jmapauth_find(db, userid, expire, lastuse, kind, proc, &mdata, NULL);
+        r = jmapauth_find(db, userid, expired, lastuse, kind, proc, &mdata, NULL);
         if (r) {
             fprintf(stderr, "jmapauth_find: %s\n", cyrusdb_strerror(r));
             goto done;
@@ -410,11 +407,11 @@ static int usage(const char *name)
     fprintf(stderr, "\n");
     fprintf(stderr, "criteria is a combination of:\n");
     fprintf(stderr, "    -k A,L     find access tokens 'A' or login ids 'L' (default all)\n");
-    fprintf(stderr, "    -x         find expired tokens (default all)\n");
-    fprintf(stderr, "    -u <dur>   find tokens that haven't been used in the last <dur> time units.\n"
+    fprintf(stderr, "    -x         find expired tokens. Tokens expiry dates are determined according\n"
+                    "               to their corresponding ttl parameters in imapd.conf\n");
+    fprintf(stderr, "    -u <dur>   find tokens that haven't been used in the last <dur> time units\n"
                     "               <dur> must be a positive integer, optionally followed by either\n"
-                    "               'm' or 'h' for minutes and hours, respectively. Default is seconds.\n"
-                    "               (currently, this option is only useful for access tokens)\n");
+                    "               'm' or 'h' for minutes and hours, respectively. Default is seconds.\n");
     fprintf(stderr, "    or\n");
     fprintf(stderr, "    -t id      find token with id\n");
     fprintf(stderr, "\n");

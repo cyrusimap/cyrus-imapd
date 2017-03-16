@@ -77,14 +77,14 @@
 #define JMAPAUTH_KEY_LEN (JMAPAUTH_SESSIONID_LEN + 2) /* length of db key */
 
 EXPORTED struct jmapauth_token *jmapauth_token_new(const char *userid,
-               char kind, const void *data, size_t datalen, time_t ttl)
+               char kind, const void *data, size_t datalen)
 {
     struct jmapauth_token *tok = xzmalloc(sizeof(struct jmapauth_token));
 
     tok->userid = xstrdup(userid);
     tok->version = JMAPAUTH_TOKEN_VERSION;
     tok->kind = kind;
-    tok->expire = ttl ? time(NULL) + ttl : 0;
+    tok->lastuse = time(NULL);
     tok->data = data;
     tok->datalen = datalen;
     RAND_bytes((unsigned char *) tok->sessionid, JMAPAUTH_SESSIONID_LEN);
@@ -227,12 +227,6 @@ static int token_parse(const char *key, const char *data, size_t datalen,
     datalen -= sizeof(uint64_t);
     data += sizeof(uint64_t);
 
-    /* expire */
-    if (datalen < sizeof(uint64_t)) goto done;
-    tok->expire = (time_t) ntohll(*(uint64_t*) data);
-    datalen -= sizeof(uint64_t);
-    data += sizeof(uint64_t);
-
     /* flags */
     if (!datalen) goto done;
     tok->flags = *data++;
@@ -254,6 +248,28 @@ done:
     return r;
 }
 
+EXPORTED int jmapauth_is_expired(struct jmapauth_token *tok)
+{
+    time_t ttl, now = time(NULL);
+
+    switch (tok->kind) {
+        case JMAPAUTH_LOGINID_KIND:
+            ttl = config_jmapauth_loginid_ttl;
+            break;
+        case JMAPAUTH_ACCESS_KIND:
+            if (!config_jmapauth_token_ttl) {
+                return 0;
+            }
+            ttl = config_jmapauth_token_ttl + JMAPAUTH_TOKEN_TTL_WINDOW;
+            break;
+        default:
+            syslog(LOG_ERR, "jmapauth: unexpected token kind: %c", tok->kind);
+            return 1;
+    }
+
+    return now - tok->lastuse > ttl;
+}
+
 struct jmapauth_find_data {
     /* Internal callback data */
     struct db *db;
@@ -262,7 +278,7 @@ struct jmapauth_find_data {
 
     /* Search criteria */
     const char *userid; /* match tokens owned by userid */
-    time_t expire;      /* match tokens expiring before or at expire */
+    int expired;        /* match tokens that are expired */
     time_t lastuse;     /* match tokens last used before lastuse */
     char kind;          /* match tokens with kind */
 
@@ -292,16 +308,15 @@ static int jmapauth_find_p(void *rock,
         return 0;
     }
 
-    if (cbdata->expire && cbdata->tok.expire &&
-                          cbdata->tok.expire > cbdata->expire) {
-        return 0;
-    }
-
     if (cbdata->lastuse && cbdata->tok.lastuse >= cbdata->lastuse) {
         return 0;
     }
 
     if (cbdata->kind && cbdata->tok.kind != cbdata->kind) {
+        return 0;
+    }
+
+    if (cbdata->expired && !jmapauth_is_expired(&cbdata->tok)) {
         return 0;
     }
 
@@ -320,7 +335,7 @@ static int jmapauth_find_cb(void *rock,
     return cbdata->proc(cbdata->db, &cbdata->tok, cbdata->rock, cbdata->tidptr);
 }
 
-EXPORTED int jmapauth_find(struct db *db, const char *userid, time_t expire,
+EXPORTED int jmapauth_find(struct db *db, const char *userid, int expired,
                            time_t lastuse, char kind,
                            jmapauth_find_proc_t proc, void *rock,
                            struct txn **tidptr)
@@ -331,7 +346,7 @@ EXPORTED int jmapauth_find(struct db *db, const char *userid, time_t expire,
     cbdata.db = db;
     cbdata.tidptr = tidptr;
     cbdata.userid = userid;
-    cbdata.expire = expire;
+    cbdata.expired = expired;
     cbdata.lastuse = lastuse;
     cbdata.kind = kind;
     cbdata.proc = proc;
@@ -349,13 +364,12 @@ EXPORTED int jmapauth_find(struct db *db, const char *userid, time_t expire,
  * Returns
  * - CYRUSDB_OK       on success
  * - CYRUSDB_NOTFOUND if tokenid does not exist
- * - CYRUSDB_EXISTS   if tokenid exists but is signed incorrectly or expired
+ * - CYRUSDB_EXISTS   if tokenid exists but is signed incorrectly
  * - CYRUSDB_INTERNAL if tokenid is invalid, or an internal error
  * or any other defined cyrusdb error.
  *
  * fetch_flags options:
  * - JMAPAUTH_FETCH_LOCK:    force a lock on db before fetching
- * - JMAPAUTH_FETCH_EXPIRED: ignore the expiration date of tokens
  */
 EXPORTED int jmapauth_fetch(struct db *db, const char *tokenid,
                             struct jmapauth_token **tokptr, int fetch_flags,
@@ -397,16 +411,6 @@ EXPORTED int jmapauth_fetch(struct db *db, const char *tokenid,
         goto done;
     }
 
-    /* Verify expiry date */
-    if (!(fetch_flags & JMAPAUTH_FETCH_EXPIRED)) {
-        if (tok->expire && tok->expire <= time(NULL)) {
-            jmapauth_token_free(tok);
-            tok = NULL;
-            r = CYRUSDB_EXISTS;
-            goto done;
-        }
-    }
-
 done:
     free(signed_key);
     if (tok) *tokptr = tok;
@@ -441,10 +445,6 @@ EXPORTED int jmapauth_store(struct db *db, struct jmapauth_token *tok,
     u64 = htonll((uint64_t) tok->lastuse);
     buf_appendmap(&buf, (char*) &u64, sizeof(uint64_t));
 
-    /* expire */
-    u64 = htonll((uint64_t) tok->expire);
-    buf_appendmap(&buf, (char*) &u64, sizeof(uint64_t));
-
     /* flags */
     buf_appendmap(&buf, &tok->flags, sizeof(char));
 
@@ -477,7 +477,7 @@ EXPORTED int jmapauth_delete(struct db *db, const char *tokenid, struct txn **ti
     if (!tidptr) tidptr = &mytid;
 
     /* Lookup the token. This also validates the signature of tokenid. */
-    r = jmapauth_fetch(db, tokenid, &tok, JMAPAUTH_FETCH_EXPIRED, tidptr);
+    r = jmapauth_fetch(db, tokenid, &tok, 0, tidptr);
     if (r) goto done;
 
     /* Remove the entry */

@@ -1193,7 +1193,7 @@ static int jmap_login(const char *login_id, const char *password,
         goto done;
     }
 
-    /* Fetch the token. This fails for corrupt MACs or expired tokens */
+    /* Fetch the token. This fails for corrupt MACs */
     r = jmapauth_fetch(db, login_id, &login_tok, JMAPAUTH_FETCH_LOCK, &tid);
     switch (r) {
         case CYRUSDB_OK:
@@ -1207,6 +1207,12 @@ static int jmap_login(const char *login_id, const char *password,
             ret = HTTP_SERVER_ERROR;
     }
     if (ret) {
+        goto done;
+    }
+
+    /* Check expiry time */
+    if (jmapauth_is_expired(login_tok)) {
+        ret = HTTP_GONE;
         goto done;
     }
 
@@ -1224,7 +1230,7 @@ static int jmap_login(const char *login_id, const char *password,
     datalen = login_tok->datalen;
     memcpy(data, login_tok->data, login_tok->datalen);
     access_tok = jmapauth_token_new(login_tok->userid, JMAPAUTH_ACCESS_KIND,
-                                    data, datalen, /*ttl*/0);
+                                    data, datalen);
     if (!access_tok) {
         syslog(LOG_ERR, "JMAP auth: cannot create access token");
         ret = HTTP_SERVER_ERROR;
@@ -1327,9 +1333,8 @@ static int jmap_authreq(struct transaction_t *txn)
         /* Create a loginId (also for unknown users) */
         struct jmapauth_token *login_tok = jmapauth_token_new(userid,
                 JMAPAUTH_LOGINID_KIND,
-                /*data*/txn->req_body.payload.s,
-                        txn->req_body.payload.len,
-                /*ttl*/5*60); /* FIXME make ttl configurable */
+                txn->req_body.payload.s,
+                txn->req_body.payload.len);
         if (!login_tok) {
             syslog(LOG_ERR, "JMAP auth: cannot create login id");
             ret = HTTP_SERVER_ERROR;
@@ -1512,8 +1517,8 @@ static int jmap_bearer(const char *bearer, char *userbuf, size_t userbuf_size)
         goto done;
     }
 
-    /* Lookup the token. We'll check expiration time by ourselves */
-    r = jmapauth_fetch(db, bearer, &access_tok, JMAPAUTH_FETCH_EXPIRED, NULL);
+    /* Lookup the token. */
+    r = jmapauth_fetch(db, bearer, &access_tok, 0, NULL);
     if (r) {
         syslog(LOG_INFO, "JMAP auth: access token lookup failed: %s",
                 cyrusdb_strerror(r));
@@ -1528,7 +1533,7 @@ static int jmap_bearer(const char *bearer, char *userbuf, size_t userbuf_size)
     }
 
     /* Validate expiration time */
-    if (access_tok->expire && access_tok->expire < now) {
+    if (jmapauth_is_expired(access_tok)) {
         syslog(LOG_INFO, "JMAP auth: access token is expired");
         r = jmapauth_delete(db, bearer, NULL);
         if (r) {
@@ -1539,8 +1544,7 @@ static int jmap_bearer(const char *bearer, char *userbuf, size_t userbuf_size)
     }
 
     /* Update last usage time if significant time has passed */
-    /* FIXME make ttl timelapse configurable */
-    if (now - access_tok->lastuse > 30 * 60) {
+    if (now - access_tok->lastuse > JMAPAUTH_TOKEN_TTL_WINDOW) {
         access_tok->lastuse = now;
         r = jmapauth_store(db, access_tok, NULL);
         if (r) {

@@ -150,6 +150,8 @@ extern const char *config_conversations_db;
 extern const char *config_backup_db;
 extern const char *config_jmapauth_db;
 extern int config_jmapauth_allowsasl;
+extern int config_jmapauth_token_ttl;
+extern int config_jmapauth_loginid_ttl;
 extern int charset_flags;
 extern int charset_snippet_flags;
 

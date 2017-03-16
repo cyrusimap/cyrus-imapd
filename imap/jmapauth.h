@@ -52,6 +52,11 @@
 #define JMAPAUTH_LOGINID_KIND 'L'    /* token kind for login ids */
 #define JMAPAUTH_ACCESS_KIND 'A'     /* token kind for access tokens */
 
+#define JMAPAUTH_TOKEN_TTL_WINDOW 60 /* grace-period in seconds until the
+                                        user-configured ttl of access tokens
+                                        is enforced. This parameter allows to
+                                        avoid db-writes for every token use */
+
 struct jmapauth_token {
     /* Client-facing identifier */
     char version;
@@ -61,7 +66,6 @@ struct jmapauth_token {
     /* Server-only session data */
     char *userid;
     time_t lastuse;
-    time_t expire;
     char flags;
     const void *data; /* ONLY valid until the next database operation */
     size_t datalen;
@@ -72,7 +76,6 @@ struct jmapauth_token {
 extern int jmapauth_open(struct db **dbptr, int db_flags, const char *fname);
 
 #define JMAPAUTH_FETCH_LOCK    1<<1
-#define JMAPAUTH_FETCH_EXPIRED 1<<2
 
 extern int jmapauth_fetch(struct db *db, const char *tokenid,
                           struct jmapauth_token **tokptr, int fetch_flags,
@@ -85,17 +88,18 @@ typedef int (*jmapauth_find_proc_t)(struct db *db, struct jmapauth_token *tok,
                                     void* rock, struct txn **tidptr);
 
 extern int jmapauth_find(struct db *db,
-                         const char *userid, time_t expire, time_t lastuse,
-                         char kind, jmapauth_find_proc_t proc, void *rock,
+                         const char *userid, int expired,
+                         time_t lastuse, char kind,
+                         jmapauth_find_proc_t proc, void *rock,
                          struct txn **tidptr);
 
 extern struct jmapauth_token* jmapauth_token_new(const char *userid,
                                                  char kind,
                                                  const void *data,
-                                                 size_t datalen,
-                                                 time_t ttl);
+                                                 size_t datalen);
 extern void jmapauth_token_free(struct jmapauth_token *tok);
 extern char* jmapauth_tokenid(const struct jmapauth_token *tok);
+extern int jmapauth_is_expired(struct jmapauth_token *tok);
 
 
 #endif /* JMAPAUTH_H */
