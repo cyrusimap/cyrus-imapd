@@ -4715,6 +4715,7 @@ static void append_alnum(struct buf *buf, const char *ss)
     }
 }
 
+#ifdef USE_HTTPD
 static int index_icalmessage(message_t *msg, struct getsearchtext_rock *str)
 {
     icalcomponent *comp = NULL, *ical = NULL;
@@ -4818,6 +4819,7 @@ done:
     if (ical) icalcomponent_free(ical);
     return r;
 }
+#endif /* USE_HTTPD */
 
 EXPORTED int index_getsearchtext(message_t *msg,
                                  search_text_receiver_t *receiver,
@@ -4850,12 +4852,14 @@ EXPORTED int index_getsearchtext(message_t *msg,
         format = MESSAGE_SNIPPET;
     }
 
+#ifdef USE_HTTPD
     /* Choose index scheme for Content=Type */
     if (!strcasecmp(type, "TEXT") && !strcasecmp(subtype, "CALENDAR")) {
         /* An iCalendar entry. */
         index_icalmessage(msg, &str);
     }
     else {
+#endif
         /* A regular message */
         message_foreach_text_section(msg, getsearchtext_cb, &str);
 
@@ -4907,7 +4911,9 @@ EXPORTED int index_getsearchtext(message_t *msg,
             }
             receiver->end_part(receiver, SEARCH_PART_TYPE);
         }
+#ifdef USE_HTTPD
     }
+#endif
 
     r = receiver->end_message(receiver);
     buf_free(&buf);
