@@ -152,7 +152,6 @@ sbin_PROGRAMS += \
 	imap/ctl_conversationsdb \
 	imap/ctl_cyrusdb \
 	imap/ctl_deliver \
-	imap/ctl_jmapauth \
 	imap/ctl_mboxlist \
 	imap/cvt_cyrusdb \
 	imap/cyr_df \
@@ -229,7 +228,8 @@ BUILT_SOURCES += \
 libexec_PROGRAMS += imap/httpd
 sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
-	imap/dav_reconstruct
+	imap/dav_reconstruct \
+	imap/ctl_jmapauth
 
 endif # HTTPD
 
@@ -989,8 +989,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
-	imap/jmapauth.c \
-	imap/jmapauth.h \
 	imap/mailbox.c \
 	imap/mailbox.h \
 	imap/mbdump.c \
@@ -1105,6 +1103,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_util.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
+	imap/jmapauth.c \
+	imap/jmapauth.h \
 	imap/vcard_support.c \
 	imap/vcard_support.h \
 	imap/webdav_db.c \
