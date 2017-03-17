@@ -141,6 +141,7 @@ static int usage(const char *name)
             "  -F          filter during compaction\n"
             "  -T dir      use temporary directory dir during compaction\n"
             "  -X          reindex during compaction\n"
+            "  -U          reindex tiers having deprecated stems or prefixes\n"
             "  -o          copy db rather compacting\n"
             "\n"
             "General options:\n"
@@ -825,7 +826,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RXUT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
@@ -837,6 +838,10 @@ int main(int argc, char **argv)
 
         case 'X':
             compact_flags |= SEARCH_COMPACT_REINDEX;
+            break;
+
+        case 'U':
+            compact_flags |= SEARCH_COMPACT_UPGRADE;
             break;
 
         case 'N':
