@@ -260,6 +260,31 @@ static int stem_version_set(Xapian::WritableDatabase *database, int version)
     database->set_metadata(XAPIAN_STEM_VERSION_KEY, convert.str());
 }
 
+/* For all db paths in sources that are not using the latest stem
+ * version, report their paths in legacydbs, otherwise in currentdbs */
+int xapian_legacy_dbs(const strarray_t *sources, strarray_t *legacydbs)
+{
+    int r = 0;
+
+    // Check the stem version of all dbs in sources
+    for (int i = 0; i < sources->count; i++) {
+        const char *thispath = strarray_nth(sources, i);
+        Xapian::Database database = Xapian::Database(thispath);
+        int stem_version = stem_version_get(&database);
+        if (stem_version < 0) {
+            syslog(LOG_ERR, "xapian_wrapper: Invalid prefix version %d in %s",
+                    stem_version, thispath);
+            r = IMAP_INTERNAL;
+            break;
+        }
+        if (stem_version < XAPIAN_STEM_CURRENT_VERSION) {
+            strarray_append(legacydbs, thispath);
+        }
+    }
+
+    return r;
+}
+
 /* ====================================================================== */
 
 struct xapian_dbw

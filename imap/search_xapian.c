@@ -2352,6 +2352,44 @@ static int compact_dbs(const char *userid, const char *tempdir,
                 printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
             }
         }
+        else if (flags & SEARCH_COMPACT_UPGRADE) {
+            strarray_t *mydirs = NULL, *legacydbs = NULL;
+
+            /* Determine databases that use legacy stem versions */
+            legacydbs = strarray_new();
+            r = xapian_legacy_dbs(dirs, legacydbs);
+            if (r) {
+                printf("ERROR: cannot determine legacy dbs");
+                goto out;
+            }
+
+            /* Split dirs into legacy and current dbs */
+            mydirs = strarray_new();
+            for (i = 0; i < dirs->count; i++) {
+                const char *dbpath = strarray_nth(dirs, i);
+                if (strarray_find(legacydbs, dbpath, 0) == -1) {
+                    strarray_append(mydirs, dbpath);
+                }
+            }
+
+            /* Compact any databases that use up-to-date stemmers */
+            r = search_compress(userid, mydirs, newdirs, flags);
+            if (r) {
+                printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
+            }
+
+            /* Reindex any databases with deprecated stems or prefixes */
+            if (!r && legacydbs->count) {
+                r = search_reindex(userid, legacydbs, newdirs, flags);
+                if (r) {
+                    printf("ERROR: failed to reindex legacy dbs to %s",
+                            strarray_nth(newdirs, 0));
+                }
+            }
+
+            strarray_free(legacydbs);
+            strarray_free(mydirs);
+        }
         else {
             r = search_compress(userid, dirs, newdirs, flags);
             if (r) {
