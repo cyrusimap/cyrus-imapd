@@ -53,7 +53,7 @@ typedef struct xapian_snipgen xapian_snipgen_t;
 
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
-extern int xapian_legacy_dbs(const strarray_t *sources, strarray_t *legacydbs);
+extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex);
 
 /* write-side interface */
 extern int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp);

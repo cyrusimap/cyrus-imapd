@@ -261,28 +261,25 @@ static int stem_version_set(Xapian::WritableDatabase *database, int version)
 }
 
 /* For all db paths in sources that are not using the latest stem
- * version, report their paths in legacydbs, otherwise in currentdbs */
-int xapian_legacy_dbs(const strarray_t *sources, strarray_t *legacydbs)
+ * version or not readable, report their paths in toreindex */
+void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex)
 {
-    int r = 0;
+    int i;
 
     // Check the stem version of all dbs in sources
-    for (int i = 0; i < sources->count; i++) {
+    for (i = 0; i < sources->count; i++) {
         const char *thispath = strarray_nth(sources, i);
-        Xapian::Database database = Xapian::Database(thispath);
-        int stem_version = stem_version_get(&database);
-        if (stem_version < 0) {
-            syslog(LOG_ERR, "xapian_wrapper: Invalid prefix version %d in %s",
-                    stem_version, thispath);
-            r = IMAP_INTERNAL;
-            break;
+        try {
+            Xapian::Database database = Xapian::Database(thispath);
+            int stem_version = stem_version_get(&database);
+            if (stem_version != XAPIAN_STEM_CURRENT_VERSION) {
+                strarray_add(toreindex, thispath);
+            }
         }
-        if (stem_version < XAPIAN_STEM_CURRENT_VERSION) {
-            strarray_append(legacydbs, thispath);
+        catch (const Xapian::Error &err) {
+            strarray_add(toreindex, thispath);
         }
     }
-
-    return r;
 }
 
 /* ====================================================================== */
