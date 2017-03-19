@@ -53,8 +53,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+#ifdef USE_HTTPD
 /* For iCalendar indexing */
 #include <libical/ical.h>
+#endif
 
 #include "acl.h"
 #include "annotate.h"
