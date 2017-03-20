@@ -9,12 +9,14 @@
 #include "imap/global.h"
 #include "libcyr_cfg.h"
 #include "imap/annotate.h"
+#include "imap/append.h"
 #include "imap/mboxlist.h"
 #include "imap/imap_err.h"
 
 #define DBDIR           "test-dbdir"
 #define MBOXNAME1_INT   "user.smurf"
 #define MBOXNAME2_INT   "user.smurfette"
+#define MBOXNAME3_INT   "user.smurfine"
 #define PARTITION       "default"
 #define COMMENT         "/comment"
 #define EXENTRY         "/vendor/example.com/a-non-default-entry"
@@ -25,6 +27,9 @@
 #define VALUE1          "lorem ipsum"
 #define VALUE2          "dolor sit amet"
 #define ACL             "anyone\tlrswipkxtecdan\t"
+
+#define MBOX1_MAXUID    3
+#define MBOX2_MAXUID    1
 
 static int isadmin;
 static const char *userid;
@@ -489,7 +494,7 @@ static void test_getset_message_shared(void)
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
@@ -505,14 +510,14 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
            "mboxname=\"" MBOXNAME1_INT "\" " \
-           "uid=42 " \
+           "uid=1 " \
            "entry=\"" COMMENT "\" " \
            VALUE_SHARED "=NIL"
     CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
 #undef EXPECTED
     strarray_truncate(&results, 0);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
@@ -533,14 +538,14 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
            "mboxname=\"" MBOXNAME1_INT "\" " \
-           "uid=42 " \
+           "uid=1 " \
            "entry=\"" COMMENT "\" " \
            VALUE_SHARED "=\"" VALUE0 "\""
     CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
 #undef EXPECTED
     strarray_truncate(&results, 0);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
@@ -553,7 +558,7 @@ static void test_getset_message_shared(void)
     /* check that we can fetch the value back in a new txn */
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
@@ -564,14 +569,14 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
            "mboxname=\"" MBOXNAME1_INT "\" " \
-           "uid=42 " \
+           "uid=1 " \
            "entry=\"" COMMENT "\" " \
            VALUE_SHARED "=\"" VALUE0 "\""
     CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
 #undef EXPECTED
     strarray_truncate(&results, 0);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
@@ -589,7 +594,7 @@ static void test_getset_message_shared(void)
 
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
@@ -600,14 +605,14 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
            "mboxname=\"" MBOXNAME1_INT "\" " \
-           "uid=42 " \
+           "uid=1 " \
            "entry=\"" COMMENT "\" " \
            VALUE_SHARED "=\"" VALUE0 "\""
     CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
 #undef EXPECTED
     strarray_truncate(&results, 0);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
@@ -629,7 +634,7 @@ static void test_getset_message_shared(void)
     /* check that there is no value any more */
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
@@ -640,7 +645,7 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
            "mboxname=\"" MBOXNAME1_INT "\" " \
-           "uid=42 " \
+           "uid=1 " \
            "entry=\"" COMMENT "\" " \
            VALUE_SHARED "=NIL"
     CU_ASSERT_STRING_EQUAL(results.data[0], EXPECTED);
@@ -648,7 +653,7 @@ static void test_getset_message_shared(void)
     strarray_truncate(&results, 0);
 
     buf_free(&val);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
@@ -677,8 +682,6 @@ static void test_delete(void)
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
-
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
     annotate_init(NULL, NULL);
 
@@ -714,7 +717,7 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -725,7 +728,7 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox, 127, &astate);
+    r = mailbox_get_annotate_state(mailbox, 3, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -745,13 +748,13 @@ static void test_delete(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE1);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
@@ -776,12 +779,12 @@ static void test_delete(void)
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
@@ -806,20 +809,17 @@ static void test_rename(void)
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox1 = NULL;
-    struct mailbox *mailbox2 = NULL;
+    struct mailbox *mailbox3 = NULL;
     const char *uniqueid = makeuuid();
 
     annotate_init(NULL, NULL);
 
     annotatemore_open();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
-
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
-    r = mailbox_open_iwl(MBOXNAME2_INT, &mailbox2);
+    r = mailbox_open_iwl(MBOXNAME3_INT, &mailbox3);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     strarray_append(&entries, COMMENT);
@@ -843,7 +843,7 @@ static void test_rename(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox1, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox1, 2, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -854,7 +854,7 @@ static void test_rename(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox1, 127, &astate);
+    r = mailbox_get_annotate_state(mailbox1, 3, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -877,33 +877,33 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE1);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), -ENOENT);
 
-    /* rename MBOXNAME1 -> MBOXNAME2 */
+    /* rename MBOXNAME1 -> MBOXNAME3 */
 
-    r = annotate_rename_mailbox(mailbox1, mailbox2);
+    r = annotate_rename_mailbox(mailbox1, mailbox3);
     CU_ASSERT_EQUAL(r, 0);
-    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME2_INT, uniqueid);
+    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, uniqueid);
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_rename_cleanup(&mailbox1, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(mailbox1);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), 0);
 
     /* check that the values are gone under the old name */
 
@@ -912,38 +912,38 @@ static void test_rename(void)
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
     buf_free(&val2);
 
     /* check that the values are present under the new name */
 
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 0, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME3_INT, 0, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME3_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE1);
     buf_free(&val2);
 
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME3_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), 0);
 
     annotatemore_close();
 
@@ -951,7 +951,7 @@ static void test_rename(void)
     strarray_fini(&attribs);
     buf_free(&val);
     mailbox_close(&mailbox1);
-    mailbox_close(&mailbox2);
+    mailbox_close(&mailbox3);
 }
 
 static void test_abort(void)
@@ -1048,7 +1048,7 @@ static void test_abort(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -1102,9 +1102,6 @@ static void test_msg_copy(void)
 
     annotatemore_open();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
-
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     r = mailbox_open_iwl(MBOXNAME2_INT, &mailbox2);
@@ -1117,7 +1114,7 @@ static void test_msg_copy(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox1, 17, &astate);
+    r = mailbox_get_annotate_state(mailbox1, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -1128,7 +1125,7 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox1, 42, &astate);
+    r = mailbox_get_annotate_state(mailbox1, 2, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -1139,7 +1136,7 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = mailbox_get_annotate_state(mailbox1, 127, &astate);
+    r = mailbox_get_annotate_state(mailbox1, 3, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
@@ -1154,42 +1151,42 @@ static void test_msg_copy(void)
     /* check that we can fetch the values back */
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 17, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE1);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 35, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME2_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
 
-    /* copy MBOXNAME1,17 -> MBOXNAME2,35 */
+    /* copy MBOXNAME1,1 -> MBOXNAME2,1 */
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     /* ensure we have an astate connected to the destination
      * mailbox, so that the annotation txn will be committed
      * when we close the mailbox */
-    r = mailbox_get_annotate_state(mailbox2, 35, &astate);
+    r = mailbox_get_annotate_state(mailbox2, 1, &astate);
     CU_ASSERT_EQUAL(r, 0);
 
-    r = annotate_msg_copy(mailbox1, 17, mailbox2, 35, "smurf");
+    r = annotate_msg_copy(mailbox1, 1, mailbox2, 1, "smurf");
     CU_ASSERT_EQUAL(r, 0);
 
     r = mailbox_commit(mailbox2);
@@ -1203,13 +1200,13 @@ static void test_msg_copy(void)
     /* check that the values copied are present for both mailboxes */
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 17, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 35, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME2_INT, 1, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
@@ -1218,24 +1215,24 @@ static void test_msg_copy(void)
      * mailbox */
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE1);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME1_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 42, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME2_INT, 2, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL(val2.s);
 
     buf_free(&val2);
-    r = annotatemore_msg_lookup(MBOXNAME2_INT, 127, COMMENT, /*userid*/"", &val2);
+    r = annotatemore_msg_lookup(MBOXNAME2_INT, 3, COMMENT, /*userid*/"", &val2);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL(val2.s);
 
@@ -1821,6 +1818,72 @@ static void test_clearentryatt(void)
     buf_free(&val);
 }
 
+static int create_messages(struct mailbox *mailbox, int count)
+{
+    int i, r;
+
+    for (i = 0; i < count; i++) {
+        static const char msgtmpl[] =
+            "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+            "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+            "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+            "Subject: Trivial testing email %d in mbox %s\r\n"
+            "Message-ID: <fake800-%d@fastmail.fm>\r\n"
+            "X-Mailer: Norman\r\n"
+            "\r\n"
+            "Hello, World from message %d in mailbox %s!\n";
+        struct stagemsg *stage = NULL;
+        struct appendstate as;
+        quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+        FILE *fp;
+        time_t internaldate = time(NULL);
+        struct body *body = NULL;
+        struct buf buf = BUF_INITIALIZER;
+
+        /* Write the message to the filesystem */
+        if (!(fp = append_newstage(mailbox->name, internaldate, 0, &stage))) {
+            fprintf(stderr, "append_newstage(%s) failed", mailbox->name);
+            return r;
+        }
+        buf_printf(&buf, msgtmpl, i, mailbox->name, i, i, mailbox->name);
+        fwrite(buf_base(&buf), 1, buf_len(&buf), fp);
+        buf_free(&buf);
+        if (fclose(fp)) {
+            fprintf(stderr, "fclose failed: %s", strerror(errno));
+            return IMAP_IOERROR;
+        }
+
+        /* Append the message to the mailbox */
+        qdiffs[QUOTA_MESSAGE] = 1;
+        r = append_setup_mbox(&as, mailbox, userid, auth_state,
+                0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
+        if (r) {
+            fprintf(stderr, "append_setup_mbox(%s) failed: %s", mailbox->name,
+                    strerror(errno));
+            return r;
+        }
+        r = append_fromstage(&as, &body, stage, internaldate, NULL, 0, NULL);
+        if (r) {
+            fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox->name,
+                    error_message(r));
+            append_abort(&as);
+            return r;
+        }
+        message_free_body(body);
+        free(body);
+
+        append_removestage(stage);
+        r = append_commit(&as);
+        if (r) {
+            fprintf(stderr, "append_commit(%s) failed: %s", mailbox->name,
+                    error_message(r));
+            return r;
+        }
+    }
+
+    return 0;
+}
+
 
 static int set_up(void)
 {
@@ -1892,6 +1955,10 @@ static int set_up(void)
                        /*highestmodseq*/0, &mailbox);
     if (r)
         return r;
+
+    r = create_messages(mailbox, MBOX1_MAXUID);
+    if (r)
+        return r;
     mailbox_close(&mailbox);
 
     memset(&mbentry, 0, sizeof(mbentry));
@@ -1904,6 +1971,27 @@ static int set_up(void)
         return r;
 
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, PARTITION, ACL,
+                       /*uniqueid*/NULL,
+                       /*options*/0, /*uidvalidity*/0,
+                       /*highestmodseq*/0, &mailbox);
+    if (r)
+        return r;
+
+    r = create_messages(mailbox, MBOX2_MAXUID);
+    if (r)
+        return r;
+    mailbox_close(&mailbox);
+
+    memset(&mbentry, 0, sizeof(mbentry));
+    mbentry.name = MBOXNAME3_INT;
+    mbentry.mbtype = 0;
+    mbentry.partition = PARTITION;
+    mbentry.acl = ACL;
+    r = mboxlist_update(&mbentry, /*localonly*/1);
+    if (r)
+        return r;
+
+    r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
                        /*highestmodseq*/0, &mailbox);
