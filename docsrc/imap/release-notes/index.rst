@@ -4,16 +4,18 @@
 IMAP Release Notes
 ==================
 
+This is version 2.5.
+
 Currently Stable Version
 ========================
 
-Release notes for stable: |imap_stable_release_notes|.
+Latest stable version is |imap_stable_release_notes|. Documentation at :cyrus-stable:`/`.
 
 
 Current Development Version
 ===========================
 
-Full documentation for development release at :cyrus-dev:`/`.
+Latest development version is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
 
 Currently Supported Product Series
 ==================================

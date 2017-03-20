@@ -63,7 +63,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Cyrus IMAP'
-copyright = u'1993-2016, The Cyrus Team'
+copyright = u'1993-2017, The Cyrus Team'
 
 
 # The version info for the project you're documenting, acts as replacement for
@@ -1063,13 +1063,13 @@ epub_exclude_files = ['search.html']
 #epub_use_index = True
 
 rst_prolog = """
-.. |imap_last_stable_version| replace:: 2.4.18
-.. |imap_last_stable_branch| replace:: `cyrus-imapd-2.4`
-.. |imap_last_stable_next_version| replace:: 2.4.18 + patches
-.. |imap_current_stable_version| replace:: 2.5.10
-.. |imap_current_stable_next_version| replace:: 2.5.10 + patches
-.. |imap_current_stable_branch| replace:: `cyrus-imapd-2.5`
-.. |imap_latest_development_version| replace:: 3.0.0-beta2
+.. |imap_last_stable_version| replace:: 2.5
+.. |imap_last_stable_branch| replace:: `cyrus-imapd-2.5`
+.. |imap_last_stable_next_version| replace:: `3.0.0`
+.. |imap_current_stable_version| replace:: 3.0.0
+.. |imap_current_stable_next_version| replace:: 3.0.1
+.. |imap_current_stable_branch| replace:: `cyrus-imapd-3.0`
+.. |imap_latest_development_version| replace:: 3.1.0
 .. |imap_latest_development_branch| replace:: master
 .. |imap_tikanga_stock_version| replace:: 2.3.7
 .. |imap_santiago_stock_version| replace:: 2.3.16
@@ -1082,11 +1082,11 @@ rst_prolog = """
 .. |sasl_current_stable_version| replace:: 2.1.26
 .. |imap_stable_release_notes| raw:: html
 
-    <a href="2.5/x/2.5.10.html">2.5.10</a>
+    <a href="3.0/x/3.0.0.html">3.0.0</a>
 
 .. |imap_development_release_notes| raw:: html
 
-    <a href="3.0/x/3.0.0-beta2.html">3.0.0-beta2</a>
+    <a href="3.1/x/3.1.0.html">3.1.0</a>
 
 """
 
@@ -1148,13 +1148,14 @@ rst_prolog += """
 
 # Use this as :task:`18`
 extlinks = {
-        'rfc':('http://tools.ietf.org/html/rfc%s', 'RFC '),
         'task':('https://git.cyrus.foundation/T%s', 'Task #'),
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
-        'cyrus-stable':('http://www.cyrusimap.org/stable%s', None),
-        'cyrus-dev':('http://www.cyrusimap.org/dev%s', None),
+        'cyrus-2.5':('http://www.cyrusimap.org/2.5%s',None),
+        'cyrus-3.0':('http://www.cyrusimap.org/3.0%s',None),
+        'cyrus-dev':('http://www.cyrusimap.org/dev%s',None),
+        'cyrus-stable': ('http://www.cyrusimap.org/3.0%s',None),
     }
 
 # Change this to whatever your output root is
 # If you're in a local build environment, this might be file://cyrus-imapd/doc/build/imap/admin/$num/$topic/$topic.html
-cyrus_man_url_regex = "http://www.cyrusimap.org/stable/imap/admin/$num/$topic.html";
+cyrus_man_url_regex = "http://www.cyrusimap.org/2.5/imap/admin/$num/$topic.html";
