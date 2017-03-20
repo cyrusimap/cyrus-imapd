@@ -80,7 +80,7 @@ Calendar and Contact (DAV) Collection Management
 
     features/caldav-collections
     features/dav-components
-    features/caldav-collection-mgmt
+    features/dav-collection-mgmt
     features/carddav
 
 Storage
