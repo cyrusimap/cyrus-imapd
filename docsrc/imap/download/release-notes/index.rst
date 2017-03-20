@@ -16,8 +16,22 @@ Latest development version is |imap_development_release_notes|. Documentation at
 Currently Supported Product Series
 ==================================
 
+Series 3.0
+----------
+
+Documentation at :cyrus-3.0:`/`.
+
+.. toctree::
+    :maxdepth: 1
+    :glob:
+
+    3.0/index
+
 Series 2.5
 ----------
+
+Documentation at :cyrus-2.5:`/`.
+
 .. toctree::
     :maxdepth: 1
     :glob:
