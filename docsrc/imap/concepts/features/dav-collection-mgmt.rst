@@ -32,7 +32,8 @@ Using the CalDAV GUI, one may:
     * Set visibility attributes such as Public or Transparent
     * Delete existing collections
 
-Similarly, for addressbook management, use a URL of the form https://<servername>/dav/addressbooks/user/%3Cusername%3E
+Similarly, for addressbook management, use a URL of the form
+https://<servername>/dav/addressbooks/user/%3Cusername%3E
 
 For example:
 
