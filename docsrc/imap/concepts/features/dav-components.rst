@@ -13,5 +13,6 @@ The following CalDAV components are supported for calendar collections:
     * VJOURNAL
     * VFREEBUSY
     * VAVAILABILITY
+    * VPOLL (awaiting IETF review)
 
 Back to :ref:`imap-features`
