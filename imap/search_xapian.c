@@ -2362,6 +2362,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
             free(strarray_shift(newdirs));
             strarray_unshift(tocompact, tempreindexdir);
         }
+        else if ((flags & SEARCH_COMPACT_ONLYUPGRADE)) {
+            /* nothing to reindex, so bail now.  Since we don't set 'r', we will just
+             * abort with no change other than a new tmp location which compreses down
+             * soon enough */
+            goto out;
+        }
 
         // and now we're ready to compact to the real tempdir
         strarray_unshift(newdirs, buf_cstring(&mytempdir));

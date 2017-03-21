@@ -826,7 +826,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RUXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
@@ -908,6 +908,9 @@ int main(int argc, char **argv)
         case 'o':               /* copy one DB rather than compressing */
             compact_flags |= SEARCH_COMPACT_COPYONE;
             break;
+
+        case 'U':
+            compact_flags |= SEARCH_COMPACT_ONLYUPGRADE;
 
         case 'v':               /* verbose */
             verbose++;
