@@ -911,6 +911,7 @@ int main(int argc, char **argv)
 
         case 'U':
             compact_flags |= SEARCH_COMPACT_ONLYUPGRADE;
+            break;
 
         case 'v':               /* verbose */
             verbose++;
