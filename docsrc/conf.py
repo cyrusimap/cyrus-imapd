@@ -1202,7 +1202,7 @@ rst_prolog = """
 
 .. |imap_development_release_notes| raw:: html
 
-    <a href="3.1.0/x/3.1.0.html">3.1.0</a>
+    <a href="3.1/x/3.1.0.html">3.1.0</a>
 
 """
 
