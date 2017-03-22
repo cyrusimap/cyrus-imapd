@@ -69,19 +69,22 @@ int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
     Xapian::Database db;
+    const char *thispath = "(unknown path)";
 
     try {
         while (*sources) {
+            thispath = *sources;
             Xapian::Database subdb(*sources++);
             db.add_database(subdb);
         }
+        thispath = "(unknown path)";
 
         /* FULLER because we never write to compression targets again */
         db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception compact_dbs: %s: %s (%s)",
+                    err.get_context().c_str(), err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
@@ -300,11 +303,13 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
+    const char *thispath = "(unknown path)";
 
     const char *path = *paths++;
     try {
         /* Determine the sterm version of an existing database, or create a
          * new one with the latest one. Never implicitly upgrade. */
+        thispath = path;
         try {
             dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_OPEN);
             dbw->stem_version = stem_version_get(dbw->database);
@@ -336,8 +341,8 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
         r = IMAP_MAILBOX_LOCKED;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open: %s: %s (%s)",
+                    err.get_context().c_str(), err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
@@ -349,12 +354,13 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
     /* open the read-only databases */
     while (*paths) {
         try {
+            thispath = *paths;
             Xapian::Database *database = new Xapian::Database(*paths++);
             ptrarray_append(&dbw->otherdbs, database);
         }
         catch (const Xapian::Error &err) {
-            syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-                        err.get_context().c_str(), err.get_description().c_str());
+            syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open read: %s: %s (%s)",
+                        err.get_context().c_str(), err.get_description().c_str(), thispath);
         }
     }
 
@@ -381,7 +387,7 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         free(dbw);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_close: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
     }
 }
@@ -394,7 +400,7 @@ int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
         dbw->database->begin_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception begin_txn: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -408,7 +414,7 @@ int xapian_dbw_commit_txn(xapian_dbw_t *dbw)
         dbw->database->commit_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception commit_txn: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -422,7 +428,7 @@ int xapian_dbw_cancel_txn(xapian_dbw_t *dbw)
         dbw->database->cancel_transaction();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception cancel_txn: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -444,7 +450,7 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid)
         dbw->term_generator->set_termpos(1);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception begin_doc: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -470,7 +476,7 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
         dbw->term_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception doc_part: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -489,7 +495,7 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
         dbw->cyrusid = NULL;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception end_doc: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -567,7 +573,7 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         db->parser->set_stopper(db->stopper);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_open: %s: %s",
                     thispath, err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -594,7 +600,7 @@ void xapian_db_close(xapian_db_t *db)
     }
     catch (const Xapian::Error &err) {
         /* XXX - memory leak? */
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_close: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
     }
 }
@@ -664,7 +670,7 @@ xapian_query_new_match_internal(const xapian_db_t *db, int stem_version,
         return (xapian_query_t *)new Xapian::Query(query);
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception match_internal: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         return 0;
     }
@@ -738,7 +744,7 @@ xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((u
         return (xapian_query_t *)compound;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception new_compound: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         return 0;
     }
@@ -760,7 +766,7 @@ xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused
         return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception new_not: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         return 0;
     }
@@ -773,7 +779,7 @@ void xapian_query_free(xapian_query_t *qq)
         delete query;
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_free: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
     }
 }
@@ -802,7 +808,7 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
         }
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -1013,7 +1019,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         snipgen->phrases = NULL;
 
     } catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception end_doc: %s: %s",
                 err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
@@ -1029,6 +1035,7 @@ int xapian_filter(const char *dest, const char **sources,
 {
     int r = 0;
     int count = 0;
+    const char *thispath = "(unknown path)";
 
     try {
         /* create a destination database */
@@ -1039,6 +1046,7 @@ int xapian_filter(const char *dest, const char **sources,
          * destdb in turn for better locality of reference, and so better cache
          * use. -- Olly on the mailing list */
         while (*sources) {
+            thispath = *sources;
             Xapian::Database srcdb = Xapian::Database(*sources++);
 
             /* copy all matching documents to the new DB */
@@ -1050,12 +1058,14 @@ int xapian_filter(const char *dest, const char **sources,
             }
         }
 
+        thispath = "(unknown path)";
+
         /* commit all changes explicitly */
         destdb.commit();
     }
     catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s",
-               err.get_description().c_str());
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception filter: %s (%s)",
+               err.get_description().c_str(), thispath);
         r = IMAP_IOERROR;
     }
 
