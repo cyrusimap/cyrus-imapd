@@ -70,7 +70,7 @@ struct hdrcache_t {
     hash_table cache;       /* hash table of headers for quick retrieval     */
     struct header_t *head;  /* head of double-linked list of ordered headers */
     struct header_t *tail;  /* tail of double-linked list of ordered headers */
-    ptrarray_t body_array;  /* header bodies returned by spool_getheader()   */
+    ptrarray_t getheader_cache;  /* header bodies returned by spool_getheader()   */
 };
 
 hdrcache_t spool_new_hdrcache(void)
@@ -414,20 +414,19 @@ EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
     free(head);
 
     if (contents && ptrarray_size(contents)) {
+        strarray_t *array = strarray_new();
         /* build read-only array of header bodies */
-        int idx;
 
-        ptrarray_truncate(&cache->body_array, 0);
-        for (idx = 0; idx < ptrarray_size(contents); idx++) {
-            struct header_t *hdr = ptrarray_nth(contents, idx);
-
-            ptrarray_append(&cache->body_array, hdr->body);
+        int i;
+        for (i = 0; i < ptrarray_size(contents); i++) {
+            struct header_t *hdr = ptrarray_nth(contents, i);
+            strarray_append(array, hdr->body);
         }
 
-        /* make sure array it NULL-terminated */
-        ptrarray_append(&cache->body_array, NULL);
+        /* cache the response so we clean it up later */
+        ptrarray_append(&cache->getheader_cache, array);
 
-        return (const char **) cache->body_array.data;
+        return (const char **) array->data;
     }
 
     return NULL;
@@ -449,11 +448,17 @@ static void __spool_free_hdrcache(ptrarray_t *pa)
 
 EXPORTED void spool_free_hdrcache(hdrcache_t cache)
 {
+    int i;
+
     if (!cache) return;
 
     free_hash_table(&cache->cache, (void (*)(void *)) __spool_free_hdrcache);
 
-    ptrarray_fini(&cache->body_array);
+    for (i = 0; i < cache->getheader_cache.count; i++) {
+        strarray_t *item = ptrarray_nth(&cache->getheader_cache, i);
+        strarray_free(item);
+    }
+    ptrarray_fini(&cache->getheader_cache);
 
     free(cache);
 }
