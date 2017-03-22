@@ -143,6 +143,7 @@ static int usage(const char *name)
             "  -X          reindex during compaction\n"
             "  -U          reindex tiers having deprecated stems or prefixes\n"
             "  -o          copy db rather compacting\n"
+            "  -U          only compact if re-indexing\n"
             "\n"
             "General options:\n"
             "  -v          be verbose\n"
