@@ -1186,7 +1186,7 @@ test:     ANYOF testlist         {
                                      }
 
                                      $$ = build_mbox_meta(parse_script,
-                                                          NULL, NULL, NULL, $2);
+                                                          $$, NULL, NULL, $2);
                                  }
 
         | METADATA mtags STRING STRING stringlist
@@ -1203,7 +1203,7 @@ test:     ANYOF testlist         {
                                      }
 
                                      $$ = build_mbox_meta(parse_script,
-                                                          NULL, $2, NULL, $3);
+                                                          $$, $2, NULL, $3);
                                  }
 
         | SERVERMETADATA mtags STRING stringlist
