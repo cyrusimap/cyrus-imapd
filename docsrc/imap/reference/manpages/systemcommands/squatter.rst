@@ -80,7 +80,8 @@ In the seventh synopsis, **squatter** will compact indices from
 expunged records (**-F**) in the process.  The optional **-T** flag may
 be used to specify a directory to use for temporary files.  The **-o**
 flag may be used to direct that a single index be copied, rather than
-compressed, from *srctier* to *desttier*.
+compressed, from *srctier* to *desttier*.  The **-U** flag may be used
+to only compact if re-indexing.
 
 For all modes, the **-S** option may be specified, causing squatter to
 pause *seconds* seconds after each mailbox, to smooth loads.
@@ -207,6 +208,11 @@ Options
 
     Extra options refer to usernames (e.g. foo@bar.com) rather than
     mailbox names.
+    |v3-new-feature|
+
+.. option:: -U
+
+    In compact mode, only compact if re-indexing.
     |v3-new-feature|
 
 .. option:: -v
