@@ -2357,11 +2357,17 @@ static int compact_dbs(const char *userid, const char *tempdir,
                 printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
                 goto out;
             }
-            // remove tempreindexdir from newdirs again, and add it to "tocompact" so we
-            // always compact it
+            // remove tempreindexdir from newdirs again, it's going to be compacted instead
             free(strarray_shift(newdirs));
-            strarray_unshift(tocompact, tempreindexdir);
+
+            // add it to the to-compact list if there's something there to reindex
+            if (!xapstat(tempreindexdir))
+                strarray_unshift(tocompact, tempreindexdir);
         }
+
+        // nothing left to compress
+        if (!tocompact->count)
+            goto out;
 
         // and now we're ready to compact to the real tempdir
         strarray_unshift(newdirs, buf_cstring(&mytempdir));
