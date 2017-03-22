@@ -267,10 +267,8 @@
 
 /********** TUNING *************/
 
-/* don't bother rewriting if the database has less than this much "new" data */
+/* don't bother rewriting if the database has less than this much data */
 #define MINREWRITE 16834
-/* don't bother rewriting if less than this ratio is dirty (50%) */
-#define REWRITE_RATIO 0.5
 /* number of skiplist levels - 31 gives us binary search to 2^32 records.
  * limited to 255 by file format, but skiplist had 20, and that was enough
  * for most real uses.  31 is heaps. */
@@ -1711,19 +1709,20 @@ static int mycommit(struct dbengine *db, struct txn *tid)
             syslog(LOG_ERR, "DBERROR: twoskip %s: commit AND abort failed",
                    FNAME(db));
         }
-    } else {
-        /* consider checkpointing */
-        int diff = db->header.current_size - db->header.repack_size;
-        if (!(db->open_flags & CYRUSDB_NOCOMPACT) && diff > MINREWRITE &&
-           ((float)diff / (float)db->header.repack_size) > REWRITE_RATIO) {
+    }
+    else {
+        if (!(db->open_flags & CYRUSDB_NOCOMPACT)
+            && db->header.current_size > MINREWRITE
+            && db->header.current_size > 2 * db->header.repack_size) {
             int r2 = mycheckpoint(db);
             if (r2) {
                 syslog(LOG_NOTICE, "twoskip: failed to checkpoint %s: %m",
                        FNAME(db));
             }
         }
-        else
+        else {
             unlock(db);
+        }
 
         free(tid);
         db->current_txn = NULL;
