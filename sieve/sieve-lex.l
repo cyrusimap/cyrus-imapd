@@ -388,11 +388,11 @@ weekday         [W|w][E|e][E|e][D|d][A|a][Y|y]
 <INITIAL>:create              return CREATE;
 
     /* mboxmetadata - RFC 5490 */
-<INITIAL>metadata             return METADATA;
+<INITIAL>metadata             return yylval->nval = METADATA;
 <INITIAL>metadataexists       return METADATAEXISTS;
 
     /* servermetadata - RFC 5490 */
-<INITIAL>servermetadata       return SERVERMETADATA;
+<INITIAL>servermetadata       return yylval->nval = SERVERMETADATA;
 <INITIAL>servermetadataexists return SERVERMETADATAEXISTS;
 
     /* include - RFC 6609 */

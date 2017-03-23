@@ -263,10 +263,12 @@ extern void sieverestart(FILE *f);
 %type <test> mtags
 
 /* mboxmetadata - RFC 5490 */
-%token METADATA METADATAEXISTS
+%token <nval> METADATA
+%token METADATAEXISTS
 
 /* servermetadata - RFC 5490 */
-%token SERVERMETADATA SERVERMETADATAEXISTS
+%token <nval> SERVERMETADATA
+%token SERVERMETADATAEXISTS
 
 /* extlists - RFC 6134 */
 %token VALIDEXTLIST
