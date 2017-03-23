@@ -537,6 +537,59 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         i=write_list(ntohl(d[i].len), i+1, d);
         printf("             ]\n");
         break;
+
+    case BC_MAILBOXEXISTS:/*16*/
+    case BC_METADATAEXISTS:/*18*/
+    case BC_SERVERMETADATAEXISTS:/*20*/
+        ++i; /* skip opcode */
+
+        if (BC_MAILBOXEXISTS == opcode) {
+            printf("MailboxExists [");
+        }
+        else if (BC_SERVERMETADATAEXISTS == opcode) {
+            printf("ServerMetaDataExists [");
+        }
+        else {
+            const char *data;
+            int len;
+
+            printf("MetaDataExists [");
+            i = unwrap_string(d, i, &data, &len);
+            printf("              Mailbox Name: {%d}%s\n", len, data);
+        }
+
+        printf("              Key List: ");
+        i=write_list(ntohl(d[i].len), i+1, d);
+        printf("             ]\n");
+        break;
+
+    case BC_METADATA:/*17*/
+    case BC_SERVERMETADATA:/*19*/
+    {
+        const char *data;
+        int len;
+
+        if (BC_METADATA == opcode) {
+            printf("MetaData [");
+        } else {
+            printf("ServerMetaData [");
+        }
+        i= printComparison(d, i+1);
+
+        if (BC_METADATA == opcode) {
+            i = unwrap_string(d, i, &data, &len);
+            printf("              Mailbox Name: {%d}%s\n", len, data);
+        }
+
+        i = unwrap_string(d, i, &data, &len);
+        printf("              Key Name: {%d}%s\n", len, data);
+
+        printf("              Key List: ");
+        i=write_list(ntohl(d[i].len), i+1, d);
+        printf("             ]\n");
+        break;
+    }
+
     default:
         printf("WERT %d ", ntohl(d[i].value));
     }
