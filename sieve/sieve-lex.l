@@ -93,7 +93,7 @@ time            [T|t][I|i][M|m][E|e]
 iso8601         [I|i][S|s][O|o]8601
 std11           [S|s][T|t][D|d]11
 zone            [Z|z][O|o][N|n][E|e]
-weekday         [W|w][E|e][E|e][D|d][A|a][Y|y]
+weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
 %state MULTILINE
 %state QSTRING
