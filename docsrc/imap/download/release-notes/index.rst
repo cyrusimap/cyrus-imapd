@@ -18,6 +18,9 @@ Currently Supported Product Series
 
 Series 2.5
 ----------
+
+Documentation at :cyrus-2.5:`/`.
+
 .. toctree::
     :maxdepth: 1
     :glob:
