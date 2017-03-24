@@ -71,6 +71,10 @@ int autorespond_reponse = SIEVE_OK;
 
 extern int verbose;
 
+static void context_setup(sieve_test_context_t *ctx,
+                          const char *script);
+static void context_cleanup(sieve_test_context_t *ctx);
+
 static void test_variable_modifiers(void)
 {
     /*
@@ -108,18 +112,21 @@ static void test_variable_modifiers(void)
 
 #define TESTCASE(_comp, _mode, _pat, _text, _result)            \
     comprock = NULL;                                            \
-    c = lookup_comp(_comp, _mode, -1, &comprock);               \
+    c = lookup_comp(ctx.interp, _comp, _mode, -1, &comprock);   \
     CU_ASSERT_PTR_NOT_NULL(c);                                  \
     if (c) {                                                    \
-        res = c(_text, strlen(_text), _pat, comprock);          \
+        res = c(_text, strlen(_text), _pat, NULL, comprock);    \
         CU_ASSERT_EQUAL(res, _result);                          \
     }
 
 static void test_comparator(void)
 {
+    sieve_test_context_t ctx;
     void *comprock;
     comparator_t *c;
     int res;
+
+    context_setup(&ctx, "");
 
     TESTCASE( B_OCTET, B_IS, "", "", 1 );
     TESTCASE( B_OCTET, B_IS, "a", "", 0 );
@@ -280,6 +287,8 @@ static void test_comparator(void)
     TESTCASE( B_ASCIICASEMAP, B_MATCHES, "a*b", "aBBB", 1 );
     TESTCASE( B_ASCIICASEMAP, B_MATCHES, "a*b", "ACB", 1 );
     TESTCASE( B_ASCIICASEMAP, B_MATCHES, "a*b", "ACBC", 0 );
+
+    context_cleanup(&ctx);
 }
 
 
