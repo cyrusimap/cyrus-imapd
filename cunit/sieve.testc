@@ -121,12 +121,15 @@ static void test_variable_modifiers(void)
 
 static void test_comparator(void)
 {
+    static const char SCRIPT[] =
+    "require [\"comparator-i;ascii-numeric\"];\n"
+    ;
     sieve_test_context_t ctx;
     void *comprock;
     comparator_t *c;
     int res;
 
-    context_setup(&ctx, "");
+    context_setup(&ctx, SCRIPT);
 
     TESTCASE( B_OCTET, B_IS, "", "", 1 );
     TESTCASE( B_OCTET, B_IS, "a", "", 0 );
