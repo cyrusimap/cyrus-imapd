@@ -238,7 +238,7 @@ Sieve is enabled by default.
 CalDAV and CardDAV
 ##################
 
-    ``./configure --with-httpd --with-calalarmd``
+    ``./configure --enable-http --enable-calalarmd``
 
 Murder
 ######
