@@ -92,6 +92,8 @@ imap/imap_err.c
 imap/imap_err.h
 imap/imapd
 imap/ipurge
+imap/lmtp_err.c
+imap/lmtp_err.h
 imap/lmtpd
 imap/lmtpstats.c
 imap/lmtpstats.h
