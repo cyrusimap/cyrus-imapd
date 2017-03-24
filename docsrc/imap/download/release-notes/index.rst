@@ -11,7 +11,11 @@ Latest stable version is |imap_stable_release_notes|. Documentation at :cyrus-st
 Current Development Version
 ===========================
 
-Latest development version is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
+..
+    Latest development version is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
+
+There have not yet been any releases from the current development series.
+Documentation is at :cyrus-dev:`/`.
 
 Currently Supported Product Series
 ==================================
