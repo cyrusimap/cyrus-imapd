@@ -13,9 +13,9 @@ What is Cyrus IMAP?
 
 Cyrus IMAP is an email, contacts and calendar server.
 
-This is the documentation for version |version| of Cyrus IMAP.
+This is the documentation for version |release| of Cyrus IMAP.
 
-Looking for the latest stable version of Cyrus IMAP? Documentation at :cyrus-stable:`/` for |imap_current_stable_version|.
+Looking for the latest development version of Cyrus IMAP? Documentation at :cyrus-dev:`/` for |imap_latest_development_version|.
 
 .. Update this when there is a changeover from stable to development.
 
