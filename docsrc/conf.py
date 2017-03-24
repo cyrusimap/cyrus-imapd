@@ -1183,7 +1183,7 @@ epub_exclude_files = ['search.html']
 rst_prolog = """
 .. |imap_last_stable_version| replace:: 2.5.10
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-2.5`
-.. |imap_current_stable_version| replace:: `3.0.0`
+.. |imap_current_stable_version| replace:: 3.0.0
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-3.0`
 .. |imap_latest_development_version| replace:: 3.1.0
 .. |imap_latest_development_branch| replace:: master
