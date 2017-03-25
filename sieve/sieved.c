@@ -514,6 +514,7 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         case B_YEAR: printf("year\n"); break;
         case B_MONTH: printf("month\n"); break;
         case B_DAY: printf("day\n"); break;
+        case B_DATE: printf("date\n"); break;
         case B_JULIAN: printf("julian\n"); break;
         case B_HOUR: printf("hour\n"); break;
         case B_MINUTE: printf("minute\n"); break;
