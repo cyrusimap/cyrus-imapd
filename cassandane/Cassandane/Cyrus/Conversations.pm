@@ -121,7 +121,7 @@ sub test_append
 #
 # Test APPEND of messages to IMAP
 #
-sub test_append_references
+sub test_append_reply
     :min_version_3_0
 {
     my ($self) = @_;
@@ -139,6 +139,40 @@ sub test_append_references
     $exp{B} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
     $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
+}
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_append_reply_200
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog "generating replies";
+    for (1..99) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid());
+    for (1..99) {
+      $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid());
+    }
+    $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid());
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
 }
 
 
