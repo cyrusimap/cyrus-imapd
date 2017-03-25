@@ -118,6 +118,29 @@ sub test_append
     $self->check_messages(\%exp);
 }
 
+#
+# Test APPEND of messages to IMAP
+#
+sub test_append_references
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+}
+
 
 #
 # Test APPEND of messages to IMAP which results in a CID clash.
