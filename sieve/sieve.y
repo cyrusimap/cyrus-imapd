@@ -1171,10 +1171,10 @@ test:     ANYOF testlist         {
                                  }
 
         /* getdatepart variable is used to change the start state of the lexer */
-        | CURRENTDATE cdtags { getdatepart = 1; } datepart stringlist
+        | CURRENTDATE { getdatepart = 1; } cdtags datepart stringlist
                                  {
                                      $$ = build_date(parse_script,
-                                                     $2, NULL, $4, $5);
+                                                     $3, NULL, $4, $5);
                                      if ($$ == NULL) {
                                          YYERROR; /* bd should call yyerror() */
                                      }
