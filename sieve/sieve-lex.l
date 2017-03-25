@@ -310,7 +310,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
     /* date - RFC 5260 */
 <INITIAL>date                 return DATE;
-<INITIAL>currentdate          return CURRENTDATE;
+<INITIAL>currentdate          { getdatepart = 1; return CURRENTDATE; }
 <INITIAL>:originalzone        return ORIGINALZONE;
 <INITIAL>:zone                { BEGIN QTIMEZONE; return ZONE; }
 
