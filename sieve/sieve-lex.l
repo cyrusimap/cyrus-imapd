@@ -1,6 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
+ * Ken Murchison
  *
  * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,20 +49,19 @@
 
 #include "xmalloc.h"
 
-#include "sieve/tree.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
+#include "sieve/tree.h"
 
 #define YY_NO_INPUT
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
-
-extern int getdatepart;  /* used to receive start state feedback from parser */
 
 static int tonum(char *c);
 static int totimezone(char *c);
 static char *chkstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
+extern int getdatepart;  /* used to receive start state feedback from parser */
 extern void sieveerror(sieve_script_t *, char *);
 extern void sieveerror_f(sieve_script_t *, char *fmt, ...);
 %}
@@ -78,7 +78,7 @@ CRLF            (\r\n|\r|\n)
 ws              [ \t]+
 
     /* UTC offset of timezone +/-hhmm */
-timezone        [-|+][0-9][0-9][0-5][0-9]
+timezone        [-|+][0-1][0-9][0-5][0-9]
 
     /* case-insensitive date-parts */
 year            [Y|y][E|e][A|a][R|r]
@@ -214,7 +214,10 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:comparator          { BEGIN QCOLLATION; return COMPARATOR; }
 
 <QCOLLATION>[ \t\n\r] ;       /* ignore whitespace */
-<QCOLLATION>\"i;octet\"       { BEGIN INITIAL; return yylval->nval = OCTET; }
+<QCOLLATION>\"i;octet\"       {
+                                  BEGIN INITIAL;
+                                  return yylval->nval = OCTET;
+                              }
 <QCOLLATION>\"i;ascii-casemap\" {
                                   BEGIN INITIAL;
                                   return yylval->nval = ASCIICASEMAP;
@@ -297,7 +300,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                                                yytext);
                               }
 
-    /* imap[4]flags - RFC 5232 */
+    /* imap4flags - RFC 5232 */
 <INITIAL>setflag              return yylval->nval = SETFLAG;
 <INITIAL>addflag              return yylval->nval = ADDFLAG;
 <INITIAL>removeflag           return yylval->nval = REMOVEFLAG;
@@ -363,7 +366,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:method              return METHOD;
 <INITIAL>:options             return OPTIONS;
 <INITIAL>:message             return MESSAGE;
-<INITIAL>:encodeurl          return yylval->nval = ENCODEURL;
+<INITIAL>:encodeurl           return yylval->nval = ENCODEURL;
 <INITIAL>:importance          { BEGIN QIMPORTANCE; return IMPORTANCE; }
 
 <QIMPORTANCE>[ \t\n\r] ;      /* ignore whitespace */
@@ -403,7 +406,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:once                return ONCE;
 <INITIAL>return               return RETURN;
 
-<INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracket comments */
+<INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */
 .                             return yytext[0];
