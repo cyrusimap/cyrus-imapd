@@ -47,20 +47,18 @@
 #include <config.h>
 #endif
 
-#include "xmalloc.h"
+#include "util.h"
 
+#include "sieve/tree.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
-#include "sieve/tree.h"
 
 #define YY_NO_INPUT
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
 
 static int tonum(char *c);
 static int totimezone(char *c);
-static char *chkstr(char *);
-static char *mlbuf;
-static int mlbufsz, mlcur;
+static struct buf buf;   /* buffer for multi-line text and quoted strings */
 extern int getdatepart;  /* used to receive start state feedback from parser */
 extern void sieveerror(sieve_script_t *, char *);
 extern void sieveerror_f(sieve_script_t *, char *fmt, ...);
@@ -107,60 +105,39 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* end of multi-line text */
 <MULTILINE>^\.{CRLF}          {
                                   BEGIN INITIAL;
-                                  if (mlbuf) mlbuf[mlcur] = '\0';
-                                  yylval->sval = chkstr(mlbuf);
+                                  yylval->sval = buf_release(&buf);
                                   return STRING;
                               }
-<MULTILINE>^\.\.              { /* dot stuffing! we want one . */ yyless(1); }
-<MULTILINE>(.|\n)             {
-                                  if (mlcur == mlbufsz) {
-                                      mlbuf = xrealloc(mlbuf,
-                                                       1 + (mlbufsz += 1024));
-                                  }
-                                  mlbuf[mlcur++] = yytext[0];
-                              }
-<MULTILINE><<EOF>>            {
-                                  BEGIN INITIAL;
-                                  sieveerror(parse_script,
-                                             "unexpected end of file in string");
-                                  if (mlbuf) free(mlbuf);
-                                  yyterminate();
-                              }
+
+    /* dot stuffing */
+<MULTILINE>^\.\.              buf_putc(&buf, yytext[1]);
 
     /* end of quoted string */
 <QSTRING>\"                   {
                                   BEGIN INITIAL;
-                                  if (mlbuf) mlbuf[mlcur] = '\0';
-                                  yylval->sval = chkstr(mlbuf);
+                                  yylval->sval = buf_release(&buf);
                                   return STRING;
                               }
-<QSTRING>\\.                  {
-                                  if (mlcur == mlbufsz) {
-                                      mlbuf = xrealloc(mlbuf,
-                                                       1 + (mlbufsz += 1024));
-                                  }
-                                  mlbuf[mlcur++] = yytext[1];
-                              }
-<QSTRING>(.|\n)               {
-                                  if (mlcur == mlbufsz) {
-                                      mlbuf = xrealloc(mlbuf,
-                                                       1 + (mlbufsz += 1024));
-                                  }
-                                  mlbuf[mlcur++] = yytext[0];
-                              }
-<QSTRING><<EOF>>              {
+
+    /* escaped character */
+<QSTRING>\\.                  buf_putc(&buf, yytext[1]);
+
+    /* any character (including LF) */
+<QSTRING,MULTILINE>(.|\n)     buf_putc(&buf, yytext[0]);
+
+    /* premature EOF */
+<QSTRING,MULTILINE><<EOF>>    {
+                                  BEGIN INITIAL;
                                   sieveerror(parse_script,
                                              "unexpected end of file in string");
-                                  if (mlbuf) free(mlbuf);
-                                  BEGIN INITIAL;
+                                  buf_free(&buf);
                                   yyterminate();
                               }
 
     /* beginning of multi-line text */
 <INITIAL>text:{ws}?(#.*)?{CRLF} {
                                   BEGIN MULTILINE;
-                                  mlcur = mlbufsz = 0;
-                                  mlbuf = NULL;
+                                  buf_init(&buf);
                               }
 
     /* beginning of quoted string */
@@ -172,8 +149,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                                   }
                                   else {
                                       BEGIN QSTRING;
-                                      mlcur = mlbufsz = 0;
-                                      mlbuf = NULL;
+                                      buf_init(&buf);
                                   }
                               }
 
@@ -438,10 +414,4 @@ static int totimezone(char *c)
     sscanf(c, "\"%c%02u%02u\"", &sign, &hours, &minutes);
 
     return (sign == '-' ? -1 : 1) * (hours * 60) + minutes;
-}
-
-/* convert NULL strings to "" */
-static char *chkstr(char *str)
-{
-    return (str ? str : xstrdup(""));
 }
