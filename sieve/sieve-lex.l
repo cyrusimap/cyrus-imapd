@@ -56,7 +56,7 @@
 #define YY_NO_INPUT
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
 
-static int tonum(char *c);
+static unsigned long long tonum(const char *str);
 static int totimezone(char *c);
 static struct buf buf;   /* buffer for multi-line text and quoted strings */
 extern int getdatepart;  /* used to receive start state feedback from parser */
@@ -154,7 +154,16 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                               }
 
     /* number with optional power of 2 suffix */
-<INITIAL>[0-9]+[KMGkmg]?      { yylval->nval = tonum(yytext); return NUMBER; }
+<INITIAL>[0-9]+[KMGkmg]?      {
+                                  unsigned long long val = tonum(yytext);
+                                  if (val > INT_MAX) {
+                                      sieveerror_f(parse_script,
+                                                   "number too large %s",
+                                                   yytext);
+                                  }
+                                  yylval->nval = val;
+                                  return NUMBER;
+                              }
 
     /* standard control commands - RFC 5228 */
 <INITIAL>if                   return IF;
@@ -390,15 +399,22 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 %%
 
 /* convert numerical string w/units to int */
-static int tonum(char *c)
+static unsigned long long tonum(const char *str)
 {
-    int val = atoi(c);
+    char *units;
+    unsigned long long val = strtoull(str, &units, 10);
 
-    switch (c[strlen(c)-1]) {
-    case 'K': case 'k': val *= (1 << 10); break;
-    case 'M': case 'm': val *= (1 << 20); break;
-    case 'G': case 'g': val *= (1 << 30); break;
-    default: break;
+    if (*units && errno != ERANGE) {
+        switch (toupper(*units)) {
+        case 'K': val *= (1ULL << 10); break;
+        case 'M': val *= (1ULL << 20); break;
+        case 'G': val *= (1ULL << 30); break;
+            /* for future use */
+        case 'T': val *= (1ULL << 40); break;
+        case 'P': val *= (1ULL << 50); break;
+        case 'E': val *= (1ULL << 60); break;
+        default: break;
+        }
     }
 
     return val;
