@@ -148,13 +148,13 @@ EXPORTED strarray_t *strarray_dup(const strarray_t *sa)
 
     strarray_truncate(new, sa->count);
     for (i = 0 ; i < sa->count ; i++)
-        new->data[i] = xstrdup(sa->data[i]);
+        new->data[i] = xstrdupnull(sa->data[i]);
     return new;
 }
 
 EXPORTED int strarray_append(strarray_t *sa, const char *s)
 {
-    return strarray_appendm(sa, xstrdup(s));
+    return strarray_appendm(sa, xstrdupnull(s));
 }
 
 EXPORTED void strarray_cat(strarray_t *dest, const strarray_t *src)
@@ -223,7 +223,7 @@ EXPORTED void strarray_insert(strarray_t *sa, int idx, const char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 1)) < 0)
         return;
-    _strarray_insert(sa, idx, xstrdup(s));
+    _strarray_insert(sa, idx, xstrdupnull(s));
 }
 
 EXPORTED void strarray_insertm(strarray_t *sa, int idx, char *s)
