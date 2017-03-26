@@ -57,7 +57,6 @@
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
 
 static unsigned long long tonum(const char *str);
-static int totimezone(char *c);
 static struct buf buf;   /* buffer for multi-line text and quoted strings */
 extern int getdatepart;  /* used to receive start state feedback from parser */
 extern void sieveerror(sieve_script_t *, char *);
@@ -305,7 +304,8 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <QTIMEZONE>[ \t\n\r] ;        /* ignore whitespace */
 <QTIMEZONE>\"{timezone}\"     {
                                   BEGIN INITIAL;
-                                  yylval->nval = totimezone(yytext);
+                                  int tz = atoi(yytext+1); /* skip leading " */
+                                  yylval->nval = 60 * (tz / 100) + (tz % 100);
                                   return TIMEZONE;
                               }
 <QTIMEZONE>\"[^\"]*\"         {
@@ -418,16 +418,4 @@ static unsigned long long tonum(const char *str)
     }
 
     return val;
-}
-
-/* convert utc-offset string into int */
-static int totimezone(char *c)
-{
-    char sign;
-    unsigned hours;
-    unsigned minutes;
-
-    sscanf(c, "\"%c%02u%02u\"", &sign, &hours, &minutes);
-
-    return (sign == '-' ? -1 : 1) * (hours * 60) + minutes;
 }
