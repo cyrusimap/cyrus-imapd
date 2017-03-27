@@ -146,7 +146,7 @@ sub test_append_reply
 # Test APPEND of messages to IMAP
 #
 sub test_append_reply_200
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -180,7 +180,7 @@ sub test_append_reply_200
 # test reconstruct of larger conversation
 #
 sub test_reconstruct_splitconv
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -203,7 +203,6 @@ sub test_reconstruct_splitconv
 
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
 
-
     for (5..9) {
       $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
     }
@@ -222,7 +221,7 @@ sub test_reconstruct_splitconv
 # Test APPEND of messages to IMAP
 #
 sub test_replication_reply_200
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -266,6 +265,66 @@ sub test_replication_reply_200
     xlog "Creating a message on the replica now to make sure it gets the right CID";
     $exp{"D"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $replica_store);
     $exp{"D"}->set_attributes(uid => 202, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
+}
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_replication_reconstruct
+    :min_version_3_1
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+    $master_store->set_fetch_attributes('uid', 'cid', 'basecid');
+    $replica_store->set_fetch_attributes('uid', 'cid', 'basecid');
+
+    $self->assert($master_store->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    xlog "checking message A on master";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "running replication";
+    $self->run_replication();
+    xlog "checking message A on replica";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    xlog "generating replies";
+    for (1..20) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->run_replication();
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
+
+    for (5..9) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    for (10..14) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A10"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    for (15..19) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A15"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->run_replication();
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
+
+    xlog "Creating a message on the replica now to make sure it gets the right CID";
+    $exp{"D"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $replica_store);
+    $exp{"D"}->set_attributes(uid => 22, cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 }
 
