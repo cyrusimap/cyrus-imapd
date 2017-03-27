@@ -1777,19 +1777,18 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
     change->record = *record;
     change->flags = flags;
 
-    if ((record->system_flags & FLAG_SPLITCONVERSATION)) {
-        annotate_state_t *astate = NULL;
-        int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
-        if (r) return r;
+    annotate_state_t *astate = NULL;
+    int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+    if (r) return r;
 
-        struct buf annotval = BUF_INITIALIZER;
+    struct buf annotval = BUF_INITIALIZER;
+    if (record->cid && record->basecid && record->basecid != record->cid)
         buf_printf(&annotval, "%016llx", record->basecid);
 
-        r = annotate_state_write(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
-        buf_free(&annotval);
+    r = annotate_state_write(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
+    buf_free(&annotval);
 
-        if (r) return r;
-    }
+    if (r) return r;
 
     return 0;
 }
