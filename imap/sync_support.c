@@ -2416,6 +2416,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 
             struct index_record copy = *rrecord;
             copy.cid = mrecord.cid;
+            copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
             copy.internaldate = mrecord.internaldate;
