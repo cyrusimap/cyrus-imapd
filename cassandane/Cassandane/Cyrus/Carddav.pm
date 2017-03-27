@@ -44,7 +44,8 @@ use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CardDAVTalk 0.03;
+use Net::DAVTalk 0.14;
+use Net::CardDAVTalk 0.05;
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
@@ -208,7 +209,7 @@ sub test_homeset_extradomain
 	expandurl => 1,
     );
 
-    $self->assert_str_equals("/dav/addressbooks/user/cassandane\@extradomain.com/", $talk->{basepath});
+    $self->assert_str_equals($talk->{basepath}, "/dav/addressbooks/user/cassandane\@extradomain.com");
 }
 
 sub test_no_filter
