@@ -3993,6 +3993,17 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         buf_free(&buf);
         sepchar = ' ';
     }
+    if ((fetchitems & FETCH_BASECID) &&
+        config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        struct buf buf = BUF_INITIALIZER;
+        if (!record.basecid)
+            buf_appendcstr(&buf, "NIL");
+        else
+            buf_printf(&buf, CONV_FMT, record.basecid);
+        prot_printf(state->out, "%cBASECID %s", sepchar, buf_cstring(&buf));
+        buf_free(&buf);
+        sepchar = ' ';
+    }
     if ((fetchitems & FETCH_FOLDER)) {
         char *extname = mboxname_to_external(index_mboxname(state),
                                              fetchargs->namespace, fetchargs->userid);

@@ -129,7 +129,8 @@ enum {
     FETCH_FILESIZE =            (1<<17),
     FETCH_CID =                 (1<<18),
     FETCH_FOLDER =              (1<<19),
-    FETCH_UIDVALIDITY =         (1<<20)
+    FETCH_UIDVALIDITY =         (1<<20),
+    FETCH_BASECID =             (1<<21)
 };
 
 enum {

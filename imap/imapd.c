@@ -4507,7 +4507,11 @@ badannotation:
             break;
 
         case 'B':
-            if (!strncmp(fetchatt.s, "BINARY[", 7) ||
+            if (!strcmp(fetchatt.s, "BASECID") &&
+                config_getswitch(IMAPOPT_CONVERSATIONS)) {
+                fa->fetchitems |= FETCH_BASECID;
+            }
+            else if (!strncmp(fetchatt.s, "BINARY[", 7) ||
                 !strncmp(fetchatt.s, "BINARY.PEEK[", 12) ||
                 !strncmp(fetchatt.s, "BINARY.SIZE[", 12)) {
                 int binsize = 0;
