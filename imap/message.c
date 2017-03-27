@@ -3432,7 +3432,11 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
     if (conv->exists >= max_thread && !mustkeep && !record->silent) {
         /* time to reset the conversation */
+        conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
+
+        syslog(LOG_NOTICE, "splitting conversation for %s %u base:%016llx was:%016llx now:%016llx",
+               mailbox->name, record->uid, record->basecid, was, record->cid);
 
         conversation_free(conv);
         r = conversation_load(state, record->cid, &conv);
