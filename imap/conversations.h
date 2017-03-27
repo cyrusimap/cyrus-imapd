@@ -66,6 +66,7 @@ struct mailbox;
 struct conversations_state {
     struct db *db;
     struct txn *txn;
+    char *annotmboxname;
     strarray_t *counted_flags;
     strarray_t *folder_names;
     hash_table folderstatus;
@@ -228,7 +229,8 @@ extern int conversation_store(struct conversations_state *state,
 extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
                                        const struct index_record *old,
-                                       struct index_record *new);
+                                       struct index_record *new,
+                                       int allowrenumber);
 
 extern void conversation_update(struct conversations_state *state,
                                 conversation_t *conv,

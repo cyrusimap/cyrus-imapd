@@ -158,6 +158,7 @@ struct index_record {
     /* metadata */
     uint32_t recno;
     int silent;
+    bit64 basecid;
     struct cacherecord crec;
 };
 
@@ -368,15 +369,16 @@ struct mailbox_iter {
 #define FLAG_DELETED (1<<2)
 #define FLAG_DRAFT (1<<3)
 #define FLAG_SEEN (1<<4)
+#define FLAG_SPLITCONVERSATION (1<<27)
 #define FLAG_NEEDS_CLEANUP (1<<28)
 #define FLAG_ARCHIVED (1<<29)
 #define FLAG_UNLINKED (1<<30)
 #define FLAG_EXPUNGED (1U<<31)
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
-#define FLAGS_INTERNAL (FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED|FLAG_EXPUNGED)
+#define FLAGS_INTERNAL (FLAG_SPLITCONVERSATION|FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED|FLAG_EXPUNGED)
 /* for replication */
-#define FLAGS_LOCAL    (FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED)
+#define FLAGS_LOCAL    (FLAG_SPLITCONVERSATION|FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED)
 #define FLAGS_GLOBAL   (FLAGS_SYSTEM|FLAG_EXPUNGED)
 
 #define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */

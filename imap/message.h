@@ -187,7 +187,7 @@ extern char *parse_nstring(char **str);
 extern void message_read_bodystructure(const struct index_record *record,
                                        struct body **body);
 
-extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);
+extern int message_update_conversations(struct conversations_state *, struct mailbox *, struct index_record *, conversation_t **);
 
 extern int message_foreach_header(const char *headers, size_t len,
                    int (*proc)(const char *key, const char *val, void *rock),

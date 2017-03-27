@@ -94,6 +94,7 @@
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"
 #define FNKEY "$FOLDER_NAMES"
 #define CFKEY "$COUNTED_FLAGS"
+#define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
 
@@ -249,7 +250,10 @@ EXPORTED int conversations_open_user(const char *username, struct conversations_
     if (!path) return IMAP_MAILBOX_BADNAME;
     r = conversations_open_path(path, statep);
     free(path);
-    return r;
+    if (r) return r;
+    assert(*statep);
+    (*statep)->annotmboxname = mboxname_user_mbox(username, CONVSPLITFOLDER);
+    return 0;
 }
 
 EXPORTED int conversations_open_mbox(const char *mboxname, struct conversations_state **statep)
@@ -259,7 +263,14 @@ EXPORTED int conversations_open_mbox(const char *mboxname, struct conversations_
     if (!path) return IMAP_MAILBOX_BADNAME;
     r = conversations_open_path(path, statep);
     free(path);
-    return r;
+    if (r) return r;
+    assert(*statep);
+    char *userid = mboxname_to_userid(mboxname);
+    if (userid) {
+        (*statep)->annotmboxname = mboxname_user_mbox(userid, CONVSPLITFOLDER);
+    }
+    free(userid);
+    return 0;
 }
 
 EXPORTED struct conversations_state *conversations_get_path(const char *fname)
@@ -304,6 +315,7 @@ static void _conv_remove(struct conversations_state *state)
         if (state == &cur->s) {
             /* found it! */
             *prevp = cur->next;
+            free(cur->s.annotmboxname);
             free(cur->s.path);
             if (cur->s.counted_flags)
                 strarray_free(cur->s.counted_flags);
@@ -1828,7 +1840,8 @@ static int conversations_set_guid(struct conversations_state *state,
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
-                                         struct index_record *new)
+                                         struct index_record *new,
+                                         int allowrenumber)
 {
     conversation_t *conv = NULL;
     int delta_num_records = 0;
@@ -1855,17 +1868,17 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
          * a removal and re-add, so cache gets parsed and msgids
          * updated */
         if (old->cid != new->cid) {
-            r = conversations_update_record(cstate, mailbox, old, NULL);
+            r = conversations_update_record(cstate, mailbox, old, NULL, 0);
             if (r) return r;
-            return conversations_update_record(cstate, mailbox, NULL, new);
+            return conversations_update_record(cstate, mailbox, NULL, new, 0);
         }
     }
 
-    if (new && !old) {
+    if (new && !old && allowrenumber) {
         /* add the conversation */
         r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
         if (r) return r;
-        r = message_update_conversations(cstate, new, &conv);
+        r = message_update_conversations(cstate, mailbox, new, &conv);
         if (r) return r;
         record = new;
         /* possible if silent (i.e. replica) */

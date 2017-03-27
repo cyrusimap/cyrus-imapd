@@ -1982,6 +1982,13 @@ int decode_annotations(/*const*/struct dlist *annots,
                 /* XXX - check on p? */
             }
         }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+            if (record) {
+                const char *p = buf_cstring(&value);
+                parsehex(p, &p, 16, &record->basecid);
+                /* XXX - check on p? */
+            }
+        }
         else {
             sync_annot_list_add(*salp, entry, userid, &value);
         }

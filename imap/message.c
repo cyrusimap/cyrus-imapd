@@ -3237,6 +3237,20 @@ static int is_valid_rfc2822_inreplyto(const char *p)
     return (!*p || *p == '<');
 }
 
+/* XXX - refactor this whole thing to an "open or create" API */
+static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
+{
+    int r = mailbox_open_iwl(mboxname, mailboxptr);
+    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    /* create the mailbox */
+    char *userid = mboxname_to_userid(mboxname);
+    r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, userid, NULL,
+                               0, 0, 0, 0, mailboxptr);
+    free(userid);
+    return r;
+}
+
 /*
  * Update the conversations database for the given
  * mailbox, to account for the given message.
@@ -3244,6 +3258,7 @@ static int is_valid_rfc2822_inreplyto(const char *p)
  * we need out of the cache item in @record.
  */
 EXPORTED int message_update_conversations(struct conversations_state *state,
+                                          struct mailbox *mailbox,
                                           struct index_record *record,
                                           conversation_t **convp)
 {
@@ -3253,12 +3268,14 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     strarray_t msgidlist = STRARRAY_INITIALIZER;
     arrayu64_t matchlist = ARRAYU64_INITIALIZER;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
+    int mustkeep = 0;
     conversation_t *conv = NULL;
     const char *msubj = NULL;
     int i;
     int j;
     int r = 0;
     char *msgid = NULL;
+    struct mailbox *local_mailbox = NULL;
 
     /*
      * Gather all the msgids mentioned in the message, starting with
@@ -3370,18 +3387,78 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         }
     }
 
+    /* calculate the CID if needed */
     if (!record->silent) {
-        if (!record->cid) record->cid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
+        /* match for GUID, it always has the same CID */
+        if (!record->cid) {
+            record->cid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
+            if (record->cid) mustkeep = 1;
+        }
         if (!record->cid) record->cid = arrayu64_max(&matchlist);
-        if (!record->cid) record->cid = generate_conversation_id(record);
+        if (!record->cid) {
+            record->cid = generate_conversation_id(record);
+            if (record->cid) mustkeep = 1;
+        }
+        if (!mustkeep && !record->basecid) {
+            /* try finding a CID in the match list, or if we came in with it */
+            struct buf annotkey = BUF_INITIALIZER;
+            struct buf annotval = BUF_INITIALIZER;
+            buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, record->cid);
+            r = annotatemore_lookup(state->annotmboxname, buf_cstring(&annotkey), "", &annotval);
+            if (annotval.len == 16) {
+                const char *p = buf_cstring(&annotval);
+                /* we have a new canonical CID */
+                record->basecid = record->cid;
+                r = parsehex(p, &p, 16, &record->cid);
+            }
+            else {
+                r = 0; /* we're just going to pretend this wasn't found, worst case we split
+                        * more than we should */
+            }
+            buf_free(&annotkey);
+            buf_free(&annotval);
+            if (r) goto out;
+        }
     }
 
     if (!record->cid) goto out;
+    if (!record->basecid) record->basecid = record->cid;
 
     r = conversation_load(state, record->cid, &conv);
     if (r) goto out;
 
     if (!conv) conv = conversation_new(state);
+
+    uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
+    if (conv->exists >= max_thread && !mustkeep && !record->silent) {
+        /* time to reset the conversation */
+        record->cid = generate_conversation_id(record);
+
+        conversation_free(conv);
+        r = conversation_load(state, record->cid, &conv);
+        if (r) goto out;
+        if (!conv) conv = conversation_new(state);
+
+        /* and update the pointer for next time */
+        if (strcmpsafe(state->annotmboxname, mailbox->name)) {
+            r = getconvmailbox(state->annotmboxname, &local_mailbox);
+            if (r) goto out;
+            mailbox = local_mailbox;
+        }
+
+        struct annotate_state *astate = NULL;
+        r = mailbox_get_annotate_state(mailbox, 0, &astate);
+        if (r) goto out;
+
+        struct buf annotkey = BUF_INITIALIZER;
+        struct buf annotval = BUF_INITIALIZER;
+        buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, record->basecid);
+        buf_printf(&annotval, "%016llx", record->cid);
+        r = annotate_state_write(astate, buf_cstring(&annotkey), "", &annotval);
+        buf_free(&annotkey);
+        buf_free(&annotval);
+        if (r) goto out;
+    }
 
     /* Create the subject header if not already set */
     if (!conv->subject)
@@ -3392,10 +3469,15 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
      * not already mentioned.  Note that add_msgid does the right
      * thing[tm] when the cid already exists.
      */
+
     for (i = 0 ; i < msgidlist.count ; i++) {
-        r = conversations_add_msgid(state, strarray_nth(&msgidlist, i), record->cid);
+        r = conversations_add_msgid(state, strarray_nth(&msgidlist, i), record->basecid);
         if (r) goto out;
     }
+
+    /* mark that it's split so basecid gets saved */
+    if (record->basecid != record->cid)
+        record->system_flags |= FLAG_SPLITCONVERSATION;
 
 out:
     free(msgid);
@@ -3406,6 +3488,8 @@ out:
     free(c_env);
     free(c_me_msgid);
     buf_free(&msubject);
+    if (local_mailbox)
+        mailbox_close(&local_mailbox);
 
     if (r)
         conversation_free(conv);

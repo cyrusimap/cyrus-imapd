@@ -219,7 +219,7 @@ static int build_cid_cb(const mbentry_t *mbentry,
             r = mailbox_cacherecord(mailbox, &oldrecord);
             if (r) goto done;
 
-            r = message_update_conversations(cstate, &oldrecord, NULL);
+            r = message_update_conversations(cstate, mailbox, &oldrecord, NULL);
             if (r) goto done;
 
             r = mailbox_rewrite_index_record(mailbox, &oldrecord);
@@ -259,7 +259,7 @@ static int recalc_counts_cb(const mbentry_t *mbentry,
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_irl(mbentry->name, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) return r;
 
     if (verbose)

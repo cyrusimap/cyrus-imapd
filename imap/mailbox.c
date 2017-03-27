@@ -1753,7 +1753,7 @@ static struct index_change *_find_change(struct mailbox *mailbox, uint32_t recno
     return NULL;
 }
 
-static void _store_change(struct mailbox *mailbox, struct index_record *record, int flags)
+static int _store_change(struct mailbox *mailbox, struct index_record *record, int flags)
 {
     struct index_change *change = _find_change(mailbox, record->recno);
 
@@ -1776,6 +1776,22 @@ static void _store_change(struct mailbox *mailbox, struct index_record *record, 
     /* finally always copy the data into place */
     change->record = *record;
     change->flags = flags;
+
+    if ((record->system_flags & FLAG_SPLITCONVERSATION)) {
+        annotate_state_t *astate = NULL;
+        int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+        if (r) return r;
+
+        struct buf annotval = BUF_INITIALIZER;
+        buf_printf(&annotval, "%016llx", record->basecid);
+
+        r = annotate_state_write(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
+        buf_free(&annotval);
+
+        if (r) return r;
+    }
+
+    return 0;
 }
 
 static int _commit_one(struct mailbox *mailbox, struct index_change *change)
@@ -1910,6 +1926,17 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
     r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record);
 
     record->recno = recno;
+
+    if ((record->system_flags & FLAG_SPLITCONVERSATION)) {
+        struct buf annotval = BUF_INITIALIZER;
+        annotatemore_msg_lookup(mailbox->name, record->uid, IMAP_ANNOT_NS "basethrid", "", &annotval);
+        if (annotval.len == 16) {
+            const char *p = buf_cstring(&annotval);
+            /* we have a new canonical CID */
+            r = parsehex(p, &p, 16, &record->basecid);
+        }
+        buf_free(&annotval);
+    }
 
     return r;
 }
@@ -3310,7 +3337,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
     if (!old && !new)
         return 0;
 
-    return conversations_update_record(cstate, mailbox, old, new);
+    return conversations_update_record(cstate, mailbox, old, new, /*allowrenumber*/1);
 }
 
 
@@ -3481,7 +3508,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         mailbox_annot_update_counts(mailbox, &oldrecord, 0);
     }
 
-    _store_change(mailbox, record, changeflags);
+    r = _store_change(mailbox, record, changeflags);
+    if (r) return r;
 
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
@@ -3579,7 +3607,8 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     record->recno = mailbox->i.num_records + 1;
 
-    _store_change(mailbox, record, changeflags);
+    r = _store_change(mailbox, record, changeflags);
+    if (r) return r;
 
     mailbox->i.last_uid = record->uid;
     mailbox->i.num_records = record->recno;
@@ -4759,13 +4788,24 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
             continue;
 
         struct index_record copyrecord = *record;
-        r = mailbox_update_conversations(mailbox, NULL, &copyrecord);
+        r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1);
         if (r) break;
 
         if (copyrecord.cid == record->cid)
             continue;
 
-        /* we had a cid change? */
+        /* remove this record again */
+        r = conversations_update_record(cstate, mailbox, &copyrecord, NULL, 0);
+        if (r) break;
+
+        /* we had a cid change, so rewrite will try to correct the counts, so we
+         * need to add this one in again */
+        struct index_record oldrecord = *record;
+        /* add the old record that's going away */
+        r = conversations_update_record(cstate, mailbox, NULL, &oldrecord, 0);
+        if (r) break;
+
+        /* and finally to the update that will reverse those two actions again */
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
         if (r) break;
     }
@@ -4789,7 +4829,7 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
         if (!record->cid)
             continue;
 
-        r = mailbox_update_conversations(mailbox, record, NULL);
+        r = conversations_update_record(cstate, mailbox, record, NULL, 0);
         if (r) break;
     }
     mailbox_iter_done(&iter);

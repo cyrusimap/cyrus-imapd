@@ -605,6 +605,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    information needed for receiving new messages in existing
    conversations, in days. */
 
+{ "conversations_max_thread", 100, INT }
+/* maximum size for a single thread.  Threads will split if they have this many
+ * messages in them and another message arrives */
+
 { "crossdomains", 0, SWITCH }
 /* Enable cross domain sharing.  This works best with alt namespace and
    unix hierarchy separators on, so you get Other Users/foo@example.com/... */
