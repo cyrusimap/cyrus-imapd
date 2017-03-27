@@ -165,13 +165,13 @@ sub test_append_reply_200
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
     }
     $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
-    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid());
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
     for (1..99) {
       $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
-      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid());
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
     }
     $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
-    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid());
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
 
     $self->check_messages(\%exp, keyed_on => 'uid');
 }
@@ -205,15 +205,15 @@ sub test_reconstruct_splitconv
 
 
     for (5..9) {
-      $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid());
+      $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
     }
     for (10..14) {
-      $exp{"A$_"}->set_attributes(cid => $exp{"A10"}->make_cid());
+      $exp{"A$_"}->set_attributes(cid => $exp{"A10"}->make_cid(), basecid => $exp{A}->make_cid());
     }
     for (15..19) {
-      $exp{"A$_"}->set_attributes(cid => $exp{"A15"}->make_cid());
+      $exp{"A$_"}->set_attributes(cid => $exp{"A15"}->make_cid(), basecid => $exp{A}->make_cid());
     }
-    $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid());
+    $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
 
     $self->check_messages(\%exp, keyed_on => 'uid');
 }
@@ -251,13 +251,13 @@ sub test_replication_reply_200
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
     }
     $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
-    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid());
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
     for (1..99) {
       $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
-      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid());
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
     }
     $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
-    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid());
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
 
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
@@ -265,10 +265,9 @@ sub test_replication_reply_200
 
     xlog "Creating a message on the replica now to make sure it gets the right CID";
     $exp{"D"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $replica_store);
-    $exp{"D"}->set_attributes(uid => 202, cid => $exp{C}->make_cid());
+    $exp{"D"}->set_attributes(uid => 202, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 }
-
 
 
 #
