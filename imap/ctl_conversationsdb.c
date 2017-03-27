@@ -53,6 +53,11 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
+#ifdef WITH_DAV
+#include "caldav_db.h"
+#include "carddav_db.h"
+#include "webdav_db.h"
+#endif
 #include "exitcodes.h"
 #include "global.h"
 #include "index.h"
@@ -893,6 +898,15 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    quotadb_init(0);
+    quotadb_open(NULL);
+
+#ifdef WITH_DAV
+    caldav_init();
+    carddav_init();
+    webdav_init();
+#endif
+
     sync_log_init();
 
     if (recursive) {
@@ -905,6 +919,15 @@ int main(int argc, char **argv)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
+
+#ifdef WITH_DAV
+    webdav_done();
+    carddav_done();
+    caldav_done();
+#endif
 
     cyrus_done();
 
