@@ -66,7 +66,15 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    $self->{store}->set_fetch_attributes('uid', 'cid', 'basecid');
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    # basecid was added after 3.0
+    if ($maj > 3 or ($maj == 3 and $min > 0)) {
+       $self->{store}->set_fetch_attributes('uid', 'cid', 'basecid');
+    }
+    else {
+       $self->{store}->set_fetch_attributes('uid', 'cid');
+    }
 }
 
 sub tear_down
