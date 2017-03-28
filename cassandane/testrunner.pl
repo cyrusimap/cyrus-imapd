@@ -199,6 +199,11 @@ while (my $a = shift)
 	$format = shift;
 	usage unless defined $runners{$format};
     }
+    elsif ($a =~ m/^-f(\w+)$/)
+    {
+	$format = $1;
+	usage unless defined $runners{$format};
+    }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
 	set_verbose(get_verbose()+1);
@@ -220,6 +225,11 @@ while (my $a = shift)
     {
 	$jobs = shift;
 	usage unless defined $jobs;
+    }
+    elsif ($a =~ m/^-j(\d+)$/)
+    {
+	$jobs = 0 + $1;
+	usage unless $jobs > 0;
     }
     elsif ($a eq '-L' || $a eq '--log-directory')
     {
