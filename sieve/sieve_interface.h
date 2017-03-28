@@ -107,6 +107,12 @@ typedef struct sieve_vacation {
     sieve_callback *send_response;
 } sieve_vacation_t;
 
+typedef struct sieve_duplicate {
+    int max_expiration;           /* 0 -> defaults to 90 days */
+    sieve_callback *check;
+    sieve_callback *track;
+} sieve_duplicate_t;
+
 
 /* sieve_imapflags: NULL -> defaults to \flagged */
 
@@ -153,6 +159,11 @@ typedef struct sieve_send_response_context {
     int mime;
 } sieve_send_response_context_t;
 
+typedef struct sieve_duplicate_context {
+    char *id;
+    int seconds;
+} sieve_duplicate_context_t;
+
 /* build a sieve interpretor */
 sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
@@ -185,6 +196,8 @@ void sieve_register_listvalidator(sieve_interp_t *interp,
                                   sieve_list_validator *f);
 void sieve_register_listcompare(sieve_interp_t *interp,
                                 sieve_list_comparator *f);
+
+int sieve_register_duplicate(sieve_interp_t *interp, sieve_duplicate_t *d);
 
 typedef int sieve_parse_error(int lineno, const char *msg,
                               void *interp_context,

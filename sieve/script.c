@@ -233,6 +233,10 @@ int script_require(sieve_script_t *s, char *req)
                (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)) {
         s->support.editheader = 1;
         return 1;
+    } else if (!strcmp("duplicate", req) &&
+               (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) {
+        s->support.duplicate = 1;
+        return 1;
     }
 
     return 0;
@@ -940,34 +944,39 @@ static int do_action_list(sieve_interp_t *interp,
 
 /* execute some bytecode */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
-                  void *sc, void *m,
-                  variable_list_t *variables, action_list_t *actions,
-                  notify_list_t *notify_list, const char **errmsg);
+                  void *sc, void *m, variable_list_t *variables,
+                  action_list_t *actions, notify_list_t *notify_list,
+                  duptrack_list_t *duptrack_list, const char **errmsg);
 
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
                            void *script_context, void *message_context)
 {
     action_list_t *actions = NULL;
     notify_list_t *notify_list = NULL;
+    duptrack_list_t *duptrack_list = NULL;
     /*   notify_action_t *notify_action;*/
     action_t lastaction = -1;
     int ret;
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
-    variable_list_t variables = VARIABLE_LIST_INITIALIZER;
-
-    variables.var = &imapflags;
-    variables.name = xstrdup("");
-
-    varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
-    varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);
 
     if (!interp) return SIEVE_FAIL;
+
+    if (interp->duplicate) {
+        duptrack_list = new_duptrack_list();
+        if (duptrack_list == NULL) {
+            return do_sieve_error(SIEVE_NOMEM, interp,
+                                  script_context, message_context, &imapflags,
+                                  actions, notify_list, lastaction, 0,
+                                  actions_string, errmsg);
+        }
+    }
 
     if (interp->notify) {
         notify_list = new_notify_list();
         if (notify_list == NULL) {
+            if (duptrack_list) free_duptrack_list(duptrack_list);
             return do_sieve_error(SIEVE_NOMEM, interp,
                                   script_context, message_context, &imapflags,
                                   actions, notify_list, lastaction, 0,
@@ -983,9 +992,17 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
                              actions_string, errmsg);
     }
     else {
+        variable_list_t variables = VARIABLE_LIST_INITIALIZER;
+
+        variables.var = &imapflags;
+        variables.name = xstrdup("");
+
+        varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
+        varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);
+
         ret = sieve_eval_bc(exe, 0, interp,
-                            script_context, message_context,
-                            &variables, actions, notify_list, &errmsg);
+                            script_context, message_context, &variables,
+                            actions, notify_list, duptrack_list, &errmsg);
 
         if (ret < 0) {
             ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
@@ -999,9 +1016,28 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
                                  &imapflags, actions, notify_list,
                                  actions_string, errmsg);
         }
+
+        varlist_fini(&variables);
     }
 
-    varlist_fini(&variables);
+    if (duptrack_list) {
+        if (interp->duplicate && ret == SIEVE_OK) {
+            /* Process duplicate tracking records */
+            duptrack_list_t *d;
+
+            for (d = duptrack_list; d != NULL; d = d->next) {
+                if (d->id) {
+                    sieve_duplicate_context_t dc = { d->id, d->seconds };
+
+                    interp->duplicate->track(&dc, interp->interp_context,
+                                             script_context, message_context,
+                                             &errmsg);
+                }
+            }
+        }
+
+        free_duptrack_list(duptrack_list);
+    }
 
     return ret;
 }

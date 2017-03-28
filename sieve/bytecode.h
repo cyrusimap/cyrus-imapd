@@ -195,7 +195,8 @@ enum bytecode_comps {
     BC_SERVERMETADATA,  /* require servermetadata */
     BC_SERVERMETADATAEXISTS,
     BC_STRING,          /* require variables */
-    BC_VALIDEXTLIST     /* require extlists */
+    BC_VALIDEXTLIST,    /* require extlists */
+    BC_DUPLICATE        /* require duplicate */
 };
 
 /* currently one enum so as to help determine where values are being misused.
@@ -310,7 +311,14 @@ enum bytecode_tags {
     B_DATEPART_PLACEHOLDER_1,
     B_DATEPART_PLACEHOLDER_2,
     B_DATEPART_PLACEHOLDER_3,
-    B_DATEPART_PLACEHOLDER_4
+    B_DATEPART_PLACEHOLDER_4,
+
+    /* Duplicate ID Types (81-84) */
+    B_HEADER,
+    B_UNIQUEID,
+
+    B_IDTYPE_PLACEHOLDER_1,
+    B_IDTYPE_PLACEHOLDER_2
 };
 
 enum bytecode_variables_bitflags {

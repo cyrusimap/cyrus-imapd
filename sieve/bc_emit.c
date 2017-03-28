@@ -583,6 +583,60 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
     }
 
+    case BC_DUPLICATE:
+    {
+        int ret;
+        int datalen;
+
+        /* drop idtype */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+
+        /* drop hdrname/uniqueid */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+
+        wrote+=ret;
+
+        /* drop handle */
+        datalen = bc->data[(*codep)++].len;
+
+        if(write_int(fd, datalen) == -1) return -1;
+        wrote += sizeof(int);
+
+        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+        wrote += datalen;
+
+        ret = align_string(fd,datalen);
+        if(ret == -1) return -1;
+
+        wrote+=ret;
+
+        /* drop seconds */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+
+        /* drop last tag */
+        if(write_int(fd, bc->data[(*codep)].value) == -1)
+            return -1;
+        wrote += sizeof(int);
+        (*codep)++;
+
+        break;
+    }
+
     default:
         /* Unknown testcode? */
         return -1;

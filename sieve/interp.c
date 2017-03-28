@@ -136,6 +136,8 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " mboxmetadata");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)
             buf_appendcstr(&buf, " servermetadata");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)
+            buf_appendcstr(&buf, " duplicate");
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
@@ -302,6 +304,23 @@ EXPORTED void sieve_register_listvalidator(sieve_interp_t *interp, sieve_list_va
 EXPORTED void sieve_register_listcompare(sieve_interp_t *interp, sieve_list_comparator *f)
 {
     interp->listcompare = f;
+}
+
+EXPORTED int sieve_register_duplicate(sieve_interp_t *interp,
+                                      sieve_duplicate_t *d)
+{
+    if (!interp->getheader) {
+        return SIEVE_NOT_FINALIZED; /* we need header for duplicate! */
+    }
+
+    if (!(d->check && d->track)) {
+        return SIEVE_FAIL;
+    }
+
+    if (d->max_expiration > 7776000) d->max_expiration = 7776000;  /* 90 days */
+
+    interp->duplicate = d;
+    return SIEVE_OK;
 }
 
 EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)

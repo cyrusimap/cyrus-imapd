@@ -591,6 +591,29 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         break;
     }
 
+    case BC_DUPLICATE:/*23*/
+    {
+        printf("DUPLICATE\n");
+        int type = ntohl(d[i+1].value);
+        const char *data;
+        int len;
+
+        i = unwrap_string(d, i+2, &data, &len);
+
+        printf("\t%s({%d}%s)\n",
+               (type == B_UNIQUEID) ? "UNIQUEID" : "HDRNAME",
+               len, data);
+
+        i = unwrap_string(d, i, &data, &len);
+
+        printf("\tHANDLE({%d}%s)\n", len, (!data ? "[nil]" : data));
+
+        printf("\tSECONDS(%d) LAST(%d)\n",
+               ntohl(d[i].value), ntohl(d[i+1].value));
+        i+=2;
+    }
+    break;
+
     default:
         printf("WERT %d ", ntohl(d[i].value));
     }

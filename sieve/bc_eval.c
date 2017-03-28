@@ -376,7 +376,9 @@ static int regcomp_flags(int comparator, int requires)
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
-			variable_list_t *variables, int version, int requires)
+			variable_list_t *variables,
+                        duptrack_list_t *duptrack_list,
+                        int version, int requires)
 {
     int res=0;
     int i=*ip;
@@ -403,7 +405,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
     case BC_NOT:/*2*/
         i+=1;
-        res = eval_bc_test(interp, m, sc, bc, &i, variables, version, requires);
+        res = eval_bc_test(interp, m, sc, bc, &i, variables,
+                           duptrack_list, version, requires);
         if(res >= 0) res = !res; /* Only invert in non-error case */
         break;
 
@@ -466,7 +469,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
          * in the right place */
         for (x=0; x<list_len && !res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, variables, version, requires);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
+                               duptrack_list, version, requires);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -486,7 +490,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         /* return 1 unless you find one that isn't true, then return 0 */
         for (x=0; x<list_len && res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, variables, version, requires);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
+                               duptrack_list, version, requires);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -1787,6 +1792,53 @@ envelope_err:
         break;
     }
 
+    case BC_DUPLICATE:/*23*/
+    {
+        int type = ntohl(bc[i+1].value);
+        const char *idval, *handle;
+        int len, last;
+        sieve_duplicate_context_t dc;
+
+        i = unwrap_string(bc, i+2, &idval, &len);
+        i = unwrap_string(bc, i, &handle, &len);
+
+        dc.seconds = ntohl(bc[i].value);
+        last = ntohl(bc[i+1].value);
+        i+=2;
+
+        res = 1;
+        if (!dc.seconds) res = 0;
+        else if (type == B_HEADER) {
+            /* fetch header body */
+            const char **hdr;
+            if (interp->getheader(m, idval, &hdr) != SIEVE_OK) res = 0;
+            else idval = hdr[0];
+        }
+        else if (requires & BFE_VARIABLES) {
+            /* substitute variables in uniqueid */
+            idval = parse_string(idval, variables);
+        }
+
+        if (res) {
+            struct buf id = BUF_INITIALIZER;
+            const char *errmsg;
+
+            /* prefix the ID with the handle */
+            buf_printf(&id, "%s:%s", handle, idval);
+            dc.id = buf_release(&id);
+
+            res = interp->duplicate->check(&dc, interp->interp_context,
+                                           sc, m, &errmsg);
+            if (!res || last) {
+                /* add tracking record to list
+                   (to be processed iff script executes successfully) */
+                do_duptrack(duptrack_list, &dc);
+            }
+            else free(dc.id);
+        }
+    }
+    break;
+
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",
@@ -1818,9 +1870,9 @@ int sieve_bytecode_version(const sieve_bytecode_t *bc)
 
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
-                  void *sc, void *m,
-                  variable_list_t *variables, action_list_t *actions,
-                  notify_list_t *notify_list, const char **errmsg)
+                  void *sc, void *m, variable_list_t *variables,
+                  action_list_t *actions, notify_list_t *notify_list,
+                  duptrack_list_t *duptrack_list, const char **errmsg)
 {
     const char *data;
     int res=0;
@@ -2059,7 +2111,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int result;
 
             ip+=1;
-            result=eval_bc_test(i, m, sc, bc, &ip, variables, version, requires);
+            result=eval_bc_test(i, m, sc, bc, &ip, variables,
+                                duptrack_list, version, requires);
 
             if (result<0) {
                 *errmsg = "Invalid test";
@@ -2551,9 +2604,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 break;
             }
 
-            res = sieve_eval_bc(exe, 1, i,
-				sc, m, variables, actions,
-				notify_list, errmsg);
+            res = sieve_eval_bc(exe, 1, i, sc, m, variables, actions,
+				notify_list, duptrack_list, errmsg);
             break;
         }
 

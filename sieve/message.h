@@ -115,6 +115,15 @@ typedef struct notify_list_s {
 notify_list_t *new_notify_list(void);
 void free_notify_list(notify_list_t *n);
 
+typedef struct duptrack_list_s {
+    char *id;
+    int seconds;
+    struct duptrack_list_s *next;
+} duptrack_list_t;
+
+duptrack_list_t *new_duptrack_list(void);
+void free_duptrack_list(duptrack_list_t *d);
+
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
  * action list */
@@ -138,6 +147,6 @@ int do_notify(notify_list_t *n, const char *id, const char *from,
               const char *priority, const char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority);
-
+int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc);
 
 #endif

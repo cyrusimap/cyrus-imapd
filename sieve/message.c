@@ -408,6 +408,28 @@ int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
     return 0;
 }
 
+int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc)
+{
+    duptrack_list_t *b = NULL;
+
+    /* find the end of the duptrack list */
+    while (d != NULL) {
+        b = d;
+        d = d->next;
+    }
+
+    /* add to the duptrack list */
+    d = (duptrack_list_t *) xmalloc(sizeof(duptrack_list_t));
+    if (d == NULL)
+        return SIEVE_NOMEM;
+
+    b->next = d;
+    d->id = dc->id;
+    d->seconds = dc->seconds;
+    d->next = NULL;
+    return 0;
+}
+
 notify_list_t *new_notify_list(void)
 {
     notify_list_t *ret = xmalloc(sizeof(notify_list_t));
@@ -463,3 +485,24 @@ void free_action_list(action_list_t *a)
     }
 }
 
+duptrack_list_t *new_duptrack_list(void)
+{
+    duptrack_list_t *ret = xzmalloc(sizeof(duptrack_list_t));
+
+    if (ret != NULL) {
+        ret->id       = NULL;
+        ret->seconds  = 0;
+        ret->next     = NULL;
+    }
+    return ret;
+}
+
+void free_duptrack_list(duptrack_list_t *d)
+{
+    while (d) {
+        duptrack_list_t *b = d->next;
+        free(d->id);
+        free(d);
+        d = b;
+    }
+}

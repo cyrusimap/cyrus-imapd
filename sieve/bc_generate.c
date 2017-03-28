@@ -331,7 +331,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         codep= bc_testlist_generate(codep, retval, t->u.tl);
         if (codep == -1) return -1;
         break;
-    case HEADER:
+    case HEADERT:
     case HASFLAG:
     case STRINGT:
         /* BC_HEADER { i: index } { c: comparator }
@@ -343,7 +343,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         if(!atleast(retval,codep + 1)) return -1;
         switch (t->type) {
-        case HEADER:
+        case HEADERT:
             retval->data[codep++].op = BC_HEADER;
             break;
         case HASFLAG:
@@ -354,7 +354,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
             break;
         }
 
-        if (t->type == HEADER) {
+        if (t->type == HEADERT) {
             /* index */
             if(!atleast(retval,codep + 1)) return -1;
             retval->data[codep++].value = t->u.hhs.comp.index;
@@ -631,6 +631,34 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         if (!atleast(retval, codep+1)) return -1;
         retval->data[codep++].op = BC_SERVERMETADATAEXISTS;
         codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
+        if (codep == -1) return -1;
+
+        break;
+
+    case DUPLICATE:
+        /* BC_DUPLICATE { idtype: HEADER | UNIQUEID }
+         *              { hdrname/uniqueid : string }
+         *              { handle: string} { seconds: int } { last: int }
+         */
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].op = BC_DUPLICATE;
+
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep++].value =
+            (t->u.dup.idtype == UNIQUEID) ? B_UNIQUEID : B_HEADER;
+
+        if (!atleast(retval, codep+2)) return -1;
+        retval->data[codep++].len = strlen(t->u.dup.idval);
+        retval->data[codep++].str = t->u.dup.idval;
+
+        if (!atleast(retval, codep+2)) return -1;
+        retval->data[codep++].len = strlen(t->u.dup.handle);
+        retval->data[codep++].str = t->u.dup.handle;
+
+        if (!atleast(retval, codep+2)) return -1;
+        retval->data[codep++].value = t->u.dup.seconds;
+        retval->data[codep++].value = t->u.dup.last;
+
         if (codep == -1) return -1;
 
         break;

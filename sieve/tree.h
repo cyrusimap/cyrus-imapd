@@ -102,6 +102,13 @@ struct Test {
             char *keyname;
             strarray_t *keylist;
         } mm;
+        struct { /* its a duplicate test */
+            int idtype;
+            char *idval;
+            char *handle;
+            int seconds;
+            int last;
+        } dup;
     } u;
 };
 

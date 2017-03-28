@@ -175,6 +175,7 @@ Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions
 * Editheader Extension :rfc:`5293`
 * Reject and Extended Reject :rfc:`5429`
 * Externally Stored Lists :rfc:`6134`
+* Duplicate Extension :rfc:`7352`
 * IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
 * Body Extension `Draft body extension RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
 

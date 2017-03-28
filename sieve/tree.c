@@ -76,7 +76,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
     p->type = type;
 
     switch (p->type) {
-    case HEADER:
+    case HEADERT:
         init_comptags(&p->u.hhs.comp);
         break;
 
@@ -144,6 +144,12 @@ test_t *new_test(int type, sieve_script_t *parse_script)
     case VALIDEXTLIST:
         capability = "extlists";
         supported = parse_script->support.extlists;
+        break;
+
+    case DUPLICATE:
+        capability = "duplicate";
+        supported = parse_script->support.duplicate;
+        p->u.dup.idtype = p->u.dup.seconds = -1;
         break;
     }
 
@@ -305,7 +311,7 @@ void free_test(test_t *t)
         break;
 
     case HASFLAG:
-    case HEADER:
+    case HEADERT:
     case STRINGT:
         strarray_free(t->u.hhs.sl);
         strarray_free(t->u.hhs.pl);
@@ -341,6 +347,11 @@ void free_test(test_t *t)
         free(t->u.mm.extname);
         free(t->u.mm.keyname);
         strarray_free(t->u.mm.keylist);
+        break;
+
+    case DUPLICATE:
+        free(t->u.dup.idval);
+        free(t->u.dup.handle);
         break;
     }
 

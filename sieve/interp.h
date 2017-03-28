@@ -66,6 +66,8 @@ struct sieve_interp {
     sieve_list_validator *isvalidlist;
     sieve_list_comparator *listcompare;
 
+    sieve_duplicate_t *duplicate;
+
     sieve_parse_error *err;
 
     /* site-specific imapflags for mark/unmark */

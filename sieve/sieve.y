@@ -119,6 +119,7 @@ static test_t *build_date(sieve_script_t*, test_t *t,
 static test_t *build_mbox_meta(sieve_script_t*,
                                test_t *t, const char *extname,
                                const char *keyname, strarray_t *keylist);
+static test_t *build_duplicate(sieve_script_t*, test_t *t);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl,
                              int (*verify)(sieve_script_t*, char *));
@@ -174,7 +175,7 @@ extern void sieverestart(FILE *f);
 
 /* standard tests - RFC 5228 */
 %token ANYOF ALLOF EXISTS NOT SFALSE STRUE SIZE
-%token HEADER ADDRESS ENVELOPE COMPARATOR
+%token HEADERT ADDRESS ENVELOPE COMPARATOR
 %token <nval> OVER UNDER
 %token <nval> ALL LOCALPART DOMAIN
 %token <nval> IS CONTAINS MATCHES
@@ -280,6 +281,12 @@ extern void sieverestart(FILE *f);
 %token <nval> PERSONAL GLOBAL
 %type <cl> itags
 %type <nval> location
+
+/* duplicate - RFC 7352 */
+%token DUPLICATE
+%token <nval> HEADER UNIQUEID
+%type <test> duptags
+%type <nval> idtype
 
 
 %%
@@ -1097,7 +1104,7 @@ test:     ANYOF testlist         {
                                      $$->u.sz.n = $3;
                                  }
 
-        | HEADER htags stringlist stringlist
+        | HEADERT htags stringlist stringlist
                                  {
                                      $$ = build_header(parse_script, $2, $3, $4);
                                      if ($$ == NULL) {
@@ -1235,6 +1242,14 @@ test:     ANYOF testlist         {
                                      $$->u.sl = $2;
                                  }
 
+        | DUPLICATE duptags
+                                 {
+                                     $$ = build_duplicate(parse_script, $2);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* bd should call yyerror() */
+                                     }
+                                 }
+
         | error                  { $$ = NULL; }
         ;
 
@@ -1246,7 +1261,7 @@ sizetag:  OVER
 
 
 /* HEADER tagged arguments */
-htags: /* empty */               { $$ = new_test(HEADER, parse_script); }
+htags: /* empty */               { $$ = new_test(HEADERT, parse_script); }
         | htags { ctags = &($1->u.hhs.comp); } matchtype
         | htags { ctags = &($1->u.hhs.comp); } listmatch
         | htags { ctags = &($1->u.hhs.comp); } comparator
@@ -1633,6 +1648,66 @@ mtags: /* empty */               {
         | mtags { ctags = &($1->u.mm.comp); } matchtype
         | mtags { ctags = &($1->u.mm.comp); } comparator
         ;
+
+
+/* DUPLICATE tagged arguments */
+duptags: /* empty */             {
+                                     $$ = new_test(DUPLICATE, parse_script);
+                                     if ($$ == NULL) {
+                                         YYERROR; /* nt should call yyerror() */
+                                     }
+                                 }
+        | duptags idtype STRING  {
+                                     if ($$->u.dup.idtype != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      $2 == HEADER ? ":header" :
+                                                      ":uniqueid");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.dup.idtype = $2;
+                                     $$->u.dup.idval = $3;
+                                 }
+        | duptags HANDLE STRING  {
+                                     if ($$->u.dup.handle != NULL) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":handle");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.dup.handle = $3;
+                                 }
+        | duptags SECONDS NUMBER {
+                                     if ($$->u.dup.seconds != -1) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":seconds");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.dup.seconds = $3;
+                                 }
+        | duptags LAST           {
+                                     if ($$->u.dup.last != 0) {
+                                         sieveerror_c(parse_script,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":last");
+                                         YYERROR;
+                                     }
+
+                                     $$->u.dup.last = 1;
+                                 }
+        ;
+
+
+/* DUPLICATE idtypes */
+idtype:   HEADER
+        | UNIQUEID
+        ;
+
+
 %%
 
 
@@ -2186,7 +2261,7 @@ static test_t *build_hhs(sieve_script_t *parse_script, test_t *t,
 static test_t *build_header(sieve_script_t *parse_script, test_t *t,
                             strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == HEADER);
+    assert(t && t->type == HEADERT);
 
     if (!verify_stringlist(parse_script, sl, verify_header)) return NULL;
 
@@ -2315,3 +2390,31 @@ static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
     return t;
 }
 
+
+static test_t *build_duplicate(sieve_script_t *parse_script, test_t *t)
+{
+    assert(t && t->type == DUPLICATE);
+
+    switch (t->u.dup.idtype) {
+    case HEADER:
+        if (!verify_header(parse_script, t->u.dup.idval)) return NULL;
+        break;
+
+    case UNIQUEID:
+        if (!verify_utf8(parse_script, t->u.dup.idval)) return NULL;
+        break;
+
+    default:
+        t->u.dup.idtype = HEADER;
+        t->u.dup.idval = xstrdup("Message-ID");
+        break;
+    }
+
+    if (t->u.dup.handle &&
+        !verify_utf8(parse_script, t->u.dup.handle)) return NULL;
+    t->u.dup.handle = xstrdupsafe(t->u.dup.handle);
+
+    if (t->u.dup.seconds == -1) t->u.dup.seconds = 7 * 86400; /* 7 days */
+
+    return t;
+}

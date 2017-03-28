@@ -178,7 +178,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>false                return SFALSE;
 <INITIAL>true                 return STRUE;
 <INITIAL>not                  return NOT;
-<INITIAL>header               return HEADER;
+<INITIAL>header               return HEADERT;
 <INITIAL>address              return ADDRESS;
 <INITIAL>envelope             return ENVELOPE;
 <INITIAL>size                 return SIZE;
@@ -297,9 +297,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
     /* date - RFC 5260 */
 <INITIAL>date                 return DATE;
-<INITIAL>currentdate          { getdatepart = 1; return CURRENTDATE; }
 <INITIAL>:originalzone        return ORIGINALZONE;
 <INITIAL>:zone                { BEGIN QTIMEZONE; return ZONE; }
+<INITIAL>currentdate          { getdatepart = 1; return CURRENTDATE; }
 
 <QTIMEZONE>[ \t\n\r] ;        /* ignore whitespace */
 <QTIMEZONE>\"{timezone}\"     {
@@ -341,6 +341,8 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* editheader - RFC 5293 */
 <INITIAL>addheader            return ADDHEADER;
 <INITIAL>deleteheader         return DELETEHEADER;
+    /*   :index               defined in 'index' */
+    /*   :last                defined in 'index' */
 
     /* [e]reject - RFC 5429 */
 <INITIAL>reject               return yylval->nval = REJCT;
@@ -390,6 +392,14 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:optional            return OPTIONAL;
 <INITIAL>:once                return ONCE;
 <INITIAL>return               return RETURN;
+
+    /* duplicate - RFC 7352 */
+<INITIAL>duplicate            return DUPLICATE;
+<INITIAL>:header              return yylval->nval = HEADER;
+<INITIAL>:uniqueid            return yylval->nval = UNIQUEID;
+    /*   :handle              defined in 'vacation' */
+    /*   :seconds             defined in 'vacation-seconds' */
+    /*   :last                defined in 'index' */
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */

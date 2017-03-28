@@ -81,6 +81,7 @@ struct sieve_script {
         int variables       : 1;
         int editheader      : 1;
         int extlists        : 1;
+        int duplicate       : 1;
     } support;
 
     void *script_context;
