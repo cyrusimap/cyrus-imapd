@@ -54,7 +54,7 @@ use Data::Dumper;
 $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 
-my $format = 'tap';
+my $format = 'prettier';
 my $output_dir = 'reports';
 my $do_list = 0;
 # The default really should be --no-keep-going like make
@@ -161,8 +161,6 @@ eval
 	$runner->start($plan);
 	return $runner->all_tests_passed();
     };
-
-    $format = 'xml';
 };
 if ($@) {
     my $eval_err = $@;
