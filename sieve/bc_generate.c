@@ -806,7 +806,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    VALUE copy
                    STRING address
                 */
-                if (!atleast(retval, codep+4)) return -1;
+                if (!atleast(retval, codep+5)) return -1;
                 retval->data[codep++].op = B_REDIRECT;
                 retval->data[codep++].value = c->u.r.list;
                 retval->data[codep++].value = c->u.r.copy;
