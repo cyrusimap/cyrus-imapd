@@ -107,10 +107,14 @@ typedef union
  * version 0x08 scripts implemented DATE and INDEX extensions
  * version 0x09 scripts implemented IMAP4FLAGS extension
  * version 0x10 scripts implemented Mailbox and Metadata (RFC5490)
- * version 0x11 scripts implemented Variables (RFC5229), eReject (RFC5429),
- *                                  and External Lists (RFC 6134)
+ * version 0x11 scripts implemented Variables (RFC5229)
+ * version 0x12 scripts implemented Editheader (RFC5293),
+ *                                  eReject (RFC5429),
+ *                                  External Lists (RFC6134),
+ *                                  eNotify (RFC5435),
+ *                                  Duplicate (RFC7352)
  */
-#define BYTECODE_VERSION 0x11
+#define BYTECODE_VERSION 0x12
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
