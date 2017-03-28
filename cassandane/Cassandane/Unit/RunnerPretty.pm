@@ -54,6 +54,20 @@ sub new
     return $self;
 }
 
+sub ansi
+{
+    my ($self, $codes, @args) = @_;
+    my $isatty = -t $self->print_stream;
+
+    my $ansi;
+
+    $ansi .= "\e[" . join(',', @{$codes}) . 'm' if $isatty;
+    $ansi .= join ('', @args);
+    $ansi .= "\e[0m" if $isatty;
+
+    return $ansi;
+}
+
 sub start_test
 {
     my $self = shift;
@@ -65,21 +79,21 @@ sub add_pass
 {
     my $self = shift;
     my $test = shift;
-    $self->_print(_getpaddedname($test) . "[  \e[32mOK\e[0m  ]\n");
+    $self->_print(_getpaddedname($test) . "[  " . $self->ansi([32], 'OK') . "  ]\n");
 }
 
 sub add_error
 {
     my $self = shift;
     my $test = shift;
-    $self->_print(_getpaddedname($test) . "[\e[31mERROR\e[0m ]\n");
+    $self->_print(_getpaddedname($test) . "[" . $self->ansi([31], 'ERROR') . " ]\n");
 }
 
 sub add_failure
 {
     my $self = shift;
     my $test = shift;
-    $self->_print(_getpaddedname($test) . "[\e[33mFAILED\e[0m]\n");
+    $self->_print(_getpaddedname($test) . "[" . $self->ansi([33], 'FAILED') . "]\n");
 }
 
 sub _getpaddedname
@@ -120,7 +134,7 @@ sub print_errors
     for my $e (@{$result->errors()}) {
         chomp(my $e_to_str = $e);
         $i++;
-        $self->_print("\e[31m$i)\e[0m $e_to_str\n");
+        $self->_print($self->ansi([31], "$i)") . " $e_to_str\n");
         $self->_print("\nAnnotations:\n", $e->object->annotations())
           if $e->object->annotations();
     }
@@ -144,7 +158,7 @@ sub print_failures
     for my $f (@{$result->failures()}) {
         chomp(my $f_to_str = $f);
         $self->_print("\n") if $i++;
-        $self->_print("\e[33m$i)\e[0m $f_to_str\n");
+        $self->_print($self->ansi([33], "$i)") . " $f_to_str\n");
         $self->_print("\nAnnotations:\n", $f->object->annotations())
           if $f->object->annotations();
     }
