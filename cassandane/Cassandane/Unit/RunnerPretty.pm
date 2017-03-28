@@ -132,9 +132,10 @@ sub print_errors
 
     my $i = 0;
     for my $e (@{$result->errors()}) {
-        chomp(my $e_to_str = $e);
+        my ($test, $errors) = split(/\n/, $e->to_string(), 2);
+        chomp $errors;
         $i++;
-        $self->_print($self->ansi([31], "$i)") . " $e_to_str\n");
+        $self->_print($self->ansi([31], "$i) $test") . "\n$errors\n");
         $self->_print("\nAnnotations:\n", $e->object->annotations())
           if $e->object->annotations();
     }
@@ -156,9 +157,10 @@ sub print_failures
 
     my $i = 0;
     for my $f (@{$result->failures()}) {
-        chomp(my $f_to_str = $f);
+        my ($test, $failures) = split(/\n/, $f->to_string(), 2);
+        chomp $failures;
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([33], "$i)") . " $f_to_str\n");
+        $self->_print($self->ansi([33], "$i) $test") . "\n$failures\n");
         $self->_print("\nAnnotations:\n", $f->object->annotations())
           if $f->object->annotations();
     }
