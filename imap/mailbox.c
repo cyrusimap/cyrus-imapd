@@ -1785,7 +1785,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
     if (record->cid && record->basecid && record->basecid != record->cid)
         buf_printf(&annotval, "%016llx", record->basecid);
 
-    r = annotate_state_write(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
+    r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
     buf_free(&annotval);
 
     if (r) return r;
@@ -2771,7 +2771,8 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
                            const char *entry,
                            const char *userid,
                            const struct buf *oldval,
-                           const struct buf *newval)
+                           const struct buf *newval,
+                           int silent)
 {
     /* update sync_crc - NOTE, only per-message annotations count */
     if (uid) {
@@ -2786,10 +2787,13 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
             mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, newval);
     }
 
-    /* we are dirtying both index and quota */
-    mailbox_index_dirty(mailbox);
+    if (!silent) {
+        /* we are dirtying index and modseq */
+        mailbox_index_dirty(mailbox);
+        mboxlist_foldermodseq_dirty(mailbox);
+    }
+    /* we always dirty the quota */
     mailbox_quota_dirty(mailbox);
-    mboxlist_foldermodseq_dirty(mailbox);
 
     /* corruption prevention - check we don't go negative */
     if (mailbox->i.quota_annot_used > (quota_t)oldval->len)

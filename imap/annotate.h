@@ -187,6 +187,9 @@ int annotate_state_write(annotate_state_t *, const char *entry,
 /* same but write to shared if the user owns the mailbox */
 int annotate_state_writemask(annotate_state_t *, const char *entry,
                              const char *userid, const struct buf *value);
+/* same but call mailbox_annot_changed with the silent flag set */
+int annotate_state_writesilent(annotate_state_t *, const char *entry,
+                               const char *userid, const struct buf *value);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations

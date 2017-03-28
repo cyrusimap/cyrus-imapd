@@ -2447,7 +2447,8 @@ static int write_entry(struct mailbox *mailbox,
                        const char *entry,
                        const char *userid,
                        const struct buf *value,
-                       int ignorequota)
+                       int ignorequota,
+                       int silent)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
@@ -2476,7 +2477,7 @@ static int write_entry(struct mailbox *mailbox,
         }
 
         /* do the annot-changed here before altering the DB */
-        mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value);
+        mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
     }
 
     /* zero length annotation is also deletion I think */
@@ -2616,7 +2617,7 @@ EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const ch
         if (r) goto done;
     }
 
-    r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1);
+    r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1, /*silent*/0);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -2629,12 +2630,23 @@ done:
 }
 
 EXPORTED int annotate_state_write(annotate_state_t *state,
-                         const char *entry,
-                         const char *userid,
-                         const struct buf *value)
+                                  const char *entry,
+                                  const char *userid,
+                                  const struct buf *value)
 {
     return write_entry(state->mailbox, state->uid,
-                       entry, userid, value, /*ignorequota*/1);
+                       entry, userid, value, /*ignorequota*/1,
+                       /*silent*/0);
+}
+
+EXPORTED int annotate_state_writesilent(annotate_state_t *state,
+                                        const char *entry,
+                                        const char *userid,
+                                        const struct buf *value)
+{
+    return write_entry(state->mailbox, state->uid,
+                       entry, userid, value, /*ignorequota*/1,
+                       /*silent*/1);
 }
 
 EXPORTED int annotate_state_writemask(annotate_state_t *state,
@@ -2850,11 +2862,11 @@ static int annotation_set_todb(annotate_state_t *state,
     if (entry->have_shared)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, "",
-                        &entry->shared, 0);
+                        &entry->shared, 0, 0);
     if (!r && entry->have_priv)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, state->userid,
-                        &entry->priv, 0);
+                        &entry->priv, 0, 0);
 
     return r;
 }
@@ -2991,14 +3003,14 @@ static int annotation_set_specialuse(annotate_state_t *state,
 
     /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
-        r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &entry->priv, 0);
+        r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &entry->priv, 0, 0);
         goto done;
     }
 
     r = specialuse_validate(state->userid, buf_cstring(&entry->priv), &res);
     if (r) goto done;
 
-    r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &res, 0);
+    r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &res, 0, 0);
 
 done:
     buf_free(&res);
@@ -3220,13 +3232,13 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             /* renaming a user, so change the userid for priv annots */
             newuserid = rrock->newuserid;
         }
-        r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid, value, 0);
+        r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid, value, 0, 0);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
-        r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib, 0);
+        r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib, 0, 0);
     }
 
     return r;

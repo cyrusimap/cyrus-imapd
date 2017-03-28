@@ -614,7 +614,8 @@ void mailbox_annot_changed(struct mailbox *mailbox,
                            const char *entry,
                            const char *userid,
                            const struct buf *oldval,
-                           const struct buf *newval);
+                           const struct buf *newval,
+                           int silent);
 
 extern int mailbox_get_annotate_state(struct mailbox *mailbox,
                                       unsigned int uid,
