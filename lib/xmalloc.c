@@ -61,16 +61,9 @@ EXPORTED void* xmalloc(size_t size)
 
 EXPORTED void* xzmalloc(size_t size)
 {
-    void *ret;
-
-    ret = malloc(size);
-    if (ret != NULL) {
-        memset(ret, 0, size);
-        return ret;
-    }
-
-    fatal("Virtual memory exhausted", EC_TEMPFAIL);
-    return 0; /*NOTREACHED*/
+    void *ret = malloc(size);
+    memset(ret, 0, size);
+    return ret;
 }
 
 EXPORTED void *xcalloc(size_t nmemb, size_t size)
