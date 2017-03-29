@@ -2214,6 +2214,7 @@ External dependencies:
    zlib:               $with_zlib
    pcre:               $cyrus_cv_pcre_utf8
    clamav:             $with_clamav
+   snmp:               $with_snmp
    -----------------------
    caringo:            $with_caringo
    openio:             $with_openio
