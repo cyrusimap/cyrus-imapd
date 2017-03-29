@@ -116,9 +116,8 @@ static test_t *build_hasflag(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_date(sieve_script_t*, test_t *t,
                           char *hn, int part, strarray_t *kl);
-static test_t *build_mbox_meta(sieve_script_t*,
-                               test_t *t, const char *extname,
-                               const char *keyname, strarray_t *keylist);
+static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
+                               char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl,
@@ -2033,8 +2032,9 @@ static commandlist_t *build_fileinto(sieve_script_t *parse_script,
     if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
         c->u.f.folder = xmalloc(5 * strlen(folder) + 1);
         UTF8_to_mUTF7(c->u.f.folder, folder);
+        free(folder);
     }
-    else c->u.f.folder = xstrdup(folder);
+    else c->u.f.folder = folder;
 
     return c;
 }
@@ -2049,7 +2049,7 @@ static commandlist_t *build_redirect(sieve_script_t *parse_script,
     }
     else if (!verify_address(parse_script, address)) return NULL;
 
-    c->u.r.address = xstrdup(address);
+    c->u.r.address = address;
 
     return c;
 }
@@ -2074,8 +2074,8 @@ static commandlist_t *build_set(sieve_script_t *parse_script,
     if (!verify_identifier(parse_script, variable)) return NULL;
     if (!verify_utf8(parse_script, value)) return NULL;
 
-    c->u.s.variable = xstrdup(variable);
-    c->u.s.value = xstrdup(value);
+    c->u.s.variable = variable;
+    c->u.s.value = value;
 
     return c;
 }
@@ -2090,10 +2090,7 @@ static commandlist_t *build_vacation(sieve_script_t *parse_script,
 
     if ((c->u.v.mime == -1) && !verify_utf8(parse_script, message)) return NULL;
 
-    c->u.v.from = xstrdupnull(c->u.v.from);
-    c->u.v.handle = xstrdupnull(c->u.v.handle);
-    c->u.v.subject = xstrdupnull(c->u.v.subject);
-    c->u.v.message = xstrdup(message);
+    c->u.v.message = message;
 
     if (c->u.v.seconds == -1) c->u.v.seconds = 7 * DAY2SEC;
     if (c->u.v.seconds < min) c->u.v.seconds = min;
@@ -2112,8 +2109,8 @@ static commandlist_t *build_flag(sieve_script_t *parse_script,
     if (!parse_script->support.variables && !verify_flaglist(flags)) return NULL;
 
     if (!strarray_size(flags)) strarray_add(flags, "");
+    if (!c->u.fl.variable) c->u.fl.variable = xstrdup("");
     c->u.fl.flags = flags;
-    c->u.fl.variable = xstrdupsafe(c->u.fl.variable);
 
     return c;
 }
@@ -2127,8 +2124,8 @@ static commandlist_t *build_addheader(sieve_script_t *parse_script,
     if (!verify_utf8(parse_script, value)) return NULL;
 
     if (c->u.ah.index == 0) c->u.ah.index = 1;
-    c->u.ah.name = xstrdup(name);
-    c->u.ah.value = xstrdup(value);
+    c->u.ah.name = name;
+    c->u.ah.value = value;
 
     return c;
 }
@@ -2151,7 +2148,7 @@ static commandlist_t *build_deleteheader(sieve_script_t *parse_script,
         return NULL;
     }
 
-    c->u.dh.name = xstrdup(name);
+    c->u.dh.name = name;
     c->u.dh.values = values;
 
     return c;
@@ -2166,7 +2163,8 @@ static commandlist_t *build_reject(sieve_script_t *parse_script,
 
     if (!verify_utf8(parse_script, message)) return NULL;
 
-    if ((c = new_command(t, parse_script))) c->u.reject = xstrdup(message);
+    c = new_command(t, parse_script);
+    c->u.reject = message;
 
     return c;
 }
@@ -2190,7 +2188,7 @@ static commandlist_t *build_notify(sieve_script_t *parse_script,
             return NULL;
         }
 
-        c->u.n.method = xstrdup(method);
+        c->u.n.method = method;
     }
     else {
         if (!parse_script->support.notify) {
@@ -2202,15 +2200,12 @@ static commandlist_t *build_notify(sieve_script_t *parse_script,
             return NULL;
         }
 
-        c->u.n.method = xstrdup(c->u.n.method ? c->u.n.method : "default");
+        if (!c->u.n.method) c->u.n.method = xstrdup("default");
     }
 
     c->type = t;
     if (c->u.n.priority == -1) c->u.n.priority = NORMAL;
-    c->u.n.id = xstrdupnull(c->u.n.id);
-    c->u.n.from = xstrdupnull(c->u.n.from);
-    c->u.n.message =
-        xstrdup(c->u.n.message ? c->u.n.message : "$from$: $subject$");
+    if (!c->u.n.message) c->u.n.message = xstrdup("$from$: $subject$");
 
     return c;
 }
@@ -2221,13 +2216,13 @@ static commandlist_t *build_denotify(commandlist_t *t)
 
     canon_comptags(&t->u.d.comp);
     if (t->u.d.priority == -1) t->u.d.priority = ANY;
-    t->u.d.pattern = xstrdup(t->u.d.pattern);
+    t->u.d.pattern = t->u.d.pattern;
 
     return t;
 }
 
 static commandlist_t *build_include(sieve_script_t *parse_script,
-                                    commandlist_t *c, char* script)
+                                    commandlist_t *c, char *script)
 {
     assert(c && c->type == INCLUDE);
 
@@ -2236,7 +2231,7 @@ static commandlist_t *build_include(sieve_script_t *parse_script,
         return NULL;
     }
 
-    c->u.inc.script = xstrdup(script);
+    c->u.inc.script = script;
     if (c->u.inc.once == -1) c->u.inc.once = 0;
     if (c->u.inc.location == -1) c->u.inc.location = PERSONAL;
     if (c->u.inc.optional == -1) c->u.inc.optional = 0;
@@ -2368,23 +2363,23 @@ static test_t *build_date(sieve_script_t *parse_script,
     }
 
     t->u.dt.date_part = part;
-    t->u.dt.header_name = xstrdupnull(hn);
+    t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
 
     return t;
 }
 
 static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
-                               test_t *t, const char *extname,
-                               const char *keyname, strarray_t *keylist)
+                               test_t *t, char *extname,
+                               char *keyname, strarray_t *keylist)
 {
     assert(t && (t->type == MAILBOXEXISTS ||
                  t->type == METADATA || t->type == METADATAEXISTS ||
                  t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS));
 
     canon_comptags(&t->u.mm.comp);
-    t->u.mm.extname = xstrdupnull(extname);
-    t->u.mm.keyname = xstrdupnull(keyname);
+    t->u.mm.extname = extname;
+    t->u.mm.keyname = keyname;
     t->u.mm.keylist = keylist;
 
     return t;
@@ -2410,9 +2405,8 @@ static test_t *build_duplicate(sieve_script_t *parse_script, test_t *t)
         break;
     }
 
-    if (t->u.dup.handle &&
-        !verify_utf8(parse_script, t->u.dup.handle)) return NULL;
-    t->u.dup.handle = xstrdupsafe(t->u.dup.handle);
+    if (!t->u.dup.handle) t->u.dup.handle = xstrdup("");
+    else if (!verify_utf8(parse_script, t->u.dup.handle)) return NULL;
 
     if (t->u.dup.seconds == -1) t->u.dup.seconds = 7 * 86400; /* 7 days */
 
