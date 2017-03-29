@@ -1942,7 +1942,7 @@ AC_MSG_RESULT($cyrus_cv_sse42)
 dnl documentation generation (sphinx, perl2rst)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
-            AS_HELP_STRING([with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
+            AS_HELP_STRING([--with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
             [with_sphinx_build=$withval],
             [with_sphinx_build=yes])
 AS_CASE([$with_sphinx_build],
