@@ -2163,6 +2163,11 @@ static commandlist_t *build_reject(sieve_script_t *parse_script,
     if (!verify_utf8(parse_script, message)) return NULL;
 
     c = new_command(t, parse_script);
+    if (!c) {
+        free(message);
+        return NULL;
+    }
+
     c->u.reject = message;
 
     return c;
