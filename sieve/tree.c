@@ -302,6 +302,7 @@ void free_test(test_t *t)
         break;
 
     case EXISTS:
+    case VALIDEXTLIST:
         strarray_free(t->u.sl);
         break;
 
@@ -333,9 +334,8 @@ void free_test(test_t *t)
         break;
 
     case DATE:
-        free(t->u.dt.header_name);
-        /* fall-through */
     case CURRENTDATE:
+        free(t->u.dt.header_name);
         strarray_free(t->u.dt.kl);
         break;
 
@@ -431,6 +431,16 @@ void free_tree(commandlist_t *cl)
 #endif
                 free(cl->u.d.pattern);
             }
+            break;
+
+        case SET:
+            free(cl->u.s.variable);
+            free(cl->u.s.value);
+            break;
+
+        case ADDHEADER:
+            free(cl->u.ah.name);
+            free(cl->u.ah.value);
             break;
 
         case DELETEHEADER:
