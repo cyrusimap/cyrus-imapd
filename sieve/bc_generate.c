@@ -258,25 +258,25 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
 static int bc_zone_generate(int codep, bytecode_info_t *retval,
                             int zonetag, int zone)
 {
-        assert(retval != NULL);
+    assert(retval != NULL);
 
-        /* zonetag */
+    /* zonetag */
+    switch (zonetag) {
+    case ZONE:
+        /* time-zone offset in minutes */
+        if (!atleast(retval, codep + 2)) return -1;
+        retval->data[codep++].value = B_TIMEZONE;
+        retval->data[codep++].value = zone;
+        break;
+    case ORIGINALZONE:
         if (!atleast(retval, codep + 1)) return -1;
+        retval->data[codep++].value = B_ORIGINALZONE;
+        break;
+    default:
+        return -1;
+    }
 
-        switch (zonetag) {
-        case ZONE:
-                /* time-zone offset in minutes */
-                retval->data[codep++].value = B_TIMEZONE;
-                retval->data[codep++].value = zone;
-                break;
-        case ORIGINALZONE:
-                retval->data[codep++].value = B_ORIGINALZONE;
-                break;
-        default:
-                return -1;
-        }
-
-        return codep;
+    return codep;
 }
 
 
