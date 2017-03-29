@@ -1767,7 +1767,7 @@ static int verify_regexlist(sieve_script_t *parse_script,
                             const strarray_t *sa, int collation)
 {
     int i, ret = 0;
-    regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
+    regex_t reg;
     int cflags = REG_EXTENDED | REG_NOSUB;
 
 #ifdef HAVE_PCREPOSIX_H
@@ -1779,21 +1779,20 @@ static int verify_regexlist(sieve_script_t *parse_script,
         cflags |= REG_ICASE;
     }
 
-    for (i = 0 ; i < strarray_size(sa) ; i++) {
-        if ((ret = regcomp(reg, strarray_nth(sa, i), cflags)) != 0) {
-            size_t errbuf_size = regerror(ret, reg, NULL, 0);
+    for (i = 0 ; !ret && i < strarray_size(sa) ; i++) {
+        if ((ret = regcomp(&reg, strarray_nth(sa, i), cflags)) != 0) {
+            size_t errbuf_size = regerror(ret, &reg, NULL, 0);
 
             buf_reset(&parse_script->sieveerr);
             buf_ensure(&parse_script->sieveerr, errbuf_size);
-            (void) regerror(ret, reg,
+            (void) regerror(ret, &reg,
                             (char *) buf_base(&parse_script->sieveerr),
                             errbuf_size);
             yyerror(parse_script, buf_cstring(&parse_script->sieveerr));
-            break;
         }
-    }
 
-    free(reg);
+        regfree(&reg);
+    }
 
     return (ret == 0);
 }
