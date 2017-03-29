@@ -735,7 +735,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case DENOTIFY:
                 /* DENOTIFY  */
-                if (!atleast(retval, codep+6)) return -1;
+                if (!atleast(retval, codep+2)) return -1;
                 retval->data[codep++].op = B_DENOTIFY;
                 switch(c->u.d.priority) {
                 case LOW:
@@ -761,6 +761,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                                                0);
                 if (codep == -1) return -1;
 
+                if (!atleast(retval, codep+2)) return -1;
                 if(c->u.d.pattern) {
                     retval->data[codep++].len = strlen(c->u.d.pattern);
                     retval->data[codep++].str = c->u.d.pattern;

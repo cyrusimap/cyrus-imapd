@@ -221,7 +221,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support.notify;
         init_comptags(&p->u.d.comp);
         p->u.d.comp.collation = ASCIICASEMAP;
-        p->u.n.priority = -1;
+        p->u.d.priority = -1;
         break;
 
     case NOTIFY:
@@ -423,14 +423,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case DENOTIFY:
-            if (cl->u.d.pattern) {
-#ifdef ENABLE_REGEX
-                if (cl->u.d.comp.match == REGEX) {
-                    regfree((regex_t *) cl->u.d.pattern);
-                }
-#endif
-                free(cl->u.d.pattern);
-            }
+            free(cl->u.d.pattern);
             break;
 
         case SET:
@@ -444,6 +437,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case DELETEHEADER:
+            free(cl->u.dh.name);
             strarray_free(cl->u.dh.values);
             break;
         }

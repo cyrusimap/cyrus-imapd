@@ -1009,15 +1009,15 @@ dtags: /* empty */               {
 
         | dtags { ctags = &($1->u.d.comp); } matchtype STRING {
                                      strarray_t sa = STRARRAY_INITIALIZER;
-                                     strarray_appendm(&sa, $4);
+                                     strarray_pushm(&sa, $4);
                                      if (!verify_patternlist(parse_script, &sa,
                                                              &($$->u.d.comp),
                                                              NULL)) {
                                          YYERROR;
                                      }
-                                     strarray_fini(&sa);
 
-                                     $$->u.d.pattern = $4;
+                                     $$->u.d.pattern = strarray_pop(&sa);;
+                                     strarray_fini(&sa);
                                  }
         ;
 

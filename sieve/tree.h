@@ -179,7 +179,7 @@ struct Commandlist {
         } n;
         struct { /* it's a denotify action */
             comp_t comp;
-            void *pattern;
+            char *pattern;
             int priority;
         } d;
         struct { /* it's an addheader action */
