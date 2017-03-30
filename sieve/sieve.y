@@ -298,8 +298,13 @@ extern void sieverestart(FILE *f);
  * This allows us to pass values "forward" by reference.
  */
 
-/* Per RFC5228, Secion 3.2, ALL require commands MUST appear first */
-start: reqs commands             { parse_script->cmds = $2; }
+/* Per RFC5228, Secion 3.2, ALL require commands MUST appear first
+ *
+ * Note: 'reqs' and 'commands' can NOT both be allowed to be empty
+ * otherwise we get a shift/reduce conflict.
+ */
+start: reqs                      { parse_script->cmds = NULL; }
+        | reqs commands          { parse_script->cmds = $2; }
         ;
 
 
@@ -308,7 +313,7 @@ reqs: /* empty */
         ;
 
 
-commands: /* empty */            { $$ = NULL; }
+commands: command                { $$ = $1; }
         | command commands       { $1->next = $2; $$ = $1; }
         ;
 
