@@ -61,7 +61,7 @@ EXPORTED void* xmalloc(size_t size)
 
 EXPORTED void* xzmalloc(size_t size)
 {
-    void *ret = malloc(size);
+    void *ret = xmalloc(size);
     memset(ret, 0, size);
     return ret;
 }
