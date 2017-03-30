@@ -1044,7 +1044,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
 
         if (parentId) {
             char *newparentname;
-            if (strcmp(parentId, inboxentry->uniqueid)) {
+            if (strcmpsafe(parentId, inboxentry->uniqueid)) {
                 newparentname = mboxlist_find_uniqueid(parentId, req->userid);
                 /* We already validated that parentId exists. */
                 assert(newparentname);
@@ -1053,7 +1053,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
             }
 
             /* Did the parent's name change? */
-            if (strcmp(parentname, newparentname)) {
+            if (strcmpsafe(parentname, newparentname)) {
                 free(parentname);
                 parentname = newparentname;
                 force_rename = 1;
@@ -1063,14 +1063,14 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         }
 
         /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
-        if ((name || force_rename) && strcmp(mboxname, inboxentry->name)) {
+        if ((name || force_rename) && strcmpsafe(mboxname, inboxentry->name)) {
             mbname_t *mbname = mbname_from_intname(mboxname);
             char *oldname = jmapmbox_name(req, mbname);
             mbname_free(&mbname);
             if (!name) name = xstrdup(oldname);
 
             /* Do old and new mailbox names differ? */
-            if (force_rename || strcmp(oldname, name)) {
+            if (force_rename || strcmpsafe(oldname, name)) {
                 char *newmboxname, *oldmboxname;
 
                 /* Determine the unique IMAP mailbox name. */
@@ -1372,7 +1372,7 @@ static int setMailboxes(jmap_req_t *req)
             }
 
             /* Do not allow to remove INBOX. */
-            if (!strcmp(uid, inboxentry->uniqueid)) {
+            if (!strcmpsafe(uid, inboxentry->uniqueid)) {
                 json_t *err = json_pack("{s:s}", "type", "forbidden");
                 json_object_set_new(notDestroyed, uid, err);
                 continue;
