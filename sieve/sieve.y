@@ -160,7 +160,7 @@ extern void sieverestart(FILE *f);
 %token <nval> NUMBER
 %token <sval> STRING
 %type <sl> optstringlist stringlist strings
-%type <cl> commands command action
+%type <cl> commands command action control
 %type <testl> testlist tests
 %type <test> test
 
@@ -298,8 +298,8 @@ extern void sieverestart(FILE *f);
  * This allows us to pass values "forward" by reference.
  */
 
-start: reqs                      { parse_script->cmds = NULL; }
-        | reqs commands          { parse_script->cmds = $2; }
+/* Per RFC5228, Secion 3.2, ALL require commands MUST appear first */
+start: reqs commands             { parse_script->cmds = $2; }
         ;
 
 
@@ -308,41 +308,20 @@ reqs: /* empty */
         ;
 
 
-/*
- * Control commands
- */
-require: REQUIRE stringlist ';'  {
-                                     if (!check_reqs(parse_script, $2)) {
-                                         YYERROR; /* cr should call yyerror() */
-                                     }
-                                 }
-        ;
-
-commands: command                { $$ = $1; }
+commands: /* empty */            { $$ = NULL; }
         | command commands       { $1->next = $2; $$ = $1; }
         ;
 
 
-command:  action ';'             { $$ = $1; }
-        | IF test block elsif    { $$ = new_if($2, $3, $4); }
+command:  control                { $$ = $1; }
+        | action ';'             { $$ = $1; }
         | error ';'              { $$ = new_command(STOP, parse_script); }
-        ;
-
-
-elsif: /* empty */               { $$ = NULL; }
-        | ELSIF test block elsif { $$ = new_if($2, $3, $4); }
-        | ELSE block             { $$ = $2; }
-        ;
-
-
-block: '{' commands '}'          { $$ = $2; }
-        | '{' '}'                { $$ = NULL; }
         ;
 
 
 optstringlist: /* empty */       { $$ = strarray_new(); }
         | stringlist             { $$ = $1; }
-;
+        ;
 
 
 stringlist: '[' strings ']'      { $$ = $2; }
@@ -365,11 +344,36 @@ strings: STRING                  {
 
 
 /*
+ * Control commands
+ */
+require: REQUIRE stringlist ';'  {
+                                     if (!check_reqs(parse_script, $2)) {
+                                         YYERROR; /* cr should call yyerror() */
+                                     }
+                                 }
+        ;
+
+
+control:  IF test block elsif    { $$ = new_if($2, $3, $4); }
+        | STOP ';'               { $$ = new_command(STOP, parse_script); }
+        ;
+
+
+elsif: /* empty */               { $$ = NULL; }
+        | ELSIF test block elsif { $$ = new_if($2, $3, $4); }
+        | ELSE block             { $$ = $2; }
+        ;
+
+
+block: '{' commands '}'          { $$ = $2; }
+        | '{' '}'                { $$ = NULL; }
+        ;
+
+
+/*
  * Action commands
  */
-action:   STOP                   { $$ = new_command(STOP, parse_script);    }
-        | DISCARD                { $$ = new_command(DISCARD, parse_script); }
-        | KEEP ktags             { $$ = $2; }
+action:   KEEP ktags             { $$ = $2; }
         | FILEINTO ftags STRING  {
                                      $$ = build_fileinto(parse_script, $2, $3);
                                      if ($$ == NULL) {
@@ -382,6 +386,7 @@ action:   STOP                   { $$ = new_command(STOP, parse_script);    }
                                          YYERROR; /* br should call yyerror() */
                                      }
                                  }
+        | DISCARD                { $$ = new_command(DISCARD, parse_script); }
         | SET stags STRING STRING
                                  {
                                      $$ = build_set(parse_script, $2, $3, $4);
@@ -389,7 +394,6 @@ action:   STOP                   { $$ = new_command(STOP, parse_script);    }
                                          YYERROR; /* bs should call yyerror() */
                                      }
                                  }
-
         | VACATION vtags STRING  {
                                      $$ = build_vacation(parse_script, $2, $3);
                                      if ($$ == NULL) {
@@ -430,7 +434,6 @@ action:   STOP                   { $$ = new_command(STOP, parse_script);    }
                                          YYERROR; /* bdh should call yyerror() */
                                      }
                                  }
-
         | reject STRING          {
                                      $$ = build_reject(parse_script, $1, $2);
                                      if ($$ == NULL) {
@@ -1096,7 +1099,6 @@ test:     ANYOF testlist         {
                                  }
         | SFALSE                 { $$ = new_test(SFALSE, parse_script); }
         | STRUE                  { $$ = new_test(STRUE, parse_script);  }
-
         | SIZE sizetag NUMBER    {
                                      $$ = new_test(SIZE, parse_script);
                                      $$->u.sz.t = $2;
@@ -1240,7 +1242,6 @@ test:     ANYOF testlist         {
 
                                      $$->u.sl = $2;
                                  }
-
         | DUPLICATE duptags
                                  {
                                      $$ = build_duplicate(parse_script, $2);
@@ -1248,7 +1249,6 @@ test:     ANYOF testlist         {
                                          YYERROR; /* bd should call yyerror() */
                                      }
                                  }
-
         | error                  { $$ = NULL; }
         ;
 
