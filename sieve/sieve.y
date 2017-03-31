@@ -141,7 +141,7 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$); } commands command action elsif block
+%destructor  { free_tree($$); } commands command action control elsif block
 
 %parse-param { sieve_script_t *parse_script }
 %lex-param   { sieve_script_t *parse_script }
@@ -159,7 +159,7 @@ extern void sieverestart(FILE *f);
 
 %token <nval> NUMBER
 %token <sval> STRING
-%type <sl> optstringlist stringlist strings
+%type <sl> optstringlist stringlist strings string1
 %type <cl> commands command action control
 %type <testl> testlist tests
 %type <test> test
@@ -298,7 +298,7 @@ extern void sieverestart(FILE *f);
  * This allows us to pass values "forward" by reference.
  */
 
-/* Per RFC5228, Secion 3.2, ALL require commands MUST appear first
+/* Per RFC5228, Section 3.2, ALL require commands MUST appear first
  *
  * Note: 'reqs' and 'commands' can NOT both be allowed to be empty
  * otherwise we get a shift/reduce conflict.
@@ -314,7 +314,7 @@ reqs: /* empty */
 
 
 commands: command                { $$ = $1; }
-        | command commands       { $1->next = $2; $$ = $1; }
+        | command commands       { $$ = $1; $$->next = $2; }
         ;
 
 
@@ -330,20 +330,18 @@ optstringlist: /* empty */       { $$ = strarray_new(); }
 
 
 stringlist: '[' strings ']'      { $$ = $2; }
-        | STRING                 {
-                                    $$ = strarray_new();
-                                    strarray_appendm($$, $1);
-                                 }
+        | string1                { $$ = $1; }
         ;
 
 
-strings: STRING                  {
-                                    $$ = strarray_new();
-                                    strarray_appendm($$, $1);
-                                 }
-        | strings ',' STRING     {
-                                    $$ = $1;
-                                    strarray_appendm($$, $3);
+strings:  string1                { $$ = $1; }
+        | strings ',' STRING     { $$ = $1; strarray_appendm($$, $3); }
+        ;
+
+
+string1: STRING                  {
+                                     $$ = strarray_new();
+                                     strarray_appendm($$, $1);
                                  }
         ;
 
