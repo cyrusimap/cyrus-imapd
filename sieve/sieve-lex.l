@@ -54,7 +54,7 @@
 #include "sieve/sieve.h"
 
 #define YY_NO_INPUT
-#define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
+#define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *sscript)
 
 static unsigned long long tonum(const char *str);
 static struct buf buf;   /* buffer for multi-line text and quoted strings */
@@ -127,7 +127,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* premature EOF */
 <QSTRING,MULTILINE><<EOF>>    {
                                   BEGIN INITIAL;
-                                  sieveerror(parse_script,
+                                  sieveerror(sscript,
                                              "unexpected end of file in string");
                                   buf_free(&buf);
                                   yyterminate();
@@ -156,7 +156,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>[0-9]+[KMGkmg]?      {
                                   unsigned long long val = tonum(yytext);
                                   if (val > INT_MAX) {
-                                      sieveerror_f(parse_script,
+                                      sieveerror_f(sscript,
                                                    "number too large %s",
                                                    yytext);
                                   }
@@ -212,7 +212,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                               }
 <QCOLLATION>\"[^\"]*\"        {
                                   BEGIN INITIAL;
-                                  sieveerror_f(parse_script,
+                                  sieveerror_f(sscript,
                                                "unknown comparator-name %s",
                                                yytext);
                               }
@@ -279,7 +279,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <QRELATION>\"le\"             { BEGIN INITIAL; return yylval->nval = LE; }
 <QRELATION>\"[^\"]*\"         {
                                   BEGIN INITIAL;
-                                  sieveerror_f(parse_script,
+                                  sieveerror_f(sscript,
                                                "invalid relational-match %s",
                                                yytext);
                               }
@@ -310,7 +310,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                               }
 <QTIMEZONE>\"[^\"]*\"         {
                                   BEGIN INITIAL;
-                                  sieveerror_f(parse_script,
+                                  sieveerror_f(sscript,
                                                "invalid time-zone %s", yytext);
                               }
 
@@ -329,7 +329,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <QDATEPART>\"{weekday}\"      { BEGIN INITIAL; return yylval->nval = WEEKDAYP; }
 <QDATEPART>\"[^\"]*\"         {
                                   BEGIN INITIAL;
-                                  sieveerror_f(parse_script,
+                                  sieveerror_f(sscript,
                                                "invalid date-part %s", yytext);
                               }
 
@@ -362,7 +362,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <QIMPORTANCE>\"3\"            { BEGIN INITIAL; return yylval->nval = LOW;    }
 <QIMPORTANCE>\"[^\"]*\"       {
                                   BEGIN INITIAL;
-                                  sieveerror_f(parse_script,
+                                  sieveerror_f(sscript,
                                                "invalid importance %s", yytext);
                               }
 

@@ -155,8 +155,6 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     if (!supported) {
         sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, capability);
-        free_test(p);
-        return NULL;
     }
 
     return p;
@@ -255,8 +253,6 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
     if (!supported) {
         sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, capability);
-        free_tree(p);
-        return NULL;
     }
 
     return p;
