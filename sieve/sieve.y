@@ -1675,7 +1675,8 @@ static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 {
     assert(c && c->type == KEEP);
 
-    if (!sscript->support.variables && !verify_flaglist(c->u.k.flags)) {
+    if (!sscript->support.variables &&
+        c->u.k.flags && !verify_flaglist(c->u.k.flags)) {
         strarray_add(c->u.k.flags, "");
     }
 
@@ -1687,7 +1688,8 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
 {
     assert(c && c->type == FILEINTO);
 
-    if (!sscript->support.variables && !verify_flaglist(c->u.f.flags)) {
+    if (!sscript->support.variables &&
+        c->u.f.flags && !verify_flaglist(c->u.f.flags)) {
         strarray_add(c->u.f.flags, "");
     }
     if (verify_mailbox(sscript, folder) &&
