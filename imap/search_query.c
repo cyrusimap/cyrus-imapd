@@ -898,3 +898,44 @@ out:
 }
 
 /* ====================================================================== */
+
+static int is_mutable_sort(struct sortcrit *sortcrit)
+{
+    int i;
+
+    if (!sortcrit) return 0;
+
+    for (i = 0; sortcrit[i].key; i++) {
+        switch (sortcrit[i].key) {
+            /* these are the mutable fields */
+            case SORT_ANNOTATION:
+            case SORT_MODSEQ:
+            case SORT_HASFLAG:
+            case SORT_CONVMODSEQ:
+            case SORT_CONVEXISTS:
+            case SORT_CONVSIZE:
+            case SORT_HASCONVFLAG:
+                return 1;
+            default:
+                break;
+        }
+    }
+
+    return 0;
+}
+
+/* This function will return a TRUE value if anything in the
+ * sort or search criteria returns a MUTABLE ordering, i.e.
+ * the user can take actions which will change the order in
+ * which the results are returned.  For example, the base
+ * case of UID sort and all messages is NOT mutable */
+EXPORTED int search_is_mutable(struct sortcrit *sortcrit,
+                               struct searchargs *searchargs)
+{
+    if (is_mutable_sort(sortcrit))
+        return 1;
+    if (search_expr_is_mutable(searchargs->root))
+        return 1;
+    return 0;
+}
+

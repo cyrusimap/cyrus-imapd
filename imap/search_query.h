@@ -180,4 +180,8 @@ extern uint64_t search_folder_get_last_modseq(const search_folder_t *);
 
 extern void search_build_query(search_builder_t *bx, search_expr_t *e);
 
+extern int search_is_mutable(struct sortcrit *sortcrit,
+                             struct searchargs *searchargs);
+
+
 #endif /* __CYRUS_SEARCH_RESULT_H__ */

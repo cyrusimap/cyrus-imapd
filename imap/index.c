@@ -1946,46 +1946,6 @@ out:
     return nmsg;
 }
 
-static int is_mutable_sort(struct sortcrit *sortcrit)
-{
-    int i;
-
-    if (!sortcrit) return 0;
-
-    for (i = 0; sortcrit[i].key; i++) {
-        switch (sortcrit[i].key) {
-            /* these are the mutable fields */
-            case SORT_ANNOTATION:
-            case SORT_MODSEQ:
-            case SORT_HASFLAG:
-            case SORT_CONVMODSEQ:
-            case SORT_CONVEXISTS:
-            case SORT_CONVSIZE:
-            case SORT_HASCONVFLAG:
-                return 1;
-            default:
-                break;
-        }
-    }
-
-    return 0;
-}
-
-/* This function will return a TRUE value if anything in the
- * sort or search criteria returns a MUTABLE ordering, i.e.
- * the user can take actions which will change the order in
- * which the results are returned.  For example, the base
- * case of UID sort and all messages is NOT mutable */
-static int is_mutable_ordering(struct sortcrit *sortcrit,
-                               struct searchargs *searchargs)
-{
-    if (is_mutable_sort(sortcrit))
-        return 1;
-    if (search_expr_is_mutable(searchargs->root))
-        return 1;
-    return 0;
-}
-
 #define UNPREDICTABLE       (-1)
 static int search_predict_total(struct index_state *state,
                                 struct conversations_state *cstate,
@@ -2565,7 +2525,7 @@ EXPORTED int index_convupdates(struct index_state *state,
     ptrarray_t changed = PTRARRAY_INITIALIZER;
     int total = 0;
     struct conversations_state *cstate = NULL;
-    int search_is_mutable = is_mutable_ordering(sortcrit, searchargs);
+    int is_mutable = search_is_mutable(sortcrit, searchargs);
     int r = 0;
 
     assert(windowargs);
@@ -2644,7 +2604,7 @@ EXPORTED int index_convupdates(struct index_state *state,
          * searches, possible an old exemplar? */
         if (!is_new &&
             !was_deleted &&
-            (in_search || (search_is_mutable && is_changed)) &&
+            (in_search || (is_mutable && is_changed)) &&
             (!windowargs->conversations || !hashu64_lookup(msg->cid, &old_seen_cids))) {
             was_old_exemplar = 1;
             if (windowargs->conversations)
@@ -2659,7 +2619,7 @@ EXPORTED int index_convupdates(struct index_state *state,
         } else if (was_old_exemplar && is_new_exemplar) {
             if (is_changed) {
                 ptrarray_push(&changed, msg);
-                if (search_is_mutable) {
+                if (is_mutable) {
                     /* is the search is mutable, we're in a whole world of
                      * uncertainty about the client's state, so we just
                      * report the exemplar in all three lists and let the
@@ -2674,7 +2634,7 @@ EXPORTED int index_convupdates(struct index_state *state,
         /* if this is the last message the client cares about ('upto')
          * then we can break early...unless its a mutable search or
          * we need to keep going to calculate an accurate total */
-        if (!search_is_mutable &&
+        if (!is_mutable &&
             !upto_pos &&
             msg->uid == windowargs->upto) {
             if (total != UNPREDICTABLE)
