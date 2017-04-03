@@ -549,6 +549,7 @@ dnl
 dnl Search engines - Xapian
 dnl
 
+xapian_flavor=none
 AC_ARG_ENABLE(xapian,
         [  --enable-xapian         enable Xapian support],[
             enable_xapian=$enableval
@@ -593,12 +594,38 @@ if test "x$enable_xapian" != xno ; then
                 define([AM_PROG_LIBTOOL], defn([AM_PROG_LIBTOOL])
                        [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])])])
         AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
+
+        dnl check if Xapian supports CJK word breaks
+        AC_LANG_PUSH([C++])
+        ORIG_LDFLAGS=$LDFLAGS
+        ORIG_CXXFLAGS=$CXXFLAGS
+        LDFLAGS="$LDFLAGS $XAPIAN_LIBS"
+        CXXFLAGS="$CXXFLAGS $XAPIAN_CXXFLAGS"
+        AC_MSG_CHECKING([for Xapian CJK_WORDS flag])
+        AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM(
+                [[#include <xapian.h>]],
+                [[unsigned flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS;]])],
+            [xapian_cjkwords="yes"],
+            [xapian_cjkwords="no"])
+        AC_MSG_RESULT($xapian_cjkwords)
+        if test $xapian_cjkwords = yes; then
+            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word break?])
+            xapian_flavor=cyruslibs
+        else
+            AC_MSG_NOTICE([Your Xapian does not support CJK word break. Consider installing cyruslibs Xapian])
+            xapian_flavor=vanilla
+        fi
+        LDFLAGS=$ORIG_LDFLAGS
+        CXXFLAGS=$ORIG_CXXFLAGS
+        AC_LANG_POP([C++])
     fi
     AC_SUBST(XAPIAN_CXXFLAGS)
     AC_SUBST(XAPIAN_LIBS)
     AC_SUBST(XAPIAN_VERSION)
 fi
 AM_CONDITIONAL([USE_XAPIAN], [test "${enable_xapian}" != "no"])
+AC_DEFINE_UNQUOTED([XAPIAN_FLAVOR], ["$xapian_flavor"], [Which Xapian are we running on?])
 
 
 AM_CONDITIONAL([SQUATTER],
@@ -2235,6 +2262,7 @@ Search engine:
    squat:              $enable_squat
    sphinx:             $enable_sphinx
    xapian:             $enable_xapian
+   xapian_flavor:      $xapian_flavor
 
 Hardware support:
    SSE4.2:             $cyrus_cv_sse42

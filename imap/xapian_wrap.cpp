@@ -326,8 +326,13 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
         dbw->stopper = get_stopper();
         dbw->term_generator->set_stemmer(*dbw->stemmer);
         /* Always enable CJK word tokenization */
+#ifdef USE_XAPIAN_CJK_WORDS
         dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
                 ~Xapian::TermGenerator::FLAG_CJK_WORDS);
+#else
+        dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
+                ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
+#endif
         dbw->term_generator->set_stopper(dbw->stopper);
     }
     catch (const Xapian::DatabaseLockError &err) {
@@ -626,7 +631,11 @@ xapian_query_new_match_internal(const xapian_db_t *db, int stem_version,
             std::string sstr = std::string("") + str;
             Xapian::Query query = db->parser->parse_query(
                                     sstr,
+#ifdef USE_XAPIAN_CJK_WORDS
                                     Xapian::QueryParser::FLAG_CJK_WORDS,
+#else
+                                    Xapian::QueryParser::FLAG_CJK_NGRAM,
+#endif
                                     std::string(prefix));
             return (xapian_query_t *)new Xapian::Query(query);
         }
@@ -899,8 +908,13 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
     if (snipgen->loose_terms) {
         /* Add loose query terms */
         term_generator.set_stemmer(*snipgen->stemmer);
+#ifdef USE_XAPIAN_CJK_WORDS
         term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
                 ~Xapian::TermGenerator::FLAG_CJK_WORDS);
+#else
+        term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_NGRAM,
+                ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
+#endif
 
         for(size_t i = 0; i < snipgen->loose_terms->size(); ++i)
         {
@@ -924,7 +938,11 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
     if (snipgen->phrases) {
         /* Add phrase queries */
         unsigned flags = Xapian::QueryParser::FLAG_PHRASE|
+#ifdef USE_XAPIAN_CJK_WORDS
                          Xapian::QueryParser::FLAG_CJK_WORDS;
+#else
+                         Xapian::QueryParser::FLAG_CJK_NGRAM;
+#endif
         Xapian::QueryParser queryparser;
         queryparser.set_stemmer(*snipgen->stemmer);
         for(size_t i = 0; i < snipgen->phrases->size(); ++i) {
@@ -1000,8 +1018,12 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 Xapian::MSet::SNIPPET_EXHAUSTIVE,
                 snipgen->hi_start,
                 snipgen->hi_end,
-                snipgen->omit,
-                Xapian::TermGenerator::FLAG_CJK_WORDS);
+                snipgen->omit
+#ifdef USE_XAPIAN_CJK_WORDS
+                , Xapian::TermGenerator::FLAG_CJK_WORDS
+#endif
+        );
+
 
         buf_setcstr(buf, snippet.c_str());
         buf_cstring(buf);
