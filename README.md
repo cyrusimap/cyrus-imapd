@@ -97,8 +97,13 @@ Read through doc/html/imap/developer.html for more detailed instructions on buil
 How to install Cyrus libraries from git source
 ==============================================
 For version 3.0 or later, it is recommended to also build the main
-dependencies from source. You will need to do so, to use Xapian for
-search.
+dependencies from source.
+
+If you intend to use Xapian for search, we strongly recommend to use the
+custom Xapian fork in cyruslibs. However, if this is not an option
+in your environment, please fetch the latest stable upstream Xapian release.
+Cyrus will omit custom features such as word boundary analysis for Chinese,
+Japanese and Korean.
 
 The Cyrus dependencies source is available at:
 
@@ -120,6 +125,9 @@ For Xapian, either make sure to add $CYRUSLIBS/bin to your PATH, or call
 Cyrus ./configure script as follows:
 
     $ ./configure XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5" [...]
+
+(If you do not use Xapian from cyruslibs, you'll need to locate the
+`xapian-config` binary and substitute `XAPIAN_CONFIG` accordingly).
 
 Then continue to install Cyrus.
 
