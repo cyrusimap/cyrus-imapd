@@ -778,10 +778,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "expunge_mode", "delayed", ENUM("default", "immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
-   are expunged.  "default" mode is the default behavior in which the
+   are expunged.  "default" mode is the old behavior in which the
    message files are purged at the time of the EXPUNGE, but index
-   and cache records are retained to facilitate QRESYNC.  In "delayed"
-   mode, the message files are also retained, allowing unexpunge to
+   and cache records are retained to facilitate QRESYNC.  (Note that
+   this behaviour is no longer the default, but is so named for historical
+   reasons.)  In "delayed" mode, which is the default since Cyrus 2.5.0,
+   the message files are also retained, allowing unexpunge to
    rescue them.  In "immediate" mode, both the message files and the
    index records are removed as soon as possible.  In all cases,
    nothing will be finally purged until all other processes have
