@@ -277,6 +277,9 @@ struct mailbox {
     struct index_change *index_changes;
     uint32_t index_change_alloc;
     uint32_t index_change_count;
+
+    /* read-only message records */
+    hash_table *msgrecords;
 };
 
 #define ITER_SKIP_UNLINKED (1<<0)

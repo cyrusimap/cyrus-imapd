@@ -96,6 +96,7 @@
 #include "map.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
+#include "msgrecord.h"
 #include "parseaddr.h"
 #include "proc.h"
 #include "retry.h"
@@ -1119,6 +1120,8 @@ EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
     return r;
 }
 
+static void freemsgrecord(void *p) { msgrecord_t *m = p; msgrecord_unref(&m); }
+
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */
@@ -1135,6 +1138,13 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     assert(listitem && &listitem->m == mailbox);
 
     *mailboxptr = NULL;
+
+    if (mailbox->msgrecords) {
+        /* free message records. any unsaved changes are discarded */
+        free_hash_table(mailbox->msgrecords, freemsgrecord);
+        free(mailbox->msgrecords);
+        mailbox->msgrecords = NULL;
+    }
 
     /* open multiple times?  Just close this one */
     if (listitem->nopen > 1) {

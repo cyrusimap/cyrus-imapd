@@ -1008,6 +1008,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/message.c \
 	imap/message.h \
 	imap/message_priv.h \
+	imap/msgrecord.c \
+	imap/msgrecord.h \
 	imap/mupdate-client.c \
 	imap/mupdate-client.h \
 	imap/mutex.h \

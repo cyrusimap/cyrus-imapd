@@ -59,6 +59,7 @@
 #include "http_proxy.h"
 #include "imap_err.h"
 #include "mboxname.h"
+#include "msgrecord.h"
 #include "proxy.h"
 #include "times.h"
 #include "syslog.h"
@@ -479,7 +480,7 @@ EXPORTED char *jmap_blobid(const struct message_guid *guid)
 struct findblob_data {
     jmap_req_t *req;
     struct mailbox *mbox;
-    struct index_record *record;
+    const msgrecord_t *mr;
     char *part_id;
 };
 
@@ -492,14 +493,10 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
     if (r) return r;
 
-    d->record = xzmalloc(sizeof(struct index_record));
-
-    r = mailbox_find_index_record(d->mbox, rec->uid, d->record);
+    r = mailbox_find_msgrecord(d->mbox, rec->uid, &d->mr);
     if (r) {
-        memset(&d->record, 0, sizeof(struct index_record));
         jmap_closembox(req, &d->mbox);
-        free(d->record);
-        d->record = NULL;
+        d->mr = NULL;
         return r;
     }
 
@@ -507,8 +504,9 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
+
 EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
-                           struct mailbox **mbox, struct index_record **record,
+                           struct mailbox **mbox, const msgrecord_t **mr,
                            struct body **body, const struct body **part)
 {
     struct findblob_data data = { req, NULL, NULL, NULL };
@@ -525,12 +523,8 @@ EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
         goto done;
     }
 
-    /* Fetch cache record for the message */
-    r = mailbox_cacherecord(data.mbox, data.record);
+    r = msgrecord_get_bodystructure(data.mr, &mybody);
     if (r) goto done;
-
-    /* Parse message body structure */
-    message_read_bodystructure(data.record, &mybody);
 
     /* Find part containing the data */
     if (data.part_id) {
@@ -558,7 +552,7 @@ EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
     }
 
     *mbox = data.mbox;
-    *record = data.record;
+    *mr = data.mr;
     *part = mypart;
     *body = mybody;
     r = 0;
@@ -566,7 +560,6 @@ EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
 done:
     if (r) {
         if (data.mbox) jmap_closembox(req, &data.mbox);
-        if (data.record) free(data.record);
         if (mybody) message_free_body(mybody);
     }
     if (data.part_id) free(data.part_id);
@@ -644,7 +637,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     char *blobid = xstrndup(blobbase, bloblen);
 
     struct mailbox *mbox = NULL;
-    struct index_record *record = NULL;
+    const msgrecord_t *mr = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
@@ -654,7 +647,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     int res = 0;
 
     /* Find part containing blob */
-    r = jmap_findblob(&req, blobid, &mbox, &record, &body, &part);
+    r = jmap_findblob(&req, blobid, &mbox, &mr, &body, &part);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to find blob by id";
@@ -662,7 +655,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     }
 
     /* Map the message into memory */
-    r = mailbox_map_record(mbox, record, &msg_buf);
+    r = msgrecord_get_body(mr, &msg_buf);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to map record";
@@ -714,7 +707,6 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     strarray_fini(&headers);
     if (mbox) jmap_closembox(&req, &mbox);
     conversations_commit(&cstate);
-    if (record) free(record);
     if (body) {
         message_free_body(body);
         free(body);
