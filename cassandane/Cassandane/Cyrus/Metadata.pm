@@ -143,7 +143,7 @@ sub unescape
 # List annotations actually stored in the database.
 sub list_annotations
 {
-    my ($self, %params) = @_;
+    my ($self, %params, $tombstones) = @_;
 
     my $scope = delete $params{scope} || 'global';
     my $mailbox = delete $params{mailbox} || 'user.cassandane';
@@ -189,7 +189,20 @@ sub list_annotations
 
 	# Damn stupid database format has sizeof(long) bytes of length.
 	my ($length) = unpack("N", $value);
-	my $data = substr($value, $Config{longsize}, $length);
+
+    # In records written by older versions of Cyrus, there will be
+    # binary encoded content-type and modifiedsince values after the
+    # data. We don't care about those anymore, but need to skip past
+    # them the entry metadata.
+    my @entry = split(/\0/, substr($value, $Config{longsize}), 3);
+    my $data = $entry[0];
+    if ($entry[2]) {
+        my ($modseq, $modtime, $flags) =
+            unpack("Q>Q>C", bytes::substr($entry[2], $Config{longsize}));
+        if ($flags and not $tombstones) {
+            next;
+        }
+    }
 
 	push(@annots, {
 	    uid => ($scope eq 'message' ? $f[0] : 0),
