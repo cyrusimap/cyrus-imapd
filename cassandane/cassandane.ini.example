@@ -20,11 +20,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -43,8 +43,10 @@
 # This section describes configurable properties of the
 # Cassandane infrastructure
 [cassandane]
-# Directory under which all the instance directories
-# will be created.  It's wise to keep this short.
+# Directory under which all the instance directories will be created.
+# It's wise to keep this short.  Tests will run quite a bit faster if
+# this is on a tmpfs filesystem (though note that you will lose your
+# old instance directories across reboots if you do this).
 ##rootdir = /var/tmp/cass
 # Which SASL password checking method to use:
 # alwaystrue
@@ -76,14 +78,13 @@
 
 # This section describes the default Cyrus installation.
 [cyrus default]
-# Prefix of the installation; should be the value which
-# was supplied as --prefix to the Cyrus configure script.
-# Cassandane will look for Cyrus binaries in {prefix}/bin,
-# .../sbin, .../libexec, .../lib, and .../cyrus/bin.
+# Prefix of the installation; should be the value which was supplied as
+# --prefix to the Cyrus configure script.  Cassandane will look for Cyrus
+# binaries in {prefix}/bin, {prefix}/sbin, {prefix}/libexec, {prefix}/lib,
+# and {prefix}/cyrus/bin.
 ##prefix = /usr/cyrus
-# A non-standard or temporary place where the installation
-# has been made, e.g. by
-# make DESTDIR=/tmp/my-cyrus-inst install
+# A non-standard or temporary place where the installation has been made,
+# e.g. by make DESTDIR=/tmp/my-cyrus-inst install
 # If set, binaries will be in {destdir}{prefix}/bin (etc)
 ##destdir =
 
@@ -91,7 +92,7 @@
 # replica side of replication tests.  You can use this to test
 # replication to a different Cyrus version from your main instance.
 # If this section does not exist, or the prefix it names does not
-# exist, then the replica side will use the "cyrus default".
+# exist, then the replica instance will use the "cyrus default".
 ##[cyrus replica]
 ##prefix = /usr/cyrus
 ##destdir =
@@ -113,6 +114,7 @@
 ##sync_server = yes
 ##lmtpd = yes
 ##timsieved = yes
+##backupd = yes
 
 # This section describes the common configuration parameters to set
 # for each test. This overrides the bare hardcoded configuration, and is
