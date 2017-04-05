@@ -41,6 +41,14 @@ Build and Install Yourself
 
     installation/mta/index
 
+Optional Components
+===================
+
+.. toctree::
+    :maxdepth: 2
+
+    installation/manage-dav
+
 External Tools
 ==============
 

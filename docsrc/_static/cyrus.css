@@ -23,6 +23,10 @@ cite, code, pre, tt {
     font-family: "Liberation Mono", "Consolas","Deja Vu Sans Mono","Bitstream Vera Sans Mono", monospace;
 }
 
+.rst-content code {
+    font-size: 90%;
+}
+
 div.admonition {
     border-left: 0.5em solid #59bc00;
     border-top: none;
