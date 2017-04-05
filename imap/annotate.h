@@ -79,6 +79,15 @@ struct entryattlist {
     struct entryattlist *next;
 };
 
+#define ANNOTATE_FLAG_DELETED (1<<0)
+
+struct annotate_metadata
+{
+    modseq_t modseq;
+    time_t modtime;
+    unsigned char flags; /* read-only */
+};
+
 typedef struct annotate_state annotate_state_t;
 typedef struct annotate_recalc_state annotate_recalc_state_t;
 
@@ -136,13 +145,22 @@ void annotatemore_open(void);
 typedef int (*annotatemore_find_proc_t)(const char *mailbox,
                     uint32_t uid,
                     const char *entry, const char *userid,
-                    const struct buf *value, void *rock);
+                    const struct buf *value,
+                    const struct annotate_metadata *mdata,
+                    void *rock);
 
 /* For findall(), matches any non-zero uid */
 #define ANNOTATE_ANY_UID    ((unsigned int)~0)
+
+/* For findall() matches also tombstones */
+#define ANNOTATE_TOMBSTONES  (1<<0)
+
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
-int annotatemore_findall(const char *mboxname, uint32_t uid, const char *entry,
-                         annotatemore_find_proc_t proc, void *rock);
+int annotatemore_findall(const char *mboxname, uint32_t uid,
+                         const char *entry,
+                         modseq_t modseq,
+                         annotatemore_find_proc_t proc, void *rock,
+                         int flags);
 
 /* fetch annotations and output results */
 typedef void (*annotate_fetch_cb_t)(const char *mboxname, /* internal */

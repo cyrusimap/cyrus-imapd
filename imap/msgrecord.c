@@ -274,7 +274,8 @@ EXPORTED int msgrecord_annot_findall(const msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_MAILBOX|M_UID);
     if (r) return r;
-    return annotatemore_findall(mr->mbox->name, mr->uid, entry, proc, rock);
+    return annotatemore_findall(mr->mbox->name, mr->uid, entry, /*modseq*/0,
+                                proc, rock, /*flags*/0);
 }
 
 EXPORTED int msgrecord_annot_write(msgrecord_t *mrw,

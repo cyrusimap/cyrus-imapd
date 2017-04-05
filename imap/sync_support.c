@@ -1892,13 +1892,14 @@ static int read_one_annot(const char *mailbox __attribute__((unused)),
                           const char *entry,
                           const char *userid,
                           const struct buf *value,
+                          const struct annotate_metadata *mdata __attribute__((unused)),
                           void *rock)
 {
     struct sync_annot_list **salp = (struct sync_annot_list **)rock;
 
     if (!*salp)
         *salp = sync_annot_list_create();
-    sync_annot_list_add(*salp, entry, userid, value);
+    sync_annot_list_add(*salp, entry, userid, value); /* FIXME(rsto): pass mdata */
     return 0;
 }
 
@@ -1918,8 +1919,8 @@ int read_annotations(const struct mailbox *mailbox,
 {
     *resp = NULL;
     return annotatemore_findall(mailbox->name, record ? record->uid : 0,
-                                /* all entries*/"*",
-                                read_one_annot, (void *)resp);
+                                /* all entries*/"*", /*modseq*/0,
+                                read_one_annot, (void *)resp, /*flags*/0);
 }
 
 /*
@@ -2808,6 +2809,7 @@ static int getannotation_cb(const char *mailbox,
                             uint32_t uid __attribute__((unused)),
                             const char *entry, const char *userid,
                             const struct buf *value,
+                            const struct annotate_metadata *mdata __attribute__((unused)),
                             void *rock)
 {
     struct protstream *pout = (struct protstream *)rock;
@@ -2827,8 +2829,9 @@ static int getannotation_cb(const char *mailbox,
 int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
-    return annotatemore_findall(mboxname, 0, "*", &getannotation_cb,
-                                (void *) sstate->pout);
+    return annotatemore_findall(mboxname, 0, "*", /*modseq*/0,
+                                &getannotation_cb, (void *) sstate->pout,
+                                /*flags*/0);
 }
 
 static void print_quota(struct quota *q, struct protstream *pout)
@@ -5441,11 +5444,13 @@ int sync_do_quota(const char *root, struct backend *sync_be,
 static int do_annotation_cb(const char *mailbox __attribute__((unused)),
                             uint32_t uid __attribute__((unused)),
                             const char *entry, const char *userid,
-                            const struct buf *value, void *rock)
+                            const struct buf *value,
+                            const struct annotate_metadata *mdata __attribute__((unused)),
+                            void *rock)
 {
     struct sync_annot_list *l = (struct sync_annot_list *) rock;
 
-    sync_annot_list_add(l, entry, userid, value);
+    sync_annot_list_add(l, entry, userid, value); /* FIXME(rsto): pass mdata */
 
     return 0;
 }
@@ -5508,7 +5513,8 @@ int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags)
     r = do_getannotation(mboxname, replica_annot, sync_be);
     if (r) goto bail;
 
-    r = annotatemore_findall(mboxname, 0, "*", &do_annotation_cb, master_annot);
+    r = annotatemore_findall(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
+                             master_annot, /*flags*/0);
     if (r) {
         syslog(LOG_ERR, "IOERROR: fetching annotations for %s", mboxname);
         r = IMAP_IOERROR;

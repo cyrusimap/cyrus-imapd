@@ -877,9 +877,13 @@ static const char *key_as_string(const annotate_db_t *d,
 #endif
 
 static int split_attribs(const char *data, int datalen __attribute__((unused)),
-                         struct buf *value)
+                         struct buf *value, struct annotate_metadata *mdata)
 {
     unsigned long tmp; /* for alignment */
+    const char *tmps;
+
+    /* initialize metadata */
+    memset(mdata, 0, sizeof(struct annotate_metadata));
 
     /* xxx use datalen? */
     /* xxx sanity check the data? */
@@ -897,8 +901,27 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
     /*
      * In records written by older versions of Cyrus, there will be
      * binary encoded content-type and modifiedsince values after the
-     * data.  We don't care about those anymore, so we just ignore them.
+     * data. We don't care about those anymore, so we just ignore them
+     * and skip to the entry's metadata.
      */
+    tmps = data + ntohl(tmp) + 1;  /* Skip zero-terminated value */
+    tmps += strlen(tmps) + 1;      /* Skip zero-terminated content-type */
+    tmps += sizeof(unsigned long); /* Skip modifiedsince value */
+
+    mdata->modseq = ntohll(*((unsigned long long *)tmps));
+    tmps += sizeof(unsigned long long);
+
+    mdata->modtime = (time_t) ntohll(*((unsigned long long*)tmps));
+    tmps += sizeof(unsigned long long);
+
+    mdata->flags = *tmps;
+    tmps++;
+
+    /* normalise deleted entries */
+    if (mdata->flags & ANNOTATE_FLAG_DELETED) {
+        buf_reset(value);
+    }
+
     return 0;
 }
 
@@ -906,9 +929,11 @@ struct find_rock {
     struct glob *mglob;
     struct glob *eglob;
     unsigned int uid;
+    modseq_t modseq;
     annotate_db_t *d;
     annotatemore_find_proc_t proc;
     void *rock;
+    int flags;
 };
 
 static int find_p(void *rock, const char *key, size_t keylen,
@@ -945,6 +970,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     char newkey[MAX_MAILBOX_NAME+1];
     size_t newkeylen;
     struct buf value = BUF_INITIALIZER;
+    struct annotate_metadata mdata;
     int r;
 
     assert(keylen < MAX_MAILBOX_PATH);
@@ -964,20 +990,47 @@ static int find_cb(void *rock, const char *key, size_t keylen,
         syslog(LOG_ERR, "find_cb: bogus key %s %d %s %s (%d %d)", mboxname, uid, entry, userid, (int)keylen, (int)newkeylen);
     }
 
-    r = split_attribs(data, datalen, &value);
+    r = split_attribs(data, datalen, &value, &mdata);
+    if (r) {
+        buf_free(&value);
+        return r;
+    }
+#if DEBUG
+    syslog(LOG_ERR, "find_cb: found key %s has modseq " MODSEQ_FMT
+            key_as_string(frock->d, key, keylen), mdata.modseq);
+#endif
 
-    if (!r) r = frock->proc(mboxname, uid, entry, userid, &value, frock->rock);
+    if (frock->modseq && frock->modseq >= mdata.modseq) {
+#if DEBUG
+        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT, key_as_string(frock->d, key, keylen), mdata.modseq, frock->modseq);
+#endif
+        buf_free(&value);
+        return 0;
+    }
 
+    if ((mdata.flags & ANNOTATE_FLAG_DELETED) &&
+        !(frock->flags & ANNOTATE_TOMBSTONES)) {
+#if DEBUG
+    syslog(LOG_ERR, "find_cb: ignoring key %s, tombstones are ignored",
+            key_as_string(frock->d, key, keylen));
+#endif
+        buf_free(&value);
+        return 0;
+    }
+
+    if (!r) r = frock->proc(mboxname, uid, entry, userid, &value, &mdata,
+                            frock->rock);
     buf_free(&value);
-
     return r;
 }
 
 EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
                          unsigned int uid,
                          const char *entry,
+                         modseq_t modseq,
                          annotatemore_find_proc_t proc,
-                         void *rock)
+                         void *rock,
+                         int flags)
 {
     char key[MAX_MAILBOX_PATH+1], *p;
     size_t keylen;
@@ -991,6 +1044,8 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
+    frock.modseq = modseq;
+    frock.flags = flags;
     r = _annotate_getdb(mboxname, uid, 0, &frock.d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND)
@@ -1017,7 +1072,6 @@ out:
 
     return r;
 }
-
 /***************************  Annotate State Management  ***************************/
 
 EXPORTED annotate_state_t *annotate_state_new(void)
@@ -1689,7 +1743,9 @@ static void annotation_get_uniqueid(annotate_state_t *state,
 static int rw_cb(const char *mailbox __attribute__((unused)),
                  uint32_t uid __attribute__((unused)),
                  const char *entry, const char *userid,
-                 const struct buf *value, void *rock)
+                 const struct buf *value,
+                 const struct annotate_metadata *mdata __attribute__((unused)),
+                 void *rock)
 {
     annotate_state_t *state = (annotate_state_t *)rock;
 
@@ -1708,7 +1764,7 @@ static void annotation_get_fromdb(annotate_state_t *state,
     const char *mboxname = (state->mailbox ? state->mailbox->name : "");
     state->found = 0;
 
-    annotatemore_findall(mboxname, state->uid, entry->name, &rw_cb, state);
+    annotatemore_findall(mboxname, state->uid, entry->name, 0, &rw_cb, state, 0);
 
     if (state->found != state->attribs &&
         (!strchr(entry->name, '%') && !strchr(entry->name, '*'))) {
@@ -2375,6 +2431,7 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     int r;
     const char *data;
     annotate_db_t *d = NULL;
+    struct annotate_metadata mdata;
 
     r = _annotate_getdb(mboxname, uid, 0, &d);
     if (r)
@@ -2387,14 +2444,18 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     } while (r == CYRUSDB_AGAIN);
 
     if (!r && data) {
-        r = split_attribs(data, datalen, value);
+        r = split_attribs(data, datalen, value, &mdata);
         if (!r) {
             /* Force a copy, in case the putdb() call destroys
              * the per-db data area that @data points to.  */
             buf_cstring(value);
         }
+        if (mdata.flags & ANNOTATE_FLAG_DELETED) {
+            buf_free(value);
+            r = CYRUSDB_NOTFOUND;
+        }
     }
-    else if (r == CYRUSDB_NOTFOUND) r = 0;
+    if (r == CYRUSDB_NOTFOUND) r = 0;
 
     annotate_putdb(&d);
     return r;
@@ -2419,7 +2480,8 @@ EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, con
 
 static int read_old_value(annotate_db_t *d,
                           const char *key, int keylen,
-                          struct buf *valp)
+                          struct buf *valp,
+                          struct annotate_metadata *mdata)
 {
     int r;
     size_t datalen;
@@ -2436,10 +2498,60 @@ static int read_old_value(annotate_db_t *d,
     if (r || !data)
         goto out;
 
-    r = split_attribs(data, datalen, valp);
+    r = split_attribs(data, datalen, valp, mdata);
 
 out:
     return r;
+}
+
+static int make_entry(struct buf *data,
+                      const struct buf *value,
+                      modseq_t modseq,
+                      time_t modtime,
+                      unsigned char flags)
+{
+    unsigned long l;
+    static const char contenttype[] = "text/plain"; /* fake */
+    unsigned long long nmodseq, nmodtime;
+
+    /* Make sure that native types are wide enough */
+    assert(sizeof(modseq_t) <= sizeof(unsigned long long));
+    nmodseq = htonll((unsigned long long) modseq);
+
+    /* FIXME need modtime to be platform independent? */
+    nmodtime = htonll((unsigned long long) modtime);
+
+    l = htonl(value->len);
+    buf_appendmap(data, (const char *)&l, sizeof(l));
+
+    buf_appendmap(data, value->s ? value->s : "", value->len);
+    buf_putc(data, '\0');
+
+    /*
+     * Older versions of Cyrus expected content-type and
+     * modifiedsince fields after the value.  We don't support those
+     * but we write out default values just in case the database
+     * needs to be read by older versions of Cyrus
+     */
+    buf_appendcstr(data, contenttype);
+    buf_putc(data, '\0');
+
+    l = 0;  /* fake modifiedsince */
+    buf_appendmap(data, (const char *)&l, sizeof(l));
+
+    /* Append modseq and modtime at the end */
+    buf_appendmap(data, (const char *)&nmodseq, sizeof(nmodseq));
+    buf_appendmap(data, (const char *)&nmodtime, sizeof(nmodtime));
+
+    /* Append flags */
+    buf_putc(data, flags);
+
+#if DEBUG
+    syslog(LOG_ERR, "make_entry: created entry with modseq=%lld flags=%x",
+            modseq, flags);
+#endif
+
+    return 0;
 }
 
 static int write_entry(struct mailbox *mailbox,
@@ -2455,6 +2567,10 @@ static int write_entry(struct mailbox *mailbox,
     annotate_db_t *d = NULL;
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
+    struct annotate_metadata *mdata = NULL; /* FIXME(rsto): make mdata a parameter */
+
+    modseq_t modseq = mdata ? mdata->modseq : 0;
+    time_t modtime = mdata ? mdata->modtime : time(NULL);
 
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r)
@@ -2466,7 +2582,8 @@ static int write_entry(struct mailbox *mailbox,
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (mailbox) {
-        r = read_old_value(d, key, keylen, &oldval);
+        struct annotate_metadata oldmdata;
+        r = read_old_value(d, key, keylen, &oldval, &oldmdata);
         if (r) goto out;
 
         /* if the value is identical, don't touch the mailbox */
@@ -2484,8 +2601,9 @@ static int write_entry(struct mailbox *mailbox,
         mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
     }
 
-    /* zero length annotation is also deletion I think */
-    if (!value->len) {
+    /* zero length annotation is deletion.
+     * keep tombstones for message annotations */
+    if (!value->len && !uid) {
 
 #if DEBUG
         syslog(LOG_ERR, "write_entry: deleting key %s from %s",
@@ -2498,30 +2616,15 @@ static int write_entry(struct mailbox *mailbox,
     }
     else {
         struct buf data = BUF_INITIALIZER;
-        unsigned long l;
-        static const char contenttype[] = "text/plain"; /* fake */
-
-        l = htonl(value->len);
-        buf_appendmap(&data, (const char *)&l, sizeof(l));
-
-        buf_appendmap(&data, value->s, value->len);
-        buf_putc(&data, '\0');
-
-        /*
-         * Older versions of Cyrus expected content-type and
-         * modifiedsince fields after the value.  We don't support those
-         * but we write out default values just in case the database
-         * needs to be read by older versions of Cyrus
-         */
-        buf_appendcstr(&data, contenttype);
-        buf_putc(&data, '\0');
-
-        l = 0;  /* fake modifiedsince */
-        buf_appendmap(&data, (const char *)&l, sizeof(l));
+        unsigned char flags = 0;
+        if (!value->len || value->s == NULL) {
+            flags |= ANNOTATE_FLAG_DELETED;
+        }
+        make_entry(&data, value, modseq, modtime, flags);
 
 #if DEBUG
-        syslog(LOG_ERR, "write_entry: storing key %s to %s",
-                key_as_string(d, key, keylen), d->filename);
+        syslog(LOG_ERR, "write_entry: storing key %s to %s modseq=" MODSEQ_FMT,
+                key_as_string(d, key, keylen), d->filename, modseq);
 #endif
 
         do {
@@ -2563,31 +2666,12 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     }
     else {
         struct buf data = BUF_INITIALIZER;
-        unsigned long l;
-        static const char contenttype[] = "text/plain"; /* fake */
 
-        l = htonl(value->len);
-        buf_appendmap(&data, (const char *)&l, sizeof(l));
-
-        buf_appendmap(&data, value->s, value->len);
-        buf_putc(&data, '\0');
-
-        /*
-         * Older versions of Cyrus expected content-type and
-         * modifiedsince fields after the value.  We don't support those
-         * but we write out default values just in case the database
-         * needs to be read by older versions of Cyrus
-         */
-        buf_appendcstr(&data, contenttype);
-        buf_putc(&data, '\0');
-
-        l = 0;  /* fake modifiedsince */
-        buf_appendmap(&data, (const char *)&l, sizeof(l));
+        make_entry(&data, value, uid, time(NULL), /*flags*/0);
 
         do {
             r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
         } while (r == CYRUSDB_AGAIN);
-
         buf_free(&data);
     }
 
@@ -3220,6 +3304,7 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
                      uint32_t uid,
                      const char *entry,
                      const char *userid, const struct buf *value,
+                     const struct annotate_metadata *mdata __attribute__((unused)),
                      void *rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
@@ -3289,7 +3374,6 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     return r;
 }
 
-
 /*
  * Perform a scan-and-rewrite through the database(s) for
  * a given set of criteria; common code for several higher
@@ -3313,7 +3397,8 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
     rrock.newuid = newuid;
     rrock.copy = copy;
 
-    return annotatemore_findall(oldmailbox->name, olduid, "*", &rename_cb, &rrock);
+    return annotatemore_findall(oldmailbox->name, olduid, "*", /*modseq*/0,
+                                &rename_cb, &rrock, /*flags*/0);
 }
 
 EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)

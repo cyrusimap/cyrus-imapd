@@ -343,7 +343,9 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
                             uint32_t uid  __attribute__((unused)),
                             const char *entry,
                             const char *userid,
-                            const struct buf *value, void *rock)
+                            const struct buf *value,
+                            const struct annotate_metadata *mdata __attribute__((unused)),
+                            void *rock)
 {
     struct dump_annotation_rock *ctx = (struct dump_annotation_rock *)rock;
 
@@ -607,8 +609,8 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
         struct dump_annotation_rock actx;
         actx.tag = tag;
         actx.pout = pout;
-        annotatemore_findall(mailbox->name, 0, "*", dump_annotations,
-                             (void *) &actx);
+        annotatemore_findall(mailbox->name, 0, "*", /*modseq*/0,
+                             dump_annotations, (void *) &actx, /*flags*/0);
     }
 
     /* Dump user files if this is an inbox */

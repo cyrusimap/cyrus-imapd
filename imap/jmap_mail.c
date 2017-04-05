@@ -2078,6 +2078,7 @@ static int extract_annotations(const char *mboxname __attribute__((unused)),
                                const char *entry,
                                const char *userid __attribute__((unused)),
                                const struct buf *value,
+                               const struct annotate_metadata *mdata __attribute__((unused)),
                                void *rock)
 {
     json_t *annotations = (json_t *)rock;

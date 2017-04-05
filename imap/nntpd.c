@@ -2601,7 +2601,9 @@ static int newsgroups_cb(const char *mailbox,
                   uint32_t uid __attribute__((unused)),
                   const char *entry __attribute__((unused)),
                   const char *userid,
-                  const struct buf *value, void *rock)
+                  const struct buf *value,
+                  const struct annotate_metadata *mdata __attribute__((unused)),
+                  void *rock)
 {
     struct wildmat *wild = (struct wildmat *) rock;
 
@@ -2716,8 +2718,8 @@ static void cmd_list(char *arg1, char *arg2)
 
         strcpy(pattern, newsprefix);
         strcat(pattern, "*");
-        annotatemore_findall(pattern, 0, "/comment",
-                             newsgroups_cb, lrock.wild);
+        annotatemore_findall(pattern, 0, "/comment", /*modseq*/0,
+                             newsgroups_cb, lrock.wild, /*flags*/0);
 
         prot_printf(nntp_out, ".\r\n");
 

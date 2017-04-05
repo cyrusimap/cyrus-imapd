@@ -1515,7 +1515,9 @@ EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
 static int load_annot_cb(const char *mailbox __attribute__((unused)),
                          uint32_t uid __attribute__((unused)),
                          const char *entry, const char *userid,
-                         const struct buf *value, void *rock)
+                         const struct buf *value,
+                         const struct annotate_metadata *mdata __attribute__((unused)),
+                         void *rock)
 {
     struct entryattlist **eal = (struct entryattlist **)rock;
     if (!userid) userid = "";
@@ -1524,13 +1526,12 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
     return 0;
 }
 
-
 EXPORTED struct entryattlist *mailbox_extract_annots(const struct mailbox *mailbox,
                                                      const struct index_record *record)
 {
     struct entryattlist *annots = NULL;
-    int r = annotatemore_findall(mailbox->name, record->uid, "*",
-                                 load_annot_cb, &annots);
+    int r = annotatemore_findall(mailbox->name, record->uid, "*", /*modseq*/0,
+                                 load_annot_cb, &annots, /*flags*/0);
     if (r) return NULL;
     return annots;
 }
@@ -2827,6 +2828,7 @@ static int calc_one_annot(const char *mailbox __attribute__((unused)),
                           const char *entry,
                           const char *userid,
                           const struct buf *value,
+                          const struct annotate_metadata *mdata __attribute__((unused)),
                           void *rock)
 {
     struct annot_calc_rock *cr = (struct annot_calc_rock *)rock;
@@ -2851,7 +2853,7 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
     if (record && record->system_flags & FLAG_EXPUNGED) return;
 
     annotatemore_findall(mailbox->name, record ? record->uid : 0, /* all entries*/"*",
-                         calc_one_annot, &cr);
+                         /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
 
     if (record)
         mailbox->i.synccrcs.annot ^= cr.annot;
@@ -2895,7 +2897,7 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
 
         struct annot_calc_rock cr = { 0, 0 };
         annotatemore_findall(mailbox->name, record->uid, /* all entries*/"*",
-                             calc_one_annot, &cr);
+                             /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
 
         crcs.annot ^= cr.annot;
     }
@@ -6253,6 +6255,7 @@ static int addannot_uid(const char *mailbox __attribute__((unused)),
                         const char *entry __attribute__((unused)),
                         const char *userid __attribute__((unused)),
                         const struct buf *value __attribute__((unused)),
+                        const struct annotate_metadata *mdata __attribute__((unused)),
                         void *rock)
 {
     struct found_uids *annots = (struct found_uids *)rock;
@@ -6273,7 +6276,7 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
     int r = 0;
 
     r = annotatemore_findall(mailbox->name, ANNOTATE_ANY_UID, "*",
-                             addannot_uid, annots);
+                             /*modseq*/0, addannot_uid, annots, /*flags*/0);
     if (r) return r;
 
     /* make sure UIDs are sorted for comparison */

@@ -176,6 +176,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
                       uint32_t uid __attribute__((unused)),
                       const char *entry,
                       const char *userid, const struct buf *attrib,
+                      const struct annotate_metadata *mdata __attribute__((unused)),
                       void *rock);
 
 /* Array of supported REPORTs */
@@ -1405,7 +1406,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
             (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)) {
             struct allprop_rock arock = { fctx, propstat };
 
-            annotatemore_findall(fctx->mailbox->name, 0, "*", allprop_cb, &arock);
+            annotatemore_findall(fctx->mailbox->name, 0, "*", /*modseq*/0,
+                                 allprop_cb, &arock, /*flags*/0);
         }
 
         /* Check if we have any propstat elements */
@@ -2877,12 +2879,12 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
-
 /* annotemore_findall callback for adding dead properties (allprop/propname) */
 static int allprop_cb(const char *mailbox __attribute__((unused)),
                       uint32_t uid __attribute__((unused)),
                       const char *entry,
                       const char *userid, const struct buf *attrib,
+                      const struct annotate_metadata *mdata __attribute__((unused)),
                       void *rock)
 {
     struct allprop_rock *arock = (struct allprop_rock *) rock;
