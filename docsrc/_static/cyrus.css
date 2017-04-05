@@ -230,3 +230,25 @@ nav.wy-nav-side p.caption {
 h4 {
     font-style: italic;
 }
+
+.rst-content .sidebar {
+    width: 35%;
+    padding-bottom: 0px;
+    font-size: 80%;
+}
+
+.rst-content .sidebar {
+    margin-bottom: 0px;
+    line-height: 18px;
+}
+
+.rst-content .sidebar blockquote {
+    margin-bottom: 0px;
+    margin-left: 0px;
+    padding-left: 0px;
+    line-height: 18px;
+}
+
+.rst-content .sidebar p {
+    line-height: 18px;
+}
