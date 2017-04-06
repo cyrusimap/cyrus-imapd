@@ -2718,12 +2718,29 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         domainpat[0] = '\0';
 
     /* calculate the inbox (with trailing .INBOX. for later use) */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
+    if (userid && (!(p = strchr(userid, rock->namespace->hier_sep)) ||
+        ((p - userid) > (int)userlen)) &&
         strlen(userid)+7 < MAX_MAILBOX_BUFFER) {
+        char *t, *tmpuser = NULL;
+        const char *inboxuser;
+
         if (domainlen)
             snprintf(inbox, sizeof(inbox), "%s!", userid+userlen+1);
+        if (rock->namespace->hier_sep == '/' && (p = strchr(userid, '.'))) {
+            tmpuser = malloc(userlen);
+            memcpy(tmpuser, userid, userlen);
+            t = tmpuser + (p - userid);
+            while(t < (tmpuser + userlen)) {
+                if (*t == '.')
+                    *t = '^';
+                t++;
+            }
+            inboxuser = tmpuser;
+        } else
+            inboxuser = userid;
         snprintf(inbox+domainlen, sizeof(inbox)-domainlen,
-                 "user.%.*s.INBOX.", (int)userlen, userid);
+                 "user.%.*s.INBOX.", (int)userlen, inboxuser);
+        free(tmpuser);
         inboxlen = strlen(inbox) - 7;
     }
     else {
