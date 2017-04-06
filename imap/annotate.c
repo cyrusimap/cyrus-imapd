@@ -162,6 +162,12 @@ struct annotate_state
      */
     /* number of mailboxes matching the pattern */
     unsigned count;
+
+    /*
+     * Silent. If set, mailboxes aren't dirtied for mailbox and
+     * message annotation writes.
+     */
+    unsigned silent;
 };
 
 enum {
@@ -2599,6 +2605,11 @@ static int write_entry(struct mailbox *mailbox,
 
         /* do the annot-changed here before altering the DB */
         mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
+
+        /* grab the message annotation modseq */
+        if (uid) {
+            modseq = mailbox->i.highestmodseq;
+        }
     }
 
     /* zero length annotation is deletion.
@@ -2687,17 +2698,11 @@ done:
 EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
                                 const char *userid, const struct buf *value)
 {
-    return annotatemore_msg_write(mboxname, /*uid*/0, entry, userid, value);
-}
-
-EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const char *entry,
-                                    const char *userid, const struct buf *value)
-{
     struct mailbox *mailbox = NULL;
     int r = 0;
     annotate_db_t *d = NULL;
 
-    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mboxname, /*uid*/0, CYRUSDB_CREATE, &d);
     if (r) goto done;
 
     if (mboxname) {
@@ -2705,7 +2710,8 @@ EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const ch
         if (r) goto done;
     }
 
-    r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1, /*silent*/0);
+    r = write_entry(mailbox, /*uid*/0, entry, userid, value,
+                    /*ignorequota*/1, /*silent*/0);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -2724,7 +2730,7 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       /*silent*/0);
+                       state->silent);
 }
 
 EXPORTED int annotate_state_writesilent(annotate_state_t *state,
@@ -2823,6 +2829,7 @@ static int _annotate_store_entries(annotate_state_t *state)
 {
     struct annotate_entry_list *ee;
     int r;
+    unsigned oldsilent = state->silent;
 
     /* Loop through the list of provided entries to set */
     for (ee = state->entry_list ; ee ; ee = ee->next) {
@@ -2833,18 +2840,29 @@ static int _annotate_store_entries(annotate_state_t *state)
             continue;
 
         if (ee->have_shared &&
-            !_annotate_may_store(state, /*shared*/1, ee->desc))
-            return IMAP_PERMISSION_DENIED;
+            !_annotate_may_store(state, /*shared*/1, ee->desc)) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
 
         if (ee->have_priv &&
-            !_annotate_may_store(state, /*shared*/0, ee->desc))
-            return IMAP_PERMISSION_DENIED;
+            !_annotate_may_store(state, /*shared*/0, ee->desc)) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
 
         r = ee->desc->set(state, ee);
         if (r)
-            return r;
+            goto done;
+
+        /* only the first write for message annotations isn't silent! */
+        if (state->which == ANNOTATION_SCOPE_MESSAGE)
+            state->silent = 1;
     }
-    return 0;
+
+done:
+    state->silent = oldsilent;
+    return r;
 }
 
 
@@ -2950,11 +2968,11 @@ static int annotation_set_todb(annotate_state_t *state,
     if (entry->have_shared)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, "",
-                        &entry->shared, 0, 0);
+                        &entry->shared, 0, state->silent);
     if (!r && entry->have_priv)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, state->userid,
-                        &entry->priv, 0, 0);
+                        &entry->priv, 0, state->silent);
 
     return r;
 }
@@ -3091,14 +3109,16 @@ static int annotation_set_specialuse(annotate_state_t *state,
 
     /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
-        r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &entry->priv, 0, 0);
+        r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
+                        &entry->priv, /*ignorequota*/0, /*silent*/0);
         goto done;
     }
 
     r = specialuse_validate(state->userid, buf_cstring(&entry->priv), &res);
     if (r) goto done;
 
-    r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &res, 0, 0);
+    r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
+                    &res, /*ignorequota*/0, state->silent);
 
 done:
     buf_free(&res);
@@ -3321,13 +3341,15 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             /* renaming a user, so change the userid for priv annots */
             newuserid = rrock->newuserid;
         }
-        r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid, value, 0, 0);
+        r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid,
+                        value, /*ignorequota*/0, /*silent*/0);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
-        r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib, 0, 0);
+        r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib,
+                        /*ignorequota*/0, /*silent*/0);
     }
 
     return r;

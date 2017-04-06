@@ -175,8 +175,6 @@ int annotate_state_fetch(annotate_state_t *state,
 /* write a single annotation, avoiding all ACL checks and etc */
 int annotatemore_write(const char *mboxname, const char *entry,
                        const char *userid, const struct buf *value);
-int annotatemore_msg_write(const char *mboxname, uint32_t uid, const char *entry,
-                           const char *userid, const struct buf *value);
 /* flat out ignore modseq and quota and everything */
 int annotatemore_rawwrite(const char *mboxname, const char *entry,
                        const char *userid, const struct buf *value);
