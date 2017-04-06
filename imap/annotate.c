@@ -929,7 +929,7 @@ struct find_rock {
     struct glob *mglob;
     struct glob *eglob;
     unsigned int uid;
-    modseq_t modseq;
+    modseq_t since_modseq;
     annotate_db_t *d;
     annotatemore_find_proc_t proc;
     void *rock;
@@ -1000,9 +1000,9 @@ static int find_cb(void *rock, const char *key, size_t keylen,
             key_as_string(frock->d, key, keylen), mdata.modseq);
 #endif
 
-    if (frock->modseq && frock->modseq >= mdata.modseq) {
+    if (frock->since_modseq && frock->since_modseq >= mdata.modseq) {
 #if DEBUG
-        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT, key_as_string(frock->d, key, keylen), mdata.modseq, frock->modseq);
+        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT, key_as_string(frock->d, key, keylen), mdata.modseq, frock->since_modseq);
 #endif
         buf_free(&value);
         return 0;
@@ -1027,7 +1027,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
                          unsigned int uid,
                          const char *entry,
-                         modseq_t modseq,
+                         modseq_t since_modseq,
                          annotatemore_find_proc_t proc,
                          void *rock,
                          int flags)
@@ -1044,7 +1044,7 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
-    frock.modseq = modseq;
+    frock.since_modseq = since_modseq;
     frock.flags = flags;
     r = _annotate_getdb(mboxname, uid, 0, &frock.d);
     if (r) {

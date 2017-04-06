@@ -364,6 +364,7 @@ struct sync_annot {
     char *userid;
     struct buf value;
     int mark;
+    modseq_t modseq;
 };
 
 struct sync_annot_list {
@@ -376,7 +377,8 @@ struct sync_annot_list *sync_annot_list_create(void);
 
 void sync_annot_list_add(struct sync_annot_list *l,
                          const char *entry, const char *userid,
-                         const struct buf *value);
+                         const struct buf *value,
+                         modseq_t modseq);
 
 void sync_annot_list_free(struct sync_annot_list **lp);
 
@@ -428,7 +430,9 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
 int read_annotations(const struct mailbox *,
                      const struct index_record *,
-                     struct sync_annot_list **);
+                     struct sync_annot_list **,
+                     modseq_t since_modseq,
+                     int flags);
 void encode_annotations(struct dlist *parent,
                         const struct index_record *record,
                         const struct sync_annot_list *);

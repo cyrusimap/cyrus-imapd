@@ -158,7 +158,7 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mboxname, uint32_t uid,
                          const char *entry,
-                         modseq_t modseq,
+                         modseq_t since_modseq,
                          annotatemore_find_proc_t proc, void *rock,
                          int flags);
 

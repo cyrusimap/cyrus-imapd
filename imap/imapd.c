@@ -11164,7 +11164,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     part_list = sync_reserve_partlist(reserve_guids, topart);
 
     /* always send mailbox annotations */
-    r = read_annotations(mailbox, NULL, &annots);
+    r = read_annotations(mailbox, NULL, &annots, /*since_modseq*/0, /*flags*/0);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): read annotations failed: %s '%s'",
                mailbox->name, error_message(r));

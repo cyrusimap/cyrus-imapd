@@ -1380,7 +1380,8 @@ struct sync_annot_list *sync_annot_list_create(void)
 
 void sync_annot_list_add(struct sync_annot_list *l,
                          const char *entry, const char *userid,
-                         const struct buf *value)
+                         const struct buf *value,
+                         modseq_t modseq)
 {
     struct sync_annot *item = xzmalloc(sizeof(struct sync_annot));
 
@@ -1388,6 +1389,7 @@ void sync_annot_list_add(struct sync_annot_list *l,
     item->userid = xstrdupnull(userid);
     buf_copy(&item->value, value);
     item->mark = 0;
+    item->modseq = modseq;
 
     if (l->tail)
         l->tail = l->tail->next = item;
@@ -1656,7 +1658,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
 
     /* always send mailbox annotations */
-    r = read_annotations(mailbox, NULL, &annots);
+    r = read_annotations(mailbox, NULL, &annots, 0, 0);
     if (r) goto done;
 
     encode_annotations(kl, NULL, annots);
@@ -1715,7 +1717,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
-            r = read_annotations(mailbox, record, &annots);
+            r = read_annotations(mailbox, record, &annots, 0, 0);
             if (r) goto done;
 
             encode_annotations(il, record, annots);
@@ -1892,14 +1894,14 @@ static int read_one_annot(const char *mailbox __attribute__((unused)),
                           const char *entry,
                           const char *userid,
                           const struct buf *value,
-                          const struct annotate_metadata *mdata __attribute__((unused)),
+                          const struct annotate_metadata *mdata,
                           void *rock)
 {
     struct sync_annot_list **salp = (struct sync_annot_list **)rock;
 
     if (!*salp)
         *salp = sync_annot_list_create();
-    sync_annot_list_add(*salp, entry, userid, value); /* FIXME(rsto): pass mdata */
+    sync_annot_list_add(*salp, entry, userid, value, mdata->modseq);
     return 0;
 }
 
@@ -1909,18 +1911,24 @@ static int read_one_annot(const char *mailbox __attribute__((unused)),
  * as a new sync_annot_list.  The caller should free the new
  * list with sync_annot_list_free().
  * If record is NULL, return the mailbox annotations
+ * If since_modseq is greated than zero, return annotations
+ * add or changed since modseq (exclusively since_modseq).
+ * If flags is set to ANNOTATE_TOMBSTONES, also return
+ * deleted annotations. Deleted annotations have a zero value.
  *
  * Returns: non-zero on error,
  *          resulting sync_annot_list in *@resp
  */
 int read_annotations(const struct mailbox *mailbox,
                      const struct index_record *record,
-                     struct sync_annot_list **resp)
+                     struct sync_annot_list **resp,
+                     modseq_t since_modseq,
+                     int flags)
 {
     *resp = NULL;
     return annotatemore_findall(mailbox->name, record ? record->uid : 0,
-                                /* all entries*/"*", /*modseq*/0,
-                                read_one_annot, (void *)resp, /*flags*/0);
+                                /* all entries*/"*", since_modseq,
+                                read_one_annot, (void *)resp, flags);
 }
 
 /*
@@ -1943,6 +1951,7 @@ void encode_annotations(struct dlist *parent,
             aa = dlist_newkvlist(annots, NULL);
             dlist_setatom(aa, "ENTRY", sa->entry);
             dlist_setatom(aa, "USERID", sa->userid);
+            dlist_setnum64(aa, "MODSEQ", sa->modseq);
             dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
         }
     }
@@ -1953,6 +1962,7 @@ void encode_annotations(struct dlist *parent,
         aa = dlist_newkvlist(annots, NULL);
         dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
         dlist_setatom(aa, "USERID", NULL);
+        dlist_setnum64(aa, "MODSEQ", 0);
         dlist_sethex64(aa, "VALUE", record->cid);
     }
 }
@@ -1971,6 +1981,7 @@ int decode_annotations(/*const*/struct dlist *annots,
     struct dlist *aa;
     const char *entry;
     const char *userid;
+    modseq_t modseq;
 
     *salp = NULL;
     if (strcmp(annots->name, "ANNOTATIONS"))
@@ -1983,6 +1994,8 @@ int decode_annotations(/*const*/struct dlist *annots,
         if (!dlist_getatom(aa, "ENTRY", &entry))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getatom(aa, "USERID", &userid))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getnum64(aa, "MODSEQ", &modseq))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getbuf(aa, "VALUE", &value))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2002,8 +2015,9 @@ int decode_annotations(/*const*/struct dlist *annots,
                 parsehex(p, &p, 16, &record->basecid);
                 /* XXX - check on p? */
             }
-
-            sync_annot_list_add(*salp, entry, userid, &value);
+        }
+        else {
+            sync_annot_list_add(*salp, entry, userid, &value, modseq);
         }
         buf_free(&value);
     }
@@ -2451,7 +2465,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
 
-            r = read_annotations(mailbox, &copy, &rannots);
+            r = read_annotations(mailbox, &copy, &rannots, 0, 0);
             if (r) {
                 syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
                        mailbox->name, rrecord->recno, error_message(r));
@@ -2743,7 +2757,7 @@ int sync_apply_mailbox(struct dlist *kin,
     if (ka)
         decode_annotations(ka, &mannots, NULL);
 
-    r = read_annotations(mailbox, NULL, &rannots);
+    r = read_annotations(mailbox, NULL, &rannots, 0, 0);
     if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
 
     if (r) {
@@ -3650,7 +3664,7 @@ int sync_restore_mailbox(struct dlist *kin,
 
         r = decode_annotations(ka, &restore_annots, NULL);
 
-        if (!r) r = read_annotations(mailbox, NULL, &mailbox_annots);
+        if (!r) r = read_annotations(mailbox, NULL, &mailbox_annots, 0, 0);
 
         if (!r) r = apply_annotations(mailbox, NULL,
                                       mailbox_annots, restore_annots,
@@ -4876,7 +4890,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 
         /* most common case - both a master AND a replica record exist */
         if (ki && mrecord) {
-            r = read_annotations(mailbox, mrecord, &mannots);
+            r = read_annotations(mailbox, mrecord, &mannots, 0, 0);
             if (r) goto out;
             r = parse_upload(ki, mailbox, &rrecord, &rannots);
             if (r) goto out;
@@ -5116,7 +5130,7 @@ static int mailbox_full_update(struct sync_folder *local,
     dlist_getlist(kl, "ANNOTATIONS", &ka);
 
     if (ka) decode_annotations(ka, &rannots, NULL);
-    r = read_annotations(mailbox, NULL, &mannots);
+    r = read_annotations(mailbox, NULL, &mannots, 0, 0);
     if (r) goto cleanup;
     r = apply_annotations(mailbox, NULL, mannots, rannots,
                           !remote_modseq_was_higher);
@@ -5206,7 +5220,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     /* compare annotations */
     {
         struct sync_annot_list *mannots = NULL;
-        int r = read_annotations(mailbox, NULL, &mannots);
+        int r = read_annotations(mailbox, NULL, &mannots, 0, 0);
         if (r) return 0;
 
         if (diff_annotations(mannots, remote->annots)) {
@@ -5445,12 +5459,12 @@ static int do_annotation_cb(const char *mailbox __attribute__((unused)),
                             uint32_t uid __attribute__((unused)),
                             const char *entry, const char *userid,
                             const struct buf *value,
-                            const struct annotate_metadata *mdata __attribute__((unused)),
+                            const struct annotate_metadata *mdata,
                             void *rock)
 {
     struct sync_annot_list *l = (struct sync_annot_list *) rock;
 
-    sync_annot_list_add(l, entry, userid, value); /* FIXME(rsto): pass mdata */
+    sync_annot_list_add(l, entry, userid, value, mdata->modseq);
 
     return 0;
 }
@@ -5464,16 +5478,19 @@ static int parse_annotation(struct dlist *kin,
     const char *valmap = NULL;
     size_t vallen = 0;
     struct buf value = BUF_INITIALIZER;
+    modseq_t modseq;
 
     for (kl = kin->head; kl; kl = kl->next) {
         if (!dlist_getatom(kl, "ENTRY", &entry))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getatom(kl, "USERID", &userid))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getnum64(kl, "MODSEQ", &modseq))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getmap(kl, "VALUE", &valmap, &vallen))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         buf_init_ro(&value, valmap, vallen);
-        sync_annot_list_add(replica_annot, entry, userid, &value);
+        sync_annot_list_add(replica_annot, entry, userid, &value, modseq);
     }
 
     return 0;
