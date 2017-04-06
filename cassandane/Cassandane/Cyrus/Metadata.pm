@@ -143,14 +143,15 @@ sub unescape
 # List annotations actually stored in the database.
 sub list_annotations
 {
-    my ($self, %params, $tombstones) = @_;
+    my ($self, %params) = @_;
 
     my $scope = delete $params{scope} || 'global';
     my $mailbox = delete $params{mailbox} || 'user.cassandane';
+    my $basedir = delete $params{basedir} || $self->{instance}->{basedir};
+    my $tombstones = delete $params{tombstones};
+    my $withmodseq = delete $params{withmodseq};
     die "Unknown parameters: " . join(' ', map { $_ . '=' . $params{$_}; } keys %params)
 	if scalar %params;
-
-    my $basedir = $self->{instance}->{basedir};
 
     my $mailbox_db;
     if ($scope eq 'global' || $scope eq 'mailbox')
@@ -195,22 +196,26 @@ sub list_annotations
     # data. We don't care about those anymore, but need to skip past
     # them the entry metadata.
     my @entry = split(/\0/, substr($value, $Config{longsize}), 3);
-    my $data = $entry[0];
+    my $annot = {
+	    uid => ($scope eq 'message' ? $f[0] : 0),
+	    mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
+	    entry => $f[1],
+	    userid => $f[2],
+	    data => $entry[0],
+	};
+
     if ($entry[2]) {
         my ($modseq, $modtime, $flags) =
             unpack("Q>Q>C", bytes::substr($entry[2], $Config{longsize}));
         if ($flags and not $tombstones) {
             next;
         }
+        if ($withmodseq) {
+            $annot->{modseq} = $modseq;
+        }
     }
 
-	push(@annots, {
-	    uid => ($scope eq 'message' ? $f[0] : 0),
-	    mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
-	    entry => $f[1],
-	    userid => $f[2],
-	    data => $data
-	});
+	push(@annots, $annot);
     }
     close(TMP);
     unlink($tmpfile);
