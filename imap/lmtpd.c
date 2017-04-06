@@ -794,7 +794,9 @@ int deliver(message_data_t *msgdata, char *authuser,
             struct sieve_interp_ctx ctx = { mbname_userid(mbname), NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
             r = run_sieve(mbname, interp, &mydata);
+#ifdef WITH_DAV
             if (ctx.carddavdb) carddav_close(ctx.carddavdb);
+#endif
             sieve_interp_free(&interp);
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */
