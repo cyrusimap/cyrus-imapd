@@ -458,9 +458,9 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
-        decode_annotations(fl, salp, record);
+        r = decode_annotations(fl, salp, record);
 
-    return 0;
+    return r;
 }
 
 
