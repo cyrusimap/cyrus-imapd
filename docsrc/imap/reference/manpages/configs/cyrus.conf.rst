@@ -62,6 +62,8 @@ START
 
 This section lists the processes to run before any **SERVICES** are
 spawned.  This section is typically used to initialize databases.
+Master itself will not startup until all tasks in **START** have either
+completed or backgrounded themselves, so put no blocking commands here.
 
 .. parsed-literal::
 
