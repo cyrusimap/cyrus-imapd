@@ -140,20 +140,10 @@ One last thing we need to do for LMTP to work with Sendmail is to create a folde
 
 6. Protocol ports
 -----------------
-Cyrus uses assorted protocols, which need to have their ports defined in ``/etc/services``. Make sure that these lines are present and add them if they are missing:
 
-::
-
-    pop3      110/tcp
-    nntp      119/tcp
-    imap      143/tcp
-    imsp      406/tcp
-    nntps     563/tcp
-    imaps     993/tcp
-    pop3s     995/tcp
-    kpop      1109/tcp
-    lmtp      2003/tcp
-    sieve     4190/tcp
+.. include:: /imap/reference/admin/ports/services.rst
+	:start-after: _imap-admin-ports-servent:
+	:end-before: _imap-admin-ports-servent-end:
 
 7. Configuring Cyrus
 --------------------
@@ -189,37 +179,9 @@ The admin user is the ``imapuser`` created in step 4, for authentication against
 
 For :cyrusman:`cyrus.conf(5)`, start with this:
 
-::
-
-    START {
-      # do not delete this entry!
-      recover    cmd="ctl_cyrusdb -r"
-    }
-
-    # UNIX sockets start with a slash and are put into /var/imap/sockets
-    SERVICES {
-      # add or remove based on preferences
-      imap        cmd="imapd" listen="imap" prefork=0
-      pop3        cmd="pop3d" listen="pop3" prefork=0
-
-      # LMTP is required for delivery (socket is set for Sendmail MTA)
-      lmtpunix    cmd="lmtpd" listen="/var/run/cyrus/socket/lmtp" prefork=0
-    }
-
-    EVENTS {
-      # this is required
-      checkpoint    cmd="ctl_cyrusdb -c" period=30
-
-      # this is only necessary if using duplicate delivery suppression
-      delprune    cmd="ctl_deliver -E 3" at=0400
-
-      # expire data older than 28 days
-      deleteprune cmd="cyr_expire -E 4 -D 28" at=0430
-      expungeprune cmd="cyr_expire -E 4 -X 28" at=0445
-
-      # this is only necessary if caching TLS sessions
-      tlsprune    cmd="tls_prune" at=0400
-    }
+.. include:: /imap/reference/manpages/configs/cyrus.conf.rst
+    :start-after: _imap-manpages-cyrus-conf:
+    :end-before: _imap-manpages-cyrus-conf-end:
 
 Before you launch Cyrus for the first time, create the Cyrus directory structure: use :cyrusman:`mkimap(8)`.
 

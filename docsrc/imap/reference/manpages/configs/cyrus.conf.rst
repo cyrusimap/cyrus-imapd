@@ -11,9 +11,10 @@ Cyrus configuration file
 Description
 ===========
 
-**cyrus.conf** is the configuration file for the Cyrus **master**
-process.  It defines the startup procedures, services and events to be
-spawned by **master**.
+**cyrus.conf** is the configuration file for the Cyrus
+:cyrusman:`master(8)` process.  It defines the startup procedures,
+services, events and daemons to be spawned, managed and tended to by
+**master**.
 
 The ``/etc/cyrus.conf`` file consists of a series of entries divided
 into sections of the form
