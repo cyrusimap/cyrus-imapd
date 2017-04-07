@@ -848,10 +848,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
             i = unwrap_string(d, i, &data, &len);
             printf("SET ");
             printf("LOWER(%d) UPPER(%d) LOWERFIRST(%d) UPPERFIRST(%d) "
-                   "QUOTEWILDCARD(%d) ENCODEURL(%d) LENGTH(%d)\n",
+                   "QUOTEWILDCARD(%d) QUOTEREGEX(%d) ENCODEURL(%d) LENGTH(%d)\n",
 		   m & BFV_LOWER, m & BFV_UPPER,
                    m & BFV_LOWERFIRST, m & BFV_UPPERFIRST,
-                   m & BFV_QUOTEWILDCARD, m & BFV_ENCODEURL, m & BFV_LENGTH);
+                   m & BFV_QUOTEWILDCARD, m & BFV_QUOTEREGEX,
+                   m & BFV_ENCODEURL, m & BFV_LENGTH);
             printf("              VARS({%d}%s)", len, data);
             i = unwrap_string(d, i, &data, &len);
             printf(" VALS({%d}%s)\n", len, data);
