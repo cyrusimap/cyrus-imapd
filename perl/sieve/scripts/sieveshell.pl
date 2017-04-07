@@ -344,4 +344,4 @@ work in progress.
 =head1 AUTHOR
 
 Tim Martin E<lt>tmartin@mirapoint.comE<gt>, and the rest of the Cyrus
-team E<lt>cyrus-bugs@andrew.cmu.eduE<gt>.
+team.
