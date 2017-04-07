@@ -12,7 +12,7 @@ Description
 ===========
 
 **cyrus.conf** is the configuration file for the Cyrus
-:cyrusman:`master` process.  It defines the startup procedures,
+:cyrusman:`master(8)` process.  It defines the startup procedures,
 services, events and daemons to be spawned, managed and tended to by
 **master**.
 
