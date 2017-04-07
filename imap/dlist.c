@@ -1307,6 +1307,7 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
     case DL_ATOM:
     case DL_FLAG:
     case DL_BUF:
+    case DL_NIL:
         break;
 
     default:
