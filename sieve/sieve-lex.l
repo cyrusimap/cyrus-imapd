@@ -222,7 +222,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:contains            return yylval->nval = CONTAINS;
 <INITIAL>:matches             return yylval->nval = MATCHES;
 
-    /* regex - draft-murchison-sieve-regex */
+    /* regex - draft-ietf-sieve-regex */
 <INITIAL>:regex               return yylval->nval = REGEX;
 
     /* extlists - RFC 6134 */
@@ -291,7 +291,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>hasflag              return yylval->nval = HASFLAG;
 <INITIAL>:flags               return FLAGS;
 
-    /* imapflags - draft-melnikov-sieve-imapflags */
+    /* imapflags - draft-melnikov-sieve-imapflags-04 */
 <INITIAL>mark                 return yylval->nval = MARK;
 <INITIAL>unmark               return yylval->nval = UNMARK;
 
@@ -366,7 +366,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                                                "invalid importance %s", yytext);
                               }
 
-    /* notify - draft-martin-sieve-notify */
+    /* notify - draft-martin-sieve-notify-01 */
 <INITIAL>denotify             return DENOTIFY;
 <INITIAL>:id                  return ID;
 <INITIAL>:low                 return yylval->nval = LOW;
