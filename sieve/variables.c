@@ -47,6 +47,7 @@ EXPORTED char *variables_modify_string (const char *string, int modifiers) {
      * |                :upperfirst     |
      * +--------------------------------+
      * |     20         :quotewildcard  |
+     * |                :quoteregex     |
      * +--------------------------------+
      * |     15         :encodeurl      |
      * +--------------------------------+
@@ -76,21 +77,34 @@ EXPORTED char *variables_modify_string (const char *string, int modifiers) {
         break;
     }
     /*
-     * 4.1.2.  Modifier ":quotewildcard"
+     * Modifiers ":quotewildcard" and ":quoteregex"
 
-     This modifier adds the necessary quoting to ensure that the expanded
+     These modifiers add the necessary quoting to ensure that the expanded
      text will only match a literal occurrence if used as a parameter to
-     :matches.  Every character with special meaning ("*", "?",  and "\")
-     is prefixed with "\" in the expansion.
-     *
+     :matches or :regex respectively.  Every character with special meaning
+     ("*", "?", "\", etc) is prefixed with "\" in the expansion.
+
      */
     /* Precedence 20 */
-    if (BFV_QUOTEWILDCARD & modifiers) {
+    if ((BFV_QUOTEWILDCARD | BFV_QUOTEREGEX) & modifiers) {
         char *original, *quoted;
         original = result;
         quoted = working_buffer;
         while (*original) {
             switch (*original) {
+                /* :regex-only special characters */
+            case '.':
+            case '^':
+            case '$':
+            case '+':
+            case '(':
+            case ')':
+            case '[':
+            case '{':
+            case '|':
+                if (!(BFV_QUOTEREGEX & modifiers)) break;
+
+                /* :matches and :regex special characters */
             case '*':
             case '?':
             case '\\':

@@ -332,7 +332,8 @@ enum bytecode_variables_bitflags {
     BFV_UPPERFIRST      = 1<<3,
     BFV_QUOTEWILDCARD   = 1<<4,
     BFV_ENCODEURL	= 1<<5,
-    BFV_LENGTH		= 1<<6
+    BFV_LENGTH		= 1<<6,
+    BFV_QUOTEREGEX      = 1<<7
 };
 
 enum bytecode_required_extensions {

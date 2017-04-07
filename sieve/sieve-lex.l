@@ -224,6 +224,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
     /* regex - draft-ietf-sieve-regex */
 <INITIAL>:regex               return yylval->nval = REGEX;
+<INITIAL>:quoteregex          return yylval->nval = QUOTEREGEX;
 
     /* extlists - RFC 6134 */
 <INITIAL>:list                return yylval->nval = LIST;

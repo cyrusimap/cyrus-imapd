@@ -186,7 +186,7 @@ extern void sieverestart(FILE *f);
 %type <nval> matchtag collation sizetag addrparttag
 
 /* regex - draft-ietf-sieve-regex */
-%token <nval> REGEX
+%token <nval> REGEX QUOTEREGEX
 
 /* copy - RFC 3894 */
 %token COPY
@@ -554,6 +554,14 @@ mod30:    LOWERFIRST
         ;
 
 mod20:    QUOTEWILDCARD
+        | QUOTEREGEX            { 
+                                     if (!supported(SIEVE_CAPA_REGEX)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "regex");
+                                     }
+                                 }
+
         ;
 
 mod15:    ENCODEURL              { 
