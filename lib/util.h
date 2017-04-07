@@ -302,6 +302,7 @@ void buf_init_mmap(struct buf *buf, int onceonly, int fd,
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
 const char *buf_lcase(struct buf *buf);
+const char *buf_ucase(struct buf *buf);
 void buf_trim(struct buf *buf);
 
 /*

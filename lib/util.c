@@ -1476,6 +1476,13 @@ EXPORTED const char *buf_lcase(struct buf *buf)
     return buf->s;
 }
 
+EXPORTED const char *buf_ucase(struct buf *buf)
+{
+    buf_cstring(buf);
+    ucase(buf->s);
+    return buf->s;
+}
+
 EXPORTED void buf_trim(struct buf *buf)
 {
     size_t i;
