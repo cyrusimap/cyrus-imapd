@@ -19,16 +19,17 @@ Management
     :maxdepth: 2
 
     admin/locations
-    admin/murder/murder
+    admin/ports-sockets
     admin/access-control
-    admin/nntp
-    admin/protlayer
     admin/quotas
     admin/sieve
     admin/backups
+    admin/nntp
+    admin/protlayer
     admin/sop
     admin/eventsource    
     admin/config-mailboxdistribution
+    admin/murder/murder
     admin/nginx-proxy
     admin/tweaking
 
