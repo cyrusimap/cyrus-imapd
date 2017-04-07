@@ -9,10 +9,10 @@ IMPORTS
         FROM CMU-MIB;
 
 cyrusMasterMIB MODULE-IDENTITY
-    LAST-UPDATED "0010312300Z"          -- 2000 Oct 31
+    LAST-UPDATED "1704070437Z"          -- 2017 April 7
     ORGANIZATION "CMU Project Cyrus"
     CONTACT-INFO
-                "       Email: cyrus-bugs@andrew.cmu.edu
+                "       WWW: https://github.com/cyrusimap/cyrus-imapd/
 
                         Project Cyrus
                         Computing Services

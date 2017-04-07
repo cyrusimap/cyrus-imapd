@@ -1,7 +1,8 @@
 cyrus-graphtools v1.0
 Alison Greenwald <alison@andrew.cmu.edu>
 
-Please send all comments/questions/bugs to cyrus-bugs@andrew.cmu.edu.
+Please send all comments/questions/bugs to
+https://github.com/cyrusimap/cyrus-imapd/issues
 
 --------
 
@@ -66,4 +67,5 @@ html directory and you should be ready to go.
 
 -------
 
-Please send any comments or suggestions to cyrus-bugs@andrew.cmu.edu.
+Please send any comments or suggestions to
+https://github.com/cyrusimap/cyrus-imapd/issues

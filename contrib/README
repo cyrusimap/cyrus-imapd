@@ -5,8 +5,8 @@ plays a large part here).  They are "not supported" by us, meaning that we
 didn't try them, don't use them for whatever reasons, or were too lazy to
 do a real integration at this point in time.
 
-Bugs can still be sent to cyrus-bugs@andrew.cmu.edu. Patches are even
-better.
+Bugs can still be sent to https://github.com/cyrusimap/cyrus-imapd/issues.
+Patches/pull requests are even better.
 
 If you wish to submit a patch, please submit either unified or context
 diffs; plain diffs are hard to apply if the source has changed.
