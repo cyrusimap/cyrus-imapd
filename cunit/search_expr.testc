@@ -526,6 +526,28 @@ static void test_unserialise(void)
     CU_ASSERT_PTR_NULL(e->parent);
     search_expr_free(e);
 
+    e = search_expr_unserialise("(fuzzymatch subject \"BESTELLING BEVESTIGD: GRADO IGRADO HEADPHONES ON-EAR NECKBAND BEHIND-THE-NECK STEREO HEADSETS BLACK\")");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_FUZZYMATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "subject");
+    CU_ASSERT_STRING_EQUAL(e->value.s, "BESTELLING BEVESTIGD: GRADO IGRADO HEADPHONES ON-EAR NECKBAND BEHIND-THE-NECK STEREO HEADSETS BLACK");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(fuzzymatch subject \"STENA LINE E-TICKET AND RESERVATION ADVICE FOR BOOKING REFERENCE 72105814\")");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_FUZZYMATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "subject");
+    CU_ASSERT_STRING_EQUAL(e->value.s, "STENA LINE E-TICKET AND RESERVATION ADVICE FOR BOOKING REFERENCE 72105814");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
     e = search_expr_unserialise("(ge size 123)");
     CU_ASSERT_PTR_NOT_NULL_FATAL(e);
     CU_ASSERT_EQUAL(e->op, SEOP_GE);
