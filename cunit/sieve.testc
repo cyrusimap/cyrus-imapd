@@ -85,7 +85,8 @@ static void test_variable_modifiers(void)
       set :lower "b" "${a}";                 => "jumbled letters"
       set :upperfirst "b" "${a}";            => "JuMBlEd lETteRS"
       set :upperfirst :lower "b" "${a}";     => "Jumbled letters"
-      set :quotewildcard "b" "Rock*";        => "Rock\*"
+      set :quotewildcard "b" "^Rock*";       => "^Rock\*"
+      set :quoteregex "b" "^Rock*";          => "\^Rock\*"
      */
     const char *a = "juMBlEd lETteRS";
     char *b;
@@ -102,11 +103,14 @@ static void test_variable_modifiers(void)
     b = variables_modify_string(a, BFV_UPPERFIRST | BFV_LOWER);
     CU_ASSERT_STRING_EQUAL(b, "Jumbled letters");
     free(b);
-    b = variables_modify_string("Rock*", BFV_QUOTEWILDCARD);
-    CU_ASSERT_STRING_EQUAL(b, "Rock\\*");
+    b = variables_modify_string("^Rock*", BFV_QUOTEWILDCARD);
+    CU_ASSERT_STRING_EQUAL(b, "^Rock\\*");
     free(b);
-    b = variables_modify_string("Rock\\*", BFV_QUOTEWILDCARD | BFV_ENCODEURL);
-    CU_ASSERT_STRING_EQUAL(b, "Rock%5C%5C%5C%2A");
+    b = variables_modify_string("^Rock*", BFV_QUOTEREGEX);
+    CU_ASSERT_STRING_EQUAL(b, "\\^Rock\\*");
+    free(b);
+    b = variables_modify_string("~Rock\\*", BFV_QUOTEWILDCARD | BFV_ENCODEURL);
+    CU_ASSERT_STRING_EQUAL(b, "~Rock%5C%5C%5C%2A");
     free(b);
 }
 
