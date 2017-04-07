@@ -2727,7 +2727,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         if (domainlen)
             snprintf(inbox, sizeof(inbox), "%s!", userid+userlen+1);
         if (rock->namespace->hier_sep == '/' && (p = strchr(userid, '.'))) {
-            tmpuser = malloc(userlen);
+            tmpuser = xmalloc(userlen);
             memcpy(tmpuser, userid, userlen);
             t = tmpuser + (p - userid);
             while(t < (tmpuser + userlen)) {
