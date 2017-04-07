@@ -131,7 +131,17 @@ Debian/Ubuntu copypasta:
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libio-socket-inet6-perl libnet-server-perl \
        libunix-syslog-perl libnews-nntpclient-perl \
-       libfile-chdir-perl libio-stringy-perl
+       libfile-chdir-perl libio-stringy-perl \
+       libanyevent-perl libjson-perl libjson-xs-perl \
+       libfile-libmagic-perl libtest-xml-perl \
+       libdatetime-format-iso8601-perl libdata-uuid-perl \
+       libmime-types-perl libtext-levenshteinxs-perl \
+       libdatetime-format-ical-perl libuniversal-require-perl \
+       libtest-nowarnings-perl libtest-longstring-perl \
+       libtest-warn-perl
+
+  sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
+       Net::CalDAVTalk Net::CardDAVTalk String::CRC32
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested
