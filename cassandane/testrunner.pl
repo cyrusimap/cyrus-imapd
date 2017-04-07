@@ -61,7 +61,7 @@ my $do_list = 0;
 my $keep_going = 1;
 my $log_directory;
 my @names;
-my $jobs;
+my $jobs = Cassandane::Cassini->instance()->val('cassandane', 'maxworkers', undef);
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.

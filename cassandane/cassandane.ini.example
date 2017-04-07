@@ -63,6 +63,9 @@
 # run (also, will remove and old instance directories from earlier
 # runs).  See also the --cleanup option to testrunner.pl.
 ##cleanup = no
+# How many worker processes to run.  Overridden by -j argument to
+# testrunner.pl.
+##maxworkers = 2
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
