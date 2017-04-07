@@ -1013,6 +1013,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 case QUOTEWILDCARD:
                     retval->data[codep].value |= BFV_QUOTEWILDCARD;
                     break;
+                case QUOTEREGEX:
+                    retval->data[codep].value |= BFV_QUOTEREGEX;
+                    break;
                 }
                 switch(c->u.s.mod15) {
                 case ENCODEURL:
