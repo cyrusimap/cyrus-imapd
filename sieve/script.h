@@ -54,35 +54,7 @@
 struct sieve_script {
     sieve_interp_t interp;
 
-    /* was a "require" done for these? */
-    struct sieve_support {
-        int fileinto        : 1;
-        int reject          : 1;
-        int ereject         : 1;
-        int envelope        : 1;
-        int body            : 1;
-        int vacation        : 1;
-        int imapflags       : 1;
-        int notify          : 1;
-        int enotify         : 1;
-        int regex           : 1;
-        int subaddress      : 1;
-        int relational      : 1;
-        int i_ascii_numeric : 1;
-        int include         : 1;
-        int copy            : 1;
-        int date            : 1;
-        int index           : 1;
-        int vacation_seconds: 1;
-        int imap4flags      : 1;
-        int mailbox         : 1;
-        int mboxmetadata    : 1;
-        int servermetadata  : 1;
-        int variables       : 1;
-        int editheader      : 1;
-        int extlists        : 1;
-        int duplicate       : 1;
-    } support;
+    unsigned long long support; /* bitmask of extensions required by script */
 
     void *script_context;
     commandlist_t *cmds;

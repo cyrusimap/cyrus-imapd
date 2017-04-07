@@ -71,7 +71,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 {
     test_t *p = (test_t *) xzmalloc(sizeof(test_t));
     const char *capability = "";
-    int supported = 1;
+    unsigned long long supported = SIEVE_CAPA_BASE;
 
     p->type = type;
 
@@ -82,21 +82,21 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case HASFLAG:
         capability = "imap4flags";
-        supported = parse_script->support.imap4flags;
+        supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
 
         init_comptags(&p->u.hhs.comp);
         break;
 
     case STRINGT:
         capability = "variables";
-        supported = parse_script->support.variables;
+        supported = parse_script->support & SIEVE_CAPA_VARIABLES;
 
         init_comptags(&p->u.hhs.comp);
         break;
 
     case ENVELOPE:
         capability = "envelope";
-        supported = parse_script->support.envelope;
+        supported = parse_script->support & SIEVE_CAPA_ENVELOPE;
 
     case ADDRESS:
         init_comptags(&p->u.ae.comp);
@@ -105,7 +105,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case BODY:
         capability = "body";
-        supported = parse_script->support.body;
+        supported = parse_script->support & SIEVE_CAPA_BODY;
 
         init_comptags(&p->u.b.comp);
         p->u.b.transform = p->u.b.offset = -1;
@@ -114,7 +114,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
     case DATE:
     case CURRENTDATE:
         capability = "date";
-        supported = parse_script->support.date;
+        supported = parse_script->support & SIEVE_CAPA_DATE;
 
         init_comptags(&p->u.dt.comp);
         p->u.dt.zonetag = -1;
@@ -122,7 +122,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case MAILBOXEXISTS:
         capability = "mailbox";
-        supported = parse_script->support.mailbox;
+        supported = parse_script->support & SIEVE_CAPA_MAILBOX;
         break;
 
     case METADATA:
@@ -130,7 +130,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case METADATAEXISTS:
         capability = "mboxmetadata";
-        supported = parse_script->support.mboxmetadata;
+        supported = parse_script->support & SIEVE_CAPA_MBOXMETA;
         break;
 
     case SERVERMETADATA:
@@ -138,17 +138,17 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case SERVERMETADATAEXISTS:
         capability = "servermetadata";
-        supported = parse_script->support.servermetadata;
+        supported = parse_script->support & SIEVE_CAPA_SERVERMETA;
         break;
 
     case VALIDEXTLIST:
         capability = "extlists";
-        supported = parse_script->support.extlists;
+        supported = parse_script->support & SIEVE_CAPA_EXTLISTS;
         break;
 
     case DUPLICATE:
         capability = "duplicate";
-        supported = parse_script->support.duplicate;
+        supported = parse_script->support & SIEVE_CAPA_DUPLICATE;
         p->u.dup.idtype = p->u.dup.seconds = -1;
         break;
     }
@@ -172,7 +172,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 {
     commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
     const char *capability = "";
-    int supported = 1;
+    unsigned long long  supported = SIEVE_CAPA_BASE;
 
     p->type = type;
     p->next = NULL;
@@ -180,22 +180,22 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     switch (type) {
     case FILEINTO:
         capability = "fileinto";
-        supported = parse_script->support.fileinto;
+        supported = parse_script->support & SIEVE_CAPA_FILEINTO;
         break;
 
     case REJCT:
         capability = "reject";
-        supported = parse_script->support.reject;
+        supported = parse_script->support & SIEVE_CAPA_REJECT;
         break;
 
     case EREJECT:
         capability = "ereject";
-        supported = parse_script->support.ereject;
+        supported = parse_script->support & SIEVE_CAPA_EREJECT;
         break;
 
     case VACATION:
         capability = "vacation";
-        supported = parse_script->support.vacation;
+        supported = parse_script->support & SIEVE_CAPA_VACATION;
 
         p->u.v.seconds = p->u.v.mime = -1;
         break;
@@ -205,18 +205,18 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case REMOVEFLAG:
         capability = "imap[4]flags";
         supported =
-            parse_script->support.imapflags || parse_script->support.imap4flags;
+            parse_script->support & (SIEVE_CAPA_IMAP4FLAGS | SIEVE_CAPA_IMAPFLAGS);
         break;
 
     case MARK:
     case UNMARK:
         capability = "imapflags";
-        supported = parse_script->support.imapflags;
+        supported = parse_script->support & SIEVE_CAPA_IMAPFLAGS;
         break;
 
     case DENOTIFY:
         capability = "notify";
-        supported = parse_script->support.notify;
+        supported = parse_script->support & SIEVE_CAPA_NOTIFY;
         init_comptags(&p->u.d.comp);
         p->u.d.comp.collation = ASCIICASEMAP;
         p->u.d.priority = -1;
@@ -225,7 +225,6 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case NOTIFY:
     case ENOTIFY:
         /* actual type and availability will be determined by parser */
-        supported = 1;
         p->type = p->u.n.priority = -1;
         break;
 
@@ -234,12 +233,12 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
     case RETURN:
         capability = "include";
-        supported = parse_script->support.include;
+        supported = parse_script->support & SIEVE_CAPA_INCLUDE;
         break;
 
     case SET:
         capability = "variables";
-        supported = parse_script->support.variables;
+        supported = parse_script->support & SIEVE_CAPA_VARIABLES;
         break;
 
     case DELETEHEADER:
@@ -247,7 +246,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
     case ADDHEADER:
         capability = "editheader";
-        supported = parse_script->support.editheader;
+        supported = parse_script->support & SIEVE_CAPA_EDITHEADER;
         break;
     }
 

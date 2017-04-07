@@ -341,3 +341,121 @@ int interp_verify(sieve_interp_t *i)
         return SIEVE_NOT_FINALIZED;
     }
 }
+
+/* Array of Sieve capabilities */
+static const struct sieve_capa_t {
+    const char *str;
+    unsigned long long flag;
+} sieve_capabilities[] =
+{
+    /* Sieve "base" - RFC 5228 */
+    { "comparator-i;octet",         SIEVE_CAPA_BASE },
+    { "comparator-i;ascii-casemap", SIEVE_CAPA_BASE },
+    { "comparator-i;ascii-numeric", SIEVE_CAPA_COMP_NUMERIC },
+
+    { "encoded-character", SIEVE_CAPA_ENCODE_CHAR },
+    { "envelope",          SIEVE_CAPA_ENVELOPE },
+    { "fileinto",          SIEVE_CAPA_FILEINTO },
+
+    /* Regular Expressions - draft-ietf-sieve-regex */
+    { "regex", SIEVE_CAPA_REGEX },
+
+    /* Copy - RFC 3894 */
+    { "copy", SIEVE_CAPA_COPY },
+
+    /* Body - RFC 5173 */
+    { "body", SIEVE_CAPA_BODY },
+
+    /* Environment - RFC 5183 */
+    { "environment", SIEVE_CAPA_ENVIRONMENT },
+
+    /* Variables - RFC 5229 */
+    { "variables", SIEVE_CAPA_VARIABLES },
+
+    /* Vacation - RFC 5230 */
+    { "vacation", SIEVE_CAPA_VACATION },
+
+    /* Relational - RFC 5231 */
+    { "relational", SIEVE_CAPA_RELATIONAL },
+
+    /* IMAP4 Flags - RFC 5232 */
+    { "imap4flags", SIEVE_CAPA_IMAP4FLAGS },
+    { "imapflags",  SIEVE_CAPA_IMAPFLAGS }, /* draft-melnikov-sieve-imapflags-04 */
+
+    /* Subaddress - RFC 5233 */
+    { "subaddress", SIEVE_CAPA_SUBADDRESS },
+
+    /* Spamtest & Virustest - RFC 5235 */
+    { "spamtest",     SIEVE_CAPA_SPAM },
+    { "spamtestplus", SIEVE_CAPA_SPAMPLUS },
+    { "virustest",    SIEVE_CAPA_VIRUS },
+
+    /* Date & Index - RFC 5260 */
+    { "date",  SIEVE_CAPA_DATE },
+    { "index", SIEVE_CAPA_INDEX },
+
+    /* Editheader - RFC 5293 */
+    { "editheader", SIEVE_CAPA_EDITHEADER },
+
+    /* [Extended] Reject - RFC 5429 */
+    { "ereject", SIEVE_CAPA_EREJECT },
+    { "reject",  SIEVE_CAPA_REJECT },
+
+    /* Notifications - RFC 5435 */
+    { "enotify", SIEVE_CAPA_ENOTIFY },
+    { "notify",  SIEVE_CAPA_NOTIFY }, /* draft-martin-sieve-notify-01 */
+
+    /* Ihave - RFC 5463 */
+    { "ihave", SIEVE_CAPA_IHAVE },
+
+    /* Mailbox & Metadata - RFC 5490 */
+    { "mailbox",        SIEVE_CAPA_MAILBOX },
+    { "mboxmetadata",   SIEVE_CAPA_MBOXMETA },
+    { "servermetadata", SIEVE_CAPA_SERVERMETA },
+
+    /* MIME Part Handling - RFC 5703 */
+    { "enclose",      SIEVE_CAPA_ENCLOSE },
+    { "extracttest",  SIEVE_CAPA_EXTRACT },
+    { "foreverypart", SIEVE_CAPA_FOREVERYPART },
+    { "mime",         SIEVE_CAPA_MIME },
+    { "replace",      SIEVE_CAPA_REPLACE },
+
+    /* DSN & Deliver-By - RFC 6009 */
+    { "envelope-deliverby", SIEVE_CAPA_ENV_DELBY },
+    { "envelope-dsn",       SIEVE_CAPA_ENV_DSN },
+    { "redirect-deliverby", SIEVE_CAPA_REDIR_DELBY },
+    { "redirect-dsn",       SIEVE_CAPA_REDIR_DSN },
+
+    /* Vacation :seconds - RFC 6131 */
+    { "vacation-seconds", SIEVE_CAPA_VACATION_SEC },
+
+    /* External Lists - RFC 6134 */
+    { "extlists", SIEVE_CAPA_EXTLISTS },
+
+    /* Convert - RFC 6558 */
+    { "convert", SIEVE_CAPA_CONVERT },
+
+    /* Include - RFC 6609 */
+    { "include", SIEVE_CAPA_INCLUDE },
+
+    /* IMAP Events - RFC 6785 */
+    { "imapsieve", SIEVE_CAPA_IMAP },
+
+    /* Duplicate - RFC 7352 */
+    { "duplicate", SIEVE_CAPA_DUPLICATE },
+
+    { NULL, 0 }
+};
+    
+
+unsigned long long lookup_capability(const char *str)
+{
+    const struct sieve_capa_t *capa;
+
+    for (capa = sieve_capabilities; capa->str; capa++) {
+        if (!strcmp(str, capa->str)) return capa->flag;
+    }
+
+    return 0;
+}
+

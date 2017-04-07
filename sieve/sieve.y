@@ -129,6 +129,8 @@ void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
 extern void sieverestart(FILE *f);
 
+#define supported(capa) (sscript->support & capa)
+
 #define YYERROR_VERBOSE /* I want better error messages! */
 
 /* byacc default is 500, bison default is 10000 - go with the
@@ -183,7 +185,7 @@ extern void sieverestart(FILE *f);
 %type <test> htags atags etags
 %type <nval> matchtag collation sizetag addrparttag
 
-/* regex - draft-murchison-sieve-regex */
+/* regex - draft-ietf-sieve-regex */
 %token <nval> REGEX
 
 /* copy - RFC 3894 */
@@ -220,7 +222,7 @@ extern void sieverestart(FILE *f);
 %type <cl> flagtags
 %type <nval> flagaction
 
-/* imapflags - draft-melnikov-sieve-imapflags */
+/* imapflags - draft-melnikov-sieve-imapflags-04 */
 %token <nval> MARK UNMARK
 %type <nval> flagmark
 
@@ -253,7 +255,7 @@ extern void sieverestart(FILE *f);
 %type <cl> ntags
 %type <nval> mod15
 
-/* notify - draft-martin-sieve-notify */
+/* notify - draft-martin-sieve-notify-01 */
 %token DENOTIFY ID ANY
 %token <nval> LOW NORMAL HIGH
 %type <cl> dtags
@@ -423,7 +425,7 @@ flags: FLAGS stringlist          {
                                                       ":flags");
                                          strarray_free(*flags);
                                      }
-                                     else if (!sscript->support.imap4flags) {
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "imap4flags");
@@ -444,7 +446,7 @@ ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":create");
                                      }
-                                     else if (!sscript->support.mailbox) {
+                                     else if (!supported(SIEVE_CAPA_MAILBOX)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "mailbox");
@@ -465,7 +467,7 @@ copy: COPY                       {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":copy");
                                      }
-                                     else if (!sscript->support.copy) {
+                                     else if (!supported(SIEVE_CAPA_COPY)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "copy");
@@ -483,7 +485,7 @@ rtags: /* empty */               { $$ = new_command(REDIRECT, sscript); }
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":list");
                                      }
-                                     else if (!sscript->support.extlists) {
+                                     else if (!supported(SIEVE_CAPA_EXTLISTS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "extlists");
@@ -555,7 +557,7 @@ mod20:    QUOTEWILDCARD
         ;
 
 mod15:    ENCODEURL              { 
-                                     if (!sscript->support.enotify) {
+                                     if (!supported(SIEVE_CAPA_ENOTIFY)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "enotify");
@@ -579,7 +581,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.seconds = $3 * DAY2SEC;
                                  }
         | vtags SECONDS NUMBER   {
-                                     if (!sscript->support.vacation_seconds) {
+                                     if (supported(SIEVE_CAPA_VACATION_SEC)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "vacation-seconds");
@@ -662,7 +664,7 @@ flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
                                                       "variablename");
                                          free($$->u.fl.variable);
                                      }
-                                     else if (!(sscript->support.imap4flags)) {
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "imap4flags");
@@ -997,7 +999,7 @@ matchtype: matchtag              {
                                  {
                                      if (ctags->match != COUNT &&
                                          ctags->match != VALUE &&
-                                         !sscript->support.relational) {
+                                         !supported(SIEVE_CAPA_RELATIONAL)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "relational");
@@ -1019,7 +1021,7 @@ matchtag: IS
         | CONTAINS
         | MATCHES
         | REGEX                  {
-                                     if (!sscript->support.regex) {
+                                     if (!supported(SIEVE_CAPA_REGEX)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "regex");
@@ -1047,7 +1049,7 @@ relation: EQ
 /* :list match-type */
 listmatch: LIST                  {
                                      if (ctags->match != LIST &&
-                                         !sscript->support.extlists) {
+                                         !supported(SIEVE_CAPA_EXTLISTS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "extlists");
@@ -1081,7 +1083,7 @@ comparator: COMPARATOR collation
 collation: OCTET
         | ASCIICASEMAP
         | ASCIINUMERIC           {
-                                     if (!sscript->support.i_ascii_numeric) {
+                                     if (!supported(SIEVE_CAPA_COMP_NUMERIC)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "comparator-"
@@ -1103,7 +1105,7 @@ idxtags: INDEX NUMBER            {
                                                       ":index");
                                      }
                                      else {
-                                         if (!sscript->support.index) {
+                                       if (!supported(SIEVE_CAPA_INDEX)) {
                                              sieveerror_c(sscript,
                                                           SIEVE_MISSING_REQUIRE,
                                                           "index");
@@ -1122,7 +1124,7 @@ idxtags: INDEX NUMBER            {
                                                       ":last");
                                      }
                                      else if (ctags->index == 0) {
-                                         if (!sscript->support.index) {
+                                       if (!supported(SIEVE_CAPA_INDEX)) {
                                              sieveerror_c(sscript,
                                                           SIEVE_MISSING_REQUIRE,
                                                           "index");
@@ -1165,7 +1167,7 @@ addrparttag: ALL
         | LOCALPART
         | DOMAIN
         | subaddress             {
-                                     if (!sscript->support.subaddress) {
+                                     if (!supported(SIEVE_CAPA_SUBADDRESS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "subaddress");
@@ -1675,7 +1677,7 @@ static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 {
     assert(c && c->type == KEEP);
 
-    if (!sscript->support.variables &&
+    if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
         c->u.k.flags && !verify_flaglist(c->u.k.flags)) {
         strarray_add(c->u.k.flags, "");
     }
@@ -1688,7 +1690,7 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
 {
     assert(c && c->type == FILEINTO);
 
-    if (!sscript->support.variables &&
+    if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
         c->u.f.flags && !verify_flaglist(c->u.f.flags)) {
         strarray_add(c->u.f.flags, "");
     }
@@ -1773,7 +1775,7 @@ static commandlist_t *build_flag(sieve_script_t *sscript,
     assert(c &&
            (c->type == SETFLAG || c->type == ADDFLAG || c->type == REMOVEFLAG));
 
-    if (!sscript->support.variables && !verify_flaglist(flags)) {
+    if (!(sscript->support & SIEVE_CAPA_VARIABLES) && !verify_flaglist(flags)) {
         strarray_add(flags, "");
     }
     c->u.fl.flags = flags;
@@ -1842,7 +1844,7 @@ static commandlist_t *build_notify(sieve_script_t *sscript,
     assert(c && (t == NOTIFY || t == ENOTIFY));
 
     if (t == ENOTIFY) {
-        if (!sscript->support.enotify) {
+        if (!supported(SIEVE_CAPA_ENOTIFY)) {
             sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "enotify");
         }
         if (c->u.n.id != NULL) {
@@ -1855,7 +1857,7 @@ static commandlist_t *build_notify(sieve_script_t *sscript,
         c->u.n.method = method;
     }
     else {
-        if (!sscript->support.notify) {
+        if (!supported(SIEVE_CAPA_NOTIFY)) {
             sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "notify");
         }
         if (c->u.n.from != NULL) {
@@ -1947,7 +1949,7 @@ static test_t *build_hasflag(sieve_script_t *sscript, test_t *t,
     assert(t && t->type == HASFLAG);
 
     if (sl) {
-        if (!sscript->support.variables) {
+        if (!supported(SIEVE_CAPA_VARIABLES)) {
             sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "variables");
         }
 
