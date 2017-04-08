@@ -1785,19 +1785,22 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
 
     assert(c && c->type == VACATION);
 
-    verify_utf8(sscript, c->u.v.handle);
-    verify_utf8(sscript, c->u.v.subject);
-    verify_address(sscript, c->u.v.from);
-    verify_stringlist(sscript, c->u.v.addresses, verify_address);
+    if (c->u.v.handle) verify_utf8(sscript, c->u.v.handle);
+    if (c->u.v.subject) verify_utf8(sscript, c->u.v.subject);
+    if (c->u.v.from) verify_address(sscript, c->u.v.from);
+    if (c->u.v.addresses)
+        verify_stringlist(sscript, c->u.v.addresses, verify_address);
 
-    if (c->u.v.mime == -1) verify_utf8(sscript, message);
+    if (c->u.v.mime == -1) {
+        verify_utf8(sscript, message);
+        c->u.v.mime = 0;
+    }
 
     c->u.v.message = message;
 
     if (c->u.v.seconds == -1) c->u.v.seconds = 7 * DAY2SEC;
     if (c->u.v.seconds < min) c->u.v.seconds = min;
     if (c->u.v.seconds > max) c->u.v.seconds = max;
-    if (c->u.v.mime == -1) c->u.v.mime = 0;
 
     return c;
 }
