@@ -616,7 +616,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.seconds = $3 * DAY2SEC;
                                  }
         | vtags SECONDS NUMBER   {
-                                     if (supported(SIEVE_CAPA_VACATION_SEC)) {
+                                     if (!supported(SIEVE_CAPA_VACATION_SEC)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "vacation-seconds");
