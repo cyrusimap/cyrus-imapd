@@ -120,6 +120,11 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         p->u.dt.zonetag = -1;
         break;
 
+    case IHAVE:
+        capability = "ihave";
+        supported = parse_script->support & SIEVE_CAPA_IHAVE;
+        break;
+
     case MAILBOXEXISTS:
         capability = "mailbox";
         supported = parse_script->support & SIEVE_CAPA_MAILBOX;
@@ -228,6 +233,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         p->type = p->u.n.priority = -1;
         break;
 
+    case ERROR:
+        capability = "ihave";
+        supported = parse_script->support & SIEVE_CAPA_IHAVE;
+        break;
+
     case INCLUDE:
         p->u.inc.once = p->u.inc.location = p->u.inc.optional = -1;
 
@@ -270,9 +280,7 @@ commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
     return p;
 }
 
-void free_test(test_t *t);
-
-static void free_tl(testlist_t *tl)
+void free_testlist(testlist_t *tl)
 {
     testlist_t *tl2;
 
@@ -293,10 +301,11 @@ void free_test(test_t *t)
     switch (t->type) {
     case ANYOF:
     case ALLOF:
-        free_tl(t->u.tl);
+        free_testlist(t->u.tl);
         break;
 
     case EXISTS:
+    case IHAVE:
     case VALIDEXTLIST:
         strarray_free(t->u.sl);
         break;
@@ -388,7 +397,8 @@ void free_tree(commandlist_t *cl)
 
         case REJCT:
         case EREJECT:
-            free(cl->u.reject);
+        case ERROR:
+            free(cl->u.str);
             break;
 
         case VACATION:

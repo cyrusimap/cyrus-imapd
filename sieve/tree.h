@@ -62,10 +62,11 @@ struct Comp {
 
 struct Test {
     int type;
+    int ignore_err;
     union {
         test_t *t; /* not */
         testlist_t *tl; /* anyof, allof */
-        strarray_t *sl; /* exists, valid_ext_list */
+        strarray_t *sl; /* exists, ihave, valid_ext_list */
         struct { /* it's a header or hasflag or string test */
             comp_t comp;
             strarray_t *sl;
@@ -120,7 +121,7 @@ struct Testlist {
 struct Commandlist {
     int type;
     union {
-        char *reject; /* its a reject action */
+        char *str; /* its a reject or error action */
         struct { /* it's an if statement */
             test_t *t;
             commandlist_t *do_then;
@@ -203,6 +204,7 @@ testlist_t *new_testlist(test_t *t, testlist_t *n);
 commandlist_t *new_command(int type, sieve_script_t *parse_script);
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n);
 
+void free_testlist(testlist_t *tl);
 void free_test(test_t *t);
 void free_tree(commandlist_t *cl);
 

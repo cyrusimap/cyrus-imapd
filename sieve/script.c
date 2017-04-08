@@ -75,130 +75,13 @@ void sieverestart (FILE *input_file);
 #define ERR_BUF_SIZE 1024
 
 /* does this interpretor support this requirement? */
-int script_require(sieve_script_t *s, char *req)
+int script_require(sieve_script_t *s, const char *req)
 {
-    unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
-    unsigned long long capa = lookup_capability(req);
-
-    switch (capa) {
-    case SIEVE_CAPA_ENVELOPE:
-        if (!(s->interp.getenvelope &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_FILEINTO:
-        if (!(s->interp.fileinto &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_REGEX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_COPY:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_BODY:
-        if (!(s->interp.getbody &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_VARIABLES:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)) capa = 0;
-        break;
-        
-    case SIEVE_CAPA_VACATION:
-        if (!(s->interp.vacation &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_RELATIONAL:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_IMAP4FLAGS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) capa = 0;
-        break;
-        
-    case SIEVE_CAPA_IMAPFLAGS:
-        if (!(s->interp.markflags->count &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_SUBADDRESS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_DATE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_INDEX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_EDITHEADER:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_EREJECT:
-    case SIEVE_CAPA_REJECT:
-        if (!(s->interp.reject &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_ENOTIFY:
-    case SIEVE_CAPA_NOTIFY:
-        if (!(s->interp.notify &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_MAILBOX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_MBOXMETA:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_SERVERMETA:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_VACATION_SEC:
-        if (!(s->interp.vacation &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))) {
-            capa = 0;
-        } else {
-            /* Note that "vacation-seconds" implies "vacation", and a script
-             * with "vacation-seconds" in a "require" list MAY omit "vacation"
-             * from that list. */
-            capa |= SIEVE_CAPA_VACATION;
-        }
-        break;
-
-    case SIEVE_CAPA_EXTLISTS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)) capa = 0;
-        break;
-
-    case SIEVE_CAPA_INCLUDE:
-        if (!(s->interp.getinclude &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))) capa = 0;
-        break;
-
-    case SIEVE_CAPA_DUPLICATE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) capa = 0;
-        break;
-
-    default:
-        /* nothing to check or add */
-        break;
-    }
+    unsigned long long capa = extension_isactive(&s->interp, req);
 
     s->support |= capa;
 
-    return (capa != 0);
+    return (capa != 0LL);
 }
 
 /* given an interpretor and a script, produce an executable script */
@@ -223,7 +106,7 @@ EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     /* initialize error buffer */
     buf_init(&s->sieveerr);
 
-    s->err = 0;
+    s->err = s->ignore_err = 0;
 
     sieverestart(script);
     s->cmds = NULL;

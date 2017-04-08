@@ -118,6 +118,8 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->addheader &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
             buf_appendcstr(&buf, " editheader");
+        if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
+            buf_appendcstr(&buf, " ihave");
 
         /* add tests */
         if (i->getenvelope &&
@@ -459,3 +461,136 @@ unsigned long long lookup_capability(const char *str)
     return 0;
 }
 
+unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
+{
+    unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+    unsigned long long capa = lookup_capability(str);
+
+    switch (capa) {
+    case SIEVE_CAPA_BASE:
+    case SIEVE_CAPA_COMP_NUMERIC:
+        /* always enabled */
+        break;
+
+    case SIEVE_CAPA_ENVELOPE:
+        if (!(interp->getenvelope &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_FILEINTO:
+        if (!(interp->fileinto &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_REGEX:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_COPY:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_BODY:
+        if (!(interp->getbody &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_VARIABLES:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)) capa = 0;
+        break;
+        
+    case SIEVE_CAPA_VACATION:
+        if (!(interp->vacation &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_RELATIONAL:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_IMAP4FLAGS:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) capa = 0;
+        break;
+        
+    case SIEVE_CAPA_IMAPFLAGS:
+        if (!(interp->markflags->count &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_SUBADDRESS:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_DATE:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_INDEX:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_EDITHEADER:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_EREJECT:
+    case SIEVE_CAPA_REJECT:
+        if (!(interp->reject &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_ENOTIFY:
+    case SIEVE_CAPA_NOTIFY:
+        if (!(interp->notify &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_IHAVE:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_MAILBOX:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_MBOXMETA:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_SERVERMETA:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_VACATION_SEC:
+        if (!(interp->vacation &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))) {
+            capa = 0;
+        } else {
+            /* Note that "vacation-seconds" implies "vacation", and a script
+             * with "vacation-seconds" in a "require" list MAY omit "vacation"
+             * from that list. */
+            capa |= SIEVE_CAPA_VACATION;
+        }
+        break;
+
+    case SIEVE_CAPA_EXTLISTS:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_INCLUDE:
+        if (!(interp->getinclude &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_DUPLICATE:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) capa = 0;
+        break;
+
+    default:
+        /* not supported */
+        capa = 0;
+        break;
+    }
+
+    return (capa);
+}

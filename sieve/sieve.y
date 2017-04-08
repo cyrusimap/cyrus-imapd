@@ -82,9 +82,9 @@ extern void addr_delete_buffer(YY_BUFFER_STATE);
 
 extern int sievelineno;
 
-void sieveerror_c(sieve_script_t* , int code, ...);
+void sieveerror_c(sieve_script_t*, int code, ...);
 
-static int check_reqs(sieve_script_t* , strarray_t *sl);
+static int check_reqs(sieve_script_t*, strarray_t *sl);
 
 /* construct/canonicalize action commands */
 static commandlist_t *build_keep(sieve_script_t*, commandlist_t *c);
@@ -92,7 +92,7 @@ static commandlist_t *build_fileinto(sieve_script_t*,
                                      commandlist_t *c, char *folder);
 static commandlist_t *build_redirect(sieve_script_t*,
                                      commandlist_t *c, char *addr);
-static commandlist_t *build_reject(sieve_script_t*, int t, char *message);
+static commandlist_t *build_rej_err(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t*,
                                  commandlist_t *c, strarray_t *flags);
@@ -108,6 +108,9 @@ static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
 
 /* construct/canonicalize test commands */
+static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
+static test_t *build_allof(sieve_script_t*, testlist_t *tl);
+static test_t *build_not(sieve_script_t*, test_t *t);
 static test_t *build_address(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_envelope(sieve_script_t*, test_t *t,
@@ -121,6 +124,7 @@ static test_t *build_hasflag(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_date(sieve_script_t*, test_t *t,
                           char *hn, int part, strarray_t *kl);
+static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
@@ -141,7 +145,8 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$);     } commands command action control elsif block
+%destructor  { free_tree($$);     } commands command action control thenelse elsif block
+%destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
 %destructor  { free($$);          } STRING
@@ -169,7 +174,7 @@ extern void sieverestart(FILE *f);
 
 /* standard control commands - RFC 5228 */
 %token IF ELSIF ELSE REQUIRE STOP
-%type <cl> elsif block
+%type <cl> thenelse elsif block
 
 /* standard action commands - RFC 5228 */
 %token DISCARD KEEP FILEINTO REDIRECT
@@ -261,6 +266,9 @@ extern void sieverestart(FILE *f);
 %type <cl> dtags
 %type <nval> priority
 
+/* ihave - RFC 5463 */
+%token IHAVE ERROR
+
 /* mailbox - RFC 5490 */
 %token MAILBOXEXISTS CREATE
 %type <test> mtags
@@ -319,7 +327,14 @@ commands: command
 
 command:  control
         | action ';'
-        | error ';'              { $$ = new_command(STOP, sscript); }
+        | error ';'              {
+                                     struct buf buf = BUF_INITIALIZER;
+                                     buf_printf(&buf, "%s: line %d",
+                                                error_message(SIEVE_UNSUPP_EXT),
+                                                sievelineno);
+                                     $$ = build_rej_err(sscript, ERROR,
+                                                        buf_release(&buf));
+                                 }
         ;
 
 
@@ -352,13 +367,25 @@ require: REQUIRE stringlist ';'  { check_reqs(sscript, $2); }
         ;
 
 
-control:  IF test block elsif    { $$ = new_if($2, $3, $4); }
+control:  IF thenelse            { $$ = $2; }
         | STOP ';'               { $$ = new_command(STOP, sscript); }
+        | ERROR STRING ';'       { $$ = build_rej_err(sscript, ERROR, $2); }
+        ;
+
+
+thenelse: test block elsif       { 
+                                     if ($1->ignore_err) {
+                                         /* end of block - decrement counter */
+                                         sscript->ignore_err--;
+                                     }
+
+                                     $$ = new_if($1, $2, $3);
+                                 }
         ;
 
 
 elsif: /* empty */               { $$ = NULL; }
-        | ELSIF test block elsif { $$ = new_if($2, $3, $4); }
+        | ELSIF thenelse         { $$ = $2; }
         | ELSE block             { $$ = $2; }
         ;
 
@@ -393,7 +420,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
                                  { $$ = build_deleteheader(sscript,
                                                            $2, $3, $4); }
 
-        | reject STRING          { $$ = build_reject(sscript, $1, $2); }
+        | reject STRING          { $$ = build_rej_err(sscript, $1, $2); }
         | NOTIFY ntags STRING    { $$ = build_notify(sscript,
                                                      $2, ENOTIFY, $3); }
 
@@ -885,24 +912,15 @@ tests: test                      { $$ = new_testlist($1, NULL); }
         ;
 
 
-test:     ANYOF testlist         {
-                                     $$ = new_test(ANYOF, sscript);
-                                     $$->u.tl = $2;
-                                 }
-        | ALLOF testlist         {
-                                     $$ = new_test(ALLOF, sscript);
-                                     $$->u.tl = $2;
-                                 }
+test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
+        | ALLOF testlist         { $$ = build_allof(sscript, $2); }
+        | NOT test               { $$ = build_not(sscript, $2);   }
+        | SFALSE                 { $$ = new_test(SFALSE, sscript); }
+        | STRUE                  { $$ = new_test(STRUE, sscript);  }
         | EXISTS stringlist      {
                                      $$ = new_test(EXISTS, sscript);
                                      $$->u.sl = $2;
                                  }
-        | NOT test               {
-                                     $$ = new_test(NOT, sscript);
-                                     $$->u.t  = $2;
-                                 }
-        | SFALSE                 { $$ = new_test(SFALSE, sscript); }
-        | STRUE                  { $$ = new_test(STRUE, sscript);  }
         | SIZE sizetag NUMBER    {
                                      $$ = new_test(SIZE, sscript);
                                      $$->u.sz.t = $2;
@@ -937,6 +955,7 @@ test:     ANYOF testlist         {
 
         | CURRENTDATE cdtags datepart stringlist
                                  { $$ = build_date(sscript, $2, NULL, $3, $4); }
+        | IHAVE stringlist       { $$ = build_ihave(sscript, $2); }
 
         | MAILBOXEXISTS stringlist
                                  { 
@@ -974,7 +993,7 @@ test:     ANYOF testlist         {
                                      $$->u.sl = $2;
                                  }
         | DUPLICATE duptags      { $$ = build_duplicate(sscript, $2); }
-        | error                  { $$ = NULL; }
+        | error                  { $$ = new_test(SFALSE, sscript); }
         ;
 
 
@@ -1377,6 +1396,8 @@ idtype:   HEADER
 
 void yyerror(sieve_script_t *sscript, const char *msg)
 {
+    if (sscript->ignore_err) return;
+
     sscript->err++;
     if (sscript->interp.err) {
         sscript->interp.err(sievelineno, msg, sscript->interp.interp_context,
@@ -1677,6 +1698,10 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
     strarray_free(sa);
 
     if (ret == 0) yyerror(sscript, buf_cstring(&sscript->sieveerr));
+    else if (sscript->support & SIEVE_CAPA_IHAVE) {
+        /* mark all allowed extensions as supported */
+        sscript->support |= (SIEVE_CAPA_ALL & ~SIEVE_CAPA_IHAVE_INCOMPAT);
+    }
 
     return ret;
 }
@@ -1831,17 +1856,17 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
     return c;
 }
 
-static commandlist_t *build_reject(sieve_script_t *sscript,
-                                   int t, char *message)
+static commandlist_t *build_rej_err(sieve_script_t *sscript,
+                                    int t, char *message)
 {
     commandlist_t *c;
 
-    assert(t == REJCT || t == EREJECT);
+    assert(t == REJCT || t == EREJECT || t == ERROR);
 
     verify_utf8(sscript, message);
 
     c = new_command(t, sscript);
-    c->u.reject = message;
+    c->u.str = message;
 
     return c;
 }
@@ -1916,6 +1941,92 @@ static commandlist_t *build_include(sieve_script_t *sscript,
     if (c->u.inc.optional == -1) c->u.inc.optional = 0;
 
     return c;
+}
+
+static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
+{
+    test_t *t;
+
+    assert(tl);
+
+    if (tl->next == NULL) {
+        /* collapse single item list into a simple test */
+        t = tl->t;
+        free(tl);
+    }
+    else {
+        test_t *fail = NULL, *maybe = NULL;
+
+        /* create ANYOF test */
+        t = new_test(ANYOF, sscript);
+        t->u.tl = tl;
+
+        /* find first test that did/didn't set ignore_err */
+        for ( ; tl && !fail && !maybe; tl = tl->next) {
+            if (tl->t->ignore_err) {
+                if (!fail) fail = tl->t;
+            }
+            else if (!maybe) maybe = tl->t;
+        }
+
+        if (fail) {
+            if (maybe) {
+                /* test may succeed - backout ignore_err */
+                sscript->ignore_err = --fail->ignore_err;
+            }
+            else {
+                /* test will fail - revert ignore_err to first value */
+                sscript->ignore_err = t->ignore_err = fail->ignore_err;
+            }
+        }
+    }
+
+    return t;
+}
+
+static test_t *build_allof(sieve_script_t *sscript, testlist_t *tl)
+{
+    test_t *t;
+
+    assert(tl);
+
+    if (tl->next == NULL) {
+        /* collapse single item list into a simple test */
+        t = tl->t;
+        free(tl);
+    }
+    else {
+        /* create ALLOF test */
+        t = new_test(ALLOF, sscript);
+        t->u.tl = tl;
+
+        /* find first test that set ignore_err and revert to that value */
+        for ( ; tl; tl = tl->next) {
+            if (tl->t->ignore_err) {
+                sscript->ignore_err = t->ignore_err = tl->t->ignore_err;
+                break;
+            }
+        }
+    }
+
+    return t;
+}
+
+static test_t *build_not(sieve_script_t *sscript, test_t *t)
+{
+    test_t *n;
+
+    assert(t);
+
+    if (t->ignore_err) {
+        /* test will succeed - backout ignore_err */
+        sscript->ignore_err = --t->ignore_err;
+    }
+
+    n = new_test(NOT, sscript);
+    n->u.t = t;
+
+    return n;
 }
 
 static test_t *build_hhs(sieve_script_t *sscript, test_t *t,
@@ -2045,6 +2156,34 @@ static test_t *build_date(sieve_script_t *sscript,
     return t;
 }
 
+static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
+{
+    test_t *t;
+    int i;
+
+    t = new_test(IHAVE, sscript);
+    t->u.sl = sa;
+
+    /* check if we support all listed extensions */
+    for (i = 0; i < strarray_size(sa); i++) {
+        unsigned long long capa = lookup_capability(strarray_nth(sa, i));
+
+        if (!capa) {
+            /* need to start ignoring errors immediately in case this ihave
+               is part of a testlist with an unknown test later in the list */
+            if (!t->ignore_err) t->ignore_err = ++sscript->ignore_err;
+        }
+        else if (capa & SIEVE_CAPA_IHAVE_INCOMPAT) {
+            /* incompatible extension used in ihave - parse error */
+            sscript->ignore_err = 0;
+            sieveerror_c(sscript, SIEVE_IHAVE_INCOMPAT, strarray_nth(sa, i));
+            break;
+        }
+    }
+
+    return t;
+}
+
 static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
                                test_t *t, char *extname,
                                char *keyname, strarray_t *keylist)
@@ -2060,7 +2199,6 @@ static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
 
     return t;
 }
-
 
 static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 {

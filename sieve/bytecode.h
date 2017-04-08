@@ -112,7 +112,8 @@ typedef union
  *                                  eReject (RFC5429),
  *                                  External Lists (RFC6134),
  *                                  eNotify (RFC5435),
- *                                  Duplicate (RFC7352)
+ *                                  Duplicate (RFC7352),
+ *                                  Ihave (RFC5463)
  */
 #define BYTECODE_VERSION 0x12
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -173,7 +174,9 @@ enum bytecode {
 
     B_REDIRECT,
 
-    B_ENOTIFY           /* require enotify */
+    B_ENOTIFY,          /* require enotify */
+
+    B_ERROR             /* require ihave */
 };
 
 enum bytecode_comps {
@@ -200,7 +203,8 @@ enum bytecode_comps {
     BC_SERVERMETADATAEXISTS,
     BC_STRING,          /* require variables */
     BC_VALIDEXTLIST,    /* require extlists */
-    BC_DUPLICATE        /* require duplicate */
+    BC_DUPLICATE,       /* require duplicate */
+    BC_IHAVE            /* require ihave */
 };
 
 /* currently one enum so as to help determine where values are being misused.

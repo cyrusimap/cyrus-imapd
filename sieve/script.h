@@ -60,6 +60,7 @@ struct sieve_script {
     commandlist_t *cmds;
 
     int err;
+    int ignore_err;
     char addrerr[500]; /* buffer for address parser error messages */
     struct buf sieveerr;
 };
@@ -82,6 +83,6 @@ struct sieve_execute {
     sieve_bytecode_t *bc_cur;   /* currently active bytecode buffer */
 };
 
-int script_require(sieve_script_t *s, char *req);
+int script_require(sieve_script_t *s, const char *req);
 
 #endif /*  SIEVE_SCRIPT_H */

@@ -374,6 +374,10 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:normal              return yylval->nval = NORMAL;
 <INITIAL>:high                return yylval->nval = HIGH;
 
+    /* ihave - RFC 5463 */
+<INITIAL>ihave                return IHAVE;
+<INITIAL>error                return ERROR;
+
     /* mailbox - RFC 5490 */
 <INITIAL>mailboxexists        return MAILBOXEXISTS;
 <INITIAL>:create              return CREATE;

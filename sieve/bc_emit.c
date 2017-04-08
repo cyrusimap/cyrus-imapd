@@ -238,6 +238,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
 
     case BC_EXISTS:
+    case BC_IHAVE:
     case BC_VALIDEXTLIST:
     {
         int ret;
@@ -876,6 +877,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
         case B_REJECT:
         case B_EREJECT:
+        case B_ERROR:
             /*just a string*/
             len = bc->data[codep++].len;
             if(write_int(fd,len) == -1)

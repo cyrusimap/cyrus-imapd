@@ -1543,6 +1543,30 @@ envelope_err:
         free(keylist);
         break;
     }
+    case BC_IHAVE:/*24*/
+    {
+        int listi=i+1;
+        int currl;
+
+        res=1;
+
+        list_len=ntohl(bc[listi].len);
+        list_end=ntohl(bc[listi+1].value)/4;
+
+        currl=listi+2;
+
+        for(x=0; x<list_len && res; x++)
+        {
+            const char *str;
+
+            currl = unwrap_string(bc, currl, &str, NULL);
+
+            if (!extension_isactive(interp, str)) res = 0;
+        }
+
+        i=list_end; /* adjust for short-circuit */
+        break;
+    }
     case BC_MAILBOXEXISTS:/*16*/
         res = 0;
         i++;
@@ -1765,20 +1789,20 @@ envelope_err:
     case BC_VALIDEXTLIST:/*22*/
     {
         int listi=i+1;
-        int currh;
+        int currl;
 
         res=1;
 
         list_len=ntohl(bc[listi].len);
         list_end=ntohl(bc[listi+1].value)/4;
 
-        currh=listi+2;
+        currl=listi+2;
 
         for(x=0; x<list_len && res; x++)
         {
             const char *str;
 
-            currh = unwrap_string(bc, currh, &str, NULL);
+            currl = unwrap_string(bc, currl, &str, NULL);
 
             if (requires & BFE_VARIABLES) {
                 str = parse_string(str, variables);
@@ -2828,6 +2852,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
             break;
         }
+
+        case B_ERROR:/*33*/
+            ip = unwrap_string(bc, ip, &data, NULL);
+
+            res = SIEVE_RUN_ERROR;
+            *errmsg = data;
+
+            break;
 
         default:
             if(errmsg) *errmsg = "Invalid sieve bytecode";

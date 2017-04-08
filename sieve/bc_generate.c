@@ -309,14 +309,15 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
                                        ? B_OVER : B_UNDER);
         retval->data[codep++].value = t->u.sz.n;
         break;
-    case EXISTS:/* BC_EXISTS { headers : string list } */
+    case EXISTS:      /* BC_EXISTS       { headers    : string list } */
+    case IHAVE:       /* BC_IHAVE        { extensions : string list } */
+    case VALIDEXTLIST:/* BC_VALIDEXTLIST { listnames  : string list } */
         if(!atleast(retval,codep+1)) return -1;
-        retval->data[codep++].op = BC_EXISTS;
-        codep= bc_stringlist_generate(codep, retval, t->u.sl);
-        break;
-    case VALIDEXTLIST:/* BC_VALIDEXTLIST { listnames : string list } */
-        if(!atleast(retval,codep+1)) return -1;
-        retval->data[codep++].op = BC_VALIDEXTLIST;
+        switch (t->type) {
+        case EXISTS:       retval->data[codep++].op = BC_EXISTS; break;
+        case IHAVE:        retval->data[codep++].op = BC_IHAVE; break;
+        case VALIDEXTLIST: retval->data[codep++].op = BC_VALIDEXTLIST; break;
+        }
         codep= bc_stringlist_generate(codep, retval, t->u.sl);
         break;
     case ANYOF:/* BC_ANYOF { tests : test list } */
@@ -775,12 +776,16 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case REJCT:
             case EREJECT:
-                /* (REJECT | EREJECT) (STRING: len + dataptr) */
+            case ERROR:
+                /* (REJECT | EREJECT | ERROR) (STRING: len + dataptr) */
                 if (!atleast(retval, codep+3)) return -1;
-                retval->data[codep++].op =
-                    (c->type == EREJECT) ? B_EREJECT : B_REJECT;
-                retval->data[codep++].len = strlen(c->u.reject);
-                retval->data[codep++].str = c->u.reject;
+                switch (c->type) {
+                case REJCT:   retval->data[codep++].op = B_REJECT; break;
+                case EREJECT: retval->data[codep++].op = B_EREJECT; break;
+                case ERROR:   retval->data[codep++].op = B_ERROR; break;
+                }
+                retval->data[codep++].len = strlen(c->u.str);
+                retval->data[codep++].str = c->u.str;
                 break;
 
             case FILEINTO:

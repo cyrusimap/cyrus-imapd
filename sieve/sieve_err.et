@@ -86,4 +86,10 @@ ec SIEVE_DUPLICATE_ARG,
 ec SIEVE_INVALID_VALUE,
    "invalid %s value"
 
+ec SIEVE_UNSUPP_EXT,
+    "unsupported extension"
+
+ec SIEVE_IHAVE_INCOMPAT,
+   "\"%s\" extension MUST NOT be used in \"ihave\" test"
+
 end

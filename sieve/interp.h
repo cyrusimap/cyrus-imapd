@@ -148,7 +148,7 @@ enum sieve_capa_flag {
     SIEVE_CAPA_NOTIFY       = 1LL<<24, /* draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
-    SIEVE_CAPA_IHAVE        = 0LL<<25, /* currently unsupported */
+    SIEVE_CAPA_IHAVE        = 1LL<<25,
 
     /* Mailbox & Metadata - RFC 5490 */
     SIEVE_CAPA_MAILBOX      = 1LL<<26,
@@ -187,8 +187,56 @@ enum sieve_capa_flag {
     SIEVE_CAPA_DUPLICATE    = 1LL<<43,
 };
 
+#define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
+                        | SIEVE_CAPA_COMP_NUMERIC \
+                        | SIEVE_CAPA_ENCODE_CHAR  \
+                        | SIEVE_CAPA_ENVELOPE     \
+                        | SIEVE_CAPA_FILEINTO     \
+                        | SIEVE_CAPA_REGEX        \
+                        | SIEVE_CAPA_COPY         \
+                        | SIEVE_CAPA_BODY         \
+                        | SIEVE_CAPA_ENVIRONMENT  \
+                        | SIEVE_CAPA_VARIABLES    \
+                        | SIEVE_CAPA_VACATION     \
+                        | SIEVE_CAPA_RELATIONAL   \
+                        | SIEVE_CAPA_IMAP4FLAGS   \
+                        | SIEVE_CAPA_IMAPFLAGS    \
+                        | SIEVE_CAPA_SUBADDRESS   \
+                        | SIEVE_CAPA_SPAM         \
+                        | SIEVE_CAPA_SPAMPLUS     \
+                        | SIEVE_CAPA_VIRUS        \
+                        | SIEVE_CAPA_DATE         \
+                        | SIEVE_CAPA_INDEX        \
+                        | SIEVE_CAPA_EDITHEADER   \
+                        | SIEVE_CAPA_EREJECT      \
+                        | SIEVE_CAPA_REJECT       \
+                        | SIEVE_CAPA_ENOTIFY      \
+                        | SIEVE_CAPA_NOTIFY       \
+                        | SIEVE_CAPA_IHAVE        \
+                        | SIEVE_CAPA_MAILBOX      \
+                        | SIEVE_CAPA_MBOXMETA     \
+                        | SIEVE_CAPA_SERVERMETA   \
+                        | SIEVE_CAPA_ENCLOSE      \
+                        | SIEVE_CAPA_EXTRACT      \
+                        | SIEVE_CAPA_FOREVERYPART \
+                        | SIEVE_CAPA_MIME         \
+                        | SIEVE_CAPA_REPLACE      \
+                        | SIEVE_CAPA_ENV_DELBY    \
+                        | SIEVE_CAPA_ENV_DSN      \
+                        | SIEVE_CAPA_REDIR_DELBY  \
+                        | SIEVE_CAPA_REDIR_DSN    \
+                        | SIEVE_CAPA_VACATION_SEC \
+                        | SIEVE_CAPA_EXTLISTS     \
+                        | SIEVE_CAPA_CONVERT      \
+                        | SIEVE_CAPA_INCLUDE      \
+                        | SIEVE_CAPA_IMAP         \
+                        | SIEVE_CAPA_DUPLICATE    \
+                        )
+
+#define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODE_CHAR | SIEVE_CAPA_VARIABLES)
 
 unsigned long long lookup_capability(const char *str);
+unsigned long long extension_isactive(sieve_interp_t *interp, const char *str);
 int interp_verify(sieve_interp_t *interp);
 
 #endif

@@ -232,6 +232,10 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         printf("valid_ext_list");
         i=write_list(ntohl(d[i+1].len), i+2, d);
         break;
+    case BC_IHAVE:
+        printf("ihave");
+        i=write_list(ntohl(d[i+1].len), i+2, d);
+        break;
     case BC_SIZE:
         printf("size");
         if (ntohl(d[i+1].value)==B_OVER) {
@@ -637,10 +641,15 @@ static void dump2(bytecode_input_t *d, int bc_len)
     i = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
     version = ntohl(d[i].op);
-    printf("Sievecode version %d\n", version);
-    if (version >= 0x11 && ntohl(d[++i].value) & BFE_VARIABLES) {
-        printf("Require Variables\n");
+    printf("Bytecode version: %d\n", version);
+    if (version >= 0x11) {
+        int requires = ntohl(d[++i].value);
+
+        printf("Require:");
+        if (requires & BFE_VARIABLES) printf(" Variables");
+        printf("\n");
     }
+    printf("\n");
     
     for(i++; i<bc_len;) 
     {
@@ -680,6 +689,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
                    len, data);
             break;
 
+        case B_ERROR:/*34*/
+            i = unwrap_string(d, i, &data, &len);
+            printf("ERROR {%d}%s\n", len, data);
+            break;
+
         case B_FILEINTO: /*24*/
             create = ntohl(d[i++].value);
             /* fall through */
@@ -697,7 +711,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
             /* fall through */
         case B_FILEINTO_ORIG: /*4*/
             i = unwrap_string(d, i, &data, &len);
-            printf("FILEINTO COPY(%d) CREATE(%d) FOLDER({%d}%s)\n",copy,create,len,data);
+            printf("FILEINTO COPY(%d) CREATE(%d) FOLDER({%d}%s)\n",
+                   copy, create, len, data);
             break;
 
         case B_REDIRECT: /*32*/
