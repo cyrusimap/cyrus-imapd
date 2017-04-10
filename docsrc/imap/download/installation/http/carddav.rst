@@ -5,7 +5,7 @@ CardDAV Management
 ==================
 
 CardDAV Configuration
-====================
+=====================
 
 .. sidebar:: addressbookprefix
 
