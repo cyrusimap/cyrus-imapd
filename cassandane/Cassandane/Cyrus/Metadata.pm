@@ -147,11 +147,14 @@ sub list_annotations
 
     my $scope = delete $params{scope} || 'global';
     my $mailbox = delete $params{mailbox} || 'user.cassandane';
-    my $basedir = delete $params{basedir} || $self->{instance}->{basedir};
     my $tombstones = delete $params{tombstones};
-    my $withmodseq = delete $params{withmodseq};
+    my $withmdata = delete $params{withmdata};
+    my $instance = delete $params{instance} || $self->{instance};
+    my $uids = delete $params{uids};
     die "Unknown parameters: " . join(' ', map { $_ . '=' . $params{$_}; } keys %params)
 	if scalar %params;
+
+    my $basedir = $instance->{basedir};
 
     my $mailbox_db;
     if ($scope eq 'global' || $scope eq 'mailbox')
@@ -170,10 +173,10 @@ sub list_annotations
     }
 
     my $tmpfile = tmpnam();
-    my $format = $self->{instance}->{config}->get('annotation_db');
+    my $format = $instance->{config}->get('annotation_db');
     $format = $format // 'skiplist';
 
-    $self->{instance}->run_command({ cyrus => 1 },
+    $instance->run_command({ cyrus => 1 },
 			'cvt_cyrusdb',
 			$mailbox_db, $format,
 			$tmpfile, 'flat');
@@ -210,8 +213,16 @@ sub list_annotations
         if ($flags and not $tombstones) {
             next;
         }
-        if ($withmodseq) {
+        if ($withmdata) {
             $annot->{modseq} = $modseq;
+            $annot->{flags} = $flags;
+        }
+    }
+
+    if ($uids) {
+        my %wantuids = map { $_ => 1 } $uids;
+        if ($uids and not exists($wantuids{$annot->{uid}})) {
+            next;
         }
     }
 
@@ -232,6 +243,42 @@ sub list_annotations
     return \@annots;
 }
 
+sub list_uids
+{
+    my ($self, $store) = @_;
+    my @uids;
+
+	$store->read_begin();
+	while (my $msg = $store->read_message())
+	{
+        push(@uids, $msg->{uid});
+	}
+	$store->read_end();
+
+    return \@uids;
+}
+
+sub check_msg_annotation_replication
+{
+    my ($self, $master_store, $replica_store, %params) = @_;
+
+    my $master_annots = $self->list_annotations((%params,
+            scope => 'message',
+            instance => $self->{instance},
+            withmdata => 1,
+            tombstones => 1,
+            uids => $self->list_uids($master_store),
+        ));
+    my $replica_annots = $self->list_annotations((%params,
+            scope => 'message',
+            instance => $self->{replica},
+            withmdata => 1,
+            tombstones => 1,
+            uids => $self->list_uids($replica_store),
+        ));
+
+    $self->assert_deep_equals($master_annots, $replica_annots);
+}
 
 #
 # Test the capabilities
@@ -1037,6 +1084,9 @@ sub test_msg_replication_new_mas
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_new_rep
@@ -1079,6 +1129,9 @@ sub test_msg_replication_new_rep
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After replication, message is still present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_new_bot_mse_gul
@@ -1131,6 +1184,9 @@ sub test_msg_replication_new_bot_mse_gul
     $replica_exp{A}->set_attribute('uid', 2);
     $replica_exp{B}->set_attribute('uid', 3);
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_new_bot_mse_guh
@@ -1183,6 +1239,9 @@ sub test_msg_replication_new_bot_mse_guh
     $replica_exp{B}->set_attribute('uid', 2);
     $replica_exp{A}->set_attribute('uid', 3);
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 
@@ -1243,6 +1302,9 @@ sub test_msg_replication_mod_mas
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message annotation is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 
@@ -1303,6 +1365,9 @@ sub test_msg_replication_mod_rep
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message annotation is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_mod_bot_msl
@@ -1369,6 +1434,9 @@ sub test_msg_replication_mod_bot_msl
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message annotation is still present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_mod_bot_msh
@@ -1435,6 +1503,9 @@ sub test_msg_replication_mod_bot_msh
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message annotation is updated on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_exp_mas
@@ -1500,6 +1571,9 @@ sub test_msg_replication_exp_mas
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message is now missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_exp_rep
@@ -1565,6 +1639,9 @@ sub test_msg_replication_exp_rep
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message is still missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_replication_exp_bot
@@ -1636,6 +1713,9 @@ sub test_msg_replication_exp_bot
     $self->check_messages(\%master_exp, store => $master_store);
     xlog "After second replication, the message is still missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
 sub test_msg_sort_order
