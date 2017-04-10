@@ -1604,7 +1604,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                                const char *topart,
                                struct sync_msgid_list *part_list,
                                struct dlist *kl, struct dlist *kupload,
-                               int printrecords)
+                               int printrecords, int fullannots)
 {
     struct sync_annot_list *annots = NULL;
     struct mailbox_iter *iter = NULL;
@@ -1672,6 +1672,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         iter = mailbox_iter_init(mailbox, modseq, 0);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
+            modseq_t since_modseq = fullannots ? 0 : modseq;
+
             /* stop early for partial sync */
             modseq_t mymodseq = record->modseq;
             if (ispartial) {
@@ -1686,6 +1688,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                     mymodseq = local->highestmodseq;
                 }
             }
+
 
             /* start off thinking we're sending the file too */
             int send_file = 1;
@@ -1717,7 +1720,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
-            r = read_annotations(mailbox, record, &annots, 0, ANNOTATE_TOMBSTONES);
+            r = read_annotations(mailbox, record, &annots, since_modseq, ANNOTATE_TOMBSTONES);
             if (r) goto done;
 
             encode_annotations(il, record, annots);
@@ -2480,7 +2483,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
 
-            r = read_annotations(mailbox, &copy, &rannots, 0, ANNOTATE_TOMBSTONES);
+            r = read_annotations(mailbox, &copy, &rannots, rrecord->modseq, ANNOTATE_TOMBSTONES);
             if (r) {
                 syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
                        mailbox->name, rrecord->recno, error_message(r));
@@ -2929,7 +2932,7 @@ static int sync_mailbox_byname(const char *name, void *rock)
          !sync_name_lookup(qrl, mailbox->quotaroot))
         sync_name_list_add(qrl, mailbox->quotaroot);
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0, 0);
     if (!r) sync_send_response(kl, mrock->pout);
 
 out:
@@ -2957,7 +2960,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1, 0);
     if (r) goto out;
 
     sync_send_response(kl, sstate->pout);
@@ -5257,6 +5260,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 /* XXX kind of nasty having this here, but i think it probably
  * shouldn't be in .h with the rest of them */
 #define SYNC_FLAG_ISREPEAT      (1<<15)
+#define SYNC_FLAG_FULLANNOTS    (1<<16)
 
 static int update_mailbox_once(struct sync_folder *local,
                                struct sync_folder *remote,
@@ -5335,7 +5339,8 @@ static int update_mailbox_once(struct sync_folder *local,
 
     if (!topart) topart = mailbox->part;
     part_list = sync_reserve_partlist(reserve_list, topart);
-    r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl, kupload, 1);
+    r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl,
+                            kupload, 1, flags & SYNC_FLAG_FULLANNOTS);
     if (r) goto done;
 
     /* keep the mailbox locked for shorter time! Unlock the index now
@@ -5399,7 +5404,8 @@ int sync_update_mailbox(struct sync_folder *local,
                local->name);
         r = mailbox_full_update(local, reserve_list, sync_be, flags);
         if (!r) r = update_mailbox_once(local, remote, topart,
-                                        reserve_list, sync_be, flags);
+                                        reserve_list, sync_be,
+                                        flags|SYNC_FLAG_FULLANNOTS);
     }
 
     return r;
