@@ -981,15 +981,12 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 
     assert(keylen < MAX_MAILBOX_PATH);
 
-#if DEBUG
-    syslog(LOG_ERR, "find_cb: found key %s in %s",
-            key_as_string(frock->d, key, keylen), frock->d->filename);
-#endif
-
     r = split_key(frock->d, key, keylen, &mboxname,
                   &uid, &entry, &userid);
-    if (r)
+    if (r) {
+        syslog(LOG_ERR, "find_cb: can't split bogus key %*.s", (int)keylen, key);
         return r;
+    }
 
     newkeylen = make_key(mboxname, uid, entry, userid, newkey, sizeof(newkey));
     if (keylen != newkeylen || strncmp(newkey, key, keylen)) {
@@ -1002,13 +999,14 @@ static int find_cb(void *rock, const char *key, size_t keylen,
         return r;
     }
 #if DEBUG
-    syslog(LOG_ERR, "find_cb: found key %s has modseq " MODSEQ_FMT
-            key_as_string(frock->d, key, keylen), mdata.modseq);
+    syslog(LOG_ERR, "find_cb: found key %s in %s with modseq " MODSEQ_FMT,
+            key_as_string(frock->d, key, keylen), frock->d->filename, mdata.modseq);
 #endif
 
     if (frock->since_modseq && frock->since_modseq >= mdata.modseq) {
 #if DEBUG
-        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT, key_as_string(frock->d, key, keylen), mdata.modseq, frock->since_modseq);
+        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT,
+                key_as_string(frock->d, key, keylen), mdata.modseq, frock->since_modseq);
 #endif
         buf_free(&value);
         return 0;
@@ -2552,11 +2550,6 @@ static int make_entry(struct buf *data,
     /* Append flags */
     buf_putc(data, flags);
 
-#if DEBUG
-    syslog(LOG_ERR, "make_entry: created entry with modseq=%lld flags=%x",
-            modseq, flags);
-#endif
-
     return 0;
 }
 
@@ -2566,15 +2559,15 @@ static int write_entry(struct mailbox *mailbox,
                        const char *userid,
                        const struct buf *value,
                        int ignorequota,
-                       int silent)
+                       int silent,
+                       const struct annotate_metadata *mdata)
+
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
-    struct annotate_metadata *mdata = NULL; /* FIXME(rsto): make mdata a parameter */
-
     modseq_t modseq = mdata ? mdata->modseq : 0;
     time_t modtime = mdata ? mdata->modtime : time(NULL);
 
@@ -2606,8 +2599,8 @@ static int write_entry(struct mailbox *mailbox,
         /* do the annot-changed here before altering the DB */
         mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
 
-        /* grab the message annotation modseq */
-        if (uid) {
+        /* grab the message annotation modseq, if not overriden */
+        if (uid && !mdata) {
             modseq = mailbox->i.highestmodseq;
         }
     }
@@ -2634,8 +2627,8 @@ static int write_entry(struct mailbox *mailbox,
         make_entry(&data, value, modseq, modtime, flags);
 
 #if DEBUG
-        syslog(LOG_ERR, "write_entry: storing key %s to %s modseq=" MODSEQ_FMT,
-                key_as_string(d, key, keylen), d->filename, modseq);
+        syslog(LOG_ERR, "write_entry: storing key %s (value: %s) to %s modseq=" MODSEQ_FMT,
+                key_as_string(d, key, keylen), value->s, d->filename, modseq);
 #endif
 
         do {
@@ -2711,7 +2704,7 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
     }
 
     r = write_entry(mailbox, /*uid*/0, entry, userid, value,
-                    /*ignorequota*/1, /*silent*/0);
+                    /*ignorequota*/1, /*silent*/0, NULL);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -2730,7 +2723,7 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       state->silent);
+                       state->silent, NULL);
 }
 
 EXPORTED int annotate_state_writesilent(annotate_state_t *state,
@@ -2740,7 +2733,17 @@ EXPORTED int annotate_state_writesilent(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       /*silent*/1);
+                       /*silent*/1, NULL);
+}
+
+EXPORTED int annotate_state_writemdata(annotate_state_t *state,
+                                       const char *entry,
+                                       const char *userid,
+                                       const struct buf *value,
+                                       const struct annotate_metadata *mdata)
+{
+    return write_entry(state->mailbox, state->uid, entry, userid, value,
+                       /*ignorequota*/1, 0, mdata);
 }
 
 EXPORTED int annotate_state_writemask(annotate_state_t *state,
@@ -2968,11 +2971,11 @@ static int annotation_set_todb(annotate_state_t *state,
     if (entry->have_shared)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, "",
-                        &entry->shared, 0, state->silent);
+                        &entry->shared, 0, state->silent, NULL);
     if (!r && entry->have_priv)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, state->userid,
-                        &entry->priv, 0, state->silent);
+                        &entry->priv, 0, state->silent, NULL);
 
     return r;
 }
@@ -3110,7 +3113,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
     /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
         r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                        &entry->priv, /*ignorequota*/0, /*silent*/0);
+                        &entry->priv, /*ignorequota*/0, /*silent*/0, NULL);
         goto done;
     }
 
@@ -3118,7 +3121,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
     if (r) goto done;
 
     r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                    &res, /*ignorequota*/0, state->silent);
+                    &res, /*ignorequota*/0, state->silent, NULL);
 
 done:
     buf_free(&res);
@@ -3342,14 +3345,14 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             newuserid = rrock->newuserid;
         }
         r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid,
-                        value, /*ignorequota*/0, /*silent*/0);
+                        value, /*ignorequota*/0, /*silent*/0, NULL);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
         r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib,
-                        /*ignorequota*/0, /*silent*/0);
+                        /*ignorequota*/0, /*silent*/0, NULL);
     }
 
     return r;

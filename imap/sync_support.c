@@ -1717,7 +1717,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
-            r = read_annotations(mailbox, record, &annots, 0, 0);
+            r = read_annotations(mailbox, record, &annots, 0, ANNOTATE_TOMBSTONES);
             if (r) goto done;
 
             encode_annotations(il, record, annots);
@@ -2015,6 +2015,15 @@ int decode_annotations(/*const*/struct dlist *annots,
                 parsehex(p, &p, 16, &record->basecid);
                 /* XXX - check on p? */
             }
+            /* "basethrid" is special, since it is written during mailbox
+             * appends and rewrites. We can't pass the master modseq for its
+             * annotation through the mailbox API, because this could cause
+             * master and replicae to get out of sync.
+             * The fix is to set the basecid field both on the index
+             * record and adding the annotation to the annotation list.
+             * That way the local modseq of basethrid always gets over-
+             * written by whoever wins to be master of this annotation. */
+            sync_annot_list_add(*salp, entry, userid, &value, modseq);
         }
         else {
             sync_annot_list_add(*salp, entry, userid, &value, modseq);
@@ -2124,8 +2133,14 @@ int apply_annotations(struct mailbox *mailbox,
                 continue;   /* same value, skip */
         }
 
-        r = annotate_state_write(astate, chosen->entry,
-                                 chosen->userid, value);
+        /* Replicate the modseq of this record from master */
+        struct annotate_metadata mdata = {
+            chosen->modseq, /* modseq */
+            time(NULL),     /* modtime */
+            0               /* flags - is determined by value */
+        };
+        r = annotate_state_writemdata(astate, chosen->entry,
+                                      chosen->userid, value, &mdata);
         if (r)
             break;
     }
@@ -2375,7 +2390,7 @@ int sync_apply_quota(struct dlist *kin,
 
 /* ====================================================================== */
 
-static int mailbox_compare_update(struct mailbox *mailbox,
+static int sync_mailbox_compare_update(struct mailbox *mailbox,
                                   struct dlist *kr, int doupdate,
                                   struct sync_msgid_list *part_list)
 {
@@ -2465,7 +2480,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
 
-            r = read_annotations(mailbox, &copy, &rannots, 0, 0);
+            r = read_annotations(mailbox, &copy, &rannots, 0, ANNOTATE_TOMBSTONES);
             if (r) {
                 syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
                        mailbox->name, rrecord->recno, error_message(r));
@@ -2736,7 +2751,7 @@ int sync_apply_mailbox(struct dlist *kin,
         }
     }
 
-    r = mailbox_compare_update(mailbox, kr, 0, part_list);
+    r = sync_mailbox_compare_update(mailbox, kr, 0, part_list);
     if (r) goto done;
 
     /* now we're committed to writing something no matter what happens! */
@@ -2766,7 +2781,7 @@ int sync_apply_mailbox(struct dlist *kin,
         goto done;
     }
 
-    r = mailbox_compare_update(mailbox, kr, 1, part_list);
+    r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
     if (r) {
         abort();
         return r;
@@ -2881,7 +2896,7 @@ struct mbox_rock {
     struct sync_name_list *qrl;
 };
 
-static int mailbox_byname(const char *name, void *rock)
+static int sync_mailbox_byname(const char *name, void *rock)
 {
     struct mbox_rock *mrock = (struct mbox_rock *) rock;
     struct sync_name_list *qrl = mrock->qrl;
@@ -2926,7 +2941,7 @@ out:
 
 static int mailbox_cb(const mbentry_t *mbentry, void *rock)
 {
-    return mailbox_byname(mbentry->name, rock);
+    return sync_mailbox_byname(mbentry->name, rock);
 }
 
 int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
@@ -2959,7 +2974,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
     struct mbox_rock mrock = { sstate->pout, NULL };
 
     for (ki = kin->head; ki; ki = ki->next)
-        mailbox_byname(ki->sval, &mrock);
+        sync_mailbox_byname(ki->sval, &mrock);
 
     return 0;
 }
