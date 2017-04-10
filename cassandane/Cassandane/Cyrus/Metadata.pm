@@ -1718,6 +1718,88 @@ sub test_msg_replication_exp_bot
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
+sub test_msg_replication_new_mas_partial_wwsw
+{
+    my ($self) = @_;
+
+    xlog "testing partial replication of message scope annotations";
+    xlog "case master to replica: write, write, sync, write";
+
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    xlog "Write an annotation twice";
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c2');
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    xlog "Write another annotation";
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+}
+
+sub test_msg_replication_new_mas_partial_wwd
+{
+    my ($self) = @_;
+
+    xlog "testing partial replication of message scope annotations";
+    xlog "case master to replica: write, write, delete";
+
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    xlog "Write an annotation";
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    xlog "Write another annotation";
+    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    xlog "Delete the first annotation";
+    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
+
+    xlog "Run replication";
+    $self->run_replication();
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+}
+
 sub test_msg_sort_order
 {
     my ($self) = @_;
