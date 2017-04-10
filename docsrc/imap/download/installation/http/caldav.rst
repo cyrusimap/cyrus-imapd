@@ -259,3 +259,23 @@ The tables below show how the access controls are used by the CalDAV module.
         <td>lrwipkxtan789</td>
       </tr>
     </table>
+
+Freebusy URL module
+===================
+
+When enabled in conjuction with the CalDAV module, the Freebusy URL module
+allows non-CalDAV and/or remote calendaring clients to query the freebusy
+information of Cyrus CalDAV users.
+
+Access to the freebusy information is controlled by the "freebusy" ACL (9) on a
+user's home calendar collection. (e.g. a mailbox named
+``user.murch.#calendars``). To enable unauthenticated users (non-Cyrus) to
+access freebusy information, the freebusy ACL must be given to "anyone".
+
+Freebusy information is accessed via URLs of the following form:
+``https://<servername>/freebusy/user/<userid>``
+
+Query parameters can be added to the URL per Section 4 of
+`Freebusy Read URL <http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf>`_,
+allowing the user to choose to set the start, end, period and format of
+their query results.
