@@ -1,8 +1,8 @@
 .. _manage-dav:
 
-=====================================
-Http modules management
-=====================================
+============
+HTTP modules
+============
 
 About http module support
 =========================
@@ -20,9 +20,6 @@ Its feature set is limited to:
       collections and :rfc:`5322` messages to store iCalendar data.
     * Allows non-CalDAV/remote calendar clients to query freebusy information of
       Cyrus CalDAV users via freebusy URLs.
-    * Allows scheduling transactions between separate calendaring and
-      scheduling systems via the iSchedule protocol (currently only
-      used within a Cyrus Murder).
     * Acts as a Time Zone Distribution Service by serving iCalendar
       (VTIMEZONE) data to client systems.
 * Contacts (CardDAV)
@@ -34,8 +31,8 @@ Its feature set is limited to:
 * JMAP support
     * Allows synchonization of mail clients via the JSON Mail Access Protocol (JMAP).
 * Other (RSS, static content)
-    * Serves static content (such as the RSS feed list template and/or the
-      CalDAV/CardDAV JavaScript clients mentioned below).
+    * Serves static content (such as the RSS feed list template and the
+      CalDAV/CardDAV web GUIs ).
     * Serves IMAP mailboxes as RSS feeds.
 
 HTTPD Configuration
