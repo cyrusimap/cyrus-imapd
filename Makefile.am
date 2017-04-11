@@ -383,11 +383,6 @@ EXTRA_DIST += \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
 	master/CYRUS-MASTER.mib \
-	master/conf/cmu-backend.conf \
-	master/conf/cmu-frontend.conf \
-	master/conf/normal.conf \
-	master/conf/prefork.conf \
-	master/conf/small.conf \
 	master/README \
 	netnews/inn.diffs \
 	perl/annotator/Daemon.pm \
