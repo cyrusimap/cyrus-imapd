@@ -829,9 +829,10 @@ static int process_recipient(char *addr,
         if (forcedowncase) mbname_downcaseuser(mbname);
 
         /* strip username if postuser */
-        if (!strcmpsafe(mbname_userid(mbname), config_getstring(IMAPOPT_POSTUSER))) {
+        if (!strcmpsafe(mbname_localpart(mbname), config_getstring(IMAPOPT_POSTUSER))) {
             mbname_set_localpart(mbname, NULL);
-            mbname_set_domain(mbname, NULL);
+            if (!config_virtdomains || !strcmpsafe(mbname_domain(mbname), config_defdomain))
+                mbname_set_domain(mbname, NULL);
         }
 
         if (verify_user(mbname,
