@@ -289,6 +289,9 @@ struct mailbox {
 /* pre-declare message_t to avoid circular dependency problems */
 typedef struct message message_t;
 
+/* pre-declare mrecord_t to avoid circular dependency problems */
+typedef struct msgrecord msgrecord_t;
+
 struct mailbox_iter {
     struct mailbox *mailbox;
     message_t *msg;

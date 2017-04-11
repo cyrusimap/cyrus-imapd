@@ -75,6 +75,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
+#include "msgrecord.h"
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "search_query.h"
@@ -143,10 +144,11 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
                            struct copyargs *copyargs);
 static int index_storeflag(struct index_state *state,
                            struct index_modified_flags *modified_flags,
-                           uint32_t msgno, struct index_record *record,
+                           uint32_t msgno, msgrecord_t *msgrec,
                            struct storeargs *storeargs);
 static int index_store_annotation(struct index_state *state, uint32_t msgno,
-                           struct storeargs *storeargs);
+                           msgrecord_t *mrw, struct storeargs *storeargs,
+                           int *dirty);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno,
@@ -239,16 +241,18 @@ EXPORTED int index_reload_record(struct index_state *state,
 
 static int index_rewrite_record(struct index_state *state,
                                 uint32_t msgno,
-                                struct index_record *record)
+                                struct index_record *record,
+                                int silent)
 {
     struct index_map *im = &state->map[msgno-1];
     int i;
-    int r;
 
     assert(record->uid == im->uid);
 
-    r = mailbox_rewrite_index_record(state->mailbox, record);
-    if (r) return r;
+    if (!silent) {
+        int r = mailbox_rewrite_index_record(state->mailbox, record);
+        if (r) return r;
+    }
 
     /* update tracking of mutable fields */
     im->modseq = record->modseq;
@@ -431,7 +435,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
         numexpunged++;
         state->num_expunged++;
 
-        r = index_rewrite_record(state, msgno, &record);
+        r = index_rewrite_record(state, msgno, &record, /*silent*/0);
         if (r) break;
 
         /* avoid telling again (equivalent to STORE FLAGS.SILENT) */
@@ -1045,7 +1049,7 @@ static int _fetch_setseen(struct index_state *state,
         record.system_flags |= FLAG_SEEN;
 
     /* need to bump modseq anyway, so always rewrite it */
-    r = index_rewrite_record(state, msgno, &record);
+    r = index_rewrite_record(state, msgno, &record, /*silent*/0);
     if (r) return r;
 
     mboxevent_extract_record(mboxevent, state->mailbox, &record);
@@ -1237,6 +1241,8 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     storeargs->update_time = time((time_t *)0);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
+        int dirty = 0;
+
         im = &state->map[msgno-1];
         if (!seqset_ismember(seq, storeargs->usinguid ? im->uid : msgno))
             continue;
@@ -1258,14 +1264,26 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
             continue;
         }
 
+        /* FIXME(rsto): we need to keep index_reload_record here until we
+         * can make sure that the index map doesn't contain uncommitted
+         * changes for this msgno. See the comments in index_reload_record
+         * on how it releases the cyrus.index lock in the middle of action */
+        msgrecord_t *msgrec = NULL;
+
         r = index_reload_record(state, msgno, &record);
+        if (r) goto out;
+        r = mailbox_msgrecord_from_index(state->mailbox, record, &msgrec);
         if (r) goto out;
 
         switch (storeargs->operation) {
         case STORE_ADD_FLAGS:
         case STORE_REMOVE_FLAGS:
         case STORE_REPLACE_FLAGS:
-            r = index_storeflag(state, &modified_flags, msgno, &record, storeargs);
+            r = index_storeflag(state, &modified_flags, msgno, msgrec, storeargs);
+            if (r)
+                break;
+
+            r = msgrecord_get_index_record(msgrec, &record);
             if (r)
                 break;
 
@@ -1287,11 +1305,11 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                                     modified_flags.removed_user_flags);
                 mboxevent_extract_record(flagsclear, mailbox, &record);
             }
-
+            dirty = modified_flags.added_flags | modified_flags.removed_flags;
             break;
 
         case STORE_ANNOTATION:
-            r = index_store_annotation(state, msgno, storeargs);
+            r = index_store_annotation(state, msgno, msgrec, storeargs, &dirty);
             break;
 
         default:
@@ -1299,7 +1317,23 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
             break;
         }
         if (r) goto out;
+
+        if (!dirty)
+            continue;
+
+        r = msgrecord_save(msgrec);
+        if (r) goto out;
+
+        r = msgrecord_get_index_record(msgrec, &record);
+        if (r) goto out;
+
+        /* msgrecord_save already took care of rewriting the index_record,
+         * but we want to stay up to date of the changes in the index_map.
+         * Pass the silent flag to index_rewrite_record. */
+        r = index_rewrite_record(state, msgno, &record, /*silent*/1);
+        if (r) goto out;
     }
+
 
     /* let mboxevent_notify split FlagsSet into MessageRead, MessageTrash
      * and FlagsSet events */
@@ -1406,7 +1440,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = append_run_annotator(&as, &record);
         if (r) goto out;
 
-        r = index_rewrite_record(state, msgno, &record);
+        r = index_rewrite_record(state, msgno, &record, /*silent*/0);
         if (r) goto out;
     }
 
@@ -4390,7 +4424,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
  */
 static int index_storeflag(struct index_state *state,
                            struct index_modified_flags *modified_flags,
-                           uint32_t msgno, struct index_record *record,
+                           uint32_t msgno, msgrecord_t *msgrec,
                            struct storeargs *storeargs)
 {
     uint32_t old, new, keep;
@@ -4422,8 +4456,17 @@ static int index_storeflag(struct index_state *state,
         }
     }
 
-    keep = record->system_flags & FLAGS_INTERNAL;
-    old = record->system_flags & FLAGS_SYSTEM;
+    uint32_t system_flags;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
+
+    r = msgrecord_get_systemflags(msgrec, &system_flags);
+    if (r) return r;
+
+    r = msgrecord_get_userflags(msgrec, user_flags);
+    if (r) return r;
+
+    keep = system_flags & FLAGS_INTERNAL;
+    old = system_flags & FLAGS_SYSTEM;
     new = storeargs->system_flags & FLAGS_SYSTEM;
 
     /* all other updates happen directly to the record */
@@ -4432,39 +4475,39 @@ static int index_storeflag(struct index_state *state,
             /* ACL_DELETE handled in index_store() */
             if ((old & FLAG_DELETED) != (new & FLAG_DELETED)) {
                 dirty++;
-                record->system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
+                system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
             }
         }
         else {
             if (!(state->myrights & ACL_DELETEMSG)) {
                 if ((old & ~FLAG_DELETED) != (new & ~FLAG_DELETED)) {
                     dirty++;
-                    record->system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
+                    system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
                 }
             }
             else {
                 if (old != new) {
                     dirty++;
-                    record->system_flags = new;
+                    system_flags = new;
                 }
             }
             for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-                if (record->user_flags[i] != storeargs->user_flags[i]) {
+                if (user_flags[i] != storeargs->user_flags[i]) {
                     uint32_t changed;
                     dirty++;
 
-                    changed = ~record->user_flags[i] & storeargs->user_flags[i];
+                    changed = ~user_flags[i] & storeargs->user_flags[i];
                     if (changed) {
                         modified_flags->added_user_flags[i] = changed;
                         modified_flags->added_flags++;
                     }
 
-                    changed = record->user_flags[i] & ~storeargs->user_flags[i];
+                    changed = user_flags[i] & ~storeargs->user_flags[i];
                     if (changed) {
                         modified_flags->removed_user_flags[i] = changed;
                         modified_flags->removed_flags++;
                     }
-                    record->user_flags[i] = storeargs->user_flags[i];
+                    user_flags[i] = storeargs->user_flags[i];
                 }
             }
         }
@@ -4474,13 +4517,13 @@ static int index_storeflag(struct index_state *state,
 
         if (~old & new) {
             dirty++;
-            record->system_flags = old | new;
+            system_flags = old | new;
         }
         for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-            added = ~record->user_flags[i] & storeargs->user_flags[i];
+            added = ~user_flags[i] & storeargs->user_flags[i];
             if (added) {
                 dirty++;
-                record->user_flags[i] |= storeargs->user_flags[i];
+                user_flags[i] |= storeargs->user_flags[i];
 
                 modified_flags->added_user_flags[i] = added;
                 modified_flags->added_flags++;
@@ -4492,13 +4535,13 @@ static int index_storeflag(struct index_state *state,
 
         if (old & new) {
             dirty++;
-            record->system_flags &= ~storeargs->system_flags;
+            system_flags &= ~storeargs->system_flags;
         }
         for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-            removed = record->user_flags[i] & storeargs->user_flags[i];
+            removed = user_flags[i] & storeargs->user_flags[i];
             if (removed) {
                 dirty++;
-                record->user_flags[i] &= ~storeargs->user_flags[i];
+                user_flags[i] &= ~storeargs->user_flags[i];
 
                 modified_flags->removed_user_flags[i] = removed;
                 modified_flags->removed_flags++;
@@ -4524,21 +4567,23 @@ static int index_storeflag(struct index_state *state,
     if (state->internalseen) {
         /* copy the seen flag from the index */
         if (im->isseen)
-            record->system_flags |= FLAG_SEEN;
+            system_flags |= FLAG_SEEN;
         else
-            record->system_flags &= ~FLAG_SEEN;
+            system_flags &= ~FLAG_SEEN;
     }
     /* add back the internal tracking flags */
-    record->system_flags |= keep;
+    system_flags |= keep;
 
-    modified_flags->added_system_flags = ~old & record->system_flags & FLAGS_SYSTEM;
+    modified_flags->added_system_flags = ~old & system_flags & FLAGS_SYSTEM;
     if (modified_flags->added_system_flags)
         modified_flags->added_flags++;
-    modified_flags->removed_system_flags = old & ~record->system_flags & FLAGS_SYSTEM;
+    modified_flags->removed_system_flags = old & ~system_flags & FLAGS_SYSTEM;
     if (modified_flags->removed_system_flags)
         modified_flags->removed_flags++;
 
-    r = index_rewrite_record(state, msgno, record);
+    r = msgrecord_set_systemflags(msgrec, system_flags);
+    if (r) return r;
+    r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) return r;
 
     /* if it's silent and unchanged, update the seen value, but
@@ -4557,31 +4602,36 @@ static int index_storeflag(struct index_state *state,
  */
 static int index_store_annotation(struct index_state *state,
                                   uint32_t msgno,
-                                  struct storeargs *storeargs)
+                                  msgrecord_t *msgrec,
+                                  struct storeargs *storeargs,
+                                  int *dirty)
 {
     modseq_t oldmodseq;
-    struct index_record record;
-    annotate_state_t *astate = NULL;
+    struct index_record *record;
     struct index_map *im = &state->map[msgno-1];
     int r;
 
-    r = index_reload_record(state, msgno, &record);
+    r = msgrecord_get_index_record_rw(msgrec, &record);
     if (r) goto out;
 
-    oldmodseq = record.modseq;
-
-    r = mailbox_get_annotate_state(state->mailbox, record.uid, &astate);
+    r = index_reload_record(state, msgno, record);
     if (r) goto out;
-    annotate_state_set_auth(astate, storeargs->isadmin,
-                            storeargs->userid, storeargs->authstate);
-    r = annotate_state_store(astate, storeargs->entryatts);
+
+    oldmodseq = record->modseq;
+
+    r = msgrecord_annot_set_auth(msgrec, storeargs->isadmin, storeargs->userid,
+                                 storeargs->authstate);
+    if (r) goto out;
+
+    r = msgrecord_annot_writeall(msgrec, storeargs->entryatts);
     if (r) goto out;
 
     /* It would be nice if the annotate layer told us whether it
      * actually made a change to the database, but it doesn't, so
      * we have to assume the message is dirty */
+    *dirty = 1;
 
-    r = index_rewrite_record(state, msgno, &record);
+    r = index_rewrite_record(state, msgno, record, /*silent*/1);
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */

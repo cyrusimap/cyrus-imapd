@@ -2627,7 +2627,7 @@ static int write_entry(struct mailbox *mailbox,
         make_entry(&data, value, modseq, modtime, flags);
 
 #if DEBUG
-        syslog(LOG_ERR, "write_entry: storing key %s (value: %s) to %s modseq=" MODSEQ_FMT,
+        syslog(LOG_ERR, "write_entry: storing key %s (value: %s) to %s (modseq=" MODSEQ_FMT ")",
                 key_as_string(d, key, keylen), value->s, d->filename, modseq);
 #endif
 

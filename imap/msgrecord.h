@@ -48,7 +48,8 @@
 typedef struct msgrecord msgrecord_t;
 struct mailbox;
 
-/* While we are prototyping we'll also keep the mailbox.c code here */
+/* TODO(rsto): mailbox.c */
+
 extern int mailbox_find_msgrecord(struct mailbox *mbox, uint32_t uid,
                                   const msgrecord_t **mr);
 extern int mailbox_find_msgrecord_rw(struct mailbox *mbox, uint32_t uid,
@@ -56,14 +57,29 @@ extern int mailbox_find_msgrecord_rw(struct mailbox *mbox, uint32_t uid,
 
 extern int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr);
 
+
+// FIXME(rsto) - remove these
 extern int mailbox_edit_msgrecord(struct mailbox *mbox, const msgrecord_t *mr,
                                   msgrecord_t **mrw);
-
 extern int mailbox_save_msgrecord(struct mailbox *mbox, msgrecord_t *mrw);
 
+extern int mailbox_msgrecord_from_index(struct mailbox *mbox,
+                                        struct index_record record,
+                                        msgrecord_t **mrp);
+
+/* msgrecord.c */
+
+
+extern int msgrecord_save(msgrecord_t *mrw);
+
 extern msgrecord_t *msgrecord_new_from_uid(struct mailbox *mbox, uint32_t uid);
+
+/* HIDDEN
+ *
+extern msgrecord_t *msgrecord_new(struct mailbox *mbox);
 extern msgrecord_t *msgrecord_new_from_index_record(struct mailbox *mbox,
                                                     struct index_record record);
+*/
 
 // FIXME extern void msgrecord_ref(msgrecord_t *mr);
 extern void msgrecord_unref(msgrecord_t **mr);
@@ -73,20 +89,28 @@ extern int msgrecord_get_body(const msgrecord_t *mr, struct buf *buf);
 extern int msgrecord_get_bodystructure(const msgrecord_t *mr, struct body **body);
 extern int msgrecord_get_cid(const msgrecord_t *mr, bit64 *cid);
 extern int msgrecord_get_guid(const msgrecord_t *mr, struct message_guid *guid);
+extern int msgrecord_get_uid(const msgrecord_t *mr, uint32_t *uid);
 extern int msgrecord_get_internaldate(const msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(const msgrecord_t *mr, message_t **msg);
 extern int msgrecord_get_size(const msgrecord_t *mr, uint32_t *size);
 extern int msgrecord_get_systemflags(const msgrecord_t *mr, uint32_t *flags);
 extern int msgrecord_hasflag(const msgrecord_t *mr, const char *flag, int *has);
-extern int msgrecord_get_index_record(msgrecord_t *mrw, struct index_record *record);
+extern int msgrecord_get_index_record(const msgrecord_t *mr, struct index_record *record);
+extern int msgrecord_get_userflags(const msgrecord_t *mr, uint32_t user_flags[MAX_USER_FLAGS/32]);
+extern int msgrecord_get_fname(const msgrecord_t *mr, const char **fname);
 
 /* Setters and mutating functions */
 extern int msgrecord_get_index_record_rw(msgrecord_t *mrw,
                                          struct index_record **record);
 
-// TODO(rsto): also for userflags, including strarray */
+// TODO(rsto): also strarray variant */
 extern int msgrecord_set_systemflags(msgrecord_t *mrw, uint32_t system_flags);
 extern int msgrecord_add_systemflags(msgrecord_t *mrw, uint32_t system_flags);
+extern int msgrecord_set_userflags(msgrecord_t *mrw, uint32_t user_flags[MAX_USER_FLAGS/32]);
+extern int msgrecord_set_userflag(msgrecord_t *mrw, uint32_t user_flag, int bit);
+extern int msgrecord_set_uid(msgrecord_t *mrw, uint32_t uid);
+extern int msgrecord_set_bodystructure(msgrecord_t *mrw, struct body *body);
+extern int msgrecord_set_internaldate(msgrecord_t *mrw, time_t internaldate);
 
 /* A light-weight layer above annotations. */
 extern int msgrecord_annot_lookup(const msgrecord_t *mr, const char *entry,
@@ -96,5 +120,14 @@ extern int msgrecord_annot_findall(const msgrecord_t *mr, const char *entry,
                                    void *rock);
 extern int msgrecord_annot_write(msgrecord_t *mrw, const char *entry,
                                  const char *userid, const struct buf *value);
+extern int msgrecord_annot_writeall(msgrecord_t *mrw, struct entryattlist *l);
+
+extern int msgrecord_annot_set_auth(msgrecord_t *mrw, int isadmin,
+                                    const char *userid,
+                                    const struct auth_state *authstate);
+
+/* misc */
+extern int msgrecord_should_archive(const msgrecord_t *mr, void *rock);
+
 
 #endif /* INCLUDED_MSGRECORD_H */
