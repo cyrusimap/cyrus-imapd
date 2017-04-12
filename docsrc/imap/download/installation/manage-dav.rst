@@ -92,8 +92,12 @@ Module-specific information
 
 .. toctree::
     :glob:
+    :maxdepth: 2
 
-    http/*
+    http/caldav
+    http/carddav
+    http/webdav
+    http/rss
 
 For end users
 =============
