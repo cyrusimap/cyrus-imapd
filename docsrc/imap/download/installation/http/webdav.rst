@@ -1,11 +1,11 @@
 .. _webdav:
 
-=================
-WebDAV Management
-=================
+======
+WebDAV
+======
 
-WebDAV Configuration
-====================
+Configuration
+=============
 
 .. sidebar:: davdriveprefix
 

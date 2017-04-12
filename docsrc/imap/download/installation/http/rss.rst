@@ -1,8 +1,8 @@
 .. _rss:
 
-===================
-RSS Feed Management
-===================
+=========
+RSS Feeds
+=========
 
 About RSS Feeds
 ===============

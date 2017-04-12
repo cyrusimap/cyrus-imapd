@@ -1,11 +1,11 @@
 .. _caldav:
 
-=================
-CalDAV Management
-=================
+======
+CalDAV
+======
 
-CalDAV Configuration
-====================
+Configuration
+=============
 
 .. sidebar:: calendarprefix
 
@@ -262,8 +262,8 @@ The tables below show how the access controls are used by the CalDAV module.
 
 |
 
-Freebusy URL module
-===================
+Freebusy URL
+============
 
 When enabled in conjuction with the CalDAV module, the Freebusy URL module
 allows non-CalDAV and/or remote calendaring clients to query the freebusy
@@ -282,8 +282,8 @@ Query parameters can be added to the URL per Section 4 of
 allowing the user to choose to set the start, end, period and format of
 their query results.
 
-Time Zone Distribution Service (TZDist) module
-==============================================
+Time Zone Distribution Service (TZDist)
+=======================================
 
 What is TZDist
 --------------
