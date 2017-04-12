@@ -42,7 +42,7 @@ static void test_control_chars(void)
     { \
         struct vparse_state vparser; \
         memset(&vparser, 0, sizeof(struct vparse_state)); \
-        vparse_set_multival(&vparser, "adr"); \
+        vparse_set_multival(&vparser, "adr", ';'); \
         vparser.base = (in); \
         vparser.ctrl = flag; \
         int vr = vparse_parse(&vparser, 0); \
@@ -124,7 +124,7 @@ static void test_crlf(void)
     { \
         struct vparse_state vparser; \
         memset(&vparser, 0, sizeof(struct vparse_state)); \
-        vparse_set_multival(&vparser, "adr"); \
+        vparse_set_multival(&vparser, "adr", ';'); \
         vparser.base = (in); \
         vparser.ctrl = (wantctrl); \
         int vr = vparse_parse(&vparser, 0); \
