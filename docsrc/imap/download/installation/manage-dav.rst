@@ -100,6 +100,7 @@ Module-specific information
     http/caldav
     http/carddav
     http/webdav
+    http/jmap
     http/rss
 
 For end users
