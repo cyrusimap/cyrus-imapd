@@ -1482,7 +1482,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
         case VCARD_NICKNAME_PROPERTY:
             if (cdata->nickname) {
                 if (propfilter->match) {
-                    myprop.multivalue = 1;
+                    myprop.multivaluesep = ',';
                     myprop.v.values =
                         strarray_split(cdata->nickname, ",", STRARRAY_TRIM);
                 }
@@ -1540,14 +1540,14 @@ static int apply_propfilter(struct prop_filter *propfilter,
              match = match->next) {
 
             int n = 0;
-            const char *text = prop->multivalue ?
+            const char *text = prop->multivaluesep ?
                 strarray_nth(prop->v.values, n) : prop->v.value;
 
             /* Test each value of this property (logical OR) */
             do {
                 pass = dav_apply_textmatch(BAD_CAST text, match);
 
-            } while (!pass && prop->multivalue &&
+            } while (!pass && prop->multivaluesep &&
                      (text = strarray_nth(prop->v.values, ++n)));
         }
 
@@ -1561,7 +1561,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
 
     } while (!pass && (prop = prop->next));  /* XXX  No API to fetch next prop */
 
-    if (myprop.multivalue) strarray_free(myprop.v.values);
+    if (myprop.multivaluesep) strarray_free(myprop.v.values);
 
     return pass;
 }

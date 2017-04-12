@@ -36,7 +36,8 @@ struct vparse_state {
     const char *base;
     const char *itemstart;
     const char *p;
-    strarray_t *multival;
+    strarray_t *multivalsemi;
+    strarray_t *multivalcomma;
     strarray_t *multiparam;
     int barekeys;
     int ctrl;
@@ -56,7 +57,7 @@ struct vparse_param {
 struct vparse_entry {
     char *group;
     char *name;
-    int multivalue;
+    char multivaluesep;
     union {
         char *value;
         strarray_t *values;
@@ -86,7 +87,7 @@ extern void vparse_free(struct vparse_state *state);
 extern void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos);
 extern const char *vparse_errstr(int err);
 
-extern void vparse_set_multival(struct vparse_state *state, const char *name);
+extern void vparse_set_multival(struct vparse_state *state, const char *name, char split);
 extern void vparse_set_multiparam(struct vparse_state *state, const char *name);
 
 extern const char *vparse_stringval(const struct vparse_card *card, const char *name);

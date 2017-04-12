@@ -57,9 +57,11 @@ struct vparse_card *vcard_parse_string(const char *str, int repair)
     memset(&vparser, 0, sizeof(struct vparse_state));
 
     vparser.base = str;
-    vparse_set_multival(&vparser, "adr");
-    vparse_set_multival(&vparser, "org");
-    vparse_set_multival(&vparser, "n");
+    vparse_set_multival(&vparser, "adr", ';');
+    vparse_set_multival(&vparser, "org", ';');
+    vparse_set_multival(&vparser, "n", ';');
+    vparse_set_multival(&vparser, "nickname", ',');
+    vparse_set_multival(&vparser, "categories", ',');
     vparser.ctrl = repair ? VPARSE_CTRL_SKIP : VPARSE_CTRL_REJECT;
     vr = vparse_parse(&vparser, 0);
     if (vr) {
