@@ -17,7 +17,7 @@ A quick guide to getting a basic installation of Cyrus up and running in 5 minut
 
 The first place to start with a new installation of Cyrus IMAP is with
 your OS distribution of choice and their packaging, where available.  If
-there is no Cyrus IMAP 3.0 package available yet from your distro, 
+there is no Cyrus IMAP 3.0 package available yet from your distro,
 download the `latest stable package`_ : version |imap_current_stable_version|.
 
 .. _latest stable package: ftp://ftp.cyrusimap.org/cyrus-imapd/debs/
@@ -78,7 +78,7 @@ A basic description of these files:
 
 *   Cyrus Aggregation - Murder -- configurations (these constitute a
     set, with at least one of each required):
-    
+
     *   murder-mupdate.conf
             The Mupdate Master server; holds the canonical copy of the
             ``mailboxes.db`` database.
@@ -115,94 +115,53 @@ Feature overview
 The features (configuration options) supported in our reference
 packages are:
 
-+---------------------+-------------+
-| Cyrus Server configured components|
-+---------------------+-------------+
-|  event notification | yes         |
-+---------------------+-------------+
-|  gssapi             | /usr        |
-+---------------------+-------------+
-|  autocreate         | yes         |
-+---------------------+-------------+
-|  idled              | yes         |
-+---------------------+-------------+
-|  httpd              | yes         |
-+---------------------+-------------+
-|  kerberos V4        | no          |
-+---------------------+-------------+
-|  murder             | yes         |
-+---------------------+-------------+
-|  nntpd              | yes         |
-+---------------------+-------------+
-|  replication        | yes         |
-+---------------------+-------------+
-|  sieve              | yes         |
-+---------------------+-------------+
-|  calalarmd          | no          |
-+---------------------+-------------+
-|  jmap               | yes         |
-+---------------------+-------------+
-|  objectstore        | no          |
-+---------------------+-------------+
-|  backup             | no          |
-+---------------------+-------------+
-| External dependencies             |
-+---------------------+-------------+
-|   ldap              | yes         |
-+---------------------+-------------+
-|   openssl           | yes         |
-+---------------------+-------------+
-|   zlib              | yes         |
-+---------------------+-------------+
-|   pcre              | yes         |
-+---------------------+-------------+
-|   clamav            | yes         |
-+---------------------+-------------+
-|   snmp              | yes         |
-+---------------------+-------------+
-|   caringo           | no          |
-+---------------------+-------------+
-|   openio            | no          |
-+---------------------+-------------+
-|   nghttp2           | no          |
-+---------------------+-------------+
-|   brotli            | no          |
-+---------------------+-------------+
-|   xml2              | yes         |
-+---------------------+-------------+
-|   ical              | yes         |
-+---------------------+-------------+
-|   icu4c             | no          |
-+---------------------+-------------+
-|   shapelib          | no          |
-+---------------------+-------------+
-| Database support                  |
-+---------------------+-------------+
-|   mysql             | no          |
-+---------------------+-------------+
-|   postgresql        | no          |
-+---------------------+-------------+
-|   sqlite            | yes         |
-+---------------------+-------------+
-|   lmdb              | no          |
-+---------------------+-------------+
-| Search engine                     |
-+---------------------+-------------+
-|   squat             | yes         |
-+---------------------+-------------+
-|   sphinx            | no          |
-+---------------------+-------------+
-|   xapian            | yes         |
-+---------------------+-------------+
-|   xapian_flavor     | vanilla     |
-+---------------------+-------------+
-| Hardware support                  |
-+---------------------+-------------+
-|   SSE4.2            | yes         |
-+---------------------+-------------+
-| Installation directories          |
-+---------------------+-------------+
-|   prefix            | /usr        |
-+---------------------+-------------+
-|   sysconfdir        | /etc        |
-+---------------------+-------------+
+Cyrus Server configured components
+    * event notification : yes
+    * gssapi             : /usr
+    * autocreate         : yes
+    * idled              : yes
+    * httpd              : yes
+    * kerberos V4        : no
+    * murder             : yes
+    * nntpd              : yes
+    * replication        : yes
+    * sieve              : yes
+    * calalarmd          : no
+    * jmap               : yes
+    * objectstore        : no
+    * backup             : no
+
+External dependencies
+    * ldap              : yes
+    * openssl           : yes
+    * zlib              : yes
+    * pcre              : yes
+    * clamav            : yes
+    * snmp              : yes
+    * caringo           : no
+    * openio            : no
+    * nghttp2           : no
+    * brotli            : no
+    * xml2              : yes
+    * ical              : yes
+    * icu4c             : no
+    * shapelib          : no
+
+Database support
+    * mysql             : no
+    * postgresql        : no
+    * sqlite            : yes
+    * lmdb              : no
+
+Search engine
+    * squat             : yes
+    * sphinx            : no
+    * xapian            : yes
+    * xapian_flavor     : vanilla
+
+Hardware support
+    * SSE4.2            : yes
+
+Installation directories
+    * prefix            : /usr
+    * sysconfdir        : /etc
