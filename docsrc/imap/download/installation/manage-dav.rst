@@ -1,8 +1,8 @@
 .. _manage-dav:
 
-=====================================
-Http modules management
-=====================================
+============
+HTTP modules
+============
 
 About http module support
 =========================
@@ -34,8 +34,8 @@ Its feature set is limited to:
 * JMAP support
     * Allows synchonization of mail clients via the JSON Mail Access Protocol (JMAP).
 * Other (RSS, static content)
-    * Serves static content (such as the RSS feed list template and/or the
-      CalDAV/CardDAV JavaScript clients mentioned below).
+    * Serves static content (such as the RSS feed list template and the
+      CalDAV/CardDAV web GUIs ).
     * Serves IMAP mailboxes as RSS feeds.
 
 HTTPD Configuration
@@ -95,8 +95,13 @@ Module-specific information
 
 .. toctree::
     :glob:
+    :maxdepth: 2
 
-    http/*
+    http/caldav
+    http/carddav
+    http/webdav
+    http/jmap
+    http/rss
 
 For end users
 =============
