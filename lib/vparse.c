@@ -748,9 +748,12 @@ EXPORTED const char *vparse_stringval(const struct vparse_card *card, const char
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
-        if (entry->multivaluesep) continue;
-        if (!strcasecmp(name, entry->name))
-            return entry->v.value;
+        if (!strcasecmp(name, entry->name)) {
+            if (entry->multivaluesep)
+                return strarray_nth(entry->v.values, 0);
+            else
+                return entry->v.value;
+        }
     }
     return NULL;
 }
