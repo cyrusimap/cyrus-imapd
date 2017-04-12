@@ -21,9 +21,13 @@ Compile JMAP support into Cyrus
     * In :cyrusman:`imapd.conf(5)`, set ``conversations: 1``, ``conversations_db: twoskip``
     * Create a conversations.db for each user: ``ctl_conversationsdb -b -r``
 
-3. JMAP depends on Xapian. This needs to be manually compiled due to extra patches needing to be applied. Our :ref:`Xapian install guide <imapinstall-xapian>` shows how.
+3. JMAP depends on Xapian. For full support (to gain full word boundary
+distinctions in CJK languages - Chinese, Japanese and Korean), this needs to be
+manually compiled due to extra patches needing to be applied.
+Our :ref:`Xapian install guide <imapinstall-xapian>` shows how.
 
-4. Once installed, the ``jmap`` module must be enabled in :cyrusman:`imapd.conf(5)`: ``httpmodules: caldav jmap tzdist``
+4. Once installed, the ``jmap`` module must be enabled in
+:cyrusman:`imapd.conf(5)`: ``httpmodules: jmap``
 
 JMAP client
 ===========
@@ -101,40 +105,7 @@ Developing the client further
 You'll want to become deeply familiar with the `JMAP developer documentation <http://jmap.io/#i-want-to-get-involved-with-jmap.-what-do-i-need-to-know?>`_
 
 
-JMAP implementation in Cyrus
-============================
-The JMAP implementation in Cyrus is at various stages of maturity.
+.. note::
 
-Working
--------
-
-* **Contacts**
-    * All JMAP methods are implemented. JMAP blobs are not supported.
-
-* **Calendars**
-    * All JMAP methods are implemented. JMAP blobs are not supported.
-
-* **Messages**
-    * Most JMAP methods are implemented. The following methods are not planned for implementation:
-      * copyMessages
-      * reportMessages
-      * getVacationResponse
-      * setVacationResponse
-      * getIdentityUpdates
-      * setIdentities
-
-Not yet implemented
--------------------
-
-* **Authentication**
-    * Cyrus does not yet implement the JMAP authentication workflow. All the JMAP methods in httpd currently require an account logged in via Basic Authentication.
-
-* **Multi-user accounts**
-    All the current JMAP method operate with the account currently authenticated
-    to Cyrus httpd. That is, the `‘accountId`` property in JMAP requests is
-    not supported.
-
-* **Remote mailboxes**
-
-* **Events**
-    * Changes on mailbox entries trigger notifications. However, the JMAP event service is not implemented.
+    JMAP implementation in Cyrus is a work in progress. Current status can be
+    viewed on the main :ref:`JMAP configuration page <jmap-implementation>`.
