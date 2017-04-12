@@ -373,9 +373,9 @@ static int _parse_entry_key(struct vparse_state *state)
     return PE_NAME_EOF;
 }
 
-static int _parse_entry_multivalue(struct vparse_state *state)
+static int _parse_entry_multivalue(struct vparse_state *state, char splitchar)
 {
-    state->entry->multivalue = 1;
+    state->entry->multivaluesep = splitchar;
     state->entry->v.values = strarray_new();
 
     NOTESTART();
@@ -404,11 +404,6 @@ static int _parse_entry_multivalue(struct vparse_state *state)
             INC(2);
             break;
 
-        case ';':
-            strarray_appendm(state->entry->v.values, buf_dup_cstring(&state->buf));
-            INC(1);
-            break;
-
         case '\r':
             HANDLEBACKR(state);
             INC(1);
@@ -423,7 +418,12 @@ static int _parse_entry_multivalue(struct vparse_state *state)
             goto out;
 
         default:
-            PUTC(*state->p);
+            if (*state->p == splitchar) {
+                strarray_appendm(state->entry->v.values, buf_dup_cstring(&state->buf));
+            }
+            else {
+                PUTC(*state->p);
+            }
             INC(1);
             break;
         }
@@ -438,8 +438,10 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (state->multival && strarray_find_case(state->multival, state->entry->name, 0) >= 0)
-        return _parse_entry_multivalue(state);
+    if (state->multivalsemi && strarray_find_case(state->multivalsemi, state->entry->name, 0) >= 0)
+        return _parse_entry_multivalue(state, ';');
+    if (state->multivalcomma && strarray_find_case(state->multivalcomma, state->entry->name, 0) >= 0)
+        return _parse_entry_multivalue(state, ',');
 
     NOTESTART();
 
@@ -517,7 +519,7 @@ static void _free_entry(struct vparse_entry *entry)
         entrynext = entry->next;
         free(entry->name);
         free(entry->group);
-        if (entry->multivalue)
+        if (entry->multivaluesep)
             strarray_free(entry->v.values);
         else
             free(entry->v.value);
@@ -545,7 +547,8 @@ static void _free_state(struct vparse_state *state)
     _free_card(state->card);
     _free_entry(state->entry);
     _free_param(state->param);
-    if (state->multival) strarray_free(state->multival);
+    if (state->multivalsemi) strarray_free(state->multivalsemi);
+    if (state->multivalcomma) strarray_free(state->multivalcomma);
     if (state->multiparam) strarray_free(state->multiparam);
 
     memset(state, 0, sizeof(struct vparse_state));
@@ -589,7 +592,7 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             }
             /* only possible if some idiot passes 'begin' as
              * multivalue field name */
-            if (state->entry->multivalue) {
+            if (state->entry->multivaluesep) {
                 state->itemstart = entrystart;
                 return PE_BEGIN_PARAMS;
             }
@@ -613,7 +616,7 @@ static int _parse_vcard(struct vparse_state *state, struct vparse_card *card, in
             }
             /* only possible if some idiot passes 'end' as
              * multivalue field name */
-            if (state->entry->multivalue) {
+            if (state->entry->multivaluesep) {
                 state->itemstart = entrystart;
                 return PE_BEGIN_PARAMS;
             }
@@ -745,7 +748,7 @@ EXPORTED const char *vparse_stringval(const struct vparse_card *card, const char
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
-        if (entry->multivalue == 1) continue;
+        if (entry->multivaluesep) continue;
         if (!strcasecmp(name, entry->name))
             return entry->v.value;
     }
@@ -756,17 +759,28 @@ EXPORTED const strarray_t *vparse_multival(const struct vparse_card *card, const
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
-        if (entry->multivalue == 0) continue;
+        if (!entry->multivaluesep) continue;
         if (!strcasecmp(name, entry->name))
             return entry->v.values;
     }
     return NULL;
 }
 
-EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
+EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name, char split)
 {
-    if (!state->multival) state->multival = strarray_new();
-    strarray_append(state->multival, name);
+    switch (split) {
+    case ';':
+        if (!state->multivalsemi) state->multivalsemi = strarray_new();
+        strarray_append(state->multivalsemi, name);
+        break;
+    case ',':
+        if (!state->multivalcomma) state->multivalcomma = strarray_new();
+        strarray_append(state->multivalcomma, name);
+        break;
+
+    default:
+        abort();
+    }
 }
 
 EXPORTED void vparse_set_multiparam(struct vparse_state *state, const char *name)
@@ -799,7 +813,7 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt, int is_multival)
+static void _value_to_tgt(const char *value, struct vparse_target *tgt, char multivalsep)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -818,8 +832,15 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt, int is_m
             buf_putc(tgt->buf, 'n');
             break;
         case ';':
-            if (is_multival) break;
-            /* or fall through */
+            /* this doesn't need to be quoted, but , does. yay. So special case this one */
+            if (multivalsep == ';') {
+                buf_putc(tgt->buf, '\\');
+                buf_putc(tgt->buf, *value);
+            }
+            else {
+                buf_putc(tgt->buf, *value);
+            }
+            break;
         case ',':
         case '\\':
             buf_putc(tgt->buf, '\\');
@@ -914,15 +935,15 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 
     buf_putc(tgt->buf, ':');
 
-    if (entry->multivalue) {
+    if (entry->multivaluesep) {
         int i;
         for (i = 0; i < entry->v.values->count; i++) {
-            if (i) buf_putc(tgt->buf, ';');
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
+            if (i) buf_putc(tgt->buf, entry->multivaluesep);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, entry->multivaluesep);
         }
     }
     else {
-        _value_to_tgt(entry->v.value, tgt, 0);
+        _value_to_tgt(entry->v.value, tgt, '\0');
     }
 
     _endline(tgt);
@@ -1067,8 +1088,8 @@ static int _dump_card(struct vparse_card *card)
         printf("%s", entry->name);
         for (param = entry->params; param; param = param->next)
             printf(";%s=%s", param->name, param->value);
-        if (entry->multivalue)
-            printf(":multivalue\n");
+        if (entry->multivaluesep)
+            printf(":multivalue (%c)\n", entry->multivaluesep);
         else
             printf(":%s\n", entry->v.value);
     }

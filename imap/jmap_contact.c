@@ -996,21 +996,21 @@ static int setContactGroups(struct jmap_req *req)
                 /* both N and FN get the name */
                 struct vparse_entry *entry = vparse_get_entry(card, NULL, "N");
                 if (entry) {
-                    if (entry->multivalue) {
+                    if (entry->multivaluesep) {
                         strarray_free(entry->v.values);
                         entry->v.values = NULL;
                     } else {
                         free(entry->v.value);
                     }
                     entry->v.value = xstrdup(name);
-                    entry->multivalue = 0;
+                    entry->multivaluesep = '\0';
                 }
                 else {
                     vparse_add_entry(card, NULL, "N", name);
                 }
                 entry = vparse_get_entry(card, NULL, "FN");
                 if (entry) {
-                    if (entry->multivalue) {
+                    if (entry->multivaluesep) {
                         /* FN isn't allowed to be a multi-value, but let's
                          * rather check than deal with corrupt memory */
                         strarray_free(entry->v.values);
@@ -1019,7 +1019,7 @@ static int setContactGroups(struct jmap_req *req)
                         free(entry->v.value);
                     }
                     entry->v.value = xstrdup(name);
-                    entry->multivalue = 0;
+                    entry->multivaluesep = '\0';
                 }
                 else {
                     vparse_add_entry(card, NULL, "FN", name);
@@ -2233,12 +2233,12 @@ done:
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
-                                        const char *name)
+                                        const char *name, char sepchar)
 {
     struct vparse_entry *res = vparse_get_entry(card, NULL, name);
     if (!res) {
         res = vparse_add_entry(card, NULL, name, NULL);
-        res->multivalue = 1;
+        res->multivaluesep = sepchar;
         res->v.values = strarray_new();
     }
     return res;
@@ -2477,7 +2477,7 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg, json_t *inv
         if (label)
             vparse_add_param(entry, "label", label);
 
-        entry->multivalue = 1;
+        entry->multivaluesep = ';';
         entry->v.values = strarray_new();
         strarray_append(entry->v.values, ""); // PO Box
         strarray_append(entry->v.values, ""); // Extended Address
@@ -2668,7 +2668,7 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n");
+            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 3, val);
         }
         else if (!strcmp(key, "firstName")) {
@@ -2681,7 +2681,7 @@ static int _json_to_card(const char *uid,
             /* JMAP doesn't have a separate field for Middle (aka "Additional
              * Names"), so any extra names are probably in firstName, and we
              * should split them out. See reverse of this in getcontacts_cb */
-            struct vparse_entry *n = _card_multi(card, "n");
+            struct vparse_entry *n = _card_multi(card, "n", ';');
             const char *middle = strchr(val, ' ');
             if (middle) {
                 /* multiple worlds, first to First, rest to Middle */
@@ -2701,7 +2701,7 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n");
+            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 0, val);
         }
         else if (!strcmp(key, "suffix")) {
@@ -2711,7 +2711,7 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n");
+            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 4, val);
         }
         else if (!strcmp(key, "nickname")) {
@@ -2752,7 +2752,7 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("company"));
                 return -1;
             }
-            struct vparse_entry *org = _card_multi(card, "org");
+            struct vparse_entry *org = _card_multi(card, "org", ';');
             strarray_set(org->v.values, 0, val);
             record_is_dirty = 1;
         }
@@ -2762,7 +2762,7 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("department"));
                 return -1;
             }
-            struct vparse_entry *org = _card_multi(card, "org");
+            struct vparse_entry *org = _card_multi(card, "org", ';');
             strarray_set(org->v.values, 1, val);
             record_is_dirty = 1;
         }
