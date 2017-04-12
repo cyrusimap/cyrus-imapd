@@ -11,7 +11,7 @@ Quickstart Guide
 .. -----------
 
 Quick install
--------------
+=============
 
 A quick guide to getting a basic installation of Cyrus up and running in 5 minutes.
 
@@ -29,7 +29,10 @@ official Cyrus packages are for Debian Jessie (with backports enabled).
 Please download both the packages (\*.deb) and the signature files.
 Installation is a two step process:
 
-1. First, invoke the ``dpkg -i`` command with the list of all packages::
+1. Install Cyrus reference packages
+-----------------------------------
+
+First, invoke the ``dpkg -i`` command with the list of all packages::
 
     $ sudo dpkg -i \
         cyrus-common_3.0.1-jessie_amd64.deb  \
@@ -48,15 +51,46 @@ Installation is a two step process:
 That step will produce an error, as there will doubtless be unmet
 dependencies.  Not to worry, there's a fix for that...
 
-2.  Now invoke ``apt-get install -f`` to pull in the dependencies and
-    complete the installation::
+2. Use "apt-get install -f" to complete installation
+----------------------------------------------------
+
+Now invoke ``apt-get install -f`` to pull in the dependencies and
+complete the installation::
 
     $ sudo apt-get install -f
 
 The packaging should pull along all necessary support libraries, etc..
 
-CONFIGURATION
--------------
+3. Setup the cyrus:mail user and group
+--------------------------------------
+
+.. include:: /assets/cyrus-user-group.rst
+
+4. Setting up authentication with SASL
+--------------------------------------
+
+.. include:: /assets/setup-sasl-sasldb.rst
+
+5. Setup mail delivery from your MTA
+------------------------------------
+
+Your Cyrus IMAP server will want to receive the emails accepted by your
+SMTP server (ie Sendmail, Postfix, etc). In Cyrus, this happens via a
+protocol called LMTP, which is usually supported by your SMTP server.
+
+.. include:: /assets/setup-sendmail.rst
+
+6. Protocol ports
+-----------------
+
+.. include:: /assets/services.rst
+
+7. Configuring Cyrus
+--------------------
+
+(Nearly there)
+
+.. include:: /assets/setup-dir-struct.rst
 
 Following installation, a fairly comprehensive set of sample
 configuration files may be found in
@@ -76,6 +110,10 @@ A basic description of these files:
             As above, but with several server processes pre-forked for
             faster connection initialization.
 
+    ..  note::  The ``normal.conf`` file in the ``imapd_conf`` directory
+        is intended to work with any of the above files from the
+        ``cyrus_conf`` directory.
+        
 *   Cyrus Aggregation - Murder -- configurations (these constitute a
     set, with at least one of each required):
 
@@ -101,19 +139,41 @@ A basic description of these files:
             A typical replica server, which accepts updates from the
             master.
 
+    .. note::
+        When working with replication or aggregation (Murder), the
+        example files in ``cyrus_conf`` and ``imapd_conf`` of the same
+        name are intended to be used together.
+
 You should review each of these and then install as desired to
 ``/etc/``, making changes as needed.  In particular, you'll need to set
 passwords for the various users used to authenticate between instances
 in a Murder or Replication environment.
 
-.. Note::
-    Continue with instructions in :ref:`The cyrus:mail user <basicserver_cyrus_user>`
+For example::
+
+    install -m 600 doc/examples/cyrus_conf/normal.conf /etc/cyrus.conf
+    install -m 600 doc/examples/imapd_conf/normal.conf /etc/imapd.conf
+    vi /etc/imapd.conf
+    ...
+    vi /etc/cyrus.conf
+    ...
+
+8. Launch Cyrus
+---------------
+
+If using our packages on Debian Jessie, you will have a SystemV
+compatible init script installed, with systemd support.  Start Cyrus
+with the following command::
+
+    systemctl start cyrus-imapd
+
+Tada!  You should now have a working Cyrus IMAP server.
 
 Feature overview
 ----------------
 
-The features (configuration options) supported in our reference
-packages are:
+The features (compile-time configuration options) supported in our
+reference packages are:
 
 Cyrus Server configured components
     * event notification : yes

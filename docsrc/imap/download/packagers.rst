@@ -5,10 +5,11 @@ Notes for Packagers
 Sample configuration files
 ==========================
 
-There are several samples of :cyrusman:`cyrus.conf(5)` located in the
-``doc/examples`` directory of the distribution tarball.  Please install
-these to your preferred documentation directory (i.e.
-``/usr/share/doc/cyrus-imapd``) as a reference for your users.
+There are several samples of :cyrusman:`cyrus.conf(5)` and
+:cyrusman:`imapd.conf(5)` located in the ``doc/examples`` directory of
+the distribution tarball.  Please install these to your preferred
+documentation directory (i.e. ``/usr/share/doc/cyrus-imapd``) as a
+reference for your users.
 
 Predefined configurations
 =========================
@@ -65,11 +66,11 @@ sections are:
 The configuration file for the various programs: imapd.conf
 -----------------------------------------------------------
 
-There is no sample for the :cyrusman:`imapd.conf(5)` file, as it must
-vary so much from site to site.  Here, therefore, we'll attempt to
-point you towards some reasonable settings which take advantage of
-recent improvements and features, and may help guide you and your users
-to a better performing Cyrus installation.
+The sample :cyrusman:`imapd.conf(5)` files must be adapted for use from
+site to site.  Here, therefore, we'll attempt to point you towards some
+reasonable settings which take advantage of recent improvements and
+features, and may help guide you and your users to a better performing
+Cyrus installation.
 
 Ephemeral files and temporary filesystems
 #########################################
@@ -102,6 +103,56 @@ New default settings
 With the introduction of version 3.0, the defaults for some settings
 have changed.  Please consult :ref:`upgrade` for details.
 
+New features
+############
+
+There are several features either new to version 3.0, or newly improved.
+Some of these may be features which previously were not considered ripe
+for packaging, but merit new consideration.
+
+Please see the release notes :ref:`relnotes-3.0.0-changes` for more
+details and other recent changes.
+
+*   Conversations
+
+    *   Server-side threading with reduced protocol chatter for mobile
+        or other high-latency clients.
+    *   Required for JMAP support.
+    *   See the ``conversations`` options in :cyrusman:`imapd.conf(5)`
+
+*   JMAP
+
+    *   JSON Mail Access Protocol
+    *   Follow-on successor to IMAP ("J comes after I") with a special
+        focus on mobile and other clients with high-latency or
+        unreliable connectivity.
+    *   Includes Calendaring, Contacts, Conversations, message delivery.
+    *   See ``httpmodules`` in :cyrusman:`imapd.conf(5)`
+
+*   Xapian
+
+    *   Higher quality full-text search support.
+    *   Required for JMAP support.
+    *   See the ``search_engine`` option in :cyrusman:`imapd.conf(5)`
+        and ``doc/README.xapian`` in the source distribution.
+
+*   Archive partitions
+
+    *   Automatically migrate messages from posh, fast storage (think
+        SSD) to cheap, slow storage (spinning rust).
+    *   Requires addition of an archive partition for each data
+        partition.
+    *   See ``archive_*`` options in :cyrusman:`imapd.conf(5)`
+
+*   Backup
+
+    *   Replication-based backup to dedicated instance with efficient,
+        compact scheme.
+    *   See :ref:`Cyrus Backups <cyrus-backups>`
+
+Please consider enabling these features in the :cyrusman:`imapd.conf(5)`
+you ship  in your packages.
+
 Services in ``/etc/services``
 =============================
 
@@ -109,50 +160,4 @@ Listing named services through ``/etc/services`` aids in cross-system consistenc
 
 Some of the services Cyrus IMAP would like to see available through ``/etc/services`` have not been assigned an IANA port number, and few have configuration options.
 
-The following lists services Cyrus IMAP should have available in ``/etc/services``:
-
-* **csync**
-
-    The Cyrus IMAP synchronisation server port, for replication clients to connect to.
-
-    * Description: *Cyrus IMAP Replication Daemon*
-    * Suggested Port(s): **2005/tcp**
-
-.. note::
-    **Default in /etc/imapd.conf**
-
-    While **2005/tcp** is the suggested default port for **csync**, the value of the port number is specified through the **sync_port** option in ``/etc/imapd.conf`` (generated from ``lib/imapoptions``). Note that when changing the suggested port for **csync** we recommend you also patch ``lib/imapoptions`` prior to building Cyrus IMAP.
-
-* **lmtp**
-
-    Some platforms do not specify the service port for LMTP –like Solaris and Debian. Fedora-based Linux distributions allocate port **24/tcp** for LMTP Mail Delivery, however. Whatever port packagers choose to use, please note they should be the same across all platforms deployed in a single environment.
-
-    * Description: *LMTP Mail Delivery*
-    * Suggested Port(s): **24/tcp** (Fedora-based platforms), **2003/tcp** (other platforms)
-
-* **mupdate**
-
-    The Cyrus IMAP Murder Mailbox Update protocol (MUPDATE) ensures mailboxes
-
-    * Description: *Mailbox Update (MUPDATE) protocol*
-    * Recommended Port(s): **3905/tcp**
-
-.. note::
-    Default in ``/etc/imapd.conf``
-
-    **3905/tcp** is the suggested default port for mupdate, as it is the default value specified for the **mupdate_port** option available in ``/etc/imapd.conf`` (generated from ``lib/imapoptions``). Note that when changing the suggested port for mupdate we recommend you also patch ``lib/imapoptions`` prior to building Cyrus IMAP.
-
-* **sieve**
-
-    * Description: *ManageSieve protocol*
-    * IANA Port: **4190/tcp**
-
-.. note::
-    **Port 2000/tcp**
-
-    **2000/tcp** is actually sieve-filter with description *Sieve Mail Filter Daemon*.
-
-* **smmap**
-
-    * Description: *Cyrus smmapd (quota check) service*
-    * Suggested Port(s): **/tcp**
+..  include:: /assets/services.rst

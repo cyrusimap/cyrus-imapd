@@ -87,6 +87,10 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
 .. _pkgconfig: http://pkgconfig.freedesktop.org
 .. _sqlite: https://www.sqlite.org/
 
+To install all dependencies from packages on Debian Jessie, use this:
+
+.. include:: /assets/cyrus-build-reqpkg.rst
+
 Optional Build Dependencies
 ---------------------------
 
