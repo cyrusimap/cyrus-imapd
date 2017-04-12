@@ -1885,10 +1885,20 @@ doc-text: doc-text-force doc/text/.sphinx-build.stamp
 clean-doc-text:
 	@$(RM) -r doc/text
 
-.PHONY: doc clean-doc
-doc: man doc-html doc-text
+GENERATED_EXAMPLES = doc/examples/imapd_conf/imapd.conf.sample
 
-clean-doc: clean-man clean-doc-html clean-doc-text
+.PHONY: doc-examples doc-examples-force clean-doc-examples
+doc-examples-force:
+
+doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
+
+clean-doc-examples:
+	@$(RM) $(GENERATED_EXAMPLES)
+
+.PHONY: doc clean-doc
+doc: man doc-html doc-text doc-examples
+
+clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples
 
 .PHONY: clean-local
 clean-local: clean-doc clean-sphinx-cache clean-docsrc
@@ -1919,6 +1929,7 @@ distgit:
 
 dist-hook:
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
+	find $(top_distdir) -type f -name .gitignore -delete
 	rm -rf $(top_distdir)/$(SPHINX_CACHE)
 
 install-data-hook:
