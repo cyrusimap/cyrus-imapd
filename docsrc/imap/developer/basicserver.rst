@@ -49,6 +49,8 @@ Install libraries and tools used by Cyrus IMAP. This includes a C compiler, some
 3. The cyrus:mail user
 ----------------------
 
+.. _basicserver_cyrus_user:
+
 Now let's create a **special user account just for the Cyrus server** to sandbox Cyrus: called ``cyrus``. We'll also create a ``mail`` group as well. This allows Cyrus to give other programs some permissions if they are run under the ``mail`` group, again, without causing a Cyrus bug to delete all of your cat pictures. Disaster!
 
 ::

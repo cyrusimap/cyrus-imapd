@@ -526,6 +526,7 @@ dist_noinst_SCRIPTS = \
 	tools/config2header \
 	tools/config2man \
 	tools/config2rst \
+	tools/config2sample \
 	tools/convert-sieve.pl \
 	tools/dohash \
 	tools/fixsearchpath.pl \
@@ -1767,6 +1768,10 @@ docsrc/imap/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/ima
 docsrc/imap/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
+
+doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
 
 docsrc/imap/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)

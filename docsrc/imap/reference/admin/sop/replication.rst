@@ -59,7 +59,8 @@ Replica server configuration
 The **replica** is a standalone server instance which listens for and
 processes synchronization messages from a single **master** server. The
 replica server needs to be configured to accept synchronization
-messages via the :cyrusman:`sync_server(8)` process.
+messages via IMAP or the (deprecated) :cyrusman:`sync_server(8)`
+process.
 
 .. Important::
     Within a Cyrus :ref:`Murder <architecture_murder>` environment,
@@ -70,16 +71,17 @@ messages via the :cyrusman:`sync_server(8)` process.
 
 1. :ref:`Configure a standalone server <installguide>`.
 
-2. Add the following line to the ``/etc/services`` file. Note that the
-   port number is arbitrary as long as its not being used by any other
-   services on the network.
+2. If using the deprecated sync_server scheme, add the following line
+   to the ``/etc/services`` file. Note that the port number is
+   arbitrary as long as its not being used by any other services on the
+   network.
 
     ::
 
         csync     2005/tcp
 
-3. Add a line similar to the following in the SERVICES section of
-   :cyrusman:`cyrus.conf(5)`:
+3. If using the deprecated sync_server scheme, add a line similar to
+   the following in the SERVICES section of :cyrusman:`cyrus.conf(5)`:
 
     ::
 
@@ -91,12 +93,12 @@ Master server configuration
 ---------------------------
 
 The **master** server is a standalone or backend Cyrus IMAP server
-instance which is
-actively serving mailboxes to clients. This server needs to be
-configured to synchronize its mailstore with a **replica** server via an
-instance of :cyrusman:`sync_client(8)`.
+instance which is actively serving mailboxes to clients. This server
+needs to be configured to synchronize its mailstore with a **replica**
+server via an instance of :cyrusman:`sync_client(8)`.
 
-Add the following line to the ``/etc/services`` file.
+If using the deprecated sync_server scheme, add the following line to
+the ``/etc/services`` file.
 
 ::
 
@@ -165,7 +167,7 @@ To configure rolling replication, perform the following:
 
         syncclient       cmd="/usr/cyrus/bin/sync_client -r"
   
-Start/restart ``usr/cyrus/bin/master``.
+Start/restart ``/usr/cyrus/bin/master``.
 
 .. Hint::
     In a multi-channel mesh, the channel to be used by a given
@@ -253,19 +255,19 @@ rest of the sync related settings in :cyrusman:`imapd.conf(5)`::
     # The main replica
     repl1_sync_host: mailrepl1.example.org
     repl1_sync_repeat_interval: 180
-    repl1_shutdown_file: /var/lib/imap/sync/repl1_shutdown
+    repl1_shutdown_file: /run/cyrus/sync/repl1_shutdown
     ##
     # A second replica used to feed the tape backup system
     repl2_sync_host: mailrepl2.example.org
     repl2_sync_repeat_interval: 180
-    repl2_shutdown_file: /var/lib/imap/sync/repl2_shutdown
+    repl2_shutdown_file: /run/cyrus/sync/repl2_shutdown
     ##
     # An offsite replica which needs a different port and uses a slower
     # cycle rate
     offsite_sync_port: 19205
     offsite_sync_host: mailoffsite.example.org
     offsite_sync_repeat_interval: 360
-    offsite_shutdown_file: /var/lib/imap/sync/offsite_shutdown
+    offsite_shutdown_file: /run/cyrus/sync/offsite_shutdown
 
 Then these entries in :cyrusman:`cyrus.conf(5)` would complete the
 exercise::
