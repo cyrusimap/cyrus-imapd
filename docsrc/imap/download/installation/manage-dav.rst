@@ -20,6 +20,9 @@ Its feature set is limited to:
       collections and :rfc:`5322` messages to store iCalendar data.
     * Allows non-CalDAV/remote calendar clients to query freebusy information of
       Cyrus CalDAV users via freebusy URLs.
+    * Allows scheduling transactions between separate calendaring and
+      scheduling systems via the iSchedule protocol (currently only
+      used within a Cyrus Murder).
     * Acts as a Time Zone Distribution Service by serving iCalendar
       (VTIMEZONE) data to client systems.
 * Contacts (CardDAV)
