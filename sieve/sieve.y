@@ -332,6 +332,7 @@ command:  control
                                      buf_printf(&buf, "%s: line %d",
                                                 error_message(SIEVE_UNSUPP_EXT),
                                                 sievelineno);
+                                     sscript->support |= SIEVE_CAPA_IHAVE;
                                      $$ = build_rej_err(sscript, ERROR,
                                                         buf_release(&buf));
                                  }
