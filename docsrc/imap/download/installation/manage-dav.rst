@@ -69,7 +69,7 @@ Authentication
 As with other Cyrus services, the Cyrus httpd service uses
 :ref:`Cyrus SASL <cyrussasl:sasl-index>` to perform
 its authentication. Cyrus supports the following HTTP authentication schemes:
-Basic, Digest, Negotiate (Kerberos only), and NTLM. While Basic is available in
+Basic, Digest, Negotiate (Kerberos only), and NTLM. While Basic and NTLM are available in
 all versions of SASL, the remaining schemes are only available in Cyrus SASL
 2.1.16 (and higher).
 
@@ -111,14 +111,15 @@ configure their clients in order to access their data on Cyrus. The list below
 needs to be customized to your specific hostnames.
 
 * CalDAV
-    * ``https://<servername>/dav/calendars/user/<userid>/<calendar>/``
-    * Many clients do the right thing if you provide the correct server, username and password.
+    * Many clients find calendars automatically if you provide the correct server, username and password.
+    * Otherwise, use the direct URL: ``https://<servername>/dav/calendars/user/<userid>/<calendar>/``
 * Freebusy
     * ``https://<servername>/freebusy/user/<userid>``
     * Query parameters can be added to the URL per Section 4 of
       `Freebusy Read URL <http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf>`_.
 * CardDAV
-    * ``https://<servername>/dav/principals/user/``
+    * Many clients find addressbooks automatically if you provide the correct server, username and password.
+    * Otherwise, use the direct URL:``https://<servername>/dav/addressbooks/<userid>/<addressbook>``
     * The address book(s) are automatically filtered based on the username and password supplied.
 * WebDAV
     * ``https://<servername>/dav/drive/user/<userid>``

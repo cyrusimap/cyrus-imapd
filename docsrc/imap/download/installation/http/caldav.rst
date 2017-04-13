@@ -24,10 +24,14 @@ For example, using the default value for calendarprefix, a
 calendar named Default for user "murch" would reside in the mailbox named
 ``user.murch.#calendars.Default``.
 
-Note that mailboxes in the calendar hierarchies (those under calendarprefix)
-will NOT be returned by Cyrus imapd in response to an IMAP client's request for
-the available mailbox list, but Cyrus imapd will not otherwise prevent an IMAP
-client from accessing them.
+.. warning::
+
+    Note that mailboxes in the calendar hierarchies (those under
+    calendarprefix) **should not** be accessed with an IMAP client as doing so will
+    leave a mailbox in a state unsuitable for CalDAV. To this end, calendar
+    mailboxes will not returned by Cyrus imapd in response to an IMAP client's
+    request for the available calendar list, but Cyrus imapd can not otherwise
+    prevent an IMAP client from accessing them.
 
 .. sidebar:: caldav_allowscheduling
 
@@ -47,6 +51,22 @@ The CalDAV module will *automatically* create the required calendars for a user
 the first time that the user authenticates to the CalDAV server. Note that the
 user MUST have an existing IMAP Inbox in order for the calendars to be created.
 
+.. sidebar:: autocreate options
+
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+      :start-after: startblob caldav_create_default
+      :end-before: endblob caldav_create_default
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+      :start-after: startblob caldav_create_attach
+      :end-before: endblob caldav_create_attach
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+      :start-after: startblob caldav_create_sched
+      :end-before: endblob caldav_create_sched
+
+Autocreate of the various calendars can be disabled with the
+"caldav_create_default/sched/attach" options, if you have an alternate
+mechanism to create calendars.
+
 There is also a Cyrus web GUI for managing calendar resources.
 It allows you to:
 
@@ -58,16 +78,6 @@ It allows you to:
 
 To access the Cyrus web GUI for CalDAV Collection Management, point
 a web browser at ``https://<servername>/dav/calendars/user/<username>``
-
-
-Similarly, for addressbook management, use a URL of the form
-``https://<servername>/dav/addressbooks/user/<username>``
-
-Using the CardDAV GUI, one may:
-
-    * Create new collections
-    * Delete existing collections
-    * Download existing collections via prepared URLs
 
 .. _calendar_ACL:
 
