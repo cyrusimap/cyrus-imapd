@@ -80,6 +80,8 @@ protocol called LMTP, which is usually supported by your SMTP server.
 
 .. include:: /assets/setup-sendmail.rst
 
+.. include:: /assets/setup-postfix.rst
+
 6. Protocol ports
 -----------------
 
