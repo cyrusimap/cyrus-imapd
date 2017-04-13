@@ -1,11 +1,11 @@
 .. _carddav:
 
-==================
-CardDAV Management
-==================
+=======
+CardDAV
+=======
 
-CardDAV Configuration
-====================
+Configuration
+=============
 
 .. sidebar:: addressbookprefix
 

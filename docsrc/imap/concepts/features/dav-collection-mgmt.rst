@@ -17,6 +17,9 @@ Collections have special attributes, so should be created and
 maintained either through protocol -- i.e. with purpose-built calendar
 or address book clients -- or with the provided web GUI.
 
-.. seealso:: :ref:`caldav` for more information on creating and managing Calendars
+.. seealso::
+    :ref:`caldav` for more information on creating and managing Calendars
+    :ref:`carddav` for more information on creating and managing Addressbooks
+
 
 Back to :ref:`imap-features`
