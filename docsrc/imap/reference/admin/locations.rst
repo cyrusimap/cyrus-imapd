@@ -24,7 +24,7 @@ and may be defined for the following types of data:
     * :ref:`imap-features-mail-spool-partitions`
     * :ref:`imap-features-metadata-partitions`
     * :ref:`cyrus-backups`
-    * Archive Data
+    * :ref:`imap-features-archive-partitions`
 
 Please consult the documents linked above for more information on these.
 

@@ -91,6 +91,7 @@ Storage
 
     features/mail-spool-partitions
     features/mailbox-metadata-partitions
+    features/archiving
     features/quota
     features/single-instance-store
 
