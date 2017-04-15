@@ -132,7 +132,7 @@ int do_fileinto(action_list_t *m, const char *mbox, int cancel_keep, int do_crea
                 strarray_t *imapflags);
 int do_redirect(action_list_t *m, const char *addr,
                 int is_ext_list, int cancel_keep);
-int do_keep(action_list_t *m, int cancel_keep, strarray_t *imapflags);
+int do_keep(action_list_t *m, strarray_t *imapflags);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr,
                 char *subj, const char *msg, int seconds, int mime,

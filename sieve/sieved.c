@@ -668,11 +668,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("STOP\n");
             break;
 
-        case B_KEEP:/*22*/
+        case B_KEEP:/*35*/
+        case B_KEEP_COPY:/*22*/
             printf("KEEP FLAGS {%d}\n", ntohl(d[i].listlen));
             i=write_list(ntohl(d[i].listlen), i+1, d);
-            copy = ntohl(d[i++].value);
-            printf("              COPY(%d)\n",copy);
+            if (op == B_KEEP_COPY) copy = ntohl(d[i++].value);
             break;
         case B_KEEP_ORIG:/*1*/
             printf("KEEP\n");

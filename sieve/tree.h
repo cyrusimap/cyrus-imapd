@@ -144,7 +144,6 @@ struct Commandlist {
         } s;
         struct { /* it's a keep action */
             strarray_t *flags;
-            int copy;
         } k;
         struct { /* it's a fileinto action */
             strarray_t *flags;

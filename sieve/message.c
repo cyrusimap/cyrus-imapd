@@ -180,7 +180,7 @@ int do_redirect(action_list_t *a, const char *addr,
  *
  * incompatible with: [e]reject
  */
-int do_keep(action_list_t *a, int cancel_keep, strarray_t *imapflags)
+int do_keep(action_list_t *a, strarray_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -218,7 +218,6 @@ int do_keep(action_list_t *a, int cancel_keep, strarray_t *imapflags)
         b->next = a;
     }
     a->a = ACTION_KEEP;
-    a->cancel_keep |= cancel_keep;
     a->u.keep.imapflags = imapflags;
     return 0;
 }

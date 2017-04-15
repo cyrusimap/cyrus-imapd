@@ -1981,7 +1981,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             res=1;
             break;
 
-        case B_KEEP:/*22*/
+        case B_KEEP:/*35*/
+        case B_KEEP_COPY:/*22*/
         {
             int x;
             int list_len=ntohl(bc[ip].len);
@@ -2004,7 +2005,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
             }
         }
-            copy = ntohl(bc[ip++].value);
+            if (op == B_KEEP_COPY) copy = ntohl(bc[ip++].value);
             /* fall through */
         case B_KEEP_ORIG:/*1*/
             /* if there's no :flags parameter, use the internal flags var*/
@@ -2016,7 +2017,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
             verify_flaglist(actionflags);
 
-            res = do_keep(actions, !copy, actionflags);
+            res = do_keep(actions, actionflags);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
             actionflags = NULL;

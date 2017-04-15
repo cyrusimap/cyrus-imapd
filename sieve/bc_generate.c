@@ -712,8 +712,6 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].op = B_KEEP;
                 codep = bc_stringlist_generate(codep,retval,c->u.k.flags);
                 if (codep == -1) return -1;
-                if(!atleast(retval,codep+1)) return -1;
-                retval->data[codep++].value = c->u.k.copy;
                 break;
 
             case MARK:

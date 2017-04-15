@@ -113,7 +113,8 @@ typedef union
  *                                  External Lists (RFC6134),
  *                                  eNotify (RFC5435),
  *                                  Duplicate (RFC7352),
- *                                  Ihave (RFC5463)
+ *                                  Ihave (RFC5463),
+ *                                  updated KEEP (remove :copy)
  */
 #define BYTECODE_VERSION 0x12
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -127,7 +128,7 @@ typedef union
 enum bytecode {
     B_STOP,
 
-    B_KEEP_ORIG,        /* legacy keep w/o support for :copy and :flags */
+    B_KEEP_ORIG,        /* legacy keep w/o support for :flags */
     B_DISCARD,
     B_REJECT,           /* require reject */
     B_FILEINTO_ORIG,    /* legacy fileinto w/o support for :copy */
@@ -142,7 +143,7 @@ enum bytecode {
     B_SETFLAG_ORIG,	/* legacy setflag w/o support for variables */
     B_REMOVEFLAG_ORIG,	/* legacy removeflag w/o support for variables */
 
-    B_NOTIFY,           /* require notify */
+    B_NOTIFY,           /* require notify/enotify */
     B_DENOTIFY,         /* require notify */
 
     B_VACATION_ORIG,    /* legacy vacation w/o support for :seconds */
@@ -157,7 +158,7 @@ enum bytecode {
 
     B_VACATION,         /* require vacation */
 
-    B_KEEP,
+    B_KEEP_COPY,        /* legacy keep with bogus support for :copy */
     B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
     B_FILEINTO,         /* require mailbox, imap4flags, copy */
 
@@ -172,11 +173,13 @@ enum bytecode {
 
     B_EREJECT,          /* require ereject */
 
-    B_REDIRECT,
+    B_REDIRECT,         /* require list */
 
     B_ENOTIFY,          /* require enotify */
 
-    B_ERROR             /* require ihave */
+    B_ERROR,            /* require ihave */
+
+    B_KEEP
 };
 
 enum bytecode_comps {
