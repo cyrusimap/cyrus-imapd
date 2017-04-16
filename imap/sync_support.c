@@ -1075,7 +1075,7 @@ int sync_sieve_deactivate(const char *userid)
     const char *sieve_path = user_sieve_path(userid);
     char active[2048];
 
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
+    snprintf(active, sizeof(active), "%s/defaultbc", sieve_path);
     unlink(active);
 
     sync_log_sieve(userid);
