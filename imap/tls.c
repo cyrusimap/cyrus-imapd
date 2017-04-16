@@ -523,11 +523,13 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
         /* store the session in our database */
 
         session_id = SSL_SESSION_get_id(sess, &session_id_length);
-        do {
-            ret = cyrusdb_store(sessdb, (const char *) session_id,
-                            session_id_length,
-                            (const char *) data, len + sizeof(time_t), NULL);
-        } while (ret == CYRUSDB_AGAIN);
+        if (session_id_length) {
+	    do {
+	        ret = cyrusdb_store(sessdb, (const char *) session_id,
+			        session_id_length,
+			        (const char *) data, len + sizeof(time_t), NULL);
+	    } while (ret == CYRUSDB_AGAIN);
+        }
     }
 
     free(data);
@@ -556,6 +558,7 @@ static void remove_session(const unsigned char *id, int idlen)
     assert(id);
     assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
 
+    if (!idlen) return;
     if (!sess_dbopen) return;
 
     do {
