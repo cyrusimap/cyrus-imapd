@@ -801,7 +801,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 return -1;
             filelen += ret;
 
-            filelen += sizeof(int);
             break;
 
         case B_FILEINTO:
