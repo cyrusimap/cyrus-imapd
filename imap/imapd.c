@@ -3480,7 +3480,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
         n = prot_read(imapd_in, buf, size > 4096 ? 4096 : size);
         if (!n) {
             syslog(LOG_ERR,
-                   "IOERROR: reading message: unexpected end of file");
+                   "DISCONNECT: client disconnected during upload of literal");
             return IMAP_IOERROR;
         }
 
