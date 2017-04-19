@@ -2715,11 +2715,14 @@ static int _json_to_card(const char *uid,
             strarray_set(n->v.values, 4, val);
         }
         else if (!strcmp(key, "nickname")) {
-            int r = _kv_to_card(card, "nickname", jval);
-            if (r) {
+            const char *val = json_string_value(jval);
+            if (!val) {
                 json_array_append_new(invalid, json_string("nickname"));
-                return r;
+                return -1;
             }
+            struct vparse_entry *n = _card_multi(card, "nickname", ',');
+            strarray_truncate(n->v.values, 0);
+            if (*val) strarray_set(n->v.values, 0, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
