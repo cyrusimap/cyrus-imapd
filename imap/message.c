@@ -3438,6 +3438,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         syslog(LOG_NOTICE, "splitting conversation for %s %u base:%016llx was:%016llx now:%016llx",
                mailbox->name, record->uid, record->basecid, was, record->cid);
 
+        if (!record->basecid) record->basecid = was;
+
         conversation_free(conv);
         r = conversation_load(state, record->cid, &conv);
         if (r) goto out;
