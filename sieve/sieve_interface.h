@@ -157,6 +157,7 @@ typedef struct sieve_send_response_context {
     const char *msg;
     char *subj;
     int mime;
+    sieve_fileinto_context_t fcc;
 } sieve_send_response_context_t;
 
 typedef struct sieve_duplicate_context {

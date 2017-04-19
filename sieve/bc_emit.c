@@ -1023,14 +1023,15 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                     break;
         case B_VACATION:
             /* Address list, Subject String, Message String,
-               Seconds (word), Mime (word), From String, Handle String */
+               Seconds (word), Mime (word), From String, Handle String
+               Fcc String [ Create (word), Flags list ] */
 
-                /*new code-this might be broken*/
+            /* Address list */
             ret = bc_stringlist_emit(fd, &codep, bc);
             if(ret < 0) return -1;
             filelen += ret;
-            /*end of new code*/
 
+            /* Subject, Message */
             for(i=0; i<2; i++) {/*writing strings*/
 
                 /*write length of string*/
@@ -1064,12 +1065,14 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 return -1;
             codep++;
             filelen += sizeof(int);
-            /*Mime */
+
+            /* Mime */
             if(write_int(fd,bc->data[codep].value) == -1)
                 return -1;
             codep++;
 
-            for(i=0; i<2; i++) {/*writing strings*/
+            /* From, Handle, Fcc */
+            for(i=0; i<3; i++) {/*writing strings*/
 
                 /*write length of string*/
                 len = bc->data[codep++].len;
@@ -1097,6 +1100,19 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 }
 
             }
+
+            if (len > 0) {
+                /* Write create */
+                if(write_int(fd,bc->data[codep++].value) == -1)
+                    return -1;
+                filelen += sizeof(int);
+
+                /* Dump a stringlist of flags */
+                ret = bc_stringlist_emit(fd, &codep, bc);
+                if(ret < 0) return -1;
+                filelen += ret;
+            }
+
             filelen += sizeof(int);
 
             break;

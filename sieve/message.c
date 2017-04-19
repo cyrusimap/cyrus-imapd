@@ -266,7 +266,8 @@ static int makehash(unsigned char hash[],
 
 int do_vacation(action_list_t *a, char *addr, char *fromaddr,
                 char *subj, const char *msg, int seconds,
-                int mime, const char *handle)
+                int mime, const char *handle,
+                const sieve_fileinto_context_t *fcc)
 {
     action_list_t *b = NULL;
 
@@ -290,6 +291,9 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     a->u.vac.send.subj = subj;  /* user specified subject */
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
+    a->u.vac.send.fcc.mailbox = fcc->mailbox;
+    a->u.vac.send.fcc.do_create = fcc->do_create;
+    a->u.vac.send.fcc.imapflags = fcc->imapflags;
     if (handle)
         makehash(a->u.vac.autoresp.hash, addr, handle, NULL);
     else
@@ -487,6 +491,7 @@ void free_action_list(action_list_t *a)
             if(a->u.vac.send.subj) free(a->u.vac.send.subj);
             if(a->u.vac.send.addr) free(a->u.vac.send.addr);
             if(a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
+            strarray_free(a->u.vac.send.fcc.imapflags);
             break;
 
         default:

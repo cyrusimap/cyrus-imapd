@@ -185,6 +185,9 @@ enum sieve_capa_flag {
 
     /* Duplicate - RFC 7352 */
     SIEVE_CAPA_DUPLICATE    = 1LL<<43,
+
+    /* Fcc - draft-murchison-sieve-fcc */
+    SIEVE_CAPA_FCC          = 1LL<<44,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -231,6 +234,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_INCLUDE      \
                         | SIEVE_CAPA_IMAP         \
                         | SIEVE_CAPA_DUPLICATE    \
+                        | SIEVE_CAPA_FCC          \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODE_CHAR | SIEVE_CAPA_VARIABLES)

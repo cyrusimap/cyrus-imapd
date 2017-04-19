@@ -60,6 +60,7 @@
 #include <string.h>
 
 #include "map.h"
+#include "times.h"
 
 static void dump2(bytecode_input_t *d, int len);
 static int dump2_test(bytecode_input_t * d, int i, int version);
@@ -809,9 +810,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
         case B_VACATION_ORIG:/*14*/
-        case B_VACATION:/*22*/
-            printf("VACATION\n");
-            /*add address list here!*/
+        case B_VACATION_SEC:/*21*/
+        case B_VACATION:/*25*/
+            printf("VACATION ADDR {%d}\n", ntohl(d[i].listlen));
             i=write_list(ntohl(d[i].len),i+1,d);
 
             i = unwrap_string(d, i, &data, &len);
@@ -822,7 +823,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
             printf("%d MESG({%d}%s) \n", i, len, (!data ? "[nil]" : data));
 
-            printf("SECONDS(%d) MIME(%d)\n", ntohl(d[i].value) * (op == B_VACATION ? 1: 24 * 60 * 60 /* 1 day */), ntohl(d[i+1].value));
+            printf("SECONDS(%d) MIME(%d)\n",
+                   ntohl(d[i].value) * (op == B_VACATION_ORIG ? DAY2SEC : 1),
+                   ntohl(d[i+1].value));
             i+=2;
 
             if (version >= 0x05) {
@@ -833,6 +836,20 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 i = unwrap_string(d, i, &data, &len);
 
                 printf("%d HANDLE({%d}%s) \n",i, len, (!data ? "[nil]" : data));
+
+                if (op == B_VACATION) {
+                    i = unwrap_string(d, i, &data, &len);
+
+                    printf("%d FCC({%d}%s)",i, len, (!data ? "[nil]" : data));
+
+                    if (data) {
+                        create = ntohl(d[i++].value);
+                        printf(" FLAGS {%d}\n", ntohl(d[i].listlen));
+                        i=write_list(ntohl(d[i].listlen), i+1, d);
+                        printf("              CREATE(%d)", create);
+                    }
+                    printf("\n");
+                }
             }
 
             break;

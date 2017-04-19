@@ -115,6 +115,7 @@ typedef union
  *                                  Duplicate (RFC7352),
  *                                  Ihave (RFC5463),
  *                                  updated KEEP (remove :copy)
+ *                                  updated VACATION (:fcc)
  */
 #define BYTECODE_VERSION 0x12
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -156,7 +157,7 @@ enum bytecode {
     B_FILEINTO_COPY,    /* legacy fileinto w/o support for :flags */
     B_REDIRECT_COPY,    /* legacy redirect w/o support for :list */
 
-    B_VACATION,         /* require vacation */
+    B_VACATION_SEC,     /* legacy vacation w/o support for :fcc*/
 
     B_KEEP_COPY,        /* legacy keep with bogus support for :copy */
     B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
@@ -179,7 +180,9 @@ enum bytecode {
 
     B_ERROR,            /* require ihave */
 
-    B_KEEP
+    B_KEEP,
+
+    B_VACATION          /* require vacation */
 };
 
 enum bytecode_comps {

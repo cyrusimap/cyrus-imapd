@@ -988,6 +988,60 @@ static int autorespond(void *ac,
     return ret;
 }
 
+static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
+                   struct buf *header, const char *msg, struct buf *footer)
+{
+    struct appendstate as;
+    const char *userid;
+    char *intname;
+    int r;
+
+    userid = mbname_userid(sdata->mbname);
+    intname = mboxname_from_external(fcc->mailbox, sdata->ns, userid);
+
+    r = mboxlist_lookup(intname, NULL, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = autosieve_createfolder(userid, sdata->authstate,
+                                   intname, fcc->do_create);
+    }
+    if (!r) {
+        r = append_setup(&as, intname, userid, sdata->authstate,
+                         0, NULL, NULL, 0, EVENT_MESSAGE_APPEND);
+    }
+    if (!r) {
+        struct stagemsg *stage;
+        FILE *f = append_newstage(intname, time(NULL),
+                                  strhash(intname) /* unique msgnum for reply */,
+                                  &stage);
+        if (f) {
+            struct body *body = NULL;
+
+            fprintf(f, "%s%s%s",
+                    buf_cstring(header), msg, buf_cstring(footer));
+            fclose(f);
+
+            r = append_fromstage(&as, &body, stage,
+                                 0, fcc->imapflags, 0, /* annotatons */ NULL);
+            if (!r) r = append_commit(&as);
+
+            if (body) {
+                message_free_body(body);
+                free(body);
+            }
+
+            append_removestage(stage);
+        }
+        if (r || !f) append_abort(&as);
+    }
+
+    if (r) {
+        syslog(LOG_NOTICE, "sieve fcc '%s' failed: %s",
+               fcc->mailbox, error_message(r));
+    }
+
+    free(intname);
+}
+
 static int send_response(void *ac,
                          void *ic __attribute__((unused)),
                          void *sc, void *mc, const char **errmsg)
@@ -995,7 +1049,7 @@ static int send_response(void *ac,
     FILE *sm;
     const char *smbuf[10];
     char outmsgid[8192], *sievedb, *subj;
-    int i, sl, sm_stat;
+    int i, sl, sm_stat, ret;
     time_t t;
     char datestr[RFC822_DATETIME_MAX+1];
     pid_t sm_pid, p;
@@ -1003,6 +1057,7 @@ static int send_response(void *ac,
     message_data_t *md = ((deliver_data_t *) mc)->m;
     script_data_t *sdata = (script_data_t *) sc;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    struct buf header = BUF_INITIALIZER, footer = BUF_INITIALIZER;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";            /* ignore dots */
@@ -1022,14 +1077,14 @@ static int send_response(void *ac,
     snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>",
              (int) p, (int) t, global_outgoing_count++, config_servername);
 
-    fprintf(sm, "Message-ID: %s\r\n", outmsgid);
+    buf_printf(&header, "Message-ID: %s\r\n", outmsgid);
 
     time_to_rfc822(t, datestr, sizeof(datestr));
-    fprintf(sm, "Date: %s\r\n", datestr);
+    buf_printf(&header, "Date: %s\r\n", datestr);
 
-    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: <%s>\r\n", src->fromaddr);
-    fprintf(sm, "To: <%s>\r\n", src->addr);
+    buf_printf(&header, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    buf_printf(&header, "From: <%s>\r\n", src->fromaddr);
+    buf_printf(&header, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
@@ -1038,27 +1093,31 @@ static int send_response(void *ac,
             break;
         }
     subj = charset_encode_mimeheader(src->subj, strlen(src->subj));
-    fprintf(sm, "Subject: %s\r\n", subj);
+    buf_printf(&header, "Subject: %s\r\n", subj);
     free(subj);
-    if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
-    fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
-    fprintf(sm, "MIME-Version: 1.0\r\n");
+    if (md->id) buf_printf(&header, "In-Reply-To: %s\r\n", md->id);
+    buf_printf(&header, "Auto-Submitted: auto-replied (vacation)\r\n");
+    buf_printf(&header, "MIME-Version: 1.0\r\n");
     if (src->mime) {
-        fprintf(sm, "Content-Type: multipart/mixed;"
+        buf_printf(&header, "Content-Type: multipart/mixed;"
                 "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
-        fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-        fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
+        buf_printf(&header, "\r\n");
+        buf_printf(&header, "This is a MIME-encapsulated message\r\n");
+        buf_printf(&header, "\r\n--%d/%s\r\n", (int) p, config_servername);
     } else {
-        fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
-        fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n");
-        fprintf(sm, "\r\n");
+        buf_printf(&header, "Content-Type: text/plain; charset=utf-8\r\n");
+        buf_printf(&header, "Content-Transfer-Encoding: 8bit\r\n");
+        buf_printf(&header, "\r\n");
     }
 
-    fprintf(sm, "%s\r\n", src->msg);
-
+    buf_printf(&footer, "\r\n");
     if (src->mime) {
-        fprintf(sm, "\r\n--%d/%s--\r\n", (int) p, config_servername);
+        buf_printf(&footer, "\r\n--%d/%s--\r\n", (int) p, config_servername);
     }
+
+    fprintf(sm, "%s%s%s",
+            buf_cstring(&header), src->msg, buf_cstring(&footer));
+
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
 
@@ -1070,13 +1129,22 @@ static int send_response(void *ac,
         dkey.date = ((deliver_data_t *) mc)->m->date;
         duplicate_mark(&dkey, t, 0);
 
+        if (src->fcc.mailbox) {
+            do_fcc(sdata, &src->fcc, &header, src->msg, &footer);
+        }
+
         snmp_increment(SIEVE_VACATION_REPLIED, 1);
 
-        return SIEVE_OK;
+        ret = SIEVE_OK;
     } else {
         *errmsg = sendmail_errstr(sm_stat);
-        return SIEVE_FAIL;
+        ret = SIEVE_FAIL;
     }
+
+    buf_free(&header);
+    buf_free(&footer);
+
+    return ret;
 }
 
 /* vacation support */

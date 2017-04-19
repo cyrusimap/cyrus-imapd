@@ -908,6 +908,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    VALUE mime
                    STRING from (if len is -1, then from was NULL)
                    STRING handle (again, len == -1 means handle was NULL)
+                   STRING fcc (again, len == -1 means fcc was NULL)
+                      VALUE create (if and only if fcc != NULL)
+                      STRINGLIST flags (if and only if fcc != NULL)
                 */
 
                 if (!atleast(retval, codep+1)) return -1;
@@ -954,6 +957,23 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (c->u.v.handle) {
                     retval->data[codep++].len = strlen(c->u.v.handle);
                     retval->data[codep++].str = c->u.v.handle;
+                }
+                else {
+                    retval->data[codep++].len = -1;
+                    retval->data[codep++].str = NULL;
+                }
+
+                if (!atleast(retval, codep+2)) return -1;
+                if (c->u.v.fcc.folder) {
+                    retval->data[codep++].len = strlen(c->u.v.fcc.folder);
+                    retval->data[codep++].str = c->u.v.fcc.folder;
+
+                    if (!atleast(retval, codep+1)) return -1;
+                    retval->data[codep++].value = c->u.v.fcc.create;
+
+                    codep = bc_stringlist_generate(codep, retval,
+                                                   c->u.v.fcc.flags);
+                    if (codep == -1) return -1;
                 }
                 else {
                     retval->data[codep++].len = -1;

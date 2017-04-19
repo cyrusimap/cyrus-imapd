@@ -2423,9 +2423,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
         case B_VACATION_ORIG:/*14*/
-        case B_VACATION:/*21*/
+        case B_VACATION_SEC:/*21*/
+        case B_VACATION:/*35*/
         {
             int respond;
+            sieve_fileinto_context_t fcc = { NULL, NULL, 0 };
             char *fromaddr = NULL; /* relative to message we send */
             char *toaddr = NULL; /* relative to message we send */
             const char *handle = NULL;
@@ -2504,10 +2506,27 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                         /* user specified handle */
                         handle = data;
                     }
+
+                    if (op == B_VACATION) {
+                        ip = unwrap_string(bc, ip, &data, NULL);
+
+                        if (data) {
+                            /* user specified fcc mailbox */
+                            if (requires & BFE_VARIABLES) {
+                                data = parse_string(data, variables);
+                            }
+
+                            fcc.mailbox = data;
+                            fcc.do_create = ntohl(bc[ip++].value);
+                            ip = unwrap_flaglist(bc, ip, &fcc.imapflags,
+                                                 (requires & BFE_VARIABLES) ?
+                                                 variables : NULL);
+                        }
+                    }
                 }
 
                 res = do_vacation(actions, toaddr, fromaddr, xstrdup(subject),
-                                  message, seconds, mime, handle);
+                                  message, seconds, mime, handle, &fcc);
 
                 if (res == SIEVE_RUN_ERROR)
                     *errmsg = "Vacation can not be used with Reject or Vacation";
@@ -2523,6 +2542,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     /* skip from and handle */
                     ip = unwrap_string(bc, ip, &data, NULL);
                     ip = unwrap_string(bc, ip, &data, NULL);
+
+                    if (op == B_VACATION) {
+                        /* skip fcc */
+                        ip = unwrap_string(bc, ip, &data, NULL);
+
+                        if (data) {
+                            ip++; /* skip create flag */
+
+                            /* skip flag list */
+                            ip = unwrap_flaglist(bc, ip, &fcc.imapflags, NULL);
+                            strarray_free(fcc.imapflags);
+                        }
+                    }
                 }
             } else {
                 res = SIEVE_RUN_ERROR; /* something is bad */

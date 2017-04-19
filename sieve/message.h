@@ -134,9 +134,9 @@ int do_redirect(action_list_t *m, const char *addr,
                 int is_ext_list, int cancel_keep);
 int do_keep(action_list_t *m, strarray_t *imapflags);
 int do_discard(action_list_t *m);
-int do_vacation(action_list_t *m, char *addr, char *fromaddr,
-                char *subj, const char *msg, int seconds, int mime,
-                const char *handle);
+int do_vacation(action_list_t *m, char *addr, char *fromaddr, char *subj,
+                const char *msg, int seconds, int mime, const char *handle,
+                const sieve_fileinto_context_t *fcc);
 int do_setflag(action_list_t *m);
 int do_addflag(action_list_t *m, const char *flag);
 int do_removeflag(action_list_t *m, const char *flag);

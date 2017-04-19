@@ -407,6 +407,8 @@ void free_tree(commandlist_t *cl)
             free(cl->u.v.message);
             free(cl->u.v.from);
             free(cl->u.v.handle);
+            free(cl->u.v.fcc.folder);
+            strarray_free(cl->u.v.fcc.flags);
             break;
 
         case KEEP:

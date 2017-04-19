@@ -118,6 +118,13 @@ struct Testlist {
     testlist_t *next;
 };
 
+struct Fileinto {
+    strarray_t *flags;
+    char *folder;
+    int copy;
+    int create;
+};
+
 struct Commandlist {
     int type;
     union {
@@ -145,12 +152,7 @@ struct Commandlist {
         struct { /* it's a keep action */
             strarray_t *flags;
         } k;
-        struct { /* it's a fileinto action */
-            strarray_t *flags;
-            char *folder;
-            int copy;
-            int create;
-        } f;
+        struct Fileinto f; /* it's a fileinto action */
         struct { /* it's a flag action */
             char *variable;
             strarray_t *flags;
@@ -168,6 +170,7 @@ struct Commandlist {
             char *from;
             char *handle;
             int mime;
+            struct Fileinto fcc;
         } v;
         struct { /* it's an (e)notify action */
             char *method;

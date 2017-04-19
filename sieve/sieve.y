@@ -297,6 +297,9 @@ extern void sieverestart(FILE *f);
 %type <test> duptags
 %type <nval> idtype
 
+/* draft-murchison-sieve-fcc */
+%token FCC
+
 
 %%
 
@@ -442,10 +445,18 @@ ktags: /* empty */               { $$ = new_command(KEEP, sscript); }
 
 /* :flags */
 flags: FLAGS stringlist          {
-                                     /* $0 refers to ktags or ftags */
+                                     /* $0 refers to ktags, ftags, or vtags */
                                      commandlist_t *c = $<cl>0;
-                                     strarray_t **flags = (c->type == KEEP) ?
-                                         &c->u.k.flags : &c->u.f.flags;
+                                     strarray_t **flags = NULL;
+
+                                     switch (c->type) {
+                                     case KEEP:
+                                         flags = &c->u.k.flags; break;
+                                     case FILEINTO:
+                                         flags = &c->u.f.flags; break;
+                                     case VACATION:
+                                         flags = &c->u.v.fcc.flags; break;
+                                     }
 
                                      if (*flags != NULL) {
                                          sieveerror_c(sscript,
@@ -468,18 +479,7 @@ flags: FLAGS stringlist          {
 ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
         | ftags copy
         | ftags flags
-        | ftags CREATE           {
-                                     if ($$->u.f.create++) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":create");
-                                     }
-                                     else if (!supported(SIEVE_CAPA_MAILBOX)) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_MISSING_REQUIRE,
-                                                      "mailbox");
-                                     }
-                                 }
+        | ftags create
         ;
 
 
@@ -499,6 +499,27 @@ copy: COPY                       {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "copy");
+                                     }
+                                 }
+        ;
+
+
+/* :create */
+create: CREATE                  {
+                                     /* $0 refers to ftags or vtags */
+                                     commandlist_t *c = $<cl>0;
+                                     int *create = (c->type == FILEINTO) ?
+                                         &c->u.f.create : &c->u.v.fcc.create;
+
+                                     if ((*create)++) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":create");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MAILBOX)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mailbox");
                                      }
                                  }
         ;
@@ -681,6 +702,30 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
                                      $$->u.v.handle = $3;
                                  }
+        | vtags fcctags
+        ;
+
+
+fcctags: FCC STRING              {
+                                     /* $0 refers to vtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.v.fcc.folder != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":fcc");
+                                         free(c->u.v.fcc.folder);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_FCC)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "fcc");
+                                     }
+
+                                     c->u.v.fcc.folder = $2;
+                                 }
+        | create
+        | flags
         ;
 
 
@@ -1791,10 +1836,19 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     if (c->u.v.from) verify_address(sscript, c->u.v.from);
     if (c->u.v.addresses)
         verify_stringlist(sscript, c->u.v.addresses, verify_address);
-
     if (c->u.v.mime == -1) {
         verify_utf8(sscript, message);
         c->u.v.mime = 0;
+    }
+    if (c->u.v.fcc.folder) {
+        verify_mailbox(sscript, c->u.v.fcc.folder);
+        if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
+            c->u.v.fcc.flags && !verify_flaglist(c->u.v.fcc.flags)) {
+            strarray_add(c->u.v.fcc.flags, "");
+        }
+    }
+    else if (c->u.v.fcc.create || c->u.v.fcc.flags) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
     c->u.v.message = message;

@@ -446,6 +446,9 @@ static const struct sieve_capa_t {
     /* Duplicate - RFC 7352 */
     { "duplicate", SIEVE_CAPA_DUPLICATE },
 
+    /* Fcc - draft-murchison-sieve-fcc */
+    { "fcc", SIEVE_CAPA_FCC },
+
     { NULL, 0 }
 };
     
@@ -584,6 +587,10 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_DUPLICATE:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_FCC:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)) capa = 0;
         break;
 
     default:
