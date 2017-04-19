@@ -2252,6 +2252,7 @@ static int zero_b_cb(void *rock,
     conversation_t *conv = NULL;
     conv_folder_t *folder;
     conv_sender_t *sender;
+    conv_thread_t *thread;
     int r;
     int i;
 
@@ -2287,6 +2288,11 @@ static int zero_b_cb(void *rock,
         free(sender->mailbox);
         free(sender->domain);
         free(sender);
+    }
+
+    while ((thread = conv->thread)) {
+        conv->thread = thread->next;
+        free(thread);
     }
 
     /* keep the subject of course */
