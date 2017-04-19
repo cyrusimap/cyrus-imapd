@@ -1878,6 +1878,39 @@ envelope_err:
     return res;
 }
 
+int unwrap_flaglist(bytecode_input_t *bc, int pos, strarray_t **flaglist,
+                    variable_list_t *variables)
+{
+    int len = ntohl(bc[pos].value);
+
+    pos += 2; /* Skip # Values and Total Byte Length */
+
+    if (len) {
+        int i;
+
+        if (!*flaglist) *flaglist = strarray_new();
+
+        for (i = 0; i < len; i++) {
+            const char *flag;
+
+            pos = unwrap_string(bc, pos, &flag, NULL);
+
+            if (variables) {
+                flag = parse_string(flag, variables);
+            }
+
+            if (flag[0]) {
+                strarray_add_case(*flaglist, flag);
+            }
+        }
+
+        verify_flaglist(*flaglist);
+    }
+
+    return pos;
+}
+
+
 int sieve_bytecode_version(const sieve_bytecode_t *bc)
 {
     if (!bc) return 0;
@@ -1983,39 +2016,20 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
         case B_KEEP:/*35*/
         case B_KEEP_COPY:/*22*/
-        {
-            int x;
-            int list_len=ntohl(bc[ip].len);
+            ip = unwrap_flaglist(bc, ip, &actionflags,
+                                 (requires & BFE_VARIABLES) ? variables: NULL);
 
-            ip+=2; /* skip opcode, list_len, and list data len */
-
-            if (list_len) {
-                actionflags = (varlist_extend(variables))->var;
-            }
-            for (x=0; x<list_len; x++) {
-                const char *flag;
-                ip = unwrap_string(bc, ip, &flag, NULL);
-
-                if (requires & BFE_VARIABLES) {
-                    flag = parse_string(flag, variables);
-                }
-
-                if (flag[0]) {
-                strarray_add_case(actionflags,flag);
-                }
-            }
-        }
             if (op == B_KEEP_COPY) copy = ntohl(bc[ip++].value);
             /* fall through */
         case B_KEEP_ORIG:/*1*/
             /* if there's no :flags parameter, use the internal flags var*/
             if (!actionflags) {
-                variable_list_t *temp = varlist_extend(variables);
                 actionflags = strarray_dup(variables->var);
-                strarray_free(temp->var);
-                temp->var = actionflags;
             }
-            verify_flaglist(actionflags);
+
+            variable = varlist_extend(variables);
+            strarray_free(variable->var);
+            variable->var = actionflags;
 
             res = do_keep(actions, actionflags);
             if (res == SIEVE_RUN_ERROR)
@@ -2050,28 +2064,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             /* fall through */
         case B_FILEINTO_FLAGS:/*23*/
-        {
-            int x;
-            int list_len=ntohl(bc[ip].len);
+            ip = unwrap_flaglist(bc, ip, &actionflags,
+                                 (requires & BFE_VARIABLES) ? variables: NULL);
 
-            ip+=2; /* skip opcode, list_len, and list data len */
-
-            if (list_len) {
-                actionflags = (varlist_extend(variables))->var;
-            }
-            for (x=0; x<list_len; x++) {
-                const char *flag;
-                ip = unwrap_string(bc, ip, &flag, NULL);
-
-                if (requires & BFE_VARIABLES) {
-                    flag = parse_string(flag, variables);
-                }
-
-                if (flag[0]) {
-                strarray_add_case(actionflags,flag);
-                }
-            }
-        }
             /* fall through */
         case B_FILEINTO_COPY:/*19*/
             copy = ntohl(bc[ip].value);
@@ -2082,12 +2077,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             /* if there's no :flags parameter, use the internal flags var*/
             if (!actionflags) {
-                variable_list_t *temp = varlist_extend(variables);
                 actionflags = strarray_dup(variables->var);
-                strarray_free(temp->var);
-                temp->var = actionflags;
             }
-            verify_flaglist(actionflags);
+
+            variable = varlist_extend(variables);
+            strarray_free(variable->var);
+            variable->var = actionflags;
 
             ip = unwrap_string(bc, ip, &data, NULL);
 
@@ -2194,27 +2189,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             /* fall through */
         case B_ADDFLAG_ORIG:/*9*/
-        {
-            int x;
-            int list_len=ntohl(bc[ip].len);
-
-            ip+=2; /* skip opcode, list_len, and list data len */
-
             if (!actionflags) {
                 actionflags = variables->var;
             }
 
-            for (x=0; x<list_len; x++) {
-                ip = unwrap_string(bc, ip, &data, NULL);
-
-                if (requires & BFE_VARIABLES) {
-                    data = parse_string(data, variables);
-                }
-                strarray_add_case(actionflags, data);
-            }
-            verify_flaglist(actionflags);
+            ip = unwrap_flaglist(bc, ip, &actionflags,
+                                 (requires & BFE_VARIABLES) ? variables: NULL);
             break;
-        }
 
         case B_SETFLAG:/*27*/
             /* get the variable name */
@@ -2240,33 +2221,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             /* fall through */
         case B_SETFLAG_ORIG:/*10*/
-        {
-            int x;
-            int list_len=ntohl(bc[ip].len);
-
-            ip+=2; /* skip opcode, list_len, and list data len */
-
             if (!actionflags) {
                 actionflags = variables->var;
             }
 
             strarray_fini(actionflags);
 
-            for (x=0; x<list_len; x++) {
-                ip = unwrap_string(bc, ip, &data, NULL);
-
-                if (requires & BFE_VARIABLES) {
-                    data = parse_string(data, variables);
-                }
-
-                if (data[0]) {
-                    strarray_add_case(actionflags, data);
-                }
-            }
-
-	    verify_flaglist(actionflags);
+            ip = unwrap_flaglist(bc, ip, &actionflags,
+                                 (requires & BFE_VARIABLES) ? variables: NULL);
             break;
-        }
 
         case B_REMOVEFLAG:/*28*/
             /* get the variable name */
@@ -2293,34 +2256,22 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             /* fall through */
         case B_REMOVEFLAG_ORIG:/*11*/
         {
-          int x, y;
-            int list_len=ntohl(bc[ip].len);
-            strarray_t temp = STRARRAY_INITIALIZER;
-
-            ip+=2; /* skip opcode, list_len, and list data len */
+            strarray_t *temp = NULL;
+            int x;
 
             if (!actionflags) {
                 actionflags = variables->var;
             }
-	    verify_flaglist(actionflags);
 
-            for (x=0; x<list_len; x++) {
-                ip = unwrap_string(bc, ip, &data, NULL);
+            ip = unwrap_flaglist(bc, ip, &temp,
+                                 (requires & BFE_VARIABLES) ? variables: NULL);
 
-                if (requires & BFE_VARIABLES) {
-                    data = parse_string(data, variables);
-                }
+            for (x = 0; x < strarray_size(temp); x++) {
+                strarray_remove_all(actionflags, strarray_nth(temp, x));
+            }
 
-                strarray_append(&temp, data);
-                verify_flaglist(&temp);
+            strarray_free(temp);
 
-                for (y = 0; y < temp.count; y++) {
-                    data = temp.data[y];
-                    strarray_remove_all_case(actionflags, data);
-                }
-
-		strarray_fini(&temp);
-	    } 
             break;
         }
 
