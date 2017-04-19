@@ -2027,10 +2027,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 actionflags = strarray_dup(variables->var);
             }
 
-            variable = varlist_extend(variables);
-            strarray_free(variable->var);
-            variable->var = actionflags;
-
             res = do_keep(actions, actionflags);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
@@ -2079,10 +2075,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (!actionflags) {
                 actionflags = strarray_dup(variables->var);
             }
-
-            variable = varlist_extend(variables);
-            strarray_free(variable->var);
-            variable->var = actionflags;
 
             ip = unwrap_string(bc, ip, &data, NULL);
 

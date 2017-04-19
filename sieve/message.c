@@ -474,10 +474,23 @@ void free_action_list(action_list_t *a)
     while (a) {
         action_list_t *b = a->next;
 
-        if(a->a == ACTION_VACATION) {
+        switch (a->a) {
+        case ACTION_FILEINTO:
+            strarray_free(a->u.fil.imapflags);
+            break;
+
+        case ACTION_KEEP:
+            strarray_free(a->u.keep.imapflags);
+            break;
+
+        case ACTION_VACATION:
             if(a->u.vac.send.subj) free(a->u.vac.send.subj);
             if(a->u.vac.send.addr) free(a->u.vac.send.addr);
             if(a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
+            break;
+
+        default:
+            break;
         }
 
         free(a);
