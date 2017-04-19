@@ -1103,4 +1103,105 @@ EOF
     $self->assert_alarms({summary => 'allday', start => $start, timezone => 'Australia/Sydney'});
 }
 
+sub test_replication_withalarms
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event which recurs weekly
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-/c/Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+RRULE:FREQ=WEEKLY
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5 );
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->run_replication(nosyncback => 1);
+
+    $self->assert_alarms();
+
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5 );
+
+    $self->assert_alarms();
+
+    # add an hour for daylight savings safety
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5 );
+
+    $self->assert_alarms();
+
+    $self->run_replication(nosyncback => 1);
+
+    $self->assert_alarms();
+
+    # add an hour for daylight savings safety
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + (86400*7) + 5 + 3600 );
+
+    # should be a new alarm here
+    $self->assert_alarms({summary => 'Simple'});
+}
+
 1;
