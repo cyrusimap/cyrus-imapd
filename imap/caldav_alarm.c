@@ -524,19 +524,23 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
                                      icalcomponent *ical)
 {
     if (!has_alarms(ical)) return 0;
+    // we need to skip silent records (replication) because the lastalarm annotation won't be
+    // set yet, so it will all break :(  Instead, we have an explicit touch on the record which
+    // is done after the annotations are written, and processes the alarms if needed then, and
+    // regardless will always update the alarmdb
+    if (record->silent) return 0;
     int rc = 0;
 
     /* XXX - we COULD cache this in the mailbox object so it doesn't get read multiple times,
      * but this is really rare - only dav_reconstruct maybe */
     icaltimezone *floatingtz = get_floatingtz(mailbox);
+
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
         data.lastrun = record->internaldate;
-    if (!record->silent) {
-        data.nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
-                                        ical, data.lastrun, data.lastrun);
-        rc = update_alarmdb(mailbox->name, record->uid, data.nextcheck);
-    }
+    data.nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
+                                    ical, data.lastrun, data.lastrun);
+    rc = update_alarmdb(mailbox->name, record->uid, data.nextcheck);
 
     if (floatingtz) icaltimezone_free(floatingtz, 1);
 
