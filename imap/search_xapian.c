@@ -2521,14 +2521,30 @@ static int delete_user(const char *userid)
 {
     char *mboxname = mboxname_user_mbox(userid, /*subfolder*/NULL);
     char *activename = activefile_fname(mboxname);
+    struct mappedfile *activefile = NULL;
+    int r = 0;
+
+    /* grab an exclusive lock on activefile: that way we won't delete
+     * it out from under something else (such as squatter)
+     */
+    r = mappedfile_open(&activefile, activename, MAPPEDFILE_RW);
+    if (r) goto out;
+    r = mappedfile_writelock(activefile);
+    if (r) goto out;
 
     config_foreachoverflowstring(delete_one, mboxname);
     unlink(activename);
 
+out:
+    if (activefile) {
+        mappedfile_unlock(activefile);
+        mappedfile_close(&activefile);
+    }
+
     free(activename);
     free(mboxname);
 
-    return 0;
+    return r;
 }
 
 
