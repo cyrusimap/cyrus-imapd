@@ -62,6 +62,8 @@ struct msgrecord {
     annotate_state_t *annot_state;
 };
 
+static int mailbox_save_msgrecord(struct mailbox *mbox, msgrecord_t *mrw);
+
 #define M_MAILBOX       (1<<0)      /* an open mailbox* */
 #define M_RECORD        (1<<2)      /* a valid index_record */
 #define M_UID           (1<<3)      /* valid UID in index_record */
@@ -183,11 +185,14 @@ static void msgrecord_free(msgrecord_t *mr)
     free(mr);
 }
 
-EXPORTED void msgrecord_unref(msgrecord_t **mrp)
+EXPORTED void msgrecord_unrefw(msgrecord_t **mrp)
 {
     msgrecord_t *mr;
 
-    if (!mrp || !(mr = *mrp)) return;
+    if (!mrp) return;
+    mr = (msgrecord_t*) *mrp;
+    if (!mr) return;
+
     assert(mr->refcount >= 1);
     if (--mr->refcount == 0) {
         if (mr->annot_state) {
@@ -197,6 +202,12 @@ EXPORTED void msgrecord_unref(msgrecord_t **mrp)
     }
     *mrp = NULL;
 }
+
+EXPORTED void msgrecord_unref(const msgrecord_t **mrp)
+{
+    msgrecord_unrefw(((msgrecord_t **)mrp));
+}
+
 
 EXPORTED int msgrecord_get_systemflags(const msgrecord_t *mr, uint32_t *flags)
 {
@@ -482,89 +493,38 @@ struct findbyrecno_rock {
     msgrecord_t *mr;
 };
 
-static void findbyrecno_cb(const char *key __attribute__((unused)),
-                           void *data, void *rock)
-{
-    struct findbyrecno_rock *myrock = rock;
-    msgrecord_t *mr = data;
-
-    if (myrock->mr)
-        return;
-
-    if (mr->have & M_RECORD)
-        return;
-
-    if (mr->record.recno == myrock->recno)
-        myrock->mr = mr;
-}
-
-EXPORTED int mailbox_find_msgrecord_internal(struct mailbox *mbox,
-                                             uint32_t uid,
-                                             uint32_t recno,
-                                             int reload,
-                                             const msgrecord_t **mrp)
+static int mailbox_find_msgrecord_internal(struct mailbox *mbox,
+                                           uint32_t uid,
+                                           uint32_t recno,
+                                           const msgrecord_t **mrp)
 {
     int r = 0;
-    msgrecord_t *mr;
+    msgrecord_t *mr = NULL;
     struct buf buf = BUF_INITIALIZER;
 
-    /* TODO(rsto) depending on how many records are open, a hash table might
-     * not a good choice. I'd like a balanced tree optimized for
-     * 32-bit unsigned int keys. For prototyping, a hash table will do */
-    /* Lookup if we already have a msgrecords for this UID. msgrecords in
-     * mbox->msgrecords are read-only, so its safe to pass around pointers
-     * to the same instance */
-    if (!mbox->msgrecords) {
-        mbox->msgrecords = xzmalloc(sizeof(hash_table));
-        construct_hash_table(mbox->msgrecords, 512, 0);
-    }
-
     assert(uid || recno);
-    if (uid) {
-        buf_printf(&buf, "%d", uid);
-        mr = hash_lookup(buf_cstring(&buf), mbox->msgrecords);
-        buf_reset(&buf);
+
+    /* lookup the message record */
+    if (recno) {
+        struct index_record record;
+        memset(&record, 0, sizeof(struct index_record));
+        record.recno = recno;
+        /* TODO(rsto): mailbox_reload_index_record loads
+         * the record from recno, if it's set on the
+         * index_record. That's OK to assume here since
+         * we'll move this whole function into mailbox.c */
+        r = mailbox_reload_index_record(mbox, &record);
+        if (r) goto done;
+        mr = msgrecord_new_from_index_record(mbox, record);
     }
     else {
-        /* meh - a sequential scan on open message records */
-        struct findbyrecno_rock rock = { recno, NULL };
-        hash_enumerate(mbox->msgrecords, findbyrecno_cb, &rock);
-        mr = rock.mr;
+        mr = msgrecord_new_from_uid(mbox, uid);
     }
-
-    if (!mr) {
-        /* lookup the message record */
-        if (recno) {
-            struct index_record record;
-            memset(&record, 0, sizeof(struct index_record));
-            record.recno = recno;
-            /* TODO(rsto): mailbox_reload_index_record loads
-             * the record from recno, if it's set on the
-             * index_record. That's OK to assume here since
-             * we'll move this whole function into mailbox.c */
-            r = mailbox_reload_index_record(mbox, &record);
-            if (r) goto done;
-            mr = msgrecord_new_from_index_record(mbox, record);
-        }
-        else {
-            mr = msgrecord_new_from_uid(mbox, uid);
-        }
-        /* make sure we have an index_record */
-        r = msgrecord_need(mr, M_RECORD);
-        if (r) {
-            msgrecord_unref(&mr);
-            goto done;
-        }
-        /* keep track of the record */
-        buf_printf(&buf, "%d", mr->uid);
-        hash_insert(buf_cstring(&buf), mr, mbox->msgrecords);
-        buf_reset(&buf);
-    }
-    else if (reload) {
-        r = msgrecord_need(mr, M_RECORD);
-        if (r) goto done;
-        r = mailbox_reload_index_record(mbox, &mr->record);
-        if (r) goto done;
+    /* make sure we have an index_record */
+    r = msgrecord_need(mr, M_RECORD);
+    if (r) {
+        msgrecord_unrefw(&mr);
+        goto done;
     }
     mr->isappend = 0;
     *mrp = mr;
@@ -578,8 +538,7 @@ EXPORTED int mailbox_find_msgrecord(struct mailbox *mbox,
                                     uint32_t uid,
                                     const msgrecord_t **mrp)
 {
-    return mailbox_find_msgrecord_internal(mbox, uid, /*recno*/0,
-                                           /*reload*/0, mrp);
+    return mailbox_find_msgrecord_internal(mbox, uid, /*recno*/0, mrp);
 }
 
 EXPORTED int mailbox_find_msgrecord_rw(struct mailbox *mbox,
@@ -609,8 +568,7 @@ EXPORTED int mailbox_find_msgrecord_rw(struct mailbox *mbox,
 EXPORTED int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr)
 {
 
-   return mailbox_find_msgrecord_internal(mbox, mbox->i.last_uid, /*recno*/0,
-                                          /*reload*/1, mr);
+   return mailbox_find_msgrecord_internal(mbox, mbox->i.last_uid, /*recno*/0, mr);
 }
 
 EXPORTED int mailbox_msgrecord_from_index(struct mailbox *mbox,
@@ -622,8 +580,8 @@ EXPORTED int mailbox_msgrecord_from_index(struct mailbox *mbox,
     msgrecord_t *mrw = NULL;
 
     r = record.recno ?
-        mailbox_find_msgrecord_internal(mbox, 0, record.recno, 1, &mr) :
-        mailbox_find_msgrecord_internal(mbox, record.uid, 0, 1, &mr);
+        mailbox_find_msgrecord_internal(mbox, 0, record.recno, &mr) :
+        mailbox_find_msgrecord_internal(mbox, record.uid, 0, &mr);
     if (r) goto done;
 
     r = mailbox_edit_msgrecord(mbox, mr, &mrw);
@@ -649,7 +607,7 @@ EXPORTED int mailbox_edit_msgrecord(struct mailbox *mbox, const msgrecord_t *mr,
     return 0;
 }
 
-EXPORTED int mailbox_save_msgrecord(struct mailbox *mbox, msgrecord_t *mrw)
+static int mailbox_save_msgrecord(struct mailbox *mbox, msgrecord_t *mrw)
 {
     int r = 0;
 

@@ -1215,6 +1215,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     struct mboxevent *flagsset = NULL, *flagsclear = NULL;
     struct index_modified_flags modified_flags;
     struct index_record record;
+    msgrecord_t *msgrec = NULL;
 
     /* First pass at checking permission */
     if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
@@ -1268,7 +1269,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
          * can make sure that the index map doesn't contain uncommitted
          * changes for this msgno. See the comments in index_reload_record
          * on how it releases the cyrus.index lock in the middle of action */
-        msgrecord_t *msgrec = NULL;
 
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
@@ -1348,6 +1348,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_notify(&mboxevents);
 
 out:
+    if (msgrec) msgrecord_unrefw(&msgrec);
     mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);

@@ -1854,7 +1854,9 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         json_object_set_new(mboxs, mbox->uniqueid, json_string(mbox->name));
     }
 
+
 done:
+    if (mr) msgrecord_unref(&mr);
     jmap_closembox(req, &mbox);
     return r;
 }
@@ -2624,6 +2626,7 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
                 d->mboxname = xstrdup(rec->mboxname);
                 d->uid = rec->uid;
             }
+            msgrecord_unref(&mr);
         }
 
         jmap_closembox(req, &mbox);
@@ -2682,6 +2685,7 @@ static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
         if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
             d->count++;
         }
+        msgrecord_unref(&mr);
     }
 
     jmap_closembox(req, &mbox);
@@ -2733,6 +2737,7 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
             d->is_expunged = 0;
             r = IMAP_OK_COMPLETED;
         }
+        msgrecord_unref(&mr);
     }
 
     jmap_closembox(req, &mbox);
@@ -3857,7 +3862,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     /* Convert the snippets */
     json_array_foreach(messageids, i, val) {
         message_t *msg;
-        const msgrecord_t *mr;
+        const msgrecord_t *mr = NULL;
         uint32_t uid;
 
         msgid = json_string_value(val);
@@ -3877,10 +3882,10 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
         r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
 
         r = mailbox_find_msgrecord(mbox, uid, &mr);
-        if (r) continue;
+        if (r) goto doneloop;
 
         r = msgrecord_get_message(mr, &msg);
-        if (r) continue;
+        if (r) goto doneloop;
 
         json_object_set_new(snippet, "messageId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
@@ -3888,10 +3893,13 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
         index_getsearchtext(msg, rx, /*snippet*/1);
         json_array_append_new(*snippets, json_deep_copy(snippet));
         json_object_clear(snippet);
+        msgrecord_unref(&mr);
 
         r = rx->end_mailbox(rx, mbox);
         if (r) goto done;
 
+doneloop:
+        if (mr) msgrecord_unref(&mr);
         jmap_closembox(req, &mbox);
         free(mboxname);
         mboxname = NULL;
@@ -4362,6 +4370,7 @@ static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **message
     *messageid = buf_release(&buf);
 
 done:
+    if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     buf_free(&buf);
@@ -5381,6 +5390,7 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
     struct updaterecord_data *d = (struct updaterecord_data *) rock;
     jmap_req_t *req = d->req;
     struct mailbox *mbox = NULL;
+    msgrecord_t *mrw = NULL;
     int r = 0;
 
     if (rec->part) return 0;
@@ -5389,7 +5399,6 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
     if (r) goto done;
 
     if (!d->mailboxes || json_object_get(d->mailboxes, mbox->uniqueid)) {
-        msgrecord_t *mrw;
 
         r = mailbox_find_msgrecord_rw(mbox, rec->uid, &mrw);
         if (r) goto done;
@@ -5397,11 +5406,14 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
         r = updaterecord(mrw, d->flagged, d->unread, d->answered);
         if (r) goto done;
 
-        r = mailbox_save_msgrecord(mbox, mrw);
+        r = msgrecord_save(mrw);
         if (r) goto done;
+
+        msgrecord_unrefw(&mrw);
     }
 
 done:
+    if (mrw) msgrecord_unrefw(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     return r;
 }
@@ -5410,29 +5422,32 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
 {
     int r;
     struct mboxevent *mboxevent = NULL;
-    msgrecord_t *mrw;
+    msgrecord_t *mrw = NULL;
     uint32_t flags;
 
     r = mailbox_find_msgrecord_rw(mbox, uid, &mrw);
     if (r) return r;
 
     r = msgrecord_get_systemflags(mrw, &flags);
-    if (r) return r;
+    if (r) goto done;
 
-    if (flags & FLAG_EXPUNGED)
-        return 0;
+    if (flags & FLAG_EXPUNGED) {
+        r = 0;
+        goto done;
+    }
 
     /* Expunge index record */
     r = msgrecord_add_systemflags(mrw, FLAG_DELETED | FLAG_EXPUNGED);
-    if (r) return r;
+    if (r) goto done;
 
-    r = mailbox_save_msgrecord(mbox, mrw);
-    if (r) return r;
+    r = msgrecord_save(mrw);
+    if (r) goto done;
 
     /* Report mailbox event. */
+    /* FIXME mboxevent -> msgrecord */
     struct index_record record;
     r = msgrecord_get_index_record(mrw, &record);
-    if (r) return r;
+    if (r) goto done;
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
     mboxevent_extract_record(mboxevent, mbox, &record);
     mboxevent_extract_mailbox(mboxevent, mbox);
@@ -5441,7 +5456,9 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
-    return 0;
+done:
+    if (mrw) msgrecord_unrefw(&mrw);
+    return r;
 }
 
 struct delrecord_data {
@@ -5483,7 +5500,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
     const char *id;
     struct stagemsg *stage = NULL;
     struct mailbox *mbox = NULL;
-    msgrecord_t *mrw;
+    msgrecord_t *mrw = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
     size_t len, i, msgcount = 0;
@@ -5602,7 +5619,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         r = msgrecord_add_systemflags(mrw, system_flags);
         if (r) goto done;
 
-        r = mailbox_save_msgrecord(mbox, mrw);
+        r = msgrecord_save(mrw);
         if (r) goto done;
 
         /* Flag mailbox */
@@ -5642,7 +5659,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         if (r) goto done;
 
         /* Open the mailbox where the message is stored */
-        r = jmap_openmbox(req, mboxname, &mbox, 0);
+        r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (r) goto done;
 
         r = mailbox_find_msgrecord_rw(mbox, uid, &mrw);
@@ -5706,6 +5723,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
 done:
     if (f) fclose(f);
     if (stage) append_removestage(stage);
+    if (mrw) msgrecord_unrefw(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (mailboxes) json_decref(mailboxes);
@@ -5874,7 +5892,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     r = updaterecord(mrw, flagged, unread, answered);
     if (r) goto done;
 
-    r = mailbox_save_msgrecord(mbox, mrw);
+    r = msgrecord_save(mrw);
     if (r) goto done;
 
     /* Update record in kept mailboxes, except its master copy. */
@@ -5914,6 +5932,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
 done:
+    if (mrw) msgrecord_unrefw(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (oldmailboxes) json_decref(oldmailboxes);
@@ -6224,6 +6243,7 @@ done:
     free_hash_table(&props, NULL);
     buf_free(&data.msg_buf);
     if (msgid) free(msgid);
+    if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
     if (body) {
         message_free_body(body);

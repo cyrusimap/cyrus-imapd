@@ -911,7 +911,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                      struct entryattlist *user_annots)
 {
     struct mailbox *mailbox = as->mailbox;
-    msgrecord_t *msgrec;
+    msgrecord_t *msgrec = NULL;
     const char *fname;
     int i, r;
     strarray_t *newflags = NULL;
@@ -1138,13 +1138,15 @@ out:
     /* TODO(rsto): You'll be next, mboxevent! */
     struct index_record record;
     r = msgrecord_get_index_record(msgrec, &record);
-    if (r) return r;
+    if (r) goto done;
     mboxevent_extract_record(mboxevent, mailbox, &record);
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
-    return 0;
+done:
+    if (msgrec) msgrecord_unrefw(&msgrec);
+    return r;
 }
 
 EXPORTED int append_removestage(struct stagemsg *stage)

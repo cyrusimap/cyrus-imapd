@@ -61,7 +61,6 @@ extern int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr);
 // FIXME(rsto) - remove these
 extern int mailbox_edit_msgrecord(struct mailbox *mbox, const msgrecord_t *mr,
                                   msgrecord_t **mrw);
-extern int mailbox_save_msgrecord(struct mailbox *mbox, msgrecord_t *mrw);
 
 extern int mailbox_msgrecord_from_index(struct mailbox *mbox,
                                         struct index_record record,
@@ -82,7 +81,8 @@ extern msgrecord_t *msgrecord_new_from_index_record(struct mailbox *mbox,
 */
 
 // FIXME extern void msgrecord_ref(msgrecord_t *mr);
-extern void msgrecord_unref(msgrecord_t **mr);
+extern void msgrecord_unref(const msgrecord_t **mr);
+extern void msgrecord_unrefw(msgrecord_t **mr);
 
 /* Getters: all pointer members are owned by msgrecord */
 extern int msgrecord_get_body(const msgrecord_t *mr, struct buf *buf);
