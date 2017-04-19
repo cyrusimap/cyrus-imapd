@@ -251,6 +251,33 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 
+sub test_setnickname
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->Request([['setContacts', {create => {
+                        "1" => { firstName => "foo", lastName => "last1", nickname => "" },
+                        "2" => { firstName => "bar", lastName => "last2", nickname => "string" },
+                        "3" => { firstName => "bar", lastName => "last3", nickname => "string,list" },
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    my $contact1 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"2"}{id};
+    my $contact3 = $res->[0][1]{created}{"3"}{id};
+    $self->assert_not_null($contact1);
+    $self->assert_not_null($contact2);
+    $self->assert_not_null($contact3);
+
+    $res = $jmap->Request([['setContacts', {update => {
+                        $contact2 => { nickname => "" },
+                    }}, "R2"]]);
+    $self->assert_not_null($res);
+}
+
 sub test_setcontactgroups
     :JMAP :min_version_3_0
 {
@@ -265,7 +292,7 @@ sub test_setcontactgroups
                         "2" => { firstName => "bar", lastName => "last2" }
                     }}, "R1"]]);
     my $contact1 = $res->[0][1]{created}{"1"}{id};
-    my $contact2 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "create contact group with no contact ids";
     $res = $jmap->Request([['setContactGroups', {create => {
