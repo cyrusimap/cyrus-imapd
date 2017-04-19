@@ -21,7 +21,7 @@ static void test_open(void)
     int r;
     struct conversations_state *state = NULL;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     r = conversations_abort(&state);
@@ -37,7 +37,7 @@ static void test_getset(void)
     conversation_id_t cid;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Database is empty, so get should succeed and report no results */
@@ -61,7 +61,7 @@ static void test_getset(void)
     r = conversations_commit(&state);
     CU_ASSERT_EQUAL(r, 0);
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* get should still succeed after the db is closed & reopened */
@@ -86,7 +86,7 @@ static void test_abort(void)
     conversation_id_t cid;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Database is empty, so get should succeed and report no results */
@@ -112,7 +112,7 @@ static void test_abort(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* the set vanished with the txn abort, so get should
@@ -146,7 +146,7 @@ static void test_prune(void)
     arrayu64_t cids = ARRAYU64_INITIALIZER;
     unsigned int nseen = 0, ndeleted = 0;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Add keys, with delays in between */
@@ -173,7 +173,7 @@ static void test_prune(void)
 
     /* Should be able to get all 3 msgids */
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     memset(&cid, 0x45, sizeof(cid));
@@ -246,10 +246,10 @@ static void test_two(void)
     conversation_id_t cid;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
 
-    r = conversations_open_path(DBNAME, &state1);
+    r = conversations_open_path(DBNAME, NULL, &state1);
     CU_ASSERT_EQUAL(r, 0);
 
-    r = conversations_open_path(DBNAME2, &state2);
+    r = conversations_open_path(DBNAME2, NULL, &state2);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Databases are empty, so gets of either msgid from either db
@@ -384,7 +384,7 @@ static void test_folder_rename(void)
     conversation_t *conv;
     conv_folder_t *folder;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(state);
 
@@ -419,7 +419,7 @@ static void test_folder_rename(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* do a rename */
@@ -431,7 +431,7 @@ static void test_folder_rename(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     conv = NULL;
@@ -474,7 +474,7 @@ static void test_folders(void)
     /* hack to get this DB created with a counted_strings value */
     imapopts[IMAPOPT_CONVERSATIONS_COUNTED_FLAGS].val.s = "\\Draft $HasRandom";
 
-    r = conversations_open_path(DBNAME3, &state);
+    r = conversations_open_path(DBNAME3, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     imapopts[IMAPOPT_CONVERSATIONS_COUNTED_FLAGS].val.s = NULL;
@@ -671,7 +671,7 @@ static void test_folders(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME3, &state);
+    r = conversations_open_path(DBNAME3, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* get should still succeed and report all values we gave it */
@@ -804,7 +804,7 @@ static void test_folder_ordering(void)
     conv_folder_t *folder3;
     int *counts = 0;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Database is empty, so get should succeed and report no results */
@@ -902,7 +902,7 @@ static void test_folder_ordering(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* get should still succeed and report all values we gave it */
@@ -955,7 +955,7 @@ static void __test_senders(void)
     conv_sender_t *sender3;
     int *counts = 0;
 
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* Database is empty, so get should succeed and report no results */
@@ -1044,7 +1044,7 @@ static void __test_senders(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open the db again */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     /* get should still succeed and report all values we gave it */
@@ -1149,7 +1149,7 @@ static void test_dump(void)
     memset(&state, 0, sizeof(state));
 
     /* generate some data in the database */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
@@ -1178,7 +1178,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open and dump the database */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     conversations_dump(state, fp);
@@ -1197,7 +1197,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* open and truncate the database */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     r = conversations_truncate(state);
@@ -1207,7 +1207,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check we can no longer find any of the data */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
@@ -1233,7 +1233,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* finally check that we got all the data back */
-    r = conversations_open_path(DBNAME, &state);
+    r = conversations_open_path(DBNAME, NULL, &state);
     CU_ASSERT_EQUAL(r, 0);
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
