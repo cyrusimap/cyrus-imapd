@@ -906,6 +906,7 @@ sub run_replication
     my $rolling = delete $opts{rolling};
     my $mailbox = delete $opts{mailbox};
     my $meta = delete $opts{meta};
+    my $nosyncback = delete $opts{nosyncback};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -929,7 +930,7 @@ sub run_replication
     $self->_disconnect_all();
 
     # build sync_client command line
-    my @cmd = ('sync_client', '-v', '-v');
+    my @cmd = ('sync_client', '-v', '-v', '-o');
     push(@cmd, '-S', $server) if defined $server;
     push(@cmd, '-n', $channel) if defined $channel;
     push(@cmd, '-f', $inputfile) if defined $inputfile;
@@ -937,6 +938,7 @@ sub run_replication
     push(@cmd, '-R') if defined $rolling;
     push(@cmd, '-m') if defined $mailbox;
     push(@cmd, '-s') if defined $meta;
+    push(@cmd, '-O') if defined $nosyncback;
     push(@cmd, $mailbox) if defined $mailbox;
 
     my %run_options;
