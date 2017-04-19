@@ -69,6 +69,7 @@
 #include "map.h"
 #include "mboxevent.h"
 #include "mboxname.h"
+#include "msgrecord.h"
 #include "notify.h"
 #include "global.h"
 
@@ -930,6 +931,149 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         if (mailbox_cacherecord(mailbox, record))
             return;
         message_read_bodystructure(record, &body);
+
+        for (param = body->disposition_params; param; param = param->next) {
+            if (!strcmp(param->attribute, "FILENAME")) {
+                resource = param->value;
+            }
+        }
+
+        if (resource)
+            FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
+
+        if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
+            if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+                struct carddav_db *carddavdb = NULL;
+                struct carddav_data *cdata = NULL;
+                carddavdb = mailbox_open_carddav(mailbox);
+                carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
+                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
+            }
+            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+                struct caldav_db *caldavdb = NULL;
+                struct caldav_data *cdata = NULL;
+                caldavdb = mailbox_open_caldav(mailbox);
+                caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
+                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
+            }
+            else {
+                /* don't bail for MBTYPE_COLLECTION or any new things */
+                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
+            }
+        }
+    }
+#endif // WITH_DAV
+}
+
+EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, const msgrecord_t *msgrec)
+{
+    int r;
+    uint32_t uid;
+
+    if (!event)
+        return;
+
+    if ((r = msgrecord_get_uid(msgrec, &uid))) {
+        syslog(LOG_ERR, "mboxevent: can't extract uid: %s", error_message(r));
+        return;
+    }
+
+    /* add modseq only on first call, cancel otherwise */
+    if (mboxevent_expected_param(event->type, EVENT_MODSEQ)) {
+        modseq_t modseq = 0;
+        if ((r = msgrecord_get_modseq(msgrec, &modseq))) {
+            syslog(LOG_ERR, "mboxevent: can't extract modseq: %s", error_message(r));
+            return;
+        }
+        if (event->uidset == NULL || (seqset_first(event->uidset) == seqset_last(event->uidset))) {
+            FILL_UNSIGNED_PARAM(event, EVENT_MODSEQ, modseq);
+        }
+        else {
+            /* From RFC 5423:
+             * modseq May be included with any notification referring
+             * to one message.
+             *
+             * thus cancel inclusion of modseq parameter
+             */
+            event->params[EVENT_MODSEQ].filled = 0;
+        }
+    }
+
+    /* add UID to uidset */
+    if (event->uidset == NULL)
+        event->uidset = seqset_init(0, SEQ_SPARSE);
+    seqset_add(event->uidset, uid, 1);
+
+    if (event->type == EVENT_CANCELLED)
+        return;
+
+    /* add Message-Id to midset or NIL if doesn't exists */
+    if (mboxevent_expected_param(event->type, (EVENT_MIDSET))) {
+        char *msgid = NULL;
+        if ((r = msgrecord_get_cache_env(msgrec, ENV_MSGID, &msgid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract msgid: %s", error_message(r));
+            return;
+        }
+        strarray_add(&event->midset, msgid ? msgid : "NIL");
+        free(msgid);
+    }
+
+    /* add message size */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_SIZE)) {
+        uint32_t size;
+        if ((r = msgrecord_get_size(msgrec, &size))) {
+            syslog(LOG_ERR, "mboxevent: can't extract size: %s", error_message(r));
+            return;
+        }
+        FILL_UNSIGNED_PARAM(event, EVENT_MESSAGE_SIZE, size);
+    }
+
+    /* add message CID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_CID)) {
+        bit64 cid;
+        if ((r = msgrecord_get_cid(msgrec, &cid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            return;
+        }
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
+                          xstrdup(conversation_id_encode(cid)));
+    }
+
+    /* add vnd.cmu.envelope */
+    if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
+        char *env;
+        if ((r = msgrecord_get_cache_item(msgrec, CACHE_ENVELOPE, &env))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cache envelope: %s", error_message(r));
+            return;
+        }
+        FILL_STRING_PARAM(event, EVENT_ENVELOPE, env);
+    }
+
+    /* add bodyStructure */
+    if (mboxevent_expected_param(event->type, EVENT_BODYSTRUCTURE)) {
+        char *bs;
+        if ((r = msgrecord_get_cache_item(msgrec, CACHE_BODYSTRUCTURE, &bs))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cached bodystructure: %s", error_message(r));
+            return;
+        }
+        FILL_STRING_PARAM(event, EVENT_BODYSTRUCTURE, bs);
+    }
+
+#ifdef WITH_DAV
+    /* add caldav items */
+    struct mailbox *mailbox;
+    r = msgrecord_get_mailbox(msgrec, &mailbox);
+    if (r) return;
+
+    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+        (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
+         mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
+        struct body *body = NULL;
+        const char *resource = NULL;
+        struct param *param;
+
+        r = msgrecord_get_bodystructure(msgrec, &body);
+        if (r) return;
 
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {

@@ -1135,16 +1135,11 @@ out:
     /* finish filling the event notification */
     /* XXX avoid to parse ENVELOPE record since Message-Id is already
      * present in body structure ? */
-    /* TODO(rsto): You'll be next, mboxevent! */
-    struct index_record record;
-    r = msgrecord_get_index_record(msgrec, &record);
-    if (r) goto done;
-    mboxevent_extract_record(mboxevent, mailbox, &record);
+    mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
-done:
     if (msgrec) msgrecord_unrefw(&msgrec);
     return r;
 }

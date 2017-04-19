@@ -5444,12 +5444,8 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     if (r) goto done;
 
     /* Report mailbox event. */
-    /* FIXME mboxevent -> msgrecord */
-    struct index_record record;
-    r = msgrecord_get_index_record(mrw, &record);
-    if (r) goto done;
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-    mboxevent_extract_record(mboxevent, mbox, &record);
+    mboxevent_extract_msgrecord(mboxevent, mrw);
     mboxevent_extract_mailbox(mboxevent, mbox);
     mboxevent_set_numunseen(mboxevent, mbox, -1);
     mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);

@@ -50,6 +50,9 @@
 #include "mailbox.h"
 #include "mboxname.h"
 
+/* Foward declaration to avoid circular dependency */
+typedef struct msgrecord msgrecord_t;
+
 /*
  * event types defined in RFC 5423 - Internet Message Store Events
  */
@@ -292,6 +295,18 @@ void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
 void mboxevent_extract_record(struct mboxevent *event,
                               struct mailbox *mailbox,
                               struct index_record *record);
+
+/*
+ * Extract data from the given message record to fill these event parameters :
+ * - uidset from UID
+ * - vnd.cmu.midset from Message-Id in ENVELOPE structure
+ * - messageSize
+ * - bodyStructure
+ *
+ * Called once per message and always before mboxevent_extract_mailbox
+ */
+void mboxevent_extract_msgrecord(struct mboxevent *event, const msgrecord_t *msgrec);
+
 
 /*
  * Fill event parameter about the copied message.

@@ -90,6 +90,7 @@ extern int msgrecord_get_bodystructure(const msgrecord_t *mr, struct body **body
 extern int msgrecord_get_cid(const msgrecord_t *mr, bit64 *cid);
 extern int msgrecord_get_guid(const msgrecord_t *mr, struct message_guid *guid);
 extern int msgrecord_get_uid(const msgrecord_t *mr, uint32_t *uid);
+extern int msgrecord_get_modseq(const msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_internaldate(const msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(const msgrecord_t *mr, message_t **msg);
 extern int msgrecord_get_size(const msgrecord_t *mr, uint32_t *size);
@@ -98,6 +99,9 @@ extern int msgrecord_hasflag(const msgrecord_t *mr, const char *flag, int *has);
 extern int msgrecord_get_index_record(const msgrecord_t *mr, struct index_record *record);
 extern int msgrecord_get_userflags(const msgrecord_t *mr, uint32_t user_flags[MAX_USER_FLAGS/32]);
 extern int msgrecord_get_fname(const msgrecord_t *mr, const char **fname);
+extern int msgrecord_get_cache_env(const msgrecord_t *mr, int token, char **tok);
+extern int msgrecord_get_cache_item(const msgrecord_t *mr, int field, char **item);
+extern int msgrecord_get_mailbox(const msgrecord_t *mr, struct mailbox **mailboxptr);
 
 /* Setters and mutating functions */
 extern int msgrecord_get_index_record_rw(msgrecord_t *mrw,

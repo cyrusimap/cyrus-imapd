@@ -290,6 +290,46 @@ EXPORTED int msgrecord_get_uid(const msgrecord_t *mr, uint32_t *uid)
     return 0;
 }
 
+EXPORTED int msgrecord_get_modseq(const msgrecord_t *mr, modseq_t *modseq)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *modseq = mr->record.modseq;
+    return 0;
+}
+
+EXPORTED int msgrecord_get_cache_env(const msgrecord_t *mr, int token, char **tok)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *tok = mailbox_cache_get_env(mr->mbox, &mr->record, token);
+    return 0;
+}
+
+EXPORTED int msgrecord_get_cache_item(const msgrecord_t *mr, int field, char **item)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *item = xstrndup(cacheitem_base(&mr->record, field),
+                     cacheitem_size(&mr->record, field));
+    return 0;
+}
+
+EXPORTED int msgrecord_get_mailbox(const msgrecord_t *mr, struct mailbox **mboxp)
+{
+    int r = msgrecord_need(mr, M_MAILBOX);
+    if (r) return r;
+    *mboxp = mr->mbox;
+    return 0;
+}
+
+
 EXPORTED int msgrecord_get_message(const msgrecord_t *mr, message_t **msg)
 {
     int r = msgrecord_need(mr, M_MESSAGE);

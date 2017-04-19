@@ -1265,11 +1265,10 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
             continue;
         }
 
-        /* FIXME(rsto): we need to keep index_reload_record here until we
+        /* TODO(rsto): we need to keep index_reload_record here until we
          * can make sure that the index map doesn't contain uncommitted
          * changes for this msgno. See the comments in index_reload_record
          * on how it releases the cyrus.index lock in the middle of action */
-
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
         r = mailbox_msgrecord_from_index(state->mailbox, record, &msgrec);
@@ -1283,10 +1282,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
             if (r)
                 break;
 
-            r = msgrecord_get_index_record(msgrec, &record);
-            if (r)
-                break;
-
             if (modified_flags.added_flags) {
                 if (flagsset == NULL)
                     flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
@@ -1294,7 +1289,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 mboxevent_add_flags(flagsset, mailbox->flagname,
                                     modified_flags.added_system_flags,
                                     modified_flags.added_user_flags);
-                mboxevent_extract_record(flagsset, mailbox, &record);
+                mboxevent_extract_msgrecord(flagsset, msgrec);
             }
             if (modified_flags.removed_flags) {
                 if (flagsclear == NULL)
@@ -1303,7 +1298,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                 mboxevent_add_flags(flagsclear, mailbox->flagname,
                                     modified_flags.removed_system_flags,
                                     modified_flags.removed_user_flags);
-                mboxevent_extract_record(flagsclear, mailbox, &record);
+                mboxevent_extract_msgrecord(flagsclear, msgrec);
             }
             dirty = modified_flags.added_flags | modified_flags.removed_flags;
             break;
@@ -1324,12 +1319,11 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
         r = msgrecord_save(msgrec);
         if (r) goto out;
 
-        r = msgrecord_get_index_record(msgrec, &record);
-        if (r) goto out;
-
         /* msgrecord_save already took care of rewriting the index_record,
          * but we want to stay up to date of the changes in the index_map.
          * Pass the silent flag to index_rewrite_record. */
+        r = msgrecord_get_index_record(msgrec, &record);
+        if (r) goto out;
         r = index_rewrite_record(state, msgno, &record, /*silent*/1);
         if (r) goto out;
     }
