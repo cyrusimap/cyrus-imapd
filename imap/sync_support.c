@@ -60,6 +60,7 @@
 #include <limits.h>
 
 #include "assert.h"
+#include "caldav_alarm.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
@@ -2097,7 +2098,13 @@ int apply_annotations(struct mailbox *mailbox,
     }
 
 out:
-    if (!record) {
+
+    if (record) {
+        if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            caldav_alarm_touch_record(mailbox, record);
+        }
+    }
+    else {
         /* need to manage our own txn for the global db */
         if (!r)
             r = annotate_state_commit(&astate);

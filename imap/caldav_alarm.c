@@ -492,6 +492,33 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid, icaltimezo
     return rock.nextcheck;
 }
 
+struct lastalarm_data {
+    time_t lastrun;
+    time_t nextcheck;
+};
+
+static int read_lastalarm(struct mailbox *mailbox, const struct index_record *record,
+                          struct lastalarm_data *data)
+{
+    int r = IMAP_NOTFOUND;
+    memset(data, 0, sizeof(struct lastalarm_data));
+
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    struct buf annot_buf = BUF_INITIALIZER;
+    annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
+
+    if (annot_buf.len) {
+        char *base = (char *)buf_cstring(&annot_buf);
+        data->lastrun = strtoul(base, &base, 10);
+        if (*base == ' ') base++;
+        data->nextcheck = strtoul(base, &base, 10);
+        r = 0;
+    }
+
+    buf_free(&annot_buf);
+    return r;
+}
+
 /* add a calendar alarm */
 EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
                                      icalcomponent *ical)
@@ -502,41 +529,26 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
     /* XXX - we COULD cache this in the mailbox object so it doesn't get read multiple times,
      * but this is really rare - only dav_reconstruct maybe */
     icaltimezone *floatingtz = get_floatingtz(mailbox);
-
-    const char *annotname = DAV_ANNOT_NS "lastalarm";
-    struct buf annot_buf = BUF_INITIALIZER;
-    annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
-    time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record->internaldate;
-
-    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz, ical, lastrun, lastrun);
-    rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
+    struct lastalarm_data data;
+    if (read_lastalarm(mailbox, record, &data))
+        data.lastrun = record->internaldate;
+    if (!record->silent) {
+        data.nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
+                                        ical, data.lastrun, data.lastrun);
+        rc = update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+    }
 
     if (floatingtz) icaltimezone_free(floatingtz, 1);
-    buf_free(&annot_buf);
 
     return rc;
 }
 
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record)
 {
-    const char *annotname = DAV_ANNOT_NS "lastalarm";
-    struct buf annot_buf = BUF_INITIALIZER;
-    int rc = 0;
-
-    mailbox_annotation_lookup(mailbox, record->uid, annotname, "", &annot_buf);
-    if (!annot_buf.len) goto done;
-
-    const char *val = buf_cstring(&annot_buf);
-    val = strchr(val, ' ');
-    if (val) {
-        /* might be zero -> delete */
-        time_t nextcheck = atoi(val + 1);
-        rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
-    }
-
-done:
-    buf_free(&annot_buf);
-    return rc;
+    struct lastalarm_data data;
+    if (!read_lastalarm(mailbox, record, &data))
+        return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+    return 0;
 }
 
 /* delete all alarms matching the event */
@@ -620,7 +632,6 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     int rc;
     icalcomponent *ical = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    struct buf annot_buf = BUF_INITIALIZER;
 
     syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
            mailbox->name, imap_uid);
@@ -654,18 +665,20 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         goto done_item;
     }
 
+    struct lastalarm_data data;
+    if (read_lastalarm(mailbox, &record, &data))
+        data.lastrun = record.internaldate;
+
+    if (runtime > data.nextcheck)
+        data.nextcheck = process_alarms(mailbox->name, record.uid, floatingtz, ical, data.lastrun, runtime);
+
+    struct buf annot_buf = BUF_INITIALIZER;
+    buf_printf(&annot_buf, "%ld %ld", runtime, data.nextcheck);
     const char *annotname = DAV_ANNOT_NS "lastalarm";
-    mailbox_annotation_lookup(mailbox, record.uid, annotname, "", &annot_buf);
-    time_t lastrun = annot_buf.len ? atoi(buf_cstring(&annot_buf)) : record.internaldate;
-
-    time_t nextcheck = process_alarms(mailbox->name, record.uid, floatingtz, ical, lastrun, runtime);
-
-    buf_reset(&annot_buf);
-    buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
     mailbox_annotation_write(mailbox, record.uid, annotname, "", &annot_buf);
+    buf_free(&annot_buf);
 
 done_item:
-    buf_free(&annot_buf);
     buf_free(&msg_buf);
     if (ical) icalcomponent_free(ical);
 }
