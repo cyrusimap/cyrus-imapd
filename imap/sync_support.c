@@ -2101,6 +2101,11 @@ out:
 
     if (record) {
         if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            // NOTE: this is because we don't pass the annotations through
+            // with the record as we create it, so we can't update the alarm
+            // database properly.  Instead, we don't set anything when we append
+            // by checking for .silent, and instead update the database by touching
+            // the alarm AFTER writing the record.
             caldav_alarm_touch_record(mailbox, record);
         }
     }
