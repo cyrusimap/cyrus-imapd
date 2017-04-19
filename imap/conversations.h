@@ -156,7 +156,7 @@ extern void conversations_set_suffix(const char *suff);
 extern char *conversations_getmboxpath(const char *mboxname);
 extern char *conversations_getuserpath(const char *username);
 
-extern int conversations_open_path(const char *path,
+extern int conversations_open_path(const char *path, const char *userid,
                                    struct conversations_state **statep);
 extern int conversations_open_user(const char *username,
                                    struct conversations_state **statep);

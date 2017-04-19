@@ -83,7 +83,7 @@ int verbose = 0;
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
-static int do_dump(const char *fname)
+static int do_dump(const char *fname, const char *userid)
 {
     struct conversations_state *state = NULL;
     struct stat sb;
@@ -99,7 +99,7 @@ static int do_dump(const char *fname)
         return -1;
     }
 
-    r = conversations_open_path(fname, &state);
+    r = conversations_open_path(fname, userid, &state);
     if (r) {
         fprintf(stderr, "Failed to open conversations database %s: %s\n",
                 fname, error_message(r));
@@ -112,12 +112,12 @@ static int do_dump(const char *fname)
     return 0;
 }
 
-static int do_undump(const char *fname)
+static int do_undump(const char *fname, const char *userid)
 {
     struct conversations_state *state;
     int r;
 
-    r = conversations_open_path(fname, &state);
+    r = conversations_open_path(fname, userid, &state);
     if (r) {
         fprintf(stderr, "Failed to open conversations database %s: %s\n",
                 fname, error_message(r));
@@ -655,7 +655,7 @@ static int do_audit(const char *userid)
     }
 
     /* Begin recalculating in the temp db */
-    r = conversations_open_path(filename_temp, &state_temp);
+    r = conversations_open_path(filename_temp, userid, &state_temp);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_temp, error_message(r));
@@ -704,14 +704,14 @@ static int do_audit(const char *userid)
     if (verbose)
         printf("Pass 2: find differences from recalculated to live dbs\n");
 
-    r = conversations_open_path(filename_temp, &state_temp);
+    r = conversations_open_path(filename_temp, userid, &state_temp);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_temp, error_message(r));
         goto out;
     }
 
-    r = conversations_open_path(filename_real, &state_real);
+    r = conversations_open_path(filename_real, userid, &state_real);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_real, error_message(r));
@@ -762,12 +762,12 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     switch (mode)
     {
     case DUMP:
-        if (do_dump(fname))
+        if (do_dump(fname, userid))
             r = EC_NOINPUT;
         break;
 
     case UNDUMP:
-        if (do_undump(fname))
+        if (do_undump(fname, userid))
             r = EC_NOINPUT;
         break;
 

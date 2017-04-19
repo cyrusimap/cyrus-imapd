@@ -188,7 +188,7 @@ static int _init_counted(struct conversations_state *state,
     return 0;
 }
 
-EXPORTED int conversations_open_path(const char *fname, struct conversations_state **statep)
+EXPORTED int conversations_open_path(const char *fname, const char *userid, struct conversations_state **statep)
 {
     struct conversations_open *open = NULL;
     const char *val = NULL;
@@ -235,6 +235,11 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
         dlist_free(&dl);
     }
 
+    if (userid)
+        open->s.annotmboxname = mboxname_user_mbox(userid, CONVSPLITFOLDER);
+    else
+        open->s.annotmboxname = xstrdup(CONVSPLITFOLDER);
+
     /* create the status cache */
     construct_hash_table(&open->s.folderstatus, open->s.folder_names->count/4+4, 0);
 
@@ -243,17 +248,14 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
     return 0;
 }
 
-EXPORTED int conversations_open_user(const char *username, struct conversations_state **statep)
+EXPORTED int conversations_open_user(const char *userid, struct conversations_state **statep)
 {
-    char *path = conversations_getuserpath(username);
+    char *path = conversations_getuserpath(userid);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
-    r = conversations_open_path(path, statep);
+    r = conversations_open_path(path, userid, statep);
     free(path);
-    if (r) return r;
-    assert(*statep);
-    (*statep)->annotmboxname = mboxname_user_mbox(username, CONVSPLITFOLDER);
-    return 0;
+    return r;
 }
 
 EXPORTED int conversations_open_mbox(const char *mboxname, struct conversations_state **statep)
@@ -261,15 +263,11 @@ EXPORTED int conversations_open_mbox(const char *mboxname, struct conversations_
     char *path = conversations_getmboxpath(mboxname);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
-    r = conversations_open_path(path, statep);
-    free(path);
-    if (r) return r;
-    assert(*statep);
     char *userid = mboxname_to_userid(mboxname);
-    if (userid) {
-        (*statep)->annotmboxname = mboxname_user_mbox(userid, CONVSPLITFOLDER);
-    }
+    r = conversations_open_path(path, userid, statep);
     free(userid);
+    free(path);
+    return r;
     return 0;
 }
 
