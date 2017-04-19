@@ -2469,6 +2469,10 @@ static int write_entry(struct mailbox *mailbox,
         r = read_old_value(d, key, keylen, &oldval);
         if (r) goto out;
 
+        /* if the value is identical, don't touch the mailbox */
+        if (oldval.len == value->len && (!value->len || !memcmp(oldval.s, value->s, value->len)))
+            goto out;
+
         if (!ignorequota) {
             quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
             qdiffs[QUOTA_ANNOTSTORAGE] = value->len - (quota_t)oldval.len;
