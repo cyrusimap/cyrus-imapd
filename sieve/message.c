@@ -218,6 +218,7 @@ int do_keep(action_list_t *a, strarray_t *imapflags)
         b->next = a;
     }
     a->a = ACTION_KEEP;
+    a->cancel_keep = 1;
     a->u.keep.imapflags = imapflags;
     return 0;
 }
