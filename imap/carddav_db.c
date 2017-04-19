@@ -108,7 +108,6 @@ EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));
-    carddavdb->userid = xstrdup(userid);
     carddavdb->db = db;
 
     return carddavdb;
