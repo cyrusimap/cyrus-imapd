@@ -249,6 +249,7 @@ sub test_replication_reply_200
     $self->check_messages(\%exp, store => $master_store);
     xlog "running replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     xlog "checking message A on replica";
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -268,6 +269,7 @@ sub test_replication_reply_200
 
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
     xlog "Creating a message on the replica now to make sure it gets the right CID";
@@ -300,6 +302,7 @@ sub test_replication_reconstruct
     $self->check_messages(\%exp, store => $master_store);
     xlog "running replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     xlog "checking message A on replica";
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -311,6 +314,7 @@ sub test_replication_reconstruct
 
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
@@ -328,6 +332,7 @@ sub test_replication_reconstruct
 
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
     xlog "Creating a message on the replica now to make sure it gets the right CID";
@@ -465,6 +470,7 @@ sub bogus_test_replication_clash
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -472,6 +478,7 @@ sub bogus_test_replication_clash
     $exp{B} = $self->make_message("Message B", store => $master_store);
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -479,6 +486,7 @@ sub bogus_test_replication_clash
     $exp{C} = $self->make_message("Message C", store => $master_store);
     $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
     $self->run_replication();
+    $self->check_replication('cassandane');
     my $actual = $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -506,6 +514,7 @@ sub bogus_test_replication_clash
     }
 
     $self->run_replication();
+    $self->check_replication('cassandane');
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 }
