@@ -4,12 +4,6 @@
 Mail Spool Partitions
 =====================
 
-.. NOTE::
-
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`44`.
-
 A mail spool is divided in partitions. The partition Cyrus IMAP ships
 with by default is called ``default``.
 
@@ -30,6 +24,11 @@ As an example, one could imagine a set of disks configured as follows:
 
 *   Some small but fast (expensive) disks for the main storage array,
 *   Some large but slow (cheap) disks for archives.
+
+..  note::
+
+    This particular example is more efficaciously achieved via the new
+    (post 3.0) :ref:`imap-features-archiving` feature.
 
 Mounting a filesystem on the fast disks under
 :file:`/var/spool/imap/fast/`, and mounting a filesystem on the slow
