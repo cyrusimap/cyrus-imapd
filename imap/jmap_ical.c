@@ -1542,6 +1542,34 @@ done:
     return alerts;
 }
 
+
+static json_t*
+replyto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
+{
+    icalproperty *prop;
+    json_t *replyto = json_pack("{}");
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+        const char *org, *uri;
+
+        if ((org = icalproperty_get_organizer(prop))) {
+            json_object_set_new(replyto, "imip", json_string(org));
+        }
+        /* XXX: let's see if we can use the new PARTICIPANT component */
+        if ((uri = get_icalxparam_value(prop, JMAPICAL_XPARAM_RSVP_URI))) {
+            json_object_set_new(replyto, "web", json_string(uri));
+        }
+    }
+
+    if (!json_object_size(replyto)) {
+        json_decref(replyto);
+        replyto = json_null();
+    }
+
+    return replyto;
+}
+
 static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
 {
     json_t *p = json_pack("{}");
@@ -2359,11 +2387,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* replyTo */
     if (wantprop(ctx, "replyTo") && !is_exc) {
-        const char *org = NULL;
-        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        if (prop) org = icalproperty_get_organizer(prop);
-        json_object_set_new(event, "replyTo", org ?
-                json_pack("{s:s}", "imip", org) : json_null());
+        json_object_set_new(event, "replyTo", replyto_from_ical(ctx, comp));
     }
 
     /* participants */
@@ -3867,7 +3891,7 @@ static void
 replyto_to_ical(context_t *ctx, icalcomponent *comp, json_t *replyto)
 {
     icalproperty *prop;
-    json_t *imip;
+    json_t *imip, *web;
 
     remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
@@ -3886,6 +3910,25 @@ replyto_to_ical(context_t *ctx, icalcomponent *comp, json_t *replyto)
         prop = icalproperty_new_organizer(addr);
         icalcomponent_add_property(comp, prop);
         endprop(ctx);
+
+        /* XXX(rsto): We want ORGANIZER always to have a mailto: URI
+         * for now, and without ORGANIZER we can't store the 'web'
+         * replyTo property. */
+        if ((web = json_object_get(replyto, "web"))) {
+            const char *uri = NULL;
+
+            beginprop_key(ctx, "replyTo", "web");
+
+            uri = json_string_value(web);
+            if (!uri || (strncmp(uri, "http:", 5) && strncmp(uri, "https:", 6))) {
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                return;
+            }
+            set_icalxparam(prop, JMAPICAL_XPARAM_RSVP_URI, uri, 1);
+
+            endprop(ctx);
+        }
     }
 }
 
