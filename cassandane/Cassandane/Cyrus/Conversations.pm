@@ -267,6 +267,11 @@ sub test_replication_reply_200
     $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
     $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
 
+    # this shouldn't make any difference, but it doesn when you're not logging annotation
+    # usage for split conversations properly, so just leaving it here to break this unrelated-ish test and gain
+    # the benefits of check_replication's annotsize check
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-u' => 'cassandane');
+
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
     $self->check_replication('cassandane');
