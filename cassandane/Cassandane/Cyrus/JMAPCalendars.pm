@@ -653,7 +653,7 @@ sub test_getcalendarevents_simple
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
     $self->assert_str_equals($event->{uid}, $id);
-    $self->assert_deep_equals($event->{relatedTo}, ["58ADE31-broken-UID"]);
+    $self->assert_null($event->{relatedTo});
     $self->assert_str_equals($event->{title}, "yo");
     $self->assert_str_equals($event->{prodId}, "-//Apple Inc.//Mac OS X 10.9.5//EN");
     $self->assert_str_equals($event->{locale}, "en");
@@ -666,6 +666,23 @@ sub test_getcalendarevents_simple
     $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
     $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
     $self->assert_num_equals($event->{sequence}, 9);
+}
+
+sub test_getcalendarevents_relatedto
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('relatedto');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals($event->{uid}, $id);
+    $self->assert_deep_equals($event->{relatedTo}, {
+            "first"     => "58ADE31-001",
+            "next"      => "58ADE31-003",
+            "x-unknown" => "foo",
+    });
 }
 
 sub test_getcalendarevents_links
@@ -1066,7 +1083,41 @@ sub test_setcalendarevents_simple
     my $event =  {
         "calendarId" => $calid,
         "uid" => "58ADE31-custom-UID",
-        "relatedTo" => ["58ADE31-someother-UID"],
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "showAsFree"=> JSON::false,
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+    $self->assert_num_equals($event->{sequence}, 42);
+}
+
+sub test_setcalendarevents_relatedto
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE31-custom-UID",
+        "relatedTo" => {
+            "first" => "uid1",
+            "next"  => "uid2",
+            "x-unknown" => "uid3",
+        },
         "title"=> "foo",
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT5M",
