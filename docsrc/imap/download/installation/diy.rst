@@ -180,6 +180,8 @@ Other
     Configure option: ``--with-ldap``"
     `tcp_wrappers`_, tcp_wrappers, xx, "no"
     `transfig`_, transfig, xx, "no"
+    `zlib`_, zlib1g-dev, zlib-devel, "no", "Compression support for httpd"
+    `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "HTTP/2 support for httpd"
 
 .. _CUnit: http://cunit.sourceforge.net/
 .. _Cyrus SASL Plain: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
@@ -199,6 +201,8 @@ Other
 .. _tcp_wrappers: ftp://ftp.porcupine.org/pub/security/index.html
 .. _transfig: http://www.xfig.org/
 .. _valgrind: http://www.valgrind.org/
+.. _zlib: http://zlib.net/
+.. _nghttp2: https://nghttp2.org/
 
 Continue with :ref:`imap-installation-diy-configure`
 
