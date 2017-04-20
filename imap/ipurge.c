@@ -84,10 +84,10 @@ static int invertmatch = 0;
 /* for statistical purposes */
 typedef struct mbox_stats_s {
 
-    int total;         /* total including those deleted */
-    int total_bytes;
-    int deleted;
-    int deleted_bytes;
+    uint64_t total;         /* total including those deleted */
+    uint64_t total_bytes;
+    uint64_t deleted;
+    uint64_t deleted_bytes;
 
 } mbox_stats_t;
 
@@ -375,11 +375,11 @@ static void print_record(struct mailbox *mailbox,
 
 static void print_stats(mbox_stats_t *stats)
 {
-    printf("Total messages    \t\t %d\n",stats->total);
-    printf("Total bytes       \t\t %d\n",stats->total_bytes);
-    printf("Deleted messages  \t\t %d\n",stats->deleted);
-    printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
-    printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
-    printf("Remaining bytes   \t\t %d\n",
+    printf("Total messages    \t\t %llu\n",stats->total);
+    printf("Total bytes       \t\t %llu\n",stats->total_bytes);
+    printf("Deleted messages  \t\t %llu\n",stats->deleted);
+    printf("Deleted bytes     \t\t %llu\n",stats->deleted_bytes);
+    printf("Remaining messages\t\t %llu\n",stats->total - stats->deleted);
+    printf("Remaining bytes   \t\t %llu\n",
            stats->total_bytes - stats->deleted_bytes);
 }
