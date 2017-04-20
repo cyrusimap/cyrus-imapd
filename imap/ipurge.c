@@ -375,11 +375,11 @@ static void print_record(struct mailbox *mailbox,
 
 static void print_stats(mbox_stats_t *stats)
 {
-    printf("Total messages    \t\t %llu\n",stats->total);
-    printf("Total bytes       \t\t %llu\n",stats->total_bytes);
-    printf("Deleted messages  \t\t %llu\n",stats->deleted);
-    printf("Deleted bytes     \t\t %llu\n",stats->deleted_bytes);
-    printf("Remaining messages\t\t %llu\n",stats->total - stats->deleted);
+    printf("Total messages    \t\t %llu\n", (long long unsigned)stats->total);
+    printf("Total bytes       \t\t %llu\n", (long long unsigned)stats->total_bytes);
+    printf("Deleted messages  \t\t %llu\n", (long long unsigned)stats->deleted);
+    printf("Deleted bytes     \t\t %llu\n", (long long unsigned)stats->deleted_bytes);
+    printf("Remaining messages\t\t %llu\n", (long long unsigned)stats->total - stats->deleted);
     printf("Remaining bytes   \t\t %llu\n",
-           stats->total_bytes - stats->deleted_bytes);
+            (long long unsigned)stats->total_bytes - stats->deleted_bytes);
 }
