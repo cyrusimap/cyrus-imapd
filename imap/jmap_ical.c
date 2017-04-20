@@ -3960,6 +3960,8 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             context_t *toctx;
             json_t *ex;
 
+            /* If the override doesn't have a custom start date, use
+             * the LocalDate in the recurrenceOverrides object key */
             if (!json_object_get(override, "start")) {
                 json_object_set_new(override, "start", json_string(id));
             }
@@ -3970,7 +3972,6 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
                 endprop(ctx);
                 continue;
             }
-            json_object_set_new(master, "start", json_string(id));
 
             /* Lookup or create the VEVENT for this override */
             if ((excomp = hash_del(id, &recurs)) == NULL) {
