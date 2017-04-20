@@ -3610,11 +3610,11 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     record->recno = mailbox->i.num_records + 1;
 
-    r = _store_change(mailbox, record, changeflags);
-    if (r) return r;
-
     mailbox->i.last_uid = record->uid;
     mailbox->i.num_records = record->recno;
+
+    r = _store_change(mailbox, record, changeflags);
+    if (r) return r;
 
     /* expunged tracking */
     if (record->system_flags & FLAG_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
