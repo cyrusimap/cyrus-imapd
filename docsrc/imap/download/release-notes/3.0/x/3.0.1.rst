@@ -1,0 +1,56 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.1 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.1.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.1.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.1.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.1.tar.gz.sig
+
+.. _relnotes-3.0.1-changes:
+
+Changes Since 3.0.0
+===================
+
+Dependency changes
+------------------
+
+* Cyrus can now be built with Xapian 1.4 (the current upstream release),
+  if CJK support is not required in your environment.  If you need CJK
+  support, you will still need to use the cyruslibs Xapian fork.
+
+Other changes
+-------------
+
+* Extensive documentation enhancements (thanks Nic Bernstein)
+* Sample cyrus.conf and imapd.conf files are now available in the doc/examples
+  directory of the distribution (thanks Nic Bernstein)
+
+Bug fixes
+---------
+
+* Fixed :issue:`1875`: correctly calculate INBOX for user names containing
+  a dot (thanks Martin Matuska)
+* Fixed parsing of vcard categories and nicknames
+* Fixed :issue:`1872`: don't crash when removing invalid sessions
+* Fixed :issue:`1926`: no longer report some client disconnects as IOERROR
+* Fixed setting of contact nicknames via JMAP
+* Fixed :issue:`1915`: delivery to shared mailboxes with virtual domains
+  (thanks Martin Matuska)
+* Fixed replication of CalDAV alarms
+* Fixed :issue:`1927`: no race between xapian squatter and user deletions
+* Fixed stats overflow in ipurge for >2GB mailboxes (thanks Pavel Zhukov)
