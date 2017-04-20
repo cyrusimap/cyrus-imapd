@@ -56,6 +56,7 @@ use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 use Cassandane::PortManager;
+use Cyrus::CheckReplication;
 
 my @stores = qw(store adminstore
 		replica_store replica_adminstore
@@ -948,6 +949,26 @@ sub run_replication
     $self->{instance}->run_command(\%run_options, @cmd);
 
     $self->_reconnect_all();
+}
+
+sub check_replication {
+    my ($self, $user) = @_;
+
+    my $CR = Cyrus::CheckReplication->new(
+        IMAPs1 => $self->{master_store}->get_client(),
+        IMAPs2 => $self->{replica_store}->get_client(),
+        CyrusName => $user,
+        SleepTime => 0,
+        Repeats => 1,
+        CheckConversations => 1,
+        CheckAnnotations => 1,
+        CheckMetadata => 1,
+    );
+    $CR->CheckUserReplication(2);
+    if ($CR->HasError()) {
+        my @Messages = $CR->GetMessages();
+        $self->assert(0, "GOT ERRORS " . join(', ', @Messages));
+    }
 }
 
 sub run_delayed_expunge
