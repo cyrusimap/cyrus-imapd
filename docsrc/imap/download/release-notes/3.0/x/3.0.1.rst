@@ -48,3 +48,9 @@ Bug fixes
 * Fixed parsing of vcard categories and nicknames
 * Fixed :issue:`1872`: don't crash when removing invalid sessions
 * Fixed :issue:`1926`: no longer report some client disconnects as IOERROR
+* Fixed setting of contact nicknames via JMAP
+* Fixed :issue:`1915`: delivery to shared mailboxes with virtual domains
+  (thanks Martin Matuska)
+* Fixed replication of CalDAV alarms
+* Fixed :issue:`1927`: no race between xapian squatter and user deletions
+* Fixed stats overflow in ipurge for >2GB mailboxes (thanks Pavel Zhukov)
