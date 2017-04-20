@@ -1560,7 +1560,11 @@ sub test_setcalendarevents_participants
         "isAllDay"=> JSON::false,
         "showAsFree"=> JSON::false,
         "status" => "confirmed",
-        "replyTo" => { imip => "mailto:foo\@local" },
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+            "web" => "http://local/rsvp",
+
+        },
         "participants" => $participants,
     };
 
