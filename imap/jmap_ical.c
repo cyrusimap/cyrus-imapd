@@ -1922,21 +1922,31 @@ static json_t*
 relatedto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
 {
     icalproperty* prop;
-    json_t *ret = json_pack("[]");
+    json_t *ret = json_pack("{}");
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_RELATEDTO_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_RELATEDTO_PROPERTY)) {
 
-        const char *uid;
+        const char *uid, *reltype;
+        char *s = NULL;
+        icalparameter *param;
+
+        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
+        if (!param) continue;
+
+        reltype = icalparameter_get_xvalue(param);
+        if (!reltype || !strlen(reltype)) continue;
 
         uid = icalproperty_get_value_as_string(prop);
         if (!uid || !strlen(uid)) continue;
 
-        json_array_append_new(ret, json_string(uid));
+        s = lcase(xstrdup(reltype));
+        json_object_set_new(ret, s, json_string(uid));
+        free(s);
     }
 
-    if (!json_array_size(ret)) {
+    if (!json_object_size(ret)) {
         json_decref(ret);
         ret = json_null();
     }
@@ -3638,8 +3648,9 @@ static void
 relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
 {
     icalproperty *prop, *next;
+    icalparameter *param;
     json_t *to;
-    size_t i;
+    const char *reltype;
 
     /* Purge existing relatedTo properties from component */
     for (prop = icalcomponent_get_first_property(comp, ICAL_RELATEDTO_PROPERTY);
@@ -3652,14 +3663,21 @@ relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
     }
 
     /* Add relatedTo */
-    json_array_foreach(related, i, to) {
+    json_object_foreach(related, reltype, to) {
         const char *uid = json_string_value(to);
 
-        beginprop_idx(ctx, "relatedTo", i);
+        beginprop_key(ctx, "relatedTo", reltype);
 
-        /* Validate uid */
-        if (uid && strlen(uid)) {
-            icalcomponent_add_property(comp, icalproperty_new_relatedto(uid));
+        /* Validate uid and reltype */
+        if (uid && strlen(uid) && strlen(reltype)) {
+            prop = icalproperty_new_relatedto(uid);
+            param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
+
+            char *s = ucase(xstrdup(reltype));
+            icalparameter_set_xvalue(param, s);
+            icalproperty_add_parameter(prop, param);
+            icalcomponent_add_property(comp, prop);
+            free(s);
         } else {
             invalidprop(ctx, NULL);
         }
@@ -4042,7 +4060,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     json_t *relatedTo = NULL;
     pe = readprop(ctx, event, "relatedTo", 0, "o", &relatedTo);
     if (pe > 0) {
-        if (json_is_null(relatedTo) || json_array_size(relatedTo)) {
+        if (json_is_null(relatedTo) || json_object_size(relatedTo)) {
             relatedto_to_ical(ctx, comp, relatedTo);
         } else {
             invalidprop(ctx, "relatedTo");
