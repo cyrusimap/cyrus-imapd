@@ -2100,6 +2100,7 @@ int apply_annotations(struct mailbox *mailbox,
 out:
 
     if (record) {
+#ifdef USE_CALALARMD
         if (mailbox->mbtype & MBTYPE_CALENDAR) {
             // NOTE: this is because we don't pass the annotations through
             // with the record as we create it, so we can't update the alarm
@@ -2108,6 +2109,7 @@ out:
             // the alarm AFTER writing the record.
             caldav_alarm_touch_record(mailbox, record);
         }
+#endif
     }
     else {
         /* need to manage our own txn for the global db */
