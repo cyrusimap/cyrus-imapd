@@ -237,6 +237,11 @@ static json_t* patch_object(json_t *src, json_t *patches)
         }
 
         if (!it) {
+            /*
+             * JMAP spec: "When evaluating a path, all parts prior to the
+             * last (i.e. the value after the final slash) MUST exist for
+             * the patch to be valid. If not, the patch MUST be ignored."
+             */
             json_decref(dst);
             return NULL;
         }
@@ -3958,7 +3963,27 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
         } else {
             /* Add VEVENT exception */
             context_t *toctx;
-            json_t *ex;
+            json_t *ex, *val;
+            const char *key;
+            int ignore = 0;
+
+            /* JMAP spec: "A pointer MUST NOT start with one of the following
+             * prefixes; any patch with a such a key MUST be ignored" */
+            json_object_foreach(override, key, val) {
+                if (!strcmp(key, "uid") ||
+                    !strcmp(key, "relatedTo") ||
+                    !strcmp(key, "prodId") ||
+                    !strcmp(key, "isAllDay") ||
+                    !strcmp(key, "recurrenceRule") ||
+                    !strcmp(key, "recurrenceOverrides") ||
+                    !strcmp(key, "replyTo") ||
+                    !strcmp(key, "participantId")) {
+
+                    ignore = 1;
+                }
+            }
+            if (ignore)
+                continue;
 
             /* If the override doesn't have a custom start date, use
              * the LocalDate in the recurrenceOverrides object key */
