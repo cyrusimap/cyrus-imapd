@@ -1505,6 +1505,9 @@ sub test_setcalendarevents_recurrenceoverrides
             "2016-06-01T10:00:00" => {
                 showAsFree => JSON::true,
             },
+            "2016-07-01T09:00:00" => {
+                "uid" => "foo",
+            },
         },
     };
 
@@ -1512,6 +1515,7 @@ sub test_setcalendarevents_recurrenceoverrides
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
+    delete $event->{recurrenceOverrides}{"2016-07-01T09:00:00"}; # ignore patch with 'uid'
     $self->assert_normalized_event_equals($ret, $event);
 
     $ret = $self->updateandget_event({
