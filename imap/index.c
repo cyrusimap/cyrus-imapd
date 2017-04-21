@@ -3955,6 +3955,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if ((fetchitems & FETCH_BASECID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        mailbox_read_basecid(mailbox, &record);
         struct buf buf = BUF_INITIALIZER;
         if (!record.basecid)
             buf_appendcstr(&buf, "NIL");

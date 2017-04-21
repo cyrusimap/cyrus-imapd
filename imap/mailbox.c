@@ -1926,18 +1926,26 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
 
     record->recno = recno;
 
+    return r;
+}
+
+EXPORTED int mailbox_read_basecid(struct mailbox *mailbox, const struct index_record *record)
+{
+    if (record->basecid) return 0;
+
     if ((record->system_flags & FLAG_SPLITCONVERSATION)) {
         struct buf annotval = BUF_INITIALIZER;
         annotatemore_msg_lookup(mailbox->name, record->uid, IMAP_ANNOT_NS "basethrid", "", &annotval);
         if (annotval.len == 16) {
             const char *p = buf_cstring(&annotval);
             /* we have a new canonical CID */
-            r = parsehex(p, &p, 16, &record->basecid);
+            struct index_record *backdoor = (struct index_record *)record;
+            parsehex(p, &p, 16, &backdoor->basecid);
         }
         buf_free(&annotval);
     }
 
-    return r;
+    return 0;
 }
 
 EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
@@ -3443,6 +3451,16 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
                mailbox->name, record->uid);
         return r;
     }
+    mailbox_read_basecid(mailbox, &oldrecord);
+
+    /* OK, we need to decide how to handle basecid.  Three cases here:
+     * 1) basecid is already set - keep it
+     * 2) basecid is zero, but the system flag says it should be readable, set it from oldrecord
+     * 3) basecid is zero, system flag is zero - keep zero
+     * we only need code for case #2
+     */
+    if (!record->basecid && (record->system_flags & FLAG_SPLITCONVERSATION))
+        record->basecid = oldrecord.basecid;
 
     if (oldrecord.system_flags & FLAG_EXPUNGED)
         changeflags |= CHANGE_WASEXPUNGED;

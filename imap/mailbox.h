@@ -538,6 +538,9 @@ extern int mailbox_append_index_record(struct mailbox *mailbox,
                                        struct index_record *record);
 extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
                                      struct index_record *record);
+extern int mailbox_read_basecid(struct mailbox *mailbox,
+                                const struct index_record *record);
+
 
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
                            int dirty_modseq);

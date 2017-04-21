@@ -1983,14 +1983,16 @@ int decode_annotations(/*const*/struct dlist *annots,
                 /* XXX - check on p? */
             }
         }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
-            if (record) {
+        else {
+            /* this might double-apply the annotation, but oh well.  It does mean that
+             * basethrid is paired in here when we do a comparison against new values
+             * from the replica later! */
+            if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
                 const char *p = buf_cstring(&value);
                 parsehex(p, &p, 16, &record->basecid);
                 /* XXX - check on p? */
             }
-        }
-        else {
+
             sync_annot_list_add(*salp, entry, userid, &value);
         }
         buf_free(&value);
@@ -4784,6 +4786,8 @@ static int compare_one_record(struct mailbox *mailbox,
         goto diff;
     if (mp->cid != rp->cid)
         goto diff;
+    if (mp->basecid != rp->basecid)
+        goto diff;
     if (diff_annotations(mannots, rannots))
         goto diff;
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
@@ -4867,6 +4871,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 
             /* same UID - compare the records */
             if (rrecord.uid == mrecord->uid) {
+                mailbox_read_basecid(mailbox, mrecord);
                 r = compare_one_record(mailbox,
                                        (struct index_record *)mrecord, &rrecord,
                                        mannots, rannots,
