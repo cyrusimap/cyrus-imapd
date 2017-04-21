@@ -2,6 +2,15 @@
 Notes for Packagers
 ===================
 
+Binary naming
+=============
+
+Prevent namespace clashes. We suggest renaming all binaries with ``cyr_`` at
+the front, including renaming the ``ctl_*`` to ``cyr_``.
+
+The Cyrus team are looking to fix this in the core bundle in upcoming releases
+so packagers have less to do.
+
 Sample configuration files
 ==========================
 
