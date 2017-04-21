@@ -2009,24 +2009,24 @@ int decode_annotations(/*const*/struct dlist *annots,
                 /* XXX - check on p? */
             }
         }
-        else {
-            /* this might double-apply the annotation, but oh well.  It does mean that
-             * basethrid is paired in here when we do a comparison against new values
-             * from the replica later! */
-            if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+        else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+                /* this might double-apply the annotation, but oh well.  It does mean that
+                 * basethrid is paired in here when we do a comparison against new values
+                 * from the replica later! */
                 const char *p = buf_cstring(&value);
                 parsehex(p, &p, 16, &record->basecid);
                 /* XXX - check on p? */
-            }
-            /* "basethrid" is special, since it is written during mailbox
-             * appends and rewrites. We can't pass the master modseq for its
-             * annotation through the mailbox API, because this could cause
-             * master and replicae to get out of sync.
-             * The fix is to set the basecid field both on the index
-             * record and adding the annotation to the annotation list.
-             * That way the local modseq of basethrid always gets over-
-             * written by whoever wins to be master of this annotation. */
-            sync_annot_list_add(*salp, entry, userid, &value, modseq);
+
+                /* "basethrid" is special, since it is written during mailbox
+                 * appends and rewrites, using whatever modseq the index_record
+                 * has at this moment. This might differ from the modseq we
+                 * just parsed here, causing master and replica annotations
+                 * to get out of sync.
+                 * The fix is to set the basecid field both on the index
+                 * record *and* adding the annotation to the annotation list.
+                 * That way the local modseq of basethrid always gets over-
+                 * written by whoever wins to be master of this annotation */
+                sync_annot_list_add(*salp, entry, userid, &value, modseq);
         }
         else {
             sync_annot_list_add(*salp, entry, userid, &value, modseq);
