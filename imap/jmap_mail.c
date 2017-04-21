@@ -5324,19 +5324,18 @@ static int copyrecord(jmap_req_t *req, struct mailbox *src, struct mailbox *dst,
     struct appendstate as;
     int r;
     int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
-    struct index_record record;
+    ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
 
     if (!strcmp(src->uniqueid, dst->uniqueid))
         return 0;
-
-    r = msgrecord_get_index_record(mrw, &record);
-    if (r) goto done;
 
     r = append_setup_mbox(&as, dst, req->userid, httpd_authstate,
             ACL_INSERT, NULL, &jmap_namespace, 0, EVENT_MESSAGE_COPY);
     if (r) goto done;
 
-    r = append_copy(src, &as, 1, &record, nolink,
+    ptrarray_add(&msgrecs, mrw);
+
+    r = append_copy_msgrecord(src, &as, &msgrecs, nolink,
             mboxname_same_userid(src->name, dst->name));
     if (r) {
         append_abort(&as);

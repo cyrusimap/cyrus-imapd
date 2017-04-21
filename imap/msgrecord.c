@@ -179,6 +179,14 @@ HIDDEN msgrecord_t *msgrecord_new_from_index_record(struct mailbox *mbox,
     return mr;
 }
 
+EXPORTED msgrecord_t *msgrecord_new_from_msgrecord(struct mailbox *mbox,
+                                                   const msgrecord_t *mr)
+{
+    /* TODO(rsto) make clear which fields aren't cloned */
+    return msgrecord_new_from_index_record(mbox ? mbox : mr->mbox, mr->record);
+}
+
+
 static void msgrecord_free(msgrecord_t *mr)
 {
     if (mr->msg) message_unref(&mr->msg);
@@ -270,6 +278,17 @@ EXPORTED int msgrecord_get_size(const msgrecord_t *mr, uint32_t *size)
     return 0;
 }
 
+EXPORTED int msgrecord_get_header_size(const msgrecord_t *mr, uint32_t *header_size)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *header_size = mr->record.header_size;
+    return 0;
+
+}
+
 EXPORTED int msgrecord_get_guid(const msgrecord_t *mr, struct message_guid *guid)
 {
     if (!mr->isappend) {
@@ -298,6 +317,11 @@ EXPORTED int msgrecord_get_modseq(const msgrecord_t *mr, modseq_t *modseq)
     }
     *modseq = mr->record.modseq;
     return 0;
+}
+
+EXPORTED int msgrecord_load_cache(const msgrecord_t *mr)
+{
+    return msgrecord_need(mr, M_CACHE);
 }
 
 EXPORTED int msgrecord_get_cache_env(const msgrecord_t *mr, int token, char **tok)
@@ -443,6 +467,25 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mrw, struct entryattlist *l)
     return r;
 }
 
+EXPORTED int msgrecord_extract_annots(const msgrecord_t *mr,
+                                      struct entryattlist **annots)
+{
+    int r = msgrecord_need(mr, M_MAILBOX|M_RECORD);
+    if (r) return r;
+    *annots = mailbox_extract_annots(mr->mbox, &mr->record);
+    return *annots == NULL ? IMAP_INTERNAL : 0;
+}
+
+EXPORTED int msgrecord_extract_flags(const msgrecord_t *mr,
+                                     const char *userid,
+                                     strarray_t **flags)
+{
+    int r = msgrecord_need(mr, M_MAILBOX|M_RECORD);
+    if (r) return r;
+    *flags = mailbox_extract_flags(mr->mbox, &mr->record, userid);
+    return *flags == NULL ? IMAP_INTERNAL : 0;
+}
+
 EXPORTED int msgrecord_get_index_record_rw(msgrecord_t *mrw,
                                            struct index_record **record)
 {
@@ -463,6 +506,12 @@ EXPORTED int msgrecord_set_uid(msgrecord_t *mrw, uint32_t uid)
 {
     mrw->uid = uid;
     mrw->record.uid = uid;
+    return 0;
+}
+
+EXPORTED int msgrecord_set_cid(msgrecord_t *mrw, bit64 cid)
+{
+    mrw->record.cid = cid;
     return 0;
 }
 
@@ -498,6 +547,16 @@ EXPORTED int msgrecord_set_userflag(msgrecord_t *mrw, uint32_t userflag, int val
         mrw->record.user_flags[userflag/32] |= 1<<(userflag&31);
     else
         mrw->record.user_flags[userflag/32] &= ~(1<<(userflag&31));
+    return 0;
+}
+
+EXPORTED int msgrecord_set_cache_offset(msgrecord_t *mrw, size_t offset)
+{
+    if (!mrw->isappend) {
+        int r = msgrecord_need(mrw, M_RECORD);
+        if (r) return r;
+    }
+    mrw->record.cache_offset = offset;
     return 0;
 }
 
@@ -611,9 +670,9 @@ EXPORTED int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr
    return mailbox_find_msgrecord_internal(mbox, mbox->i.last_uid, /*recno*/0, mr);
 }
 
-EXPORTED int mailbox_msgrecord_from_index(struct mailbox *mbox,
-                                          struct index_record record,
-                                          msgrecord_t **mrp)
+EXPORTED int msgrecord_from_index_record(struct mailbox *mbox,
+                                         struct index_record record,
+                                         msgrecord_t **mrp)
 {
     int r;
     const msgrecord_t *mr = NULL;

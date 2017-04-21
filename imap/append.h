@@ -135,6 +135,12 @@ extern int append_copy(struct mailbox *mailbox,
                        int nummsg, struct index_record *records,
                        int nolink, int is_same_user);
 
+// FIXME just for migration
+extern int append_copy_msgrecord(struct mailbox *mailbox,
+                       struct appendstate *append_mailbox,
+                       ptrarray_t *msgrecs,
+                       int nolink, int is_same_user);
+
 extern int append_collectnews(struct appendstate *mailbox,
                               const char *group, unsigned long feeduid);
 

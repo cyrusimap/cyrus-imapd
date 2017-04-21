@@ -315,11 +315,19 @@ void mboxevent_extract_msgrecord(struct mboxevent *event, const msgrecord_t *msg
 void mboxevent_extract_copied_record(struct mboxevent *event,
                                      const struct mailbox *mailbox, struct index_record *record);
 
+extern void mboxevent_extract_copied_msgrecord(struct mboxevent *event, const msgrecord_t *msgrec);
+
 /*
  * Extract message content to include to event notification
  */
 void mboxevent_extract_content(struct mboxevent *event,
                                const struct index_record *record, FILE* content);
+
+/*
+ * Extract message content to include to event notification
+ */
+void mboxevent_extract_content_msgrec(struct mboxevent *event,
+                               const msgrecord_t *msgrec, FILE* content);
 
 /*
  * Extract quota limit, quota usage and quota root to include to event

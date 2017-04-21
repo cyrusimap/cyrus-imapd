@@ -1271,7 +1271,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
          * on how it releases the cyrus.index lock in the middle of action */
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
-        r = mailbox_msgrecord_from_index(state->mailbox, record, &msgrec);
+        r = msgrecord_from_index_record(state->mailbox, record, &msgrec);
         if (r) goto out;
 
         switch (storeargs->operation) {

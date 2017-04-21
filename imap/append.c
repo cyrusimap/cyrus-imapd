@@ -778,66 +778,8 @@ out:
 
 static int append_apply_flags(struct appendstate *as,
                               struct mboxevent *mboxevent,
-                              struct index_record *record,
+                              msgrecord_t *msgrec,
                               const strarray_t *flags)
-{
-    int userflag;
-    int i, r = 0;
-
-    assert(flags);
-
-    for (i = 0; i < flags->count; i++) {
-        const char *flag = strarray_nth(flags, i);
-        if (!strcasecmp(flag, "\\seen")) {
-            append_setseen(as, record);
-            mboxevent_add_flag(mboxevent, flag);
-        }
-        else if (!strcasecmp(flag, "\\expunged")) {
-            /* NOTE - this is a fake internal name */
-            if (as->myrights & ACL_DELETEMSG) {
-                record->system_flags |= FLAG_EXPUNGED;
-            }
-        }
-        else if (!strcasecmp(flag, "\\deleted")) {
-            if (as->myrights & ACL_DELETEMSG) {
-                record->system_flags |= FLAG_DELETED;
-                mboxevent_add_flag(mboxevent, flag);
-            }
-        }
-        else if (!strcasecmp(flag, "\\draft")) {
-            if (as->myrights & ACL_WRITE) {
-                record->system_flags |= FLAG_DRAFT;
-                mboxevent_add_flag(mboxevent, flag);
-            }
-        }
-        else if (!strcasecmp(flag, "\\flagged")) {
-            if (as->myrights & ACL_WRITE) {
-                record->system_flags |= FLAG_FLAGGED;
-                mboxevent_add_flag(mboxevent, flag);
-            }
-        }
-        else if (!strcasecmp(flag, "\\answered")) {
-            if (as->myrights & ACL_WRITE) {
-                record->system_flags |= FLAG_ANSWERED;
-                mboxevent_add_flag(mboxevent, flag);
-            }
-        }
-        else if (as->myrights & ACL_WRITE) {
-            r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
-            if (r) goto out;
-            record->user_flags[userflag/32] |= 1<<(userflag&31);
-            mboxevent_add_flag(mboxevent, flag);
-        }
-    }
-
-out:
-    return r;
-}
-
-static int append_apply_flags_msgrecord(struct appendstate *as,
-                                        struct mboxevent *mboxevent,
-                                        msgrecord_t *msgrec,
-                                        const strarray_t *flags)
 {
     int userflag;
     uint32_t system_flags = 0;
@@ -1056,16 +998,20 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         if (r) goto out;
 
         if (system_flags & FLAG_ARCHIVED) {
-            r = objectstore_put(mailbox, &record, fname);
+            struct index_record record;
+            r = msgrecord_get_index_record(msgrec, &record);
             if (!r) {
-                // file in object store now; must delete local copy
-                in_object_storage = 1;
-            }
-            else {
-                // didn't manage to store it, so remove the ARCHIVED flag
-                system_flags &= ~FLAG_ARCHIVED;
-                r = msgrecord_set_systemflags(msgrec, system_flags);
-                if (r) goto out;
+                r = objectstore_put(mailbox, &record, fname);
+                if (!r) {
+                    // file in object store now; must delete local copy
+                    in_object_storage = 1;
+                }
+                else {
+                    // didn't manage to store it, so remove the ARCHIVED flag
+                    system_flags &= ~FLAG_ARCHIVED;
+                    r = msgrecord_set_systemflags(msgrec, system_flags);
+                    if (r) goto out;
+                }
             }
         }
     }
@@ -1073,7 +1019,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
-        r = append_apply_flags_msgrecord(as, mboxevent, msgrec, flags); 
+        r = append_apply_flags(as, mboxevent, msgrec, flags);
         if (r) {
             syslog(LOG_ERR, "Annotation callout failed to apply flags %s", error_message(r));
             goto out;
@@ -1184,21 +1130,22 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
                       const strarray_t *flags)
 {
     struct mailbox *mailbox = as->mailbox;
-    struct index_record record;
     const char *fname;
+    msgrecord_t *msgrec = NULL;
     FILE *destfile;
     int r;
     struct mboxevent *mboxevent = NULL;
 
     assert(size != 0);
 
-    zero_index(record);
     /* Setup */
-    record.uid = as->baseuid + as->nummsg;
-    record.internaldate = internaldate;
+    msgrec = msgrecord_new_from_uid(mailbox, as->baseuid + as->nummsg);
+    r = msgrecord_set_internaldate(msgrec, internaldate);
+    if (r) goto out;
 
     /* Create message file */
-    fname = mailbox_record_fname(mailbox, &record);
+    r = msgrecord_get_fname(msgrec, &fname);
+    if (r) goto out;
     as->nummsg++;
 
     unlink(fname);
@@ -1222,24 +1169,24 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     if (!r) {
         if (!*body || (as->nummsg - 1))
             r = message_parse_file(destfile, NULL, NULL, body);
-        if (!r) r = message_create_record(&record, *body);
+        if (!r) r = msgrecord_set_bodystructure(msgrec, *body);
 
         /* messageContent may be included with MessageAppend and MessageNew */
         if (!r)
-            mboxevent_extract_content(mboxevent, &record, destfile);
+            mboxevent_extract_content_msgrec(mboxevent, msgrec, destfile);
     }
     fclose(destfile);
     if (r) goto out;
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
-        r = append_apply_flags(as, mboxevent, &record, flags);
+        r = append_apply_flags(as, mboxevent, msgrec, flags);
         if (r) goto out;
     }
 
     /* Write out index file entry; if we abort later, it's not
        important */
-    r = mailbox_append_index_record(mailbox, &record);
+    r = msgrecord_save(msgrec);
 
 out:
     if (r) {
@@ -1250,10 +1197,11 @@ out:
     /* finish filling the event notification */
     /* XXX avoid to parse ENVELOPE record since Message-Id is already
      * present in body structure */
-    mboxevent_extract_record(mboxevent, mailbox, &record);
+    mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
+    msgrecord_unrefw(&msgrec);
 
     return 0;
 }
@@ -1269,15 +1217,21 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     annotate_state_t *astate = NULL;
     struct body *body = NULL;
     int r = 0;
+    msgrecord_t *msgrec = NULL;
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
 
-    flags = mailbox_extract_flags(as->mailbox, record, as->userid);
-    user_annots = mailbox_extract_annots(as->mailbox, record);
+    r = msgrecord_from_index_record(as->mailbox, *record, &msgrec);
+    if (r) return r;
 
-    fname = mailbox_record_fname(as->mailbox, record);
-    if (!fname) goto out;
+    r = msgrecord_extract_flags(msgrec, as->userid, &flags);
+    if (r) goto out;
+    r = msgrecord_extract_annots(msgrec, &user_annots);
+    if (r) goto out;
+
+    r = msgrecord_get_fname(msgrec, &fname);
+    if (r) goto out;
 
     f = fopen(fname, "r");
     if (!f) {
@@ -1294,9 +1248,23 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     r = callout_run(fname, body, &user_annots, &system_annots, flags);
     if (r) goto out;
 
-    record->system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
-    memset(&record->user_flags, 0, sizeof(record->user_flags));
-    r = append_apply_flags(as, NULL, record, flags);
+    /* Reset system flags */
+    uint32_t system_flags;
+    r = msgrecord_get_systemflags(msgrec, &system_flags);
+    if (!r) {
+        system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
+        r = msgrecord_set_systemflags(msgrec, system_flags);
+    }
+    if (r) goto out;
+
+    /* Reset user flags */
+    uint32_t user_flags[MAX_USER_FLAGS/32];
+    memset(user_flags, 0, sizeof(user_flags)/sizeof(user_flags[0]));
+    r = msgrecord_set_userflags(msgrec, user_flags);
+    if (r) goto out;
+
+    /* Apply annotator flags */
+    r = append_apply_flags(as, NULL, msgrec, flags);
     if (r) {
         syslog(LOG_ERR, "Setting flags from annotator "
                         "callout failed (%s)",
@@ -1306,10 +1274,11 @@ HIDDEN int append_run_annotator(struct appendstate *as,
 
     r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
     if (r) goto out;
+
     if (user_annots) {
-        annotate_state_set_auth(astate, as->isadmin,
-                                as->userid, as->auth_state);
-        r = annotate_state_store(astate, user_annots);
+        r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);
+        if (r) goto out;
+        r = msgrecord_annot_writeall(msgrec, user_annots);
         if (r) {
             syslog(LOG_ERR, "Setting user annnotations from annotator "
                             "callout failed (%s)",
@@ -1319,9 +1288,9 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     }
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
-        annotate_state_set_auth(astate, /*isadmin*/1,
-                                as->userid, as->auth_state);
-        r = annotate_state_store(astate, system_annots);
+        r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
+        if (r) goto out;
+        r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
             syslog(LOG_ERR, "Setting system annnotations from annotator "
                             "callout failed (%s)",
@@ -1329,6 +1298,8 @@ HIDDEN int append_run_annotator(struct appendstate *as,
             goto out;
         }
     }
+
+    r = msgrecord_save(msgrec);
 
 out:
     if (f) fclose(f);
@@ -1339,6 +1310,7 @@ out:
         message_free_body(body);
         free(body);
     }
+    if (msgrec) msgrecord_unrefw(&msgrec);
     return r;
 }
 
@@ -1472,6 +1444,204 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         mboxevent_extract_record(mboxevent, as->mailbox, &record);
         mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);
+    }
+
+out:
+    free(srcfname);
+    free(destfname);
+    if (r) {
+        append_abort(as);
+        return r;
+    }
+
+    mboxevent_extract_mailbox(mboxevent, as->mailbox);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
+
+    return 0;
+}
+
+/*
+ * Append to 'as->mailbox' the 'nummsg' messages from the
+ * mailbox 'mailbox' listed in the array pointed to by 'records'.
+ * 'as' must have been opened with append_setup().  If the '\Seen'
+ * flag is to be set anywhere then 'userid' passed to append_setup()
+ * contains the name of the user whose \Seen flag gets set.
+ */
+// FIXME just for migration
+EXPORTED int append_copy_msgrecord(struct mailbox *mailbox, struct appendstate *as,
+                         ptrarray_t *msgrecs, int nolink, int is_same_user)
+{
+    int msg;
+    char *srcfname = NULL;
+    char *destfname = NULL;
+    int object_storage_enabled = 0 ;
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
+    int r = 0;
+    int userflag;
+    int i;
+    struct mboxevent *mboxevent = NULL;
+    msgrecord_t *dst_msgrec = NULL;
+
+    if (!msgrecs->count) {
+        append_abort(as);
+        return 0;
+    }
+
+    /* prepare a single vnd.cmu.MessageCopy notification for all messages */
+    if (as->event_type) {
+        mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
+    }
+
+    /* Copy/link all files and cache info */
+    for (msg = 0; msg < msgrecs->count; msg++) {
+        const msgrecord_t *src_msgrec = ptrarray_nth(msgrecs, msg);
+        uint32_t src_uid;
+        uint32_t src_system_flags;
+
+        r = msgrecord_get_uid(src_msgrec, &src_uid);
+        if (r) goto out;
+        r = msgrecord_get_systemflags(src_msgrec, &src_system_flags);
+        if (r) goto out;
+        /* read in existing cache record BEFORE we copy data, so that the
+         * mmap will be up to date even if it's the same mailbox for source
+         * and destination */
+        r = msgrecord_load_cache(src_msgrec);
+        if (r) goto out;
+
+        /* wipe out the bits that aren't magically copied */
+        uint32_t dst_system_flags;
+        uint32_t dst_user_flags[MAX_USER_FLAGS/32];
+
+        dst_msgrec = msgrecord_new_from_msgrecord(as->mailbox, src_msgrec);
+
+        r = msgrecord_get_systemflags(dst_msgrec, &dst_system_flags);
+        if (r) goto out;
+        dst_system_flags &= ~FLAG_SEEN;
+
+        for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+            dst_user_flags[i] = 0;
+        }
+        r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
+        if (r) goto out;
+
+        if (!is_same_user) {
+            r = msgrecord_set_cid(dst_msgrec, NULLCONVERSATION);
+            if (r) goto out;
+        }
+
+        r = msgrecord_set_cache_offset(dst_msgrec, 0);
+        if (r) goto out;
+
+        /* renumber the message into the new mailbox */
+        uint32_t dst_uid = as->mailbox->i.last_uid + 1;
+        r = msgrecord_set_uid(dst_msgrec, dst_uid);
+        if (r) goto out;
+        as->nummsg++;
+
+        /* user flags are special - different numbers, so look them up */
+        if (as->myrights & ACL_WRITE) {
+            uint32_t src_user_flags[MAX_USER_FLAGS/32];
+
+            r = msgrecord_get_userflags(src_msgrec, src_user_flags);
+            if (r) goto out;
+
+            for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+                bit32 flagmask = src_user_flags[userflag/32];
+                if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+                    int num;
+                    r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
+                    if (r)
+                        syslog(LOG_ERR, "IOERROR: unable to copy flag %s from %s to %s for UID %u: %s",
+                               mailbox->flagname[userflag], mailbox->name, as->mailbox->name,
+                               src_uid, error_message(r));
+                    else
+                        dst_user_flags[num/32] |= 1<<(num&31);
+                }
+            }
+
+            r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: unable to copy user flags from %s to %s for UID %u: %s",
+                        mailbox->name, as->mailbox->name, src_uid, error_message(r));
+            }
+        }
+        else {
+            /* only flag allow to be kept without ACL_WRITE is DELETED */
+            dst_system_flags &= FLAG_DELETED;
+        }
+
+        /* deleted flag has its own ACL */
+        if (!(as->myrights & ACL_DELETEMSG)) {
+            dst_system_flags &= ~FLAG_DELETED;
+        }
+
+        /* should this message be marked \Seen? */
+        if (src_system_flags & FLAG_SEEN) {
+            append_setseen_msgrecord(as, dst_msgrec);
+        }
+
+        /* we're not modifying the ARCHIVED flag here, just keeping it */
+
+        /* set system flags */
+        r = msgrecord_set_systemflags(dst_msgrec, dst_system_flags);
+        if (r) goto out;
+
+        /* Link/copy message file */
+        free(srcfname);
+        free(destfname);
+
+        const char *tmp;
+        r = msgrecord_get_fname(src_msgrec, &tmp);
+        if (r) goto out;
+        srcfname = xstrdup(tmp);
+
+        r = msgrecord_get_fname(dst_msgrec, &tmp);
+        if (r) goto out;
+        destfname = xstrdup(tmp);
+
+        if (!(object_storage_enabled && src_system_flags & FLAG_ARCHIVED))   // if object storage do not move file
+           r = mailbox_copyfile(srcfname, destfname, nolink);
+
+        if (r) goto out;
+
+#if defined ENABLE_OBJECTSTORE
+        if (object_storage_enabled && src_system_flags & FLAG_ARCHIVED) {
+            struct index_record record;
+            r = msgrecord_get_index_record(dst_msgrec, &record);
+            if (!r) r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
+        }
+#endif
+
+        if (as->isoutbox) {
+            char num[10];
+            time_t internaldate;
+            r = msgrecord_get_internaldate(dst_msgrec, &internaldate);
+            if (r) goto out;
+            snprintf(num, 10, "%u", dst_uid);
+            r = notify_at(internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
+            if (r) goto out;
+        }
+
+        /* Write out index file entry */
+        r = msgrecord_save(dst_msgrec);
+        if (r) goto out;
+
+        /* ensure we have an astate connected to the destination
+         * mailbox, so that the annotation txn will be committed
+         * when we close the mailbox */
+        annotate_state_t *astate = NULL;
+        r = mailbox_get_annotate_state(as->mailbox, dst_uid, &astate);
+        if (r) goto out;
+        r = annotate_msg_copy(mailbox, src_uid,
+                              as->mailbox, dst_uid,
+                              as->userid);
+        if (r) goto out;
+
+        mboxevent_extract_msgrecord(mboxevent, dst_msgrec);
+        mboxevent_extract_copied_msgrecord(mboxevent, src_msgrec);
     }
 
 out:

@@ -62,23 +62,15 @@ extern int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr);
 extern int mailbox_edit_msgrecord(struct mailbox *mbox, const msgrecord_t *mr,
                                   msgrecord_t **mrw);
 
-extern int mailbox_msgrecord_from_index(struct mailbox *mbox,
-                                        struct index_record record,
-                                        msgrecord_t **mrp);
+extern int msgrecord_from_index_record(struct mailbox *mbox,
+                                       struct index_record record,
+                                       msgrecord_t **mrp);
 
 /* msgrecord.c */
 
-
-extern int msgrecord_save(msgrecord_t *mrw);
-
 extern msgrecord_t *msgrecord_new_from_uid(struct mailbox *mbox, uint32_t uid);
-
-/* HIDDEN
- *
-extern msgrecord_t *msgrecord_new(struct mailbox *mbox);
-extern msgrecord_t *msgrecord_new_from_index_record(struct mailbox *mbox,
-                                                    struct index_record record);
-*/
+extern msgrecord_t *msgrecord_new_from_msgrecord(struct mailbox *mbox, const msgrecord_t *mr);
+extern int msgrecord_save(msgrecord_t *mrw);
 
 // FIXME extern void msgrecord_ref(msgrecord_t *mr);
 extern void msgrecord_unref(const msgrecord_t **mr);
@@ -94,6 +86,7 @@ extern int msgrecord_get_modseq(const msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_internaldate(const msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(const msgrecord_t *mr, message_t **msg);
 extern int msgrecord_get_size(const msgrecord_t *mr, uint32_t *size);
+extern int msgrecord_get_header_size(const msgrecord_t *mr, uint32_t *header_size);
 extern int msgrecord_get_systemflags(const msgrecord_t *mr, uint32_t *flags);
 extern int msgrecord_hasflag(const msgrecord_t *mr, const char *flag, int *has);
 extern int msgrecord_get_index_record(const msgrecord_t *mr, struct index_record *record);
@@ -102,6 +95,8 @@ extern int msgrecord_get_fname(const msgrecord_t *mr, const char **fname);
 extern int msgrecord_get_cache_env(const msgrecord_t *mr, int token, char **tok);
 extern int msgrecord_get_cache_item(const msgrecord_t *mr, int field, char **item);
 extern int msgrecord_get_mailbox(const msgrecord_t *mr, struct mailbox **mailboxptr);
+
+extern int msgrecord_load_cache(const msgrecord_t *mr);
 
 /* Setters and mutating functions */
 extern int msgrecord_get_index_record_rw(msgrecord_t *mrw,
@@ -113,8 +108,10 @@ extern int msgrecord_add_systemflags(msgrecord_t *mrw, uint32_t system_flags);
 extern int msgrecord_set_userflags(msgrecord_t *mrw, uint32_t user_flags[MAX_USER_FLAGS/32]);
 extern int msgrecord_set_userflag(msgrecord_t *mrw, uint32_t user_flag, int bit);
 extern int msgrecord_set_uid(msgrecord_t *mrw, uint32_t uid);
+extern int msgrecord_set_cid(msgrecord_t *mrw, bit64 cid);
 extern int msgrecord_set_bodystructure(msgrecord_t *mrw, struct body *body);
 extern int msgrecord_set_internaldate(msgrecord_t *mrw, time_t internaldate);
+extern int msgrecord_set_cache_offset(msgrecord_t *mrw, size_t offset);
 
 /* A light-weight layer above annotations. */
 extern int msgrecord_annot_lookup(const msgrecord_t *mr, const char *entry,
@@ -129,6 +126,13 @@ extern int msgrecord_annot_writeall(msgrecord_t *mrw, struct entryattlist *l);
 extern int msgrecord_annot_set_auth(msgrecord_t *mrw, int isadmin,
                                     const char *userid,
                                     const struct auth_state *authstate);
+
+extern int msgrecord_extract_annots(const msgrecord_t *mr,
+                                    struct entryattlist **annots);
+
+extern int msgrecord_extract_flags(const msgrecord_t *mr,
+                                   const char *userid,
+                                   strarray_t **flags);
 
 /* misc */
 extern int msgrecord_should_archive(const msgrecord_t *mr, void *rock);

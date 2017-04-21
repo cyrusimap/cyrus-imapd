@@ -1129,6 +1129,100 @@ void mboxevent_extract_copied_record(struct mboxevent *event,
         mboxevent_extract_old_mailbox(event, mailbox);
 }
 
+void mboxevent_extract_copied_msgrecord(struct mboxevent *event,
+                                        const msgrecord_t *msgrec)
+{
+    int first = 0;
+    uint32_t uid;
+
+    if (!event)
+        return;
+
+    /* add the source message's UID to oldUidset */
+    if (event->olduidset == NULL) {
+        event->olduidset = seqset_init(0, SEQ_SPARSE);
+        first = 1;
+    }
+    msgrecord_get_uid(msgrec, &uid);
+    seqset_add(event->olduidset, uid, 1);
+
+    /* generate an IMAP URL to reference the old mailbox */
+    if (first) {
+        struct mailbox *mailbox = NULL;
+        msgrecord_get_mailbox(msgrec, &mailbox);
+        mboxevent_extract_old_mailbox(event, mailbox);
+    }
+}
+
+void mboxevent_extract_content_msgrec(struct mboxevent *event,
+                               const msgrecord_t *msgrec, FILE* content)
+{
+    const char *base = NULL;
+    size_t offset, size, truncate, len = 0;
+    uint32_t record_size, header_size;
+
+    if (!event)
+        return;
+
+    if (!mboxevent_expected_param(event->type, EVENT_MESSAGE_CONTENT))
+        return;
+
+    if (msgrecord_get_size(msgrec, &record_size) ||
+        msgrecord_get_header_size(msgrec, &header_size)) {
+        syslog(LOG_ERR, "mobxevent: can't determine content size");
+        return;
+    }
+
+    truncate = config_getint(IMAPOPT_EVENT_CONTENT_SIZE);
+
+    switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
+    /*  include message up to 'truncate' in size with the notification */
+    case IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_STANDARD:
+        if (!truncate || record_size <= truncate) {
+            offset = 0;
+            size = record_size;
+        }
+        else {
+            /* XXX RFC 5423 suggests to include a URLAUTH [RFC4467] reference
+             * for larger messages. IMAP URL of mailboxID seems enough though */
+            return;
+        }
+        break;
+    /* include message truncated to a size of 'truncate' */
+    case IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_MESSAGE:
+        offset = 0;
+        size = (truncate && (record_size > truncate)) ?
+                truncate : record_size;
+        break;
+    /* include headers truncated to a size of 'truncate' */
+    case IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_HEADER:
+        offset = 0;
+        size = (truncate && (header_size > truncate)) ?
+                truncate : header_size;
+        break;
+    /* include body truncated to a size of 'truncate' */
+    case IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_BODY:
+        offset = header_size;
+        size = (truncate && ((record_size - header_size) > truncate)) ?
+                truncate : record_size - header_size;
+        break;
+    /* include full headers and body truncated to a size of 'truncate' */
+    case IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_HEADERBODY:
+        offset = 0;
+        size = (truncate && ((record_size - header_size) > truncate)) ?
+                header_size + truncate : record_size;
+        break;
+    /* never happen */
+    default:
+        return;
+    }
+
+    map_refresh(fileno(content), 1, &base, &len, record_size, "new message", 0);
+    FILL_STRING_PARAM(event, EVENT_MESSAGE_CONTENT, xstrndup(base+offset, size));
+    map_free(&base, &len);
+}
+
+
 void mboxevent_extract_content(struct mboxevent *event,
                                const struct index_record *record, FILE* content)
 {
