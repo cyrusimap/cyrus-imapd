@@ -3343,7 +3343,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             hcount++;
             if (hcount > 20) {
                 free(msgid);
-                syslog(LOG_NOTICE, "too many references, skipping the rest");
+                syslog(LOG_DEBUG, "too many references, skipping the rest");
                 break;
             }
             /*
