@@ -140,7 +140,7 @@ static const struct prop_entry webdav_props[] = {
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
-    { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "getcontenttype", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Type" },
     { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
