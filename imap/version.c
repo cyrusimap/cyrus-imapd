@@ -76,9 +76,11 @@ static char id_resp_arguments[MAXIDVALUELEN] = "";
 #define CYRUS_VERSION PACKAGE_VERSION
 #endif
 
+static const char *cyrus_version_str = CYRUS_VERSION;
+
 EXPORTED const char *cyrus_version(void)
 {
-    return CYRUS_VERSION;
+    return cyrus_version_str;
 }
 
 /*
