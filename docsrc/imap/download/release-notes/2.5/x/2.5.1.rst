@@ -54,11 +54,11 @@ Changes to cyradm
 
 With thanks to Leena Heino and Norbert Warmuth for their contributions
 
-* createmailbox command now accepts --specialuse flag if server supports CREATE-SPECIAL-USE
+* createmailbox command now accepts ``--specialuse flag`` if server supports CREATE-SPECIAL-USE
 * listmailbox command now returns special-use attribute if server supports SPECIAL-USE
-* listmailbox command now accepts --specialuse flag to list only mailboxes with special-use attribute
+* listmailbox command now accepts ``--specialuse`` flag to list only mailboxes with special-use attribute
 * cyradm now uses LIST and REMOTE rather than RLIST if server supports LIST-EXTENDED
-* mboxconfig now accepts --private flag to switch from default shared to private version of an annotation
+* mboxconfig now accepts ``--private flag`` to switch from default shared to private version of an annotation
 * getmetadata: new command
 * setmetadata: new command
 

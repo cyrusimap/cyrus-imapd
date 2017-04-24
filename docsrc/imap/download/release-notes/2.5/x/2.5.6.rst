@@ -35,10 +35,10 @@ New imapd.conf options
 New cyradm options
 ------------------
 
-* --tlskey keyfile: use certificate with keyfile to authenticate with server
-* --notls: disable StartTLS negotiation
-* --cafile cacertfile: Use CA certificate file to validate server certificate
-* --cadir cacertdirectory: Use CA certificate directory to validate server certificate
+* ``--tlskey keyfile``: use certificate with keyfile to authenticate with server
+* ``--notls``: disable StartTLS negotiation
+* ``--cafile cacertfile``: Use CA certificate file to validate server certificate
+* ``--cadir cacertdirectory``: Use CA certificate directory to validate server certificate
 
 Thanks Leena Heino and Carlos Velasco
 
