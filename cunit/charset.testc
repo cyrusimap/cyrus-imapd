@@ -1054,4 +1054,18 @@ static void test_charset_decode(void)
 #undef TESTCASE
 }
 
+static void test_broken_length_hint(void)
+{
+    charset_t cs;
+    char *s;
+    const char *body = "x.x&gt;x:";
+
+    cs = charset_lookupname("iso-8859-1");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+
+    s = charset_to_utf8(body, strlen(body), cs, ENCODING_QP);
+    CU_ASSERT_STRING_EQUAL(body, s);
+    charset_free(&cs);
+}
+
 /* vim: set ft=c: */

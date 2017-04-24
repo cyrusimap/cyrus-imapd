@@ -152,8 +152,9 @@ struct striphtml_state {
     enum html_state stack[2];
 };
 
-#define CHARSET_ICUBUF_MAXSIZE 4096
-#define CHARSET_ICUBUF_MINSIZE 8
+#define CHARSET_ICUBUF_MAX_SIZE 4096
+#define CHARSET_ICUBUF_DEFAULT_SIZE CHARSET_ICUBUF_MAX_SIZE
+#define CHARSET_ICUBUF_MIN_SIZE 8
 
 struct charset_converter {
     /* An open ICU converter for ICU backed converters. Or NULL.  */
@@ -1566,10 +1567,23 @@ static void icu_free(struct convert_rock *rock)
 static void icu_reset(struct convert_rock *rock, size_t len, int to_uni)
 {
     struct charset_converter *s = (struct charset_converter *)rock->state;
-    size_t buf_size = CHARSET_ICUBUF_MAXSIZE;
+    size_t buf_size = CHARSET_ICUBUF_DEFAULT_SIZE;
 
-    if (len && len < buf_size) buf_size = len;
-    if (buf_size < CHARSET_ICUBUF_MINSIZE) buf_size = CHARSET_ICUBUF_MINSIZE;
+    if (len) {
+        /* We need multiples of two for our UChar buffer */
+        if (len % 2) len++;
+
+        /* Use size hint, but don't exceed the maximum limit */
+        if (len > CHARSET_ICUBUF_MAX_SIZE)
+            len = CHARSET_ICUBUF_MAX_SIZE;
+
+        /* Anything smaller than four UChars is just too small */
+        if (len < CHARSET_ICUBUF_MIN_SIZE)
+            len = CHARSET_ICUBUF_MIN_SIZE;
+
+        /* Allright, use that length */
+        buf_size = len;
+    }
 
     if (s->buf_size < buf_size) {
         s->buf = xrealloc(s->buf, buf_size * 2);
