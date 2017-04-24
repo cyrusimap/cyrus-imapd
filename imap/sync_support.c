@@ -1148,10 +1148,11 @@ int sync_sieve_activate(const char *userid, const char *name)
     const char *sieve_path = user_sieve_path(userid);
     char target[2048];
     char active[2048];
+    char tmp[2048];
 
     snprintf(target, sizeof(target), "%s", name);
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
-    unlink(active);
+    snprintf(tmp, sizeof(tmp), "%s.NEW", active);
 
 #ifdef USE_SIEVE
     char *bc_fname = strconcat(sieve_path, "/", target, NULL);
@@ -1162,12 +1163,20 @@ int sync_sieve_activate(const char *userid, const char *name)
     /* N.B symlink() does NOT verify target for anything but string validity,
      * so activation of a nonexistent script will report success.
      */
-    if (symlink(target, active) < 0)
-        return(IMAP_IOERROR);
+    if (symlink(target, tmp) < 0) {
+        syslog(LOG_ERR, "IOERROR: unable to symlink %s as %s: %m", target, tmp);
+        return IMAP_IOERROR;
+    }
+
+    if (rename(tmp, active) < 0) {
+        syslog(LOG_ERR, "IOERROR: unable to rename %s to %s: %m", tmp, active);
+        unlink(tmp);
+        return IMAP_IOERROR;
+    }
 
     sync_log_sieve(userid);
 
-    return(0);
+    return 0;
 }
 
 int sync_sieve_deactivate(const char *userid)
