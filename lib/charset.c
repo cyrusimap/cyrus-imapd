@@ -152,9 +152,7 @@ struct striphtml_state {
     enum html_state stack[2];
 };
 
-#define CHARSET_ICUBUF_MAX_SIZE 4096
-#define CHARSET_ICUBUF_DEFAULT_SIZE CHARSET_ICUBUF_MAX_SIZE
-#define CHARSET_ICUBUF_MIN_SIZE 8
+#define CHARSET_ICUBUF_BUFFER_SIZE 4096
 
 struct charset_converter {
     /* An open ICU converter for ICU backed converters. Or NULL.  */
@@ -188,7 +186,7 @@ struct charset_converter {
 
 struct convert_rock;
 
-static void icu_reset(struct convert_rock *rock, size_t len, int to_uni);
+static void icu_reset(struct convert_rock *rock, int to_uni);
 static void icu_flush(struct convert_rock *rock);
 static void icu_free(struct convert_rock *rock);
 
@@ -1559,31 +1557,15 @@ static void icu_flush(struct convert_rock *rock)
 static void icu_free(struct convert_rock *rock)
 {
     if (rock) {
-        if (rock->state) icu_reset(rock, 0 /*don't care*/, -1 /*don't care*/);
+        if (rock->state) icu_reset(rock, -1 /*don't care*/);
         free(rock);
     }
 }
 
-static void icu_reset(struct convert_rock *rock, size_t len, int to_uni)
+static void icu_reset(struct convert_rock *rock, int to_uni)
 {
     struct charset_converter *s = (struct charset_converter *)rock->state;
-    size_t buf_size = CHARSET_ICUBUF_DEFAULT_SIZE;
-
-    if (len) {
-        /* We need multiples of two for our UChar buffer */
-        if (len % 2) len++;
-
-        /* Use size hint, but don't exceed the maximum limit */
-        if (len > CHARSET_ICUBUF_MAX_SIZE)
-            len = CHARSET_ICUBUF_MAX_SIZE;
-
-        /* Anything smaller than four UChars is just too small */
-        if (len < CHARSET_ICUBUF_MIN_SIZE)
-            len = CHARSET_ICUBUF_MIN_SIZE;
-
-        /* Allright, use that length */
-        buf_size = len;
-    }
+    size_t buf_size = CHARSET_ICUBUF_BUFFER_SIZE;
 
     if (s->buf_size < buf_size) {
         s->buf = xrealloc(s->buf, buf_size * 2);
@@ -1636,16 +1618,14 @@ static void table_reset(struct convert_rock *rock, int to_uni)
 static void convert_switch(struct convert_rock *rock, charset_t to, int to_uni)
 {
     struct charset_converter *s = (struct charset_converter *) rock->state;
-    size_t buf_size = 0;
 
     /* make sure that the new state is sane */
     assert((to->conv == NULL) != (to->num == -1));
 
     /* flush any cached bytes in the ICU converter */
     if (s->conv) {
-        buf_size = s->buf_size;
         icu_flush(rock);
-        icu_reset(rock, 0 /*don't care*/, to_uni);
+        icu_reset(rock, to_uni);
     } else {
         table_reset(rock, to_uni);
     }
@@ -1653,7 +1633,7 @@ static void convert_switch(struct convert_rock *rock, charset_t to, int to_uni)
     /* how the new state in the pipeline */
     rock->state = to;
     if (to->conv) {
-        icu_reset(rock, buf_size, to_uni);
+        icu_reset(rock, to_uni);
     } else {
         table_reset(rock, to_uni);
     }
@@ -1757,7 +1737,6 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
 
 static struct convert_rock *convert_init(struct charset_converter *s,
                                          int to_uni,
-                                         size_t len,
                                          struct convert_rock *next)
 {
     struct convert_rock *rock;
@@ -1770,7 +1749,7 @@ static struct convert_rock *convert_init(struct charset_converter *s,
 
     /* Initialize rock based on the converter type */
     if (s->conv) {
-        icu_reset(rock, len, to_uni);
+        icu_reset(rock, to_uni);
     } else {
         table_reset(rock, to_uni);
     } 
@@ -1997,9 +1976,9 @@ EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
 
     /* set up the conversion path */
     tobuffer = buffer_init();
-    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
-    input = convert_init(charset, 1/*to_uni*/, 0, input);
+    input = convert_init(charset, 1/*to_uni*/, input);
 
     /* do the conversion */
     convert_cat(input, s);
@@ -2035,8 +2014,8 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
     /* set up the conversion path */
     imaputf7 = charset_lookupname("imap-mailbox-name");
     tobuffer = buffer_init();
-    input = convert_init(imaputf7, 0/*to_uni*/, len, tobuffer);
-    input = convert_init(charset, 1/*to_uni*/, len, input);
+    input = convert_init(imaputf7, 0/*to_uni*/, tobuffer);
+    input = convert_init(charset, 1/*to_uni*/, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -2103,8 +2082,8 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = convert_init(utf8, 0/*to_uni*/, len, tobuffer);
-    input = convert_init(charset, 1/*to_uni*/, len, input);
+    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
+    input = convert_init(charset, 1/*to_uni*/, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -2199,7 +2178,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     } else {
         defaultcs = charset_lookupname("us-ascii");
     }
-    input = convert_init(defaultcs, 1/*to_uni*/, 0, target);
+    input = convert_init(defaultcs, 1/*to_uni*/, target);
 
     /* note: we assume the caller of this function has already
      * determined that all newlines are followed by whitespace */
@@ -2297,7 +2276,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
 
     mimeheader_cat(input, s, flags);
@@ -2350,7 +2329,7 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
 
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
 
     mimeheader_cat(input, s, flags);
 
@@ -2370,7 +2349,7 @@ EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
     charset_t utf8 = charset_lookupname("utf-8");
 
     tosearch = search_init(substr, pat);
-    input = convert_init(utf8, 0/*to_uni*/, 0, tosearch);
+    input = convert_init(utf8, 0/*to_uni*/, tosearch);
     input = canon_init(flags, input);
 
     mimeheader_cat(input, s, flags);
@@ -2434,9 +2413,9 @@ EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
     tosearch = search_init(substr, pat);
 
     /* and the input stream */
-    input = convert_init(utf8to, 0/*to_uni*/, len, tosearch);
+    input = convert_init(utf8to, 0/*to_uni*/, tosearch);
     input = canon_init(flags, input);
-    input = convert_init(utf8from, 1/*to_uni*/, len, input);
+    input = convert_init(utf8from, 1/*to_uni*/, input);
 
     /* feed the handler */
     while (len-- > 0) {
@@ -2481,9 +2460,9 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
     tosearch = search_init(substr, pat);
-    input = convert_init(utf8, 0/*to_uni*/, len, tosearch);
+    input = convert_init(utf8, 0/*to_uni*/, tosearch);
     input = canon_init(flags, input);
-    input = convert_init(charset, 1/*to_uni*/, len, input);
+    input = convert_init(charset, 1/*to_uni*/, input);
 
     /* choose encoding extraction if needed */
     switch (encoding) {
@@ -2543,7 +2522,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init();
-    input = convert_init(utf8, 0/*to_uni*/, 0, tobuffer);
+    input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
 
     if (!strcmpsafe(subtype, "HTML")) {
@@ -2558,7 +2537,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
         input = striphtml_init(input);
     }
 
-    input = convert_init(charset, 1/*to_uni*/, 0, input);
+    input = convert_init(charset, 1/*to_uni*/, input);
 
     switch (encoding) {
     case ENCODING_NONE:
