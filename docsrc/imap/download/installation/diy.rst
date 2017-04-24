@@ -251,12 +251,12 @@ CalDAV and CardDAV
 Murder
 ######
 
-    ```./configure --enable-murder``
+    ``./configure --enable-murder``
 
 Replication
 ###########
 
-    ```./configure --enable-replication``
+    ``./configure --enable-replication``
 
 4. Compile and install
 ======================

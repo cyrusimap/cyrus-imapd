@@ -22,7 +22,7 @@ The core technology used by Project Cyrus is the Internet Message Access Protoco
 
 IMAP4 is an improvement over other popular Internet mail protocols when it comes to scale and availability. The Post Office Protocol (POP) family, and similar protocols, are less useful to a student-heavy user base, as they are designed to act primarily as store and forward engines. Clients contact a remote message store and download all their mail to a local message store. When the messages have been downloaded from the remote message store to the client, mobility becomes a real problem: The downloaded messages are no longer easily accessible from other clients. Even more importantly, many of the clients that students use have no permanent storage for their use, necessitating use of a remote filesystem for storage, which leads to problems with access and scale.
 
-IMAP4 is a super-set of the functionality provided by POP3--that is, all the functionality of a POP3 client can be mimicked using the IMAP4 protocol. The IMAP4 revision of the IMAP protocol adds support for disconnected operation. This will allow for a client on a notebook computer to download portions of a mail store and keep them synchronized with the mail store over time.
+IMAP4 is a super-set of the functionality provided by POP3 -- that is, all the functionality of a POP3 client can be mimicked using the IMAP4 protocol. The IMAP4 revision of the IMAP protocol adds support for disconnected operation. This will allow for a client on a notebook computer to download portions of a mail store and keep them synchronized with the mail store over time.
 
 Mime
 -----
