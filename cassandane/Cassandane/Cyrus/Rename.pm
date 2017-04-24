@@ -128,6 +128,67 @@ sub test_rename_subfolder
 }
 
 #
+# Test big conversation rename
+#
+sub test_rename_user_bigconversation
+    :AllowMoves
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Test user rename with a big conversation";
+
+    my %exp;
+
+    $admintalk->create("user.cassandane.foo") || die;
+    $admintalk->create("user.cassandane.bar") || die;
+    $admintalk->create("user.cassandane.foo.sub") || die;
+
+    $self->{store}->set_folder("INBOX.foo");
+    $self->{store}->set_fetch_attributes('uid');
+
+    $exp{A} = $self->make_message("Message A");
+
+    for (1..200) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    }
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user.newuser.foo.sub");
+    $self->assert(not $admintalk->get_last_error());
+}
+
+#
+# Test big conversation rename
+#
+sub test_rename_bigconversation
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my %exp;
+
+    $imaptalk->create("INBOX.user-src.subdir") || die;
+    $self->{store}->set_folder("INBOX.user-src.subdir");
+    $self->{store}->set_fetch_attributes('uid');
+
+    $exp{A} = $self->make_message("Message A");
+
+    for (1..200) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    }
+
+    $imaptalk->select("INBOX.user-src.subdir") || die;
+
+    $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
+    $imaptalk->select("INBOX.user-dst.subdir") || die;
+}
+
+#
 # Test Bug #3634 - rename inbox -> inbox.sub
 #
 sub test_rename_inbox
