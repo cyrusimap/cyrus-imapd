@@ -201,11 +201,13 @@ struct cyrusdb_backend {
                  const char *data, size_t datalen,
                  struct txn **tid);
 
-    /* Remove entrys from the database */
-    int (*delete)(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  struct txn **tid,
-                  int force); /* 1 = ignore not found errors */
+    /* Remove entries from the database
+     * n.b. trailing underscore so that C++ apps can also use this API
+     */
+    int (*delete_)(struct dbengine *db,
+                   const char *key, size_t keylen,
+                   struct txn **tid,
+                   int force); /* 1 = ignore not found errors */
 
     /* Commit the transaction.  When commit() returns, the tid will no longer
      * be valid, regardless of if the commit succeeded or failed */
