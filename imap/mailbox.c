@@ -5270,10 +5270,10 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     }
     else {
         /* have to handle each one separately */
-        if (oldcstate)
-            r = mailbox_delete_conversations(oldmailbox);
         if (newcstate)
             r = mailbox_add_conversations(newmailbox);
+        if (oldcstate)
+            r = mailbox_delete_conversations(oldmailbox);
     }
     if (r) goto fail;
 
