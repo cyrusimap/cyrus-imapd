@@ -267,7 +267,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION, cyrus_version());
+    snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
     return 0;
 }
@@ -346,7 +346,7 @@ void service_abort(int error)
 static void usage(void)
 {
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
-    fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
+    fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
 

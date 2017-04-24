@@ -909,7 +909,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Construct serverinfo string */
     buf_printf(&serverinfo, "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u",
-               cyrus_version(),
+               CYRUS_VERSION,
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
 #ifdef HAVE_SSL
     buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);

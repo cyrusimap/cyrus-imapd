@@ -335,7 +335,7 @@ static void dobanner(void)
 
     prot_printf(sync_out,
                 "* OK %s Cyrus sync server %s\r\n",
-                config_servername, cyrus_version());
+                config_servername, CYRUS_VERSION);
 
     prot_flush(sync_out);
 }

@@ -160,7 +160,7 @@ index d979f3b..e9f51d1 100644
 +
      /* create connection to the SNMP listener, if available. */
      snmp_connect(); /* ignore return code */
-     snmp_set_str(SERVER_NAME_VERSION,cyrus_version());
+     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 @@ -848,6 +877,15 @@ int service_main(int argc __attribute__((unused)),
                 imapd_haveaddr = 1;
             }

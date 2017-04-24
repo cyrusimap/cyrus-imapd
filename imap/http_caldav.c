@@ -678,7 +678,7 @@ static void my_caldav_init(struct buf *serverinfo)
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
     buf_printf(&ical_prodid_buf,
-               "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+               "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
     ical_prodid = buf_cstring(&ical_prodid_buf);
 
     /* Create an array of calendar-user-adddress-set domains */
@@ -1803,7 +1803,7 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
     buf_printf(body, (const char *) http_caldav_js,
-               cyrus_version(), http_caldav_js_len);
+               CYRUS_VERSION, http_caldav_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");

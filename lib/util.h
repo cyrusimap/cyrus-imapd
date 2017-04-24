@@ -55,6 +55,9 @@
 
 #include "xmalloc.h"
 
+/* version string printable in gdb tracking */
+extern const char CYRUS_VERSION[];
+
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
 #  include <pcre.h>

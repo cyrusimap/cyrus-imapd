@@ -923,7 +923,7 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
     buf_printf(body, (const char *) http_carddav_js,
-               cyrus_version(), http_carddav_js_len);
+               CYRUS_VERSION, http_carddav_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");

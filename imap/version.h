@@ -44,6 +44,8 @@
 #define _CYRUS_VERSION_H
 
 #include "prot.h"
+#include "util.h"
+
 /* Values for ID processing */
 enum {
     MAXIDFIELDLEN = 30,
@@ -51,7 +53,6 @@ enum {
     MAXIDPAIRS = 30,
 };
 
-const char *cyrus_version(void);
 extern void id_getcmdline(int argc, char **argv);
 extern void id_response(struct protstream *pout);
 

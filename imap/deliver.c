@@ -115,7 +115,7 @@ static void usage(void)
     fprintf(stderr,
             "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
             " [-a auth] [-r return_path] [-l] [-D]\r\n");
-    fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
+    fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
 

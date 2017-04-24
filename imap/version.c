@@ -65,24 +65,6 @@
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
 
-/* EXTRA_IDENT is a hack to add some version information for which compile
- * was used to build this version (at CMU, but we don't care what you do with
- * it).
- */
-
-#ifdef EXTRA_IDENT
-#define CYRUS_VERSION PACKAGE_VERSION "-" EXTRA_IDENT
-#else
-#define CYRUS_VERSION PACKAGE_VERSION
-#endif
-
-static const char *cyrus_version_str = CYRUS_VERSION;
-
-EXPORTED const char *cyrus_version(void)
-{
-    return cyrus_version_str;
-}
-
 /*
  * Grab the command line args for the ID response.
  */

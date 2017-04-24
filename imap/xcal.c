@@ -1101,7 +1101,7 @@ const char *begin_xcal(struct buf *buf)
     buf_printf_markup(buf, 2, "<properties>");
     buf_printf_markup(buf, 3, "<prodid>");
     buf_printf_markup(buf, 4, "<text>-//CyrusIMAP.org/Cyrus %s//EN</text>",
-                      cyrus_version());
+                      CYRUS_VERSION);
     buf_printf_markup(buf, 3, "</prodid>");
     buf_printf_markup(buf, 3, "<version>");
     buf_printf_markup(buf, 4, "<text>2.0</text>");

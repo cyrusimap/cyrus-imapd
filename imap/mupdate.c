@@ -1079,7 +1079,7 @@ static void dobanner(struct conn *c)
     prot_printf(c->pout,
                 "* OK MUPDATE \"%s\" \"Cyrus IMAP\" \"%s\" \"%s\"\r\n",
                 config_servername,
-                cyrus_version(), masterp ? "(master)" : slavebuf);
+                CYRUS_VERSION, masterp ? "(master)" : slavebuf);
 
     prot_flush(c->pout);
 }

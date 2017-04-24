@@ -869,7 +869,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION,cyrus_version());
+    snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 
     while ((opt = getopt(argc, argv, "Np:sq")) != EOF) {
         switch (opt) {
@@ -1229,7 +1229,7 @@ static void cmdloop(void)
     prot_printf(imapd_out, "]");
     if (config_serverinfo) prot_printf(imapd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-        prot_printf(imapd_out, " Cyrus IMAP %s", cyrus_version());
+        prot_printf(imapd_out, " Cyrus IMAP %s", CYRUS_VERSION);
     }
     prot_printf(imapd_out, " server ready\r\n");
 
@@ -10775,7 +10775,7 @@ static int backend_version(struct backend *be)
      */
 
     /* It's like looking in the mirror and not suffering from schizophrenia */
-    if (strstr(be->banner, cyrus_version())) {
+    if (strstr(be->banner, CYRUS_VERSION)) {
         return MAILBOX_MINOR_VERSION;
     }
 

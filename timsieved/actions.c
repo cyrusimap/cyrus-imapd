@@ -183,7 +183,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         prot_printf(conn,
                     "\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
-                    config_mupdate_server ? " (Murder)" : "", cyrus_version());
+                    config_mupdate_server ? " (Murder)" : "", CYRUS_VERSION);
     } else if (config_serverinfo == IMAP_ENUM_SERVERINFO_MIN) {
         prot_printf(conn,
                     "\"IMPLEMENTATION\" \"Cyrus timsieved%s\"\r\n",

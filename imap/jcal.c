@@ -855,7 +855,7 @@ EXPORTED const char *begin_jcal(struct buf *buf)
     buf_printf_markup(buf, 3, "{},");
     buf_printf_markup(buf, 3, "\"text\",");
     buf_printf_markup(buf, 3, "\"-//CyrusIMAP.org/Cyrus %s//EN\"",
-                      cyrus_version());
+                      CYRUS_VERSION);
     buf_printf_markup(buf, 2, "],");
     buf_printf_markup(buf, 2, "[");
     buf_printf_markup(buf, 3, "\"version\",");

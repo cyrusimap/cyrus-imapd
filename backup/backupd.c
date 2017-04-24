@@ -383,7 +383,7 @@ static void dobanner(void)
 
     prot_printf(backupd_out,
                 "* OK %s Cyrus backup server %s\r\n",
-                config_servername, cyrus_version());
+                config_servername, CYRUS_VERSION);
 
     prot_flush(backupd_out);
 }

@@ -931,7 +931,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* <generator> - optional */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
-                          cyrus_version());
+                          CYRUS_VERSION);
     }
 
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));

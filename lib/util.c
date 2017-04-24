@@ -175,6 +175,13 @@ const unsigned char convert_to_uppercase[256] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
+#ifdef EXTRA_IDENT
+#define CYRUS_VERSION_STR PACKAGE_VERSION "-" EXTRA_IDENT
+#else
+#define CYRUS_VERSION_STR PACKAGE_VERSION
+#endif
+EXPORTED const char CYRUS_VERSION[sizeof(CYRUS_VERSION_STR)] = CYRUS_VERSION_STR;
+
 /* convert string to all lower case
  */
 EXPORTED char *lcase(char* str)

@@ -583,7 +583,7 @@ int service_main(int argc __attribute__((unused)),
     prot_printf(popd_out, "+OK");
     if (config_serverinfo) prot_printf(popd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-        prot_printf(popd_out, " Cyrus POP3 %s", cyrus_version());
+        prot_printf(popd_out, " Cyrus POP3 %s", CYRUS_VERSION);
     }
     prot_printf(popd_out, " server ready %s\r\n", popd_apop_chal);
 
@@ -1642,7 +1642,7 @@ static void cmd_capa(void)
     if (popd_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
         prot_printf(popd_out,
                     "IMPLEMENTATION Cyrus POP3 %s\r\n",
-                    cyrus_version());
+                    CYRUS_VERSION);
     }
 
     prot_printf(popd_out, ".\r\n");

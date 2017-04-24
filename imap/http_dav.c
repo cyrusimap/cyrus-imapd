@@ -8604,7 +8604,7 @@ static void my_dav_auth(const char *userid)
             xmlNewChild(node, ns[NS_DAV],
                         BAD_CAST "name", BAD_CAST "Cyrus-HTTP");
             xmlNewTextChild(node, ns[NS_DAV],
-                            BAD_CAST "version", BAD_CAST cyrus_version());
+                            BAD_CAST "version", BAD_CAST CYRUS_VERSION);
         }
 
         /* Add global DAV features */

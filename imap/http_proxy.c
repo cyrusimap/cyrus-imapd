@@ -554,7 +554,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
     /* Create our own Via header */
     simple_hdr(txn, "Via", (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) ?
                "%s %s (Cyrus/%s)" : "%s %s",
-               version+5, config_servername,cyrus_version());
+               version+5, config_servername,CYRUS_VERSION);
 
     /* Add any existing Forwarded headers */
     for (; fwd && *fwd; fwd++) simple_hdr(txn, "Forwarded", *fwd);

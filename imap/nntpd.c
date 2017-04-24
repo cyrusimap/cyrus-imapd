@@ -594,7 +594,7 @@ int service_main(int argc __attribute__((unused)),
     }
     if (config_serverinfo) prot_printf(nntp_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-        prot_printf(nntp_out, " Cyrus NNTP %s", cyrus_version());
+        prot_printf(nntp_out, " Cyrus NNTP %s", CYRUS_VERSION);
     }
     if (shutdown) {
         prot_printf(nntp_out, "server unavailable, %s\r\n", unavail);
@@ -1828,7 +1828,7 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     prot_printf(nntp_out, "VERSION 2\r\n");
     if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
         prot_printf(nntp_out,
-                    "IMPLEMENTATION Cyrus NNTP %s\r\n", cyrus_version());
+                    "IMPLEMENTATION Cyrus NNTP %s\r\n", CYRUS_VERSION);
     }
 
     /* add STARTTLS */
@@ -2772,7 +2772,7 @@ static void cmd_mode(char *arg)
             prot_printf(nntp_out, " %s", config_servername);
         }
         if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
-            prot_printf(nntp_out, " Cyrus NNTP %s", cyrus_version());
+            prot_printf(nntp_out, " Cyrus NNTP %s", CYRUS_VERSION);
         }
         prot_printf(nntp_out, " server ready, posting %s\r\n",
                     (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
