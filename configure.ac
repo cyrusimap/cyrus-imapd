@@ -294,7 +294,9 @@ case "$with_mysql" in
 	;;
   yes)
 	# Find mysql_config in $PATH
-	mysql_config=mysql_config
+	AC_PATH_PROG(mysql_config, mysql_config, [])
+	AS_IF([test -z "$mysql_config"],
+	    AC_MSG_ERROR([The mysql_config program was not found]))
 	;;
   *)
 	# Find mysql_config in the specified directory
