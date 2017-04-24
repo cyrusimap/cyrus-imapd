@@ -431,6 +431,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
     }
     case BC_METADATAEXISTS:
+    case BC_SPECIALUSEEXISTS:
     {
         int ret;
         int datalen;
@@ -441,11 +442,19 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         if(write_int(fd, datalen) == -1) return -1;
         wrote += sizeof(int);
 
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-        wrote+=ret;
+        if (datalen == -1) {
+            /* this is a nil string */
+            /* skip the null pointer and make up for it
+             * by adjusting the offset */
+            (*codep)++;
+        }
+        else {
+            if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+            wrote += datalen;
+            ret = align_string(fd,datalen);
+            if(ret == -1) return -1;
+            wrote+=ret;
+        }
 
         /* drop keylist */
         ret = bc_stringlist_emit(fd, codep, bc);
@@ -804,7 +813,33 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
 
         case B_FILEINTO:
-            /* Create (word), Flags Stringlist, Copy (word), Folder String */
+            /* Special-Use String, Create (word),
+               Flags Stringlist, Copy (word), Folder String */
+
+            /* Write string length of Special-Use */
+            len = bc->data[codep++].len;
+            if(write_int(fd,len) == -1)
+                return -1;
+
+            filelen+=sizeof(int);
+
+            if (len == -1) {
+                /* this is a nil string */
+                /* skip the null pointer and make up for it
+                 * by adjusting the offset */
+                codep++;
+            }
+            else {
+                /* Write Special-Use */
+                if(write(fd,bc->data[codep++].str,len) == -1)
+                    return -1;
+
+                ret = align_string(fd, len);
+                if(ret == -1)
+                    return -1;
+
+                filelen += len + ret;
+            }
 
             /* Write create */
             if(write_int(fd,bc->data[codep++].value) == -1)
@@ -1024,7 +1059,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_VACATION:
             /* Address list, Subject String, Message String,
                Seconds (word), Mime (word), From String, Handle String
-               Fcc String [ Create (word), Flags list ] */
+               Fcc String [ Create (word), Flags list, Special-Use String ] */
 
             /* Address list */
             ret = bc_stringlist_emit(fd, &codep, bc);
@@ -1098,7 +1133,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
                     filelen += len + ret;
                 }
-
             }
 
             if (len > 0) {
@@ -1111,9 +1145,32 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 ret = bc_stringlist_emit(fd, &codep, bc);
                 if(ret < 0) return -1;
                 filelen += ret;
-            }
 
-            filelen += sizeof(int);
+                /* Write length of Special-Use string */
+                len = bc->data[codep++].len;
+                if(write_int(fd,len) == -1)
+                    return -1;
+                filelen += sizeof(int);
+
+                if(len == -1)
+                {
+                    /* this is a nil string */
+                    /* skip the null pointer and make up for it
+                     * by adjusting the offset */
+                    codep++;
+                }
+                else
+                {
+                    /* write string */
+                    if(write(fd,bc->data[codep++].str,len) == -1)
+                        return -1;
+
+                    ret = align_string(fd, len);
+                    if(ret == -1) return -1;
+
+                    filelen += len + ret;
+                }
+            }
 
             break;
         case B_INCLUDE:

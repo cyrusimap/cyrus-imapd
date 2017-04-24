@@ -244,6 +244,11 @@ EXPORTED void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata
     interp->getmetadata = f;
 }
 
+EXPORTED void sieve_register_specialuseexists(sieve_interp_t *interp, sieve_get_specialuseexists *f)
+{
+    interp->getspecialuseexists = f;
+}
+
 EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 {
     interp->getheader = f;
@@ -446,6 +451,9 @@ static const struct sieve_capa_t {
     /* Duplicate - RFC 7352 */
     { "duplicate", SIEVE_CAPA_DUPLICATE },
 
+    /* Special-Use - draft-bosch-sieve-special-use */
+    { "special-use", SIEVE_CAPA_SPECIAL_USE },
+
     /* Fcc - draft-murchison-sieve-fcc */
     { "fcc", SIEVE_CAPA_FCC },
 
@@ -587,6 +595,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_DUPLICATE:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_SPECIAL_USE:
+      if (!(interp->getspecialuseexists &&
+            (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))) capa = 0;
         break;
 
     case SIEVE_CAPA_FCC:

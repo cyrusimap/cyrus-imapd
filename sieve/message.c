@@ -99,8 +99,8 @@ int do_reject(action_list_t *a, int action, const char *msg)
  *
  * incompatible with: [e]reject
  */
-int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep, int do_create,
-                strarray_t *imapflags)
+int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
+                int cancel_keep, int do_create, strarray_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -139,6 +139,7 @@ int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep, int do_crea
     a->a = ACTION_FILEINTO;
     a->cancel_keep |= cancel_keep;
     a->u.fil.mailbox = mbox;
+    a->u.fil.specialuse = specialuse;
     a->u.fil.imapflags = imapflags;
     a->u.fil.do_create = do_create;
     return 0;
@@ -292,6 +293,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
     a->u.vac.send.fcc.mailbox = fcc->mailbox;
+    a->u.vac.send.fcc.specialuse = fcc->specialuse;
     a->u.vac.send.fcc.do_create = fcc->do_create;
     a->u.vac.send.fcc.imapflags = fcc->imapflags;
     if (handle)

@@ -547,6 +547,7 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
     case BC_MAILBOXEXISTS:/*16*/
     case BC_METADATAEXISTS:/*18*/
     case BC_SERVERMETADATAEXISTS:/*20*/
+    case BC_SPECIALUSEEXISTS:/*25*/
         ++i; /* skip opcode */
 
         if (BC_MAILBOXEXISTS == opcode) {
@@ -559,7 +560,8 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
             const char *data;
             int len;
 
-            printf("MetaDataExists [");
+            printf("%s [", BC_METADATAEXISTS == opcode ?
+                   "MetadataExists" : "SpecialUseExists");
             i = unwrap_string(d, i, &data, &len);
             printf("              Mailbox Name: {%d}%s\n", len, data);
         }
@@ -658,6 +660,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
         int list = 0;
         int copy = 0;
         int create = 0;
+        const char *specialuse = NULL;
         int supports_variables = 0;
 
         printf("%d: ",i);
@@ -695,17 +698,33 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("ERROR {%d}%s\n", len, data);
             break;
 
-        case B_FILEINTO: /*24*/
+        case B_FILEINTO: /*38*/
+            i = unwrap_string(d, i, &specialuse, &len);
+
+            /* fall through */
+        case B_FILEINTO_CREATE: /*24*/
             create = ntohl(d[i++].value);
+
             /* fall through */
         case B_FILEINTO_FLAGS:/*23*/
+        {
+            int speclen;
+
+            if (specialuse) speclen = strlen(specialuse);
+            else {
+                specialuse = "[nil]";
+                speclen = -1;
+            }
+
             printf("FILEINTO FLAGS {%d}\n", ntohl(d[i].listlen));
             i=write_list(ntohl(d[i].listlen), i+1, d);
             copy = ntohl(d[i++].value);
             i = unwrap_string(d, i, &data, &len);
-            printf("              CREATE(%d) COPY(%d) FOLDER({%d}%s)\n",
-                    create, copy, len, data);
+            printf("              CREATE(%d) COPY(%d) FOLDER({%d}%s)"
+                   " SPECIALUSE({%d}%s)\n",
+                   create, copy, len, data, speclen, specialuse);
             break;
+        }
 
         case B_FILEINTO_COPY : /*19*/
             copy = ntohl(d[i++].value);
@@ -811,7 +830,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_VACATION_ORIG:/*14*/
         case B_VACATION_SEC:/*21*/
-        case B_VACATION:/*25*/
+        case B_VACATION_FCC:/*36*/
+        case B_VACATION:/*37*/
             printf("VACATION ADDR {%d}\n", ntohl(d[i].listlen));
             i=write_list(ntohl(d[i].len),i+1,d);
 
@@ -837,16 +857,24 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
                 printf("%d HANDLE({%d}%s) \n",i, len, (!data ? "[nil]" : data));
 
-                if (op == B_VACATION) {
+                if (op == B_VACATION || op == B_VACATION_FCC) {
                     i = unwrap_string(d, i, &data, &len);
 
-                    printf("%d FCC({%d}%s)",i, len, (!data ? "[nil]" : data));
+                    printf("%d FCC({%d}%s)", i, len, (!data ? "[nil]" : data));
 
                     if (data) {
+                        data = NULL;
+                        len = -1;
+
                         create = ntohl(d[i++].value);
                         printf(" FLAGS {%d}\n", ntohl(d[i].listlen));
                         i=write_list(ntohl(d[i].listlen), i+1, d);
-                        printf("              CREATE(%d)", create);
+
+                        if (op == B_VACATION)
+                            i = unwrap_string(d, i, &data, &len);
+
+                        printf("              CREATE(%d) SPECIALUSE({%d}%s)",
+                               create, len, (!data ? "[nil]" : data));
                     }
                     printf("\n");
                 }

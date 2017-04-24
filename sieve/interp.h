@@ -61,6 +61,7 @@ struct sieve_interp {
     sieve_get_include *getinclude;
     sieve_get_fname *getfname;
     sieve_get_mailboxexists *getmailboxexists;
+    sieve_get_specialuseexists *getspecialuseexists;
     sieve_get_metadata *getmetadata;
 
     sieve_list_validator *isvalidlist;
@@ -186,8 +187,11 @@ enum sieve_capa_flag {
     /* Duplicate - RFC 7352 */
     SIEVE_CAPA_DUPLICATE    = 1LL<<43,
 
+    /* Special-Use - draft-bosch-sieve-special-use */
+    SIEVE_CAPA_SPECIAL_USE  = 1LL<<44,
+
     /* Fcc - draft-murchison-sieve-fcc */
-    SIEVE_CAPA_FCC          = 1LL<<44,
+    SIEVE_CAPA_FCC          = 1LL<<45,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -234,6 +238,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_INCLUDE      \
                         | SIEVE_CAPA_IMAP         \
                         | SIEVE_CAPA_DUPLICATE    \
+                        | SIEVE_CAPA_SPECIAL_USE  \
                         | SIEVE_CAPA_FCC          \
                         )
 

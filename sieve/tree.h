@@ -121,6 +121,7 @@ struct Testlist {
 struct Fileinto {
     strarray_t *flags;
     char *folder;
+    char *specialuse;
     int copy;
     int create;
 };

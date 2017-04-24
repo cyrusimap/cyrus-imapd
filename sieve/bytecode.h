@@ -116,6 +116,7 @@ typedef union
  *                                  Ihave (RFC5463),
  *                                  updated KEEP (remove :copy)
  *                                  updated VACATION (:fcc)
+ *                                  Special-Use (draft-bosch-sieve-special-use)
  */
 #define BYTECODE_VERSION 0x12
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
@@ -157,11 +158,11 @@ enum bytecode {
     B_FILEINTO_COPY,    /* legacy fileinto w/o support for :flags */
     B_REDIRECT_COPY,    /* legacy redirect w/o support for :list */
 
-    B_VACATION_SEC,     /* legacy vacation w/o support for :fcc*/
+    B_VACATION_SEC,     /* legacy vacation w/o support for :fcc */
 
     B_KEEP_COPY,        /* legacy keep with bogus support for :copy */
     B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
-    B_FILEINTO,         /* require mailbox, imap4flags, copy */
+    B_FILEINTO_CREATE,  /* legacy fileinto w/o support for :specialuse */
 
     B_SET,              /* require variables */
 
@@ -182,7 +183,10 @@ enum bytecode {
 
     B_KEEP,
 
-    B_VACATION          /* require vacation */
+    B_VACATION_FCC,     /* legacy vacation w/o support for :specialuse */
+
+    B_VACATION,         /* require vacation, fcc, specialuse */
+    B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse */
 };
 
 enum bytecode_comps {
@@ -210,7 +214,8 @@ enum bytecode_comps {
     BC_STRING,          /* require variables */
     BC_VALIDEXTLIST,    /* require extlists */
     BC_DUPLICATE,       /* require duplicate */
-    BC_IHAVE            /* require ihave */
+    BC_IHAVE,           /* require ihave */
+    BC_SPECIALUSEEXISTS /* require special-use */
 };
 
 /* currently one enum so as to help determine where values are being misused.

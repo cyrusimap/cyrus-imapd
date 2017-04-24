@@ -1863,6 +1863,36 @@ envelope_err:
     }
     break;
 
+    case BC_SPECIALUSEEXISTS:/*25*/
+    {
+        res = 1;
+        const char *extname = NULL;
+        strarray_t uses = STRARRAY_INITIALIZER;
+        i++;
+        i = unwrap_string(bc, i, &extname, NULL);
+        /* unpack the world */
+        list_len=ntohl(bc[i++].len);
+        list_end=ntohl(bc[i++].len)/4;
+
+        if (extname && !(res = interp->getmailboxexists(sc, extname))) {
+            i = list_end; /* handle short-circuiting */
+            break;
+        }
+
+        for (x=0; x<list_len; x++) {
+            const char *use = NULL;
+
+            /* this is a special-use flag */
+            i = unwrap_string(bc, i, &use, NULL);
+            strarray_add_case(&uses, use);
+        }
+
+        res = interp->getspecialuseexists(sc, extname, &uses);
+        strarray_fini(&uses);
+
+        break;
+    }
+
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",
@@ -2005,6 +2035,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         int list = 0;
         int copy = 0;
         int create = 0;
+        const char *specialuse = NULL;
         strarray_t *actionflags = NULL;
         variable_list_t *variable = NULL;
 
@@ -2054,7 +2085,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             break;
 
-        case B_FILEINTO:/*24*/
+        case B_FILEINTO:/*38*/
+            ip = unwrap_string(bc, ip, &specialuse, NULL);
+
+            if (requires & BFE_VARIABLES) {
+                specialuse = parse_string(specialuse, variables);
+            }
+
+            /* fall through */
+        case B_FILEINTO_CREATE:/*24*/
             create = ntohl(bc[ip].value);
             ip+=1;
 
@@ -2082,7 +2121,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 data = parse_string(data, variables);
             }
 
-            res = do_fileinto(actions, data, !copy, create, actionflags);
+            res = do_fileinto(actions, data, specialuse,
+                              !copy, create, actionflags);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -2424,10 +2464,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         }
         case B_VACATION_ORIG:/*14*/
         case B_VACATION_SEC:/*21*/
-        case B_VACATION:/*35*/
+        case B_VACATION_FCC:/*36*/
+        case B_VACATION:/*37*/
         {
             int respond;
-            sieve_fileinto_context_t fcc = { NULL, NULL, 0 };
+            sieve_fileinto_context_t fcc = { NULL, NULL, NULL, 0 };
             char *fromaddr = NULL; /* relative to message we send */
             char *toaddr = NULL; /* relative to message we send */
             const char *handle = NULL;
@@ -2507,7 +2548,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                         handle = data;
                     }
 
-                    if (op == B_VACATION) {
+                    if (op == B_VACATION || op == B_VACATION_FCC) {
                         ip = unwrap_string(bc, ip, &data, NULL);
 
                         if (data) {
@@ -2521,6 +2562,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                             ip = unwrap_flaglist(bc, ip, &fcc.imapflags,
                                                  (requires & BFE_VARIABLES) ?
                                                  variables : NULL);
+
+                            if (op == B_VACATION) {
+                                ip = unwrap_string(bc, ip, &fcc.specialuse, NULL);
+
+                                if (requires & BFE_VARIABLES) {
+                                    fcc.specialuse =
+                                        parse_string(fcc.specialuse, variables);
+                                }
+                            }
                         }
                     }
                 }

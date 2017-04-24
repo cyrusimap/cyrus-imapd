@@ -297,6 +297,9 @@ extern void sieverestart(FILE *f);
 %type <test> duptags
 %type <nval> idtype
 
+/* draft-bosch-sieve-special-use */
+%token SPECIALUSEEXISTS SPECIALUSE
+
 /* draft-murchison-sieve-fcc */
 %token FCC
 
@@ -480,6 +483,7 @@ ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
         | ftags copy
         | ftags flags
         | ftags create
+        | ftags specialuse
         ;
 
 
@@ -521,6 +525,30 @@ create: CREATE                  {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "mailbox");
                                      }
+                                 }
+        ;
+
+
+/* :specialuse */
+specialuse: SPECIALUSE STRING    {
+                                     /* $0 refers to ftags or vtags */
+                                     commandlist_t *c = $<cl>0;
+                                     char **specialuse = (c->type == FILEINTO) ?
+                                         &c->u.f.specialuse : &c->u.v.fcc.specialuse;
+
+                                     if (*specialuse != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":specialuse");
+                                         free(*specialuse);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_SPECIAL_USE)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "special-use");
+                                     }
+
+                                     *specialuse = $2;
                                  }
         ;
 
@@ -726,6 +754,7 @@ fcctags: FCC STRING              {
                                  }
         | create
         | flags
+        | specialuse
         ;
 
 
@@ -1039,6 +1068,20 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                      $$->u.sl = $2;
                                  }
         | DUPLICATE duptags      { $$ = build_duplicate(sscript, $2); }
+
+        | SPECIALUSEEXISTS stringlist
+                                 { 
+                                     $$ = new_test(SPECIALUSEEXISTS, sscript);
+                                     $$ = build_mbox_meta(sscript,
+                                                          $$, NULL, NULL, $2);
+                                 }
+
+        | SPECIALUSEEXISTS STRING stringlist
+                                 {
+                                     $$ = new_test(SPECIALUSEEXISTS, sscript);
+                                     $$ = build_mbox_meta(sscript,
+                                                          $$, $2, NULL, $3);
+                                 }
         | error                  { $$ = new_test(SFALSE, sscript); }
         ;
 
@@ -1847,7 +1890,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
             strarray_add(c->u.v.fcc.flags, "");
         }
     }
-    else if (c->u.v.fcc.create || c->u.v.fcc.flags) {
+    else if (c->u.v.fcc.create || c->u.v.fcc.flags || c->u.v.fcc.specialuse) {
         sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
@@ -2248,7 +2291,8 @@ static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
 {
     assert(t && (t->type == MAILBOXEXISTS ||
                  t->type == METADATA || t->type == METADATAEXISTS ||
-                 t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS));
+                 t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
+                 t->type == SPECIALUSEEXISTS));
 
     canon_comptags(&t->u.mm.comp);
     t->u.mm.extname = extname;

@@ -156,6 +156,12 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_DUPLICATE;
         p->u.dup.idtype = p->u.dup.seconds = -1;
         break;
+
+    case SPECIALUSEEXISTS:
+        capability = "special-use";
+        supported = parse_script->support & SIEVE_CAPA_SPECIAL_USE;
+        init_comptags(&p->u.mm.comp);
+        break;
     }
 
     if (!supported) {
@@ -348,6 +354,7 @@ void free_test(test_t *t)
     case METADATAEXISTS:
     case SERVERMETADATA:
     case SERVERMETADATAEXISTS:
+    case SPECIALUSEEXISTS:
         free(t->u.mm.extname);
         free(t->u.mm.keyname);
         strarray_free(t->u.mm.keylist);
@@ -360,6 +367,13 @@ void free_test(test_t *t)
     }
 
     free(t);
+}
+
+static void free_fileinto(struct Fileinto *f)
+{
+    free(f->folder);
+    free(f->specialuse);
+    strarray_free(f->flags);
 }
 
 void free_tree(commandlist_t *cl)
@@ -387,8 +401,7 @@ void free_tree(commandlist_t *cl)
             break;
 
         case FILEINTO:
-            free(cl->u.f.folder);
-            strarray_free(cl->u.f.flags);
+            free_fileinto(&cl->u.f);
             break;
 
         case REDIRECT:
@@ -407,8 +420,7 @@ void free_tree(commandlist_t *cl)
             free(cl->u.v.message);
             free(cl->u.v.from);
             free(cl->u.v.handle);
-            free(cl->u.v.fcc.folder);
-            strarray_free(cl->u.v.fcc.flags);
+            free_fileinto(&cl->u.v.fcc);
             break;
 
         case KEEP:

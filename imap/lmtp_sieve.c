@@ -171,6 +171,53 @@ static int getmailboxexists(void *sc, const char *extname)
     return r ? 0 : 1; /* 0 => exists */
 }
 
+static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    const char *userid = mbname_userid(sd->mbname);
+    int i, r = 1;
+
+    if (extname) {
+        char *intname = mboxname_from_external(extname, sd->ns, userid);
+        struct buf attrib = BUF_INITIALIZER;
+
+        annotatemore_lookup(intname, "/specialuse", userid, &attrib);
+
+        /* \\Inbox is magical */
+        if (mboxname_isusermailbox(intname, 1) &&
+            mboxname_userownsmailbox(userid, intname)) {
+            if (buf_len(&attrib)) buf_putc(&attrib, ' ');
+            buf_appendcstr(&attrib, "\\Inbox");
+        }
+
+        if (buf_len(&attrib)) {
+            strarray_t *haystack = strarray_split(buf_cstring(&attrib), " ", 0);
+
+            for (i = 0; i < strarray_size(uses); i++) {
+                if (strarray_find_case(haystack, strarray_nth(uses, i), 0) < 0) {
+                    r = 0;
+                    break;
+                }
+            }
+            strarray_free(haystack);
+        }
+        else r = 0;
+
+        buf_free(&attrib);
+        free(intname);
+    }
+    else {
+        for (i = 0; i < strarray_size(uses); i++) {
+            if (!mboxlist_find_specialuse(strarray_nth(uses, i), userid)) {
+                r = 0;
+                break;
+            }
+        }
+    }
+
+    return r;
+}
+
 static int getmetadata(void *sc, const char *extname, const char *keyname, char **res)
 {
     script_data_t *sd = (script_data_t *)sc;
@@ -839,12 +886,10 @@ static int sieve_fileinto(void *ac,
     deliver_data_t *mdata = (deliver_data_t *) mc;
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
-    char namebuf[MAX_MAILBOX_BUFFER];
-    int ret;
+    int ret = IMAP_MAILBOX_NONEXISTENT;
 
-    char *intname = mboxname_from_external(fc->mailbox, sd->ns, mbname_userid(sd->mbname));
-    strncpy(namebuf, intname, sizeof(namebuf));
-    free(intname);
+    const char *userid = mbname_userid(sd->mbname);
+    char *intname;
 
     if (sd->edited_header) {
         mdata = setup_special_delivery(mdata);
@@ -852,34 +897,57 @@ static int sieve_fileinto(void *ac,
         else md = mdata->m;
     }
 
+    if (fc->specialuse) {
+        intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
+        ret = mboxlist_lookup(intname, NULL, NULL);
+        if (ret) free(intname);
+    }
+    if (ret) intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
+
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                          fc->imapflags,
-                          mbname_userid(sd->mbname), sd->authstate, md->id,
-                          mbname_userid(sd->mbname), mdata->notifyheader,
-                          namebuf, md->date, quotaoverride, 0);
+                          fc->imapflags, userid, sd->authstate, md->id,
+                          userid, mdata->notifyheader,
+                          intname, md->date, quotaoverride, 0);
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
         /* if "plus" folder under INBOX, then try to create it */
-        ret = autosieve_createfolder(mbname_userid(sd->mbname), sd->authstate, namebuf, fc->do_create);
+        ret = autosieve_createfolder(userid, sd->authstate,
+                                     intname, fc->do_create);
 
         /* Try to deliver the mail again. */
-        if (!ret)
+        if (!ret) {
+            if (fc->specialuse) {
+                /* Attempt to add special-use flag to newly created mailbox */
+                struct buf specialuse = BUF_INITIALIZER;
+                int r = specialuse_validate(userid, fc->specialuse, &specialuse);
+
+                if (!r) {
+                    annotatemore_write(intname, "/specialuse",
+                                       userid, &specialuse);
+                }
+                buf_free(&specialuse);
+            }
+
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                                  fc->imapflags,
-                                  mbname_userid(sd->mbname), sd->authstate, md->id,
-                                  mbname_userid(sd->mbname), mdata->notifyheader,
-                                  namebuf, md->date, quotaoverride, 0);
+                                  fc->imapflags, userid, sd->authstate, md->id,
+                                  userid, mdata->notifyheader,
+                                  intname, md->date, quotaoverride, 0);
+        }
     }
 
     if (sd->edited_header) cleanup_special_delivery(mdata);
 
     if (!ret) {
         snmp_increment(SIEVE_FILEINTO, 1);
-        return SIEVE_OK;
+        ret = SIEVE_OK;
     } else {
         *errmsg = error_message(ret);
-        return SIEVE_FAIL;
+        ret = SIEVE_FAIL;
     }
+
+    free(intname);
+
+    return ret;
 }
 
 static int sieve_keep(void *ac,
@@ -994,15 +1062,32 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     struct appendstate as;
     const char *userid;
     char *intname;
-    int r;
+    int r = IMAP_MAILBOX_NONEXISTENT;
 
     userid = mbname_userid(sdata->mbname);
-    intname = mboxname_from_external(fcc->mailbox, sdata->ns, userid);
+
+    if (fcc->specialuse) {
+        intname = mboxname_from_external(fcc->specialuse, sdata->ns, userid);
+        r = mboxlist_lookup(intname, NULL, NULL);
+        if (r) free(intname);
+    }
+    if (r) intname = mboxname_from_external(fcc->mailbox, sdata->ns, userid);
 
     r = mboxlist_lookup(intname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = autosieve_createfolder(userid, sdata->authstate,
                                    intname, fcc->do_create);
+
+        if (!r && fcc->specialuse) {
+            /* Attempt to add special-use flag to newly created mailbox */
+            struct buf specialuse = BUF_INITIALIZER;
+            int r2 = specialuse_validate(userid, fcc->specialuse, &specialuse);
+
+            if (!r2) {
+                annotatemore_write(intname, "/specialuse", userid, &specialuse);
+            }
+            buf_free(&specialuse);
+        }
     }
     if (!r) {
         r = append_setup(&as, intname, userid, sdata->authstate,
@@ -1260,6 +1345,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_notify(interp, &sieve_notify);
     sieve_register_size(interp, &getsize);
     sieve_register_mailboxexists(interp, &getmailboxexists);
+    sieve_register_specialuseexists(interp, &getspecialuseexists);
     sieve_register_metadata(interp, &getmetadata);
     sieve_register_header(interp, &getheader);
     sieve_register_addheader(interp, &addheader);

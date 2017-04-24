@@ -128,8 +128,8 @@ void free_duptrack_list(duptrack_list_t *d);
  * these don't actually perform the actions, they just add it to the
  * action list */
 int do_reject(action_list_t *m, int action, const char *msg);
-int do_fileinto(action_list_t *m, const char *mbox, int cancel_keep, int do_create,
-                strarray_t *imapflags);
+int do_fileinto(action_list_t *m, const char *mbox, const char *specialuse,
+                int cancel_keep, int do_create, strarray_t *imapflags);
 int do_redirect(action_list_t *m, const char *addr,
                 int is_ext_list, int cancel_keep);
 int do_keep(action_list_t *m, strarray_t *imapflags);

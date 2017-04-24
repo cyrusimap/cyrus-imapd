@@ -599,9 +599,12 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         break;
 
     case METADATAEXISTS:
+    case SPECIALUSEEXISTS:
         if (!atleast(retval, codep+3)) return -1;
-        retval->data[codep++].op = BC_METADATAEXISTS;
-        retval->data[codep++].len = t->u.mm.extname ? (int)strlen(t->u.mm.extname) : -1;
+        retval->data[codep++].op =
+            t->type == METADATAEXISTS ? BC_METADATAEXISTS : BC_SPECIALUSEEXISTS;
+        retval->data[codep++].len =
+            t->u.mm.extname ? (int) strlen(t->u.mm.extname) : -1;
         retval->data[codep++].str = t->u.mm.extname;
         codep = bc_stringlist_generate(codep,retval,t->u.mm.keylist);
         if (codep == -1) return -1;
@@ -788,13 +791,22 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case FILEINTO:
                 /* FILEINTO
+                   STRING specialuse
                    VALUE create
                    STRINGLIST flags
                    VALUE copy
                    STRING folder
                 */
-                if (!atleast(retval, codep+2)) return -1;
+                if (!atleast(retval, codep+4)) return -1;
                 retval->data[codep++].op = B_FILEINTO;
+                if (c->u.f.specialuse) {
+                    retval->data[codep++].len = strlen(c->u.f.specialuse);
+                    retval->data[codep++].str = c->u.f.specialuse;
+                }
+                else {
+                    retval->data[codep++].len = -1;
+                    retval->data[codep++].str = NULL;
+                }
                 retval->data[codep++].value = c->u.f.create;
                 codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
                 if(codep == -1) return -1;
@@ -911,6 +923,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    STRING fcc (again, len == -1 means fcc was NULL)
                       VALUE create (if and only if fcc != NULL)
                       STRINGLIST flags (if and only if fcc != NULL)
+                      STRING specialuse (if and only if fcc != NULL)
                 */
 
                 if (!atleast(retval, codep+1)) return -1;
@@ -974,6 +987,16 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                     codep = bc_stringlist_generate(codep, retval,
                                                    c->u.v.fcc.flags);
                     if (codep == -1) return -1;
+
+                    if (!atleast(retval, codep+2)) return -1;
+                    if (c->u.v.fcc.specialuse) {
+                        retval->data[codep++].len = strlen(c->u.v.fcc.specialuse);
+                        retval->data[codep++].str = c->u.v.fcc.specialuse;
+                    }
+                    else {
+                        retval->data[codep++].len = -1;
+                        retval->data[codep++].str = NULL;
+                    }
                 }
                 else {
                     retval->data[codep++].len = -1;

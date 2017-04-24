@@ -406,6 +406,10 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /*   :seconds             defined in 'vacation-seconds' */
     /*   :last                defined in 'index' */
 
+    /* draft-bosch-sieve-special-use */
+<INITIAL>specialuse_exists     return SPECIALUSEEXISTS;
+<INITIAL>:specialuse           return SPECIALUSE;
+
     /* draft-murchison-sieve-fcc */
 <INITIAL>:fcc                  return FCC;
 
