@@ -131,7 +131,7 @@ sub test_rename_subfolder
 # Test big conversation rename
 #
 sub test_rename_user_bigconversation
-    :AllowMoves
+    :AllowMoves :Conversations
 {
     my ($self) = @_;
 
@@ -165,6 +165,7 @@ sub test_rename_user_bigconversation
 # Test big conversation rename
 #
 sub test_rename_bigconversation
+     :Conversations
 {
     my ($self) = @_;
 
@@ -186,6 +187,40 @@ sub test_rename_bigconversation
 
     $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
     $imaptalk->select("INBOX.user-dst.subdir") || die;
+}
+
+#
+# Test mid-sized conversation rename
+#
+sub test_rename_midsizeconversation
+     :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my %exp;
+
+    $imaptalk->create("INBOX.user-src.subdir") || die;
+    $self->{store}->set_folder("INBOX.user-src.subdir");
+    $self->{store}->set_fetch_attributes('uid', 'cid');
+
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    for (1..80) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    $imaptalk->select("INBOX.user-src.subdir") || die;
+
+    $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
+    $imaptalk->select("INBOX.user-dst.subdir") || die;
+
+    $self->{store}->set_folder("INBOX.user-dst.subdir");
+    $self->check_messages(\%exp, keyed_on => 'uid');
 }
 
 #
