@@ -357,12 +357,12 @@ sub badscript_common
     ($res, $errs) = $self->compile_sieve_script('badfileinto2',
 	"require [\"fileinto\"];\nfileinto\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 3: syntax error.*expecting STRING/, $errs);
+    $self->assert_matches(qr/line 3: syntax error.*unexpected.*\$end/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto3',
 	"require [\"fileinto\"];\nfileinto 42\n");
     $self->assert_str_equals('failure', $res);
-    $self->assert_matches(qr/line 2: syntax error.*expecting STRING/, $errs);
+    $self->assert_matches(qr/line 2: syntax error.*unexpected.*NUMBER/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto4',
 	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
