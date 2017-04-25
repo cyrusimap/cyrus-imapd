@@ -2831,7 +2831,7 @@ static int annotate_canon_value(struct buf *value, int type)
 static int _annotate_store_entries(annotate_state_t *state)
 {
     struct annotate_entry_list *ee;
-    int r;
+    int r = 0;
     unsigned oldsilent = state->silent;
 
     /* Loop through the list of provided entries to set */
