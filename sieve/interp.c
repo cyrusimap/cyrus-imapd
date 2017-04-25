@@ -541,7 +541,8 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_EDITHEADER:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)) capa = 0;
+        if (!(interp->addheader && interp->deleteheader &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))) capa = 0;
         break;
 
     case SIEVE_CAPA_EREJECT:
@@ -561,15 +562,18 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_MAILBOX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)) capa = 0;
+        if (!(interp->getmailboxexists &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX))) capa = 0;
         break;
 
     case SIEVE_CAPA_MBOXMETA:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)) capa = 0;
+        if (!(interp->getmetadata &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA))) capa = 0;
         break;
 
     case SIEVE_CAPA_SERVERMETA:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)) capa = 0;
+        if (!(interp->getmetadata &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA))) capa = 0;
         break;
 
     case SIEVE_CAPA_VACATION_SEC:
@@ -585,7 +589,8 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_EXTLISTS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)) capa = 0;
+        if (!(interp->isvalidlist && interp->listcompare &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS))) capa = 0;
         break;
 
     case SIEVE_CAPA_INCLUDE:
@@ -594,12 +599,13 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_DUPLICATE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)) capa = 0;
+        if (!(interp->duplicate &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE))) capa = 0;
         break;
 
     case SIEVE_CAPA_SPECIAL_USE:
-      if (!(interp->getspecialuseexists &&
-            (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))) capa = 0;
+        if (!(interp->getspecialuseexists &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))) capa = 0;
         break;
 
     case SIEVE_CAPA_FCC:

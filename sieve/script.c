@@ -137,6 +137,12 @@ static sieve_vacation_t stub_vacation = {
     (sieve_callback *) &stub_generic,   /* send_response() */
 };
 
+static sieve_duplicate_t stub_duplicate = {
+    0,                                  /* max expiration */
+    (sieve_callback *) &stub_generic,   /* check() */
+    (sieve_callback *) &stub_generic,   /* track() */
+};
+
 static int stub_notify(void *ac __attribute__((unused)),
                        void *interp_context __attribute__((unused)),
                        void *script_context __attribute__((unused)),
@@ -176,18 +182,32 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_keep(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_imapflags(interpreter, NULL);
     sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
-    sieve_register_mailboxexists(interpreter, (sieve_get_mailboxexists *) &stub_generic);
+    sieve_register_mailboxexists(interpreter,
+                                 (sieve_get_mailboxexists *) &stub_generic);
+    sieve_register_specialuseexists(interpreter,
+                                    (sieve_get_specialuseexists *) &stub_generic);
     sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);
     sieve_register_header(interpreter, (sieve_get_header *) &stub_generic);
     sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
-    sieve_register_deleteheader(interpreter, (sieve_delete_header *) &stub_generic);
+    sieve_register_deleteheader(interpreter,
+                                (sieve_delete_header *) &stub_generic);
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
+    sieve_register_listvalidator(interpreter,
+                                 (sieve_list_validator *) &stub_generic);
+    sieve_register_listcompare(interpreter,
+                               (sieve_list_comparator *) &stub_generic);
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
         syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        goto done;
+    }
+
+    res = sieve_register_duplicate(interpreter, &stub_duplicate);
+    if (res != SIEVE_OK) {
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
         goto done;
     }
 
