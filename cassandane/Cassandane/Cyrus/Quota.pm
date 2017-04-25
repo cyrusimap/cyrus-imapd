@@ -1535,6 +1535,7 @@ sub test_replication_storage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1552,6 +1553,7 @@ sub test_replication_storage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1569,6 +1571,7 @@ sub test_replication_storage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1608,6 +1611,7 @@ sub test_replication_message
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1625,6 +1629,7 @@ sub test_replication_message
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1642,6 +1647,7 @@ sub test_replication_message
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1681,6 +1687,7 @@ sub test_replication_annotstorage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1698,6 +1705,7 @@ sub test_replication_annotstorage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1722,6 +1730,7 @@ sub test_replication_annotstorage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1745,6 +1754,7 @@ sub test_replication_annotstorage
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1840,6 +1850,7 @@ sub XXtest_replication_multiple
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1857,6 +1868,7 @@ sub XXtest_replication_multiple
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
@@ -1874,6 +1886,7 @@ sub XXtest_replication_multiple
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 

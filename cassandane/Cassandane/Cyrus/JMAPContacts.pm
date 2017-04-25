@@ -59,7 +59,15 @@ use charnames ':full';
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({}, @args);
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(caldav_realm => 'Cassandane');
+    $config->set(httpmodules => 'carddav jmap');
+    $config->set(httpallowcompress => 'no');
+    return $class->SUPER::new({
+        adminstore => 1,
+        config => $config,
+        services => ['imap', 'http'],
+    }, @args);
 }
 
 sub set_up
@@ -243,6 +251,33 @@ sub test_getcontactupdates
     $self->assert_str_equals($res->[0][2], 'R1');
 }
 
+sub test_setnickname
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contacts";
+    my $res = $jmap->Request([['setContacts', {create => {
+                        "1" => { firstName => "foo", lastName => "last1", nickname => "" },
+                        "2" => { firstName => "bar", lastName => "last2", nickname => "string" },
+                        "3" => { firstName => "bar", lastName => "last3", nickname => "string,list" },
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    my $contact1 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"2"}{id};
+    my $contact3 = $res->[0][1]{created}{"3"}{id};
+    $self->assert_not_null($contact1);
+    $self->assert_not_null($contact2);
+    $self->assert_not_null($contact3);
+
+    $res = $jmap->Request([['setContacts', {update => {
+                        $contact2 => { nickname => "" },
+                    }}, "R2"]]);
+    $self->assert_not_null($res);
+}
+
 sub test_setcontactgroups
     :JMAP :min_version_3_0
 {
@@ -257,7 +292,7 @@ sub test_setcontactgroups
                         "2" => { firstName => "bar", lastName => "last2" }
                     }}, "R1"]]);
     my $contact1 = $res->[0][1]{created}{"1"}{id};
-    my $contact2 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "create contact group with no contact ids";
     $res = $jmap->Request([['setContactGroups', {create => {
@@ -1192,6 +1227,65 @@ sub test_creationids
     $self->assert_str_equals("group1", $group->{name});
 
     $self->assert_str_equals($contact->{id}, $group->{contactIds}[0]);
+}
+
+sub test_categories
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+
+    xlog "create a contact with two categories";
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+CATEGORIES:cat1,cat2
+END:VCARD
+EOF
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $data = $carddav->Request('GET', $href);
+    $self->assert_matches(qr/cat1,cat2/, $data->{content});
+
+    my $fetch = $jmap->Request([['getContacts', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals($fetch->[0][0], 'contacts');
+    $self->assert_str_equals($fetch->[0][2], 'R2');
+    $self->assert_str_equals($fetch->[0][1]{list}[0]{firstName}, 'Forrest');
+
+    my $res = $jmap->Request([['setContacts', {
+                    update => {$id => {firstName => "foo"}}
+                }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'contactsSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    $data = $carddav->Request('GET', $href);
+    $self->assert_matches(qr/cat1,cat2/, $data->{content});
+
 }
 
 1;

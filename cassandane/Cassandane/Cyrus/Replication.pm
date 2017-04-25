@@ -91,6 +91,7 @@ sub test_append
     $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should still have all four messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -121,6 +122,7 @@ sub test_splitbrain
     $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should still have all four messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -142,6 +144,7 @@ sub test_splitbrain
     $self->check_messages(\%rexp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     %exp = (%mexp, %rexp);
     # we could calculate 6 and 7 by sorting from GUID, but easiest is to ignore UIDs
@@ -176,6 +179,7 @@ sub test_splitbrain_masterexpunge
     $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should still have all four messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -207,6 +211,7 @@ sub test_splitbrain_masterexpunge
     $self->check_messages(\%mexp, store => $master_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     %exp = (%mexp, %rexp);
     # we know that the message should be prompoted to UID 6
@@ -240,6 +245,7 @@ sub test_splitbrain_replicaexpunge
     $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should still have all four messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -271,6 +277,7 @@ sub test_splitbrain_replicaexpunge
     $self->check_messages(\%rexp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     %exp = (%mexp, %rexp);
     # we know that the message should be prompoted to UID 6
@@ -304,6 +311,7 @@ sub test_splitbrain_bothexpunge
     $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should still have all four messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -339,6 +347,7 @@ sub test_splitbrain_bothexpunge
     delete $rexp{F};
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, the master should have just the original 4 messages";
     $self->check_messages(\%exp, store => $master_store);
@@ -468,6 +477,7 @@ EOF
 
     # then, run replication,
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     # then, verify that sieve script exists on both master and replica
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
@@ -511,6 +521,7 @@ EOF
 
     # then, run replication,
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     # then, verify that sieve script still exists on both master and replica
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
@@ -569,6 +580,7 @@ EOF
     # the one that exists on master only will be replicated
     # the one that exists on replica only will be deleted
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     # then, verify that scripts are in expected state
     $self->assert_sieve_exists($self->{instance}, $user, $script1name);
@@ -631,6 +643,7 @@ EOF
     # the one that exists on replica is different to and older than the one
     # on master, so it will be replaced with the one from master
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     # then, verify that scripts are in expected state
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
@@ -677,6 +690,7 @@ EOF
 
     # then, run replication,
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     # then, verify that sieve script no longer exists on either
     $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);

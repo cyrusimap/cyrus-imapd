@@ -2868,8 +2868,10 @@ sub test_netcaldavtalktests_fromical
     my $cassini = Cassandane::Cassini->instance();
     my $basedir = $cassini->val('caldavtalk', 'basedir');
 
-    # XXX - handle this more nicely
-    $self->assert($basedir);
+    unless ($basedir) {
+        xlog "Not running test, no caldavtalk";
+        return;
+    }
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
@@ -2909,8 +2911,10 @@ sub test_netcaldavtalktests_fromje
     my $cassini = Cassandane::Cassini->instance();
     my $basedir = $cassini->val('caldavtalk', 'basedir');
 
-    # XXX - handle this more nicely
-    $self->assert($basedir);
+    unless ($basedir) {
+        xlog "Not running test, no caldavtalk";
+        return;
+    }
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);

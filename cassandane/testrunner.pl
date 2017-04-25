@@ -54,14 +54,14 @@ use Data::Dumper;
 $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 
-my $format = 'tap';
+my $format = 'prettier';
 my $output_dir = 'reports';
 my $do_list = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
 my $log_directory;
 my @names;
-my $jobs;
+my $jobs = Cassandane::Cassini->instance()->val('cassandane', 'maxworkers', undef);
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.
@@ -161,8 +161,6 @@ eval
 	$runner->start($plan);
 	return $runner->all_tests_passed();
     };
-
-    $format = 'xml';
 };
 if ($@) {
     my $eval_err = $@;
@@ -201,6 +199,11 @@ while (my $a = shift)
 	$format = shift;
 	usage unless defined $runners{$format};
     }
+    elsif ($a =~ m/^-f(\w+)$/)
+    {
+	$format = $1;
+	usage unless defined $runners{$format};
+    }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
 	set_verbose(get_verbose()+1);
@@ -222,6 +225,11 @@ while (my $a = shift)
     {
 	$jobs = shift;
 	usage unless defined $jobs;
+    }
+    elsif ($a =~ m/^-j(\d+)$/)
+    {
+	$jobs = 0 + $1;
+	usage unless $jobs > 0;
     }
     elsif ($a eq '-L' || $a eq '--log-directory')
     {

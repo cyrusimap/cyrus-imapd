@@ -1329,4 +1329,112 @@ sub test_delete_unsubscribe
     });
 }
 
+sub test_dotuser_gh1875_virt
+    :VirtDomains :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo.bar\@example.com");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo.bar\@example.com");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("INBOX/Drafts");
+    $footalk->create("INBOX/Sent");
+    $footalk->create("INBOX/Trash");
+
+    my $data = $footalk->list("", "*");
+
+    xlog Dumper $data;
+    $self->_assert_list_data($data, '/', {
+	'INBOX'             => [qw( \\HasChildren )],
+	'INBOX/Sent'        => [qw( \\HasNoChildren )],
+	'INBOX/Drafts'      => [qw( \\HasNoChildren )],
+	'INBOX/Trash'       => [qw( \\HasNoChildren )],
+    });
+}
+
+sub test_dotuser_gh1875_novirt
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo.bar");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo.bar");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("INBOX/Drafts");
+    $footalk->create("INBOX/Sent");
+    $footalk->create("INBOX/Trash");
+
+    my $data = $footalk->list("", "*");
+
+    xlog Dumper $data;
+    $self->_assert_list_data($data, '/', {
+	'INBOX'             => [qw( \\HasChildren )],
+	'INBOX/Sent'        => [qw( \\HasNoChildren )],
+	'INBOX/Drafts'      => [qw( \\HasNoChildren )],
+	'INBOX/Trash'       => [qw( \\HasNoChildren )],
+    });
+}
+
+sub test_dotuser_gh1875_virt_altns
+    :VirtDomains :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo.bar\@example.com");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo.bar\@example.com");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("Drafts");
+    $footalk->create("Sent");
+    $footalk->create("Trash");
+
+    my $data = $footalk->list("", "*");
+
+    xlog Dumper $data;
+    $self->_assert_list_data($data, '/', {
+	'INBOX'       => [qw( \\HasNoChildren )],
+	'Sent'        => [qw( \\HasNoChildren )],
+	'Drafts'      => [qw( \\HasNoChildren )],
+	'Trash'       => [qw( \\HasNoChildren )],
+    });
+}
+
+sub test_dotuser_gh1875_novirt_altns
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/foo.bar");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo.bar");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create("Drafts");
+    $footalk->create("Sent");
+    $footalk->create("Trash");
+
+    my $data = $footalk->list("", "*");
+
+    xlog Dumper $data;
+    $self->_assert_list_data($data, '/', {
+	'INBOX'       => [qw( \\HasNoChildren )],
+	'Sent'        => [qw( \\HasNoChildren )],
+	'Drafts'      => [qw( \\HasNoChildren )],
+	'Trash'       => [qw( \\HasNoChildren )],
+    });
+}
+
 1;

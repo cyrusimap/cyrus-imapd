@@ -56,6 +56,7 @@ use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 use Cassandane::PortManager;
+use Cyrus::CheckReplication;
 
 my @stores = qw(store adminstore
 		replica_store replica_adminstore
@@ -906,6 +907,7 @@ sub run_replication
     my $rolling = delete $opts{rolling};
     my $mailbox = delete $opts{mailbox};
     my $meta = delete $opts{meta};
+    my $nosyncback = delete $opts{nosyncback};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -929,7 +931,7 @@ sub run_replication
     $self->_disconnect_all();
 
     # build sync_client command line
-    my @cmd = ('sync_client', '-v', '-v');
+    my @cmd = ('sync_client', '-v', '-v', '-o');
     push(@cmd, '-S', $server) if defined $server;
     push(@cmd, '-n', $channel) if defined $channel;
     push(@cmd, '-f', $inputfile) if defined $inputfile;
@@ -937,6 +939,7 @@ sub run_replication
     push(@cmd, '-R') if defined $rolling;
     push(@cmd, '-m') if defined $mailbox;
     push(@cmd, '-s') if defined $meta;
+    push(@cmd, '-O') if defined $nosyncback;
     push(@cmd, $mailbox) if defined $mailbox;
 
     my %run_options;
@@ -946,6 +949,26 @@ sub run_replication
     $self->{instance}->run_command(\%run_options, @cmd);
 
     $self->_reconnect_all();
+}
+
+sub check_replication {
+    my ($self, $user) = @_;
+
+    my $CR = Cyrus::CheckReplication->new(
+        IMAPs1 => $self->{master_store}->get_client(),
+        IMAPs2 => $self->{replica_store}->get_client(),
+        CyrusName => $user,
+        SleepTime => 0,
+        Repeats => 1,
+        CheckConversations => 1,
+        CheckAnnotations => 1,
+        CheckMetadata => 1,
+    );
+    $CR->CheckUserReplication(2);
+    if ($CR->HasError()) {
+        my @Messages = $CR->GetMessages();
+        $self->assert(0, "GOT ERRORS " . join(', ', @Messages));
+    }
 }
 
 sub run_delayed_expunge

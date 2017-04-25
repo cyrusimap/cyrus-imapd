@@ -1012,6 +1012,7 @@ sub test_msg_replication_new_mas
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After replication, message is still present on the master";
@@ -1053,6 +1054,7 @@ sub test_msg_replication_new_rep
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $master_exp{A} = $replica_exp{A}->clone();
     xlog "After replication, message is now present on the master";
@@ -1099,6 +1101,7 @@ sub test_msg_replication_new_bot_mse_gul
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
@@ -1150,6 +1153,7 @@ sub test_msg_replication_new_bot_mse_guh
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
@@ -1196,6 +1200,7 @@ sub test_msg_replication_mod_mas
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1213,6 +1218,7 @@ sub test_msg_replication_mod_mas
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After second replication, the message annotation is still present on the master";
@@ -1254,6 +1260,7 @@ sub test_msg_replication_mod_rep
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1271,6 +1278,7 @@ sub test_msg_replication_mod_rep
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After second replication, the message annotation is still present on the master";
@@ -1314,6 +1322,7 @@ sub test_msg_replication_mod_bot_msl
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1335,6 +1344,7 @@ sub test_msg_replication_mod_bot_msl
 
     xlog "Replicate the annotation change";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $master_exp{A}->set_annotation($entry, $attrib, $valueB2);
     xlog "After second replication, the message annotation is updated on the master";
@@ -1378,6 +1388,7 @@ sub test_msg_replication_mod_bot_msh
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1399,6 +1410,7 @@ sub test_msg_replication_mod_bot_msh
 
     xlog "Replicate the annotation change";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A}->set_annotation($entry, $attrib, $valueA2);
     xlog "After second replication, the message annotation is still present on the master";
@@ -1441,6 +1453,7 @@ sub test_msg_replication_exp_mas
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1462,6 +1475,7 @@ sub test_msg_replication_exp_mas
 
     xlog "Replicate the expunge";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     delete $replica_exp{A};
     xlog "After second replication, the message is still missing on the master";
@@ -1504,6 +1518,7 @@ sub test_msg_replication_exp_rep
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1525,6 +1540,7 @@ sub test_msg_replication_exp_rep
 
     xlog "Replicate the expunge";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     delete $master_exp{A};
     xlog "After second replication, the message is now missing on the master";
@@ -1567,6 +1583,7 @@ sub test_msg_replication_exp_bot
 
     xlog "Replicate the message";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1595,6 +1612,7 @@ sub test_msg_replication_exp_bot
 
     xlog "Replicate the expunge";
     $self->run_replication();
+    $self->check_replication('cassandane');
 
     xlog "After second replication, the message is still missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
@@ -2034,6 +2052,7 @@ sub test_mbox_replication_new_mas
 
     xlog "run replication";
     $self->run_replication();
+    $self->check_replication('cassandane');
     $master_talk = $master_store->get_client();
     $replica_talk = $replica_store->get_client();
 
