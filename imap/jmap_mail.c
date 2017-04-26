@@ -5335,7 +5335,7 @@ static int copyrecord(jmap_req_t *req, struct mailbox *src, struct mailbox *dst,
 
     ptrarray_add(&msgrecs, mrw);
 
-    r = append_copy_msgrecord(src, &as, &msgrecs, nolink,
+    r = append_copy(src, &as, &msgrecs, nolink,
             mboxname_same_userid(src->name, dst->name));
     if (r) {
         append_abort(&as);

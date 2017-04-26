@@ -64,7 +64,7 @@ extern int mailbox_edit_msgrecord(struct mailbox *mbox, const msgrecord_t *mr,
 
 extern int msgrecord_from_index_record(struct mailbox *mbox,
                                        struct index_record record,
-                                       msgrecord_t **mrp);
+                                       msgrecord_t **mrp, int rw);
 
 /* msgrecord.c */
 

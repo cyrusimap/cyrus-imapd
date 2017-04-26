@@ -1271,7 +1271,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
          * on how it releases the cyrus.index lock in the middle of action */
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
-        r = msgrecord_from_index_record(state->mailbox, record, &msgrec);
+        r = msgrecord_from_index_record(state->mailbox, record, &msgrec, 1);
         if (r) goto out;
 
         switch (storeargs->operation) {
@@ -1326,6 +1326,8 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
         if (r) goto out;
         r = index_rewrite_record(state, msgno, &record, /*silent*/1);
         if (r) goto out;
+
+        msgrecord_unrefw(&msgrec);
     }
 
 
@@ -1433,7 +1435,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
 
-        r = msgrecord_from_index_record(state->mailbox, record, &msgrec);
+        r = msgrecord_from_index_record(state->mailbox, record, &msgrec, 1);
         if (r) goto out;
 
         r = append_run_annotator(&as, msgrec);
@@ -2835,6 +2837,7 @@ index_copy(struct index_state *state,
     struct mailbox *destmailbox = NULL;
     struct index_map *im;
     int is_same_user;
+    ptrarray_t *msgrecs = ptrarray_new();
 
     *copyuidp = NULL;
 
@@ -2889,8 +2892,13 @@ index_copy(struct index_state *state,
 
     docopyuid = (appendstate.myrights & ACL_READ);
 
-    r = append_copy(srcmailbox, &appendstate, copyargs.nummsg,
-                    copyargs.records, nolink, is_same_user);
+    for (i = 0; i < copyargs.nummsg; i++) {
+        msgrecord_t *mr = NULL;
+        r = msgrecord_from_index_record(srcmailbox, copyargs.records[i], &mr, 0);
+        if (r) goto done;
+        ptrarray_append(msgrecs, mr);
+    }
+    r = append_copy(srcmailbox, &appendstate, msgrecs, nolink, is_same_user);
     if (r) {
         append_abort(&appendstate);
         goto done;
@@ -2942,6 +2950,11 @@ index_copy(struct index_state *state,
 done:
     free(copyargs.records);
     mailbox_close(&destmailbox);
+    for (i = 0; i < msgrecs->count; i++) {
+        msgrecord_t *mr = ptrarray_nth(msgrecs, i);
+        msgrecord_unrefw(&mr);
+    }
+    ptrarray_free(msgrecs);
 
     return r;
 }

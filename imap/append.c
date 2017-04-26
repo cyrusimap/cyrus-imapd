@@ -95,8 +95,7 @@ struct stagemsg {
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
                           struct seqset *newseen);
-static void append_setseen(struct appendstate *as, struct index_record *record);
-static int append_setseen_msgrecord(struct appendstate *as, msgrecord_t *mr);
+static int append_setseen(struct appendstate *as, msgrecord_t *mr);
 
 #define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
 
@@ -790,7 +789,7 @@ static int append_apply_flags(struct appendstate *as,
     for (i = 0; i < flags->count; i++) {
         const char *flag = strarray_nth(flags, i);
         if (!strcasecmp(flag, "\\seen")) {
-            r = append_setseen_msgrecord(as, msgrec);
+            r = append_setseen(as, msgrec);
             if (r) goto out;
             mboxevent_add_flag(mboxevent, flag);
         }
@@ -1314,154 +1313,6 @@ out:
  * contains the name of the user whose \Seen flag gets set.
  */
 EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
-                         int nummsg, struct index_record *records,
-                         int nolink, int is_same_user)
-{
-    int msg;
-    struct index_record record;
-    char *srcfname = NULL;
-    char *destfname = NULL;
-    int object_storage_enabled = 0 ;
-#if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
-#endif
-    int r = 0;
-    int userflag;
-    int i;
-    annotate_state_t *astate = NULL;
-    struct mboxevent *mboxevent = NULL;
-
-    if (!nummsg) {
-        append_abort(as);
-        return 0;
-    }
-
-    /* prepare a single vnd.cmu.MessageCopy notification for all messages */
-    if (as->event_type) {
-        mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
-    }
-
-    /* Copy/link all files and cache info */
-    for (msg = 0; msg < nummsg; msg++) {
-        /* read in existing cache record BEFORE we copy data, so that the
-         * mmap will be up to date even if it's the same mailbox for source
-         * and destination */
-        r = mailbox_cacherecord(mailbox, &records[msg]);
-        if (r) goto out;
-
-        record = records[msg]; /* copy data */
-
-        /* wipe out the bits that aren't magically copied */
-        record.system_flags &= ~FLAG_SEEN;
-        for (i = 0; i < MAX_USER_FLAGS/32; i++)
-            record.user_flags[i] = 0;
-        if (!is_same_user)
-            record.cid = NULLCONVERSATION;
-        record.cache_offset = 0;
-
-        /* renumber the message into the new mailbox */
-        record.uid = as->mailbox->i.last_uid + 1;
-        as->nummsg++;
-
-        /* user flags are special - different numbers, so look them up */
-        if (as->myrights & ACL_WRITE) {
-            for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
-                bit32 flagmask = records[msg].user_flags[userflag/32];
-                if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
-                    int num;
-                    r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
-                    if (r)
-                        syslog(LOG_ERR, "IOERROR: unable to copy flag %s from %s to %s for UID %u: %s",
-                               mailbox->flagname[userflag], mailbox->name, as->mailbox->name,
-                               records[msg].uid, error_message(r));
-                    else
-                        record.user_flags[num/32] |= 1<<(num&31);
-                }
-            }
-        }
-        else {
-            /* only flag allow to be kept without ACL_WRITE is DELETED */
-            record.system_flags &= FLAG_DELETED;
-        }
-
-        /* deleted flag has its own ACL */
-        if (!(as->myrights & ACL_DELETEMSG)) {
-            record.system_flags &= ~FLAG_DELETED;
-        }
-
-        /* should this message be marked \Seen? */
-        if (records[msg].system_flags & FLAG_SEEN) {
-            append_setseen(as, &record);
-        }
-
-        /* we're not modifying the ARCHIVED flag here, just keeping it */
-
-        /* Link/copy message file */
-        free(srcfname);
-        free(destfname);
-        srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
-        destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
-
-        if (!(object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED))   // if object storage do not move file
-           r = mailbox_copyfile(srcfname, destfname, nolink);
-
-        if (r) goto out;
-
-#if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && records[msg].system_flags & FLAG_ARCHIVED)
-            r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
-#endif
-
-        if (as->isoutbox) {
-            char num[10];
-            snprintf(num, 10, "%u", record.uid);
-            r = notify_at(record.internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
-            if (r) goto out;
-        }
-
-        /* Write out index file entry */
-        r = mailbox_append_index_record(as->mailbox, &record);
-        if (r) goto out;
-
-        /* ensure we have an astate connected to the destination
-         * mailbox, so that the annotation txn will be committed
-         * when we close the mailbox */
-        r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
-        if (r) goto out;
-
-        r = annotate_msg_copy(mailbox, records[msg].uid,
-                              as->mailbox, record.uid,
-                              as->userid);
-        if (r) goto out;
-
-        mboxevent_extract_record(mboxevent, as->mailbox, &record);
-        mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);
-    }
-
-out:
-    free(srcfname);
-    free(destfname);
-    if (r) {
-        append_abort(as);
-        return r;
-    }
-
-    mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
-    mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
-
-    return 0;
-}
-
-/*
- * Append to 'as->mailbox' the 'nummsg' messages from the
- * mailbox 'mailbox' listed in the array pointed to by 'records'.
- * 'as' must have been opened with append_setup().  If the '\Seen'
- * flag is to be set anywhere then 'userid' passed to append_setup()
- * contains the name of the user whose \Seen flag gets set.
- */
-// FIXME just for migration
-EXPORTED int append_copy_msgrecord(struct mailbox *mailbox, struct appendstate *as,
                          ptrarray_t *msgrecs, int nolink, int is_same_user)
 {
     int msg;
@@ -1572,7 +1423,7 @@ EXPORTED int append_copy_msgrecord(struct mailbox *mailbox, struct appendstate *
 
         /* should this message be marked \Seen? */
         if (src_system_flags & FLAG_SEEN) {
-            append_setseen_msgrecord(as, dst_msgrec);
+            append_setseen(as, dst_msgrec);
         }
 
         /* we're not modifying the ARCHIVED flag here, just keeping it */
@@ -1634,6 +1485,8 @@ EXPORTED int append_copy_msgrecord(struct mailbox *mailbox, struct appendstate *
 
         mboxevent_extract_msgrecord(mboxevent, dst_msgrec);
         mboxevent_extract_copied_msgrecord(mboxevent, src_msgrec);
+
+        msgrecord_unrefw(&dst_msgrec);
     }
 
 out:
@@ -1643,6 +1496,9 @@ out:
         append_abort(as);
         return r;
     }
+    if (dst_msgrec) {
+        msgrecord_unrefw(&dst_msgrec);
+    }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
@@ -1651,15 +1507,7 @@ out:
     return 0;
 }
 
-static void append_setseen(struct appendstate *as, struct index_record *record)
-{
-    if (as->internalseen)
-        record->system_flags |= FLAG_SEEN;
-    else
-        seqset_add(as->seen_seq, record->uid, 1);
-}
-
-static int append_setseen_msgrecord(struct appendstate *as, msgrecord_t *msgrec)
+static int append_setseen(struct appendstate *as, msgrecord_t *msgrec)
 {
     int r = 0;
     if (as->internalseen) {

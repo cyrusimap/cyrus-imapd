@@ -672,7 +672,8 @@ EXPORTED int mailbox_last_msgrecord(struct mailbox *mbox, const msgrecord_t **mr
 
 EXPORTED int msgrecord_from_index_record(struct mailbox *mbox,
                                          struct index_record record,
-                                         msgrecord_t **mrp)
+                                         msgrecord_t **mrp,
+                                         int rw)
 {
     int r;
     const msgrecord_t *mr = NULL;
@@ -683,11 +684,15 @@ EXPORTED int msgrecord_from_index_record(struct mailbox *mbox,
         mailbox_find_msgrecord_internal(mbox, record.uid, 0, &mr);
     if (r) goto done;
 
-    r = mailbox_edit_msgrecord(mbox, mr, &mrw);
-    if (r) goto done;
-
-    mrw->record = record; /* TODO(rsto): restrict to mutable fields? */
-    *mrp = mrw;
+    if (rw) {
+        r = mailbox_edit_msgrecord(mbox, mr, &mrw);
+        if (r) goto done;
+        mrw->record = record; /* TODO(rsto): restrict to mutable fields? */
+        *mrp = mrw;
+    }
+    else {
+        *mrp = (msgrecord_t *) mr; /* TODO(rsto): this const vs non-const msgrecord_t scheme is bogus */
+    }
 
 done:
     return r;
