@@ -9690,6 +9690,7 @@ struct searchargs *s;
     freestrlist(s->cc);
     freestrlist(s->bcc);
     freestrlist(s->subject);
+    freestrlist(s->messageid);
     freestrlist(s->body);
     freestrlist(s->text);
     freestrlist(s->header_name);
