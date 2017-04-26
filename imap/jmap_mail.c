@@ -1835,7 +1835,7 @@ static int jmapmsg_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     json_t *mboxs = data->mboxs;
     jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     uint32_t flags;
     int r;
 
@@ -2119,7 +2119,7 @@ static conversation_id_t jmap_decode_thrid(const char *thrid)
     return cid;
 }
 
-static json_t *jmapmsg_annot_read(const jmap_req_t *req, const msgrecord_t *mr,
+static json_t *jmapmsg_annot_read(const jmap_req_t *req, msgrecord_t *mr,
                                   const char *annot)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -2147,7 +2147,7 @@ static json_t *jmapmsg_annot_read(const jmap_req_t *req, const msgrecord_t *mr,
 
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
-                             const msgrecord_t *mr, int is_embedded,
+                             msgrecord_t *mr, int is_embedded,
                              json_t **msgp)
 {
     struct msgbodies bodies = MSGBODIES_INITIALIZER;
@@ -2607,7 +2607,7 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
 
     if (!d->mboxname || jmap_isopenmbox(req, rec->mboxname)) {
         struct mailbox *mbox = NULL;
-        const msgrecord_t *mr = NULL;
+        msgrecord_t *mr = NULL;
         uint32_t flags;
 
         /* Prefer to use messages in already opened mailboxes */
@@ -2669,7 +2669,7 @@ static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct jmapmsg_count_data *d = (struct jmapmsg_count_data*) rock;
     jmap_req_t *req = d->req;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     struct mailbox *mbox = NULL;
     uint32_t flags;
     int r = 0;
@@ -2720,7 +2720,7 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct jmapmsg_isexpunged_data *d = (struct jmapmsg_isexpunged_data*) rock;
     jmap_req_t *req = d->req;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     struct mailbox *mbox = NULL;
     uint32_t flags;
     int r = 0;
@@ -2766,7 +2766,7 @@ static int jmapmsg_isexpunged(jmap_req_t *req, const char *msgid, int *is_expung
 }
 
 static int jmapmsg_from_record(jmap_req_t *req, hash_table *props,
-                               const msgrecord_t *mr, json_t **msgp)
+                               msgrecord_t *mr, json_t **msgp)
 {
     struct body *body = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
@@ -3862,7 +3862,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
     /* Convert the snippets */
     json_array_foreach(messageids, i, val) {
         message_t *msg;
-        const msgrecord_t *mr = NULL;
+        msgrecord_t *mr = NULL;
         uint32_t uid;
 
         msgid = json_string_value(val);
@@ -4228,7 +4228,7 @@ static int getMessages(jmap_req_t *req)
     json_array_foreach(ids, i, val) {
         const char *id = json_string_value(val);
         char *mboxname = NULL;
-        const msgrecord_t *mr = NULL;
+        msgrecord_t *mr = NULL;
         uint32_t uid;
         json_t *msg = NULL;
         struct mailbox *mbox = NULL;
@@ -4337,7 +4337,7 @@ static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **message
 {
     char *mboxname = NULL;
     struct mailbox *mbox = NULL;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     uint32_t uid;
     struct buf buf = BUF_INITIALIZER;
     uint32_t flags;
@@ -4497,7 +4497,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     struct buf msg_buf = BUF_INITIALIZER;
     const char *blobid, *type, *cid, *name;
     strarray_t headers = STRARRAY_INITIALIZER;
-    const msgrecord_t *mr;
+    msgrecord_t *mr;
     char *ctenc = NULL;
     uint32_t size;
     int r;
@@ -5408,11 +5408,11 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
         r = msgrecord_save(mrw);
         if (r) goto done;
 
-        msgrecord_unrefw(&mrw);
+        msgrecord_unref(&mrw);
     }
 
 done:
-    if (mrw) msgrecord_unrefw(&mrw);
+    if (mrw) msgrecord_unref(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     return r;
 }
@@ -5452,7 +5452,7 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     mboxevent_free(&mboxevent);
 
 done:
-    if (mrw) msgrecord_unrefw(&mrw);
+    if (mrw) msgrecord_unref(&mrw);
     return r;
 }
 
@@ -5495,7 +5495,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
     const char *id;
     struct stagemsg *stage = NULL;
     struct mailbox *mbox = NULL;
-    msgrecord_t *mrw = NULL;
+    msgrecord_t *mr = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
     size_t len, i, msgcount = 0;
@@ -5604,17 +5604,13 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         if (r) goto done;
 
         /* Update system flags for new record */
-        const msgrecord_t *mr;
         r = mailbox_last_msgrecord(mbox, &mr);
         if (r) goto done;
 
-        r = mailbox_edit_msgrecord(mbox, mr, &mrw);
+        r = msgrecord_add_systemflags(mr, system_flags);
         if (r) goto done;
 
-        r = msgrecord_add_systemflags(mrw, system_flags);
-        if (r) goto done;
-
-        r = msgrecord_save(mrw);
+        r = msgrecord_save(mr);
         if (r) goto done;
 
         /* Flag mailbox */
@@ -5657,12 +5653,12 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (r) goto done;
 
-        r = mailbox_find_msgrecord_rw(mbox, uid, &mrw);
+        r = mailbox_find_msgrecord_rw(mbox, uid, &mr);
         if (r) goto done;
 
         /* Set flags in the new instances on this message,
          * but keep the existing entries as-is */
-        r = msgrecord_add_systemflags(mrw, system_flags);
+        r = msgrecord_add_systemflags(mr, system_flags);
         if (r) goto done;
     }
 
@@ -5709,7 +5705,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
 
-        r = copyrecord(req, mbox, dst, mrw);
+        r = copyrecord(req, mbox, dst, mr);
 
         jmap_closembox(req, &dst);
         if (r) goto done;
@@ -5718,7 +5714,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
 done:
     if (f) fclose(f);
     if (stage) append_removestage(stage);
-    if (mrw) msgrecord_unrefw(&mrw);
+    if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (mailboxes) json_decref(mailboxes);
@@ -5927,7 +5923,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
 done:
-    if (mrw) msgrecord_unrefw(&mrw);
+    if (mrw) msgrecord_unref(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     if (mboxname) free(mboxname);
     if (oldmailboxes) json_decref(oldmailboxes);
@@ -6180,7 +6176,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     char *mboxname = NULL;
     uint32_t uid;
     time_t internaldate = 0;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     int r;
 
     blobid = json_string_value(json_object_get(msg, "blobId"));

@@ -480,7 +480,7 @@ EXPORTED char *jmap_blobid(const struct message_guid *guid)
 struct findblob_data {
     jmap_req_t *req;
     struct mailbox *mbox;
-    const msgrecord_t *mr;
+    msgrecord_t *mr;
     char *part_id;
 };
 
@@ -506,7 +506,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
 
 EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
-                           struct mailbox **mbox, const msgrecord_t **mr,
+                           struct mailbox **mbox, msgrecord_t **mr,
                            struct body **body, const struct body **part)
 {
     struct findblob_data data = { req, NULL, NULL, NULL };
@@ -637,7 +637,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     char *blobid = xstrndup(blobbase, bloblen);
 
     struct mailbox *mbox = NULL;
-    const msgrecord_t *mr = NULL;
+    msgrecord_t *mr = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;

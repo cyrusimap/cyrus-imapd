@@ -965,7 +965,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 #endif // WITH_DAV
 }
 
-EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, const msgrecord_t *msgrec)
+EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *msgrec)
 {
     int r;
     uint32_t uid;
@@ -1130,7 +1130,7 @@ void mboxevent_extract_copied_record(struct mboxevent *event,
 }
 
 void mboxevent_extract_copied_msgrecord(struct mboxevent *event,
-                                        const msgrecord_t *msgrec)
+                                        msgrecord_t *msgrec)
 {
     int first = 0;
     uint32_t uid;
@@ -1155,7 +1155,7 @@ void mboxevent_extract_copied_msgrecord(struct mboxevent *event,
 }
 
 void mboxevent_extract_content_msgrec(struct mboxevent *event,
-                               const msgrecord_t *msgrec, FILE* content)
+                               msgrecord_t *msgrec, FILE* content)
 {
     const char *base = NULL;
     size_t offset, size, truncate, len = 0;

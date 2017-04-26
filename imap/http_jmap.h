@@ -101,7 +101,7 @@ extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 extern int jmap_upload(struct transaction_t *txn);
 extern int jmap_download(struct transaction_t *txn);
 extern int jmap_findblob(jmap_req_t *req, const char *blobid,
-                         struct mailbox **mbox, const msgrecord_t **mr,
+                         struct mailbox **mbox, msgrecord_t **mr,
                          struct body **body, const struct body **part);
 extern char *jmap_blobid(const struct message_guid *guid);
 

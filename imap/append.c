@@ -1083,7 +1083,7 @@ out:
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
-    if (msgrec) msgrecord_unrefw(&msgrec);
+    if (msgrec) msgrecord_unref(&msgrec);
     return r;
 }
 
@@ -1198,7 +1198,7 @@ out:
     mboxevent_extract_mailbox(mboxevent, mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
-    msgrecord_unrefw(&msgrec);
+    msgrecord_unref(&msgrec);
 
     return 0;
 }
@@ -1299,7 +1299,7 @@ out:
         message_free_body(body);
         free(body);
     }
-    if (msgrec) msgrecord_unrefw(&msgrec);
+    if (msgrec) msgrecord_unref(&msgrec);
     return r;
 }
 
@@ -1338,7 +1338,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
     /* Copy/link all files and cache info */
     for (msg = 0; msg < msgrecs->count; msg++) {
-        const msgrecord_t *src_msgrec = ptrarray_nth(msgrecs, msg);
+        msgrecord_t *src_msgrec = ptrarray_nth(msgrecs, msg);
         uint32_t src_uid;
         uint32_t src_system_flags;
 
@@ -1484,7 +1484,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         mboxevent_extract_msgrecord(mboxevent, dst_msgrec);
         mboxevent_extract_copied_msgrecord(mboxevent, src_msgrec);
 
-        msgrecord_unrefw(&dst_msgrec);
+        msgrecord_unref(&dst_msgrec);
     }
 
 out:
@@ -1495,7 +1495,7 @@ out:
         return r;
     }
     if (dst_msgrec) {
-        msgrecord_unrefw(&dst_msgrec);
+        msgrecord_unref(&dst_msgrec);
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);

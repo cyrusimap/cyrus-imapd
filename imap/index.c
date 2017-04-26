@@ -1327,7 +1327,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
         r = index_rewrite_record(state, msgno, &record, /*silent*/1);
         if (r) goto out;
 
-        msgrecord_unrefw(&msgrec);
+        msgrecord_unref(&msgrec);
     }
 
 
@@ -1344,7 +1344,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_notify(&mboxevents);
 
 out:
-    if (msgrec) msgrecord_unrefw(&msgrec);
+    if (msgrec) msgrecord_unref(&msgrec);
     mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);
@@ -1441,7 +1441,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = append_run_annotator(&as, msgrec);
         if (r) goto out;
 
-        msgrecord_unrefw(&msgrec);
+        msgrecord_unref(&msgrec);
 
         r = index_rewrite_record(state, msgno, &record, /*silent*/0);
         if (r) goto out;
@@ -1450,7 +1450,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
 out:
     seqset_free(seq);
 
-    if (msgrec) msgrecord_unrefw(&msgrec);
+    if (msgrec) msgrecord_unref(&msgrec);
     if (!r) {
         r = append_commit(&as);
     }
@@ -2952,7 +2952,7 @@ done:
     mailbox_close(&destmailbox);
     for (i = 0; i < msgrecs->count; i++) {
         msgrecord_t *mr = ptrarray_nth(msgrecs, i);
-        msgrecord_unrefw(&mr);
+        msgrecord_unref(&mr);
     }
     ptrarray_free(msgrecs);
 
