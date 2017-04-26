@@ -148,7 +148,7 @@ extern int append_collectnews(struct appendstate *mailbox,
 #define append_getlastuid(as) ((as)->m.last_uid);
 
 extern int append_run_annotator(struct appendstate *as,
-                                struct index_record *record);
+                                msgrecord_t *msgrec);
 
 extern const char *append_stagefname(struct stagemsg *stage);
 

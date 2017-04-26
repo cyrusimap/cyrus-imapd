@@ -1207,23 +1207,18 @@ out:
 }
 
 HIDDEN int append_run_annotator(struct appendstate *as,
-                         struct index_record *record)
+                                msgrecord_t *msgrec)
 {
     FILE *f = NULL;
     const char *fname;
     struct entryattlist *user_annots = NULL;
     struct entryattlist *system_annots = NULL;
     strarray_t *flags = NULL;
-    annotate_state_t *astate = NULL;
     struct body *body = NULL;
     int r = 0;
-    msgrecord_t *msgrec = NULL;
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
-
-    r = msgrecord_from_index_record(as->mailbox, *record, &msgrec);
-    if (r) return r;
 
     r = msgrecord_extract_flags(msgrec, as->userid, &flags);
     if (r) goto out;
@@ -1271,9 +1266,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
                         error_message(r));
         goto out;
     }
-
-    r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
-    if (r) goto out;
 
     if (user_annots) {
         r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);

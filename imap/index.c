@@ -1396,6 +1396,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     struct index_map *im;
     uint32_t msgno;
     struct appendstate as;
+    msgrecord_t *msgrec = NULL;
     int r = 0;
 
     /* We do the acl check here rather than in append_setup_mbox()
@@ -1432,8 +1433,13 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
 
-        r = append_run_annotator(&as, &record);
+        r = msgrecord_from_index_record(state->mailbox, record, &msgrec);
         if (r) goto out;
+
+        r = append_run_annotator(&as, msgrec);
+        if (r) goto out;
+
+        msgrecord_unrefw(&msgrec);
 
         r = index_rewrite_record(state, msgno, &record, /*silent*/0);
         if (r) goto out;
@@ -1442,6 +1448,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
 out:
     seqset_free(seq);
 
+    if (msgrec) msgrecord_unrefw(&msgrec);
     if (!r) {
         r = append_commit(&as);
     }
