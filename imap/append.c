@@ -97,8 +97,6 @@ static int append_addseen(struct mailbox *mailbox, const char *userid,
                           struct seqset *newseen);
 static int append_setseen(struct appendstate *as, msgrecord_t *mr);
 
-#define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
-
 /*
  * Check to see if mailbox can be appended to
  *
