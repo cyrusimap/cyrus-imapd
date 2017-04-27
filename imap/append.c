@@ -1418,16 +1418,16 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
             dst_system_flags &= ~FLAG_DELETED;
         }
 
-        /* should this message be marked \Seen? */
-        if (src_system_flags & FLAG_SEEN) {
-            append_setseen(as, dst_msgrec);
-        }
-
         /* we're not modifying the ARCHIVED flag here, just keeping it */
 
         /* set system flags */
         r = msgrecord_set_systemflags(dst_msgrec, dst_system_flags);
         if (r) goto out;
+
+        /* should this message be marked \Seen? */
+        if (src_system_flags & FLAG_SEEN) {
+            append_setseen(as, dst_msgrec);
+        }
 
         /* Link/copy message file */
         free(srcfname);
