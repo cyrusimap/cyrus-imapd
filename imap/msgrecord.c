@@ -177,7 +177,6 @@ HIDDEN msgrecord_t *msgrecord_new_from_index_record(struct mailbox *mbox,
 EXPORTED msgrecord_t *msgrecord_new_from_msgrecord(struct mailbox *mbox,
                                                    msgrecord_t *mr)
 {
-    /* TODO(rsto) make clear which fields aren't cloned */
     return msgrecord_new_from_index_record(mbox ? mbox : mr->mbox, mr->record);
 }
 
@@ -354,7 +353,6 @@ EXPORTED int msgrecord_get_message(msgrecord_t *mr, message_t **msg)
 EXPORTED int msgrecord_get_body(msgrecord_t *mr, struct buf *buf)
 {
     int  r;
-    /* FIXME this should probably be a function of message_t */
     if (!mr->isappend) {
         r = msgrecord_need(mr, M_CACHE);
         if (r) return r;
@@ -571,11 +569,6 @@ EXPORTED int msgrecord_should_archive(msgrecord_t *mr, void *rock)
 
 /* mailbox.c code goes here */
 
-struct findbyrecno_rock {
-    uint32_t recno;
-    msgrecord_t *mr;
-};
-
 static int mailbox_find_msgrecord_internal(struct mailbox *mbox,
                                            uint32_t uid,
                                            uint32_t recno,
@@ -592,10 +585,6 @@ static int mailbox_find_msgrecord_internal(struct mailbox *mbox,
         struct index_record record;
         memset(&record, 0, sizeof(struct index_record));
         record.recno = recno;
-        /* TODO(rsto): mailbox_reload_index_record loads
-         * the record from recno, if it's set on the
-         * index_record. That's OK to assume here since
-         * we'll move this whole function into mailbox.c */
         r = mailbox_reload_index_record(mbox, &record);
         if (r) goto done;
         mr = msgrecord_new_from_index_record(mbox, record);
