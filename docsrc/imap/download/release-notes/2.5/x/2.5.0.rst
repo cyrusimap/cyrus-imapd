@@ -113,6 +113,11 @@ Environments that run a Cyrus IMAP Murder topology will want to upgrade
 their backends before they upgrade their frontends. See :task:`16` for
 details.
 
+Greater Memory Footprint
+------------------------
+
+.. include:: /assets/cyrus-more-memory-post23.rst
+
 .. _relnotes-2.5.0-new-features:
 
 New Features
