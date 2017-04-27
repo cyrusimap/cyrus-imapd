@@ -15,6 +15,10 @@ Upgrading to 3.0
 ..  contents:: Upgrading: an overview
     :local:
 
+.. note::
+
+    .. include:: /assets/cyrus-more-memory-post23.rst
+
 1. Preparation
 --------------
 
