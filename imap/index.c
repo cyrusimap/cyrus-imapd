@@ -1271,7 +1271,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
          * on how it releases the cyrus.index lock in the middle of action */
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
-        r = msgrecord_from_index_record(state->mailbox, record, &msgrec, 1);
+        r = msgrecord_find_index_record(state->mailbox, record, &msgrec);
         if (r) goto out;
 
         switch (storeargs->operation) {
@@ -1435,7 +1435,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
 
-        r = msgrecord_from_index_record(state->mailbox, record, &msgrec, 1);
+        r = msgrecord_find_index_record(state->mailbox, record, &msgrec);
         if (r) goto out;
 
         r = append_run_annotator(&as, msgrec);
@@ -2894,7 +2894,7 @@ index_copy(struct index_state *state,
 
     for (i = 0; i < copyargs.nummsg; i++) {
         msgrecord_t *mr = NULL;
-        r = msgrecord_from_index_record(srcmailbox, copyargs.records[i], &mr, 0);
+        r = msgrecord_find_index_record(srcmailbox, copyargs.records[i], &mr);
         if (r) goto done;
         ptrarray_append(msgrecs, mr);
     }

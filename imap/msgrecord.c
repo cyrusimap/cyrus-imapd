@@ -569,7 +569,7 @@ EXPORTED int msgrecord_should_archive(msgrecord_t *mr, void *rock)
 
 /* mailbox.c code goes here */
 
-static int mailbox_find_msgrecord_internal(struct mailbox *mbox,
+static int msgrecord_find_internal(struct mailbox *mbox,
                                            uint32_t uid,
                                            uint32_t recno,
                                            msgrecord_t **mrp)
@@ -606,40 +606,30 @@ done:
     return r;
 }
 
-EXPORTED int mailbox_find_msgrecord(struct mailbox *mbox,
-                                    uint32_t uid,
-                                    msgrecord_t **mrp)
+EXPORTED int msgrecord_find(struct mailbox *mbox,
+                            uint32_t uid,
+                            msgrecord_t **mrp)
 {
-    return mailbox_find_msgrecord_internal(mbox, uid, /*recno*/0, mrp);
+    return msgrecord_find_internal(mbox, uid, /*recno*/0, mrp);
 }
 
-EXPORTED int mailbox_last_msgrecord(struct mailbox *mbox, msgrecord_t **mr)
+EXPORTED int msgrecord_find_latest(struct mailbox *mbox, msgrecord_t **mr)
 {
 
-   return mailbox_find_msgrecord_internal(mbox, mbox->i.last_uid, /*recno*/0, mr);
+   return msgrecord_find_internal(mbox, mbox->i.last_uid, /*recno*/0, mr);
 }
 
-EXPORTED int msgrecord_from_index_record(struct mailbox *mbox,
+EXPORTED int msgrecord_find_index_record(struct mailbox *mbox,
                                          struct index_record record,
-                                         msgrecord_t **mrp,
-                                         int rw)
+                                         msgrecord_t **mrp)
 {
     int r;
     msgrecord_t *mr = NULL;
 
     r = record.recno ?
-        mailbox_find_msgrecord_internal(mbox, 0, record.recno, &mr) :
-        mailbox_find_msgrecord_internal(mbox, record.uid, 0, &mr);
+        msgrecord_find_internal(mbox, 0, record.recno, &mr) :
+        msgrecord_find_internal(mbox, record.uid, 0, &mr);
     if (r) goto done;
-
-    if (rw) {
-        if (!mailbox_index_islocked(mbox, 1)) {
-            syslog(LOG_ERR, "msgrecord: need mailbox lock to edit %s:%d",
-                    mbox->name, mr->uid);
-            msgrecord_unref(&mr);
-            return IMAP_INTERNAL;
-        }
-    }
     *mrp = mr;
 
 done:

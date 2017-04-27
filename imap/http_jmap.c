@@ -493,7 +493,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
     if (r) return r;
 
-    r = mailbox_find_msgrecord(d->mbox, rec->uid, &d->mr);
+    r = msgrecord_find(d->mbox, rec->uid, &d->mr);
     if (r) {
         jmap_closembox(req, &d->mbox);
         d->mr = NULL;
