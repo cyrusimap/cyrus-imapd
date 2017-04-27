@@ -3433,7 +3433,10 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 				     stage[i]->internaldate,
 				     &stage[i]->flags, 0);
 	    }
-	    if (body) message_free_body(body);
+	    if (body) {
+		message_free_body(body);
+		free(body);
+	    }
 	}
 
 	if (!r) {
