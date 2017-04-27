@@ -2139,7 +2139,6 @@ int apply_annotations(struct mailbox *mailbox,
         /* Replicate the modseq of this record from master */
         struct annotate_metadata mdata = {
             chosen->modseq, /* modseq */
-            time(NULL),     /* modtime */
             0               /* flags - is determined by value */
         };
         r = annotate_state_writemdata(astate, chosen->entry,

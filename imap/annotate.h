@@ -84,7 +84,6 @@ struct entryattlist {
 struct annotate_metadata
 {
     modseq_t modseq;
-    time_t modtime;
     unsigned char flags; /* read-only */
 };
 

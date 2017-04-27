@@ -917,9 +917,6 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
     mdata->modseq = ntohll(*((unsigned long long *)tmps));
     tmps += sizeof(unsigned long long);
 
-    mdata->modtime = (time_t) ntohll(*((unsigned long long*)tmps));
-    tmps += sizeof(unsigned long long);
-
     mdata->flags = *tmps;
     tmps++;
 
@@ -2511,19 +2508,15 @@ out:
 static int make_entry(struct buf *data,
                       const struct buf *value,
                       modseq_t modseq,
-                      time_t modtime,
                       unsigned char flags)
 {
     unsigned long l;
     static const char contenttype[] = "text/plain"; /* fake */
-    unsigned long long nmodseq, nmodtime;
+    unsigned long long nmodseq;
 
     /* Make sure that native types are wide enough */
     assert(sizeof(modseq_t) <= sizeof(unsigned long long));
     nmodseq = htonll((unsigned long long) modseq);
-
-    /* FIXME need modtime to be platform independent? */
-    nmodtime = htonll((unsigned long long) modtime);
 
     l = htonl(value->len);
     buf_appendmap(data, (const char *)&l, sizeof(l));
@@ -2543,9 +2536,8 @@ static int make_entry(struct buf *data,
     l = 0;  /* fake modifiedsince */
     buf_appendmap(data, (const char *)&l, sizeof(l));
 
-    /* Append modseq and modtime at the end */
+    /* Append modseq at the end */
     buf_appendmap(data, (const char *)&nmodseq, sizeof(nmodseq));
-    buf_appendmap(data, (const char *)&nmodtime, sizeof(nmodtime));
 
     /* Append flags */
     buf_putc(data, flags);
@@ -2569,7 +2561,6 @@ static int write_entry(struct mailbox *mailbox,
     struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
     modseq_t modseq = mdata ? mdata->modseq : 0;
-    time_t modtime = mdata ? mdata->modtime : time(NULL);
 
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r)
@@ -2624,7 +2615,7 @@ static int write_entry(struct mailbox *mailbox,
         if (!value->len || value->s == NULL) {
             flags |= ANNOTATE_FLAG_DELETED;
         }
-        make_entry(&data, value, modseq, modtime, flags);
+        make_entry(&data, value, modseq, flags);
 
 #if DEBUG
         syslog(LOG_ERR, "write_entry: storing key %s (value: %s) to %s (modseq=" MODSEQ_FMT ")",
@@ -2671,7 +2662,7 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     else {
         struct buf data = BUF_INITIALIZER;
 
-        make_entry(&data, value, uid, time(NULL), /*flags*/0);
+        make_entry(&data, value, uid, /*flags*/0);
 
         do {
             r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
