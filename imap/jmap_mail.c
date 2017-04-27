@@ -5399,7 +5399,7 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
 
     if (!d->mailboxes || json_object_get(d->mailboxes, mbox->uniqueid)) {
 
-        r = mailbox_find_msgrecord_rw(mbox, rec->uid, &mrw);
+        r = mailbox_find_msgrecord(mbox, rec->uid, &mrw);
         if (r) goto done;
 
         r = updaterecord(mrw, d->flagged, d->unread, d->answered);
@@ -5424,7 +5424,7 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     msgrecord_t *mrw = NULL;
     uint32_t flags;
 
-    r = mailbox_find_msgrecord_rw(mbox, uid, &mrw);
+    r = mailbox_find_msgrecord(mbox, uid, &mrw);
     if (r) return r;
 
     r = msgrecord_get_systemflags(mrw, &flags);
@@ -5653,7 +5653,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (r) goto done;
 
-        r = mailbox_find_msgrecord_rw(mbox, uid, &mr);
+        r = mailbox_find_msgrecord(mbox, uid, &mr);
         if (r) goto done;
 
         /* Set flags in the new instances on this message,
@@ -5877,7 +5877,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (r) goto done;
 
     msgrecord_t *mrw;
-    r = mailbox_find_msgrecord_rw(mbox, uid, &mrw);
+    r = mailbox_find_msgrecord(mbox, uid, &mrw);
     if (r) goto done;
 
     r = updaterecord(mrw, flagged, unread, answered);

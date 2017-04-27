@@ -52,8 +52,6 @@ struct mailbox;
 
 extern int mailbox_find_msgrecord(struct mailbox *mbox, uint32_t uid,
                                   msgrecord_t **mr);
-extern int mailbox_find_msgrecord_rw(struct mailbox *mbox, uint32_t uid,
-                                     msgrecord_t **mr);
 
 extern int mailbox_last_msgrecord(struct mailbox *mbox, msgrecord_t **mr);
 

@@ -613,26 +613,6 @@ EXPORTED int mailbox_find_msgrecord(struct mailbox *mbox,
     return mailbox_find_msgrecord_internal(mbox, uid, /*recno*/0, mrp);
 }
 
-EXPORTED int mailbox_find_msgrecord_rw(struct mailbox *mbox,
-                                       uint32_t uid,
-                                       msgrecord_t **mrp)
-{
-    int r;
-    msgrecord_t *mr;
-
-    if (!mailbox_index_islocked(mbox, 1)) {
-        syslog(LOG_ERR, "msgrecord: need mailbox lock to find %s:%d",
-                mbox->name, mr->uid);
-        return IMAP_INTERNAL;
-    }
-
-    r = mailbox_find_msgrecord(mbox, uid, &mr);
-    if (r) return r;
-
-    *mrp = mr;
-    return 0;
-}
-
 EXPORTED int mailbox_last_msgrecord(struct mailbox *mbox, msgrecord_t **mr)
 {
 
