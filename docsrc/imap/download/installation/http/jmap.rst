@@ -79,11 +79,11 @@ Working
       * getIdentityUpdates
       * setIdentities
 
+* **Authentication**
+    * JMAP authentication is implemented and enabled by default for the /jmap endpoint. SASL authentication, including HTTP Basic Authentication (RFC 7617), can be enabled in addition to JMAP authentication.
+
 Not yet implemented
 -------------------
-
-* **Authentication**
-    * Cyrus does not yet implement the JMAP authentication workflow. All the JMAP methods in httpd currently require an account logged in via Basic Authentication.
 
 * **Multi-user accounts**
     All the current JMAP method operate with the account currently authenticated
