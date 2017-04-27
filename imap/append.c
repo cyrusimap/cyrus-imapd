@@ -1299,7 +1299,6 @@ out:
         message_free_body(body);
         free(body);
     }
-    if (msgrec) msgrecord_unref(&msgrec);
     return r;
 }
 
