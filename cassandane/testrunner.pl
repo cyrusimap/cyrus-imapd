@@ -61,7 +61,6 @@ my $do_list = 0;
 my $keep_going = 1;
 my $log_directory;
 my @names;
-my $jobs = Cassandane::Cassini->instance()->val('cassandane', 'maxworkers', undef);
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.
@@ -223,13 +222,15 @@ while (my $a = shift)
     }
     elsif ($a eq '-j' || $a eq '--jobs')
     {
-	$jobs = shift;
-	usage unless defined $jobs;
+	my $jobs = 0 + shift;
+	usage unless $jobs > 0;
+	push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
     }
     elsif ($a =~ m/^-j(\d+)$/)
     {
-	$jobs = 0 + $1;
+	my $jobs = 0 + $1;
 	usage unless $jobs > 0;
+	push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
     }
     elsif ($a eq '-L' || $a eq '--log-directory')
     {
@@ -273,7 +274,7 @@ Cassandane::Instance::cleanup_leftovers()
 
 my $plan = Cassandane::Unit::TestPlan->new(
 	keep_going => $keep_going,
-	maxworkers => $jobs,
+	maxworkers => $cassini->val('cassandane', 'maxworkers'),
 	log_directory => $log_directory,
     );
 
