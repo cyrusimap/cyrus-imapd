@@ -2971,12 +2971,14 @@ sub test_getmessagelist_window
     @subids = @{$ids}[1..1];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
     $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog "anchor at 2nd message";
     $res = $jmap->Request([['getMessageList', { anchor => @{$ids}[1] }, "R1"]]);
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
     $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog "anchor at 2nd message and offset -1";
     $res = $jmap->Request([['getMessageList', {
@@ -2985,6 +2987,7 @@ sub test_getmessagelist_window
     @subids = @{$ids}[2..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
     $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(2, $res->[0][1]->{position});
 
     xlog "anchor at 3rd message and offset 1";
     $res = $jmap->Request([['getMessageList', {
@@ -2993,6 +2996,7 @@ sub test_getmessagelist_window
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
     $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(1, $res->[0][1]->{position});
 
     xlog "anchor at 1st message offset -1 and limit 2";
     $res = $jmap->Request([['getMessageList', {
@@ -3001,6 +3005,7 @@ sub test_getmessagelist_window
     @subids = @{$ids}[1..2];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{messageIds});
     $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(1, $res->[0][1]->{position});
 }
 
 sub test_getsearchsnippets
