@@ -3360,6 +3360,11 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                     json_array_append(anchored_ids, json_array_get(*messageids, j));
                     json_array_append(anchored_cids, json_array_get(*threadids, j));
                 }
+                /* Adjust the window position for this anchor. This is
+                 * "[...] the 0-based index of the first result in the
+                 * threadIds array within the complete list". */
+                window->position = json_array_size(*threadids) -
+                                   json_array_size(anchored_cids);
 
                 json_decref(*messageids);
                 *messageids = anchored_ids;
@@ -3372,6 +3377,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             if (window->anchor_pos != (size_t)-1 && window->anchor_pos) {
                 /* Found the anchor but haven't yet entered its window */
                 window->anchor_pos--;
+                /* But this message still counts to the window position */
+                window->position++;
                 goto doneloop;
             }
         }
