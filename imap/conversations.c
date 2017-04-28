@@ -1459,6 +1459,8 @@ static void conversation_update_thread(conversation_t *conv,
     nextp = &conv->thread;
     for (parent = conv->thread; parent; parent = parent->next) {
         if (parent->internaldate > thread->internaldate) break;
+        /* or if the dates are the same, sort by GUID */
+        if (parent->internaldate == thread->internaldate && message_guid_cmp(&parent->guid, &thread->guid)) break;
         nextp = &parent->next;
     }
 
