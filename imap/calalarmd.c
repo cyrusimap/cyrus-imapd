@@ -55,6 +55,7 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#include "sync_log.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
@@ -86,6 +87,7 @@ static void shut_down(int ec)
     quotadb_done();
     mboxlist_close();
     mboxlist_done();
+    sync_log_done();
     cyrus_done();
     exit(ec);
 }
@@ -136,6 +138,8 @@ int main(int argc, char **argv)
     caldav_init();
 
     mboxevent_init();
+
+    sync_log_init();
 
     if (upgrade) {
         caldav_alarm_upgrade();
