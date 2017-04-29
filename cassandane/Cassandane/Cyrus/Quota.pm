@@ -2724,4 +2724,68 @@ sub test_rename_withannot
     );
 }
 
+sub test_num_folders_rename
+{
+    my ($self) = @_;
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(storage => 12345, 'x-num-folders' => 500);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 2);
+
+    $talk->create("INBOX.another");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 3);
+
+    $talk->rename("INBOX.another", "INBOX.out");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 3);
+}
+
+sub test_num_folders_delete_immediate
+{
+    my ($self) = @_;
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(storage => 12345, 'x-num-folders' => 500);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 2);
+
+    $talk->create("INBOX.another");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 3);
+
+    $talk->delete("INBOX.another");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 2);
+}
+
+sub test_num_folders_delete_delayed
+    :DelayedDelete
+{
+    my ($self) = @_;
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(storage => 12345, 'x-num-folders' => 500);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 2);
+
+    $talk->create("INBOX.another");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 3);
+
+    $talk->delete("INBOX.another");
+
+    $self->_check_usages(storage => 0, 'x-num-folders' => 2);
+}
+
 1;
