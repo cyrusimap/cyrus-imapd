@@ -5182,6 +5182,8 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     mailbox_set_quotaroot(newmailbox, newquotaroot);
     mailbox_quota_dirty(newmailbox);
     memset(newmailbox->quota_previously_used, 0, sizeof(newmailbox->quota_previously_used));
+    /* except this one... because we've counted it when we created the folder */
+    newmailbox->quota_previously_used[QUOTA_NUMFOLDERS] = 1;
 
     /* re-set the UIDVALIDITY, it will have been the old one in the index header */
     mailbox_index_dirty(newmailbox);
