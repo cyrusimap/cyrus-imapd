@@ -59,7 +59,6 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
@@ -77,6 +76,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static int getMailboxes(jmap_req_t *req);
 static int setMailboxes(jmap_req_t *req);

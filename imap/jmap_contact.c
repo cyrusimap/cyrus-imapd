@@ -59,7 +59,6 @@
 #include "http_carddav.h"
 #include "http_dav.h"
 #include "http_jmap.h"
-#include "imap_err.h"
 #include "mailbox.h"
 #include "mboxname.h"
 #include "stristr.h"
@@ -69,6 +68,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);

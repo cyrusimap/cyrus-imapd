@@ -1814,7 +1814,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q
 ## that we have a single "source directory" for sphinx-build to use.
 docsrc/.sphinx-build.stamp:
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
-        (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc) | tar xf -
+        (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@
 
 clean-docsrc:

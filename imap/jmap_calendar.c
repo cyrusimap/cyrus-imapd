@@ -62,7 +62,6 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "ical_support.h"
-#include "imap_err.h"
 #include "jmap_ical.h"
 #include "search_query.h"
 #include "stristr.h"
@@ -72,7 +71,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
-
+#include "imap/imap_err.h"
 
 static int getCalendars(struct jmap_req *req);
 static int getCalendarUpdates(struct jmap_req *req);

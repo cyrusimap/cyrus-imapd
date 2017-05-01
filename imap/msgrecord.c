@@ -44,10 +44,11 @@
 #include <stdint.h>
 #include <syslog.h>
 
-#include "imap_err.h"
 #include "mailbox.h"
-
 #include "msgrecord.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 struct msgrecord {
     int refcount;
