@@ -78,7 +78,6 @@
 #include "quota.h"
 #include "search_engines.h"
 #include "seen.h"
-#include "sqldb.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
