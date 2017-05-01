@@ -725,9 +725,6 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
     return res;
 }
 
-#define CMD_SELMBOX CMD_READFIELDS \
-    " WHERE mailbox = :mailbox AND alive = 1;"
-
 EXPORTED int caldav_get_events(struct caldav_db *caldavdb,
                                const char *mailbox, const char *ical_uid,
                                caldav_cb_t *cb, void *rock)
