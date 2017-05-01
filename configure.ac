@@ -1826,6 +1826,21 @@ if test "$with_perl" = "notfound"; then
 elif test "${with_perl}" != "no"; then
 dnl compile perl stuff and perl/cyradm
     PERL="${with_perl}"
+
+dnl Make sure perl modules are in the build directory (which isn't necessarily
+dnl the source directory)
+    AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/HeaderFile.pm:perl/imap/Cyrus/HeaderFile.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/CacheFile.pm:perl/imap/Cyrus/CacheFile.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/IndexFile.pm:perl/imap/Cyrus/IndexFile.pm])
+    AC_CONFIG_LINKS([perl/imap/IMAP/Shell.pm:perl/imap/IMAP/Shell.pm])
+    AC_CONFIG_LINKS([perl/imap/IMAP/IMSP.pm:perl/imap/IMAP/IMSP.pm])
+    AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
+    AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
+    AC_CONFIG_LINKS([perl/annotator/Message.pm:perl/annotator/Message.pm])
+    AC_CONFIG_LINKS([perl/annotator/AnnotateInlinedCIDs.pm:perl/annotator/AnnotateInlinedCIDs.pm])
+    AC_CONFIG_LINKS([perl/annotator/Daemon.pm:perl/annotator/Daemon.pm])
+
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
 dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris --
