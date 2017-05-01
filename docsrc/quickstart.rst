@@ -1,3 +1,5 @@
+:orphan:
+
 ================
 Quickstart Guide
 ================
@@ -7,8 +9,12 @@ Quickstart Guide
 
     imap/quickstart/introduction
 
-.. Coming Soon
-.. -----------
+Coming Soon
+===========
+
+.. note::
+
+    The deb packages referenced below are not yet available.  Sorry!
 
 Quick install
 =============

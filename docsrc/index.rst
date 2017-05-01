@@ -40,7 +40,6 @@ This is the highlight reel of Cyrus's full list of :ref:`features <imap-features
     :maxdepth: 3
     :caption: Cyrus IMAP
 
-    quickstart
     download
     concepts
     reference
