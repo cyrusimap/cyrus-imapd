@@ -67,7 +67,6 @@
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "json_support.h"
-#include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
@@ -91,6 +90,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #include "jmap_ical.h"
 

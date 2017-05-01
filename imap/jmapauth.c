@@ -57,7 +57,6 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
-#include "imap_err.h"
 #include "mboxname.h"
 #include "proxy.h"
 #include "times.h"
@@ -66,6 +65,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 #include "jmapauth.h"
 
