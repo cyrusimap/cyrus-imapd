@@ -83,6 +83,8 @@ int verbose = 0;
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
+int recalc_silent = 0;
+
 static int do_dump(const char *fname, const char *userid)
 {
     struct conversations_state *state = NULL;
@@ -265,7 +267,7 @@ static int recalc_counts_cb(const mbentry_t *mbentry,
     if (verbose)
         printf("%s\n", mbentry->name);
 
-    r = mailbox_add_conversations(mailbox);
+    r = mailbox_add_conversations(mailbox, recalc_silent);
 
     mailbox_close(&mailbox);
     return r;
@@ -283,7 +285,7 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     if (verbose)
         printf("%s\n", mbentry->name);
 
-    r = mailbox_add_conversations(mailbox);
+    r = mailbox_add_conversations(mailbox, /*silent*/1);
 
     mailbox_close(&mailbox);
     return r;
@@ -817,7 +819,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((c = getopt(argc, argv, "durzAbvRFC:T:")) != EOF) {
+    while ((c = getopt(argc, argv, "durzsAbvRFC:T:")) != EOF) {
         switch (c) {
         case 'd':
             if (mode != UNKNOWN)
@@ -875,6 +877,10 @@ int main(int argc, char **argv)
 
         case 'T': /* tmpfs directory for audit */
             audit_temp_directory = optarg;
+            break;
+
+        case 's':
+            recalc_silent = 1;
             break;
 
         default:

@@ -1079,7 +1079,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
                            options, uidvalidity, highestmodseq, &newmailbox);
         if (r) goto done; /* CREATE failed */
-        r = mailbox_add_conversations(newmailbox);
+        r = mailbox_add_conversations(newmailbox, /*silent*/0);
         if (r) goto done;
     }
 

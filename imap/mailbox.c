@@ -4788,7 +4788,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 
 #endif /* WITH_DAV */
 
-EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
+EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
 {
     const message_t *msg;
     int r = 0;
@@ -4811,11 +4811,14 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
             continue;
 
         struct index_record copyrecord = *record;
+        copyrecord.silent = silent;
         r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1);
         if (r) break;
 
         if (copyrecord.cid == record->cid)
             continue;
+
+        assert(!silent); // can't change cid if silent!
 
         /* remove this record again */
         r = conversations_update_record(cstate, mailbox, &copyrecord, NULL, 0);
@@ -5275,7 +5278,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     else {
         /* have to handle each one separately */
         if (newcstate)
-            r = mailbox_add_conversations(newmailbox);
+            r = mailbox_add_conversations(newmailbox, /*silent*/0);
         if (oldcstate)
             r = mailbox_delete_conversations(oldmailbox);
     }
