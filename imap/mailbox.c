@@ -484,7 +484,7 @@ EXPORTED struct buf *cacheitem_buf(const struct index_record *record, int field)
 /* parse a single cache record from the mapped file - creates buf
  * records which point into the map, so you can't free it while
  * you still have them around! */
-static int cache_parserecord(struct mappedfile *cachefile, size_t cache_offset,
+static int cache_parserecord(struct mappedfile *cachefile, uint64_t cache_offset,
                              struct cacherecord *crec)
 {
     const struct buf *buf = mappedfile_buf(cachefile);
@@ -1697,14 +1697,19 @@ static int mailbox_buf_to_index_record(const char *buf,
     record->size = ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
     record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
     record->gmtime = ntohl(*((bit32 *)(buf+OFFSET_GMTIME)));
-    record->cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+    uint64_t cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
     record->last_updated = ntohl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
     record->system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
     record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
-    record->cache_version = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+    uint64_t cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+
+    /* keep the low bits of the version field for the version */
+    record->cache_version = cache_version_field & 0xffff;
+    /* use the high bits of the version field to extend the cache offset */
+    record->cache_offset = cache_offset_field | ((cache_version_field & 0xffff0000) << 16);
 
     if (version < 8)
         return 0;
@@ -2589,6 +2594,11 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 
     memset(buf, 0, INDEX_RECORD_SIZE);
 
+    /* keep the low bits of the offset in the offset field */
+    uint32_t cache_offset_field = record->cache_offset & 0xffffffff;
+    /* mix in the high bits of the offset to the top half of the version field */
+    uint32_t cache_version_field = (uint32_t)record->cache_version | (record->cache_offset & 0xffff00000000) >> 16;
+
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
     *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
     *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
@@ -2601,14 +2611,14 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
         /* content_offset was always the same */
         *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(record->header_size);
     }
-    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(record->cache_offset);
+    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
     *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(record->system_flags);
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
-    *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
+    *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(cache_version_field);
 
     /* versions less than 8 had no modseq */
     if (version < 8) {

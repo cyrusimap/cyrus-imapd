@@ -99,7 +99,7 @@ struct index_map {
     uint32_t uid;
     uint32_t recno;
     uint32_t system_flags;
-    uint32_t cache_offset;
+    uint64_t cache_offset;
     uint32_t user_flags[MAX_USER_FLAGS/32];
     unsigned int isseen:1;
     unsigned int isrecent:1;

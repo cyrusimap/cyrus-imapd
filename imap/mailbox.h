@@ -144,12 +144,12 @@ struct index_record {
     uint32_t size;
     uint32_t header_size;
     time_t gmtime;
-    uint32_t cache_offset;
+    uint64_t cache_offset;
     time_t last_updated;
     uint32_t system_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
     uint32_t content_lines;
-    uint32_t cache_version;
+    uint16_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
     bit64 cid;
