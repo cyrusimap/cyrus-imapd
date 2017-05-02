@@ -455,6 +455,8 @@ static char *get_addrbook_mboxname(const char *list, const char *userid)
 
     free(uri);
 
+    if (!abook) return NULL;
+
     /* MUST match default addressbook case-insensitively */
     if (!strcasecmp(abook, "Default")) {
         abook[0] = 'D';
