@@ -60,7 +60,6 @@
 #include <limits.h>
 
 #include "assert.h"
-#include "caldav_alarm.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
@@ -78,6 +77,10 @@
 #include "prot.h"
 #include "dlist.h"
 #include "xstrlcat.h"
+
+#ifdef USE_CALALARMD
+#include "caldav_alarm.h"
+#endif
 
 #ifdef USE_SIEVE
 #include "sieve/sieve_interface.h"
