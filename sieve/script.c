@@ -194,10 +194,13 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
+
+#ifdef WITH_DAV
     sieve_register_listvalidator(interpreter,
                                  (sieve_list_validator *) &stub_generic);
     sieve_register_listcompare(interpreter,
                                (sieve_list_comparator *) &stub_generic);
+#endif
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {

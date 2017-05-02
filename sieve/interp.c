@@ -590,7 +590,9 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_EXTLISTS:
         if (!(interp->isvalidlist && interp->listcompare &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS))) capa = 0;
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) &&
+              (config_getbitfield(IMAPOPT_HTTPMODULES) & IMAP_ENUM_HTTPMODULES_CARDDAV)))
+            capa = 0;
         break;
 
     case SIEVE_CAPA_INCLUDE:

@@ -44,12 +44,17 @@
 #define LMTP_SIEVE_H
 
 #include "lmtpd.h"
-#include "carddav_db.h"
 #include "sieve/sieve_interface.h"
 
 struct sieve_interp_ctx {
     const char *userid;
+
+#ifdef WITH_DAV
+#include "carddav_db.h"
     struct carddav_db *carddavdb;
+#else
+    void *carddavdb;
+#endif
 };
 
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx);
