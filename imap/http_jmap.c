@@ -1161,7 +1161,7 @@ static json_t *user_settings(const char *userid)
             "accounts", accounts,
             /* FIXME capabilities */
             "apiUrl", "/jmap/",
-            "downloadUrl", "/jmap/download/",
+            "downloadUrl", "/jmap/download/{accountId}/{blobId}/{name}",
             /* FIXME eventSourceUrl */
             "uploadUrl", "/jmap/upload/");
 }
