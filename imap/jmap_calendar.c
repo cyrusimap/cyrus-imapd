@@ -117,8 +117,6 @@ struct updates_rock {
     size_t seen_records;
     size_t max_records;
 
-    struct mailbox *mailbox;
-    short fetchmodseq;
     modseq_t highestmodseq;
 };
 
@@ -159,30 +157,8 @@ static void updates_rock_update(struct updates_rock *rock,
         json_array_append_new(rock->removed, json_string(uid));
     }
 
-    /* Fetch record to determine modseq. */
-    if (rock->fetchmodseq) {
-        struct index_record record;
-        int r;
-
-        if (!rock->mailbox || strcmp(rock->mailbox->name, dav.mailbox)) {
-            mailbox_close(&rock->mailbox);
-            r = mailbox_open_irl(dav.mailbox, &rock->mailbox);
-            if (r) {
-                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                        dav.mailbox, error_message(r));
-                return;
-            }
-        }
-        r = mailbox_find_index_record(rock->mailbox, dav.imap_uid, &record);
-        if (r) {
-            syslog(LOG_INFO, "mailbox_find_index_record(%s,%d) failed: %s",
-                    rock->mailbox->name, dav.imap_uid, error_message(r));
-            mailbox_close(&rock->mailbox);
-            return;
-        }
-        if (record.modseq > rock->highestmodseq) {
-            rock->highestmodseq = record.modseq;
-        }
+    if (dav.modseq > rock->highestmodseq) {
+        rock->highestmodseq = dav.modseq;
     }
 }
 
@@ -2068,13 +2044,11 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_decref(invalid);
 
     /* Lookup updates. */
-    rock.fetchmodseq = 1;
     rock.changed = json_array();
     rock.removed = json_array();
     rock.max_records = maxChanges;
     r = caldav_get_updates(db, oldmodseq, NULL /*mboxname*/, CAL_COMP_VEVENT, 
             maxChanges ? maxChanges + 1 : -1, &geteventupdates_cb, &rock);
-    mailbox_close(&rock.mailbox);
     if (r) goto done;
     strip_spurious_deletes(&rock);
 
