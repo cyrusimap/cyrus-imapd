@@ -169,7 +169,8 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
 #define CMD_GETFIELDS                                                   \
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
-    "  version, vcard_uid, kind, fullname, name, nickname, alive"       \
+    "  version, vcard_uid, kind, fullname, name, nickname, alive,"      \
+    "  modseq" \
     " FROM vcard_objs"
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
@@ -182,6 +183,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(cdata, 0, sizeof(struct carddav_data));
 
     cdata->dav.alive = sqlite3_column_int(stmt, 15);
+    cdata->dav.modseq = sqlite3_column_int(stmt, 16);
     if (!rrock->tombstones && !cdata->dav.alive)
         return 0;
 
