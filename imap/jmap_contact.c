@@ -112,8 +112,6 @@ struct updates_rock {
     size_t seen_records;
     size_t max_records;
 
-    struct mailbox *mailbox;
-    short fetchmodseq;
     modseq_t highestmodseq;
 };
 
@@ -155,29 +153,8 @@ static void updates_rock_update(struct updates_rock *rock,
     }
 
     /* Fetch record to determine modseq. */
-    if (rock->fetchmodseq) {
-        struct index_record record;
-        int r;
-
-        if (!rock->mailbox || strcmp(rock->mailbox->name, dav.mailbox)) {
-            mailbox_close(&rock->mailbox);
-            r = mailbox_open_irl(dav.mailbox, &rock->mailbox);
-            if (r) {
-                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                        dav.mailbox, error_message(r));
-                return;
-            }
-        }
-        r = mailbox_find_index_record(rock->mailbox, dav.imap_uid, &record);
-        if (r) {
-            syslog(LOG_INFO, "mailbox_find_index_record(%s,%d) failed: %s",
-                    rock->mailbox->name, dav.imap_uid, error_message(r));
-            mailbox_close(&rock->mailbox);
-            return;
-        }
-        if (record.modseq > rock->highestmodseq) {
-            rock->highestmodseq = record.modseq;
-        }
+    if (dav.modseq > rock->highestmodseq) {
+        rock->highestmodseq = dav.modseq;
     }
 }
 
@@ -668,11 +645,9 @@ static int getContactGroupUpdates(struct jmap_req *req)
     rock.changed = json_array();
     rock.removed = json_array();
     rock.max_records = max_records;
-    rock.fetchmodseq = 1;
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
                             &getcontactupdates_cb, &rock);
-    mailbox_close(&rock.mailbox);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -1736,12 +1711,10 @@ static int getContactUpdates(struct jmap_req *req)
     memset(&rock, 0, sizeof(struct updates_rock));
     rock.changed = json_array();
     rock.removed = json_array();
-    rock.fetchmodseq = 1;
     rock.max_records = max_records;
 
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
                             &getcontactupdates_cb, &rock);
-    mailbox_close(&rock.mailbox);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
