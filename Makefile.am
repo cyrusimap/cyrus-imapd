@@ -1806,7 +1806,7 @@ docsrc/.sphinx-build.stamp:
 
 clean-docsrc:
 	test x"$(top_srcdir)" = x"$(top_builddir)" || \
-		$(RM) -r $(top_builddir)/docsrc
+		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
