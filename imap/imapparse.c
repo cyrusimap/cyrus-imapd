@@ -1183,7 +1183,13 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 'x':
-        if (!strcmp(criteria.s, "xlistid")) {           /* nonstandard */
+        if (!strcmp(criteria.s, "xattachmentname")) {  /* nonstandard */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto missingarg;
+            string_match(parent, arg.s, "attachmentname", base);
+        }
+        else if (!strcmp(criteria.s, "xlistid")) {           /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
