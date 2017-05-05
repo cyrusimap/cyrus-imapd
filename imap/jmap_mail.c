@@ -2794,6 +2794,8 @@ static void match_string(search_expr_t *parent, const char *s, const char *name)
     const search_attr_t *attr = search_attr_find(name);
     enum search_op op;
 
+    assert(attr);
+
     op = search_attr_is_fuzzable(attr) ? SEOP_FUZZYMATCH : SEOP_MATCH;
 
     e = search_expr_new(parent, op);
@@ -2889,6 +2891,9 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             e = search_expr_new(e, SEOP_MATCH);
             e->attr = search_attr_find("keyword");
             e->value.s = xstrdup(JMAP_HAS_ATTACHMENT_FLAG);
+        }
+        if ((s = json_string_value(json_object_get(filter, "attachmentName")))) {
+            match_string(this, s, "attachmentname");
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -3049,6 +3054,7 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
         readprop_full(filter, prefix, "isAnswered", 0, invalid, "b", &b);
         readprop_full(filter, prefix, "isDraft", 0, invalid, "b", &b);
         readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
+        readprop_full(filter, prefix, "attachmentName", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "text", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "from", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "to", 0, invalid, "s", &s);
