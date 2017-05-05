@@ -3170,6 +3170,105 @@ sub test_getmessagelist_snippets
     $self->assert_null($snippet->{preview});
 }
 
+sub test_getmessagelist_attachments
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    # create a message with an attachment
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    $res = $jmap->Request([
+      ['setMessages', { create => {
+                  "1" => {
+                      mailboxIds => [$draftsmbox],
+                      from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+                      to => [
+                          { name => "Bugs Bunny", email => "bugs\@acme.local" },
+                      ],
+                      subject => "Memo",
+                      textBody => "I'm givin' ya one last chance ta surrenda!",
+                      attachments => [{
+                              blobId => $data->{blobId},
+                              name => "logo.gif",
+                          }],
+                  },
+                  "2" => {
+                      mailboxIds => [$draftsmbox],
+                      from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+                      to => [
+                          { name => "Bugs Bunny", email => "bugs\@acme.local" },
+                      ],
+                      subject => "Memo 2",
+                      textBody => "I'm givin' ya *one* last chance ta surrenda!",
+                      attachments => [{
+                              blobId => $data->{blobId},
+                              name => "somethingelse.gif",
+                          }],
+                  },
+  } }, 'R2'],
+    ]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "filter attachmentName";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            attachmentName => "logo",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($id1, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter attachmentName";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            attachmentName => "somethingelse.gif",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($id2, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter attachmentName";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            attachmentName => "gif",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+
+    xlog "filter text";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            text => "logo",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($id1, $res->[0][1]->{messageIds}[0]);
+}
+
 sub test_getthreads
     :JMAP :min_version_3_0
 {
