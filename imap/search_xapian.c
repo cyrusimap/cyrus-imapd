@@ -976,8 +976,11 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     xapian_query_t *qq = NULL;
     int r = 0;
 
-    if (bb->db == NULL)
+    if (bb->db == NULL) {
+        syslog(LOG_ERR, "search_xapian: can't find index for mailbox: %s",
+                bb->mailbox ?  bb->mailbox->name : "<unknown>");
         return IMAP_NOTFOUND;       /* there's no index for this user */
+    }
 
     /* Validate config */
     r = check_config();
