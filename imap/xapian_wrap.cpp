@@ -111,7 +111,8 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "Y",                /* TYPE */
         "H",                /* HEADERS */
         "D",                /* BODY */
-        "O"                 /* LOCATION */
+        "O",                /* LOCATION */
+        "A"                 /* ATTACHMENTNAME */
     },
     // Version 1: Stem using STEM_SOME with stopwords
     {
@@ -125,7 +126,8 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "XY",                /* TYPE */
         "XH",                /* HEADERS */
         "",                  /* BODY */
-        "XO"                 /* LOCATION */
+        "XO",                /* LOCATION */
+        "XA"                 /* ATTACHMENTNAME */
     },
     // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
     {
@@ -139,7 +141,8 @@ stem_prefixes[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         "XY",                /* TYPE */
         "XH",                /* HEADERS */
         "",                  /* BODY */
-        "XO"                 /* LOCATION */
+        "XO",                /* LOCATION */
+        "XA"                 /* ATTACHMENTNAME */
     }
 };
 
@@ -157,7 +160,8 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_ALL,   /* TYPE */
         Xapian::QueryParser::STEM_ALL,   /* HEADERS */
         Xapian::QueryParser::STEM_ALL,   /* BODY */
-        Xapian::QueryParser::STEM_ALL    /* LOCATION */
+        Xapian::QueryParser::STEM_ALL,   /* LOCATION */
+        Xapian::QueryParser::STEM_NONE   /* ATTACHMENTNAME */
     },
     // Version 1: Stem bodies using STEM_SOME with stopwords
     {
@@ -171,7 +175,8 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_ALL,   /* TYPE */
         Xapian::QueryParser::STEM_ALL,   /* HEADERS */
         Xapian::QueryParser::STEM_SOME,  /* BODY */
-        Xapian::QueryParser::STEM_SOME   /* LOCATION */
+        Xapian::QueryParser::STEM_SOME,  /* LOCATION */
+        Xapian::QueryParser::STEM_NONE   /* ATTACHMENTNAME */
     },
     // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
     {
@@ -185,7 +190,8 @@ qp_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::QueryParser::STEM_NONE,  /* TYPE */
         Xapian::QueryParser::STEM_NONE,  /* HEADERS */
         Xapian::QueryParser::STEM_SOME,  /* BODY */
-        Xapian::QueryParser::STEM_SOME   /* LOCATION */
+        Xapian::QueryParser::STEM_SOME,  /* LOCATION */
+        Xapian::QueryParser::STEM_NONE   /* ATTACHMENTNAME */
     }
 };
 

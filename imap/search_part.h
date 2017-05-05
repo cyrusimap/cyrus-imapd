@@ -45,19 +45,20 @@
 
 /* These constants are passed into the search_text_receiver_t.begin_part callback to
    tell it which part of the message is being sent down */
-#define SEARCH_PART_NONE    (-1)
-#define SEARCH_PART_ANY      0
-#define SEARCH_PART_FROM     1
-#define SEARCH_PART_TO       2
-#define SEARCH_PART_CC       3
-#define SEARCH_PART_BCC      4
-#define SEARCH_PART_SUBJECT  5
-#define SEARCH_PART_LISTID   6   /* List-Id or Mailing-List fields */
-#define SEARCH_PART_TYPE     7   /* MIME Content-Type except multipart */
-#define SEARCH_PART_HEADERS  8 /* headers OTHER than the above headers */
-#define SEARCH_PART_BODY     9
-#define SEARCH_PART_LOCATION 10
-#define SEARCH_NUM_PARTS     11
+#define SEARCH_PART_NONE            (-1)
+#define SEARCH_PART_ANY             0
+#define SEARCH_PART_FROM            1
+#define SEARCH_PART_TO              2
+#define SEARCH_PART_CC              3
+#define SEARCH_PART_BCC             4
+#define SEARCH_PART_SUBJECT         5
+#define SEARCH_PART_LISTID          6 /* List-Id or Mailing-List fields */
+#define SEARCH_PART_TYPE            7 /* MIME Content-Type except multipart */
+#define SEARCH_PART_HEADERS         8 /* headers OTHER than the above headers */
+#define SEARCH_PART_BODY            9
+#define SEARCH_PART_LOCATION        10
+#define SEARCH_PART_ATTACHMENTNAME  11
+#define SEARCH_NUM_PARTS            12
 
 /* Implemented in search_engines.c */
 extern const char *search_part_as_string(int part);

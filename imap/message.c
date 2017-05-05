@@ -4217,20 +4217,49 @@ static void body_get_leaf_types(struct body *body, strarray_t *types)
     }
 }
 
-static int body_foreach_text_section(struct body *body,
-                                     struct message *message,
-                                     int (*proc)(int isbody, charset_t charset, int encoding,
-                                                 const char *subtype, struct buf *data, void *rock),
-                                     void *rock)
+static int body_foreach_section(struct body *body, struct message *message,
+                                int (*proc)(int isbody, charset_t charset,
+                                    int encoding,
+                                    const char *type, const char *subtype,
+                                    const char *disposition,
+                                    const struct param *disposition_params,
+                                    struct buf *data, void *rock),
+                                void *rock)
 {
     struct buf data = BUF_INITIALIZER;
-    int i;
-    int r;
+    int i, r;
 
     if (body->header_size) {
+        struct body *tmpbody = NULL;
+        const char *disposition = body->disposition;
+        struct param *disposition_params = body->disposition_params;
+
+        if (!disposition) {
+            /* XXX hack: body can either be read from the binary cache body
+             * or bodystructure, but either misses the contents of the other */
+            tmpbody = xzmalloc(sizeof(struct body));
+            strarray_t boundaries = STRARRAY_INITIALIZER;
+            struct msg msg;
+
+            msg.base = message->map.s + body->header_offset;
+            msg.len = body->header_size;
+            msg.offset = 0;
+            msg.encode = 0;
+            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries);
+
+            disposition = tmpbody->disposition;
+            disposition_params = tmpbody->disposition_params;
+        }
+
         buf_init_ro(&data, message->map.s + body->header_offset, body->header_size);
-        r = proc(/*isbody*/0, CHARSET_UNKNOWN_CHARSET, 0, NULL, &data, rock);
+        r = proc(/*isbody*/0, CHARSET_UNKNOWN_CHARSET, 0, body->type, body->subtype,
+                 disposition, disposition_params, &data, rock);
         buf_free(&data);
+
+        if (tmpbody) {
+            message_free_body(tmpbody);
+            free(tmpbody);
+        }
 
         if (r) return r;
     }
@@ -4239,18 +4268,22 @@ static int body_foreach_text_section(struct body *body,
         int encoding;
         charset_t charset = CHARSET_UNKNOWN_CHARSET;
         message_parse_charset(body, &encoding, &charset);
-
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
-        r = proc(/*isbody*/1, charset, encoding,
-                 body->subtype, &data, rock);
+        r = proc(/*isbody*/1, charset, encoding, body->type, body->subtype,
+                 NULL, NULL, &data, rock);
         buf_free(&data);
         charset_free(&charset);
 
         if (r) return r;
+    } else {
+        buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
+        r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET, 0,
+                body->type, body->subtype, NULL, NULL, &data, rock);
+        buf_free(&data);
     }
 
     for (i = 0; i < body->numparts; i++) {
-        r = body_foreach_text_section(&body->subpart[i], message, proc, rock);
+        r = body_foreach_section(&body->subpart[i], message, proc, rock);
         if (r) return r;
     }
 
@@ -4267,14 +4300,18 @@ static int body_foreach_text_section(struct body *body,
  * sections.  If 'proc' returns non-zero, the iteration finishes early
  * and the return value of 'proc' is returned.  Otherwise returns 0.
  */
-EXPORTED int message_foreach_text_section(message_t *m,
+EXPORTED int message_foreach_section(message_t *m,
                          int (*proc)(int isbody, charset_t charset, int encoding,
-                                     const char *subtype, struct buf *data, void *rock),
+                                     const char *type, const char *subtype,
+                                     const char *disposition,
+                                     const struct param *disposition_params,
+                                     struct buf *data,
+                                     void *rock),
                          void *rock)
 {
     int r = message_need(m, M_CACHEBODY|M_MAP);
     if (r) return r;
-    return body_foreach_text_section(m->body, m, proc, rock);
+    return body_foreach_section(m->body, m, proc, rock);
 }
 
 /*

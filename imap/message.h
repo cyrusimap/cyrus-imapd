@@ -294,9 +294,13 @@ extern int message_get_indexflags(message_t *m, uint32_t *);
 extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
 extern int message_get_fname(message_t *m, const char **fnamep);
-extern int message_foreach_text_section(message_t *m,
+extern int message_foreach_section(message_t *m,
                    int (*proc)(int isbody, charset_t charset, int encoding,
-                               const char *subtype, struct buf *data, void *rock),
+                               const char *type, const char *subtype,
+                               const char *disposition,
+                               const struct param *disposition_params,
+                               struct buf *data,
+                               void *rock),
                    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
 
