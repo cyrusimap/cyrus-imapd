@@ -638,6 +638,53 @@ sub test_noindex_multipartheaders
     $self->assert_num_equals(1, scalar @$r);
 }
 
+sub test_xattachmentname
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $body = ""
+    . "--boundary\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: application/x-excel\r\n"
+    . "Content-Transfer-Encoding: base64\r\n"
+    . "Content-Disposition: attachment; filename=\"stuff.xls\"\r\n"
+    . "\r\n"
+    . "SGVsbG8sIFdvcmxkIQ=="
+    . "\r\n"
+    . "--boundary--\r\n";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => $body
+    );
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $r;
+
+    $r = $talk->search(
+        "fuzzy", "xattachmentname", { Quote => "stuff" }
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+
+    $r = $talk->search(
+        "fuzzy", "xattachmentname", { Quote => "nope" }
+    ) || die;
+    $self->assert_num_equals(0, scalar @$r);
+
+    $r = $talk->search(
+        "fuzzy", "text", { Quote => "stuff.xls" }
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+}
+
 sub test_xapianv2
     :min_version_3_0
 {
