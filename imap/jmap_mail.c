@@ -4643,6 +4643,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
 
 
 done:
+    if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
     if (body) {
         message_free_body(body);
