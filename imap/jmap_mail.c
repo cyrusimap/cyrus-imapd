@@ -3288,6 +3288,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     query->need_ids = 1;
     query->verbose = 1;
     query->want_expunged = want_expunged;
+
     r = search_query_run(query);
     if (r) goto done;
 
@@ -3502,7 +3503,13 @@ static int getMessageList(jmap_req_t *req)
 
     r = jmapmsg_search(req, filter, sort, &window, 0, &total, &total_threads,
                        &messageids, /*expungedids*/NULL, &threadids);
-    if (r) goto done;
+    if (r == IMAP_NOTFOUND) {
+        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    else if (r) goto done;
 
     /* Prepare response. */
     res = json_pack("{}");
@@ -3615,8 +3622,13 @@ static int getMessageUpdates(jmap_req_t *req)
 
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
-
-    if (r) goto done;
+    if (r == IMAP_NOTFOUND) {
+        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    else if (r) goto done;
 
     has_more = (json_array_size(changed) + json_array_size(removed)) < total;
     oldstate = json_string(since);
@@ -3707,7 +3719,13 @@ static int getThreadUpdates(jmap_req_t *req)
                        &total, &total_threads, &changed, &removed, &threads);
     json_decref(filter);
     json_decref(sort);
-    if (r) goto done;
+    if (r == IMAP_NOTFOUND) {
+        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    else if (r) goto done;
 
     /* Split the collapsed threads into changed and removed - the values from
        jmapmsg_search will be msgids */
