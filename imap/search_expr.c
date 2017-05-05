@@ -1985,13 +1985,16 @@ struct searchmsg_rock
     int result;
 };
 
-static int searchmsg_cb(int partno, charset_t charset, int encoding,
-                        const char *subtype __attribute((unused)),
+static int searchmsg_cb(int isbody, charset_t charset, int encoding,
+                        const char *type __attribute__((unused)),
+                        const char *subtype __attribute__((unused)),
+                        const char *disposition __attribute__((unused)),
+                        const struct param *disposition_params __attribute__((unused)),
                         struct buf *data, void *rock)
 {
     struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
 
-    if (!partno) {
+    if (!isbody) {
         /* header-like */
         if (sr->skipheader) {
             sr->skipheader = 0; /* Only skip top-level message header */
@@ -2020,7 +2023,7 @@ static int search_text_match(message_t *m, const union search_value *v,
     sr.pat = (comp_pat *)internalised;
     sr.skipheader = (int)(unsigned long)data1;
     sr.result = 0;
-    message_foreach_text_section(m, searchmsg_cb, &sr);
+    message_foreach_section(m, searchmsg_cb, &sr);
     return sr.result;
 }
 
@@ -2414,6 +2417,20 @@ EXPORTED void search_attr_init(void)
             "location",     /* for iCalendar */
             SEA_FUZZABLE,
             SEARCH_PART_LOCATION,
+            SEARCH_COST_BODY,
+            search_string_internalise,
+            /*cmp*/NULL,
+            search_string_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)0
+        },{
+            "attachmentname",
+            SEA_FUZZABLE,
+            SEARCH_PART_ATTACHMENTNAME,
             SEARCH_COST_BODY,
             search_string_internalise,
             /*cmp*/NULL,

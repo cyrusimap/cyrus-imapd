@@ -4673,7 +4673,10 @@ static void extract_cb(const struct buf *text, void *rock)
 }
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
-                            const char *subtype, struct buf *data,
+                            const char *type, const char *subtype,
+                            const char *disposition,
+                            const struct param *disposition_params,
+                            struct buf *data,
                             void *rock)
 {
     struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
@@ -4681,22 +4684,32 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     struct buf text = BUF_INITIALIZER;
 
     if (!isbody) {
-        /* Only index the headers of the top message */
-        if (str->indexed_headers)
-            return 0;
-
-        q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
-        buf_init_ro_cstr(&text, q);
-        stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
-        free(q);
-        buf_free(&text);
-        str->indexed_headers = 1;
+        if (!str->indexed_headers) {
+            /* Only index the headers of the top message */
+            q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
+            buf_init_ro_cstr(&text, q);
+            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+            free(q);
+            buf_free(&text);
+            str->indexed_headers = 1;
+        }
+        if (disposition && !strcmp(disposition, "ATTACHMENT")) {
+            /* Index attachment file names */
+            const struct param *param;
+            for (param = disposition_params; param; param = param->next) {
+                if (strcmp(param->attribute, "FILENAME"))
+                    continue;
+                buf_init_ro_cstr(&text, param->value);
+                stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                buf_free(&text);
+            }
+        }
     }
     else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
         /* PGP encrypted body part - we don't want to index this,
          * it's a ton of random base64 noise */
     }
-    else {
+    else if (!strcmp(type, "TEXT")) {
         /* body-like */
         str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
         charset_extract(extract_cb, str, data, charset, encoding, subtype,
@@ -4863,7 +4876,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
     else {
 #endif
         /* A regular message */
-        message_foreach_text_section(msg, getsearchtext_cb, &str);
+        message_foreach_section(msg, getsearchtext_cb, &str);
 
         if (!message_get_field(msg, "From", format, &buf))
             stuff_part(receiver, SEARCH_PART_FROM, &buf);

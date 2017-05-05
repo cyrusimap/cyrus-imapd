@@ -111,7 +111,11 @@ static void dump_buf(FILE *fp, const struct buf *data)
 }
 
 static int dump_one_section(int partno, charset_t charset, int encoding,
-                            const char *subtype, struct buf *data,
+                            const char *type __attribute__((unused)),
+                            const char *subtype,
+                            const char *disposition __attribute__((unused)),
+                            const struct param *disposition_params __attribute__((unused)),
+                            struct buf *data,
                             void *rock __attribute__((unused)))
 {
 #define MAX_TEXT    512
@@ -124,7 +128,7 @@ static int dump_one_section(int partno, charset_t charset, int encoding,
 
 static int dump_text_sections(message_t *message)
 {
-    return message_foreach_text_section(message, dump_one_section, NULL);
+    return message_foreach_section(message, dump_one_section, NULL);
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
