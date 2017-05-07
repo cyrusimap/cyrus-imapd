@@ -16,6 +16,6 @@ naming convention that leads user *John Doe* to hold an email address of
     :ref:`imap-features-namespaces-other-users`, but the internal
     representation of it remains the same.
 
-The namespace mode does NOT change the rules governing the behavior of mailboxes or how mailboxes are stored on the filesystem. The mailboxes are ALWAYS stored using the with dot hierarchy separators. When configured to use the different modes and separators, the server translates mailbox names between the internal names and the external names when used by the client in the IMAP protocol and in Sieve scripts.
+The namespace mode does NOT change the rules governing the behavior of mailboxes or how mailboxes are stored on the filesystem. The mailboxes are ALWAYS stored with dot hierarchy separators. When configured to use the different modes and separators, the server translates mailbox names between the internal names and the external names when used by the client in the IMAP protocol and in Sieve scripts.
 
 This design allows the namespace to be changed at runtime (even on a running server) without having to reconfigure the server. This also means that one mailstore can support different namespaces.
