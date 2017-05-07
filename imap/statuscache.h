@@ -62,7 +62,7 @@ extern void statuscache_fill(struct statusdata *sdata, const char *userid,
                              struct mailbox *mailbox, unsigned statusitems,
                              unsigned numrecent, unsigned numunseen);
 
-/* lookup a single statuscache entry or open the mailbox and caluclate it */
+/* lookup a single statuscache entry or open the mailbox and calculate it */
 extern int status_lookup(const char *mboxname, const char *userid,
                          unsigned statusitems, struct statusdata *sdata);
 extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
