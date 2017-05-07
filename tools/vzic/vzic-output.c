@@ -2151,7 +2151,7 @@ output_rrule                            (char           *rrule_buffer,
 
   case DAY_WEEKDAY_ON_OR_BEFORE:
     if (day_number < 7) {
-      /* FIXME: This is unimplemented, but it isn't needed at present anway. */
+      /* FIXME: This is unimplemented, but it isn't needed at present anyway. */
       fprintf (stderr, "DAY_WEEKDAY_ON_OR_BEFORE: %i. Unimplemented. Exiting...\n", day_number);
       exit (0);
     }
