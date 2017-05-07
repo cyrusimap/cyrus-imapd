@@ -19,4 +19,4 @@ are required for any host using the listed services:
     mupdate   3905/tcp # Cyrus mupdate service
     sieve     4190/tcp # timsieved Sieve Mail Filtering Language service
 
-Make sure that these lines are present and add them if they are missing.
+Make sure that these lines are present or add them if they are missing.
