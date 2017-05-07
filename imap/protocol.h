@@ -63,7 +63,7 @@ enum {
     CAPA_COMPRESS       = (1 << 2)
 
     /*
-      protocol specific capabilites MUST be in the range
+      protocol specific capabilities MUST be in the range
       (1 << 3) .. (1 << MAX_CAPA)
     */
 };

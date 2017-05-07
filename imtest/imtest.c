@@ -167,7 +167,7 @@ struct capa_cmd_t {
     char *auth;         /* [OPTIONAL] AUTH (SASL) capability string */
     char *compress;     /* [OPTIONAL] COMPRESS capability string */
     void (*parse_mechlist)(struct buf *list, const char *str,
-                           struct protocol_t *prot, unsigned long *capabilties);
+                           struct protocol_t *prot, unsigned long *capabilities);
                         /* [OPTIONAL] parse capability string,
                            returns space-separated list of mechs */
 };

@@ -156,7 +156,7 @@ EXPORTED void fatal(const char *s, int code)
  *
  ***********************/
 
-typedef struct capabilies_s {
+typedef struct capabilities_s {
 
   char *mechs;
 
