@@ -1269,7 +1269,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, user_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting user annnotations from annotator "
+            syslog(LOG_ERR, "Setting user annotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;
@@ -1281,7 +1281,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting system annnotations from annotator "
+            syslog(LOG_ERR, "Setting system annotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;
