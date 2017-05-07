@@ -57,7 +57,7 @@ You will then want to set your local copy to get its changes from the original r
 
 ::
 
-    git remote -v
+    $ git remote -v
     origin  https://github.com/YOUR_USERNAME/YOUR_FORK.git (fetch)
     origin  https://github.com/YOUR_USERNAME/YOUR_FORK.git (push)
     
@@ -71,7 +71,7 @@ Now we can check to see that the upstream is set:
 
 ::
 
-    git remote -v
+    $ git remote -v
     origin    https://github.com/YOUR_USERNAME/YOUR_FORK.git (fetch)
     origin    https://github.com/YOUR_USERNAME/YOUR_FORK.git (push)
     upstream  https://github.com/cyrusimap/ORIGINAL_REPOSITORY.git (fetch)
