@@ -99,7 +99,6 @@ A lot of Cyrus's debugging information gets logged with ``syslog``, so you'll wa
 
 4. Arrange to rotate ``/var/log/imapd.log`` so it doesn't get stupendously large. Create ``/etc/logrotate.d/cyrus.conf`` with content like::
 
-    /etc/logrotate.d/cyrus.conf
     /var/log/imapd.log
     {
         rotate 4
