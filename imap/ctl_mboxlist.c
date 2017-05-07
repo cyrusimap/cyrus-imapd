@@ -374,7 +374,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 }
 
 /*
- * True if user types Y\n or y\n.  Anthing else is false.
+ * True if user types Y\n or y\n.  Anything else is false.
  */
 static int yes(void)
 {
