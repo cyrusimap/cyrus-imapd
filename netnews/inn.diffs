@@ -4229,7 +4229,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                         double lowPassFilter)
 + {
 +     Connection cxn;
-+     /* check arguements */
++     /* check arguments */
 +
 +     /* allocate connection structure */
 +     cxn = CALLOC (connection_t, 1) ;
