@@ -13943,7 +13943,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 
@@ -13968,7 +13968,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 
@@ -14074,7 +14074,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 
