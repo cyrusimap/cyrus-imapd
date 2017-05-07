@@ -76,7 +76,7 @@ Options
 
 .. option:: -a
 
-    When used with **-m**, assume the local mailboxes file is authoritiative,
+    When used with **-m**, assume the local mailboxes file is authoritative,
     that is, only change the mupdate server, do not delete any local
     mailboxes.
 
