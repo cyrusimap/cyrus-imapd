@@ -75,7 +75,7 @@ sub new {
   # but the API makes it difficult to get at the results of that command.
   if(defined($self)) {
     $self->{support_referrals} = 0;
-    $self->{support_annotatatemore} = 0;
+    $self->{support_annotatemore} = 0;
     $self->{support_list_extended} = 0;
     $self->{support_list_special_use} = 0;
     $self->{support_create_special_use} = 0;

@@ -2879,7 +2879,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
-/* annotemore_findall callback for adding dead properties (allprop/propname) */
+/* annotatemore_findall callback for adding dead properties (allprop/propname) */
 static int allprop_cb(const char *mailbox __attribute__((unused)),
                       uint32_t uid __attribute__((unused)),
                       const char *entry,
