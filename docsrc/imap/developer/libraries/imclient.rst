@@ -109,14 +109,14 @@ See below for a description of each function.
     case no function is invoked.  The callback function may not call
     the functions **imclient_close(), imclient_send(), imclient_eof(),
     imclient_processoneevent()**, or **imclient_authenticate()** on the
-    connection. The callback function may over write  the text of
+    connection. The callback function may overwrite  the text of
     untagged data.
 
 **imclient_send()**
     Sends a new command to the **imclient** connection.  *finishproc*
     and *finishrock* are the function and rock called when the command
     completes.  *functionproc* may be a null pointer, in which case no
-    callback is made. The call back function may not call the functions
+    callback is made. The callback function may not call the functions
     **imclient_close(), imclient_send(), imclient_eof(),
     imclient_processoneevent()**, or **imclient_authenticate()** on the
     connection.  The argument *fmt* is a :manpage:`printf(3)` like
