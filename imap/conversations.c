@@ -1332,7 +1332,7 @@ static int sender_cmp(const conv_sender_t *sender,
 static int sender_preferred_mailbox(const char *a, const char *b)
 {
     /* choosing the lexically earlier string tends to keep
-     * capital letters, which is an arbitrary asthetic */
+     * capital letters, which is an arbitrary aesthetic */
     return strcmpsafe(a, b);
 }
 
@@ -1341,7 +1341,7 @@ static int sender_preferred_mailbox(const char *a, const char *b)
 static int sender_preferred_domain(const char *a, const char *b)
 {
     /* choosing the lexically earlier string tends to keep
-     * capital letters, which is an arbitrary asthetic */
+     * capital letters, which is an arbitrary aesthetic */
     return strcmpsafe(a, b);
 }
 
@@ -1350,7 +1350,7 @@ static int sender_preferred_domain(const char *a, const char *b)
 static int sender_preferred_route(const char *a, const char *b)
 {
     /* choosing the lexically earlier string tends to keep
-     * capital letters, which is an arbitrary asthetic */
+     * capital letters, which is an arbitrary aesthetic */
     return strcmpsafe(a, b);
 }
 
