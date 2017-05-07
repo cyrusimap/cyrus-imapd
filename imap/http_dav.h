@@ -103,7 +103,7 @@ enum {
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
 #define DACL_PROPRES    ACL_ANNOTATEMSG /* CY:write-properties-resource */
 #define DACL_MKCOL      ACL_CREATE      /* CY:make-collection */
-#define DACL_ADDRES     ACL_POST        /* CY:add-resource */
+#define DACL_ADDRESS    ACL_POST        /* CY:add-resource */
 #define DACL_RMCOL      ACL_DELETEMBOX  /* CY:remove-collection */
 #define DACL_RMRES      (ACL_DELETEMSG\
                          |ACL_EXPUNGE)  /* CY:remove-resource */
@@ -120,7 +120,7 @@ enum {
 #define DACL_WRITEPROPS (DACL_PROPCOL\
                          |DACL_PROPRES) /* DAV:write-properties */
 #define DACL_BIND       (DACL_MKCOL\
-                         |DACL_ADDRES)  /* DAV:bind */
+                         |DACL_ADDRESS)  /* DAV:bind */
 #define DACL_UNBIND     (DACL_RMCOL\
                          |DACL_RMRES)   /* DAV:unbind */
 #define DACL_WRITE      (DACL_WRITECONT\

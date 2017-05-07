@@ -681,7 +681,7 @@ static void my_caldav_init(struct buf *serverinfo)
                "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
     ical_prodid = buf_cstring(&ical_prodid_buf);
 
-    /* Create an array of calendar-user-adddress-set domains */
+    /* Create an array of calendar-user-address-set domains */
     domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
     if (!domains) domains = config_defdomain;
     if (!domains) domains = config_servername;
