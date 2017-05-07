@@ -164,7 +164,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         return 1;
     }
 
-    /* Check if a default sieve filter alrady exists */
+    /* Check if a default sieve filter already exists */
     if(!stat(sieve_default,&statbuf)) {
         syslog(LOG_WARNING,"autocreate_sieve: Default sieve script already exists");
         return 1;
