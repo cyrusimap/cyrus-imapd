@@ -210,7 +210,7 @@ CAPABILITY request and prints out the result.
             }
         }
 
-        static void end_command (struct imclient *connection, void*
+        static void end_command(struct imclient *connection, void*
                                 rock,  struct imclient_reply *inmsg) {
             (*(int*)rock)--;
         }
