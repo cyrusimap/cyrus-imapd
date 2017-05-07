@@ -511,7 +511,7 @@ Usage: cyradm [args] server
   --userrc <file>       Use user configuration <file>
   --port <port>         Connect to server on <port>
   --auth <mechanism>    Authenticate with <mechanism>
-  --tlskey <keyfile>    Use certicate with keyfile to authenticate with server
+  --tlskey <keyfile>    Use certificate with keyfile to authenticate with server
   --notls               Disable StartTLS negotiation
   --cafile <cacertfile> Use CA certificate file to validate server certificate
   --cadir <cacertdirectory> Use CA certificate directory to validate
