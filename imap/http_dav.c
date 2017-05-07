@@ -1921,7 +1921,7 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Add possibly 'abstract' supported-privilege 'priv_name', of namespace 'ns',
- * with description 'desc_str' to node 'root'.  For now, we alssume all
+ * with description 'desc_str' to node 'root'.  For now, we assume all
  * descriptions are English.
  */
 static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
