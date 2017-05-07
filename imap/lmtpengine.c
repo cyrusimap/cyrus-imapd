@@ -487,7 +487,7 @@ static char *parseaddr(char *s)
                 if (*p & 128 && !lmtp_strict_rfc2821) {
                     /* this prevents us from becoming a backscatter
                        source if our MTA allows 8bit in local-part
-                       of adresses. */
+                       of addresses. */
                     *p = 'X';
                 }
                 if (*p <= ' ' || (*p & 128) ||
