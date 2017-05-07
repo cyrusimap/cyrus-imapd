@@ -672,7 +672,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
     syslog(LOG_DEBUG, "entered bc_action_emit with filelen: %d", filelen);
 
     /* All non-string data MUST be sizeof(int)
-       byte alligned so the end of each string may require a pad */
+       byte aligned so the end of each string may require a pad */
     /*
      * Note that for purposes of jumps you must multiply codep by sizeof(int)
      */
