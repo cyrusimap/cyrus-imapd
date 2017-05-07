@@ -388,7 +388,7 @@ exercise::
     offsitesync     cmd="/usr/cyrus/bin/sync_client -r -n offsite"
 
 Again, this is just an example for illustration.  The system provides so
-much flexibility, and one can combine channels with chaining to acheive
+much flexibility, and one can combine channels with chaining to achieve
 even more.
 
 .. _replication-other-uses:
