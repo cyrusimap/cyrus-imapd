@@ -144,7 +144,7 @@ struct _RuleData
 
   /* A string used to only match certain years between from and to.
      The rule only applies to the years which match. If type is NULL the rule
-     applies to all years betweeen from and to.
+     applies to all years between from and to.
      zic uses an external program called yearistype to check the string.
      Currently it is not used in the Olson database. */
   char         *type;
