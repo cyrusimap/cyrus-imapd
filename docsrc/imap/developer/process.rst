@@ -9,7 +9,7 @@ We need to develop not just for ourselves, but for those who follow us. This mea
 Coding Style
 ============
 
-* Unix style: CRLF line endings
+* Unix style: CRLF line endings.
 * No trailing spaces.
 * No tabs: use 4 spaces instead.
 * Bracketing style: use the style that's already there.
@@ -34,8 +34,8 @@ Using GitHub
 
 First, check out our :ref:`Guide to GitHub <github-guide>`, which covers:
 
-1. Create a GitHub account
-2. Fork the repository
+1. Create a GitHub account.
+2. Fork the repository.
 3. Clone the fork.
 4. Branch the clone.
 
@@ -44,8 +44,8 @@ From there, you:
 1. Take ownership of a GitHub issue (or create a new one to cover what you're planning to do).
 2. Code code :ref:`test test test <developer-testing>` code code test test test.
 3. Use git to commit your changes.
-4. Issue a :ref:`pull request <github-guide-pull>` on GitHub
-5. Wait for review (a quick note to the mailing list can speed this along)
+4. Issue a :ref:`pull request <github-guide-pull>` on GitHub.
+5. Wait for review (a quick note to the mailing list can speed this along).
 6. Once approved, it'll be merged into the master.
 
 Patches through the mailing list
