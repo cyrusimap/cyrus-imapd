@@ -1881,7 +1881,7 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
     }
 
     /*
-     * Lets see, whether a peer certificate is availabe and what is
+     * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
      */
     peer = SSL_get_peer_certificate(imclient->tls_conn);
