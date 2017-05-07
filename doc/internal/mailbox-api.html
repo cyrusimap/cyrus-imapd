@@ -171,7 +171,7 @@ int mailbox_delete(struct mailbox **mailboxptr);
 
 <p>Just like <tt>mailbox_close</tt> above, this closes the mailbox.
 Before it does so, it sets the OPT_MAILBOX_DELETED option flag in
-the index header.  The interesting work is actualy done in
+the index header.  The interesting work is actually done in
 <tt>mailbox_close</tt>.  See below under "delayed actions".</p>
 
 <p><tt>mailbox_delete</tt> requires an exclusive index lock, but
