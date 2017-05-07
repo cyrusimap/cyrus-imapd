@@ -176,8 +176,8 @@ See below for a description of each function.
 Examples
 ========
 
-The following code is a possible skeletion of **imclient** that relies
-on Kerberos to do authentication.  This code preforms an IMAP
+The following code is a possible skeleton of **imclient** that relies
+on Kerberos to do authentication.  This code performs an IMAP
 CAPABILITY request and prints out the result.
 
     ::
