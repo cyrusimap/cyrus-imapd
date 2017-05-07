@@ -83,7 +83,7 @@
  * is taken and the intent log is replayed on it.  the index file is
  * regenerated from scratch.
  *
- * during operation ckecpoints will compress the data.  the data file
+ * during operation checkpoints will compress the data.  the data file
  * is locked.  then a checkpoint rewrites the data file in order,
  * removing any unused records.  this is written and fsync'd to
  * dfile.NEW and stored for use during recovery.
