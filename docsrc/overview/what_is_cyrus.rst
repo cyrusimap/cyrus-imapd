@@ -14,7 +14,7 @@ The Cyrus IMAP (Internet Message Access Protocol) server provides access to pers
 
 A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across multiple servers. It differs from other IMAP server implementations in that it is run on "sealed" servers, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, POP3, or KPOP protocols.
 
-The private mailbox database design gives the server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
+The private mailbox database design gives the server large advantages in efficiency, scalability, and administrability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
 
 IMAP Version 4 (IMAP4)
 ----------------------
