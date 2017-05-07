@@ -57,7 +57,7 @@ You will then want to set your local copy to get its changes from the original r
 
 ::
 
-    git remote -v 
+    git remote -v
     origin  https://github.com/YOUR_USERNAME/YOUR_FORK.git (fetch)
     origin  https://github.com/YOUR_USERNAME/YOUR_FORK.git (push)
     
