@@ -1149,7 +1149,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
 /*
  * Helps create a fake "auxiliary propert plugin" for the SASL library,
  * which is how we hook into the DIGEST-MD5 mechanism when it wants to
- * get a plaintext password to check aginst the hash received from the
+ * get a plaintext password to check against the hash received from the
  * client.
  */
 static int server_auxprop_init(const sasl_utils_t *utils __attribute__((unused)),
