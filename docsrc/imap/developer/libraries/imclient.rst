@@ -47,7 +47,7 @@ Users must link with the -lcyrus switch, and must supply a function
 called *fatal* to be called in case of any error within *libcyrus.la*\ .
 
 All of the **imclient** functions begin with the prefix *imclient* and
-takes  an  argument of type **struct imclient \*** as the first argument
+take  an  argument of type **struct imclient \*** as the first argument
 which is  initialized by **imclient_connect** and freed by
 **imclient_close**\ .
 
