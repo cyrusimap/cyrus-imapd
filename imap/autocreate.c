@@ -490,7 +490,7 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
 
     /*
      * If subscribeallsharedfolders is set to yes in imapd.conf, then
-     * subscribe user to every shared folder one has the apropriate
+     * subscribe user to every shared folder one has the appropriate
      * permissions.
      */
     if (config_getswitch(IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS_ALL)) {
