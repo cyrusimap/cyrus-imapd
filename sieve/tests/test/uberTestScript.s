@@ -1,7 +1,7 @@
 /*using redirect to test if, elsif, and else, along with all of the tests
   that can be inside
 
-  this is still being added to, there are almost certaintly conditions not
+  this is still being added to, there are almost certainly conditions not
   being tested
 
 
