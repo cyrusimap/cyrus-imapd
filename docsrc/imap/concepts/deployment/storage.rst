@@ -463,7 +463,7 @@ I/O, known as in-memory buffer caching.
 A technology called `FS Cache`_ can facilitate eliminating round-trip-
 incurred network-latency, but is still a filesystem-backed solution
 (for which filesystem the local kernel applies buffer caching), requires
-yet another daemon, and introduces yet another layer of synchronisity to
+yet another daemon, and introduces yet another layer of synchronicity to
 be maintained -- aside from `other limitations <https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Storage_Administration_Guide/fscachelimitnfs.html>`_.
 
 An NFS-backed storage volume can still be used for fewer, larger files,
