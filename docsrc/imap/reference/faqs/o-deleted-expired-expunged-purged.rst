@@ -100,7 +100,7 @@ values:
 
 Exceptional circumstances aside, when ``immediate`` or ``default`` is
 the configured ``expunge_mode``, message files are often purged from the
-filesytem too quickly for anyone to recover.
+filesystem too quickly for anyone to recover.
 
 .. NOTE::
 
