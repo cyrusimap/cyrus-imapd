@@ -1038,7 +1038,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
  * 2. verify parent ACL's if need to
  * 3. create the local mailbox locally (exclusive lock) and keep it locked
  * 4. open mupdate connection if necessary
- * 5. create mupdate entry (CRASH: mupdate inconsistant)
+ * 5. create mupdate entry (CRASH: mupdate inconsistent)
  *
  */
 
