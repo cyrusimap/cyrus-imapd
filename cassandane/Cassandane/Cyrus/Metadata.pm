@@ -2573,8 +2573,7 @@ sub folder_delete_mboxa_common
     my $imaptalk = $self->{store}->get_client();
     # data thanks to hipsteripsum.me
     my $folder = 'INBOX.williamsburg';
-    my $fentry = '/comment';
-    my $fattrib = 'value.priv';
+    my $fentry = '/private/comment';
     my $data = $self->make_random_data(0.3, maxreps => 15);
 
     xlog "create a mailbox";
@@ -2582,37 +2581,31 @@ sub folder_delete_mboxa_common
 	or die "Cannot create mailbox $folder: $@";
 
     xlog "set and then get the same back again";
-    $imaptalk->setannotation($folder, $fentry, [ $fattrib, $data ])
-	or die "Cannot setannotation: $@";
+    $imaptalk->setmetadata($folder, $fentry, $data)
+	or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    my $res = $imaptalk->getannotation($folder, $fentry, $fattrib)
-	or die "Cannot getannotation: $@";
+    my $res = $imaptalk->getmetadata($folder, $fentry)
+	or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => { $fattrib => $data } }
+	$folder => { $fentry => $data }
     }, $res);
 
     xlog "delete the mailbox";
     $imaptalk->delete($folder)
 	or die "Cannot delete mailbox $folder: $@";
 
-    xlog "cannot get metadata for deleted mailbox";
-#     $res = $imaptalk->getannotation($folder, $fentry, $fattrib)
-# 	or die "Cannot getannotation: $@";
-#     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-#     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
-
     xlog "create a new mailbox with the same name";
     $imaptalk->create($folder)
 	or die "Cannot create mailbox $folder: $@";
 
     xlog "new mailbox reports NIL for the per-mailbox metadata";
-    $res = $imaptalk->getannotation($folder, $fentry, $fattrib)
-	or die "Cannot getannotation: $@";
+    $res = $imaptalk->getmetadata($folder, $fentry)
+	or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => { $fattrib => undef }}
+	$folder => { $fentry => undef }
     }, $res);
 }
 
@@ -2729,7 +2722,7 @@ sub test_folder_delete_mboxa_dmimm
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETANNOTATION annotations are";
+    xlog "test that per-mailbox GETMETADATA annotations are";
     xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
@@ -2743,7 +2736,7 @@ sub test_folder_delete_mboxa_dmdel
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETANNOTATION annotations are";
+    xlog "test that per-mailbox GETMETADATA annotations are";
     xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',

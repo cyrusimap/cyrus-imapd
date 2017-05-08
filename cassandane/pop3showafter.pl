@@ -148,13 +148,13 @@ sub check_messages($$$$)
 #
 # Check the value of the pop3-show-after annotation
 #
-my $showafter_anno = '/vendor/cmu/cyrus-imapd/pop3showafter';
+my $showafter_anno = '/private/vendor/cmu/cyrus-imapd/pop3showafter';
 
 sub get_pop3showafter
 {
     my ($store) = @_;
 
-    my $annos = $store->get_client()->getannotation($store->{folder}, $showafter_anno, '*')
+    my $annos = $store->get_client()->getmetadata($store->{folder}, $showafter_anno)
 	or die "Cannot get annotation $showafter_anno: $@";
 
     if ($annos eq "Completed")
