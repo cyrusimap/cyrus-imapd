@@ -758,7 +758,7 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
                 imtest_fatal("TLS negotiation failed!\n");
         }
 
-    /* TLS negotiation suceeded */
+    /* TLS negotiation succeeded */
     tls_sess = SSL_get_session(tls_conn); /* Save the session for reuse */
 
     /* tell SASL about the negotiated layer */

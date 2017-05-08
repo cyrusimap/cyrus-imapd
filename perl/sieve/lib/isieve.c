@@ -437,7 +437,7 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
         fillin_interactions(client_interact); /* fill in prompts */
     }
 
-    /* check if sasl suceeded */
+    /* check if sasl succeeded */
     if (saslresult<SASL_OK)
     {
         /* send cancel notice */
