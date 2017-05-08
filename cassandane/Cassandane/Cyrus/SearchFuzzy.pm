@@ -651,7 +651,7 @@ sub test_xattachmentname
     . "body"
     . "\r\n"
     . "--boundary\r\n"
-    . "Content-Type: application/x-excel\r\n"
+    . "Content-Type: application/x-excel; name=\"blah\"\r\n"
     . "Content-Transfer-Encoding: base64\r\n"
     . "Content-Disposition: attachment; filename=\"stuff.xls\"\r\n"
     . "\r\n"
@@ -683,7 +683,13 @@ sub test_xattachmentname
         "fuzzy", "text", { Quote => "stuff.xls" }
     ) || die;
     $self->assert_num_equals(1, scalar @$r);
+
+    $r = $talk->search(
+        "fuzzy", "xattachmentname", { Quote => "blah" },
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
 }
+
 
 sub test_xapianv2
     :min_version_3_0
