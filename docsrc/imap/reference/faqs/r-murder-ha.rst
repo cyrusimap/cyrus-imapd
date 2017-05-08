@@ -15,7 +15,7 @@ The mupdate server is indeed a single point of failure, however a
 failure at this point only prohibits message delivery (via the LMTP 
 proxies that are querying it for up-to-date mailbox data) and certain 
 mailbox operations (create, delete, setacl, and so on). Mail can still 
-be accessed by all users of the system, and incoming mail will recieve 
+be accessed by all users of the system, and incoming mail will receive 
 temporary failures, so the sending MTA should continue to queue the 
 mail. 
 

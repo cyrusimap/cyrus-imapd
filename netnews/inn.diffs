@@ -3402,7 +3402,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +
 +       case LMTP_READING_LHLO:
 +
-+           /* recieve the response(s) */
++           /* receive the response(s) */
 +           response_code = ask_code(str);
 +
 +           if (response_code != 250) /* was none */
@@ -3586,7 +3586,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +               return;
 +           }
 +
-+           /* we pipelined so next we recieve the rcpt's */
++           /* we pipelined so next we receive the rcpt's */
 +           cxn->lmtp_state = LMTP_READING_RCPTTO;
 +
 +           goto reset;

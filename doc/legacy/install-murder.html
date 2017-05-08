@@ -166,7 +166,7 @@ same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:<p>
 
 Note that as this is a threaded service, you must prefork atleast 1 of them
 so that the database can be synchronized at startup.  Otherwise, the service
-will not start running until after you recieve an mupdate client connection
+will not start running until after you receive an mupdate client connection
 to the slave (which is not a recommended configuration at this point).<p>
 
 You will also want to change all of your <tt>imapd</tt> entries to be
