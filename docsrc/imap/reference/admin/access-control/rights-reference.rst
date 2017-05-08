@@ -273,7 +273,7 @@ Individual Rights Reference
     ``\Deleted``.
 
     In IMAP, messages are only actually deleted (i.e. in a way that
-    makes them invisble to users of the folder) after the folder's
+    makes them invisible to users of the folder) after the folder's
     contents have been expunged.
 
     For the corresponding ``EXPUNGE`` command however, the
