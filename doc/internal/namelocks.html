@@ -50,7 +50,7 @@ It's a simple matter of having a file under $confdir/lock - in a
 directory tree using the same hashing structure as the mailbox tree.
 This directory can be symlinked or mounted to a tmpfs since the locks
 need not persist across restarts.  Due to race conditions while
-cleaning up, the easist approach is to only ever delete lock files
+cleaning up, the easiest approach is to only ever delete lock files
 during restart, so the unlock code doesn't try to remove them.
 Lock files are zero byte in size, and are locked using the flock
 or fcntl primatives used by the rest of cyrus.
