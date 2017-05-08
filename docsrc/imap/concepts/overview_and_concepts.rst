@@ -577,7 +577,7 @@ MTA.
 
 The Cyrus server implements LMTP via the ``lmtpd`` daemon.  LMTP
 can either be used over a network via TCP or local via a UNIX domain
-socket. There are security differnces between these two alternatives; read
+socket. There are security differences between these two alternatives; read
 more below.
 
 For final delivery via LMTP over a TCP socket, it is necessary to use
