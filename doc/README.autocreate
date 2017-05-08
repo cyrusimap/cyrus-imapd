@@ -33,7 +33,7 @@ and "create on post".
 
 Create on login
 ===============
-This feauture provides automatic creation of a user's INBOX folder when all of the
+This feature provides automatic creation of a user's INBOX folder when all of the
 following requirements are met:
 
 i)  The user has succesfully passed the authentication procedure.
@@ -57,7 +57,7 @@ will be created.
 
 Create on post
 ==============
-This feauture provides automatic creation of a user's INBOX folder when all of the
+This feature provides automatic creation of a user's INBOX folder when all of the
 following requirements are met.
 
 i) An email message addressed to the user has been received.
@@ -176,7 +176,7 @@ lmtp_autocreate_users: group:groupname
 Issues to be considered
 =======================
 
-I) In order to use the create on post feauture one should be absolutely sure that:
+I) In order to use the create on post feature one should be absolutely sure that:
 a) The MTA checks the validity of the email recipient before sending the email to
 LMTP. This is an RFC821 requirement. This usually expands to "the mta should be
 able to use the account database as user mailbox database".
