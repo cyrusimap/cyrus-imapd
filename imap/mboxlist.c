@@ -2696,7 +2696,7 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
  * 'proc' with the name of the mailbox.  If 'proc' ever returns
  * a nonzero value, mboxlist_findall immediately stops searching
  * and returns that value.  'rock' is passed along as an argument to proc in
- * case it wants some persistant storage or extra data.
+ * case it wants some persistent storage or extra data.
  */
 /* Find all mailboxes that match 'pattern'. */
 
