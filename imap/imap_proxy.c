@@ -964,7 +964,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 c = EOF;
                 break;
             }
-            /* looking at either SP seperating items or a RPAREN */
+            /* looking at either SP separating items or a RPAREN */
             if (c == ' ') { c = prot_getc(backend_current->in); }
             else if (c == ')') break;
             else { c = EOF; break; }
@@ -1128,7 +1128,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 c = EOF;
                 break;
             }
-            /* looking at either SP seperating items or a RPAREN */
+            /* looking at either SP separating items or a RPAREN */
             if (c == ' ') { c = prot_getc(backend_current->in); }
             else if (c == ')') break;
             else { c = EOF; break; }

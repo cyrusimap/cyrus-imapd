@@ -1279,7 +1279,7 @@ void lmtpmode(struct lmtp_func *func,
                 }
                 tmp = buf+10+strlen(msg->return_path);
 
-                /* is any other whitespace allow seperating? */
+                /* is any other whitespace allow separating? */
                 while (*tmp == ' ') {
                     tmp++;
                     switch (*tmp) {
