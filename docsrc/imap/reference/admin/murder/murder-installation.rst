@@ -142,7 +142,7 @@ synchronization, change to the cyrus user, and run ``ctl_mboxlist -m``.
     One should use ``ctl_mboxlist -mw`` (dry run) first to be sure of
     understanding all the operations that this command will perform,
     since it does require that all mailboxes are unique in the murder
-    namespace and could lead to deletions of conflicing mailboxes on
+    namespace and could lead to deletions of conflicting mailboxes on
     other back ends already in the murder.
 
 If everything is configured properly, the mailbox database of the
