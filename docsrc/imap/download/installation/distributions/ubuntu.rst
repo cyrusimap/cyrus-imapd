@@ -46,7 +46,7 @@ system, issue the following command:
 .. Note::
     The `Debian Cyrus Team`_ packages are split based upon functional
     requirements of the installation.  Depending upon your needs, you may also
-    wish to install any or all of these pacakges:
+    wish to install any or all of these packages:
 
     *   cyrus-pop3d-2.4
     *   cyrus-murder-2.4
