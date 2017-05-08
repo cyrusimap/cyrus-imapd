@@ -43,3 +43,4 @@ Releasing
 
 .. toctree::
     developer/releasing
+    developer/ancient-releasing

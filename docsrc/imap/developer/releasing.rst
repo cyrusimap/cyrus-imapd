@@ -6,9 +6,17 @@ Releasing Cyrus IMAP
 
 .. contents::
 
+These instructions are specifically for doing releases from branches that
+contain RST-based documentation and infrastructure.  This includes 2.5 and
+later versions.
+
+For new releases from ancient branches, see :ref:`imap-developer-ancient-releasing`
+
 
 Prerequisites
 =============
+
+.. startblob releaseprereqs
 
 You will need a GPG key that you can use for signing.  Ellie doesn't remember
 off the top of her head how to create one of these, so for now just read the
@@ -19,6 +27,8 @@ with SSH key authentication.  You need to be in the "admin" group on each,
 and also the "cyrupload" group on the latter.
 
 And you need permission to send to the cyrus-announce mailing list.
+
+.. endblob releaseprereqs
 
 
 Release notes
