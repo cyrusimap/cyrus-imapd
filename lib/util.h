@@ -311,7 +311,7 @@ void buf_trim(struct buf *buf);
 /*
  * Given a list of strings, terminated by (char *)NULL,
  * return a newly allocated string containing the
- * concatention of all the argument strings.  The
+ * concatenation of all the argument strings.  The
  * caller must free the returned string using free().
  *
  * This API idea based on glib's g_strconcat() which
