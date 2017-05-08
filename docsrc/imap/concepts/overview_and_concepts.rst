@@ -611,7 +611,7 @@ Duplicate Delivery Suppression
 ==============================
 
 A message is considered a duplicate if two copies of a message with
-the same message-id and the same envelope receipient are received.
+the same message-id and the same envelope recipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
 and it looks approximately 3 days back in the default install.
 
