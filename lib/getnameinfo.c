@@ -48,7 +48,7 @@
  * fake library for ssh
  *
  * This file includes getnameinfo().
- * These funtions are defined in rfc2133.
+ * These functions are defined in rfc2133.
  *
  * But these functions are not implemented correctly. The minimum subset
  * is implemented for ssh use only. For example, this routine assumes
