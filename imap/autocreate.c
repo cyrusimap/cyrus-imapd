@@ -270,7 +270,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         }
 
         if(sieve_emit_bytecode(out_fd, bc) == TIMSIEVE_FAIL) {
-            syslog(LOG_WARNING,"autocreate_sieve: problem emiting sieve script");
+            syslog(LOG_WARNING,"autocreate_sieve: problem emitting sieve script");
             /* removing the copied script and cleaning up memory */
             unlink(sieve_bctmpname);
             sieve_free_bytecode(&bc);
