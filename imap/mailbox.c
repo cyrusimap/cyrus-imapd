@@ -4563,7 +4563,7 @@ EXPORTED int mailbox_create(const char *name,
 
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    /* an exclusive lock around the non-execlusive lock to avoid create
+    /* an exclusive lock around the non-exclusive lock to avoid create
      * races on fixed names like calendar Inbox and Outbox */
     struct mboxlock *mblock = NULL;
     r = mboxname_lock("$CREATE", &mblock, LOCK_EXCLUSIVE);

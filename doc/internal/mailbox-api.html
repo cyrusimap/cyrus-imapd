@@ -32,7 +32,7 @@ r = mailbox_open_iwl(mboxname, &amp;mailbox);
 // or
 r = mailbox_open_irl(mboxname, &amp;mailbox);
 // or
-r = mailbox_open_exlusive(mboxname, &amp;mailbox);
+r = mailbox_open_exclusive(mboxname, &amp;mailbox);
 if (r) return r;
 
 do_stuff(mailbox);
