@@ -41,7 +41,7 @@ following in :cyrusman:`imapd.conf(5)`:
     partition-fast: /var/spool/imap/fast/
     partition-slow: /var/spool/imap/slow/
 
-Next, you could set the quota on ``user/john@example.org`` to a measely
+Next, you could set the quota on ``user/john@example.org`` to a measly
 1 gigabyte:
 
 .. parsed-literal::
