@@ -57,7 +57,7 @@ replication client/server applications and utilities.
 
 The "replica" server is a <i>standalone</i> server which listens for
 and processes synchronization messages from a "master" server.  The
-"replica" server needs to be configured to accept these synchonization
+"replica" server needs to be configured to accept these synchronization
 messages.  The "replica" server <b>MUST NOT</b> be configured to be
 part of a Murder (it should only be configured into the Murder at the
 point at which it replaces a failed backend "master").<p>
@@ -140,7 +140,7 @@ replication, perform the following:
 <ol>
 <li>Enable the <tt>sync_log</tt> option in imapd.conf.  This allows
 the <tt>imapd</tt>, <tt>pop3d</tt>, <tt>nntpd</tt>, and <tt>lmtpd</tt>
-services to log synchonization actions which will be periodically
+services to log synchronization actions which will be periodically
 serviced by <tt>sync_client</tt>.
 
 <li>Optionally, adjust the <tt>sync_repeat_interval</tt> in imapd.conf.

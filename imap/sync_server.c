@@ -1,4 +1,4 @@
-/* sync_server.c -- Cyrus synchonization server
+/* sync_server.c -- Cyrus synchronization server
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
