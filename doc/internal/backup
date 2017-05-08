@@ -333,7 +333,7 @@ we introduce a new command, RESTORE MAILBOX, which is similar to the existing
 APPLY MAILBOX.  it specifies, for a mailbox, the mailbox state plus the message
 records relevant to the restore.
 
-the imapd/sync_server recieving the RESTORE command creates the mailbox if necessary,
+the imapd/sync_server receiving the RESTORE command creates the mailbox if necessary,
 and then adds the message records to it as new records (i.e. generating new uid etc).
 this will end up generating new events in the backup channel's sync log, and then the
 messages will be backed up again with their new uids, etc.  additional wire transfer

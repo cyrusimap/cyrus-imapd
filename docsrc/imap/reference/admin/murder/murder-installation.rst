@@ -190,7 +190,7 @@ SERVICES section of :cyrusman:`cyrus.conf(5)`, like so::
   
 As this is a threaded service, prefork at least 1 so that the database
 synchronizes at startup. Otherwise, the service will not start running
-until after recieving a mupdate client connection to the slave (which
+until after receiving a mupdate client connection to the slave (which
 is not a recommended configuration at this point).
 
 The front end SERVICES section should now look like this::
