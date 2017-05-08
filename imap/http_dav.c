@@ -333,7 +333,7 @@ static const struct precond_t {
     /* Placeholder for zero (no) precondition code */
     { NULL, 0 },
 
-    /* WebDAV (RFC 4918) preconditons */
+    /* WebDAV (RFC 4918) preconditions */
     { "cannot-modify-protected-property", NS_DAV },
     { "lock-token-matches-request-uri", NS_DAV },
     { "lock-token-submitted", NS_DAV },

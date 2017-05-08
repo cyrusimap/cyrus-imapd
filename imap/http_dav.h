@@ -178,7 +178,7 @@ enum {
 
 /* Index into preconditions array */
 enum {
-    /* WebDAV (RFC 4918) preconditons */
+    /* WebDAV (RFC 4918) preconditions */
     DAV_PROT_PROP = 1,
     DAV_BAD_LOCK_TOKEN,
     DAV_NEED_LOCK_TOKEN,
