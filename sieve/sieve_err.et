@@ -45,7 +45,7 @@ ec SIEVE_FAIL,
    "Generic Sieve error"
 
 ec SIEVE_NOT_FINALIZED,
-   "Sieve interpretor not finalized"
+   "Sieve interpreter not finalized"
 
 ec SIEVE_PARSE_ERROR,
    "Parse error in Sieve script"

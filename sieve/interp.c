@@ -1,4 +1,4 @@
-/* interp.c -- sieve script interpretor builder
+/* interp.c -- sieve script interpreter builder
  * Larry Greenfield
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
@@ -56,7 +56,7 @@
 #include "libconfig.h"
 #include "times.h"
 
-/* build a sieve interpretor */
+/* build a sieve interpreter */
 EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
 {
     sieve_interp_t *i;

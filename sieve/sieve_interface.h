@@ -169,7 +169,7 @@ typedef struct sieve_duplicate_context {
     int seconds;
 } sieve_duplicate_context_t;
 
-/* build a sieve interpretor */
+/* build a sieve interpreter */
 sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
 
@@ -217,7 +217,7 @@ typedef int sieve_execute_error(const char *msg, void *interp_context,
 void sieve_register_execute_error(sieve_interp_t *interp,
                                  sieve_execute_error *f);
 
-/* given an interpretor and a script, produce an executable script */
+/* given an interpreter and a script, produce an executable script */
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
                        void *script_context, sieve_script_t **ret);
 

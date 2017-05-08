@@ -74,7 +74,7 @@ void sieverestart (FILE *input_file);
 
 #define ERR_BUF_SIZE 1024
 
-/* does this interpretor support this requirement? */
+/* does this interpreter support this requirement? */
 int script_require(sieve_script_t *s, const char *req)
 {
     unsigned long long capa = extension_isactive(&s->interp, req);
@@ -84,7 +84,7 @@ int script_require(sieve_script_t *s, const char *req)
     return (capa != 0LL);
 }
 
-/* given an interpretor and a script, produce an executable script */
+/* given an interpreter and a script, produce an executable script */
 EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
                        void *script_context, sieve_script_t **ret)
 {
