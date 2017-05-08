@@ -1857,8 +1857,8 @@ corresponding user.
 
 Note that in the above example, the C<unixhierarchysep> setting in
 imapd.conf is set to C<0>. When using the UNIX
-hierarchy seperator, the C</> (forward slash) character would be
-used as the hierarchy seperator, and the example would look as
+hierarchy separator, the C</> (forward slash) character would be
+used as the hierarchy separator, and the example would look as
 follows:
 
 =item Example Usage with C<unixhierarchysep: 1>
