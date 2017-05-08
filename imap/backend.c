@@ -330,7 +330,7 @@ static int parse_capability(struct backend *s, const char *str)
     } else {
         /*
          * IMAP style: one humongous line with a list of atoms
-         * of the form NAME or NAME=PARAM, preceeded by the atom
+         * of the form NAME or NAME=PARAM, preceded by the atom
          * CAPABILITY, and either surrounded by [] or being an
          * untagged response like "* CAPABILITY ...atoms... CRLF"
          */
