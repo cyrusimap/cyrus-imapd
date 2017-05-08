@@ -1,5 +1,6 @@
 prefix = @prefix@
 includedir = ${prefix}/include
+exec_prefix = @exec_prefix@
 libdir = @libdir@
 
 Name: Cyrus Imapd libcyrus_sieve
