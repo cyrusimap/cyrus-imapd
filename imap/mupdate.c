@@ -2412,7 +2412,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     /* If they match, ensure that location and acl are correct, if so,
        move on, if not, fix them */
     /* If the local is before the next remote, delete it */
-    /* If the next remote is before theis local, insert it and try again */
+    /* If the next remote is before the local, insert it and try again */
     for(l = local_boxes.head, r = remote_boxes->head; l && r;
         l = local_boxes.head, r = remote_boxes->head)
     {
