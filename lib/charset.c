@@ -2372,7 +2372,7 @@ EXPORTED comp_pat *charset_compilepat(const char *s)
 {
     struct comp_pat_s *pat = xzmalloc(sizeof(struct comp_pat_s));
     const char *p = s;
-    /* count occurances */
+    /* count occurrences */
     while (*p) {
         if (*p == *s) pat->max_start++;
         pat->patlen++;
