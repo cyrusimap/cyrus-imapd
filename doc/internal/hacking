@@ -57,7 +57,7 @@ right now but hopefully that will improve with time ;)
 - Network Functions
   - Cyrus abstracts socket stream access to a concept we refer to as
     "prot streams"  Prot Streams take care of all of the necessary
-    SASL and TLS/SSL encrpytion that may need to happen before data
+    SASL and TLS/SSL encryption that may need to happen before data
     goes out/comes in from the network.  The API is documented in
     lib/prot.h
 
