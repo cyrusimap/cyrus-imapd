@@ -146,7 +146,7 @@ backend (and performing ACTIVATE and DELETES as needed to do so).<p>
 <b>Warning</b>: If somehow a mailbox exists on two (or more) backend servers,
 each time one of them synchronizes its database that backend server will
 become authoritative.  Though this should not happen during normal operation
-of the murder (because of the consistancy guarantees of the MUPDATE protocol,
+of the murder (because of the consistency guarantees of the MUPDATE protocol,
 and the fact that mailbox operations are denied if the mupdate master is down),
 it <b>is</b> possible when first creating the mupdate database or
 when bringing a new backend server into the murder.
@@ -232,7 +232,7 @@ install <tt>master</tt> and <tt>lmtpproxyd</tt> on your SMTP servers.
 <h2>Administration</h2>
 
 <h3>Keeping the database synced</h3>
-<p>Consistancy in the database is maintained by pushing the current status
+<p>Consistency in the database is maintained by pushing the current status
 of the backends to the master, and having the frontends stay up to date with
 the master's database.  Since the frontends resync themselves entirely
 when they startup, downtime should not at all be a problem.  (While they
@@ -243,7 +243,7 @@ resync their database upon reconnection)</p>
 (with no mailboxes existing on the same server), it is not a big deal
 to resync the mupdate master using <tt>ctl_mboxlist -m</tt>.  If two servers
 do have the same mailbox, this will need to be resolved before database
-consistancy can be guranteed.</p>
+consistency can be guranteed.</p>
 <h3>Moving Mailboxes between backends</h3>
 <p>There is currently no 100% foolproof way to do this, however, if you issue
 a rename command to a frontend (as you would to move a mailbox between partitions),

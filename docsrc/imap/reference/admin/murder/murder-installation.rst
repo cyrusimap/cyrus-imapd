@@ -170,7 +170,7 @@ to do so).
     If somehow a mailbox exists on two (or more) backend servers, each
     time one of them synchronizes its database that backend server will
     become authoritative. Though this should not happen during normal
-    operation of the murder (because of the consistancy guarantees of
+    operation of the murder (because of the consistency guarantees of
     the MUPDATE protocol, and the fact that mailbox operations are
     denied if the mupdate master is down), it is possible when first
     creating the mupdate database or when bringing a new backend server
