@@ -92,7 +92,7 @@ if test "$with_tcl" != "no"; then
 
   if test -z "$TclLibBase" ; then
     AC_MSG_RESULT([can't find tclsh])
-    AC_MSG_WARN([can't find Tcl installtion; use of Tcl disabled.])
+    AC_MSG_WARN([can't find Tcl installation; use of Tcl disabled.])
     with_tcl=no
   else
     AC_MSG_CHECKING([for tclConfig.sh])

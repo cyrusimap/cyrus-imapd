@@ -45,7 +45,7 @@ system, issue the following command:
 .. _Debian Cyrus Team: https://launchpad.net/~pkg-cyrus-imapd-debian-devel
 .. Note::
     The `Debian Cyrus Team`_ packages are split based upon functional
-    requirements of the installtion.  Depending upon your needs, you may also
+    requirements of the installation.  Depending upon your needs, you may also
     wish to install any or all of these pacakges:
 
     *   cyrus-pop3d-2.4
