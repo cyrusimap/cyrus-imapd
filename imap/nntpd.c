@@ -1972,7 +1972,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
                     break;
                 }
                 else if (part == ARTICLE_BODY) {
-                    /* start outputing text */
+                    /* start outputting text */
                     output = 1;
                     continue;
                 }
