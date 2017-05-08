@@ -1638,6 +1638,32 @@ sub test_getmessages_body_multi
     $self->assert_null($att->{cid});
 }
 
+sub test_getmessages_body_nontext
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    # Generate a message to have some blob ids
+    xlog "Generate a message in $inbox via IMAP";
+    $self->make_message("foo",
+        mime_type => "application/zip",
+        body => "boguszip",
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
+    my $msg = $res->[1][1]->{list}[0];
+
+    $self->assert_str_equals("", $msg->{textBody});
+    $self->assert_null($msg->{htmlBody});
+}
+
+
 sub test_getmessages_preview
     :JMAP :min_version_3_0
 {
