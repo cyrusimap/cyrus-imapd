@@ -442,7 +442,7 @@ available, try again later,'' or it may try a different server.
 
 Cleanup which is typically necessary may include, but not be limited
 to, freeing allocated memory which will not be needed any more,
-unlocking concurrancy locks, dropping reference counts, closing file
+unlocking concurrency locks, dropping reference counts, closing file
 descriptors, or otherwise undoing anything which the procedure did up
 to this point.  When there are a lot of things which can go wrong, it
 is generally good to write one block of error-handling code which is
