@@ -103,7 +103,7 @@ sub sql_notify {
   my $User = $sock->getline();
   my $Mailbox = $sock->getline();
   my $Message = join("\n",$sock->getlines());
-  # Hmmm... there seems to be a trailling space we have to remove...
+  # Hmmm... there seems to be a trailing space we have to remove...
   $User =~ s/\s$//;
 
   my @rows = get_rows($User);
