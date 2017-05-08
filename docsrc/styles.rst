@@ -47,7 +47,7 @@ The addition of italics indicates replaceable or variable text. Italics denotes 
 
     To connect to a remote machine using ssh, type ``ssh *username@domain.name*`` at a shell prompt. If the remote machine is **example.com** and your username on that machine is **john**, type ``ssh john@example.com``
 
-    The ``mount -o remount *file-system*`` command remountes the named file system. For example, to remount the ``/home`` file system, the command is ``mount -o remount /home``.
+    The ``mount -o remount *file-system*`` command remounts the named file system. For example, to remount the ``/home`` file system, the command is ``mount -o remount /home``.
 
     To see the version of a currently installed package, use the ``rpm -q *package*`` command. It will return a result as follows: *package-version-release*.
 
