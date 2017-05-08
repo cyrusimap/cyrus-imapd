@@ -1120,7 +1120,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         buf_free(&val);
     }
 
-    /* Set specialuse or x-role. specialuse takes precendence. */
+    /* Set specialuse or x-role. specialuse takes precedence. */
     if (specialuse) {
         struct buf val = BUF_INITIALIZER;
         buf_setcstr(&val, specialuse);
