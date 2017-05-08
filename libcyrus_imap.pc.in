@@ -1,0 +1,13 @@
+prefix = @prefix@
+includedir = ${prefix}/include
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+
+Name: Cyrus Imapd libcyrus_imap
+Description: IMAP library of Cyrus Imapd
+URL: http://www.cyrusimap.org/
+Version: @PACKAGE_VERSION@
+Cflags: -I${includedir}/cyrus
+Requires.private: libcyrus_min = @PACKAGE_VERSION@, libcyrus = @PACKAGE_VERSION@
+Libs: -L${libdir} -lcyrus_imap
+Libs.private: @PKG_CONFIG_COM_ERR_LIB@ -lcyrus -lcyrus_min

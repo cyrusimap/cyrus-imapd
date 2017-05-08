@@ -132,6 +132,7 @@ lib/imapopts.c
 lib/imapopts.h
 lib/mkchartable
 libcyrus.pc
+libcyrus_imap.pc
 libcyrus_min.pc
 libcyrus_sieve.pc
 libtool
