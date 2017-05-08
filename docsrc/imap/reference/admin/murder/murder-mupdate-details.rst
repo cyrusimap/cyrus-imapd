@@ -16,7 +16,7 @@ Participants
 Within an IMAP aggregator, there are several types of MUPDATE participants.
 
 1. **MUPDATE Master** - This component maintains the master copy of the MUPDATE database and allows operations on the database to be atomic.
-2. **MUPDATE Slaves** - These components connect to the master and maintain a replica of the MUPDATE database. They also accept connections from clients, though these connections are of a read-only nature. Note that there are short periods of time between an update occuring on the master and it being reflected across all of the slaves.
+2. **MUPDATE Slaves** - These components connect to the master and maintain a replica of the MUPDATE database. They also accept connections from clients, though these connections are of a read-only nature. Note that there are short periods of time between an update occurring on the master and it being reflected across all of the slaves.
 3. **MUPDATE Clients** - These components query the master and slaves to obtain information from the mailbox database.
 
 Data Formats
