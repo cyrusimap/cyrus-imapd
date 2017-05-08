@@ -1,4 +1,4 @@
-/* cyr_buildinfo.c - tool to insepct Cyrus build configuration
+/* cyr_buildinfo.c - tool to inspect Cyrus build configuration
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *
