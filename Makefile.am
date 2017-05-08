@@ -733,6 +733,7 @@ include_HEADERS = \
 	lib/bloom.h \
 	lib/bsearch.h \
 	lib/bufarray.h \
+	lib/byteorder64.h \
 	lib/charset.h \
 	lib/chartable.h \
 	lib/command.h \
@@ -759,6 +760,7 @@ include_HEADERS = \
 	lib/murmurhash2.h \
 	lib/nonblock.h \
 	lib/parseaddr.h \
+	lib/prot.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
@@ -777,15 +779,20 @@ include_HEADERS = \
 nodist_include_HEADERS = \
 	lib/imapopts.h
 
-nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_include_HEADERS = \
+	imap/mailbox.h \
+	imap/message.h \
+	imap/message_guid.h \
+	imap/quota.h \
+	imap/sequence.h \
+	sieve/sieve_interface.h \
+	sieve/varlist.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
-	lib/byteorder64.h \
 	lib/gai.h \
 	lib/libconfig.h \
 	lib/md5.h \
-	lib/prot.h \
 	lib/ptrarray.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
@@ -987,7 +994,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
-	imap/mailbox.h \
 	imap/mbdump.c \
 	imap/mbdump.h \
 	imap/mboxkey.c \
@@ -999,9 +1005,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/mboxname.c \
 	imap/mboxname.h \
 	imap/message_guid.c \
-	imap/message_guid.h \
 	imap/message.c \
-	imap/message.h \
 	imap/message_priv.h \
 	imap/msgrecord.c \
 	imap/msgrecord.h \
@@ -1033,7 +1037,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/seen.h \
 	imap/seen_db.c \
 	imap/sequence.c \
-	imap/sequence.h \
 	imap/setproctitle.c \
 	imap/statuscache.h \
 	imap/statuscache_db.c \
@@ -1279,7 +1282,7 @@ endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
-imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
+imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
 imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
