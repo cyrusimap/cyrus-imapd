@@ -722,7 +722,7 @@ int autocreate_user(struct namespace *namespace,
 
 #ifdef USE_SIEVE
     /*
-     * Here the autocreate sieve script feature is iniated from.
+     * Here the autocreate sieve script feature is initiated from.
      */
     source_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT);
 
