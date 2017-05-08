@@ -8,7 +8,7 @@ testExtension (extensions to sieve that are tests)
 inside these directories is:
 
 XXXXX.s (sieve script)
-XXXXX.key (what this script should do with thest messages
+XXXXX.key (what this script should do with these messages
 serverm (dir of messages- for testing the script using lmtp server)
 testm (dir of messages- for testing the script using sieve test program)
 
