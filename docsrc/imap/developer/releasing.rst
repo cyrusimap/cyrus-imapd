@@ -43,7 +43,7 @@ Pre-release testing
    so make sure your ducks are in line before proceeding.
 2. Generate a configure script: ``autoreconf -i -s``
 3. Generate everything else: ``./configure --enable-maintainer-mode`` (you do not
-   need any other options at this stage)
+   need any other options at this stage).
 4. Run ``make distcheck``.  This will generate a distribution tarball, and
    test it in various ways.  It takes about 10-15 mins to run, depending on
    your hardware.  If this command fails, you are not ready to release --
@@ -53,15 +53,15 @@ Pre-release testing
    cassandane), so you also need to check the tarball against those.
 
    i.    The tarball will be called something like ``cyrus-imapd-3.0.0-rc2-23-g0241b22.tar.gz``
-         (this corresponds to the ``git describe`` output)
-   ii.   Extract it: ``tar xfz cyrus-imapd-*.tar.gz`` (substitute version for ``*``)
+         (this corresponds to the ``git describe`` output).
+   ii.   Extract it: ``tar xfz cyrus-imapd-*.tar.gz`` (substitute version for ``*``).
    iii.  Change into the directory: ``cd cyrus-imapd-*``
    iv.   Configure it: ``./configure [...]`` (provide the same arguments you would
-         when building for Cassandane at any other time)
-   v.    Compile it: ``make -j4`` -- it should build correctly
-   vi.   Run the unit tests: ``make -j4 check`` -- they should pass
+         when building for Cassandane at any other time).
+   v.    Compile it: ``make -j4`` -- it should build correctly.
+   vi.   Run the unit tests: ``make -j4 check`` -- they should pass.
    vii.  Install it to your Cassandane prefix: ``make install``
-   viii. Then run Cassandane normally -- it should pass
+   viii. Then run Cassandane normally -- it should pass.
    ix.   If any of this fails, fix it, commit it, then restart the pre-release
          testing.
 
@@ -111,7 +111,7 @@ meantime, you will end up with a mess.
 10. Ellie also likes to copy the tarball and signature file somewhere safe,
     just in case something happens between now and uploading.
 11. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
-    remote is named "ci")
+    remote is named "ci").
 
 Bundling the cyruslibs Xapian fork
 ==================================
@@ -135,5 +135,5 @@ Releasing
 3. SSH into both www and ftp, and move older releases to the old versions
    directory.  You want only the two most recent tarball+sig pairs for each
    major series.
-4. Update the topic in the #cyrus IRC channel
-5. Send an announcement to the info-cyrus and cyrus-announce lists
+4. Update the topic in the #cyrus IRC channel.
+5. Send an announcement to the info-cyrus and cyrus-announce lists.

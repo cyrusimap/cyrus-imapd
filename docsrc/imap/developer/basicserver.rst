@@ -155,7 +155,7 @@ Cyrus access to this file:
 
 Awesome! Almost done. We will now configure the Cyrus IMAP server to
 actually use this TLS certificate. Open your Cyrus configuration file
-``/etc/imapd.conf`` and add the following to lines at the end of it:
+``/etc/imapd.conf`` and add the following two lines at the end of it:
 
 ::
 
