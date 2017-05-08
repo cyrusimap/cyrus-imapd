@@ -52,7 +52,7 @@ Options
 
 .. option:: -p partition
 
-    When performing a dump, dump only thise mailboxes that live on
+    When performing a dump, dump only those mailboxes that live on
     *partition*.
 
 .. option:: -f filename
