@@ -2357,7 +2357,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
     xstats_add(SEARCH_RESULT, results.count);
     if (results.count) {
-        /* The untagged reponse would be XCONVMULTISORT but
+        /* The untagged response would be XCONVMULTISORT but
          * Mail::IMAPTalk has an undocumented hack whereby any untagged
          * response matching /sort/i is assumed to be a sequence of
          * numeric uids.  Meh. */

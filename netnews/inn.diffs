@@ -1893,7 +1893,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + }
 +
 + /*
-+  * This is called when the timeout for the reponse from the remote
++  * This is called when the timeout for the response from the remote
 +  * goes off. We tear down the connection and notify our host.
 +  */
 + static void imap_readTimeoutCbk (TimeoutId id, void *data)
@@ -2071,7 +2071,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + }
 +
 + /*
-+  * This is called when the timeout for the reponse from the remote
++  * This is called when the timeout for the response from the remote
 +  * goes off. We tear down the connection and notify our host.
 +  */
 + static void lmtp_readTimeoutCbk (TimeoutId id, void *data)

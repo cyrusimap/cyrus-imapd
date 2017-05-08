@@ -67,7 +67,7 @@ typedef struct {
 } sieve_test_message_t;
 
 /* set to SIEVE_DONE if you want to test "already responded */
-int autorespond_reponse = SIEVE_OK;
+int autorespond_response = SIEVE_OK;
 
 extern int verbose;
 
@@ -501,7 +501,7 @@ static int autorespond(void *ac __attribute__((unused)),
                        void *mc __attribute__((unused)),
                        const char **errmsg __attribute__((unused)))
 {
-    return autorespond_reponse;
+    return autorespond_response;
 }
 
 static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
