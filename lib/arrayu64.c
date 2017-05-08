@@ -114,7 +114,7 @@ static inline int adjust_index_rw(arrayu64_t *au, int idx, int grow)
          * outside the current bounds, plus perhaps @grow */
         ensure_alloc(au, idx+grow);
     } else if (idx < 0) {
-        /* adjust Perl-style negative indeces */
+        /* adjust Perl-style negative indices */
         idx += au->count;
         if (idx >= 0 && grow)
             ensure_alloc(au, au->count+grow);
