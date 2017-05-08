@@ -2263,7 +2263,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
 /*
  * Decode MIME strings (per RFC 2047) in 's'.  Returns a newly allocated
- * string, contining 's' in canonical searching form, which must be
+ * string, containing 's' in canonical searching form, which must be
  * free()d by the caller.
  */
 EXPORTED char *charset_decode_mimeheader(const char *s, int flags)

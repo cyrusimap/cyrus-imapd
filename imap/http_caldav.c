@@ -3061,7 +3061,7 @@ struct path_segment_t {
 };
 
 struct patch_data_t {
-    icalcomponent *patch;             /* component containg patch data */
+    icalcomponent *patch;             /* component containing patch data */
     struct path_segment_t *delete;    /* list of PATCH-DELETE actions */
     struct path_segment_t *setparam;  /* list of PATCH-PARAMETER items */
 };
