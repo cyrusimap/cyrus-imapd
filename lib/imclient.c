@@ -1146,7 +1146,7 @@ EXPORTED void fillin_interactions(struct imclient *context,
 
 /*
  * Params:
- *  mechlist: list of mechanisms seperated by spaces
+ *  mechlist: list of mechanisms separated by spaces
  *
  * Returns:
  *  0 - sucess

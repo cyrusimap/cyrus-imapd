@@ -3978,7 +3978,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                     ? "[TRYCREATE] " : r == IMAP_MESSAGE_TOO_LARGE
                     ? "[TOOBIG]" : "", error_message(r));
     } else if (doappenduid) {
-        /* is this a space seperated list or sequence list? */
+        /* is this a space separated list or sequence list? */
         prot_printf(imapd_out, "%s OK [APPENDUID %lu ", tag, uidvalidity);
         if (appendstate.nummsg == 1) {
             prot_printf(imapd_out, "%u", appendstate.baseuid);

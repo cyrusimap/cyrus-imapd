@@ -152,7 +152,7 @@ EXPORTED void fatal(const char *s, int code)
 /***********************
  * Parse a mech list of the form: ... AUTH=foo AUTH=bar ...
  *
- * Return: string with mechs seperated by spaces
+ * Return: string with mechs separated by spaces
  *
  ***********************/
 
