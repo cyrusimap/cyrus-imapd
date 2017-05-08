@@ -9,7 +9,7 @@ Duplicate Message Delivery Suppression
     of :task:`42`.
 
 Messages are delivered to IMAP users in a seemingly endless stream and
-near continious flow, but sometimes something fails.
+near continuous flow, but sometimes something fails.
 
 A sending MTA awaits confirmation from a receiving MTA or MDA, and a
 receiving MTA or MDA often waits giving out that confirmation until
