@@ -212,7 +212,7 @@ Examples
 
 ..
 
-        Recusively reconstruct all mailboxes belonging to *jsmith*,
+        Recursively reconstruct all mailboxes belonging to *jsmith*,
         restoring any directories containing ``cyrus.header`` files.
 
 .. only:: html

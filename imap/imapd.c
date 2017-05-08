@@ -1815,7 +1815,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if(c == ' ') {
-                    /* Optional RECURSEIVE argument */
+                    /* Optional RECURSIVE argument */
                     c = getword(imapd_in, &arg2);
                     if(!imparse_isatom(arg2.s))
                         goto extraargs;
