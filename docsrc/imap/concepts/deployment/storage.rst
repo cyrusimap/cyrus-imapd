@@ -764,7 +764,7 @@ otherwise incorporates another.
 
 Today's storage coming with a certain price-tag, and tomorrow's with a
 different one, it can be an interesting exercise to plan for storage to
-grow organicly as needed, rather than make large investments to provide
+grow organically as needed, rather than make large investments to provide
 capacity that may only be used years from today, or not be used at all,
 or turn out to still not be sufficient.
 
