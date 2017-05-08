@@ -150,7 +150,7 @@ struct imclient {
 #ifdef HAVE_SSL
     SSL_CTX *tls_ctx;
     SSL *tls_conn;
-    int tls_on; /* wheather we are under a layer or not */
+    int tls_on; /* whether we are under a layer or not */
 #endif /* HAVE_SSL */
 };
 

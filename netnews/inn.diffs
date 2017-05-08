@@ -703,7 +703,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  *            For example a cancel message canceling a message in multiple
 +  *            newsgroups will create >1 queue item but we only want it to count
 +  *            once towards the queue
-+  *  must    - wheather we must take it even though it may put us over our max size
++  *  must    - whether we must take it even though it may put us over our max size
 +  */
 +
 + static conn_ret AddToQueue(Q_t *q, void *item, control_type_t type, int addsmsg, bool must)

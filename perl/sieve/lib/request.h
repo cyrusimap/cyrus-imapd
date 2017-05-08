@@ -78,7 +78,7 @@ int setscriptactive(int version, struct protstream *pout,
                     char *name, char **refer_to, char **errstr);
 
 /*
- * Getscript. Save {0,1} wheather to save to disk or display on screen
+ * Getscript. Save {0,1} whether to save to disk or display on screen
  */
 
 //int getscript(int version, struct protstream *pout, struct protstream *pin,
