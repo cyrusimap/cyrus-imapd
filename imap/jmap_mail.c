@@ -2158,7 +2158,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     char *text = NULL, *html = NULL;
     int r;
 
-    /* Disset message into its parts */
+    /* Dissect message into its parts */
     r = find_msgbodies(body, msg_buf, &bodies);
     if (r) goto done;
 
