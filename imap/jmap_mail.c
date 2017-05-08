@@ -5162,7 +5162,7 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
                     valid = 0;
                 }
             }
-            /* Validate mail addresses in overriden header */
+            /* Validate mail addresses in overridden header */
             int ismailheader = (!strcasecmp(key, "From") ||
                                 !strcasecmp(key, "Reply-To") ||
                                 !strcasecmp(key, "Cc") ||

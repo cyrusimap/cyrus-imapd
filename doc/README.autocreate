@@ -103,7 +103,7 @@ shared folder.
 * A new config option has been added. 'autosubscribe_all_sharedfolders' is a yes/no
 option. When set to yes, the user is automatically subscribed to all shared folders one
 has permission to subscribe to. Please, note that when this option is set to yes, then
-'autosubscribesharedfolders' option is overriden.
+'autosubscribesharedfolders' option is overridden.
 
   (D) Automatic creation of a predefined default sieve script.
 

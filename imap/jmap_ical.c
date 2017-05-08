@@ -4034,7 +4034,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
                 json_object_set_new(override, "start", json_string(id));
             }
 
-            /* Create overriden event from patch and master event */
+            /* Create overridden event from patch and master event */
             if (!(ex = patch_object(master, override))) {
                 invalidprop(ctx, NULL);
                 endprop(ctx);

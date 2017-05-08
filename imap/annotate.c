@@ -2590,7 +2590,7 @@ static int write_entry(struct mailbox *mailbox,
         /* do the annot-changed here before altering the DB */
         mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
 
-        /* grab the message annotation modseq, if not overriden */
+        /* grab the message annotation modseq, if not overridden */
         if (uid && !mdata) {
             modseq = mailbox->i.highestmodseq;
         }
