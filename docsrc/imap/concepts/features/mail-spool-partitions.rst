@@ -73,7 +73,7 @@ Restricting Storage Used with Partitions
 
     It is not recommended to use partitions for the purposes of
     restricting the amount of storage used by (sets of) mailboxes,
-    unless you can also grow the filesystem (preferrably online) and you
+    unless you can also grow the filesystem (preferably online) and you
     have (automated) means to determine what is to end up on each
     partition.
 
