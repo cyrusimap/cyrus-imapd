@@ -634,7 +634,7 @@ static void byte2search(struct convert_rock *rock, uint32_t c)
         if (cur < i)
             s->starts[cur] = s->starts[i];
 
-        /* check that the substring is still maching */
+        /* check that the substring is still matching */
         if (b == s->substr[s->offset - s->starts[i]]) {
             if (s->offset - s->starts[i] == s->patlen - 1) {
                 /* we're there! */
