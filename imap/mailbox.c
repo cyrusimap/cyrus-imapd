@@ -297,7 +297,7 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
  * note that header names longer than MAX_CACHED_HEADER_SIZE
  * won't be cached regardless
  *
- * xxx can we get benefits by requireing this list to be sorted?
+ * xxx can we get benefits by requiring this list to be sorted?
  * (see is_cached_header())
  *
  */
