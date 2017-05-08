@@ -24,7 +24,7 @@ Single
 6 5250 1800 9225 2475
 4 0 0 50 0 0 12 0.0000 4 135 2940 5250 1950 Frontend server mailbox databases are\001
 4 0 0 50 0 0 12 0.0000 4 180 3300 5250 2400 mupdate connection to the mupdate master.\001
-4 0 0 50 0 0 12 0.0000 4 180 3960 5250 2175 updated based upon a stream on a frotnend-initiated\001
+4 0 0 50 0 0 12 0.0000 4 180 3960 5250 2175 updated based upon a stream on a frontend-initiated\001
 -6
 6 9600 1500 11250 2400
 4 0 0 50 0 0 12 0.0000 4 135 1575 9600 1650 Connection to LMTP\001
