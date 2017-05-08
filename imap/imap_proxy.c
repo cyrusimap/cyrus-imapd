@@ -517,7 +517,7 @@ static void add_sub(strarray_t *subs, mbentry_t *mbentry, uint32_t attributes)
         strarray_append(subs, mbentry->name);
     }
     else {
-        /* a decendent of mailbox is subscribed */
+        /* a descendent of mailbox is subscribed */
         struct buf child = BUF_INITIALIZER;
 
         buf_printf(&child, "%s.", mbentry->name);

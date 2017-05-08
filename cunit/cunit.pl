@@ -993,7 +993,7 @@ sub emit_final_makefile_bits()
 #
 # Emit to the MAKE filehandle, a makefile fragment which contains
 # rules to build wrappers around each test source in this directory
-# or it's descendants, and to build object files from those wrappers.
+# or it's descendents, and to build object files from those wrappers.
 #
 # Args: name of output makefile
 # Returns: void
@@ -1042,7 +1042,7 @@ sub emit_partial_makefile_bits($)
 #
 # Generate a makefile fragment which contains rules to build
 # wrappers around each test source in this directory or it's
-# descendants, and to build object files from those wrappers.
+# descendents, and to build object files from those wrappers.
 #
 sub generate_partial_makefile(@)
 {

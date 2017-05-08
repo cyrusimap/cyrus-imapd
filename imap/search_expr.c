@@ -187,7 +187,7 @@ EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
 
 /*
  * Recursively free a search expression tree including the given node
- * and all descendant nodes.
+ * and all descendent nodes.
  */
 EXPORTED void search_expr_free(search_expr_t *e)
 {

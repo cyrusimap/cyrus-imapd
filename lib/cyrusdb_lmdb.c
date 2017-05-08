@@ -252,7 +252,7 @@ static int begin_txn(struct dbengine *db, struct txn **tidptr, int readonly)
      * transaction.
      *
      * Note that transactions are always either the main transaction,
-     * or a direct descendant of it. There are no deeper transaction
+     * or a direct descendent of it. There are no deeper transaction
      * levels supported (although LMDB supports them).
      */
     if (db->tid) {

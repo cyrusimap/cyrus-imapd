@@ -4311,7 +4311,7 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             case 0:
                 /* VCALENDAR */
                 if (kind != ICAL_VCALENDAR_COMPONENT) {
-                    /* All other components MUST be a decendent of VCALENDAR */
+                    /* All other components MUST be a descendent of VCALENDAR */
                     error->precond = CALDAV_VALID_FILTER;
                     error->desc = "VCALENDAR must be toplevel component";
                 }

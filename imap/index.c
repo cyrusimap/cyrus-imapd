@@ -5870,7 +5870,7 @@ static int thread_is_descendent(Thread *parent, Thread *child)
     if (parent == child)
         return 1;
 
-    /* search each child's decendents */
+    /* search each child's descendents */
     for (kid = parent->child; kid; kid = kid->next) {
         if (thread_is_descendent(kid, child))
             return 1;
