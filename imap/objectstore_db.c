@@ -228,7 +228,7 @@ static char *pack_update_message (const char *msg_guid){
     // SQL statement: UPDATE user_msg SET list_info = '{"mboxs":{"uid":mailbox1 "uid":mailbox2}}' WHERE msg_guid = 'message_guid';
     char *sql = "UPDATE user_msg SET list_info = " ;
     char *sql_where = "WHERE msg_guid = " ;
-    int final_lenght = strlen (sql) +
+    int final_length = strlen (sql) +
             2 + strlen(TOKEN_MBOX) + 1 + 4 + //  "'{" + TOKEN_MBOX + "{" ... + "}}' "
                 strlen(sql_where)  +         //
             1 + 40 + 1 +                     //  "'" + msg_guid (40) + "'"
@@ -236,9 +236,9 @@ static char *pack_update_message (const char *msg_guid){
 
     int i;
     for (i=0; i < message_info.mailboxes; i++){
-        final_lenght += strlen ( message_info.mailbox [i]) + strlen (TOKEN_UID) + 1;
+        final_length += strlen ( message_info.mailbox [i]) + strlen (TOKEN_UID) + 1;
     }
-    char *list_info = malloc ( final_lenght ) ;
+    char *list_info = malloc ( final_length ) ;
     sprintf ( list_info, "%s'{%s{", sql, TOKEN_MBOX) ;
     int j = strlen (list_info) ;
     for (i=0; i < message_info.mailboxes; i++){
@@ -252,20 +252,20 @@ static char *pack_update_message (const char *msg_guid){
 static char *pack_insert_message (const char *msg_guid, char *mailbox_name){
     // SQL statement: INSERT INTO user_msg (msg_guid,list_info) values ('message_guid', '{"mboxs":{"uid":mailbox}}' )
     char *sql = "INSERT INTO user_msg (msg_guid,list_info) values " ;
-    int final_lenght = strlen (sql) +
+    int final_length = strlen (sql) +
             2 + 40 + strlen(TOKEN_MBOX) + 5 + 1 + strlen(TOKEN_UID) + //  "('" + msg_guid (40) + "', '{" + TOKEN_MBOX  + "{" + TOKEN_UID
             strlen (mailbox_name) +  5 + 1 ;                          //  "}}' )" +  1
-    char *list_info = malloc ( final_lenght ) ;
+    char *list_info = malloc ( final_length ) ;
     sprintf ( list_info, "%s('%s', '{%s{%s%s}}' )", sql, msg_guid , TOKEN_MBOX, TOKEN_UID, mailbox_name) ;
     return list_info ;
 }
 
 static char *pack_other_message (char *sql_cmd, const char *msg_guid){   // used with: SQL_SELECT_CMD SQL_DELETE_CMD
 
-    int final_lenght = strlen (sql_cmd) +
+    int final_length = strlen (sql_cmd) +
             1 + 40 + 1 + 1 ;           //  "('" + msg_guid (40) + "'" + EOS
 
-    char *list_info = malloc ( final_lenght ) ;
+    char *list_info = malloc ( final_length ) ;
     sprintf ( list_info, "%s'%s'", sql_cmd, msg_guid) ;
     return list_info ;
 }
