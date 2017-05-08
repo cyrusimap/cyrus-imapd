@@ -1505,7 +1505,7 @@ done:
     return r;
 }
 
-/* foreach allows for subsidary mailbox operations in 'cb'.
+/* foreach allows for subsidiary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,

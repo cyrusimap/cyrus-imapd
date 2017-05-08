@@ -5893,7 +5893,7 @@ int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
     int r = 0;
     int i;
 
-    /* Includes subsiduary nodes automatically */
+    /* Includes subsidiary nodes automatically */
     strarray_t *msubs = mboxlist_sublist(userid);
     if (!msubs) {
         syslog(LOG_ERR, "IOERROR: fetching subscriptions for %s", userid);
