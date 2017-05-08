@@ -440,7 +440,7 @@ message files
     This file contains fixed-length information about the mailbox itself and each message in the mailbox.
 
 ``cyrus.cache``
-    This file contans variable-length information about each message in the mailbox.
+    This file contains variable-length information about each message in the mailbox.
 
 ``cyrus.seen``
     This file contains variable-length state information about each reader of the mailbox who has ``s`` permissions.
