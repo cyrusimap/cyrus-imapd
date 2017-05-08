@@ -1,7 +1,7 @@
 Mailbox Folders exempt from quota
 ---------------------------------
 
-By creating an additional quota root, a folder's contents can be made excempt from counting towards the mailbox's quota.
+By creating an additional quota root, a folder's contents can be made exempt from counting towards the mailbox's quota.
 
 .. note::
     Making an INBOX/Archive/ Folder exempt from quota: ::
