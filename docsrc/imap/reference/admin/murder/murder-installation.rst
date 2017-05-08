@@ -374,7 +374,7 @@ Gotchas
     that all your machines are keyed properly, as we have seen problems
     with different clients trying to authenticate to different services
     (e.g. imap.imap-pool instead of imap.pool-frontend-1), so test the
-    clients in use in your enviornment and be sure that they work with
+    clients in use in your environment and be sure that they work with
     whatever keying scheme you use.
 
 **Clients dealing with referrals**
