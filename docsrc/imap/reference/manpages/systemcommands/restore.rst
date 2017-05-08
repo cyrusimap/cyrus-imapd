@@ -55,7 +55,7 @@ be used to identify objects to restore from a Cyrus backup.
 Selected mailboxes will have their messages restored to a mailbox of the same
 name, which will be created if necessary.  Individually-selected messages will
 be restored to the mailboxes in which they previously existed.  In both cases
-the **-M** option can be used to overrride the destination mailbox (see below),
+the **-M** option can be used to override the destination mailbox (see below),
 but note the consequences of doing this when multiple mailbox objects have
 been specified, or when the **-r** option is in use.
 
