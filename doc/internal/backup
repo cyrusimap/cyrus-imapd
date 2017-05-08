@@ -553,7 +553,7 @@ happily, even though reconstruct might decide that some other file is the
 correct one for that user...
 
 a backup server would generally be used only for backups, and sync_client
-is quite resilient when the destinatition isn't there, so it's actually
+is quite resilient when the destination isn't there, so it's actually
 no problem to just shut down cyrus while reconstruct runs.  no outage to
 user-facing services, just maybe some sync backlog to catch up on once
 cyrus is restarted.
