@@ -808,7 +808,7 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
 disk space usage.</li>
 <li>Fixed a crash when selecting a folder after using the SCAN command</li>
 <li>Split mupdate_synchronize() into network scarfing and mailbox
-  comparision pieces.  This allows us to not lock out the
+  comparison pieces.  This allows us to not lock out the
   mailboxes.db and mupdate clients while scarfing the UPDATE
   response, which can be quite time consuming over slow links.</li>
 <li>Added support for MUPDATE COMPRESS and IMAP COMPRESS commands
