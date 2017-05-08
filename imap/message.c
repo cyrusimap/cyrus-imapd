@@ -4221,6 +4221,7 @@ static int body_foreach_section(struct body *body, struct message *message,
                                 int (*proc)(int isbody, charset_t charset,
                                     int encoding,
                                     const char *type, const char *subtype,
+                                    const struct param *type_params,
                                     const char *disposition,
                                     const struct param *disposition_params,
                                     struct buf *data, void *rock),
@@ -4253,7 +4254,7 @@ static int body_foreach_section(struct body *body, struct message *message,
 
         buf_init_ro(&data, message->map.s + body->header_offset, body->header_size);
         r = proc(/*isbody*/0, CHARSET_UNKNOWN_CHARSET, 0, body->type, body->subtype,
-                 disposition, disposition_params, &data, rock);
+                 body->params, disposition, disposition_params, &data, rock);
         buf_free(&data);
 
         if (tmpbody) {
@@ -4270,7 +4271,7 @@ static int body_foreach_section(struct body *body, struct message *message,
         message_parse_charset(body, &encoding, &charset);
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
         r = proc(/*isbody*/1, charset, encoding, body->type, body->subtype,
-                 NULL, NULL, &data, rock);
+                 body->params, NULL, NULL, &data, rock);
         buf_free(&data);
         charset_free(&charset);
 
@@ -4278,7 +4279,7 @@ static int body_foreach_section(struct body *body, struct message *message,
     } else {
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
         r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET, 0,
-                body->type, body->subtype, NULL, NULL, &data, rock);
+                body->type, body->subtype, body->params, NULL, NULL, &data, rock);
         buf_free(&data);
     }
 
@@ -4303,6 +4304,7 @@ static int body_foreach_section(struct body *body, struct message *message,
 EXPORTED int message_foreach_section(message_t *m,
                          int (*proc)(int isbody, charset_t charset, int encoding,
                                      const char *type, const char *subtype,
+                                     const struct param *type_params,
                                      const char *disposition,
                                      const struct param *disposition_params,
                                      struct buf *data,

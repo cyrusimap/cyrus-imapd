@@ -297,6 +297,7 @@ extern int message_get_fname(message_t *m, const char **fnamep);
 extern int message_foreach_section(message_t *m,
                    int (*proc)(int isbody, charset_t charset, int encoding,
                                const char *type, const char *subtype,
+                               const struct param *type_params,
                                const char *disposition,
                                const struct param *disposition_params,
                                struct buf *data,

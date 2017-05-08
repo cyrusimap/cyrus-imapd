@@ -113,6 +113,7 @@ static void dump_buf(FILE *fp, const struct buf *data)
 static int dump_one_section(int partno, charset_t charset, int encoding,
                             const char *type __attribute__((unused)),
                             const char *subtype,
+                            const struct param *type_params __attribute__((unused)),
                             const char *disposition __attribute__((unused)),
                             const struct param *disposition_params __attribute__((unused)),
                             struct buf *data,

@@ -4711,6 +4711,7 @@ static void extract_cb(const struct buf *text, void *rock)
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                             const char *type, const char *subtype,
+                            const struct param *type_params __attribute__((unused)),
                             const char *disposition,
                             const struct param *disposition_params,
                             struct buf *data,
@@ -4730,9 +4731,11 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             buf_free(&text);
             str->indexed_headers = 1;
         }
+
+        /* Index attachment file names */
+        const struct param *param;
         if (disposition && !strcmp(disposition, "ATTACHMENT")) {
-            /* Index attachment file names */
-            const struct param *param;
+            /* Look for "Content-Disposition: attachment;filename=" header */
             for (param = disposition_params; param; param = param->next) {
                 if (strcmp(param->attribute, "FILENAME"))
                     continue;
@@ -4740,6 +4743,14 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
                 buf_free(&text);
             }
+        }
+        for(param = type_params; param; param = param->next) {
+            /* Look for "Content-Type: foo;name=" header */
+            if (strcmp(param->attribute, "NAME"))
+                continue;
+            buf_init_ro_cstr(&text, param->value);
+            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+            buf_free(&text);
         }
     }
     else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {

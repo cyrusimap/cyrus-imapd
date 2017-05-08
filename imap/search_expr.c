@@ -1988,6 +1988,7 @@ struct searchmsg_rock
 static int searchmsg_cb(int isbody, charset_t charset, int encoding,
                         const char *type __attribute__((unused)),
                         const char *subtype __attribute__((unused)),
+                        const struct param *type_params __attribute__((unused)),
                         const char *disposition __attribute__((unused)),
                         const struct param *disposition_params __attribute__((unused)),
                         struct buf *data, void *rock)
