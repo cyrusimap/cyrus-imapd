@@ -196,7 +196,7 @@ there doesn't seem to be anything preventing user/a/foo -> user/b/foo in the
 general (non-INBOX) case.
 
 renames might be a little easier to handle if the index replicated the mailbox
-heirarchy rather than just being a flat structure.  though this adds complexity
+hierarchy rather than just being a flat structure.  though this adds complexity
 wrt hiersep handling.  something like:
 
  mailbox:

@@ -27,7 +27,7 @@ There are four different uses of the term "namespace" within Cyrus:
 
 2. **User namespace mode: altnamespace**
 
-    Cyrus's user namespace mode controls how it responds to the ``IMAP NAMESPACE`` command and what the heirarchy of mailboxes looks like in response to an ``IMAP LIST`` command for a user. The config setting *altnamespace*: on or off in :cyrusman:`imapd.conf(5)` manages the mode. It is also affected by the hierarchy separator, which can be "/" (default: on) or "." (off) controlled by *unixhierarchysep* in :cyrusman:`imapd.conf(5)`.
+    Cyrus's user namespace mode controls how it responds to the ``IMAP NAMESPACE`` command and what the hierarchy of mailboxes looks like in response to an ``IMAP LIST`` command for a user. The config setting *altnamespace*: on or off in :cyrusman:`imapd.conf(5)` manages the mode. It is also affected by the hierarchy separator, which can be "/" (default: on) or "." (off) controlled by *unixhierarchysep* in :cyrusman:`imapd.conf(5)`.
 
     1. altnamespace: on (default)
 
