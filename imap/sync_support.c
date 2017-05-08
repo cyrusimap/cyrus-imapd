@@ -3112,7 +3112,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
 
-    /* Delete with admin priveleges */
+    /* Delete with admin privileges */
     return mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                   sstate->userid, sstate->authstate,
                                   NULL, 0, sstate->local_only, 1);
