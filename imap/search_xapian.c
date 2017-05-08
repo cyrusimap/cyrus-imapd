@@ -2369,7 +2369,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
         else if ((flags & SEARCH_COMPACT_ONLYUPGRADE)) {
             /* nothing to reindex, so bail now.  Since we don't set 'r', we will just
-             * abort with no change other than a new tmp location which compreses down
+             * abort with no change other than a new tmp location which compresses down
              * soon enough */
             goto out;
         }

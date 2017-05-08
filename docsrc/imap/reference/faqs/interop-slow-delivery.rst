@@ -9,7 +9,7 @@ There are a number of things that can affect mail delivery. Here are some common
     
     3. Slow dns. Some MTAs (like sendmail) talk to dns a lot. If dns is slow, mail delivery appears slow. We run named on each Cyrus machine 
     
-    4. Lmtpproxyd is having trouble. Sometimes lmtpproxyd will die and dissapear. Sometimes it just hangs. Not sure why, but restarting may help.
+    4. Lmtpproxyd is having trouble. Sometimes lmtpproxyd will die and disappear. Sometimes it just hangs. Not sure why, but restarting may help.
 
 If you have a large volume of mail then :ref:`Cyrus Murder Mail Delivery 
 <murder-mail-delivery>` has some tips. 

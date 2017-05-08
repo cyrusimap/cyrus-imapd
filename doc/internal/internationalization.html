@@ -35,7 +35,7 @@ Cyrus's known character sets (except for UTF-8) don't contain any
 characters off of the BMP this isn't seen to be a major problem.</p>
 
 <p>Throughout this text, Unicode and ISO 10646 will be used
-interchangible to refer to the 16-bit character set of the BMP,
+interchangeable to refer to the 16-bit character set of the BMP,
 regardless of encoding. "Character", unless otherwise specified,
 refers to a single Unicode character <tt>ffff</tt> or under. </p>
 
@@ -80,7 +80,7 @@ transcoding routines in <tt>lib/charset.[ch]</tt>, and
 elegant and very compact, thus somewhat intimidating. During
 compilation, Cyrus builds up a large number of tables (see <a
 href="#mkchartable">mkchartable</a>) and uses them so that it never
-has to consider more than a single octet at a time while outputing the
+has to consider more than a single octet at a time while outputting the
 Cyrus canonical form for an input string.</p>
 
 <h2>external interface</h2>
@@ -248,7 +248,7 @@ without an intervening RET.</p></dd>
 
 <dt>JMP</dt>
 
-<dd> Similiar to JSR, but does not change the stack. It is the
+<dd> Similar to JSR, but does not change the stack. It is the
 equivalent of a goto. JMPs are useful to deal with modal input
 character sets (such as an escape in ISO-2022-JP, see <a
 href="#mkchartable">how the tables are generated</a>).</dd>
@@ -354,7 +354,7 @@ characters to select a new mode.</p>
 
 <p>The input charset labels modes with "<tt>:</tt>" followed by the
 mode name. The starting mode "<tt>US-ASCII</tt>" in ISO-2022-JP is
-preceeded by "<tt>:US-ASCII</tt>". Mode transitions are denoted by a
+preceded by "<tt>:US-ASCII</tt>". Mode transitions are denoted by a
 Unicode conversion of "<tt>&gt;newmode</tt>" or
 "<tt>:newmode</tt>". To denote that the octet <tt>42</tt> transitions
 into the "<tt>US-ASCII</tt>" mode, the charset file has "<tt>42
@@ -382,14 +382,14 @@ explicitly stated, it is a translation to EMPTY.</p>
 standard. More recent versions should be available <a
 href="http://www.unicode.org/xxx">from their website</a>. Each entry
 in the file describers a Unicode character by the following
-properties, seperated by semicolons:</p>
+properties, separated by semicolons:</p>
 
 <ul>
 <li>code point (16-bit character value) in hex</li>
 <li>character name (unused by Cyrus)</li>
-<li>general category, such as whitespace or puncuation</li>
+<li>general category, such as whitespace or punctuation</li>
 <li>the canonical combining class (unused)</li>
-<li>bidirection chategory (unused)</li>
+<li>bidirection category (unused)</li>
 <li>character decomposition</li>
 <li>decimal digit value (unused)</li>
 <li>digit value (unused, and, no, I don't know the difference)</li>

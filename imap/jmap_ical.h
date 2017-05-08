@@ -84,7 +84,7 @@ typedef struct {
 
 /* Converts the iCalendar component ical to JMAP.
  *
- * Does not set the id, calendarId, participantId or any extension proprties.
+ * Does not set the id, calendarId, participantId or any extension properties.
  *
  * ical:  must contain one VEVENT, and any number of recurrences
  * props: optional JSON object whose keys name the properties to be converted

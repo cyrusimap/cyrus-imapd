@@ -244,7 +244,7 @@ periodic **squatter** runs:
 History
 =======
 
-Support for additional search enginges was added in version 3.0.
+Support for additional search engines was added in version 3.0.
 
 The following command-line switches were added in version 3.0:
 

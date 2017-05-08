@@ -163,7 +163,7 @@ Items Usage Data Reset
 
 By default items usage data are retrieved only once upon service initialization (that is when an imapd instance is created). This only concerns selection modes other than random.
 
-If you tend to use the same service instance for a long lapse of time and perform a large amount of mailboxes creation, usage data will soon be out-of-date. For the cases where it is useful to refresh those data, you can configure the number of creation requests after which data are resetted:
+If you tend to use the same service instance for a long lapse of time and perform a large amount of mailboxes creation, usage data will soon be out-of-date. For the cases where it is useful to refresh those data, you can configure the number of creation requests after which data are reset:
 
 * **serverlist_select_usage_reinit** for a frontend
 * **partition_select_usage_reinit** for a backend 

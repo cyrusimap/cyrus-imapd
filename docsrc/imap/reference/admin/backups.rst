@@ -349,7 +349,7 @@ down backupd. Just use the :cyrusman:`ctl_backups(8)` ``lock`` command to hold
 a lock on each backup while you work with its files, and the rest of the backup
 system will work around that.
 
-Restorating is more complicated, depending on what you actually need to do:
+Restoring is more complicated, depending on what you actually need to do:
 when you restart the backupd after restoring a filesystem snapshot, the next
 time your Cyrus IMAP server replicates to it, the restored backups will be
 brought up to date. Probably not what you wanted -- so don't restart backupd

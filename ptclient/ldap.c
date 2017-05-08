@@ -723,7 +723,7 @@ static int ptsmodule_tokenize_domains(
  *   %%   = %
  *   %u   = user
  *   %U   = user part of %u
- *   %d   = domain part of %u if available, othwise same as %r
+ *   %d   = domain part of %u if available, otherwise same as %r
  *   %R   = prepend '@' to domain
  *   %1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
  *   %D   = user DN

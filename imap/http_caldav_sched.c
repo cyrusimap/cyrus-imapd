@@ -740,7 +740,7 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
         }
     }
 
-    /* Report request-status (if necesary)
+    /* Report request-status (if necessary)
      * Remove the attendees from the iTIP request and hash bucket
      */
     for (list = remote->props; list; list = list->next) {

@@ -278,7 +278,7 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: commiting mailbox append %s: %s",
+        syslog(LOG_ERR, "IOERROR: committing mailbox append %s: %s",
                as->mailbox->name, error_message(r));
         append_abort(as);
         return r;
@@ -1269,7 +1269,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, user_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting user annnotations from annotator "
+            syslog(LOG_ERR, "Setting user annotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;
@@ -1281,7 +1281,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
-            syslog(LOG_ERR, "Setting system annnotations from annotator "
+            syslog(LOG_ERR, "Setting system annotations from annotator "
                             "callout failed (%s)",
                             error_message(r));
             goto out;

@@ -294,7 +294,7 @@ the messages to the destination server.</p>
 <tt>[CREATE, DELETE, RENAME, SETACL]</tt><br>
 
 These commands are all done by the back end server using the MUPDATE
-server as a lock manager.  Changes are then propogated to the frontend
+server as a lock manager.  Changes are then propagated to the frontend
 via the MUPDATE protocol.
 
 <p><tt>[LIST]</tt></p>
@@ -355,7 +355,7 @@ recovery can activate the mailbox in mupdate instead)
 next CREATE attempt failing.  The earlier MUPDATE inconsistency results
 in any attempts to CREATE the mailbox on another back end failing.  The
 latter one makes the mailbox unreachable and un-createable.  Though, this
-is safer than potentially having the mailbox appaear in two places when
+is safer than potentially having the mailbox appear in two places when
 the failed backend comes back up.</p>
 
 <p><tt>[RENAME]</tt><br>
@@ -480,7 +480,7 @@ the MUPDATE server to fail with no availability impact.
 
 <li>Load scalability - We have not done any specific benchmarks to show
 that this system actually performs better.  However, it is clear that it
-scales to a larger number of users than a single server architechure
+scales to a larger number of users than a single server architecture
 would.  Though, based on the fact that we have not had any performance
 problems similar to when we were running a single machine, and we are
 handling about 20% more concurrent users, things have been a rousing

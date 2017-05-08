@@ -1,4 +1,4 @@
-/* jmapaith.h -- Routines for JMAP authentication
+/* jmapauth.h -- Routines for JMAP authentication
  *
  * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
  *

@@ -142,7 +142,7 @@ synchronization, change to the cyrus user, and run ``ctl_mboxlist -m``.
     One should use ``ctl_mboxlist -mw`` (dry run) first to be sure of
     understanding all the operations that this command will perform,
     since it does require that all mailboxes are unique in the murder
-    namespace and could lead to deletions of conflicing mailboxes on
+    namespace and could lead to deletions of conflicting mailboxes on
     other back ends already in the murder.
 
 If everything is configured properly, the mailbox database of the
@@ -170,7 +170,7 @@ to do so).
     If somehow a mailbox exists on two (or more) backend servers, each
     time one of them synchronizes its database that backend server will
     become authoritative. Though this should not happen during normal
-    operation of the murder (because of the consistancy guarantees of
+    operation of the murder (because of the consistency guarantees of
     the MUPDATE protocol, and the fact that mailbox operations are
     denied if the mupdate master is down), it is possible when first
     creating the mupdate database or when bringing a new backend server
@@ -190,7 +190,7 @@ SERVICES section of :cyrusman:`cyrus.conf(5)`, like so::
   
 As this is a threaded service, prefork at least 1 so that the database
 synchronizes at startup. Otherwise, the service will not start running
-until after recieving a mupdate client connection to the slave (which
+until after receiving a mupdate client connection to the slave (which
 is not a recommended configuration at this point).
 
 The front end SERVICES section should now look like this::
@@ -374,7 +374,7 @@ Gotchas
     that all your machines are keyed properly, as we have seen problems
     with different clients trying to authenticate to different services
     (e.g. imap.imap-pool instead of imap.pool-frontend-1), so test the
-    clients in use in your enviornment and be sure that they work with
+    clients in use in your environment and be sure that they work with
     whatever keying scheme you use.
 
 **Clients dealing with referrals**

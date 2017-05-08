@@ -49,7 +49,7 @@
  *   - CALDAV:schedule-calendar-transp should be a flag in
  *     cyrus.index header (Mailbox Options)
  *
- *   - DAV:creationdate sould be added to cyrus.header since it only
+ *   - DAV:creationdate should be added to cyrus.header since it only
  *     gets set at creation time
  *
  *   - Should add a last_metadata_update field to cyrus.index header
@@ -333,7 +333,7 @@ static const struct precond_t {
     /* Placeholder for zero (no) precondition code */
     { NULL, 0 },
 
-    /* WebDAV (RFC 4918) preconditons */
+    /* WebDAV (RFC 4918) preconditions */
     { "cannot-modify-protected-property", NS_DAV },
     { "lock-token-matches-request-uri", NS_DAV },
     { "lock-token-submitted", NS_DAV },
@@ -1921,7 +1921,7 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Add possibly 'abstract' supported-privilege 'priv_name', of namespace 'ns',
- * with description 'desc_str' to node 'root'.  For now, we alssume all
+ * with description 'desc_str' to node 'root'.  For now, we assume all
  * descriptions are English.
  */
 static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
@@ -2125,7 +2125,7 @@ static void add_privs(int rights, unsigned flags,
                     xmlNewChild(priv, ns[NS_CYRUS],
                                 BAD_CAST "make-collection", NULL);
                 }
-                if (rights & DACL_ADDRES) {
+                if (rights & DACL_ADDRESS) {
                     priv = xmlNewChild(parent, NULL,
                                        BAD_CAST "privilege", NULL);
                     xmlNewChild(priv, ns[NS_CYRUS],
@@ -2879,7 +2879,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
-/* annotemore_findall callback for adding dead properties (allprop/propname) */
+/* annotatemore_findall callback for adding dead properties (allprop/propname) */
 static int allprop_cb(const char *mailbox __attribute__((unused)),
                       uint32_t uid __attribute__((unused)),
                       const char *entry,
@@ -3567,7 +3567,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                             rights |= DACL_RMCOL;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "add-resource"))
-                            rights |= DACL_ADDRES;
+                            rights |= DACL_ADDRESS;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "remove-resource"))
                             rights |= DACL_RMRES;
@@ -4035,12 +4035,12 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user on destination */
     rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry);
-    if (!(rights & DACL_ADDRES) || !(rights & DACL_WRITECONT)) {
+    if (!(rights & DACL_ADDRESS) || !(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = dest_tgt.path;
         txn->error.rights =
-            !(rights & DACL_ADDRES) ? DACL_ADDRES : DACL_WRITECONT;
+            !(rights & DACL_ADDRESS) ? DACL_ADDRESS : DACL_WRITECONT;
         ret = HTTP_NO_PRIVS;
         goto done;
     }
@@ -4825,12 +4825,12 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRES;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
         return HTTP_NO_PRIVS;
     }
 
@@ -6386,12 +6386,12 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRES;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
         return HTTP_NO_PRIVS;
     }
 
@@ -6863,12 +6863,12 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRES)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRES;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
         return HTTP_NO_PRIVS;
     }
 
@@ -8896,7 +8896,7 @@ struct meth_params notify_params = {
 };
 
 
-/* Namespace for WebDAV notifcation collections */
+/* Namespace for WebDAV notification collections */
 struct namespace_t namespace_notify = {
     URL_NS_NOTIFY, 0, "/dav/notifications", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -10098,7 +10098,7 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     struct propfind_entry_list *elist;
     const char *err = NULL;
 
-    /* Populate our propfind context for notifcation collection */
+    /* Populate our propfind context for notification collection */
     memset(&my_fctx, 0, sizeof(struct propfind_ctx));
 
     buf_printf(&my_fctx.buf, "%s/%s/%s/", namespace_notify.prefix,

@@ -681,7 +681,7 @@ static void my_caldav_init(struct buf *serverinfo)
                "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
     ical_prodid = buf_cstring(&ical_prodid_buf);
 
-    /* Create an array of calendar-user-adddress-set domains */
+    /* Create an array of calendar-user-address-set domains */
     domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
     if (!domains) domains = config_defdomain;
     if (!domains) domains = config_servername;
@@ -3061,7 +3061,7 @@ struct path_segment_t {
 };
 
 struct patch_data_t {
-    icalcomponent *patch;             /* component containg patch data */
+    icalcomponent *patch;             /* component containing patch data */
     struct path_segment_t *delete;    /* list of PATCH-DELETE actions */
     struct path_segment_t *setparam;  /* list of PATCH-PARAMETER items */
 };
@@ -4311,7 +4311,7 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             case 0:
                 /* VCALENDAR */
                 if (kind != ICAL_VCALENDAR_COMPONENT) {
-                    /* All other components MUST be a decendent of VCALENDAR */
+                    /* All other components MUST be a descendent of VCALENDAR */
                     error->precond = CALDAV_VALID_FILTER;
                     error->desc = "VCALENDAR must be toplevel component";
                 }
@@ -6956,7 +6956,7 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
 
     memset(&availfilter, 0, sizeof(struct freebusy_filter));
 
-    /* Sort VAVAILBILITY periods by priority and start time */
+    /* Sort VAVAILABILITY periods by priority and start time */
     qsort(vavail->vav, vavail->len,
           sizeof(struct vavailability), compare_vavail);
 

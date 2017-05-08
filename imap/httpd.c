@@ -3922,7 +3922,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         status = SASL_OK;
     }
 
-    /* Base64 decode any client response, if necesary */
+    /* Base64 decode any client response, if necessary */
     if (clientin && (scheme->flags & AUTH_BASE64)) {
         int r = sasl_decode64(clientin, clientinlen,
                               base64, BASE64_BUF_SIZE, &clientinlen);
@@ -4072,7 +4072,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             return status;
         }
 
-        /* Base64 encode any server challenge, if necesary */
+        /* Base64 encode any server challenge, if necessary */
         if (serverout && (scheme->flags & AUTH_BASE64)) {
             int r = sasl_encode64(serverout, serveroutlen,
                                    base64, BASE64_BUF_SIZE, NULL);

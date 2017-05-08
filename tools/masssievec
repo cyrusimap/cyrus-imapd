@@ -141,7 +141,7 @@ while (defined($s = readdir TOP)) {
                 symlink "$dest.bc", "defaultbc" || warn "can't symlink $dest.bc to defaultbc: $!";
                 unlink ("default");
             } elsif ($u eq "default.bc" && -l $u) {
-                # slightly different upgrade foramt
+                # slightly different upgrade format
                 $dest = readlink $u;
                 next unless($dest =~ m/\.bc$/ && $dest ne "default.bc");
                 symlink "$dest", "defaultbc" || warn "can't symlink $dest to defaultbc: $!";
@@ -160,7 +160,7 @@ while (defined($s = readdir TOP)) {
                 } elsif (defined $pid) {
                     # child
                     exec $SIEVEC, $u, "$out.bc";
-                    die "souldn't be here";
+                    die "shouldn't be here";
                 } elsif ($! =~ /No more process/) {
                     # EAGAIN
                     sleep 5; redo FORK;

@@ -275,7 +275,7 @@ following items are defined for all body structures:
 
 =item * Content-Description
 
-=item * Content-Dispositon
+=item * Content-Disposition
 
 =item * Content-Language
 

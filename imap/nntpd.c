@@ -509,7 +509,7 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     annotate_init(NULL, NULL);
     annotatemore_open();
 
@@ -1972,7 +1972,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
                     break;
                 }
                 else if (part == ARTICLE_BODY) {
-                    /* start outputing text */
+                    /* start outputting text */
                     output = 1;
                     continue;
                 }

@@ -39,7 +39,7 @@ PLAIN) will send your password in clear-text to the server.  In this case,
 the password is still verified through the Cyrus SASL library, though no
 SASL mechanism actually performs a negotiation.
 
-<p>The POP server is capable of APOP authentication, but this requries that
+<p>The POP server is capable of APOP authentication, but this requires that
 Cyrus SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
 an auxprop backend for your password store (e.g. the sasldb auxprop plugin).
 

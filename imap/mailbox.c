@@ -297,7 +297,7 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
  * note that header names longer than MAX_CACHED_HEADER_SIZE
  * won't be cached regardless
  *
- * xxx can we get benefits by requireing this list to be sorted?
+ * xxx can we get benefits by requiring this list to be sorted?
  * (see is_cached_header())
  *
  */
@@ -2038,7 +2038,7 @@ static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
 /*
  * Returns the recno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
- * the higest UID not greater than 'uid'.
+ * the highest UID not greater than 'uid'.
  */
 static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
 {
@@ -3994,7 +3994,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     xclose(repack->newindex_fd);
 
-    /* NOTE: cache files need commiting before index is renamed */
+    /* NOTE: cache files need committing before index is renamed */
     for (i = 0; i < repack->caches.count; i++) {
         struct mappedfile *cachefile = ptrarray_nth(&repack->caches, i);
         r = mappedfile_commit(cachefile);
@@ -4563,7 +4563,7 @@ EXPORTED int mailbox_create(const char *name,
 
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    /* an exclusive lock around the non-execlusive lock to avoid create
+    /* an exclusive lock around the non-exclusive lock to avoid create
      * races on fixed names like calendar Inbox and Outbox */
     struct mboxlock *mblock = NULL;
     r = mboxname_lock("$CREATE", &mblock, LOCK_EXCLUSIVE);

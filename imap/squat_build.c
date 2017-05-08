@@ -419,7 +419,7 @@ int squat_index_add_existing(SquatIndex *index,
 
 /* ====================================================================== */
 
-/* Initally, before we see a document, there are no words for the document. */
+/* Initially, before we see a document, there are no words for the document. */
 static SquatWordTable *word_table_new(void)
 {
     SquatWordTable *ret =

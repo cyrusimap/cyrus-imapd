@@ -515,7 +515,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         cyrusdb_commit(drock.db, drock.tid);
     }
     else {
-        syslog(LOG_NOTICE, "DBERROR: failed to store statuscace data for %s", mboxname);
+        syslog(LOG_NOTICE, "DBERROR: failed to store statuscache data for %s", mboxname);
         if (drock.tid) cyrusdb_abort(drock.db, drock.tid);
     }
 

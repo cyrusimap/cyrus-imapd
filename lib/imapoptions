@@ -1274,7 +1274,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mailbox_default_options", 0, INT }
 /* Default "options" field for the mailbox on create.  You'll want to know
    what you're doing before setting this, but it can apply some default
-   annotations like duplicate supression */
+   annotations like duplicate suppression */
 
 { "mailbox_initial_flags", NULL, STRING }
 /* space-separated list of permanent flags which will be pre-set in every
@@ -1875,7 +1875,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
-   "Håvard".  This is not RFC5051 complient, but it backwards
+   "Håvard".  This is not RFC5051 compliant, but it backwards
    compatible, and may be preferred by some sites. */
 
 { "search_skiphtml", 0, SWITCH }
@@ -2353,7 +2353,7 @@ product version in the capabilities */
 
 { "tls_versions", "tls1_0 tls1_1 tls1_2", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
-   with all protocols, and substracts protocols not in this list. Newer
+   with all protocols, and subtracts protocols not in this list. Newer
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 

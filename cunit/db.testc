@@ -583,7 +583,7 @@ static void test_abort(void)
     struct db *db = NULL;
     struct txn *txn = NULL;
     static const char KEY[] = "yale";
-    static const char DATA[] = "standford mit harvard";
+    static const char DATA[] = "stanford mit harvard";
     int r;
 
     if (skiptest()) return;
@@ -1041,7 +1041,7 @@ static void test_foreach_changes(void)
 
     if (skiptest()) return;
 
-    if (!strcmp(backend, "flat")) return; /* flat concurency is bogus */
+    if (!strcmp(backend, "flat")) return; /* flat concurrency is bogus */
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);

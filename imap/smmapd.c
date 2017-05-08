@@ -305,7 +305,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
         /* proxy the request to the real backend server to
          * check the quota.  if this fails, just return 0
-         * (asuume under quota)
+         * (assume under quota)
          */
 
         syslog(LOG_ERR, "verify_user(%s) proxying to host %s",

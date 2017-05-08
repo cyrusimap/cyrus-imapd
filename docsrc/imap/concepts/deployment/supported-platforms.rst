@@ -74,7 +74,7 @@ When including the following software components during the build process, and p
 
 **Berkeley DB** (Development headers)
 
-To enable using Berkely DB as a database backend, include the Berkeley DB development headers and make sure to configure Cyrus IMAP with ``--with-bdb``.
+To enable using Berkeley DB as a database backend, include the Berkeley DB development headers and make sure to configure Cyrus IMAP with ``--with-bdb``.
 
 Berkeley DB Versions and Conversion
 

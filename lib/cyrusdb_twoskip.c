@@ -1505,7 +1505,7 @@ done:
     return r;
 }
 
-/* foreach allows for subsidary mailbox operations in 'cb'.
+/* foreach allows for subsidiary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,
@@ -1855,7 +1855,7 @@ static int mycheckpoint(struct dbengine *db)
     r = mappedfile_rename(cr.db->mf, FNAME(db));
     if (r) goto err;
 
-    /* OK, we're commmitted now - clean up */
+    /* OK, we're committed now - clean up */
     unlock(db);
 
     /* gotta clean it all up */
@@ -2135,7 +2135,7 @@ static int recovery2(struct dbengine *db, int *count)
     r = mappedfile_rename(newdb->mf, FNAME(db));
     if (r) goto err;
 
-    /* OK, we're commmitted now - clean up */
+    /* OK, we're committed now - clean up */
     unlock(db);
 
     /* gotta clean it all up */
@@ -2215,7 +2215,7 @@ static int recovery1(struct dbengine *db, int *count)
         r = read_onerecord(db, nextoffset, &record);
         if (r) return r;
 
-        /* just skip over delele records */
+        /* just skip over delete records */
         if (record.type == DELETE) {
             nextoffset = record.nextloc[0];
             continue;

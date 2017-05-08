@@ -511,7 +511,7 @@ Usage: cyradm [args] server
   --userrc <file>       Use user configuration <file>
   --port <port>         Connect to server on <port>
   --auth <mechanism>    Authenticate with <mechanism>
-  --tlskey <keyfile>    Use certicate with keyfile to authenticate with server
+  --tlskey <keyfile>    Use certificate with keyfile to authenticate with server
   --notls               Disable StartTLS negotiation
   --cafile <cacertfile> Use CA certificate file to validate server certificate
   --cadir <cacertdirectory> Use CA certificate directory to validate
@@ -640,7 +640,7 @@ sub _sc_list {
 
   if ($subscribed) {
     if (scalar (keys %opts) > 0 ) {
-      # LIST + LIST-EXTENED
+      # LIST + LIST-EXTENDED
       $opts{'-sel-subscribed'} = 1;
     } else {
       # LSUB
@@ -1857,8 +1857,8 @@ corresponding user.
 
 Note that in the above example, the C<unixhierarchysep> setting in
 imapd.conf is set to C<0>. When using the UNIX
-hierarchy seperator, the C</> (forward slash) character would be
-used as the hierarchy seperator, and the example would look as
+hierarchy separator, the C</> (forward slash) character would be
+used as the hierarchy separator, and the example would look as
 follows:
 
 =item Example Usage with C<unixhierarchysep: 1>

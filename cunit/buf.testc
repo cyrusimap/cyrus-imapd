@@ -609,7 +609,7 @@ static void test_replace_all(void)
 
 /* we use buf_init_ro() instead of buf_appendcstr() to test
  * the case where the input buffer is not a C string before
- * caling buf_replace_*() */
+ * calling buf_replace_*() */
 #define TESTCASE_START(in, reg, rep, expn, exp) \
     { \
         static const char _in[] = in; \

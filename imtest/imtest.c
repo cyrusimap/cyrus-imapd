@@ -167,7 +167,7 @@ struct capa_cmd_t {
     char *auth;         /* [OPTIONAL] AUTH (SASL) capability string */
     char *compress;     /* [OPTIONAL] COMPRESS capability string */
     void (*parse_mechlist)(struct buf *list, const char *str,
-                           struct protocol_t *prot, unsigned long *capabilties);
+                           struct protocol_t *prot, unsigned long *capabilities);
                         /* [OPTIONAL] parse capability string,
                            returns space-separated list of mechs */
 };
@@ -758,7 +758,7 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
                 imtest_fatal("TLS negotiation failed!\n");
         }
 
-    /* TLS negotiation suceeded */
+    /* TLS negotiation succeeded */
     tls_sess = SSL_get_session(tls_conn); /* Save the session for reuse */
 
     /* tell SASL about the negotiated layer */
@@ -2585,7 +2585,7 @@ static void usage(char *prog, char *prot)
     printf("  -n       : number of auth attempts (default=1)\n");
     printf("  -I file  : output my PID to (file) (useful with -X)\n");
     printf("  -x file  : open the named socket for the interactive portion\n");
-    printf("  -X file  : same as -X, except close all file descriptors & dameonize\n");
+    printf("  -X file  : same as -X, except close all file descriptors & daemonize\n");
 
     exit(1);
 }

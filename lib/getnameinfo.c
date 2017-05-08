@@ -1,7 +1,7 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
  *
- * This module is besed on ssh-1.2.27-IPv6-1.5 written by
+ * This module is based on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
  */
 /*
@@ -48,10 +48,10 @@
  * fake library for ssh
  *
  * This file includes getnameinfo().
- * These funtions are defined in rfc2133.
+ * These functions are defined in rfc2133.
  *
  * But these functions are not implemented correctly. The minimum subset
- * is implemented for ssh use only. For exapmle, this routine assumes
+ * is implemented for ssh use only. For example, this routine assumes
  * that ai_family is AF_INET. Don't use it for another purpose.
  *
  * In the case not using 'configure --enable-ipv6', this getnameinfo.c

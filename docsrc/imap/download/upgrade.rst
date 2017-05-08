@@ -9,7 +9,7 @@ Upgrading to 3.0
     This guide assumes that you are familiar and comfortable with administration of a
     Cyrus installation, and system administration in general.
 
-    It assumes you are intalling from source or tarball. If you want to install from package,
+    It assumes you are installing from source or tarball. If you want to install from package,
     use the upgrade instructions from the package provider.
 
 ..  contents:: Upgrading: an overview

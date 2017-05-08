@@ -19,7 +19,7 @@ Description
 ===========
 
 **sync_reset** is a small utility program to destroy user accounts on a
-system.  The only safeguard which is in place is the obligary force
+system.  The only safeguard which is in place is the obligatory force
 option.
 
 **sync_reset** |default-conf-text|

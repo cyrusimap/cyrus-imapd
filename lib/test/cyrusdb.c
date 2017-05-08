@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     int txnp = 0;
     int r;
 
-    printf("Initing enviornment in '.'...\n");
+    printf("Initing environment in '.'...\n");
     TRY(DB->init(".", 0));
     printf("Ready!\n");
 

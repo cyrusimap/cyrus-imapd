@@ -20,7 +20,7 @@ Cyrus IMAP system. All user access to mail is through software using
 the IMAP, IMAPS, POP3, POP3S, KPOP, CalDAV and/or CardDAV protocols.
 
 The private mailbox database design gives the Cyrus IMAP server large
-advantages in efficiency, scalability, and administratability. Multiple
+advantages in efficiency, scalability, and administrability. Multiple
 concurrent read/write connections to the same mailbox are permitted.
 The server supports access control lists on mailboxes and storage
 quotas on mailbox hierarchies.

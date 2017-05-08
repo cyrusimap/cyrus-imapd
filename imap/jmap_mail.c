@@ -1120,7 +1120,7 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
         buf_free(&val);
     }
 
-    /* Set specialuse or x-role. specialuse takes precendence. */
+    /* Set specialuse or x-role. specialuse takes precedence. */
     if (specialuse) {
         struct buf val = BUF_INITIALIZER;
         buf_setcstr(&val, specialuse);
@@ -2158,7 +2158,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     char *text = NULL, *html = NULL;
     int r;
 
-    /* Disset message into its parts */
+    /* Dissect message into its parts */
     r = find_msgbodies(body, msg_buf, &bodies);
     if (r) goto done;
 
@@ -4985,7 +4985,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     if (!d.subject) d.subject = xstrdup("");
 
     /* Override Date header */
-    /* Precedence (highes first): "date" property, Date header, now */
+    /* Precedence (highest first): "date" property, Date header, now */
     time_t date = time(NULL);
     if ((s = json_string_value(json_object_get(msg, "date")))) {
         struct tm tm;
@@ -5162,7 +5162,7 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
                     valid = 0;
                 }
             }
-            /* Validate mail addresses in overriden header */
+            /* Validate mail addresses in overridden header */
             int ismailheader = (!strcasecmp(key, "From") ||
                                 !strcasecmp(key, "Reply-To") ||
                                 !strcasecmp(key, "Cc") ||

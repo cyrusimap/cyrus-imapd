@@ -603,7 +603,7 @@ static void test_rfc5051(void)
     char *s;
     static const char STR_RFC5051[] = {0xc7, 0x84, 0};
     static const char RES_RFC5051[] = {'D', 'z', 0xcc, 0x8c, 0};
-    int flags = 0; /* super complient */
+    int flags = 0; /* super compliant */
     charset_t cs;
 
     cs = charset_lookupname("utf-8");

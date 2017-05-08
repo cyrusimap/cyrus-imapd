@@ -2590,7 +2590,7 @@ static int write_entry(struct mailbox *mailbox,
         /* do the annot-changed here before altering the DB */
         mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value, silent);
 
-        /* grab the message annotation modseq, if not overriden */
+        /* grab the message annotation modseq, if not overridden */
         if (uid && !mdata) {
             modseq = mailbox->i.highestmodseq;
         }
@@ -3745,7 +3745,7 @@ static void init_annotation_definitions(void)
         tok_initm(&state.tok, aline, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
 
         /* note, we only do the most basic validity checking and may
-           be more restrictive than neccessary */
+           be more restrictive than necessary */
 
         ae = xzmalloc(sizeof(*ae));
 

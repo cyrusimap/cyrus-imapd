@@ -1,7 +1,7 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
  *
- * This module is besed on ssh-1.2.27-IPv6-1.5 written by
+ * This module is based on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
  */
 /*

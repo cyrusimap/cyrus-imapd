@@ -150,7 +150,7 @@ struct imclient {
 #ifdef HAVE_SSL
     SSL_CTX *tls_ctx;
     SSL *tls_conn;
-    int tls_on; /* wheather we are under a layer or not */
+    int tls_on; /* whether we are under a layer or not */
 #endif /* HAVE_SSL */
 };
 
@@ -1146,10 +1146,10 @@ EXPORTED void fillin_interactions(struct imclient *context,
 
 /*
  * Params:
- *  mechlist: list of mechanisms seperated by spaces
+ *  mechlist: list of mechanisms separated by spaces
  *
  * Returns:
- *  0 - sucess
+ *  0 - success
  *  1 - failure
  *  2 - severe failure?
  */
@@ -1881,7 +1881,7 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
     }
 
     /*
-     * Lets see, whether a peer certificate is availabe and what is
+     * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
      */
     peer = SSL_get_peer_certificate(imclient->tls_conn);

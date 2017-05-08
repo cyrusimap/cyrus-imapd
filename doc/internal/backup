@@ -196,7 +196,7 @@ there doesn't seem to be anything preventing user/a/foo -> user/b/foo in the
 general (non-INBOX) case.
 
 renames might be a little easier to handle if the index replicated the mailbox
-heirarchy rather than just being a flat structure.  though this adds complexity
+hierarchy rather than just being a flat structure.  though this adds complexity
 wrt hiersep handling.  something like:
 
  mailbox:
@@ -333,7 +333,7 @@ we introduce a new command, RESTORE MAILBOX, which is similar to the existing
 APPLY MAILBOX.  it specifies, for a mailbox, the mailbox state plus the message
 records relevant to the restore.
 
-the imapd/sync_server recieving the RESTORE command creates the mailbox if necessary,
+the imapd/sync_server receiving the RESTORE command creates the mailbox if necessary,
 and then adds the message records to it as new records (i.e. generating new uid etc).
 this will end up generating new events in the backup channel's sync log, and then the
 messages will be backed up again with their new uids, etc.  additional wire transfer
@@ -553,7 +553,7 @@ happily, even though reconstruct might decide that some other file is the
 correct one for that user...
 
 a backup server would generally be used only for backups, and sync_client
-is quite resilient when the destinatition isn't there, so it's actually
+is quite resilient when the destination isn't there, so it's actually
 no problem to just shut down cyrus while reconstruct runs.  no outage to
 user-facing services, just maybe some sync backlog to catch up on once
 cyrus is restarted.
@@ -600,7 +600,7 @@ mode:
     -P                  # specified backups interpreted as userid prefixes (nvfsbc)
     -f                  # specified backups interpreted as filenames
     -m                  # specified backups interpreted as mboxnames
-    -u                  # specified backups interpteted as userids (default)
+    -u                  # specified backups interpreted as userids (default)
 
 lock_opts:
     -c                  # exclusively create backup
@@ -642,7 +642,7 @@ options:
 mode:
     -f                  # backup interpreted as filename
     -m                  # backup interpreted as mboxname
-    -u                  # backup interpteted as userid (default)
+    -u                  # backup interpreted as userid (default)
 
 commands:
     list: table of contents, one per line
@@ -738,7 +738,7 @@ you detect data corruption in older chunks reactively by trying to restore from
 it.  may be too late: if a message needs restoring it's because user mailbox no
 longer has it
 
-you detect data corruption pre-emptively by running the verify tool over it.
+you detect data corruption preemptively by running the verify tool over it.
 recommend scheduling this in EVENTS/cron?
 
 if data corruption occurs in message that's no longer in user's mailbox, that

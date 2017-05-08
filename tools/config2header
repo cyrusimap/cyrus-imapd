@@ -66,7 +66,7 @@ my @enum_values = ();
 
 my $CC;
 #
-# Look for CC=xxx "assigments" in the argument list.
+# Look for CC=xxx "assignments" in the argument list.
 #
 while ($#ARGV >= 0) {
         last unless ($ARGV[0] =~ m/^(\S+)=(.*)$/);
@@ -149,9 +149,9 @@ while (<STDIN>) {
     # look for { option, default, type [enums] }
 
     # Note that the code we output has to play interesting games to get
-    # the union to initialize itself in a syntacticly valid manner.
+    # the union to initialize itself in a syntactically valid manner.
     # Namely, we need to initialize the union itself, not the members of
-    # the union, and we need to ensure we are initilizing the union with
+    # the union, and we need to ensure we are initializing the union with
     # something of a type that is in the union.
     if (m|{\s*\"(.*?)\"\s*,\s*(\"?.*?\"?)\s*,\s*(.*?)\s*(\(.*\))?\s*(,.*)?}|) {
         my $opt = $1;

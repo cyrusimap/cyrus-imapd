@@ -220,7 +220,7 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         /* XXX
            there is a value being skipped in the second pass...
            no idea what it does, but it isn't carried to here...
-           see bytecodee.c */
+           see bytecode.c */
         printf(" not(");
         i=dump2_test(d, i+1, version);
         printf(")\n");

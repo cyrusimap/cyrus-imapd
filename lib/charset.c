@@ -634,7 +634,7 @@ static void byte2search(struct convert_rock *rock, uint32_t c)
         if (cur < i)
             s->starts[cur] = s->starts[i];
 
-        /* check that the substring is still maching */
+        /* check that the substring is still matching */
         if (b == s->substr[s->offset - s->starts[i]]) {
             if (s->offset - s->starts[i] == s->patlen - 1) {
                 /* we're there! */
@@ -2263,7 +2263,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
 /*
  * Decode MIME strings (per RFC 2047) in 's'.  Returns a newly allocated
- * string, contining 's' in canonical searching form, which must be
+ * string, containing 's' in canonical searching form, which must be
  * free()d by the caller.
  */
 EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
@@ -2291,7 +2291,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 
 /*
  * Unfold len bytes of string s into a new string, which must be freed()
- * by the caller. Unfolding removes any CRLF that is mmediately followed
+ * by the caller. Unfolding removes any CRLF that is immediately followed
  * by a tab or space character. If flags sets CHARSET_UNFOLD_SKIPWS, then
  * the whitespace character is also omitted.
  */
@@ -2372,7 +2372,7 @@ EXPORTED comp_pat *charset_compilepat(const char *s)
 {
     struct comp_pat_s *pat = xzmalloc(sizeof(struct comp_pat_s));
     const char *p = s;
-    /* count occurances */
+    /* count occurrences */
     while (*p) {
         if (*p == *s) pat->max_start++;
         pat->patlen++;

@@ -21,7 +21,7 @@ sync./
 
   which are lock files for each user on the system to prevent two
   replication runs from trying to update the same account at the same time
-  (nothing disasterous should happen even without this lock, but the second
+  (nothing disastrous should happen even without this lock, but the second
   job in will get a bit confused if the target end changes under its feet,
   and will probably drop back to a recovery mode.
 
@@ -53,7 +53,7 @@ Most of that will be familiar. New entries are:
 
 master_machine
   Defines machine number in replication cluster. Used as sanity check
-  aginst master_uuid file. Sample content:
+  against master_uuid file. Sample content:
 
     machine=1
 
@@ -70,7 +70,7 @@ sync/current
   Transaction log from IMAP, POP and LMTP daemons, typically feed into
   sync_client running as asynchronous replication engine.
 
-  Rotated to be sync/current-&lt;pid&gt; by asychronous runner.
+  Rotated to be sync/current-&lt;pid&gt; by asynchronous runner.
 </pre>
 </body>
 </html>

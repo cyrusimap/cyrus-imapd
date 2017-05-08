@@ -233,7 +233,7 @@ extern int prot_settimeout(struct protstream *s, int timeout);
 extern int prot_resettimeout(struct protstream *s);
 
 /* Connect two streams so that when you block on reading s, the layer
- * will automaticly flush flushs */
+ * will automatically flush flushs */
 extern int prot_setflushonread(struct protstream *s,
                                struct protstream *flushs);
 

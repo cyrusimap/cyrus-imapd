@@ -223,7 +223,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
                 if (c == '\r' && peek == '\n') {
                     c = prot_getc(fin);
                 } else {
-                    c = peek; /* single newline seperator */
+                    c = peek; /* single newline separator */
                 }
                 if (c != ' ' && c != '\t') {
                     /* this is the end of the header */

@@ -2674,7 +2674,7 @@ HIDDEN void message_parse_env_address(char *str, struct address *addr)
 
 /*
  * Read an nstring from cached bodystructure.
- * Analog to mesage_write_nstring().
+ * Analog to message_write_nstring().
  * If 'copy' is set, returns a freshly allocated copy of the string,
  * otherwise is returns a pointer to the string which will be overwritten
  * on the next call to message_read_nstring()
@@ -2756,7 +2756,7 @@ static int message_read_addrpart(struct protstream *strm,
 
 /*
  * Read an address list from cached bodystructure.
- * Analog to mesage_write_address()
+ * Analog to message_write_address()
  */
 static int message_read_address(struct protstream *strm, struct address **addrp)
 {
@@ -2815,7 +2815,7 @@ static int message_read_address(struct protstream *strm, struct address **addrp)
 
 /*
  * Read a cached envelope response.
- * Analog to mesage_write_envelope()
+ * Analog to message_write_envelope()
  */
 static int message_read_envelope(struct protstream *strm, struct body *body)
 {
@@ -2861,7 +2861,7 @@ static int message_read_envelope(struct protstream *strm, struct body *body)
 
 /*
  * Read cached bodystructure response.
- * Analog to mesage_write_body()
+ * Analog to message_write_body()
  */
 static int message_read_body(struct protstream *strm, struct body *body, const char *part_id)
 {
@@ -3021,7 +3021,7 @@ done:
 
 /*
  * Read cached binary bodystructure.
- * Analog to mesage_write_section()
+ * Analog to message_write_section()
  */
 static void message_read_binarybody(struct body *body, const char **sect,
                                     uint32_t cache_version)

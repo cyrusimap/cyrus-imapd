@@ -143,7 +143,7 @@ static int apns_enabled = 0;
 static const int ultraparanoid = 1; /* should we kick after every operation? */
 unsigned int proxy_cmdcnt;
 
-static int referral_kick = 0; /* kick after next command recieved, for
+static int referral_kick = 0; /* kick after next command received, for
                                  referrals that are likely to change the
                                  mailbox list */
 
@@ -896,7 +896,7 @@ int service_init(int argc, char **argv, char **envp)
         }
     }
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     if (config_mupdate_server)
         annotate_init(annotate_fetch_proxy, annotate_store_proxy);
     else
@@ -1815,7 +1815,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if(c == ' ') {
-                    /* Optional RECURSEIVE argument */
+                    /* Optional RECURSIVE argument */
                     c = getword(imapd_in, &arg2);
                     if(!imparse_isatom(arg2.s))
                         goto extraargs;
@@ -3978,7 +3978,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                     ? "[TRYCREATE] " : r == IMAP_MESSAGE_TOO_LARGE
                     ? "[TOOBIG]" : "", error_message(r));
     } else if (doappenduid) {
-        /* is this a space seperated list or sequence list? */
+        /* is this a space separated list or sequence list? */
         prot_printf(imapd_out, "%s OK [APPENDUID %lu ", tag, uidvalidity);
         if (appendstate.nummsg == 1) {
             prot_printf(imapd_out, "%u", appendstate.baseuid);
@@ -8583,7 +8583,7 @@ out:
  * this implements the STARTTLS command, as described in RFC 2595.
  * one caveat: it assumes that no external layer is currently present.
  * if a client executes this command, information about the external
- * layer that was passed on the command line is disgarded. this should
+ * layer that was passed on the command line is discarded. this should
  * be fixed.
  */
 /* imaps - whether this is an imaps transaction or not */
@@ -10270,7 +10270,7 @@ syntax_error:
 
     /* Do a permissions check to avoid server DoS opportunity.  But we
      * only need read permission to warmup a mailbox.  Also, be careful
-     * to avoid telling the client about the existance of mailboxes to
+     * to avoid telling the client about the existence of mailboxes to
      * which he doesn't have LOOKUP rights. */
     r = IMAP_PERMISSION_DENIED;
     myrights = (mbentry->acl ? cyrus_acl_myrights(imapd_authstate, mbentry->acl) : 0);
@@ -11565,7 +11565,7 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
     if (r) return r;
 
-    /* note use of + to force the setting of a nonexistant
+    /* note use of + to force the setting of a nonexistent
      * quotaroot */
     char *extname = mboxname_to_external(mboxname, &imapd_namespace, imapd_userid);
     prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
@@ -13943,7 +13943,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 
@@ -13968,7 +13968,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 
@@ -14074,7 +14074,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     /* administrators only please */
     if (!imapd_userisadmin) {
         syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
         return;
     }
 

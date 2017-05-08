@@ -271,7 +271,7 @@ extra parameter, the mailbox is created on either;
 
 *   the configured ``defaultserver`` backend
 
-*   the most fitting backend (parition) among the servers listed in the
+*   the most fitting backend (partition) among the servers listed in the
     ``serverlist`` setting, if ``defaultserver`` is not configured.
 
 .. rubric:: Related Settings

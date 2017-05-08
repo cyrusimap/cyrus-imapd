@@ -487,7 +487,7 @@ static char *parseaddr(char *s)
                 if (*p & 128 && !lmtp_strict_rfc2821) {
                     /* this prevents us from becoming a backscatter
                        source if our MTA allows 8bit in local-part
-                       of adresses. */
+                       of addresses. */
                     *p = 'X';
                 }
                 if (*p <= ' ' || (*p & 128) ||
@@ -1279,7 +1279,7 @@ void lmtpmode(struct lmtp_func *func,
                 }
                 tmp = buf+10+strlen(msg->return_path);
 
-                /* is any other whitespace allow seperating? */
+                /* is any other whitespace allow separating? */
                 while (*tmp == ' ') {
                     tmp++;
                     switch (*tmp) {
@@ -1807,7 +1807,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
         } else if (PERMFAIL(code)) {
             if(txn->tempfail_unknown_mailbox &&
                txn->rcpt[j].r == IMAP_MAILBOX_NONEXISTENT) {
-                /* If there is a nonexistant error, we have been told
+                /* If there is a nonexistent error, we have been told
                  * to mask it (e.g. proxy got out-of-date mupdate data) */
                 txn->rcpt[j].result = RCPT_TEMPFAIL;
                 txn->rcpt[j].r = IMAP_AGAIN;

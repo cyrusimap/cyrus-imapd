@@ -50,7 +50,7 @@ typedef enum {
     /* something noteworthy may have happened to the mailbox,
      * e.g. a delivery, so it needs to be checked */
     IDLE_MAILBOX =      0x1,
-    /* the shutdownfile may have been written, needing an ALERT reponse
+    /* the shutdownfile may have been written, needing an ALERT response
      * to be sent to any IMAP clients */
     IDLE_ALERT =        0x2,
     /* input was detected on the @otherfd, probably because the IMAP

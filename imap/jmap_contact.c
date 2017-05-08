@@ -2167,7 +2167,7 @@ static int getContactList(struct jmap_req *req)
     }
     json_decref(invalid);
 
-    /* Inspect every entry in this accounts addressbok mailboxes. */
+    /* Inspect every entry in this accounts addressbook mailboxes. */
     rock.contacts = json_pack("[]");
     rock.carddavdb = db;
     r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);

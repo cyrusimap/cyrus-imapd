@@ -63,7 +63,7 @@
  *   be stored on disk.
  *
  * Textual:
- *   Textual represenatation for Message GUID for passing over the wire
+ *   Textual representation for Message GUID for passing over the wire
  *   Currently BASE64 string + '\0'.
  *
  */

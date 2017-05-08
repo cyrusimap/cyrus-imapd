@@ -52,7 +52,7 @@ Options
 
 .. option:: -p partition
 
-    When performing a dump, dump only thise mailboxes that live on
+    When performing a dump, dump only those mailboxes that live on
     *partition*.
 
 .. option:: -f filename
@@ -76,7 +76,7 @@ Options
 
 .. option:: -a
 
-    When used with **-m**, assume the local mailboxes file is authoritiative,
+    When used with **-m**, assume the local mailboxes file is authoritative,
     that is, only change the mupdate server, do not delete any local
     mailboxes.
 
@@ -148,7 +148,7 @@ Examples
         Synchronize our mailboxes database with the MUPDATE server.  (One may
         commonly put a command like this into the **START** section of
         :cyrusman:`cyrus.conf(5)` on backend nodes of a Murder cluster to cause
-        the backend to syncronize its mailbox list with the mupdate master upon
+        the backend to synchronize its mailbox list with the mupdate master upon
         startup).
 
 .. only:: html

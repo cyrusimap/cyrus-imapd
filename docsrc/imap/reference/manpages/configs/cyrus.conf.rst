@@ -121,7 +121,7 @@ on certain Internet/UNIX sockets.
     (as listed in ``/etc/services``).
 
     If *host* is missing, 0.0.0.0 (all interfaces) is assumed.  Use
-    localhost or 127.0.0.1 to restict access, i.e. when a proxy
+    localhost or 127.0.0.1 to restrict access, i.e. when a proxy
     on the same host is front-ending Cyrus.
 
 .. parsed-literal::

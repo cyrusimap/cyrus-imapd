@@ -3112,7 +3112,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
 
-    /* Delete with admin priveleges */
+    /* Delete with admin privileges */
     return mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                   sstate->userid, sstate->authstate,
                                   NULL, 0, sstate->local_only, 1);
@@ -5893,7 +5893,7 @@ int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
     int r = 0;
     int i;
 
-    /* Includes subsiduary nodes automatically */
+    /* Includes subsidiary nodes automatically */
     strarray_t *msubs = mboxlist_sublist(userid);
     if (!msubs) {
         syslog(LOG_ERR, "IOERROR: fetching subscriptions for %s", userid);

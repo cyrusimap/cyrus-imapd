@@ -598,7 +598,7 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
             break;
 #ifdef ENABLE_REGEX
         case B_REGEX:
-            /* the ascii-casemap destinction is made during
+            /* the ascii-casemap distinction is made during
                the compilation of the regex in verify_regex() */
             ret = &octet_regex;
             break;

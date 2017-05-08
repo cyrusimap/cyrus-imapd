@@ -258,7 +258,7 @@ static int getsize(void *mc, int *size)
 }
 
 /* we use the temp field in message_data to avoid having to malloc memory
-   to return, and we also can't expose our the receipients to the message */
+   to return, and we also can't expose our the recipients to the message */
 static int getenvelope(void *mc, const char *field, const char ***contents)
 {
     deliver_data_t *mydata = (deliver_data_t *) mc;
@@ -1108,7 +1108,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
             fclose(f);
 
             r = append_fromstage(&as, &body, stage,
-                                 0, fcc->imapflags, 0, /* annotatons */ NULL);
+                                 0, fcc->imapflags, 0, /* annotations */ NULL);
             if (!r) r = append_commit(&as);
 
             if (body) {

@@ -517,7 +517,7 @@ static void add_sub(strarray_t *subs, mbentry_t *mbentry, uint32_t attributes)
         strarray_append(subs, mbentry->name);
     }
     else {
-        /* a decendent of mailbox is subscribed */
+        /* a descendent of mailbox is subscribed */
         struct buf child = BUF_INITIALIZER;
 
         buf_printf(&child, "%s.", mbentry->name);
@@ -964,7 +964,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 c = EOF;
                 break;
             }
-            /* looking at either SP seperating items or a RPAREN */
+            /* looking at either SP separating items or a RPAREN */
             if (c == ' ') { c = prot_getc(backend_current->in); }
             else if (c == ')') break;
             else { c = EOF; break; }
@@ -1128,7 +1128,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 c = EOF;
                 break;
             }
-            /* looking at either SP seperating items or a RPAREN */
+            /* looking at either SP separating items or a RPAREN */
             if (c == ' ') { c = prot_getc(backend_current->in); }
             else if (c == ')') break;
             else { c = EOF; break; }

@@ -14,7 +14,7 @@
 
 #define DBDIR                   "test-mb-dbdir"
 #define QUOTAROOT               "user.smurf"
-#define QUOTAROOT_NONEXISTANT   "no-such-quotaroot"
+#define QUOTAROOT_NONEXISTENT   "no-such-quotaroot"
 
 static char *backend = CUNIT_PARAM("quotalegacy,skiplist");
 
@@ -74,7 +74,7 @@ static void test_read_no_root(void)
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NULL(txn);
 
-    q.root = QUOTAROOT_NONEXISTANT;
+    q.root = QUOTAROOT_NONEXISTENT;
     r = quota_read(&q, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 }
@@ -438,7 +438,7 @@ static void test_update_useds(void)
     r = quota_update_useds("", quota_diff, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_useds(QUOTAROOT_NONEXISTANT, quota_diff, 0);
+    r = quota_update_useds(QUOTAROOT_NONEXISTENT, quota_diff, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
     /* set limits */
@@ -509,7 +509,7 @@ static void test_delete(void)
     r = quota_deleteroot("");
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_deleteroot(QUOTAROOT_NONEXISTANT);
+    r = quota_deleteroot(QUOTAROOT_NONEXISTENT);
     CU_ASSERT_EQUAL(r, 0);
 
     r = quota_deleteroot(QUOTAROOT);
@@ -543,7 +543,7 @@ static void test_delete(void)
     r = quota_deleteroot("");
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_deleteroot(QUOTAROOT_NONEXISTANT);
+    r = quota_deleteroot(QUOTAROOT_NONEXISTENT);
     CU_ASSERT_EQUAL(r, 0);
 
     r = quota_deleteroot(QUOTAROOT);

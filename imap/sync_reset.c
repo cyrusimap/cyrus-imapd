@@ -238,7 +238,7 @@ main(int argc, char **argv)
 
     if (!force) {
         fprintf(stderr, "Usage: sync_reset -f user user user ...\n");
-        fprintf(stderr, "         -f [force] is obligitory for safety\n");
+        fprintf(stderr, "         -f [force] is obligatory for safety\n");
         shut_down(0);
     }
 

@@ -55,7 +55,7 @@
  * after the first send.
  *
  * (note that this assumes server LITERAL+ support, but we don't care since
- * this is a Cyrus-only extention)
+ * this is a Cyrus-only extension)
  */
 extern int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
                         int oldversion,

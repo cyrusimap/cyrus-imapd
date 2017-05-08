@@ -103,7 +103,7 @@ enum {
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
 #define DACL_PROPRES    ACL_ANNOTATEMSG /* CY:write-properties-resource */
 #define DACL_MKCOL      ACL_CREATE      /* CY:make-collection */
-#define DACL_ADDRES     ACL_POST        /* CY:add-resource */
+#define DACL_ADDRESS    ACL_POST        /* CY:add-resource */
 #define DACL_RMCOL      ACL_DELETEMBOX  /* CY:remove-collection */
 #define DACL_RMRES      (ACL_DELETEMSG\
                          |ACL_EXPUNGE)  /* CY:remove-resource */
@@ -120,7 +120,7 @@ enum {
 #define DACL_WRITEPROPS (DACL_PROPCOL\
                          |DACL_PROPRES) /* DAV:write-properties */
 #define DACL_BIND       (DACL_MKCOL\
-                         |DACL_ADDRES)  /* DAV:bind */
+                         |DACL_ADDRESS)  /* DAV:bind */
 #define DACL_UNBIND     (DACL_RMCOL\
                          |DACL_RMRES)   /* DAV:unbind */
 #define DACL_WRITE      (DACL_WRITECONT\
@@ -178,7 +178,7 @@ enum {
 
 /* Index into preconditions array */
 enum {
-    /* WebDAV (RFC 4918) preconditons */
+    /* WebDAV (RFC 4918) preconditions */
     DAV_PROT_PROP = 1,
     DAV_BAD_LOCK_TOKEN,
     DAV_NEED_LOCK_TOKEN,
@@ -316,8 +316,8 @@ struct propfind_ctx {
     int userisadmin;                    /* is userid an admin */
     struct auth_state *authstate;       /* authorization state for userid */
     void *davdb;                        /* DAV DB corresponding to collection */
-    const mbentry_t *mbentry;           /* mbentry correspondng to collection */
-    struct mailbox *mailbox;            /* mailbox correspondng to collection */
+    const mbentry_t *mbentry;           /* mbentry corresponding to collection */
+    struct mailbox *mailbox;            /* mailbox corresponding to collection */
     struct quota quota;                 /* quota info for collection */
     struct index_record *record;        /* cyrus.index record for resource */
     void *data;                         /* DAV record for resource */

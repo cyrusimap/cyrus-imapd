@@ -1,4 +1,4 @@
-/* sync_server.c -- Cyrus synchonization server
+/* sync_server.c -- Cyrus synchronization server
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -289,7 +289,7 @@ int service_init(int argc __attribute__((unused)),
     quotadb_init(0);
     quotadb_open(NULL);
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     annotate_init(NULL, NULL);
     annotatemore_open();
 

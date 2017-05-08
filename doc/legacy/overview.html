@@ -24,7 +24,7 @@ Cyrus IMAP system.  All user access to mail is through software
 using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
 
 <p>The private mailbox database design gives the server large advantages
-in efficiency, scalability, and administratability.  Multiple
+in efficiency, scalability, and administrability.  Multiple
 concurrent read/write connections to the same mailbox are permitted.
 The server supports access control lists on mailboxes and storage
 quotas on mailbox hierarchies.
@@ -105,7 +105,7 @@ character, nor may it contain two "." characters in a row.
 metacharacters are not permitted in mailbox names.
 
 <p>Optionally, the server can present mailboxes using the <a
-href="altnamespace.html#unixhiersep"> UNIX hierarchy convention</a>.
+href="altnamespace.html#unixhierarchysep"> UNIX hierarchy convention</a>.
 
 <H3><A NAME="mboxnamestd">Standard (Internal) Namespace</A></H3>
 
@@ -130,7 +130,7 @@ users' <TT>INBOX</TT>.  If a user has an <TT>INBOX</TT>, then they are
 allowed to subscribe to mailboxes.  Only users without dots in their
 userid are permitted to have an <TT>INBOX</TT>.  (A user with a dot in
 their userid would be able to login but would not be able to receive mail.
-Note that when using the unix hierarchy seperator, this is not the case, and
+Note that when using the unix hierarchy separator, this is not the case, and
 any user may have a dot in their userid.)
 
 <p>When an administrator deletes a user's <TT>INBOX</TT>, all of the
@@ -665,7 +665,7 @@ mailbox directory contains the following files:
    mailbox itself and each message in the mailbox.  <P>
 
 <DT><TT>cyrus.cache</TT>
-<DD>This file contans variable-length information about
+<DD>This file contains variable-length information about
    each message in the mailbox. <P>
 
 <DT><TT>cyrus.seen</TT>
@@ -790,7 +790,7 @@ MTA.</p>
 
 <p>The Cyrus server implements LMTP via the <tt>lmtpd</tt> daemon.  LMTP
 can either be used over a network via TCP or local via a UNIX domain
-socket. There are security differnces between these two alternatives; read
+socket. There are security differences between these two alternatives; read
 more below</p>
 
 <p>For final delivery via LMTP over a TCP socket, it is necessary to use
@@ -822,7 +822,7 @@ recipients of the message.</p>
 <h3>Duplicate Delivery Suppression</h3><a name="duplicate"></a>
 
 A message is considered a duplicate if two copies of a message with
-the same message-id and the same envelope receipient are received.
+the same message-id and the same envelope recipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
 and it looks approximately 3 days back in the default install.
 

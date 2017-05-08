@@ -91,7 +91,7 @@ to add annotations or flags to messages which are delivered into the
 Cyrus mail server.
 
 To use Cyrus::Annotator::Daemon, write a Perl script which creates an
-object derived from it; see the Synposis above.  Run this script as
+object derived from it; see the Synopsis above.  Run this script as
 root, and it will daemonize itself.  Then add this line to the
 imapd.conf file
 

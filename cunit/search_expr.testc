@@ -1184,7 +1184,7 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
              "(or (le size 123) (not (match message-id \"ETSY\")))\n");
 
-    /* a disjuctive node which does match folders gets
+    /* a disjunctive node which does match folders gets
      * split into two expressions each with the given mboxname*/
     TESTCASE("(or (match folder \"INBOX.Cosby.Sweater\") (le size 123))",
              "mboxname \"INBOX.Cosby.Sweater\" (true)\n"
@@ -1228,7 +1228,7 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(and (not (match folder \"INBOX.Tumblr\")) (fuzzymatch subject \"ETSY\"))",
              "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"INBOX.Tumblr\"))\n");
 
-    /* a disjuctive node where one side contains indexed matches,
+    /* a disjunctive node where one side contains indexed matches,
      * is split into multiple callbacks, some indexed, some not */
     TESTCASE("(or (match folder \"INBOX.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
              "mboxname \"INBOX.Cosby.Sweater\" (true)\n"

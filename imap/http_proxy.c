@@ -861,7 +861,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      *
      * - Piece the Request Line back together
      * - Add/append-to Via: header
-     * - Add Expect:100-continue header (for synchonicity)
+     * - Add Expect:100-continue header (for synchronicity)
      * - Use all cached end-to-end headers from client
      * - Body will be sent using "chunked" TE, since we might not have it yet
      */
@@ -1112,9 +1112,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 
     /*
-     * Send a synchonizing PUT request to dest backend:
+     * Send a synchronizing PUT request to dest backend:
      *
-     * - Add Expect:100-continue header (for synchonicity)
+     * - Add Expect:100-continue header (for synchronicity)
      * - Obey Overwrite by adding If-None-Match header
      * - Use any TE, Prefer, Accept* headers specified by client
      * - Use Content-Type, -Encoding, -Language headers from GET response

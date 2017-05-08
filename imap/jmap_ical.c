@@ -1673,7 +1673,7 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
                         /* Determine PARTSTAT from delegate. */
                         if (++depth > 64) {
                             /* This is a pathological case: libical does
-                             * not check for inifite DELEGATE chains, so we
+                             * not check for infinite DELEGATE chains, so we
                              * make sure not to fall in an endless loop. */
                             status = "needs-action";
                         }
@@ -4034,7 +4034,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
                 json_object_set_new(override, "start", json_string(id));
             }
 
-            /* Create overriden event from patch and master event */
+            /* Create overridden event from patch and master event */
             if (!(ex = patch_object(master, override))) {
                 invalidprop(ctx, NULL);
                 endprop(ctx);

@@ -157,7 +157,7 @@ complains if this isn&#8217;t allowed.</p>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta7</h1>
 <ul>
-<li>Added Timzone Service module along with associated admin tools
+<li>Added Timezone Service module along with associated admin tools
   (ctl_zoneinfo, vzic).</li>
 <li>Added support for accepting/returning jCal (requires Jansson) and
   xCal data wherever iCalendar data is allowed.</li>
@@ -548,7 +548,7 @@ complains if this isn&#8217;t allowed.</p>
 <li>Fixed numberous bugs with mailbox upgrades</li>
 <li>Fixed replication errors, which have been reported many
   times on the mailing list, but don't have bug numbers.</li>
-<li>Increated "paranoia" about record ordering in mailbox,
+<li>Increased "paranoia" about record ordering in mailbox,
   which would have detected some bad bugs in replication
   that caused the infinite runaway mailbox filling reported
   in 2.4.6 and below</li>
@@ -808,7 +808,7 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
 disk space usage.</li>
 <li>Fixed a crash when selecting a folder after using the SCAN command</li>
 <li>Split mupdate_synchronize() into network scarfing and mailbox
-  comparision pieces.  This allows us to not lock out the
+  comparison pieces.  This allows us to not lock out the
   mailboxes.db and mupdate clients while scarfing the UPDATE
   response, which can be quite time consuming over slow links.</li>
 <li>Added support for MUPDATE COMPRESS and IMAP COMPRESS commands
@@ -1118,7 +1118,7 @@ making it useful for remote mailboxes.</li>
 <h1>Changes to the Cyrus IMAP Server since 2.3.1</h1>
 <ul>
 <li>Added more extensive output to arbitron.</li>
-<li>Allow responses of any length from backend when proxing
+<li>Allow responses of any length from backend when proxying
 IMAP/POP3/NNTP traffic.</li>
 <li>Properly handle timeouts when proxying.</li>
 <li>Added plaintextloginalert option.</li>
@@ -1222,7 +1222,7 @@ specification (RFC4315).</li>
 <li>Fixed possible race condition in IMAP IDLE.</li>
 <li>Made <tt>ptloader</tt> runtime configurable.</li>
 <li>Added more extensive output to <tt>arbitron</tt>.</li>
-<li>Allow responses of any length from backend when proxing
+<li>Allow responses of any length from backend when proxying
 IMAP/POP3/NNTP traffic.</li>
 <li>Added <tt>plaintextloginalert</tt> option.</li>
 <li>Only allow <tt>mbpath</tt> to be run as Cyrus user.</li>
@@ -1291,12 +1291,12 @@ for proxy code</li>
 <ul>
 <li>Fix a bug in the proxy code where a backend connection might get closed
 twice</li>
-<li>Improved consistancy checking in <tt>chk_cyrus</tt></li>
+<li>Improved consistency checking in <tt>chk_cyrus</tt></li>
 <li>Fix segfault in APPEND code</li>
 <li>Fix a bug with an interaction between sieve and unixhierarchysep</li>
 <li>Fix a file descriptor leak in the quotadb code</li>
-<li>Fix a triggered assertation in service-thread services</li>
-<li>Add a number of internal consistancy checks to the skiplist code</li>
+<li>Fix a triggered assertion in service-thread services</li>
+<li>Add a number of internal consistency checks to the skiplist code</li>
 <li>Allow <tt>mbpath</tt> to handle virtual domains</li>
 <li>Fix various MANAGESIEVE client authentication issues</li>
 <li>Other minor fixes</li>
@@ -1337,7 +1337,7 @@ to the Reply-To: header instead of the To: header.</li>
 <li>Berkeley DB 4.2 Support - note that the Cyrus Berkeley
 enviroment needs to be reset (db_recover) before
 a Berkeley DB version upgrade or you need to remove all berkeley dbs.
-Special care needs to be taken when berkley db is used for mboxlist.</li>
+Special care needs to be taken when Berkeley db is used for mboxlist.</li>
 <li>Runtime configuration of the Cyrus databases.  The cyrudb backend
 used for each database can be specified with an <tt>imapd.conf</tt>
 option.  <b>NOTE:</b> You MUST convert the database using
@@ -1411,10 +1411,10 @@ fixed, including issues with the Murder, and with Sieve.</li>
 <h1>Changes to the Cyrus IMAP Server since 2.1.x</h1>
 
 <ul>
-<li>There have been extensive performance and consistancy changes to
-the configuration subsystem.  This will both ensure greater consistancy
+<li>There have been extensive performance and consistency changes to
+the configuration subsystem.  This will both ensure greater consistency
 between the documentation and the code, as well as a more standard format
-for specifing service-specific configuration options in imapd.conf.  Important
+for specifying service-specific configuration options in imapd.conf.  Important
 changes are detailed here:
 <ul>
   <li> The tls_[service]_* configuration options have been removed.  Now
@@ -1428,7 +1428,7 @@ require a specific value</li>
 </ul></li>
 
 <li> libcyrus has been split into libcyrus_min and libcyrus, so as to allow
-sensative applications (such as master) include the least amount of code
+sensitive applications (such as master) include the least amount of code
 necessary for operation </li>
 
 <li> Virtual domain support.  See the <a
@@ -1500,7 +1500,7 @@ options</li>
 <li>Continued audit by Security Appraisers and Bynari</li>
 <li>Correctly terminate the processes by calling service_abort even on
     successful exit (helps to fix a db3 lockers problem)</li>
-<li>Fix some murder+altnamespace/unixhiersep issues</li>
+<li>Fix some murder+altnamespace/unixhierarchysep issues</li>
 <li>Fix imclient's handling of literals.</li>
 <li>Add support for the windows-1256 character set</li>
 <li>Don't log 'could not shut down filedescriptor' messages when the
@@ -1644,7 +1644,7 @@ cleans up "reserved" mailboxes that may appear in the event of a crash.</li>
 of options.  Additionally, the hash table implementation has been updated
 to possibly take advantage of memory pools.</li>
 
-<li>Many bugfixes related to the Cyrus Murder.  Includes improvments to
+<li>Many bugfixes related to the Cyrus Murder.  Includes improvements to
 subscription handling as well as correct merging of seen state on
 mailbox moves.</li>
 
@@ -1682,7 +1682,7 @@ one server to another. </li>
 message was being delivered to five or more different
 partitions. </li>
 
-<li> Deliveries now don't create a redudant temporary file using
+<li> Deliveries now don't create a redundant temporary file using
 <tt>tmpfile()</tt>; the staging directory is used instead. (Ken
 Murchison) </li>
 
@@ -1799,7 +1799,7 @@ protocol extended with referrals </li>
 siblings to the INBOX at the top-level (Ken Murchison)</li>
 
 <li>unixhierarchysep: it is now possible possible to use slash as
-the hierarchy seperator, instead of a period. (Ken Murchison,
+the hierarchy separator, instead of a period. (Ken Murchison,
 inspired by David Fuchs, <tt>dfuchs@uniserve.com</tt>)</li>
 
 <li>SSL/TLS session caching (Ken Murchison)</li>
@@ -2533,7 +2533,7 @@ deliver.</li>
 
 <li>Possibly misnamed experimental --enable-static-libraries switch
 that tries to do a good job of building binaries with whatever
-static libraries are availible. If you use this, you do so at your
+static libraries are available. If you use this, you do so at your
 own risk, and if it fails, we will disavow all knowledge of you and
 your team. Good luck, Jim.</li>
 
@@ -2610,7 +2610,7 @@ grabs a write lock.</li>
 
 <li>Added logic to cause cyradm to abort more cleanly if not given
 command line arguments in an interactive session. This gets rid of
-the dreaded <tt>application-specific intialization failed</tt>
+the dreaded <tt>application-specific initialization failed</tt>
 messages.</li>
 </ul>
 
@@ -2621,7 +2621,7 @@ messages.</li>
 instead of ignoring the CREATE command.</li>
 
 <li>UIDPLUS is now always advertised in CAPABILITY and is always
-availible. The UIDPLUS extension is a set of optimizations using
+available. The UIDPLUS extension is a set of optimizations using
 UID values instead of sequence numbers and is described in RFC
 2359.</li>
 
@@ -2706,7 +2706,7 @@ bsearch_mem.</li>
 mailbox names.</li>
 
 <li>Makedepend still runs, and still generates warnings, but these
-are squirrled away in makedepend.log.</li>
+are squirreled away in makedepend.log.</li>
 
 <li>On mailbox delete, the server will no longer try and unlink
 ".." and "." as we got a report that it seriously breaks one file
@@ -2769,7 +2769,7 @@ month.)</li>
 it is not handling RENAME in an IMAP4rev1 compliant manner. This
 will be fixed in a subsequent release.</li>
 
-<li>Bug fix: imclient_autenticate now does resolution on the
+<li>Bug fix: imclient_authenticate now does resolution on the
 hostname before authenticating to it. This caused problems when
 authenticating to an address that was a CNAME.</li>
 
@@ -2780,7 +2780,7 @@ well.</li>
 <li>Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should
 now work properly.</li>
 
-<li>Bug fix: reconstruct now considers a nonexistant INN news
+<li>Bug fix: reconstruct now considers a nonexistent INN news
 directory to be empty; this makes reconstruct fix the cyrus.* files
 in the imap news partition.</li>
 
@@ -2911,7 +2911,7 @@ attempts to stream its tagged responses.</li>
 
 <li>Modify zephyr support to compile without Kerberos support.</li>
 
-<li>Add a bunch of prototype declararations to the code.</li>
+<li>Add a bunch of prototype declarations to the code.</li>
 
 <li>In deliver, change the MULT support to instead use the LMTP
 syntax.</li>

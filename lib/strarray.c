@@ -128,7 +128,7 @@ static inline int adjust_index_rw(strarray_t *sa, int idx, int grow)
          * outside the current bounds, plus perhaps @grow */
         ensure_alloc(sa, idx+grow);
     } else if (idx < 0) {
-        /* adjust Perl-style negative indeces */
+        /* adjust Perl-style negative indices */
         idx += sa->count;
         if (idx >= 0 && grow)
             ensure_alloc(sa, sa->count+grow);

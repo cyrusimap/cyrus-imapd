@@ -457,7 +457,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +
 +     Host myHost ;                   /* the host who owns the connection */
 +
-+     time_t timeCon ;                /* the time the connect happened (last auth suceeded) */
++     time_t timeCon ;                /* the time the connect happened (last auth succeeded) */
 +
 +     int issue_quit;                 /* Three states:
 +                                    *   0 - don't do anything
@@ -468,16 +468,16 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                                    */
 +
 +     /* Statistics */
-+     int lmtp_suceeded;
++     int lmtp_succeeded;
 +     int lmtp_failed;
 +
-+     int cancel_suceeded;
++     int cancel_succeeded;
 +     int cancel_failed;
 +
-+     int create_suceeded;
++     int create_succeeded;
 +     int create_failed;
 +
-+     int remove_suceeded;
++     int remove_succeeded;
 +     int remove_failed;
 +
 +
@@ -703,7 +703,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  *            For example a cancel message canceling a message in multiple
 +  *            newsgroups will create >1 queue item but we only want it to count
 +  *            once towards the queue
-+  *  must    - wheather we must take it even though it may put us over our max size
++  *  must    - whether we must take it even though it may put us over our max size
 +  */
 +
 + static conn_ret AddToQueue(Q_t *q, void *item, control_type_t type, int addsmsg, bool must)
@@ -758,7 +758,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  * Pop an item from the queue
 +  *
 +  * q    - the queue to pop from
-+  * item - where the item shall be placed upon sucess
++  * item - where the item shall be placed upon success
 +  *
 +  */
 +
@@ -826,14 +826,14 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +
 +
 + /*
-+  * Forget about an item. Tells host object if we suceeded/failed/etc with the message
++  * Forget about an item. Tells host object if we succeeded/failed/etc with the message
 +  *
 +  * cxn    - connection object
 +  * item   - item
 +  * failed - type of failure (see below)
 +  *
 +  * failed:
-+  *   0 - suceeded delivering message
++  *   0 - succeeded delivering message
 +  *   1 - failed delivering message
 +  *   2 - Try to give back to host
 +  *   3 - Article missing (i.e. can't find on disk)
@@ -1383,10 +1383,10 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +            QueueItems(&(cxn->lmtp_todeliver_q)));
 +     d_printf(1,"imap state = %s\n",imap_stateToString(cxn->imap_state));
 +     d_printf(1,"lmtp state = %s\n",lmtp_stateToString(cxn->lmtp_state));
-+     d_printf(1,"delivered:  yes: %d no: %d\n",cxn->lmtp_suceeded, cxn->lmtp_failed);
-+     d_printf(1,"control:    yes: %d no: %d\n",cxn->cancel_suceeded, cxn->cancel_failed);
-+     d_printf(1,"create:     yes: %d no: %d\n",cxn->create_suceeded, cxn->create_failed);
-+     d_printf(1,"remove:     yes: %d no: %d\n",cxn->remove_suceeded, cxn->remove_failed);
++     d_printf(1,"delivered:  yes: %d no: %d\n",cxn->lmtp_succeeded, cxn->lmtp_failed);
++     d_printf(1,"control:    yes: %d no: %d\n",cxn->cancel_succeeded, cxn->cancel_failed);
++     d_printf(1,"create:     yes: %d no: %d\n",cxn->create_succeeded, cxn->create_failed);
++     d_printf(1,"remove:     yes: %d no: %d\n",cxn->remove_succeeded, cxn->remove_failed);
 + }
 +
 + /**************************** SASL helper functions ******************************/
@@ -1893,7 +1893,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + }
 +
 + /*
-+  * This is called when the timeout for the reponse from the remote
++  * This is called when the timeout for the response from the remote
 +  * goes off. We tear down the connection and notify our host.
 +  */
 + static void imap_readTimeoutCbk (TimeoutId id, void *data)
@@ -1906,7 +1906,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   peerName = hostPeerName (cxn->myHost) ;
 +
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
-+   d_printf (0,"%s:%d shutting down non-repsonsive imap connection\n",
++   d_printf (0,"%s:%d shutting down non-responsive imap connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
 +
 +   cxnLogStats (cxn,true) ;
@@ -2071,7 +2071,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 + }
 +
 + /*
-+  * This is called when the timeout for the reponse from the remote
++  * This is called when the timeout for the response from the remote
 +  * goes off. We tear down the connection and notify our host.
 +  */
 + static void lmtp_readTimeoutCbk (TimeoutId id, void *data)
@@ -2084,7 +2084,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   peerName = hostPeerName (cxn->myHost) ;
 +
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
-+   d_printf (0,"%s:%d shutting down non-repsonsive lmtp connection\n",
++   d_printf (0,"%s:%d shutting down non-responsive lmtp connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
 +
 +   cxnLogStats (cxn,true) ;
@@ -2494,7 +2494,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                               &out,
 +                               &outlen);
 +
-+     /* check if sasl suceeded */
++     /* check if sasl succeeded */
 +     if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
 +
 +       d_printf(0,"sasl_client_step failed with %s\n",
@@ -3095,7 +3095,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                   if (okno==1) {
 +
 +                       d_printf(1,"Create successful\n");
-+                       cxn->create_suceeded++;
++                       cxn->create_succeeded++;
 +
 +                       /* we can delete article now */
 +                       QueueForgetAbout(cxn, cxn->current_control,0);
@@ -3116,7 +3116,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                   if (okno==1) {
 +
 +                       d_printf(1,"Delete successful\n");
-+                       cxn->remove_suceeded++;
++                       cxn->remove_succeeded++;
 +
 +                       /* we can delete article now */
 +                       QueueForgetAbout(cxn, cxn->current_control,0);
@@ -3194,7 +3194,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                       /* we can delete article now */
 +                       QueueForgetAbout(cxn, cxn->current_control,0);
 +
-+                       cxn->cancel_suceeded++;
++                       cxn->cancel_succeeded++;
 +
 +                       if (imap_sendClose(cxn) != RET_OK)
 +                           imap_Disconnect(cxn);
@@ -3402,7 +3402,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +
 +       case LMTP_READING_LHLO:
 +
-+           /* recieve the response(s) */
++           /* receive the response(s) */
 +           response_code = ask_code(str);
 +
 +           if (response_code != 250) /* was none */
@@ -3502,7 +3502,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +
 +                   free(in);
 +
-+                   /* check if sasl suceeded */
++                   /* check if sasl succeeded */
 +                   if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
 +
 +                       d_printf(0,"sasl_client_step returned error (%s)\n",
@@ -3586,7 +3586,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +               return;
 +           }
 +
-+           /* we pipelined so next we recieve the rcpt's */
++           /* we pipelined so next we receive the rcpt's */
 +           cxn->lmtp_state = LMTP_READING_RCPTTO;
 +
 +           goto reset;
@@ -3663,7 +3663,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +           }
 +
 +           /*
-+            * current_rcpts_okayed is number that suceeded
++            * current_rcpts_okayed is number that succeeded
 +            *
 +            */
 +
@@ -3674,7 +3674,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +           } else {
 +
 +               cxn->lmtp_state = LMTP_AUTHED_IDLE;
-+               cxn->lmtp_suceeded++;
++               cxn->lmtp_succeeded++;
 +               d_printf(1,"Woohoo! message accepted\n");
 +           }
 +
@@ -4229,7 +4229,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +                         double lowPassFilter)
 + {
 +     Connection cxn;
-+     /* check arguements */
++     /* check arguments */
 +
 +     /* allocate connection structure */
 +     cxn = CALLOC (connection_t, 1) ;
@@ -4335,7 +4335,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     QuitIfIdle(cxn);
 + }
 +
-+   /* Blow away the connection gracelessly and immedately clean up */
++   /* Blow away the connection gracelessly and immediately clean up */
 + void cxnNuke (Connection cxn)
 + {
 +     d_printf(0,"%s:%d Nuking connection\n",cxn->ServerName, cxn->ident);
@@ -4431,23 +4431,23 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +         "Host: %s:%d  status: %s  time: %d  Delivered (%d of %d) Cancelled (%d of %d) Created (%d of %d) Deleted (%d of %d)",
 +         peerName, cxn->ident,
 +           (final ? "final" : "checkpoint"), (long) (now - cxn->timeCon),
-+         cxn->lmtp_suceeded, cxn->lmtp_suceeded + cxn->lmtp_failed,
-+         cxn->cancel_suceeded, cxn->cancel_suceeded + cxn->cancel_failed,
-+         cxn->create_suceeded, cxn->create_suceeded + cxn->create_failed,
-+         cxn->remove_suceeded, cxn->remove_suceeded + cxn->remove_failed);
++         cxn->lmtp_succeeded, cxn->lmtp_succeeded + cxn->lmtp_failed,
++         cxn->cancel_succeeded, cxn->cancel_succeeded + cxn->cancel_failed,
++         cxn->create_succeeded, cxn->create_succeeded + cxn->create_failed,
++         cxn->remove_succeeded, cxn->remove_succeeded + cxn->remove_failed);
 +
 +   show_stats(cxn);
 +
 +   if (final)
 +   {
-+       cxn->lmtp_suceeded   = 0;
-+       cxn->lmtp_failed     = 0;
-+       cxn->cancel_suceeded = 0;
-+       cxn->cancel_failed   = 0;
-+       cxn->create_suceeded = 0;
-+       cxn->create_failed   = 0;
-+       cxn->remove_suceeded = 0;
-+       cxn->remove_failed   = 0;
++       cxn->lmtp_succeeded   = 0;
++       cxn->lmtp_failed      = 0;
++       cxn->cancel_succeeded = 0;
++       cxn->cancel_failed    = 0;
++       cxn->create_succeeded = 0;
++       cxn->create_failed    = 0;
++       cxn->remove_succeeded = 0;
++       cxn->remove_failed    = 0;
 +
 +       if (cxn->timeCon > 0)
 +         cxn->timeCon = theTime() ;
@@ -4531,21 +4531,21 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   fprintf (fp,"%s    time-connected (imap) : %ld\n",indent,(long) cxn->imap_timeCon) ;
 +   fprintf (fp,"%s    time-connected (lmtp) : %ld\n",indent,(long) cxn->lmtp_timeCon) ;
 +   fprintf (fp,"%s    articles from INN : %d\n",indent,
-+          cxn->lmtp_suceeded+
++          cxn->lmtp_succeeded+
 +          cxn->lmtp_failed+
-+          cxn->cancel_suceeded+
++          cxn->cancel_succeeded+
 +          cxn->cancel_failed+
-+          cxn->create_suceeded+
++          cxn->create_succeeded+
 +          cxn->create_failed+
-+          cxn->remove_suceeded+
++          cxn->remove_succeeded+
 +          cxn->remove_failed+
 +          QueueSpace(&(cxn->lmtp_todeliver_q))+
 +          QueueSpace(&(cxn->imap_controlMsg_q))
 +          );
-+   fprintf(fp,"%s    LMTP STATS: yes: %d no: %d\n",cxn->lmtp_suceeded, cxn->lmtp_failed);
-+   fprintf(fp,"%s    control:    yes: %d no: %d\n",cxn->cancel_suceeded, cxn->cancel_failed);
-+   fprintf(fp,"%s    create:     yes: %d no: %d\n",cxn->create_suceeded, cxn->create_failed);
-+   fprintf(fp,"%s    remove:     yes: %d no: %d\n",cxn->remove_suceeded, cxn->remove_failed);
++   fprintf(fp,"%s    LMTP STATS: yes: %d no: %d\n",cxn->lmtp_succeeded, cxn->lmtp_failed);
++   fprintf(fp,"%s    control:    yes: %d no: %d\n",cxn->cancel_succeeded, cxn->cancel_failed);
++   fprintf(fp,"%s    create:     yes: %d no: %d\n",cxn->create_succeeded, cxn->create_failed);
++   fprintf(fp,"%s    remove:     yes: %d no: %d\n",cxn->remove_succeeded, cxn->remove_failed);
 +
 +   fprintf (fp,"%s    response-timeout : %d\n",indent,cxn->imap_readTimeout) ;
 +   fprintf (fp,"%s    response-callback : %d\n",indent,cxn->imap_readBlockedTimerId) ;

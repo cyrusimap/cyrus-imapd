@@ -84,7 +84,7 @@ Options
 
     Don't stat underlying files.  This makes reconstruct run faster, at
     the expense of not noticing some issues (like zero byte files or
-    size mistmatches).  "**reconstruct -s**" should be quite fast.
+    size mismatches).  "**reconstruct -s**" should be quite fast.
 
 .. option:: -q
 
@@ -184,7 +184,7 @@ Examples
 ..
 
         Recursively reconstruct all mailboxes within the
-        *tech.support.Archive* hierarchy with names begining with '2',
+        *tech.support.Archive* hierarchy with names beginning with '2',
         restoring any directories containing ``cyrus.header``
         files.
 
@@ -212,7 +212,7 @@ Examples
 
 ..
 
-        Recusively reconstruct all mailboxes belonging to *jsmith*,
+        Recursively reconstruct all mailboxes belonging to *jsmith*,
         restoring any directories containing ``cyrus.header`` files.
 
 .. only:: html

@@ -729,7 +729,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
                     buf_printf(vals, ",%s", (char *) content);
                 }
                 else {
-                    /* create new list with this valiue */
+                    /* create new list with this value */
                     vals = xzmalloc(sizeof(struct buf));
                     buf_setcstr(vals, (char *) content);
                     hash_insert((char *) node->name, vals, &byrules);

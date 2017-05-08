@@ -45,7 +45,7 @@
 #
 
 divert(0)dnl
-VERSIONID(`cyrus v2 sample configuartion')
+VERSIONID(`cyrus v2 sample configuration')
 
 OSTYPE(linux)
 define(`confBIND_OPTS',`-DNSRCH -DEFNAMES')

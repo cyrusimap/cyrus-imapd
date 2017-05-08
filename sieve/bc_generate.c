@@ -1138,7 +1138,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 jumploc = codep+4;
                 retval->data[codep++].op = B_IF;
 
-                /* begining of then  code */
+                /* beginning of then  code */
                 jumpVal = bc_test_generate(jumploc,retval,c->u.i.t);
                 if (jumpVal == -1)
                     return -1;

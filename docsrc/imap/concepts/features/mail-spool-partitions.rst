@@ -7,7 +7,7 @@ Mail Spool Partitions
 A mail spool is divided in partitions. The partition Cyrus IMAP ships
 with by default is called ``default``.
 
-Partitions can give you the oppoprtuniy to tier your storage, and/or use
+Partitions can give you the opportunity to tier your storage, and/or use
 multiple filesystems to apply restrictions to information (contained
 within mailboxes), such as the absolute maximum quantity of storage
 used.
@@ -41,7 +41,7 @@ following in :cyrusman:`imapd.conf(5)`:
     partition-fast: /var/spool/imap/fast/
     partition-slow: /var/spool/imap/slow/
 
-Next, you could set the quota on ``user/john@example.org`` to a measely
+Next, you could set the quota on ``user/john@example.org`` to a measly
 1 gigabyte:
 
 .. parsed-literal::
@@ -73,7 +73,7 @@ Restricting Storage Used with Partitions
 
     It is not recommended to use partitions for the purposes of
     restricting the amount of storage used by (sets of) mailboxes,
-    unless you can also grow the filesystem (preferrably online) and you
+    unless you can also grow the filesystem (preferably online) and you
     have (automated) means to determine what is to end up on each
     partition.
 

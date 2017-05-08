@@ -160,7 +160,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
                 if (c == '\r' && peek == '\n') {
                     c = getc(f);
                 } else {
-                    c = peek; /* single newline seperator */
+                    c = peek; /* single newline separator */
                 }
                 if (c != ' ' && c != '\t') {
                     /* this is the end of the header */
@@ -221,7 +221,7 @@ static void fill_cache(message_data_t *m)
 }
 
 /* we use the temp field in message_data to avoid having to malloc memory
-   to return, and we also can't expose our the receipients to the message */
+   to return, and we also can't expose our the recipients to the message */
 static int getenvelope(void *mc, const char *field, const char ***contents)
 {
     message_data_t *m = (message_data_t *)mc;

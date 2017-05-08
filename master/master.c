@@ -1460,7 +1460,7 @@ static void process_msg(int si, struct notify_message *msg)
             break;
 
         case SERVICE_STATE_UNKNOWN:
-            /* since state is unknwon, error in non-DoS way, i.e.
+            /* since state is unknown, error in non-DoS way, i.e.
              * we don't increment ready_workers */
             syslog(LOG_DEBUG,
                    "service %s/%s pid %d in UNKNOWN state: now available and in READY state",

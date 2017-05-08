@@ -390,7 +390,7 @@ static int ptload(const char *identifier, struct auth_state **state)
         goto done;
     }
 
-    /* if it's expired (or nonexistant),
+    /* if it's expired (or nonexistent),
      * ask the ptloader to reload it and reread it */
     fetched = (struct auth_state *) data;
 

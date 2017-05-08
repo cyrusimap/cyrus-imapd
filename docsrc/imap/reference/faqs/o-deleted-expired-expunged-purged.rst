@@ -100,13 +100,13 @@ values:
 
 Exceptional circumstances aside, when ``immediate`` or ``default`` is
 the configured ``expunge_mode``, message files are often purged from the
-filesytem too quickly for anyone to recover.
+filesystem too quickly for anyone to recover.
 
 .. NOTE::
 
     One such exceptional circumstance is a mailbox with multiple
     sessions keeping the mailbox open. Cyrus IMAP ensures no mailbox
-    records dissappear from underneath an existing open mailbox session.
+    records disappear from underneath an existing open mailbox session.
 
 Moved to Trash Folder
 ---------------------

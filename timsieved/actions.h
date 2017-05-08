@@ -119,7 +119,7 @@ int setactive(struct protstream *conn, const struct buf *name);
 int actions_init(void);
 
 /*
- * Set user after sucessful authentication
+ * Set user after successful authentication
  *
  */
 

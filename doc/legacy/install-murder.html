@@ -20,12 +20,12 @@ future, you should probably just consider using a simple proxy solution.</p>
 <h3>Introduction &amp; Assumptions</h3>
 This document is intended to be a guide to the configuration of a Cyrus
 IMAP Aggregator, aka Cyrus Murder.  It is recommended that you review
-<A HREF="ag.html">this document</A> to become familliar
+<A HREF="ag.html">this document</A> to become familiar
 with the concepts at work.  This document is a work in progress and is at this
 point incomplete.<p>
 This document assumes that you have successfully been able to setup atleast
 one Cyrus IMAP server.  This server will become your first backend server.
-It also assumes that you are familliar with the administration and day
+It also assumes that you are familiar with the administration and day
 to day operations of the Cyrus IMAP server and the SASL authentication library.
 If you feel uncomfortable with this, please refer to the rest of the
 documentation first.<p>
@@ -77,7 +77,7 @@ admins: mupdateslave1 backend1
 </pre>
 
 You will also need to configure SASL to properly allow authentication in
-your enviornment.<p>
+your environment.<p>
 
 <h3>Setting up the backends to push changes to the MUPDATE Master</h3>
 On the backends, configuration to be a part of a murder is easy.  You just
@@ -146,7 +146,7 @@ backend (and performing ACTIVATE and DELETES as needed to do so).<p>
 <b>Warning</b>: If somehow a mailbox exists on two (or more) backend servers,
 each time one of them synchronizes its database that backend server will
 become authoritative.  Though this should not happen during normal operation
-of the murder (because of the consistancy guarantees of the MUPDATE protocol,
+of the murder (because of the consistency guarantees of the MUPDATE protocol,
 and the fact that mailbox operations are denied if the mupdate master is down),
 it <b>is</b> possible when first creating the mupdate database or
 when bringing a new backend server into the murder.
@@ -166,7 +166,7 @@ same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:<p>
 
 Note that as this is a threaded service, you must prefork atleast 1 of them
 so that the database can be synchronized at startup.  Otherwise, the service
-will not start running until after you recieve an mupdate client connection
+will not start running until after you receive an mupdate client connection
 to the slave (which is not a recommended configuration at this point).<p>
 
 You will also want to change all of your <tt>imapd</tt> entries to be
@@ -219,7 +219,7 @@ If your authentication system requires usernames, passwords, etc, to
 authenticate (e.g. it isn't Kerberos), then you will also need to
 specify proxy_authname (and friends) in the backend imapd.confs as well.
 This is so that the backends can authenticate to eachother to facilitate
-maibox moves.  (Backend machines will need to be full admins).
+mailbox moves.  (Backend machines will need to be full admins).
 
 <h3>Delivering mail</h3>
 
@@ -232,18 +232,18 @@ install <tt>master</tt> and <tt>lmtpproxyd</tt> on your SMTP servers.
 <h2>Administration</h2>
 
 <h3>Keeping the database synced</h3>
-<p>Consistancy in the database is maintained by pushing the current status
+<p>Consistency in the database is maintained by pushing the current status
 of the backends to the master, and having the frontends stay up to date with
 the master's database.  Since the frontends resync themselves entirely
 when they startup, downtime should not at all be a problem.  (While they
-are up they should be continously recieving database updates, as well as
+are up they should be continuously receiving database updates, as well as
 when they lose connection to the master, they will try to reconnect and
 resync their database upon reconnection)</p>
 <p>Provided that the namespace of the backend servers is kept discrete
 (with no mailboxes existing on the same server), it is not a big deal
 to resync the mupdate master using <tt>ctl_mboxlist -m</tt>.  If two servers
 do have the same mailbox, this will need to be resolved before database
-consistancy can be guranteed.</p>
+consistency can be guaranteed.</p>
 <h3>Moving Mailboxes between backends</h3>
 <p>There is currently no 100% foolproof way to do this, however, if you issue
 a rename command to a frontend (as you would to move a mailbox between partitions),
@@ -291,9 +291,9 @@ authentications than you are used to.
 you will want to ensure that all your machines are keyed properly, as we
 have seen problems with different clients trying to authenticate to
 different services (e.g. imap.imap-pool instead of imap.pool-frontend-1), so
-test the clients in use in your enviornment and be sure that they work with
+test the clients in use in your environment and be sure that they work with
 whatever keying scheme you use.</li></ul>
-<li><b>Clients dealing with referrals</b> - Some clients (we've had particuar
+<li><b>Clients dealing with referrals</b> - Some clients (we've had particular
 trouble with pine, though most of these issues have now been resolved and
 new versions should be OK (that is, pine > 4.44), but as referrals have not
 been extensively used by any IMAP server until now, referrals are very likely
@@ -309,7 +309,7 @@ might be slightly unexpected.  For example, you can only issue a SETQUOTA
 to a frontend server if the entire mailbox tree underneath where you are
 setting the quota exists on the same backend server, otherwise you will need
 to connect directly to the backend servers to perform the needed changes.
-Similarally, mailboxes will be created on the same backend server
+Similarly, mailboxes will be created on the same backend server
 that their parent is in.  In order to create them on a different server
 (or to create a new top level mailbox) you will need to connect directly to
 the desired backend server.
@@ -319,7 +319,7 @@ their backend home server, they won't be able to, unless you set
 lets any string be subscribed to successfully.
 <li><b>Restarting the mupdate master</b> - Because <tt>ctl_cyrusdb -r</tt>
 clears reservations on mailbox, if you restart the mupdate master (and
-run recovery), then this could (we suspect, very rarely) lead to inconsistancies
+run recovery), then this could (we suspect, very rarely) lead to inconsistencies
 in the mupdate database.
 </ul>
 

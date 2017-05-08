@@ -26,7 +26,7 @@ that user.
 **fud** |default-conf-text|
 
 **fud** will automatically proxy any and all FUD requests to the
-appropriate backend server if it is runing on a Cyrus Murder frontend
+appropriate backend server if it is running on a Cyrus Murder frontend
 machine.
 
 To set up the FUD daemon, add this to your cyrus.conf:

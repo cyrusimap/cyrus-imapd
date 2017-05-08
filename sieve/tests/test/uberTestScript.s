@@ -1,7 +1,7 @@
 /*using redirect to test if, elsif, and else, along with all of the tests
   that can be inside
 
-  this is still being added to, there are almost certaintly conditions not
+  this is still being added to, there are almost certainly conditions not
   being tested
 
 
@@ -50,7 +50,7 @@ if address :localpart :matches "from" "z*"
 
 
 #add tests/messages that differentiate between header/address.
-#need to write messages and to tweak tests to make sure everyhting works
+#need to write messages and to tweak tests to make sure everything works
 #as expected
 
 if header :contains "Date" "Feb"

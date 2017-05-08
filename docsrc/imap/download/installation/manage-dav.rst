@@ -32,7 +32,7 @@ Its feature set is limited to:
     * Acts as a remote storage server server by using IMAP mailboxes as
       collections and :rfc:`5322` message to store files.
 * JMAP support
-    * Allows synchonization of mail clients via the JSON Mail Access Protocol (JMAP).
+    * Allows synchronization of mail clients via the JSON Mail Access Protocol (JMAP).
 * Other (RSS, static content)
     * Serves static content (such as the RSS feed list template and the
       CalDAV/CardDAV web GUIs ).

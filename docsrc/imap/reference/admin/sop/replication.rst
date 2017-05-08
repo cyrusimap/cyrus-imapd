@@ -302,7 +302,7 @@ EVENTS section of :cyrusman:`cyrus.conf(5)` like any of these::
 
     EVENTS {
         <...>
-        # Peridoically sync ALL user mailboxes every 4 hours
+        # Periodically sync ALL user mailboxes every 4 hours
         syncclient       cmd="/usr/cyrus/bin/sync_client -A" period=240
 
         # Periodically sync changes at specific times
@@ -388,7 +388,7 @@ exercise::
     offsitesync     cmd="/usr/cyrus/bin/sync_client -r -n offsite"
 
 Again, this is just an example for illustration.  The system provides so
-much flexibility, and one can combine channels with chaining to acheive
+much flexibility, and one can combine channels with chaining to achieve
 even more.
 
 .. _replication-other-uses:

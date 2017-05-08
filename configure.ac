@@ -1785,7 +1785,7 @@ AC_ARG_WITH(syslogfacility,
 AC_DEFINE_UNQUOTED(SYSLOG_FACILITY, $SYSLOG_FACILITY, [Syslog facility to use.])
 AC_MSG_RESULT($SYSLOG_FACILITY)
 
-dnl Have to check getdtabalesize after adding ossup, as some ossups define it
+dnl Have to check getdtablesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
         [AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])])

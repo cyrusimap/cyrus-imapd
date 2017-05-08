@@ -340,7 +340,7 @@ AC_ARG_WITH(sasl,
 
 AC_ARG_WITH(staticsasl,
             [AC_HELP_STRING([--with-staticsasl=DIR],
-                            [Compile with staticly linked libsasl2 in <DIR>])],
+                            [Compile with statically linked libsasl2 in <DIR>])],
             [with_staticsasl="$withval";
              if test $with_staticsasl != "no"; then
                using_static_sasl="static"

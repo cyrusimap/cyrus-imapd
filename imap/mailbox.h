@@ -433,7 +433,7 @@ typedef union {
 /* CACHE_ITEM_BIT32: Convert to host byte order */
 /* CACHE_ITEM_LEN: Get the length out */
 /* CACHE_ITEM_NEXT: Return a pointer to the next entry.  Sizes are
- * 4-byte aligned, so round up to the next 4 byte boundry */
+ * 4-byte aligned, so round up to the next 4 byte boundary */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
 #define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))

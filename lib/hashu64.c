@@ -62,7 +62,7 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
           table->table = xmalloc(sizeof(bucketu64 *) * size);
       }
 
-      /* Allocate the table and initilize it */
+      /* Allocate the table and initialize it */
       memset(table->table, 0, sizeof(bucketu64 *) * size);
 
       return table;

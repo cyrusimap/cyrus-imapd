@@ -228,7 +228,7 @@ static int indexd_setup_config(indexd_t *id)
         /* and this one was missing dammit */
         "       U+0418->U+0438, U+0439->U+0438, \\\n"
         /* Sumerian cuneiform which is fun for testing but seems
-         * to be broken in Spinx. */
+         * to be broken in Sphinx. */
         /*
         "       U+12000..U+1237F, \\\n"
         */
@@ -913,7 +913,7 @@ static int indexd_is_running(indexd_t *id)
      * signal 0 to see if it's still alive.  But that would be a lot of
      * work to detect and hide abnormal shutdowns, which don't seem to
      * happen; sphinx seems pretty good about cleaning up after itself.
-     * So just check for the existance of the pidfile. */
+     * So just check for the existence of the pidfile. */
 
     free(pidfile);
     return r;

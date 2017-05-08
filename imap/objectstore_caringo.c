@@ -1,4 +1,4 @@
-/* objectstore_carringo.c
+/* objectstore_caringo.c
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  * Copyright (c) 2015 OpenIO, as a part of Cyrus
@@ -146,10 +146,10 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
         close(msgfd);
         rc = write_named_object  (buffer.s, sbuf.st_size, obj_def->user, obj_def->filename) ;
         if (rc == HTTP_CREATED ) {
-            syslog(LOG_INFO, "Carringo: file name %s write in bucket %s", fname, obj_def->user  );
+            syslog(LOG_INFO, "Caringo: file name %s write in bucket %s", fname, obj_def->user  );
             rc = 0;
         } else {
-            syslog(LOG_ERR, "Carringo: file name  %s write error: [record:%u] (%d) in bucket %s",
+            syslog(LOG_ERR, "Caringo: file name  %s write error: [record:%u] (%d) in bucket %s",
                     fname, record->uid, rc, obj_def->user );
             rc = -1;
         }
@@ -175,10 +175,10 @@ int objectstore_get (struct mailbox *mailbox, const struct index_record *record,
         rc = read_named_object (buffer.s, len, obj_def->user, obj_def->filename) ;
 
         if (rc == HTTP_OK ) {
-            syslog(LOG_INFO, "Carringo: file name %s read from bucket %s", fname, obj_def->user  );
+            syslog(LOG_INFO, "Caringo: file name %s read from bucket %s", fname, obj_def->user  );
             rc = 0;
         } else {
-            syslog(LOG_ERR, "Carringo: file name  %s read error: [record:%u] (%d) from bucket %s",
+            syslog(LOG_ERR, "Caringo: file name  %s read error: [record:%u] (%d) from bucket %s",
                     fname, record->uid, rc, obj_def->user );
             rc = -1 ;
         }
@@ -220,10 +220,10 @@ int objectstore_delete (struct mailbox *mailbox, const struct index_record *reco
         rc = delete_named_object (obj_def->user, obj_def->filename) ;
 
         if (rc == HTTP_OK ) {
-            syslog(LOG_INFO, "Carringo: file name %s deleted from bucket %s", obj_def->filename, obj_def->user  );
+            syslog(LOG_INFO, "Caringo: file name %s deleted from bucket %s", obj_def->filename, obj_def->user  );
             rc = 0;
         } else {
-            syslog(LOG_ERR, "Carringo: file name  %s delete error : [record:%u] (%d) from bucket %s",
+            syslog(LOG_ERR, "Caringo: file name  %s delete error : [record:%u] (%d) from bucket %s",
                     obj_def->filename, record->uid, rc, obj_def->user );
             rc = -1 ;
         }

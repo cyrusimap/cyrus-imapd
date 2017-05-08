@@ -1,7 +1,7 @@
 require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
 	"envelope", "date", "index", "imap4flags", "variables"];
 
-#this is for the extra thigns we have added to sieve
+#this is for the extra things we have added to sieve
 #test extensions
 #envelope regex relational comparators subaddress(user and detail)
 

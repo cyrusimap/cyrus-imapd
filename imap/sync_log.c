@@ -1,4 +1,4 @@
-/* sync_log.c -- Cyrus synchonization logging functions
+/* sync_log.c -- Cyrus synchronization logging functions
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *

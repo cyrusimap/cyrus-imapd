@@ -83,7 +83,7 @@
  * is taken and the intent log is replayed on it.  the index file is
  * regenerated from scratch.
  *
- * during operation ckecpoints will compress the data.  the data file
+ * during operation checkpoints will compress the data.  the data file
  * is locked.  then a checkpoint rewrites the data file in order,
  * removing any unused records.  this is written and fsync'd to
  * dfile.NEW and stored for use during recovery.
@@ -1105,7 +1105,7 @@ static int fetchlock(struct dbengine *db,
     return myfetch(db, key, keylen, data, datalen, tidptr);
 }
 
-/* foreach allows for subsidary mailbox operations in 'cb'.
+/* foreach allows for subsidiary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,

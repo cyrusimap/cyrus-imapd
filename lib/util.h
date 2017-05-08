@@ -311,7 +311,7 @@ void buf_trim(struct buf *buf);
 /*
  * Given a list of strings, terminated by (char *)NULL,
  * return a newly allocated string containing the
- * concatention of all the argument strings.  The
+ * concatenation of all the argument strings.  The
  * caller must free the returned string using free().
  *
  * This API idea based on glib's g_strconcat() which
@@ -360,7 +360,7 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * string is always NUL-terminated.  Yes, I know we have an
  * implementation of the BSD strlcpy() which has this semantic,
  * but that isn't a highly optimised libc or compiler provided
- * function like strncpy(), and we can trivially and eficiently
+ * function like strncpy(), and we can trivially and efficiently
  * add the NUL termination semantic on top of strncpy(). */
 #define xstrncpy(d, s, n) \
     do { \

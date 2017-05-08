@@ -789,7 +789,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
-               r ? "aborting" : "commiting", cyrusdb_strerror(r2));
+               r ? "aborting" : "committing", cyrusdb_strerror(r2));
     }
 
     return r;
@@ -1038,7 +1038,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
  * 2. verify parent ACL's if need to
  * 3. create the local mailbox locally (exclusive lock) and keep it locked
  * 4. open mupdate connection if necessary
- * 5. create mupdate entry (CRASH: mupdate inconsistant)
+ * 5. create mupdate entry (CRASH: mupdate inconsistent)
  *
  */
 
@@ -2696,7 +2696,7 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
  * 'proc' with the name of the mailbox.  If 'proc' ever returns
  * a nonzero value, mboxlist_findall immediately stops searching
  * and returns that value.  'rock' is passed along as an argument to proc in
- * case it wants some persistant storage or extra data.
+ * case it wants some persistent storage or extra data.
  */
 /* Find all mailboxes that match 'pattern'. */
 

@@ -236,7 +236,7 @@ static struct auth_state *mynewstate(const char *identifier)
         groupids = (gid_t *)xrealloc((gid_t *)groupids,
                                      ngroups * sizeof(gid_t));
 
-        oldngroups = ngroups; /* copy of ngroups for comparision */
+        oldngroups = ngroups; /* copy of ngroups for comparison */
         ret = getgrouplist(identifier, gid, groupids, &ngroups);
         /*
          * This is tricky. We do this as long as getgrouplist tells us to

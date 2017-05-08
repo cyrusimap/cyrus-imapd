@@ -275,7 +275,7 @@ The tables below show how the access controls are used by the CalDAV module.
 Freebusy URL
 ============
 
-When enabled in conjuction with the CalDAV module, the Freebusy URL module
+When enabled in conjunction with the CalDAV module, the Freebusy URL module
 allows non-CalDAV and/or remote calendaring clients to query the freebusy
 information of Cyrus CalDAV users.
 

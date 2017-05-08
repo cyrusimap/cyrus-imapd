@@ -86,7 +86,7 @@
 *
 * xxx we need to offer a callback to do peer issuer certification.
 *     data that should be available for inspection:
-*       If the peer offered a certifcate _and_ the certificate could be
+*       If the peer offered a certificate _and_ the certificate could be
 *       verified successfully, part of the certificate data are available as:
 *       tls_peer_subject X509v3-oneline with the DN of the peer
 *       pfixlts_peer_CN extracted CommonName of the peer

@@ -37,7 +37,7 @@ future.</i></p>
 
 <p>This document assumes that you have successfully been able to setup
 atleast one Cyrus IMAP server.  This server will become your first
-"master" server. It also assumes that you are familliar with the
+"master" server. It also assumes that you are familiar with the
 administration and day to day operations of the Cyrus IMAP server and
 the SASL authentication library. If you feel uncomfortable with this,
 please refer to the rest of the documentation first.</p>
@@ -57,7 +57,7 @@ replication client/server applications and utilities.
 
 The "replica" server is a <i>standalone</i> server which listens for
 and processes synchronization messages from a "master" server.  The
-"replica" server needs to be configured to accept these synchonization
+"replica" server needs to be configured to accept these synchronization
 messages.  The "replica" server <b>MUST NOT</b> be configured to be
 part of a Murder (it should only be configured into the Murder at the
 point at which it replaces a failed backend "master").<p>
@@ -134,13 +134,13 @@ to save bandwidth at a slight increase in CPU cost.  You can set the
 <h4>"Rolling" replication</h4>
 
 "Rolling" replication means that the "master" server continuously
-synchonizes itself with the replica.  To configure "rolling"
+synchronizes itself with the replica.  To configure "rolling"
 replication, perform the following:
 
 <ol>
 <li>Enable the <tt>sync_log</tt> option in imapd.conf.  This allows
 the <tt>imapd</tt>, <tt>pop3d</tt>, <tt>nntpd</tt>, and <tt>lmtpd</tt>
-services to log synchonization actions which will be periodically
+services to log synchronization actions which will be periodically
 serviced by <tt>sync_client</tt>.
 
 <li>Optionally, adjust the <tt>sync_repeat_interval</tt> in imapd.conf.
@@ -160,9 +160,9 @@ Add a line similar to the following in the STARTUP section of cyrus.conf:
 
 <h3>Manual replication</h3>
 
-To manually synchonize any part of the mailstore, simply run
+To manually synchronize any part of the mailstore, simply run
 <tt>sync_client(8)</tt> with the appropriate command line options.
-Note that you CAN manually synchonize even if "rolling" replication
+Note that you CAN manually synchronize even if "rolling" replication
 has been configured.
 
 <p>You can also run <tt>cyr_synclog(8)</tt> instead, which will insert

@@ -2357,7 +2357,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
     xstats_add(SEARCH_RESULT, results.count);
     if (results.count) {
-        /* The untagged reponse would be XCONVMULTISORT but
+        /* The untagged response would be XCONVMULTISORT but
          * Mail::IMAPTalk has an undocumented hack whereby any untagged
          * response matching /sort/i is assumed to be a sequence of
          * numeric uids.  Meh. */
@@ -3060,7 +3060,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
 /*
  * Returns the msgno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
- * the higest UID not greater than 'uid'.
+ * the highest UID not greater than 'uid'.
  */
 EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
 {
@@ -5870,7 +5870,7 @@ static int thread_is_descendent(Thread *parent, Thread *child)
     if (parent == child)
         return 1;
 
-    /* search each child's decendents */
+    /* search each child's descendents */
     for (kid = parent->child; kid; kid = kid->next) {
         if (thread_is_descendent(kid, child))
             return 1;
