@@ -50,7 +50,7 @@ if address :localpart :matches "from" "z*"
 
 
 #add tests/messages that differentiate between header/address.
-#need to write messages and to tweak tests to make sure everyhting works
+#need to write messages and to tweak tests to make sure everything works
 #as expected
 
 if header :contains "Date" "Feb"
