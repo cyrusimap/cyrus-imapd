@@ -134,7 +134,7 @@ to save bandwidth at a slight increase in CPU cost.  You can set the
 <h4>"Rolling" replication</h4>
 
 "Rolling" replication means that the "master" server continuously
-synchonizes itself with the replica.  To configure "rolling"
+synchronizes itself with the replica.  To configure "rolling"
 replication, perform the following:
 
 <ol>
@@ -160,9 +160,9 @@ Add a line similar to the following in the STARTUP section of cyrus.conf:
 
 <h3>Manual replication</h3>
 
-To manually synchonize any part of the mailstore, simply run
+To manually synchronize any part of the mailstore, simply run
 <tt>sync_client(8)</tt> with the appropriate command line options.
-Note that you CAN manually synchonize even if "rolling" replication
+Note that you CAN manually synchronize even if "rolling" replication
 has been configured.
 
 <p>You can also run <tt>cyr_synclog(8)</tt> instead, which will insert
