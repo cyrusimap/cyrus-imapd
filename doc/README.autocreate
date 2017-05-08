@@ -18,7 +18,7 @@ Hence, to create a new email account the site administrator has to:
      (e.g. sasldb, shadow, mysql, ldap).
   b) Create the corresponding INBOX folder.
 
-Alternatively, the user, if succesfully authenticated, may create his own INBOX folder,
+Alternatively, the user, if successfully authenticated, may create his own INBOX folder,
 as long as the configuration of the site allows it (see "autocreatequota" in imapd.conf).
 Unlike what not careful readers may think, enabling the "autocreatequota" option, doesn't
 lead to the automatic INBOX folder creation by Cyrus IMAP server.
@@ -36,7 +36,7 @@ Create on login
 This feature provides automatic creation of a user's INBOX folder when all of the
 following requirements are met:
 
-i)  The user has succesfully passed the authentication procedure.
+i)  The user has successfully passed the authentication procedure.
 
 ii) The user's authorisation ID (typically the same as the user's
 authentication ID)  doesn't belong to the imap_admins or admins
