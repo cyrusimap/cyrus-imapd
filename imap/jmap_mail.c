@@ -2306,7 +2306,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         if (!text && html) {
             text = extract_plain(html);
         }
-        json_object_set_new(msg, "textBody", text ? json_string(text) : json_null());
+        json_object_set_new(msg, "textBody", json_string(text ? text : ""));
     }
     /* htmlBody */
     if (_wantprop(props, "htmlBody") || (_wantprop(props, "body") && html)) {
