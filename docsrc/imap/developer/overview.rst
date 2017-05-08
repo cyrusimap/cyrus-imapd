@@ -5,7 +5,7 @@ Overview of Cyrus development environment
 The pre-requisites
 ==================
 
-While Cyrus itself can be run under many operating systems, we recommend the following operating systems for development, because the depencies and libraries are known. If you get a development environment working under a different operating system, we'd love to :ref:`hear about it <feedback>`.
+While Cyrus itself can be run under many operating systems, we recommend the following operating systems for development, because the dependencies and libraries are known. If you get a development environment working under a different operating system, we'd love to :ref:`hear about it <feedback>`.
     * Debian / Ubuntu
     * Fedora / Redhat
     
