@@ -2353,7 +2353,7 @@ product version in the capabilities */
 
 { "tls_versions", "tls1_0 tls1_1 tls1_2", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
-   with all protocols, and substracts protocols not in this list. Newer
+   with all protocols, and subtracts protocols not in this list. Newer
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 
