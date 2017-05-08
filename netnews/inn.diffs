@@ -4335,7 +4335,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     QuitIfIdle(cxn);
 + }
 +
-+   /* Blow away the connection gracelessly and immedately clean up */
++   /* Blow away the connection gracelessly and immediately clean up */
 + void cxnNuke (Connection cxn)
 + {
 +     d_printf(0,"%s:%d Nuking connection\n",cxn->ServerName, cxn->ident);

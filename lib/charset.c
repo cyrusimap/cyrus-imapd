@@ -2291,7 +2291,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 
 /*
  * Unfold len bytes of string s into a new string, which must be freed()
- * by the caller. Unfolding removes any CRLF that is mmediately followed
+ * by the caller. Unfolding removes any CRLF that is immediately followed
  * by a tab or space character. If flags sets CHARSET_UNFOLD_SKIPWS, then
  * the whitespace character is also omitted.
  */
