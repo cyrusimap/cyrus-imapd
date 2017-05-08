@@ -50,7 +50,7 @@
 #include "mailbox.h"
 #include "mboxname.h"
 
-/* Foward declaration to avoid circular dependency */
+/* Forward declaration to avoid circular dependency */
 typedef struct msgrecord msgrecord_t;
 
 /*
