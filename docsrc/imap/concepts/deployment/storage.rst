@@ -433,7 +433,7 @@ possibly by a hardware device (an :term:`HBA`, or in iSCSI, an
 As such, use of these network protocols for which the purpose just so
 happens to be storage does **not** provide redundancy.
 
-It is imperitive this is understood and equally well applied in planning
+It is imperative this is understood and equally well applied in planning
 for storage infrastructure, or that your storage appliance vendor or
 consultancy partner is trusted in their judgement.
 
