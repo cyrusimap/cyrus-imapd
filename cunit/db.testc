@@ -583,7 +583,7 @@ static void test_abort(void)
     struct db *db = NULL;
     struct txn *txn = NULL;
     static const char KEY[] = "yale";
-    static const char DATA[] = "standford mit harvard";
+    static const char DATA[] = "stanford mit harvard";
     int r;
 
     if (skiptest()) return;
