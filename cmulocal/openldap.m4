@@ -3,7 +3,7 @@ dnl macros for configure.in to detect openldap
 dnl
 
 dnl
-dnl Check for OpenLDAP version compatility
+dnl Check for OpenLDAP version compatibility
 AC_DEFUN([CMU_OPENLDAP_API],
 [AC_CACHE_CHECK([OpenLDAP api], [cmu_cv_openldap_api],[
     AC_EGREP_CPP(__openldap_api,[
@@ -16,7 +16,7 @@ char *__openldap_api = LDAP_API_FEATURE_X_OPENLDAP;
 ])
 
 dnl
-dnl Check for OpenLDAP version compatility
+dnl Check for OpenLDAP version compatibility
 AC_DEFUN([CMU_OPENLDAP_COMPAT],
 [AC_CACHE_CHECK([OpenLDAP version], [cmu_cv_openldap_compat],[
     AC_EGREP_CPP(__openldap_compat,[
