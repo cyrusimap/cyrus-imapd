@@ -600,7 +600,7 @@ mode:
     -P                  # specified backups interpreted as userid prefixes (nvfsbc)
     -f                  # specified backups interpreted as filenames
     -m                  # specified backups interpreted as mboxnames
-    -u                  # specified backups interpteted as userids (default)
+    -u                  # specified backups interpreted as userids (default)
 
 lock_opts:
     -c                  # exclusively create backup
@@ -642,7 +642,7 @@ options:
 mode:
     -f                  # backup interpreted as filename
     -m                  # backup interpreted as mboxname
-    -u                  # backup interpteted as userid (default)
+    -u                  # backup interpreted as userid (default)
 
 commands:
     list: table of contents, one per line
