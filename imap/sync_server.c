@@ -289,7 +289,7 @@ int service_init(int argc __attribute__((unused)),
     quotadb_init(0);
     quotadb_open(NULL);
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     annotate_init(NULL, NULL);
     annotatemore_open();
 

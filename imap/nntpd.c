@@ -509,7 +509,7 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     annotate_init(NULL, NULL);
     annotatemore_open();
 

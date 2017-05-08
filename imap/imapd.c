@@ -896,7 +896,7 @@ int service_init(int argc, char **argv, char **envp)
         }
     }
 
-    /* Initialize the annotatemore extention */
+    /* Initialize the annotatemore extension */
     if (config_mupdate_server)
         annotate_init(annotate_fetch_proxy, annotate_store_proxy);
     else

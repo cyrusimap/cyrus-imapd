@@ -2,7 +2,7 @@ there are four directories
 
 action (sieve actions)
 test (the test cases for if)
-action extension (extensons to sieve that are actions)
+action extension (extensions to sieve that are actions)
 testExtension (extensions to sieve that are tests)
 
 inside these directories is:
