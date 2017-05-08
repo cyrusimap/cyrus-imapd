@@ -53,7 +53,7 @@ need not persist across restarts.  Due to race conditions while
 cleaning up, the easiest approach is to only ever delete lock files
 during restart, so the unlock code doesn't try to remove them.
 Lock files are zero byte in size, and are locked using the flock
-or fcntl primatives used by the rest of cyrus.
+or fcntl primitives used by the rest of cyrus.
 
 <h2>API</h2>
 
