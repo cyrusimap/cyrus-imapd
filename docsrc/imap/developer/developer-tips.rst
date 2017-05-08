@@ -44,7 +44,7 @@ Cyrus currently only supports read-only memory maps, all writes back to a file n
 
 To create a map, simply call map_refresh on the map (details are in lib/map.h). To free it, call map_free on the same map.
 
-Despite the fact that the maps are read-only, it is often useful to open the file descriptors O_RDWR, especially if the file decriptors could possibly be used for writing elsewhere in the code. Some operating systems REQUIRE file descriptors that are mmap()ed to be opened O_RDWR, so just do it.
+Despite the fact that the maps are read-only, it is often useful to open the file descriptors O_RDWR, especially if the file descriptors could possibly be used for writing elsewhere in the code. Some operating systems REQUIRE file descriptors that are mmap()ed to be opened O_RDWR, so just do it.
 
 Network Functionality
 =====================
