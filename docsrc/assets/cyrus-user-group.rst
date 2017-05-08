@@ -7,12 +7,12 @@ bug to delete all of your cat pictures. Disaster!
 If you have installed from packages, your package vendor may have
 already done this for you.  To check, use these commands::
 
-    getent group mail
+    $ getent group mail
     mail:x:8:
 
 ::
 
-    getent passwd cyrus
+    $ getent passwd cyrus
     cyrus:x:999:8:Cyrus IMAP Server:/var/lib/imap:/bin/bash
 
 Example group and user creation commands for GNU/Linux::

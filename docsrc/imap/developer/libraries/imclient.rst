@@ -47,7 +47,7 @@ Users must link with the -lcyrus switch, and must supply a function
 called *fatal* to be called in case of any error within *libcyrus.la*\ .
 
 All of the **imclient** functions begin with the prefix *imclient* and
-takes  an  argument of type **struct imclient \*** as the first argument
+take  an  argument of type **struct imclient \*** as the first argument
 which is  initialized by **imclient_connect** and freed by
 **imclient_close**\ .
 
@@ -109,14 +109,14 @@ See below for a description of each function.
     case no function is invoked.  The callback function may not call
     the functions **imclient_close(), imclient_send(), imclient_eof(),
     imclient_processoneevent()**, or **imclient_authenticate()** on the
-    connection. The callback function may over write  the text of
+    connection. The callback function may overwrite  the text of
     untagged data.
 
 **imclient_send()**
     Sends a new command to the **imclient** connection.  *finishproc*
     and *finishrock* are the function and rock called when the command
     completes.  *functionproc* may be a null pointer, in which case no
-    callback is made. The call back function may not call the functions
+    callback is made. The callback function may not call the functions
     **imclient_close(), imclient_send(), imclient_eof(),
     imclient_processoneevent()**, or **imclient_authenticate()** on the
     connection.  The argument *fmt* is a :manpage:`printf(3)` like
@@ -176,8 +176,8 @@ See below for a description of each function.
 Examples
 ========
 
-The following code is a possible skeletion of **imclient** that relies
-on Kerberos to do authentication.  This code preforms an IMAP
+The following code is a possible skeleton of **imclient** that relies
+on Kerberos to do authentication.  This code performs an IMAP
 CAPABILITY request and prints out the result.
 
     ::
@@ -210,7 +210,7 @@ CAPABILITY request and prints out the result.
             }
         }
 
-        static void end_command (struct imclient *connection, void*
+        static void end_command(struct imclient *connection, void*
                                 rock,  struct imclient_reply *inmsg) {
             (*(int*)rock)--;
         }
