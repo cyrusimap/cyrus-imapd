@@ -3060,7 +3060,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
 /*
  * Returns the msgno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
- * the higest UID not greater than 'uid'.
+ * the highest UID not greater than 'uid'.
  */
 EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
 {

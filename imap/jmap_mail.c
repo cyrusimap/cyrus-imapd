@@ -4985,7 +4985,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     if (!d.subject) d.subject = xstrdup("");
 
     /* Override Date header */
-    /* Precedence (highes first): "date" property, Date header, now */
+    /* Precedence (highest first): "date" property, Date header, now */
     time_t date = time(NULL);
     if ((s = json_string_value(json_object_get(msg, "date")))) {
         struct tm tm;
