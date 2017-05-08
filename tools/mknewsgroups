@@ -112,7 +112,7 @@ while ($acl =~ /^\s*([^\s]+)\s+([^\s]+)/) {
     $acl =~ s/^\s*([^\s]+)\s+([^\s]+)//;        # skip this id/rights pair
 }
 
-my ($newsprefix, $unixhiersep) = (undef, 0);
+my ($newsprefix, $unixhierarchysep) = (undef, 0);
 
 open CONF, $config or die "can't open $config";
 print "reading configure file...\n";
@@ -125,7 +125,7 @@ while (<CONF>) {
         print "you are using \"$newsprefix\" as your news prefix.\n";
     }
     if (/^unixhierarchysep:\s+(1|t|yes|on)/) {
-        $unixhiersep = 1;
+        $unixhierarchysep = 1;
         print "i will deal with unix hierarchy separator.\n";
     }
 }
@@ -163,8 +163,8 @@ while( <INPUT> )
             # add newsprefix if necessary
             $mbox = $newsprefix . "." . $mbox if (defined($newsprefix));
 
-            # switch to unixhiersep if necessary
-            $mbox =~ s^\.^/^g if ($unixhiersep);
+            # switch to unixhierarchysep if necessary
+            $mbox =~ s^\.^/^g if ($unixhierarchysep);
 
             if ($noop) {
                 $part = "" if (!defined($part));

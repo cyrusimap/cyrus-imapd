@@ -110,7 +110,7 @@ usage: $0 [-v] [-n] [-u] [-a] [-C imapd.conf]
 
 NOTE: if imapd.conf is not provided, it will be read from the default
 location.  On a normal system this will be /etc/imapd.conf.  The *new*
-settings for unixhierarcysep and altnamespace will be read from the
+settings for unixhierarchysep and altnamespace will be read from the
 provided imapd.conf.
 
 WARNING: By default, this utility assumes that the OLD configuration

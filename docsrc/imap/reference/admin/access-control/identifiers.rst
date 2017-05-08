@@ -10,7 +10,7 @@ distinguished be the prefix "group:".  For example, "group:accounting".
 
 .. todo:: FIXME: Clarify what an ACL entry looks like first. Refer to
           how user login names are translated into their identifiers, and (in
-          that section) refer to altnamespace, unixhiersep, default domain,
+          that section) refer to altnamespace, unixhierarchysep, default domain,
           virtdomains, sasl_auth_mech tips and tricks etc.
 
 There are two special identifiers, "anonymous", and "anyone", which are
