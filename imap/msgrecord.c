@@ -65,9 +65,9 @@ struct msgrecord {
 #define M_MAILBOX       (1<<0)      /* an open mailbox* */
 #define M_RECORD        (1<<2)      /* a valid index_record */
 #define M_UID           (1<<3)      /* valid UID in index_record */
-#define M_MESSAGE       (1<<16)     /* message object - not in messag_priv */
+#define M_MESSAGE       (1<<16)     /* message object - not in message_priv */
 #define M_CACHE         (1<<5)      /* mmap()ed cyrus.cache */
-#define M_ANNOTATIONS   (1<<17)     /* annotations - not in messag_priv */
+#define M_ANNOTATIONS   (1<<17)     /* annotations - not in message_priv */
 #define M_ALL           (~0U)       /* everything */
 
 static int msgrecord_need(msgrecord_t *mr, unsigned int need)
