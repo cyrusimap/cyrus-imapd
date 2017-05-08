@@ -758,7 +758,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +  * Pop an item from the queue
 +  *
 +  * q    - the queue to pop from
-+  * item - where the item shall be placed upon sucess
++  * item - where the item shall be placed upon success
 +  *
 +  */
 +

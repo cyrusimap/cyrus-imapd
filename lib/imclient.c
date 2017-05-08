@@ -1149,7 +1149,7 @@ EXPORTED void fillin_interactions(struct imclient *context,
  *  mechlist: list of mechanisms separated by spaces
  *
  * Returns:
- *  0 - sucess
+ *  0 - success
  *  1 - failure
  *  2 - severe failure?
  */
