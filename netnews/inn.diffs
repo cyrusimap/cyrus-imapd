@@ -1906,7 +1906,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   peerName = hostPeerName (cxn->myHost) ;
 +
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
-+   d_printf (0,"%s:%d shutting down non-repsonsive imap connection\n",
++   d_printf (0,"%s:%d shutting down non-responsive imap connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
 +
 +   cxnLogStats (cxn,true) ;
@@ -2084,7 +2084,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +   peerName = hostPeerName (cxn->myHost) ;
 +
 +   syslog (LOG_WARNING, RESPONSE_TIMEOUT, peerName, cxn->ident) ;
-+   d_printf (0,"%s:%d shutting down non-repsonsive lmtp connection\n",
++   d_printf (0,"%s:%d shutting down non-responsive lmtp connection\n",
 +            hostPeerName (cxn->myHost), cxn->ident) ;
 +
 +   cxnLogStats (cxn,true) ;
