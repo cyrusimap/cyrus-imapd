@@ -111,7 +111,7 @@ static void
         vsprintf (errbuf + strlen (errbuf), fmt, args);
     }
 #ifdef _WINDOWS
-    MessageBox (NULL, errbuf, "Kerboros", MB_ICONEXCLAMATION);
+    MessageBox (NULL, errbuf, "Kerberos", MB_ICONEXCLAMATION);
 #else
     fputs (errbuf, stderr);
     /* should do this only on a tty in raw mode */
