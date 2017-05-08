@@ -90,7 +90,7 @@ static int do_dump(const char *fname, const char *userid)
     int r;
 
     /* What we really want here is read-only database access without
-     * the create-if-nonexistant semantics.  However, the cyrusdb
+     * the create-if-nonexistent semantics.  However, the cyrusdb
      * interface makes it difficult to do that properly.  In the
      * meantime, we can just check if the file exists here. */
     r = stat(fname, &sb);

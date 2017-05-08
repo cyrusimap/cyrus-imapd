@@ -1807,7 +1807,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
         } else if (PERMFAIL(code)) {
             if(txn->tempfail_unknown_mailbox &&
                txn->rcpt[j].r == IMAP_MAILBOX_NONEXISTENT) {
-                /* If there is a nonexistant error, we have been told
+                /* If there is a nonexistent error, we have been told
                  * to mask it (e.g. proxy got out-of-date mupdate data) */
                 txn->rcpt[j].result = RCPT_TEMPFAIL;
                 txn->rcpt[j].r = IMAP_AGAIN;

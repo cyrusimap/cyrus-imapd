@@ -157,7 +157,7 @@ static void test_badhost(void)
 
     default_conditions();
 
-    be = backend_connect(NULL, "nonexistanthost", &test_prot,
+    be = backend_connect(NULL, "nonexistenthost", &test_prot,
                          USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
@@ -172,7 +172,7 @@ static void test_badservice(void)
     const char *auth_status = NULL;
 
     default_conditions();
-    test_prot.service = "nonexistantservice";
+    test_prot.service = "nonexistentservice";
 
     be = backend_connect(NULL, HOST, &test_prot,
                          USERID, callbacks, &auth_status, /*fd*/-1);

@@ -11565,7 +11565,7 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
     if (r) return r;
 
-    /* note use of + to force the setting of a nonexistant
+    /* note use of + to force the setting of a nonexistent
      * quotaroot */
     char *extname = mboxname_to_external(mboxname, &imapd_namespace, imapd_userid);
     prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
