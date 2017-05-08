@@ -84,7 +84,7 @@ Options
 
     Don't stat underlying files.  This makes reconstruct run faster, at
     the expense of not noticing some issues (like zero byte files or
-    size mistmatches).  "**reconstruct -s**" should be quite fast.
+    size mismatches).  "**reconstruct -s**" should be quite fast.
 
 .. option:: -q
 
