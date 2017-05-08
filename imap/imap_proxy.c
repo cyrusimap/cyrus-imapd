@@ -1395,13 +1395,13 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
     return r;
 }
 
-/* Proxy GETANNOTATION commands to backend */
+/* Proxy GETMETADATA commands to backend */
 int annotate_fetch_proxy(const char *server, const char *mbox_pat,
                          const strarray_t *entry_pat,
                          const strarray_t *attribute_pat)
 {
     struct backend *be;
-    int i;
+    int i, j;
     char mytag[128];
 
     assert(server && mbox_pat && entry_pat && attribute_pat);
@@ -1414,12 +1414,23 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
     prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
-    for (i = 0 ; i < entry_pat->count ; i++) {
-        prot_printf(be->out, "%s\"%s\"", i ? " " : "", entry_pat->data[i]);
-    }
-    prot_printf(be->out, ") (");
-    for (i = 0 ; i < attribute_pat->count ; i++) {
-        prot_printf(be->out, "%s\"%s\"", i ? " " : "", attribute_pat->data[i]);
+    for (i = 0; i < entry_pat->count; i++) {
+        const char *entry = strarray_nth(entry_pat, i);
+
+        for (j = 0; j < attribute_pat->count; j++) {
+            const char *scope, *attr = strarray_nth(attribute_pat, j);
+            if (!strcmp(attr, "value.shared")) {
+                scope = "/shared";
+            }
+            else if (!strcmp(attr, "value.priv")) {
+                scope = "/private";
+            }
+            else {
+                syslog(LOG_ERR, "won't get deprecated annotation attribute %s", attr);
+                continue;
+            }
+            prot_printf(be->out, "%s%s%s", i ? " " : "", scope, entry);
+        }
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);
@@ -1431,7 +1442,7 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     return 0;
 }
 
-/* Proxy SETANNOTATION commands to backend */
+/* Proxy SETMETADATA commands to backend */
 int annotate_store_proxy(const char *server, const char *mbox_pat,
                          struct entryattlist *entryatts)
 {
@@ -1449,16 +1460,31 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s SETANNOTATION \"%s\" (", mytag, mbox_pat);
+    prot_printf(be->out, "%s SETMETADATA \"%s\" (", mytag, mbox_pat);
     for (e = entryatts; e; e = e->next) {
-        prot_printf(be->out, "\"%s\" (", e->entry);
-
         for (av = e->attvalues; av; av = av->next) {
-            prot_printf(be->out, "\"%s\" ", av->attrib);
-            prot_printmap(be->out, av->value.s, av->value.len);
-            prot_printf(be->out, "%s", av->next ? " " : "");
+            const char *scope;
+
+            assert(av->attrib);
+            if (!strcmp(av->attrib, "value.shared")) {
+                scope = "/shared";
+            }
+            else if (!strcmp(av->attrib, "value.priv")) {
+                scope = "/private";
+            }
+            else {
+                syslog(LOG_ERR,
+                       "won't proxy annotation with deprecated attribute %s",
+                       av->attrib);
+                return IMAP_INTERNAL;
+            }
+
+            /* Print the entry-value pair */
+            prot_printf(be->out, "%s%s ", scope, e->entry);
+            prot_printamap(be->out, av->value.s, av->value.len);
+
+            if (av->next) prot_printf(be->out, " ");
         }
-        prot_printf(be->out, ")");
         if (e->next) prot_printf(be->out, " ");
     }
     prot_printf(be->out, ")\r\n");
