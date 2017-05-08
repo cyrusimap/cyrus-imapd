@@ -2215,7 +2215,7 @@ static int recovery1(struct dbengine *db, int *count)
         r = read_onerecord(db, nextoffset, &record);
         if (r) return r;
 
-        /* just skip over delele records */
+        /* just skip over delete records */
         if (record.type == DELETE) {
             nextoffset = record.nextloc[0];
             continue;
