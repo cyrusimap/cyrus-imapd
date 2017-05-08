@@ -6956,7 +6956,7 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
 
     memset(&availfilter, 0, sizeof(struct freebusy_filter));
 
-    /* Sort VAVAILBILITY periods by priority and start time */
+    /* Sort VAVAILABILITY periods by priority and start time */
     qsort(vavail->vav, vavail->len,
           sizeof(struct vavailability), compare_vavail);
 
