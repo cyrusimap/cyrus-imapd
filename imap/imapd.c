@@ -10270,7 +10270,7 @@ syntax_error:
 
     /* Do a permissions check to avoid server DoS opportunity.  But we
      * only need read permission to warmup a mailbox.  Also, be careful
-     * to avoid telling the client about the existance of mailboxes to
+     * to avoid telling the client about the existence of mailboxes to
      * which he doesn't have LOOKUP rights. */
     r = IMAP_PERMISSION_DENIED;
     myrights = (mbentry->acl ? cyrus_acl_myrights(imapd_authstate, mbentry->acl) : 0);

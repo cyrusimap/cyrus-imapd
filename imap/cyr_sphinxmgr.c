@@ -913,7 +913,7 @@ static int indexd_is_running(indexd_t *id)
      * signal 0 to see if it's still alive.  But that would be a lot of
      * work to detect and hide abnormal shutdowns, which don't seem to
      * happen; sphinx seems pretty good about cleaning up after itself.
-     * So just check for the existance of the pidfile. */
+     * So just check for the existence of the pidfile. */
 
     free(pidfile);
     return r;
