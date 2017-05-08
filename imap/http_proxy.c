@@ -1112,7 +1112,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 
     /*
-     * Send a synchonizing PUT request to dest backend:
+     * Send a synchronizing PUT request to dest backend:
      *
      * - Add Expect:100-continue header (for synchronicity)
      * - Obey Overwrite by adding If-None-Match header
