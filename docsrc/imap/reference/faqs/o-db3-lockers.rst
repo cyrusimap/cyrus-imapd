@@ -25,7 +25,7 @@ Andreas (andreas@conectiva.com.br) writes::
     http://www.oracle.com/technology/documentation/berkeley-db/db/api_reference/C/envset_lk_max_locks.html
     http://www.oracle.com/technology/documentation/berkeley-db/db/api_reference/C/envset_lk_max_objects.html
 
-    The links above talk about the C api, but don't get alarmed, these paremeters can be set with a DB_CONFIG configuration file located in the DB environment home.
+    The links above talk about the C api, but don't get alarmed, these parameters can be set with a DB_CONFIG configuration file located in the DB environment home.
 
 I also suppose the :manpage:`db_stat(8)` utility can be used to diagnose this.
 
