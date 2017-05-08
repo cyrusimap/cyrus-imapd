@@ -197,7 +197,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     out_fd = open(sieve_bctmpname, O_CREAT|O_TRUNC|O_WRONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if(out_fd < 0) {
         if(errno == EEXIST) {
-            syslog(LOG_WARNING,"autocreate_sieve: File %s already exists. Probaly left over. Ignoring",sieve_bctmpname);
+            syslog(LOG_WARNING,"autocreate_sieve: File %s already exists. Probably left over. Ignoring",sieve_bctmpname);
         } else if (errno == EACCES) {
             syslog(LOG_WARNING,"autocreate_sieve: No access to create file %s. Check permissions",sieve_bctmpname);
             fclose(in_stream);
