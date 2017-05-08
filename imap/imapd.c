@@ -8583,7 +8583,7 @@ out:
  * this implements the STARTTLS command, as described in RFC 2595.
  * one caveat: it assumes that no external layer is currently present.
  * if a client executes this command, information about the external
- * layer that was passed on the command line is disgarded. this should
+ * layer that was passed on the command line is discarded. this should
  * be fixed.
  */
 /* imaps - whether this is an imaps transaction or not */
