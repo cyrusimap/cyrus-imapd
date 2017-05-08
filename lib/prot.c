@@ -1166,7 +1166,7 @@ int prot_flush_internal(struct protstream *s, int force)
                         s->bigbuf_len, "temp protlayer buffer", NULL);
         }
 
-    } /* end of blocking/nonblocking if statment */
+    } /* end of blocking/nonblocking if statement */
 
     /* Reset the memory buffer -- should be done on EOF or on success. */
     s->ptr = s->buf;
