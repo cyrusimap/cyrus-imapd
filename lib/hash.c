@@ -58,7 +58,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
           table->table = xmalloc(sizeof(bucket *) * size);
       }
 
-      /* Allocate the table and initilize it */
+      /* Allocate the table and initialize it */
       memset(table->table, 0, sizeof(bucket *) * size);
 
       return table;
