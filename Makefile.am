@@ -494,7 +494,21 @@ EXTRA_DIST = \
 	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
 	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
 	sieve/tests/actionExtensions/serverm/ueamail-vacation \
-	$(wildcard tools/vzic/*) \
+	tools/vzic/ChangeLog \
+	tools/vzic/Makefile \
+	tools/vzic/README \
+	tools/vzic/test-vzic.c \
+	tools/vzic/vzic-dump.c \
+	tools/vzic/vzic-dump.h \
+	tools/vzic/vzic-dump.pl \
+	tools/vzic/vzic-merge.pl \
+	tools/vzic/vzic-output.c \
+	tools/vzic/vzic-output.h \
+	tools/vzic/vzic-parse.c \
+	tools/vzic/vzic-parse.h \
+	tools/vzic/vzic-test.pl \
+	tools/vzic/vzic.c \
+	tools/vzic/vzic.h \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
