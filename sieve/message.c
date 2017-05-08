@@ -396,7 +396,7 @@ int do_notify(notify_list_t *a, const char *id, const char *from,
 
 /* denotify
  *
- * incomaptible with: none
+ * incompatible with: none
  */
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority)
