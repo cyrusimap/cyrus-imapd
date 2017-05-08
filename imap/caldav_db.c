@@ -79,8 +79,8 @@ struct caldav_db {
 
 
 static struct namespace caldav_namespace;
-time_t caldav_epoch = -1;
-time_t caldav_eternity = -1;
+EXPORTED time_t caldav_epoch = -1;
+EXPORTED time_t caldav_eternity = -1;
 
 EXPORTED int caldav_init(void)
 {
