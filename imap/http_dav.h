@@ -316,8 +316,8 @@ struct propfind_ctx {
     int userisadmin;                    /* is userid an admin */
     struct auth_state *authstate;       /* authorization state for userid */
     void *davdb;                        /* DAV DB corresponding to collection */
-    const mbentry_t *mbentry;           /* mbentry correspondng to collection */
-    struct mailbox *mailbox;            /* mailbox correspondng to collection */
+    const mbentry_t *mbentry;           /* mbentry corresponding to collection */
+    struct mailbox *mailbox;            /* mailbox corresponding to collection */
     struct quota quota;                 /* quota info for collection */
     struct index_record *record;        /* cyrus.index record for resource */
     void *data;                         /* DAV record for resource */
