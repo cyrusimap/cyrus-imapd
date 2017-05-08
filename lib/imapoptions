@@ -1274,7 +1274,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mailbox_default_options", 0, INT }
 /* Default "options" field for the mailbox on create.  You'll want to know
    what you're doing before setting this, but it can apply some default
-   annotations like duplicate supression */
+   annotations like duplicate suppression */
 
 { "mailbox_initial_flags", NULL, STRING }
 /* space-separated list of permanent flags which will be pre-set in every
