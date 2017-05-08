@@ -640,7 +640,7 @@ sub _sc_list {
 
   if ($subscribed) {
     if (scalar (keys %opts) > 0 ) {
-      # LIST + LIST-EXTENED
+      # LIST + LIST-EXTENDED
       $opts{'-sel-subscribed'} = 1;
     } else {
       # LSUB
