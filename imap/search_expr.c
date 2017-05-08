@@ -115,7 +115,7 @@ static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
 
 /*
  * Detach the node '*prevp' from the tree, and reparent its children to
- * '*prevp' parent, preseving '*prevp's location and its children's
+ * '*prevp' parent, preserving '*prevp's location and its children's
  * order.
  *
  * Apparently this operation is called "splat" but I think that's
