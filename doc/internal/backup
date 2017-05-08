@@ -738,7 +738,7 @@ you detect data corruption in older chunks reactively by trying to restore from
 it.  may be too late: if a message needs restoring it's because user mailbox no
 longer has it
 
-you detect data corruption pre-emptively by running the verify tool over it.
+you detect data corruption preemptively by running the verify tool over it.
 recommend scheduling this in EVENTS/cron?
 
 if data corruption occurs in message that's no longer in user's mailbox, that
