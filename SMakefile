@@ -123,7 +123,7 @@ SSL_CONFIG="--with-openssl=/usr/local/lib"
 # the defaults are good enough for us
 DB_CONFIG=""
 
-# the following is for staticly linking SASL only
+# the following is for statically linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 #KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
 KRB_CONFIG="--with-krb=/usr/local"
