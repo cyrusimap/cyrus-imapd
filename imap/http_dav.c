@@ -8896,7 +8896,7 @@ struct meth_params notify_params = {
 };
 
 
-/* Namespace for WebDAV notifcation collections */
+/* Namespace for WebDAV notification collections */
 struct namespace_t namespace_notify = {
     URL_NS_NOTIFY, 0, "/dav/notifications", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -10098,7 +10098,7 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     struct propfind_entry_list *elist;
     const char *err = NULL;
 
-    /* Populate our propfind context for notifcation collection */
+    /* Populate our propfind context for notification collection */
     memset(&my_fctx, 0, sizeof(struct propfind_ctx));
 
     buf_printf(&my_fctx.buf, "%s/%s/%s/", namespace_notify.prefix,
