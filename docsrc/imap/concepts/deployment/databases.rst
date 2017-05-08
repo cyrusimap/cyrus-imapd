@@ -188,7 +188,7 @@ in the past three months, mapping to the conversation IDs in which this message
 ID has been seen, and the timestamp when it was last seen.
 
 It also has a records for each conversation ID with details about which folders
-have that converations ID in them, and counts of messages and flags.
+have that conversations ID in them, and counts of messages and flags.
 
 Finally there are records for each folder with the counts of conversations in
 that folder.
