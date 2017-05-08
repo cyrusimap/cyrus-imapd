@@ -278,7 +278,7 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: commiting mailbox append %s: %s",
+        syslog(LOG_ERR, "IOERROR: committing mailbox append %s: %s",
                as->mailbox->name, error_message(r));
         append_abort(as);
         return r;

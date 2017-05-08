@@ -789,7 +789,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
-               r ? "aborting" : "commiting", cyrusdb_strerror(r2));
+               r ? "aborting" : "committing", cyrusdb_strerror(r2));
     }
 
     return r;
