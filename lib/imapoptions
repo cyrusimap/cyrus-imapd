@@ -1875,7 +1875,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
-   "Håvard".  This is not RFC5051 complient, but it backwards
+   "Håvard".  This is not RFC5051 compliant, but it backwards
    compatible, and may be preferred by some sites. */
 
 { "search_skiphtml", 0, SWITCH }
