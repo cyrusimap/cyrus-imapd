@@ -3745,7 +3745,7 @@ static void init_annotation_definitions(void)
         tok_initm(&state.tok, aline, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
 
         /* note, we only do the most basic validity checking and may
-           be more restrictive than neccessary */
+           be more restrictive than necessary */
 
         ae = xzmalloc(sizeof(*ae));
 
