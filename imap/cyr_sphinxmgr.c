@@ -228,7 +228,7 @@ static int indexd_setup_config(indexd_t *id)
         /* and this one was missing dammit */
         "       U+0418->U+0438, U+0439->U+0438, \\\n"
         /* Sumerian cuneiform which is fun for testing but seems
-         * to be broken in Spinx. */
+         * to be broken in Sphinx. */
         /*
         "       U+12000..U+1237F, \\\n"
         */

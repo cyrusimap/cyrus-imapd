@@ -1011,7 +1011,7 @@ static int sphinx_setup(const struct mailbox *mailbox, int verbose, int create)
         /* and this one was missing dammit */
         "       U+0418->U+0438, U+0439->U+0438, \\\n"
         /* Sumerian cuneiform which is fun for testing but seems
-         * to be broken in Spinx. */
+         * to be broken in Sphinx. */
         /*
         "       U+12000..U+1237F, \\\n"
         */
