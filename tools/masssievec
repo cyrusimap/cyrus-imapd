@@ -160,7 +160,7 @@ while (defined($s = readdir TOP)) {
                 } elsif (defined $pid) {
                     # child
                     exec $SIEVEC, $u, "$out.bc";
-                    die "souldn't be here";
+                    die "shouldn't be here";
                 } elsif ($! =~ /No more process/) {
                     # EAGAIN
                     sleep 5; redo FORK;

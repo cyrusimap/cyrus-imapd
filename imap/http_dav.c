@@ -49,7 +49,7 @@
  *   - CALDAV:schedule-calendar-transp should be a flag in
  *     cyrus.index header (Mailbox Options)
  *
- *   - DAV:creationdate sould be added to cyrus.header since it only
+ *   - DAV:creationdate should be added to cyrus.header since it only
  *     gets set at creation time
  *
  *   - Should add a last_metadata_update field to cyrus.index header
