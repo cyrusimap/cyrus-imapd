@@ -68,7 +68,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
-/* Transparant protgroup structure */
+/* Transparent protgroup structure */
 struct protgroup
 {
     size_t nalloced; /* Number of nodes in the group */
