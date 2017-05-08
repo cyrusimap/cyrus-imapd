@@ -2585,7 +2585,7 @@ static void usage(char *prog, char *prot)
     printf("  -n       : number of auth attempts (default=1)\n");
     printf("  -I file  : output my PID to (file) (useful with -X)\n");
     printf("  -x file  : open the named socket for the interactive portion\n");
-    printf("  -X file  : same as -X, except close all file descriptors & dameonize\n");
+    printf("  -X file  : same as -X, except close all file descriptors & daemonize\n");
 
     exit(1);
 }
