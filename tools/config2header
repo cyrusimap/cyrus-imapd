@@ -149,7 +149,7 @@ while (<STDIN>) {
     # look for { option, default, type [enums] }
 
     # Note that the code we output has to play interesting games to get
-    # the union to initialize itself in a syntacticly valid manner.
+    # the union to initialize itself in a syntactically valid manner.
     # Namely, we need to initialize the union itself, not the members of
     # the union, and we need to ensure we are initializing the union with
     # something of a type that is in the union.
