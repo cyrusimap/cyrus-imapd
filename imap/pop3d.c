@@ -948,7 +948,7 @@ static void cmdloop(void)
         if (p > inputbuf && p[-1] == '\n') *--p = '\0';
         if (p > inputbuf && p[-1] == '\r') *--p = '\0';
 
-        /* Parse into keword and argument */
+        /* Parse into keyword and argument */
         for (p = inputbuf; *p && !Uisspace(*p); p++);
         if (*p) {
             *p++ = '\0';
