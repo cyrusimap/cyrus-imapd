@@ -360,7 +360,7 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * string is always NUL-terminated.  Yes, I know we have an
  * implementation of the BSD strlcpy() which has this semantic,
  * but that isn't a highly optimised libc or compiler provided
- * function like strncpy(), and we can trivially and eficiently
+ * function like strncpy(), and we can trivially and efficiently
  * add the NUL termination semantic on top of strncpy(). */
 #define xstrncpy(d, s, n) \
     do { \
