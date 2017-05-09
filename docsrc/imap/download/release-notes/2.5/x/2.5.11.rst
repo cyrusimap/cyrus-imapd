@@ -24,7 +24,7 @@ Download via FTP:
 .. _relnotes-2.5.11-changes:
 
 Changes Since 2.5.10
-===================
+====================
 
 Dependency changes
 ------------------
