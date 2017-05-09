@@ -3097,8 +3097,6 @@ int meth_copy(struct transaction_t *txn, void *params)
 		goto done;
 	    }
 	}
-
-	cparams->davdb.release_resource(ddata);
     }
 
   done:
