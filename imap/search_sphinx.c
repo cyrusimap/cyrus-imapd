@@ -115,7 +115,8 @@ static const char * const column_by_part[SEARCH_NUM_PARTS] = {
     "header_type",
     "headers",
     "body",
-    "location"
+    "location",
+    "attachmentname"
 };
 
 static void close_connection(struct connection *conn)
