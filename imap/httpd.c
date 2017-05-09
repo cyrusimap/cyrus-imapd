@@ -1011,11 +1011,11 @@ int service_main(int argc __attribute__((unused)),
 
     /* no HTTP clients seem to use "auth-int" */
     secprops->max_ssf = 0;                              /* "auth" only */
-    secprops->maxbufsize = 0;                           /* don't need maxbuf */
+    // secprops->maxbufsize = 0;                           /* don't need maxbuf */
     if (sasl_setprop(httpd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property SASL_SEC_PROPS", EC_TEMPFAIL);
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property SASL_SSF_EXTERNAL", EC_TEMPFAIL);
 
     if (httpd_localip) {
         sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, httpd_localip);
