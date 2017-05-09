@@ -101,7 +101,8 @@ static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
     "s",
     "h",
     "m",
-    "o"
+    "o",
+    "a"
 };
 
 /* The document name is of the form
