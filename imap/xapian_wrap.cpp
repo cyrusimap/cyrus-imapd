@@ -209,7 +209,8 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_ALL,   /* TYPE */
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
         Xapian::TermGenerator::STEM_ALL,   /* BODY */
-        Xapian::TermGenerator::STEM_ALL    /* LOCATION */
+        Xapian::TermGenerator::STEM_ALL,   /* LOCATION */
+        Xapian::TermGenerator::STEM_ALL    /* ATTACHMENTNAME */
     },
     // Version 1: Stem bodies using STEM_SOME with stopwords
     {
@@ -223,7 +224,8 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_ALL,   /* TYPE */
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
-        Xapian::TermGenerator::STEM_SOME   /* LOCATION */
+        Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
+        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTNAME */
     },
     // Version 2: Use STEM_NONE for headers, STEM_SOME for free text
     {
@@ -237,7 +239,8 @@ tg_stem_strategies[XAPIAN_STEM_VERSIONS_NUM][SEARCH_NUM_PARTS] = {
         Xapian::TermGenerator::STEM_NONE,  /* TYPE */
         Xapian::TermGenerator::STEM_NONE,  /* HEADERS */
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
-        Xapian::TermGenerator::STEM_SOME   /* LOCATION */
+        Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
+        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTNAME */
     }
 };
 
