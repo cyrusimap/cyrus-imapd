@@ -1,0 +1,64 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.11 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the `stable 2.5 series <http://www.cyrusimap.org/stable>`_.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.11.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.11.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.11.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.11.tar.gz.sig
+
+.. _relnotes-2.5.11-changes:
+
+Changes Since 2.5.10
+===================
+
+Dependency changes
+------------------
+
+* ClamAV support now configures and builds properly, and is disabled
+  by default.
+
+Other changes
+-------------
+
+* Better integration with updated documentation/website infrastructure
+* The "timeout" option is now also used as an upper limit in minutes
+  for IDLE connections.  A new option "imapidletimeout" can be used
+  to set an idle-specific timeout instead.  (Thanks Philipp Gesang.)
+
+Bug fixes
+---------
+
+* Fixed: invalid free and memory leak in httpd
+* Fixed: services no longer exit when client disconnects before accept()
+* Fixed :issue:`65`: no longer use -Wno-sign-compare when unsupported
+* Fixed :issue:`67`: better support for dots in localparts (thanks Jeroen van Meeuwen)
+* Fixed: don't assume LIST section options when proxying
+* Fixed: SEARCH crash on some platforms
+* Fixed: ensure directory hierarchy created when renaming empty mailboxes
+* Fixed :issue:`1742`: reconstruct no longer crashes when cache records
+  are too short
+* Fixed :issue:`11`: LIST RETURN options now work properly with virtdomains
+* Fixed :issue:`44`: http proxy no longer crashes on starttls (thanks Wolfgang Breyha)
+* Fixed :issue:`1752`: no longer crash on notifyd mailto method
+* Fixed :issue:`1768`: ensure consistency of CalDav ORGANIZER (thanks Дилян Палаузов)
+* Fixed :issue:`368`: SETACL with invalid rights characters now returns BAD
+* Fixed :issue:`46`: renames to remote destinations now work correctly
+* Fixed :issue:`38`: UTF-8 :subject now supported in sieve vacations
+* Fixed :issue:`1872`: no longer crash on bad SSL session ids
+* Fixed :issue:`1931`: missing mysql/mariadb dependencies now reported by configure
+* Fixed: various memory and resource leaks (thanks Дилян Палаузов)
