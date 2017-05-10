@@ -65,6 +65,7 @@ imap/cyr_info
 imap/cyr_sequence
 imap/cyr_synclog
 imap/cyr_userseen
+imap/cyr_virusscan
 imap/cyrdump
 imap/dav_reconstruct
 imap/deliver
