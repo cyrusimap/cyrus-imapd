@@ -1797,15 +1797,31 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event __attribute__((un
 {
 }
 
+EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event __attribute__((unused)),
+                                          msgrecord_t *msgrec __attribute__((unused)))
+{
+}
+
 void mboxevent_extract_copied_record(struct mboxevent *event __attribute__((unused)),
                                      const struct mailbox *mailbox __attribute__((unused)),
                                      struct index_record *record __attribute__((unused)))
 {
 }
 
+void mboxevent_extract_copied_msgrecord(struct mboxevent *event __attribute__((unused)),
+                                        msgrecord_t *msgrec __attribute__((unused)))
+{
+}
+
 void mboxevent_extract_content(struct mboxevent *event __attribute__((unused)),
                                const struct index_record *record __attribute__((unused)),
                                FILE* content __attribute__((unused)))
+{
+}
+
+void mboxevent_extract_content_msgrec(struct mboxevent *event __attribute__((unused)),
+                                      msgrecord_t *msgrec __attribute__((unused)),
+                                      FILE* content __attribute__((unused)))
 {
 }
 
