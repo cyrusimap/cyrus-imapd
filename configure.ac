@@ -830,6 +830,7 @@ AS_IF([test "x$with_clamav" != "xno"],
 		[ AC_DEFINE(HAVE_CLAMAV, [], [Do we have ClamAV?])
 		  with_clamav=yes ],
 		with_clamav=no)])
+AM_CONDITIONAL([HAVE_CLAMAV], [test "x$with_clamav" != "xno"])
 
 AC_ARG_ENABLE(server,
 	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
