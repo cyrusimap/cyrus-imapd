@@ -885,12 +885,13 @@ AC_ARG_WITH(lock,
 AM_CONDITIONAL([LOCK_FCNTL], [test $WITH_LOCK = "fcntl"])
 
 dnl check for fdatasync (used by cyrusdb_skiplist)
-LIB_RT=""
-AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]), [
-  AC_CHECK_LIB(rt, fdatasync, [
-        LIB_RT="-lrt"
-        AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?])
-  ])
+AC_SEARCH_LIBS([fdatasync], [rt], [
+    AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?])
+], [])
+
+dnl check for clock_gettime
+AC_SEARCH_LIBS([clock_gettime], [rt], [], [
+    AC_MSG_ERROR([unable to find the clock_gettime() function])
 ])
 
 dnl check for libuuid (used when generating mailbox uniqueids)
@@ -1894,7 +1895,6 @@ for flag in ${ldflags} ${default_ldflags}; do
 done
 
 AC_SUBST(LIB_SASL)
-AC_SUBST(LIB_RT)
 AC_SUBST(LIB_UUID)
 AC_SUBST(PERL)
 
