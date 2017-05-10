@@ -2271,7 +2271,6 @@ External dependencies:
    ical:               $with_ical
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
-   curl:               $with_curl
 
 Database support:
    mysql:              $with_mysql
