@@ -29,9 +29,6 @@ Changes Since 2.5.10
 Dependency changes
 ------------------
 
-* ClamAV support now configures and builds properly, and is disabled
-  by default.
-
 Other changes
 -------------
 
