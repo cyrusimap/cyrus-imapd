@@ -1460,6 +1460,7 @@ dnl
         fi
 
         PKG_CHECK_MODULES([XML2], [libxml-2.0], [
+                AC_DEFINE(HAVE_XML2, [], [Build with libxml support])
                 LIBS="$LIBS ${XML2_LIBS}"
                 with_xml2=yes
                 ],
@@ -2230,7 +2231,7 @@ CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
 fi
 
 dnl check for libicu. we need this for charset conversions.
-PKG_CHECK_MODULES([ICU], [icu-uc])
+PKG_CHECK_MODULES([ICU], [icu-uc], AC_DEFINE(HAVE_ICU, [], [Build with ICU support]), [])
 AC_SUBST([ICU_LIBS])
 AC_SUBST([ICU_CFLAGS])
 
@@ -2270,6 +2271,7 @@ External dependencies:
    ical:               $with_ical
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
+   curl:               $with_curl
 
 Database support:
    mysql:              $with_mysql

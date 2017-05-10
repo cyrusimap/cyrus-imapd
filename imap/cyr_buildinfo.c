@@ -180,6 +180,11 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "openssl", json_false());
 #endif
+#ifdef HAVE_ZLIB
+    json_object_set_new(dependency, "zlib", json_true());
+#else
+    json_object_set_new(dependency, "zlib", json_false());
+#endif
 #if defined(ENABLE_REGEX) && defined(HAVE_PCREPOSIX_H)
     json_object_set_new(dependency, "pcre", json_true());
 #else
@@ -199,6 +204,41 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "netsnmp", json_true());
 #else
     json_object_set_new(dependency, "netsnmp", json_false());
+#endif
+#ifdef WITH_OPENIO
+    json_object_set_new(dependency, "openio", json_true());
+#else
+    json_object_set_new(dependency, "openio", json_false());
+#endif
+#ifdef HAVE_NGHTTP2
+    json_object_set_new(dependency, "nghttp2", json_true());
+#else
+    json_object_set_new(dependency, "nghttp2", json_false());
+#endif
+#ifdef HAVE_BROTLI
+    json_object_set_new(dependency, "brotli", json_true());
+#else
+    json_object_set_new(dependency, "brotli", json_false());
+#endif
+#ifdef USE_HTTPD
+    json_object_set_new(dependency, "xml2", json_true());
+#else
+    json_object_set_new(dependency, "xml2", json_false());
+#endif
+#ifdef HAVE_ICAL
+    json_object_set_new(dependency, "ical", json_true());
+#else
+    json_object_set_new(dependency, "ical", json_false());
+#endif
+#ifdef HAVE_ICU
+    json_object_set_new(dependency, "icu4c", json_true());
+#else
+    json_object_set_new(dependency, "icu4c", json_false());
+#endif
+#ifdef HAVE_SHAPELIB
+    json_object_set_new(dependency, "shapelib", json_true());
+#else
+    json_object_set_new(dependency, "shapelib", json_false());
 #endif
 
     /* Enabled databases */
