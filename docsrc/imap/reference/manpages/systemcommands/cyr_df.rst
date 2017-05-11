@@ -52,7 +52,7 @@ Examples
     ::
 
         Partition       1k-blocks         Used    Available Use% Location
-        default          19610300     13460832      5153412  72% /var/spool/imap
+        default          19610300     13460832      5153412  72% /var/spool/cyrus
 
 Files
 =====

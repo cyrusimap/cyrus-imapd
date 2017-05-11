@@ -27,7 +27,7 @@ Before you begin
 
 Found a bug? Got an enhancement? Great!
 
-New Feature considerations: this is an open source project. If your change isn't a basic part of what is already planned, will you be around to support it? Can you justify why it's in the best interests of the project to have your change included? We'd love to talk it through with you: contact us via the :ref:`mailing lists <feedback>`.
+New Feature considerations: this is an open source project. If your change isn't a basic part of what is already planned, will you be around to support it? Can you justify why it's in the best interests of the project to have your change included? We'd love to talk it through with you: contact us via the :ref:`mailing lists <feedback-mailing-lists>`.
 
 Using GitHub
 ------------
@@ -64,4 +64,4 @@ Join us! The project is only as good as the sum of its people. We all work toget
 
 Meetings are currently :ref:`held online <feedback-meetings>` via Google Hangouts. Not sure what time that is for you? Try the `meeting planner <http://www.worldtimebuddy.com/?pl=1&lid=8,2988507,0,21&h=8>`_.
 
-There's also :ref:`IRC and mailing lists <feedback>`.
+There's also :ref:`IRC and mailing lists <support>`.

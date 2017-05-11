@@ -31,15 +31,15 @@ As an example, one could imagine a set of disks configured as follows:
     (post 3.0) :ref:`imap-features-archiving` feature.
 
 Mounting a filesystem on the fast disks under
-:file:`/var/spool/imap/fast/`, and mounting a filesystem on the slow
-disks under :file:`/var/spool/imap/slow/`, you could configure the
+:file:`/var/spool/cyrus/fast/`, and mounting a filesystem on the slow
+disks under :file:`/var/spool/cyrus/slow/`, you could configure the
 following in :cyrusman:`imapd.conf(5)`:
 
 .. parsed-literal::
 
     defaultpartition: fast
-    partition-fast: /var/spool/imap/fast/
-    partition-slow: /var/spool/imap/slow/
+    partition-fast: /var/spool/cyrus/fast/
+    partition-slow: /var/spool/cyrus/slow/
 
 Next, you could set the quota on ``user/john@example.org`` to a measly
 1 gigabyte:

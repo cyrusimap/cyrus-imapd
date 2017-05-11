@@ -1,53 +1,15 @@
-.. _install-diy:
+.. _compiling:
 
-==============
-Do It Yourself
-==============
+=========
+Compiling
+=========
 
-The following guides outline building Cyrus IMAP from a fresh clone of
-the GIT repository's branches, or a tarball of a released version.
+These instructions are based on Debian 8.0 because it has to be based on something. Other Linux distributions will be similar in the broad ideas but may differ in the specifics. If you already have a preferred distro, use that (we assume you know how to use its package management system). If you don't already have a preferred distro, maybe consider using Debian.
 
-Unless you specifically need unreleased patches, the tarball package is
-recommended as it comes with a number of resources pre-built for you,
-such as the documentation.
+First make sure you have a :ref:`copy of the source <getcyrus>`. You can either fetch the latest source from git, or using one of our release tarballs.
 
-----
-
-.. contents::
-    :local:
-
-----
-
-1. Fetch the source
-===================
-
-From Tarball
-------------
-
-Download the `latest stable tarball`_ : version |imap_current_stable_version|.
-
-Extract the tarball:
-
-.. parsed-literal::
-
-    $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
-
-.. _latest stable tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
-
-Continue with :ref:`imap-installation-diy-build-dependencies`.
-
-From GIT
---------
-
-Read our :ref:`Guide to GitHub <github-guide>` for details on how to
-access our GitHub repository, and fork/clone the source.
-
-Continue with :ref:`imap-installation-diy-build-dependencies`.
-
-.. _imap-installation-diy-build-dependencies:
-
-2. Build Dependencies
-=====================
+Setting up dependencies
+=======================
 
 Required Build Dependencies
 ---------------------------
@@ -65,6 +27,7 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
     `gcc`_, gcc, gcc
     `gperf`_, gperf, gperf
     `jansson`_, libjansson-dev, jansson-devel
+    `libbsd`_ libbsd-dev, libbsd-devel
     `libtool`_, libtool, libtool
     `ICU`_, libicu-dev, libicu-devel
     `uuid`_, uuid-dev, libuuid-devel
@@ -80,6 +43,7 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
 .. _gcc: http://gcc.gnu.org
 .. _gperf: http://www.gnu.org/software/gperf/
 .. _jansson: http://www.digip.org/jansson/
+.. _libbsd: https://libbsd.freedesktop.org/wiki/
 .. _libtool: http://www.gnu.org/software/libtool/
 .. _ICU: http://www.icu-project.org/
 .. _uuid: https://www.kernel.org/pub/linux/utils/util-linux/
@@ -108,6 +72,7 @@ Developers only
     `perl(ExtUtils::MakeMaker)`_, ??, ??, "no", "Perl library to assist in building extensions to Perl.
 
     Configure option: ``--with-perl``"
+    `libdb-dev`, libdb-dev, libdb-devel, "no", "The -dev package must match the version of libdb you already have installed (assuming it's probably already installed). On Debian 8.0, ``libdb5.3-dev`` is needed, but ``libdb5.1-dev`` on 7.8."
     `perl-devel`_, perl-dev, perl-devel, "no", "Perl development headers to allow building binary perl libraries. Needs version 5+.
 
     Configure option: ``--with-perl``"
@@ -171,6 +136,7 @@ Other
     :header: "Package", "Debian", "RedHat",  "Required for ``make check``?", "Notes"
     :widths: 20,15,15,5,45
 
+     SSL certificates, ssl-cert-dev, mod_ssl, "no", "Used if you're installing SSL certificates"
     `net-snmp`_, libsnmp-dev, net-snmp-devel, "no", "version 4.2 or higher"
     `openldap`_, libldap2-dev, openldap-devel, "no", "Development headers to enable **ptloader** to interface with LDAP
     directly, for canonification of login usernames to mailbox names,
@@ -204,12 +170,21 @@ Other
 .. _zlib: http://zlib.net/
 .. _nghttp2: https://nghttp2.org/
 
-Continue with :ref:`imap-installation-diy-configure`
 
-.. _imap-installation-diy-configure:
+Install tools for building
+    * ``sudo apt-get install build-essential``
 
-3. Configure the Build
-======================
+
+Optionally install dependencies for :ref:`building the docs <contribute-docs>`.
+    * ``sudo pip install python-sphinx``
+    * ``sudo cpan install Pod::POM::View::Restructured``
+
+
+Compile Cyrus
+=============
+
+There are additional :ref:`compile and installation steps<imapinstall-xapian>` if you are using Xapian for searching,
+or if you are :ref:`using jmap <developer-jmap>`.
 
 Default build: mail only
 ------------------------
@@ -238,7 +213,7 @@ please see:
 Optional dependencies
 ---------------------
 
-Some features are disabled by default and must be explicitly enable-idled
+Some features are disabled by default and must be explicitly enabled
 via configure.
 
 Sieve is enabled by default.
@@ -258,21 +233,50 @@ Replication
 
     ``./configure --enable-replication``
 
-4. Compile and install
-======================
+Compile
+-------
 
 .. code-block:: bash
 
     cd /path/to/cyrus-imapd
 
-    autoreconf -i
-    ./configure [options]
+    autoreconf -i -s   # generates a configure script, and its various dependencies
+
+    ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" \
+    --enable-coverage --enable-calalarmd --enable-autocreate \
+    --enable-nntp --enable-http --enable-unit-tests \
+    --enable-replication --with-openssl=yes --enable-murder \
+    --enable-idled --prefix=/usr/cyrus
+
+    make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
     make
 
-    make check
+The ``--prefix`` option sets where Cyrus is installed to.
 
-    make install  # optional if you're just developing on this machine
+It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``.  That generates TONS of warnings.
 
-If this is the first time you've installed Cyrus, read our :ref:`Basic Server Configuration guide <basicserver>`.
-It walks through the steps of configuring the server and sending a sample piece of test mail.
+You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.
+
+If you're running on Debian, and you install to ``/usr/local``, you may need to update your library loader. Edit ``/etc/ld.so.conf.d/x86_64-linux-gnu.conf`` so it includes the following additional line::
+
+    /usr/local/lib/x86_64-linux-gnu
+
+Without this, when you attempt to start Cyrus, it reports ``error while loading shared libraries: libcyrus_imap.so.0: cannot open shared object file: No such file or directory`` because it can't find the Cyrus library in /usr/local/lib.
+
+Check
+-----
+
+.. code-block:: bash
+
+    make check    # this runs the cunit tests.
+
+This runs the cunit tests and is used for testing that the libraries support
+all the expected behaviour. If this fails, please :ref:`report it to the
+cyrus-dev mailing list <feedback-mailing-lists>` with details of your source
+version, operating system and affected libraries.
+
+
+Next: :ref:`installing Cyrus <installing>`.
+
+.. _FastMail : https://www.fastmail.com

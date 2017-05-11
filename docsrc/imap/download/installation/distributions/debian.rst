@@ -20,7 +20,7 @@ system, issue the following command:
 
     # :command:`apt-get install cyrus-imapd cyrus-sasl cyrus-sasl-plain`
 
-If you want xapian, you'll need to :ref:`build all of Cyrus yourself <imapinstallguide>`.
+If you want xapian, you'll need to :ref:`build all of Cyrus yourself <compiling>`.
 
 Next, set a password for the default administrative user ``cyrus``:
 

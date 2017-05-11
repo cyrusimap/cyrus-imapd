@@ -7,5 +7,6 @@ Developers
     :maxdepth: 2
     :glob:
 
-    Contribute <contribute>
-    imap/developer
+    contribute
+    Contribute docs <imap/developer/documentation>
+    Contribute code and tests <imap/developer>

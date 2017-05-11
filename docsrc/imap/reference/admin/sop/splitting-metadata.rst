@@ -19,9 +19,9 @@ To transition from the traditional Cyrus IMAP mailbox spool directory tree layou
      Create a new partition in **/etc/imapd.conf**, aptly named **splitmeta** in the following example configuration snippet::
  
          metapartition_files: header index cache expunge squat
-         metapartition-default: /var/spool/imap
+         metapartition-default: /var/spool/cyrus
          metapartition-splitmeta: /var/spool/splitmeta/metadata
-         partition-default: /var/spool/imap
+         partition-default: /var/spool/cyrus
          partition-splitmeta: /var/spool/splitmeta/partition
  
      Create the directory tree being referred to in the new configuration::

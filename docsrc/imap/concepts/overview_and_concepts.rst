@@ -1,8 +1,8 @@
 ########
-Overview
+Concepts
 ########
 
-This chapter gives an overview of several aspects of the Cyrus IMAP
+This section gives an overview of several aspects of the Cyrus IMAP
 server, as they relate to deployment.  In an effort to reduce
 duplication of information, we will often direct you to documentation
 in other areas.  Please do follow such referrals.
@@ -123,7 +123,7 @@ x
 t
     The user may store the "Deleted" flag.  In other words, delete
     messages.
- 
+
 e
     The user may Expunge messages which have the "Deleted" flag already
     set (**expunge**).

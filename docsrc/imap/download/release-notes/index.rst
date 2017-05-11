@@ -1,15 +1,15 @@
-==================
-IMAP Release Notes
-==================
+=============
+Release Notes
+=============
 
-Currently Stable Version
-========================
+Stable Version
+==============
 
 Latest stable version is |imap_stable_release_notes|. Documentation at :cyrus-stable:`/`.
 
 
-Current Development Version
-===========================
+Development Version
+===================
 
 ..
     Latest development version is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
@@ -17,8 +17,8 @@ Current Development Version
 There have not yet been any releases from the current development series.
 Documentation is at :cyrus-dev:`/`.
 
-Currently Supported Product Series
-==================================
+Supported Product Series
+========================
 
 Series 3.0
 ----------
@@ -53,8 +53,8 @@ Series 2.4
     2.4-dav/index
 
 
-All Versions Going Back Way Back When
-=====================================
+Older Versions
+==============
 
 Series 1
 --------
