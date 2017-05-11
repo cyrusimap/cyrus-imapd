@@ -41,8 +41,10 @@ This is the highlight reel of Cyrus's full list of :ref:`features <imap-features
     :caption: Cyrus IMAP
 
     download
-    concepts
-    reference
+    quickstart
+    overview
+    setup
+    operations
     developers
     support
 

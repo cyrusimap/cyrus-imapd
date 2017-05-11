@@ -70,7 +70,7 @@ We strongly recommend that you read this entire document before upgrading.
 2. Install new 3.0 Cyrus
 ------------------------
 
-Download the release :ref:`3.0 package tarball<install-diy>`.
+Download the release :ref:`3.0 package tarball <getcyrus>`.
 
 Fetch the libraries for your platform. The full list (including all optional packages) for Debian is::
 
@@ -81,13 +81,13 @@ Fetch the libraries for your platform. The full list (including all optional pac
     libmysqlclient-dev libnet-server-perl libnews-nntpclient-perl libpam0g-dev libpcre3-dev libsasl2-dev \
     libsnmp-dev libsqlite3-dev libssl-dev libtest-unit-perl libtool libunix-syslog-perl liburi-perl \
     libxapian-dev libxml-generator-perl libxml-xpath-perl libxml2-dev libwrap0-dev libzephyr-dev lsb-base \
-    net-tools perl php5-cli php5-curl pkg-config po-debconf tcl-dev \
+    net-tools perl php-cli php-curl pkg-config po-debconf tcl-dev \
     transfig uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo acl telnet
 
 If you're on another platform and can provide the list of dependencies, please
-let us know via a `GitHub issue <https://github.com/cyrusimap/cyrus-imapd/issues>`_ or documentation pull request or send mail to the :ref:`developer list<feedback>`.
+let us know via a `GitHub issue <https://github.com/cyrusimap/cyrus-imapd/issues>`_ or documentation pull request or send mail to the :ref:`developer list<feedback-mailing-lists>`.
 
-Follow the :ref:`general install instructions <basicserver>`.
+Follow the :ref:`general install instructions <installing>`.
 
 .. note::
 
@@ -260,7 +260,7 @@ Check ``/var/log/syslog`` for errors so you can quickly understand potential pro
 When you're satisfied version 3.0 is running and can see all its data correctly,
 start the new Cyrus up with your regular init script.
 
-If something has gone wrong, contact us on the :ref:`mailing list <feedback>`.
+If something has gone wrong, contact us on the :ref:`mailing list <feedback-mailing-lists>`.
 You can revert to backups and keep processing mail using your old version
 until you're able to finish your 3.0 installation.
 

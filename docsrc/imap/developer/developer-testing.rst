@@ -4,9 +4,9 @@
 Developer Test Environment
 ==========================
 
-This assumes you have already succeeded in getting your :ref:`development environment <imapinstallguide>` up and running, and that you've successfully got your :ref:`basic server running <basicserver>` and you've made some changes and you want to test them to work out what's going right... or wrong.
+This assumes you have your :ref:`basic server running <installing>` and you've made some changes and you want to test them to work out what's going right... or wrong.
 
-.. _imapinstallguide_cassandane:
+.. _install_cassandane:
 
 Installing Cassandane
 =====================

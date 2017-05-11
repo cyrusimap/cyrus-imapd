@@ -15,7 +15,7 @@ Cyrus IMAP supports the following platforms;
     * `Red Hat Enterprise Linux <https://www.redhat.com/en>`__
     * `SUSE Linux <https://www.suse.com>`__
 
-    Should your Linux distribution not be listed here, please refer to :ref:`feedback` for ways of contacting the Cyrus IMAP team.
+    Should your Linux distribution not be listed here, please refer to :ref:`support` for ways of contacting the Cyrus IMAP team.
 
 * Solaris
 
@@ -113,4 +113,3 @@ Should PostgreSQL - the client libraries or the development headers - be install
     --with-pgsql-incdir=DIR   Pgsql include files are in DIR
 
 Obviously, the list is not complete
-

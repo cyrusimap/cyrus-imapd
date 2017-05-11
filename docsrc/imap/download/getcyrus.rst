@@ -1,26 +1,18 @@
-.. _installguide:
+.. _getcyrus:
 
-=======================
-IMAP Installation Guide
-=======================
+=========
+Get Cyrus
+=========
+
+Where and how do you want to get Cyrus?
+
+Distribution Package
+====================
 
 Cyrus IMAP packages are shipped with every major distribution, including
 but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
 Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS. They are not
 guaranteed to be up to date.
-
-Upgrading
-==========
-
-Instructions are provided for upgrading using Cyrus tarball packages or from git.
-If you'd like to upgrade using platform packages, check with your package provider
-for upgrade instructions.
-
-.. toctree::
-    upgrade
-
-Installation Using Packages
-===========================
 
 .. toctree::
     :maxdepth: 1
@@ -31,23 +23,27 @@ Installation Using Packages
 Build and Install Yourself
 ==========================
 
-.. toctree::
-    :maxdepth: 2
+Use a release packaged tarball
+------------------------------
 
-    installation/diy
+The Cyrus team produce packaged tarballs containing full source and
+pre-built documentation.
 
-.. toctree::
-    :hidden:
+`Download a versioned tarball`_. Latest stable version is |imap_current_stable_version|.
 
-    installation/mta/index
+Extract the tarball:
 
-Optional Components
-===================
+.. parsed-literal::
 
-.. toctree::
-    :maxdepth: 2
+    $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
 
-    installation/manage-dav
+.. _Download a versioned tarball: ftp://ftp.cyrusimap.org/cyrus-imapd/
+
+Use the source from Git
+-----------------------
+
+Read our :ref:`Guide to GitHub <github-guide>` for details on how to
+access our GitHub repository, and fork/clone the source.
 
 External Tools
 ==============

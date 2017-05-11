@@ -13,17 +13,17 @@ Overview
 
 Cyrus includes a NNTP server. The NNTP works a lot like the IMAP server, it uses the same authentication and authorization. It also stores messages like IMAP. This means the messages are stored in one file per post.
 
-Cyrus has the ability to export Usenet via IMAP and/or export shared IMAP mailboxes via NNTP. 
+Cyrus has the ability to export Usenet via IMAP and/or export shared IMAP mailboxes via NNTP.
 
 This :download:`diagram <images/netnews.png>` shows how the various NNTP components interact.
 
 NNTP Setup
 ==========
 
-Decide where the newsgroup mailboxes will reside: either at the toplevel of the hierarchy (eg, comp.mail.imap) or rooted elsewhere (eg, netnews.comp.mail.imap). If the newsgroup mailboxes are not at the toplevel of the hierarchy, then the parent must be specified using **newsprefix** in :cyrusman:`imapd.conf(5)`. 
+Decide where the newsgroup mailboxes will reside: either at the toplevel of the hierarchy (eg, comp.mail.imap) or rooted elsewhere (eg, netnews.comp.mail.imap). If the newsgroup mailboxes are not at the toplevel of the hierarchy, then the parent must be specified using **newsprefix** in :cyrusman:`imapd.conf(5)`.
 
 1. Make sure that Cyrus is built with NNTP support using the ``--enable-nntp`` switch. This builds nntpd and the associated utilities.
-    
+
     In many pre-packaged versions of Cyrus, the NNTP server is in its own package (Example: Debian has a cyrus-nntpd-2.2 package that must be installed in addition to the rest of Cyrus).
 
 2. Edit ``/etc/cyrus.conf``.
@@ -33,7 +33,7 @@ Decide where the newsgroup mailboxes will reside: either at the toplevel of the 
     Add a new line in the SERVICES section with something like this::
 
         nntp: cmd="nntpd"  listen="nntp" prefork="0"
-    
+
     This defines a new service that will run the nntpd command (man nntpd for more info) on the nntp port (defined in /etc/services). Since the prefork is listed as 0, Cyrus will not start a new process for this.
 
 3. Edit ``/etc/imapd.conf``.
@@ -80,7 +80,7 @@ Next, set some permissions. (See :cyrusman:`cyradm(8)` for more info on the cm a
 
     $ sam ournews/mynewsgroup anyone lrsp
 
-The above gives **L** Lookup, **R** Read, **S** Seen, and **P** Post permissions (basically read/write -- see the man page for more) to anyone logged into the server. More restrictive permissions are possible. (Note: This example assumes *unixhierarchysep* is being used in :cyrusman:`imapd.conf(5)`)    
+The above gives **L** Lookup, **R** Read, **S** Seen, and **P** Post permissions (basically read/write -- see the man page for more) to anyone logged into the server. More restrictive permissions are possible. (Note: This example assumes *unixhierarchysep* is being used in :cyrusman:`imapd.conf(5)`)
 
 Configuration
 =============
@@ -155,5 +155,4 @@ Note that the ``/vendor/cmu/cyrus-imapd/expire`` mailbox :ref:`annotation <faqs-
 Further information
 ===================
 
-This thread from the info-cyrus :ref:`mailing list <feedback>` may be of use: `Cyrus and Usenet <http://www.mail-archive.com/info-cyrus%40lists.andrew.cmu.edu/msg22725.html>`_
-
+This thread from the info-cyrus :ref:`mailing list <feedback-mailing-lists>` may be of use: `Cyrus and Usenet <http://www.mail-archive.com/info-cyrus%40lists.andrew.cmu.edu/msg22725.html>`_

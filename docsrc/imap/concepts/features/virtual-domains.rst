@@ -96,7 +96,7 @@ Here is a sample ``imapd.conf`` with a minimal set of configuration
 options::
 
     configdirectory: /var/imap
-    partition-default: /var/spool/imap
+    partition-default: /var/spool/cyrus
     admins: admin lukecage.admin@hisdomain.com mercedesknight.admin@herdomain.net
     virtdomains: yes
     defaultdomain: exampleisp.net
@@ -140,7 +140,7 @@ qualified with the correct domain.
 Configuring Sendmail
 ####################
 
-Follow the basic :ref:`configuration instructions <installguide>`.
+Follow the basic :ref:`configuration instructions <installing>`.
 
 Some items to be aware of:
 

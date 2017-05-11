@@ -6,7 +6,7 @@ Cyrus Roadmap
 
 This is a very general, high-level view of where the Cyrus project is heading in the future, and the amount of code support you may expect to receive if you're running an older version of Cyrus.
 
-This is under your control! If there's a feature you'd like to see added, or testing/documentation you'd like to see improved, we'd love to have your involvement to help make it happen. We're here to support you. :ref:`Contact us <feedback>` and take a look at the :ref:`Contributor guides <contribute>`. 
+This is under your control! If there's a feature you'd like to see added, or testing/documentation you'd like to see improved, we'd love to have your involvement to help make it happen. We're here to support you. :ref:`Contact us <support>` and take a look at the :ref:`Contributor guides <contribute>`.
 
 High Level Roadmap
 ==================
@@ -62,8 +62,5 @@ Future
 
 * unsupported
 
-.. 
+..
 	This is woefully out of date.
-    
-    
-	

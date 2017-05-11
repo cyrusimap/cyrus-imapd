@@ -8,7 +8,7 @@ About http module support
 =========================
 
 This assumes you already have the relevant modules enabled in your Cyrus
-:ref:`installation <installguide>`, either via packages, or through a
+:ref:`installation <setup>`, either via packages, or through a
 manual installation.
 
 CalDAV, CardDAV and WebDAV all provide their functionality through an http

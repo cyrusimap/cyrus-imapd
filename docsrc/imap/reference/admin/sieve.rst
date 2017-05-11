@@ -6,7 +6,7 @@ Cyrus Sieve
 
 .. contents::
 
-    
+
 Introduction
 ============
 
@@ -21,7 +21,7 @@ Sieve scripts can be placed either by the :cyrusman:`timsieved(8)` daemon (imple
 Installing Sieve
 ================
 
-This section assumes that you :ref:`compiled Cyrus <installguide>` with sieve support. If you specified ``--disable-sieve`` when running ``./configure``, you did NOT compile the server with sieve support.
+This section assumes that you :ref:`compiled Cyrus <compiling>` with sieve support. If you specified ``--disable-sieve`` when running ``./configure``, you did NOT compile the server with sieve support.
 
 Configure sieve
 ---------------
@@ -41,7 +41,7 @@ Some Sieve actions (redirect, vacation) can send outgoing mail.
 You'll need to make sure that lmtpd can send outgoing messages. Currently, it invokes ``/usr/lib/sendmail`` by default to send messages. Change this by adding a line like::
 
     sendmail: /usr/sbin/sendmail
-   
+
 in your :cyrusman:`imapd.conf(5)`. If you're using Postfix or another MTA, make sure that the sendmail referenced in "/etc/imapd.conf" is Sendmail-compatible.
 
 Managing Sieve Scripts
@@ -54,9 +54,9 @@ If, for some reason, you do have user home directories on the server, you can us
 Sieve scripts in shared folders
 -------------------------------
 
-Cyrus has two types of repositories where Sieve scripts can live: 
+Cyrus has two types of repositories where Sieve scripts can live:
 
-1. **Personal** is per user and 
+1. **Personal** is per user and
 2. **Global** is for every user. Global scripts aren’t applied on incoming messages by default: users must include them in their scripts.
     * Note that there are two types of Global scripts: **global** and **global per domain**.
 
@@ -83,7 +83,7 @@ The Sieve server, :cyrusman:`timsieved(8)`, is used for transporting user Sieve 
 From your normal account, telnet to the sieve port on the server you're setting up::
 
     telnet servername sieve
-    
+
 If your server is running, you'll get a message similar to the following one::
 
     Trying 128.2.10.192...
@@ -93,11 +93,11 @@ If your server is running, you'll get a message similar to the following one::
     "SASL" "ANONYMOUS PLAIN KERBEROS_V4 GSSAPI"
     "SIEVE" "fileinto reject envelope vacation imapflags notify subaddress regex"
     OK
-    
+
 Any message other than one similar to the one above means there is a problem. Make sure all of authentication methods you wish to support are listed. This list should be identical to the one listed by "imapd" earlier. Next terminate the connection, by typing::
 
     logout
-    
+
 Next test authenticating to the sieve server. To do this run the :cyrusman:`sieveshell(1)` utility. You must specify the server. If you run this utility from a different machine without the "sieve" entry in "/etc/services", port 2000 will be used.
 
 ::
@@ -105,7 +105,7 @@ Next test authenticating to the sieve server. To do this run the :cyrusman:`siev
     sieveshell servername
     Please enter your password: ******
     > quit
-    
+
 This should produce the message "Authentication failed" with a description of the failure if there was a problem.
 
 Next you should attempt to place a sieve script on the server. To do this create a file named ``myscript.script`` with the following lines. Replace "foo@example.org" with an email address you can send mail from, but that is not the one you are working on now.
@@ -117,15 +117,15 @@ Next you should attempt to place a sieve script on the server. To do this create
     {
         reject "testing";
     }
-    
+
 To place this script on the server run the following command::
-  
+
     sieveshell servername
     Please enter your password: ******
     > put myscript.script
     > activate myscript
     > quit
-    
+
 This should place your script on the server and make it the active script.
 
 Test that the sieve script is actually run. Send a message to the address you're working on from the address mentioned in the sieve script. The message should be rejected.
@@ -136,7 +136,7 @@ When you're done, don't forget to delete your testing script::
     Please enter your password: ******
     > delete myscript.script
     > quit
-    
+
 Cyrus Sieve Support
 ===================
 
@@ -196,5 +196,3 @@ Sieve scripts can be used to automatically delete or forward messages; to send a
 There's a `good sieve reference <http://thsmi.github.io/sieve-reference/en/index.html>`_ online which describes the language.
 
 For those who prefer a client to write code in, Sieve.info has a `list of desktop, web and command line clients <http://sieve.info/clients>`_.
-
-

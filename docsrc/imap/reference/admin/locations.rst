@@ -48,7 +48,7 @@ Mail Spool Partitions
 ---------------------
 
 While Cyrus itself has no default values for these settings, most
-distributions use ``default`` and ``/var/spool/imap`` or
+distributions use ``default`` and ``/var/spool/cyrus`` or
 ``/var/spool/cyrus``:
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst

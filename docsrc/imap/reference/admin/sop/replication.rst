@@ -126,7 +126,7 @@ override this by setting the ``sync_try_imap`` setting in
 Installation
 ============
 
-One must :ref:`build Cyrus IMAPd <installguide>` with the
+One must :ref:`build Cyrus IMAPd <compiling>` with the
 ``--enable-replication`` configure option. This builds the replication
 client/server applications and utilities.
 
@@ -161,7 +161,7 @@ process.
     list to the **Mupdate Master**).  This may only be done on the
     Master instance.
 
-1. :ref:`Configure a standalone server <installguide>`.
+1. :ref:`Configure a standalone server <installing>`.
 
 2. If using the deprecated sync_server scheme, add the following line
    to the ``/etc/services`` file. Note that the port number is
@@ -178,7 +178,7 @@ process.
     ::
 
         syncserver       cmd="/usr/cyrus/bin/sync_server" listen="csync"
-  
+
 4. Start/restart ``/usr/cyrus/bin/master``.
 
 Master server configuration
@@ -195,7 +195,7 @@ the ``/etc/services`` file.
 ::
 
    csync     2005/tcp
-   
+
 .. Note::
     The port number **MUST** be the same as that used on the replica
     server.
@@ -208,10 +208,10 @@ it in :cyrusman:`imapd.conf(5)` using these options:
     * sync_authname
     * sync_realm
     * sync_password
-    
+
 .. Note::
     ``sync_authname`` **MUST** be an ``admin`` user on the replica.
-    
+
 .. Note::
     ``sync_realm`` and ``sync_password`` may not be necessary
     depending on the SASL mechanism used for authentication.
@@ -263,7 +263,7 @@ To configure rolling replication, perform the following:
     :cyrusman:`cyrus.conf(5)`::
 
         syncclient       cmd="/usr/cyrus/bin/sync_client -r"
-  
+
 Start/restart ``/usr/cyrus/bin/master``.
 
 .. Hint::
@@ -429,7 +429,7 @@ For example:
 
     [root@skynet ~]# /usr/lib/cyrus-imapd/sync_client -S cyrus-replica.example.org -v -u john.doe@example.org
     USER john^doe@example.org
-    
+
 One can run :cyrusman:`cyr_synclog(8)` instead, which will insert the
 record into the rolling replication log.
 

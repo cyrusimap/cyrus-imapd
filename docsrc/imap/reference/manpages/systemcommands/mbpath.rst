@@ -62,7 +62,7 @@ Examples
 
     ::
 
-        /var/spool/imap/user/jsmith
+        /var/spool/cyrus/user/jsmith
 
 .. parsed-literal::
 

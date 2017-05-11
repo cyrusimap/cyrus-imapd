@@ -1,3 +1,5 @@
+:orphan:
+
 .. _imap-configuring-the-mta:
 
 ===================
@@ -18,7 +20,7 @@ Postfix
 Sendmail
 ========
 
-* Our :ref:`basic server setup guide <basicserver>` covers Sendmail on Ubuntu
+* Our :ref:`basic server setup guide <installing>` covers Sendmail on Ubuntu
 
 Exim
 ====

@@ -31,7 +31,7 @@ command line.
     cd cyruslibs
     sh build.sh $CYRUSLIBS_DIR
 
-Then follow on with the Cyrus :ref:`compilation instructions <imapinstallguide>`, adding ``--enable-xapian`` to the flags to ``./configure``.
+Then follow on with the Cyrus :ref:`compilation instructions <compiling>`, adding ``--enable-xapian`` to the flags to ``./configure``.
 
 Configuring Xapian
 ==================
@@ -48,7 +48,7 @@ Xapian requires a running :cyrusman:`squatter(8)` instance:
 * Enable sync logging: Set ``sync_log: on`` in :cyrusman:`imapd.conf(5)`.
 * Add a squatter sync log channel: ``sync_log_channels: squatter`` in :cyrusman:`imapd.conf(5)`.
 
-You also need (at least one) search tier.
+You also need (at least one) search tier. Add this to :cyrusman:`imapd.conf(5)`.
 
 ::
 
