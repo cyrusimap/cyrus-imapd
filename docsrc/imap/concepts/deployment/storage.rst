@@ -676,7 +676,7 @@ As a general rule of thumb, you could divide
 system disk could hold your base installation of a node, including
 everything in the root (``/``) filesystem, while your payload disk(s)
 hold the files and directories that contain the system's service(s)
-payload (such as ``/var/lib/mysql/``, ``/var/spool/imap/``,
+payload (such as ``/var/lib/mysql/``, ``/var/spool/cyrus/``,
 ``/var/lib/imap/``, ``/var/lib/dirsrv/``, etc.).
 
 Distributing what is and what is not frequently used may be a cumbersome

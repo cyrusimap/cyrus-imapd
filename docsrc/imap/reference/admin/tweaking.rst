@@ -112,7 +112,7 @@ controllers, and/or some other form of enterprise-level storage.
 
 To prevent data from being corrupted during a power outage, the default
 for our Cyrus IMAP packages is to ensure the mail spool
-(:file:`/var/spool/imap/`) and configuration directory
+(:file:`/var/spool/cyrus/`) and configuration directory
 (:file:`/var/lib/imap/`) and all files contained therein have the
 *synchronous* filesystem flag set.
 
@@ -122,7 +122,7 @@ To gain performance, execute the following:
 
     .. parsed-literal::
 
-        :command:`chattr -RV -S /var/lib/imap/ /var/spool/imap/`
+        :command:`chattr -RV -S /var/lib/imap/ /var/spool/cyrus/`
 
 #.  In :file:`/etc/sysconfig/cyrus-imapd` (or
     :file:`/etc/default/cyrus-imapd`), change the following:

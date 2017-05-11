@@ -7,7 +7,7 @@ Documentation
 Overview
 ========
 
-Our documentation for the website is held under git source control, the same as the source. We'd love to have your contributions, which can be sent to the :ref:`mailing list <feedback>` or you can submit a patch directly against the source.
+Our documentation for the website is held under git source control, the same as the source. We'd love to have your contributions, which can be sent to the :ref:`mailing list <feedback-mailing-lists>` or you can submit a patch directly against the source.
 
 Our helpfile source uses Sphinx_ and `Restructured Text`_.
 
@@ -54,7 +54,7 @@ Building the files
 ==================
 
 The best way to build the documentation is to use the toplevel Makefile (generated as part of
-:ref:`building the source <imapinstallguide>`)::
+:ref:`building the source <compiling>`)::
 
     make doc
 

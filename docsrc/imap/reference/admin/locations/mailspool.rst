@@ -31,7 +31,7 @@ the ``defaultpartition`` directive.
 * Sample::
 
     defaultpartition: main
-    partition-main: /var/spool/imap
+    partition-main: /var/spool/cyrus
 
 
 Additional Spool locations
@@ -60,12 +60,12 @@ Again, building on our examples above:
 * Sample::
 
     defaultpartition: main
-    partition-main: /var/spool/imap
-    partition-am: /var/spool/imap-am
-    partition-nz: /var/spool/imap-nz
-    partition-shared: /var/spool/imap-shared
+    partition-main: /var/spool/cyrus
+    partition-am: /var/spool/cyrus-am
+    partition-nz: /var/spool/cyrus-nz
+    partition-shared: /var/spool/cyrus-shared
     metapartition_files: header index cache expunge squat annotations
-    metapartition-main: /var/spool/imapmeta/main
-    metapartition-am: /var/spool/imapmeta/am
-    metapartition-nz: /var/spool/imapmeta/nz
-    metapartition-shared: /var/spool/imapmeta/shared
+    metapartition-main: /var/spool/cyrusmeta/main
+    metapartition-am: /var/spool/cyrusmeta/am
+    metapartition-nz: /var/spool/cyrusmeta/nz
+    metapartition-shared: /var/spool/cyrusmeta/shared

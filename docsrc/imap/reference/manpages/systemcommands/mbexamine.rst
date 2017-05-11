@@ -75,7 +75,7 @@ Examples
 
         Examining user.jsmith...
          Mailbox Header Info:
-          Path to mailbox: /var/spool/imap/user/jsmith
+          Path to mailbox: /var/spool/cyrus/user/jsmith
           Mailbox ACL: jsmith	lrswipkxtecda	
           Unique ID: 3ab4f8d5512e33b1
           User Flags: [none]
@@ -114,7 +114,7 @@ Examples
 
         Examining user.jsmith...
          Mailbox Header Info:
-          Path to mailbox: /var/spool/imap/user/jsmith
+          Path to mailbox: /var/spool/cyrus/user/jsmith
           Mailbox ACL: jsmith	lrswipkxtecda	
           Unique ID: 3ab4f8d5512e33b1
           User Flags: [none]
@@ -172,7 +172,7 @@ Examples
 
         Examining user.jsmith...
          Mailbox Header Info:
-          Path to mailbox: /var/spool/imap/user/jsmith
+          Path to mailbox: /var/spool/cyrus/user/jsmith
         
          Index Record Info:                                     	Message File Info:
           UID: 00000002

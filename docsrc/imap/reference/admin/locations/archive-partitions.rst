@@ -24,12 +24,12 @@ something like this (again, building on our previous examples):
 * Sample::
 
     defaultpartition: main
-    partition-main: /var/spool/imap
-    partition-am: /var/spool/imap-am
-    partition-nz: /var/spool/imap-nz
-    partition-shared: /var/spool/imap-shared
+    partition-main: /var/spool/cyrus
+    partition-am: /var/spool/cyrus-am
+    partition-nz: /var/spool/cyrus-nz
+    partition-shared: /var/spool/cyrus-shared
     archive_enabled: yes
-    archivepartition-main: /var/spool/imaparchive/main
-    archivepartition-am: /var/spool/imaparchive/am
-    archivepartition-nz: /var/spool/imaparchive/nz
-    archivepartition-shared: /var/spool/imaparchive/shared
+    archivepartition-main: /var/spool/cyrusarchive/main
+    archivepartition-am: /var/spool/cyrusarchive/am
+    archivepartition-nz: /var/spool/cyrusarchive/nz
+    archivepartition-shared: /var/spool/cyrusarchive/shared

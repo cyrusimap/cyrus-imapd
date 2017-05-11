@@ -1,5 +1,6 @@
 .. _feedback-mailing-lists:
 
+=============
 Mailing Lists
 =============
 
@@ -80,4 +81,3 @@ Digest Lists
 ------------
 
 All of the lists have digest versions. To get the list as a digest, subscribe normally, and then set your list options by visiting the Mailman list info page at https://lists.andrew.cmu.edu/.
-

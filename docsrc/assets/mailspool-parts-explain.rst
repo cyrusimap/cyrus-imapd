@@ -12,7 +12,7 @@ user's last name, and add a partition for shared mailboxes (see
 * Sample::
 
     defaultpartition: main
-    partition-main: /var/spool/imap
-    partition-am: /var/spool/imap-am
-    partition-nz: /var/spool/imap-nz
-    partition-shared: /var/spool/imap-shared
+    partition-main: /var/spool/cyrus
+    partition-am: /var/spool/cyrus-am
+    partition-nz: /var/spool/cyrus-nz
+    partition-shared: /var/spool/cyrus-shared
