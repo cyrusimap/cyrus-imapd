@@ -10,12 +10,6 @@ Cyrus IMAP features the ability to create mailboxes automatically;
 
 *   when a Sieve script uses the "fileinto" action.
 
-.. NOTE::
-
-    Cyrus IMAP documentation is a work in progress, and the completion
-    of this part of the documentation is pending the resolution of
-    :task:`41`.
-
 When operating an IT infrastructure, Cyrus IMAP may only be one part of
 such larger environment. When adding a user
 *John Doe <john.doe@example.org>*, several pieces may need to fall or

@@ -4,10 +4,8 @@
 Server Side Filtering (Sieve)
 =============================
 
-.. NOTE::
+Needs to be written. Would you like to :ref:`help out <contribute-docs>`?
 
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`73`.
+.. todo:: Please write me.
 
 Back to :ref:`imap-features`

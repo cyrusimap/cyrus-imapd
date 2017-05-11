@@ -29,7 +29,7 @@ Changes Since 2.5.1
 Bug fixes
 ---------
 
-* Fixed :task:`179`: ptloader should no longer crash in ptsmodule_standard_root_dn
+* Fixed task 179: ptloader should no longer crash in ptsmodule_standard_root_dn
 * Improved consistency of event notification parameters
 * Fixed bug: no longer run out of memory in mupdate with twoskip (mmap leak)
 * Fixed bug: no longer crash on ctl_mboxlist -d for remote mailboxes

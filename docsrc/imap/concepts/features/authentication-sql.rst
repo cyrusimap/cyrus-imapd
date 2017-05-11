@@ -97,7 +97,7 @@ The configuration file specified also needs to be created. Using the database co
     users.db_passwd = db_mail_password;
     users.password_crypt = 1;
     users.md5 = true;
-   
+
     users.table = mail_users;
     users.where_clause = active = 1;
     users.user_column = username;
@@ -164,7 +164,5 @@ This step assumes Cyrus is already configured and listening on localhost port 14
 
 If you don't get an OK response to the LOGIN command, something isn't working properly and there may be useful log messages in either maillog, messages or secure log files.
 
-The completion of this part of the documentation is pending the
-resolution of :task:`68`.
 
 Back to :ref:`imap-features`

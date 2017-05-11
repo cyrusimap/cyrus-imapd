@@ -1264,7 +1264,6 @@ rst_prolog += """
 
 # Use this as :task:`18`
 extlinks = {
-        'task':('https://git.cyrus.foundation/T%s', 'Task #'),
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
         'cyrus-2.5':('http://www.cyrusimap.org/2.5%s',None),
         'cyrus-3.0':('http://www.cyrusimap.org/3.0%s',None),

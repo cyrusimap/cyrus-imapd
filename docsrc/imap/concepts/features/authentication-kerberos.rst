@@ -2,7 +2,8 @@
 Kerberos Authentication
 =======================
 
-The completion of this part of the documentation is pending the
-resolution of :task:`39`.
+Needs to be written. Would you like to :ref:`help out <contribute-docs>`?
+
+.. todo:: Please write me.
 
 Back to :ref:`imap-features`

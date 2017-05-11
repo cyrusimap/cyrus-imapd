@@ -32,4 +32,4 @@ Bug fixes
 * Security fix: handle urlfetch range starting outside message range
 * Fixed bug: better error messages when reading corrupted twoskip databases
 * Fixed bug: treat autocreate_quota_messages:0 as unlimited
-* Fixed :task:`203`: make autocreate_quota:0 work as documented
+* Fixed task 203: make autocreate_quota:0 work as documented

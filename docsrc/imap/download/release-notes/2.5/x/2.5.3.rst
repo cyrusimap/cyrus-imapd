@@ -29,4 +29,4 @@ Changes Since 2.5.2
 Bug fixes
 ---------
 
-* Fixed :task:`183`: don't crash on login when event notifications are enabled
+* Fixed task 183: don't crash on login when event notifications are enabled

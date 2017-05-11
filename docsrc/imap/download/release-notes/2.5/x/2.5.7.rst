@@ -58,7 +58,7 @@ Bug fixes
 * Fixed: crash in sync_server when built with buggy Sun CC (thanks Jens Erat)
 * Fixed bug #3908: crash in ctl_mboxlist -m
 * Fixed: setrlimit error on startup
-* Fixed :task:`216`: don't break quotas when transferring mailboxes between
+* Fixed task 216: don't break quotas when transferring mailboxes between
   backends
 * Fixed: idled shutdown on platforms without pselect (thanks Thomas Jarosch)
 * Fixed: autocreate_sieve now uses ``sievedir`` setting correctly

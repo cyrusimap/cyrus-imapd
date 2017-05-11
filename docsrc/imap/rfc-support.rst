@@ -6,12 +6,6 @@
 RFCs Supported by Cyrus IMAP
 ============================
 
-.. NOTE::
-
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`48`.
-
 The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`822`
@@ -93,8 +87,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        Backwards compatibility with this RFC is to be obsoleted,
-        tracked in :task:`49`.
+        Backwards compatibility with this RFC is to be obsoleted.
 
 :rfc:`2087`
 
@@ -543,12 +536,15 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
         SSLv3 is considered inscure as it is vulnerable to POODLE.
 
-        Support for SSLv3 is being deprecated and removed, see
-        :task:`52`.
+        Support for SSLv3 is being deprecated and removed.
 
 :rfc:`6131`
 
     Sieve Vacation Extension: "Seconds" Parameter
+
+:rfc:`5463`
+
+    Sieve Email Filtering: Ihave Extension
 
 :rfc:`6154`
 
@@ -726,59 +722,50 @@ RFC Wishlist
 
 :rfc:`5183`
 
-    Sieve Email Filtering: Environment Extension, tracked in :task:`53`.
+    Sieve Email Filtering: Environment Extension
 
 :rfc:`5229`
 
-    Sieve Email Filtering: Variables Extension, tracked in :task:`54`.
+    Sieve Email Filtering: Variables Extension
 
 :rfc:`5235`
 
-    Sieve Email Filtering: Spamtest and Virustest Extensions, tracked in
-    :task:`55`.
+    Sieve Email Filtering: Spamtest and Virustest Extensions
 
 :rfc:`5293`
 
-    Sieve Email Filtering: Editheader Extension, tracked in :task:`56`.
+    Sieve Email Filtering: Editheader Extension
 
 :rfc:`5429`
 
     Sieve Email Filtering: Reject and Extended Reject Extensions
 
-    The ``ereject`` action implementation is tracked in :task:`57`.
-
 :rfc:`5437`
 
     Sieve Notification Mechanism: Extensible Messaging and Presence
-    Protocol (XMPP), tracked in :task:`58`.
-
-:rfc:`5463`
-
-    Sieve Email Filtering: Ihave Extension, tracked in :task:`59`.
+    Protocol (XMPP)
 
 :rfc:`5490`
 
     The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
-    Status and Accessing Mailbox Metadata, tracked in :task:`60`.
+    Status and Accessing Mailbox Metadata
 
 :rfc:`5703`
 
     Sieve Email Filtering: MIME Part Tests, Iteration, Extraction,
-    Replacement, and Enclosure, tracked in :task:`61`.
+    Replacement, and Enclosure
 
 :rfc:`6468`
 
-    Sieve Notification Mechanism: SIP MESSAGE, tracked in :task:`62`.
+    Sieve Notification Mechanism: SIP MESSAGE
 
 :rfc:`6558`
 
-    Sieve Extension for Converting Messages before Delivery, tracked in
-    :task:`63`.
+    Sieve Extension for Converting Messages before Delivery
 
 :rfc:`6785`
 
-    Support for Internet Message Access Protocol (IMAP) Events in Sieve,
-    tracked in :task:`64`.
+    Support for Internet Message Access Protocol (IMAP) Events in Sieve
 
 :rfc:`6851`
 

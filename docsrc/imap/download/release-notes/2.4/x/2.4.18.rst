@@ -8,8 +8,8 @@ Cyrus IMAP 2.4.18 Release Notes
 *   Enhanced SSL/TLS configuration options
 *   Disable use of SSLv2/SSLv3
 *   Allow SQL backend for mboxlist and statuscache (thanks Julien Coloos)
-*   Fixed :task:`116`: correct LIST response for domains starting with 'inbox.'
-*   Fixed :task:`76`: fixed lmtpd userdeny db checks (thanks Leena Heino)
+*   Fixed task 116: correct LIST response for domains starting with 'inbox.'
+*   Fixed task 76: fixed lmtpd userdeny db checks (thanks Leena Heino)
 *   Fixed bug #3856: lmtpd now performs userdeny checks
 *   Fixed bug #3848: support charset aliases in encoded headers
 *   Fixed bug #3853: disconnect_on_vanished_mailbox: release mailbox lock before exiting (thanks Wolfgang Breyha)
