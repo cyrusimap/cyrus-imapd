@@ -31,6 +31,6 @@ Bug fixes
 
 * Security fix: compiling with --enable-autocreate no longer allows arbitrary
   mailbox creation
-* Fixed :task:`207`: don't segfault on mboxutil -d of MBTYPE_DELETED mailboxes (thanks Chris Stromsoe)
+* Fixed task 207: don't segfault on mboxutil -d of MBTYPE_DELETED mailboxes (thanks Chris Stromsoe)
 * Fixed lock management over rename (thanks Thomas Jarosch)
 * Miscellaneous other fixes (thanks Thomas Jarosch)

@@ -55,6 +55,6 @@ Bug fixes
 * Fixed compilation with Sun Studio 12 C Compiler (thanks Marty Lee)
 * Fixed bug #3765: :cyrusman:`ctl_cyrusdb(8)` now uses database paths from imapd.conf
   (thanks Simon Matter)
-* Fixed :task:`227`: service processes no longer crash with '-T 0' argument
+* Fixed task 227: service processes no longer crash with '-T 0' argument
   (thanks Ian Batten and Jens Erat)
 * various build system fixes

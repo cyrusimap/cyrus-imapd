@@ -31,17 +31,17 @@ Bug fixes
 
 * Fixed: allow SYNC_CRC to be optional, making upgrades easier in future
 * Fixed: XFER deletes source mailbox less aggressively, avoiding data loss under pathological conditions
-* Fixed :task:`163`: XFER no longer bails out on header CRC mismatch
-* Fixed :task:`117`: now error out silently on non-TLS connections to services with implicit TLS
+* Fixed task 163 : XFER no longer bails out on header CRC mismatch
+* Fixed task 117 : now error out silently on non-TLS connections to services with implicit TLS
 * Fixed reconstruct bug: upgrading mailbox format now adds GUIDs to shared folders (Thanks Norbert Warmuth)
-* Fixed :task:`165`: xfer no longer fails due to bad version comparison
+* Fixed task 165 : xfer no longer fails due to bad version comparison
 * Fixed xfer bug: version 2.5 is now detected properly
-* Fixed :task:`109`: XLIST behaviour is now compatible with Outlook 2013 (Thanks Leena Heino)
-* Fixed :task:`116`: LIST now correctly handles domains starting with "inbox."
-* Fixed :task:`120`: admin users can now SETANNOTATION correctly
-* Fixed :task:`118`: imapd no longer crashes when selected mailbox is listed
-* Fixed :task:`156`: LMTP no longer incorrectly rejects messages delivered using 'deliver'
-* Fixed :task:`76`: lmtpd no longer crashes when delivering to a shared mailbox (Thanks Leena Heino)
+* Fixed task 109 : XLIST behaviour is now compatible with Outlook 2013 (Thanks Leena Heino)
+* Fixed task 116 : LIST now correctly handles domains starting with "inbox."
+* Fixed task 120 : admin users can now SETANNOTATION correctly
+* Fixed task 118 : imapd no longer crashes when selected mailbox is listed
+* Fixed task 156 : LMTP no longer incorrectly rejects messages delivered using 'deliver'
+* Fixed task 76 : lmtpd no longer crashes when delivering to a shared mailbox (Thanks Leena Heino)
 * Fixed quota bug: no longer crash when setting quotas on shared folder hierarchies
 * Fixed compilation problem on Solaris 10 (Thanks Leena Heino)
 * Fixed bug: QuotaChange event notification now always includes maxMessages parameter

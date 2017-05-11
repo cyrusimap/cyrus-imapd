@@ -110,8 +110,7 @@ Cyrus IMAP Murder Topologies
 ----------------------------
 
 Environments that run a Cyrus IMAP Murder topology will want to upgrade
-their backends before they upgrade their frontends. See :task:`16` for
-details.
+their backends before they upgrade their frontends.
 
 Greater Memory Footprint
 ------------------------
@@ -568,6 +567,11 @@ We believe this better facilitates our processes, and will make it
 easier to contribute code and collaborate.
 
 Please see https://git.cyrus.foundation/.
+
+.. NOTE::
+
+    The Phabricator installation suffered a disk failure. We now use
+    GitHub for code and bug management. https://github.com/cyrusimap/cyrus-imapd
 
 .. _relnotes-2.5.0-development-documentation:
 

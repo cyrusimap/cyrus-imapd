@@ -355,9 +355,9 @@ Replicated Murder
 
 .. NOTE::
 
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`72`.
+    This section needs to be written. Would you like to :ref:`help out <contribute-docs>`?
+
+.. todo:: Please write me.
 
 .. _imap-features-murder-unified:
 
@@ -366,9 +366,9 @@ Unified Murder
 
 .. NOTE::
 
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`71`.
+    This section needs to be written. Would you like to :ref:`help out <contribute-docs>`?
+
+.. todo:: Please write me.
 
 Back to :ref:`imap-features`
 
@@ -393,7 +393,7 @@ Back to :ref:`imap-features`
     frontend
 	  the user interface
 
-.. glossary::    
-	
+.. glossary::
+
 	backend
 	  the server components

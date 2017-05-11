@@ -4,12 +4,6 @@
 Event Notifications
 ===================
 
-.. NOTE::
-
-    Cyrus IMAP documentation is a work in progress. The completion of
-    this particular part of the documentation is pending the resolution
-    of :task:`43`.
-
 :rfc:`5423` standardizes the emission of message store event
 notifications, and :rfc:`5465` outlines the IMAP NOTIFY extensions.
 
@@ -23,7 +17,7 @@ Available Event Notifications
     *   :ref:`imap-features-event-notifications-messagecopy`
     *   :ref:`imap-features-event-notifications-messageexpire`
     *   :ref:`imap-features-event-notifications-messageexpunge`
-    *   :ref:`imap-features-event-notifications-messagemove` 
+    *   :ref:`imap-features-event-notifications-messagemove`
     *   :ref:`imap-features-event-notifications-messagenew`
 * Flag Events
     *   :ref:`imap-features-event-notifications-flagsclear`
@@ -31,7 +25,7 @@ Available Event Notifications
     *   :ref:`imap-features-event-notifications-messageread`
     *   :ref:`imap-features-event-notifications-messagetrash`
 * Mailbox Events
-    *   :ref:`imap-features-event-notifications-aclchange` 
+    *   :ref:`imap-features-event-notifications-aclchange`
     *   :ref:`imap-features-event-notifications-mailboxcreate`
     *   :ref:`imap-features-event-notifications-mailboxdelete`
     *   :ref:`imap-features-event-notifications-mailboxrename`
@@ -44,13 +38,13 @@ Available Event Notifications
     *   :ref:`imap-features-event-notifications-quotachange`
 * Calendar Events
     *   :ref:`imap-features-event-notifications-calendaralarm`
-* Access Accounting    
+* Access Accounting
     *   :ref:`imap-features-event-notifications-login`
     *   :ref:`imap-features-event-notifications-logout`
 * Apple Push
-    *   :ref:`imap-features-event-notifications-applepushservice`    
+    *   :ref:`imap-features-event-notifications-applepushservice`
 
-    
+
 Example Event Notifications
 ===========================
 
@@ -354,17 +348,17 @@ alarm.
 .. literalinclude:: ../../../_static/event_notifications/CalendarAlarm.json
     :language: json
     :linenos:
-    
-.. _imap-features-event-notifications-applepushservice:    
+
+.. _imap-features-event-notifications-applepushservice:
 
 ApplePushService
 ----------------
-The ``ApplePushService`` event occurs when 
+The ``ApplePushService`` event occurs when
 
 .. literalinclude:: ../../../_static/event_notifications/ApplePushService.json
     :language: json
     :linenos:
-    
+
 apsVersion
     Version of the Apple Push Service this message is compliant with.
 

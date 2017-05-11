@@ -48,7 +48,7 @@ Bug fixes
   replicated.  Instead, it fails with an error and logs a warning that they need to be
   reconstructed
 * Fixed :issue:`45`: extended LIST doesn't lose options when proxied to backend
-* Fixed :task:`142`: extended LIST response no longer missing \\HasNoChildren flag on last
+* Fixed task 142: extended LIST response no longer missing \\HasNoChildren flag on last
   mailbox
 * Fixed :issue:`49`: httpd no longer crashes with assertion failure on shutdown after
   CardDAV has been used
