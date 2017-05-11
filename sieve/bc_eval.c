@@ -1164,11 +1164,10 @@ envelope_err:
 
         /*find the part(s) of the body that we want*/
         content_types = bc_makeArray(bc, &typesi);
-        if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
-            res = SIEVE_RUN_ERROR;
-            break;
-        }
+        res = interp->getbody(m, content_types, &val);
         free(content_types);
+
+        if (res != SIEVE_OK) break;
 
         /* bodypart(s) exist, now to test them */
 
