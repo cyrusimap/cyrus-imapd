@@ -1174,7 +1174,7 @@ envelope_err:
 
         /* bodypart(s) exist, now to test them */
 
-        for (y = 0; val && val[y] && !res; y++) {
+        for (y = 0; val && val[y]; y++) {
 
             if (match == B_COUNT) {
                 count++;
@@ -1197,9 +1197,9 @@ envelope_err:
                         reg = bc_compile_regex(data_val, ctag,
                                                errbuf, sizeof(errbuf));
                         if (!reg) {
-                            /* Oops */
-                            res=-1;
-                            goto alldone;
+                            /* should only get here due to a memory issue */
+                            res = SIEVE_NOMEM;
+                            break;
                         }
 
                         res |= comp(content, strlen(content), (const char *)reg,
