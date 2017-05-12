@@ -174,7 +174,7 @@ static char* look_for_me(char *myaddr, int numaddresses,
         struct address_itr ai;
         const struct address *a;
 
-        address_itr_init(&ai, body[l]);
+        address_itr_init(&ai, body[l], 0);
 
         /* loop through each address in the header */
         while (!found && (a = address_itr_next(&ai)) != NULL) {
@@ -578,6 +578,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         for (x=0; x<numheaders && !res; x++)
         {
             const char *this_header;
+            int reverse_path = 0;
 
             currh = unwrap_string(bc, currh, &this_header, NULL);
 
@@ -597,6 +598,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                 /* Envelope */
                 if(interp->getenvelope(m, this_header, &val) != SIEVE_OK)
                     continue;
+
+                if (!strcmp(this_header, "from")) reverse_path = 1;
             }
 
             /* count results */
@@ -631,7 +634,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                 printf("about to parse %s\n", val[y]);
 #endif
 
-                address_itr_init(&ai, val[y]);
+                address_itr_init(&ai, val[y], reverse_path);
 
                 while (!res && (a = address_itr_next(&ai)) != NULL) {
 #if VERBOSE

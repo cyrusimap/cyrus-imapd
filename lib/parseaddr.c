@@ -443,10 +443,15 @@ EXPORTED char *address_get_detail(const struct address *a)
  * Address iterator interface
  */
 
-EXPORTED void address_itr_init(struct address_itr *ai, const char *str)
+EXPORTED void address_itr_init(struct address_itr *ai, const char *str,
+                               int reverse_path)
 {
     memset(ai, 0, sizeof(*ai));
-    parseaddr_list(str, &ai->addrlist);
+    if (!*str && reverse_path) {
+        /* Null reverse-path */
+        ai->addrlist = (struct address *)xzmalloc(sizeof(struct address));
+    }
+    else parseaddr_list(str, &ai->addrlist);
     ai->anext = ai->addrlist;
 }
 
