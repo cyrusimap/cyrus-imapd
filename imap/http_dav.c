@@ -2775,15 +2775,20 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
                                 buf_cstring(&fctx->buf), NULL, &attrib);
 
 done:
-    if (r) return HTTP_SERVER_ERROR;
-    if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
+    if (r) r = HTTP_SERVER_ERROR;
+    else if (!buf_len(&attrib)) r = HTTP_NOT_FOUND;
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
-    xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
-                                       BAD_CAST buf_cstring(&attrib), buf_len(&attrib)));
+    if (!r) {
+        node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                            name, ns, NULL, 0);
+        xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+                                           BAD_CAST buf_cstring(&attrib),
+                                           buf_len(&attrib)));
+    }
 
-    return 0;
+    buf_free(&attrib);
+
+    return r;
 }
 
 
