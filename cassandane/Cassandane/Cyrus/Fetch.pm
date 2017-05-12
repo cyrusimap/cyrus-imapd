@@ -57,7 +57,7 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({}, @_);
+    return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
 sub set_up
@@ -722,6 +722,34 @@ sub test_fetch_urlfetch
     $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
     $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
     $self->assert_str_equals($res->{$uid}->{body}, "body3");
+}
+
+sub test_fetch_flags_before_exists
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->select('user.cassandane');
+    $self->make_message("Test Message");
+    # this sets the state with EXISTS = 1
+    $admintalk->fetch('1:*', '(flags)');
+
+    $self->make_message("Test Message");
+#    $res = $admintalk->fetch('1:*', '(flags)');
+
+    # need to make our own handlers
+    my %handlers;
+    {
+        my $sawfetch = -1;
+        use Data::Dumper;
+        $handlers{fetch} = sub { $sawfetch = $_[2] if $sawfetch < $_[2] };
+        $handlers{exists} = sub { die "Got exists count too late for $_[2]" if $_[2] <= $sawfetch };
+    }
+
+    # expecting to see EXISTS 2 before FETCH 2
+    $admintalk->_imap_cmd("fetch", 1, \%handlers, \'1:*', '(flags)');
 }
 
 
