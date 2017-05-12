@@ -2005,7 +2005,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
 
 done:
     if (r) r = HTTP_SERVER_ERROR;
-    if (!buf_len(&attrib)) r = HTTP_NOT_FOUND;
+    else if (!buf_len(&attrib)) r = HTTP_NOT_FOUND;
 
     if (!r) {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
