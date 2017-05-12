@@ -1076,6 +1076,11 @@ void index_fetchresponses(struct index_state *state,
 	im = &state->map[msgno-1];
 	if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno))
 	    continue;
+        /* if we haven't told exists and we're fetching something past the end of the
+         * old size, we need to tell exists now...
+         * https://github.com/cyrusimap/cyrus-imapd/issues/1967
+         */
+        if (msgno > state->oldexists) index_tellexists(state);
 	if (index_fetchreply(state, msgno, fetchargs))
 	    break;
 	fetched = 1;
@@ -2784,6 +2789,10 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
     uint32_t msgno;
     struct index_map *im;
 
+    /* must call tellexpunge before tellexists, because tellexpunge changes
+     * the size of oldexists to mention expunges, and tellexists will reset
+     * oldexists.  If we do these out of order, we will tell the user about
+     * expunges of messages they never saw, which would be wrong */
     if (canexpunge) index_tellexpunge(state);
 
     if (state->oldexists != state->exists) index_tellexists(state);
