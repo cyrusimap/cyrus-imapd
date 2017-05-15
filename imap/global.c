@@ -157,6 +157,30 @@ static int get_facility(const char *name)
     return SYSLOG_FACILITY;
 }
 
+struct cyrus_module {
+    void (*done)(void *rock);
+    void *rock;
+};
+
+static ptrarray_t cyrus_modules = PTRARRAY_INITIALIZER;
+
+EXPORTED void cyrus_modules_add(void (*done)(void*), void *rock)
+{
+    struct cyrus_module *cm = xmalloc(sizeof(struct cyrus_module));
+    cm->done = done;
+    cm->rock = rock;
+    ptrarray_append(&cyrus_modules, cm);
+}
+
+static void cyrus_modules_done()
+{
+    struct cyrus_module *cm;
+    while ((cm = ptrarray_pop(&cyrus_modules))) {
+        cm->done(cm->rock);
+        free(cm);
+    }
+}
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
@@ -721,6 +745,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 /* call before a cyrus application exits */
 EXPORTED void cyrus_done(void)
 {
+    cyrus_modules_done();
     if (cyrus_init_run != RUNNING)
         return;
     cyrus_init_run = DONE;

@@ -72,6 +72,10 @@ extern int cyrus_init(const char *alt_config, const char *ident,
 extern void global_sasl_init(int client, int server,
                              const sasl_callback_t *callbacks);
 
+/* Register a module callback. This callback will be called
+ * during cyrus_done, passing callback data rock */
+extern void cyrus_modules_add(void (*done)(void*), void *rock);
+
 /* Shutdown a cyrus process */
 extern void cyrus_done(void);
 
