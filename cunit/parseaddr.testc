@@ -521,12 +521,12 @@ static void test_iterator(void)
     struct address_itr ai;
     const struct address *a;
 
-    address_itr_init(&ai, "");
+    address_itr_init(&ai, "", 0);
     a = address_itr_next(&ai);
     CU_ASSERT_PTR_NULL(a);
     address_itr_fini(&ai);
 
-    address_itr_init(&ai, "Fred Bloggs <fbloggs@fastmail.fm>, Sarah Jane Smith <sjsmith@gmail.com>");
+    address_itr_init(&ai, "Fred Bloggs <fbloggs@fastmail.fm>, Sarah Jane Smith <sjsmith@gmail.com>", 0);
     a = address_itr_next(&ai);
     CU_ASSERT_PTR_NOT_NULL_FATAL(a);
     CU_ASSERT_STRING_EQUAL(a->name, "Fred Bloggs");
@@ -539,6 +539,8 @@ static void test_iterator(void)
     CU_ASSERT_STRING_EQUAL(a->domain, "gmail.com");
     CU_ASSERT_PTR_NULL(a->next);
     address_itr_fini(&ai);
+
+    /* XXX need tests with reverse_path non-zero */
 }
 
 static void test_canonicalise(void)
