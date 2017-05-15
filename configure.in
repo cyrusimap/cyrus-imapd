@@ -622,6 +622,14 @@ AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]),
   ])
 ])
 
+dnl check for clock_gettime
+AC_CHECK_FUNC(clock_gettime, AC_DEFINE(HAVE_CLOCK_GETTIME,[],[Do we have clock_gettime()?]), [
+  AC_CHECK_LIB(rt, clock_gettime, [
+    LIB_RT="-lrt"
+    AC_DEFINE(HAVE_CLOCK_GETTIME,[],[Do we have clock_gettime()?])
+  ])
+])
+
 dnl for makedepend and AFS.
 cant_find_sigvec=no
 AC_CACHE_VAL(cyrus_cv_sigveclib,[
