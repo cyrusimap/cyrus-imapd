@@ -427,7 +427,9 @@ static void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
 static void cmd_compress(char *tag, char *alg);
 #endif
 
+static void cmd_getannotation(const char* tag, char *mboxpat);
 static void cmd_getmetadata(const char* tag);
+static void cmd_setannotation(const char* tag, char *mboxpat);
 static void cmd_setmetadata(const char* tag, char *mboxpat);
 static void cmd_xrunannotator(const char *tag, const char *sequence,
                               int usinguid);
@@ -1547,6 +1549,15 @@ static void cmdloop(void)
 
                 snmp_increment(GETACL_COUNT, 1);
             }
+            else if (!strcmp(cmd.s, "Getannotation")) {
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+                if (c != ' ') goto missingargs;
+
+                cmd_getannotation(tag.s, arg1.s);
+
+                snmp_increment(GETANNOTATION_COUNT, 1);
+            }
             else if (!strcmp(cmd.s, "Getmetadata")) {
                 if (c != ' ') goto missingargs;
 
@@ -1986,6 +1997,15 @@ static void cmdloop(void)
                 cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 
                 snmp_increment(SETACL_COUNT, 1);
+            }
+            else if (!strcmp(cmd.s, "Setannotation")) {
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+                if (c != ' ') goto missingargs;
+
+                cmd_setannotation(tag.s, arg1.s);
+
+                snmp_increment(SETANNOTATION_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setmetadata")) {
                 if (c != ' ') goto missingargs;
@@ -9285,7 +9305,7 @@ static int parse_metadata_string_or_list(const char *tag,
  *
  * This is a generic routine which parses just the annotation data.
  * Any surrounding command text must be parsed elsewhere, ie,
- * STORE, APPEND.
+ * SETANNOTATION, STORE, APPEND.
  *
  * Also parse RFC5257 per-message annotation store data, which
  * is almost identical but differs in that entry names and attrib
@@ -9412,7 +9432,7 @@ static int parse_annotate_store_data(const char *tag,
  *
  * This is a generic routine which parses just the annotation data.
  * Any surrounding command text must be parsed elsewhere, ie,
- * STORE, APPEND.
+ * SETANNOTATION, STORE, APPEND.
  */
 static int parse_metadata_store_data(const char *tag,
                                      struct entryattlist **entryatts)
@@ -9499,6 +9519,35 @@ static int parse_metadata_store_data(const char *tag,
     if (attvalues) freeattvalues(attvalues);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+}
+
+static void getannotation_response(const char *mboxname,
+                                   uint32_t uid
+                                        __attribute__((unused)),
+                                   const char *entry,
+                                   struct attvaluelist *attvalues,
+                                   void *rock __attribute__((unused)))
+{
+    int sep = '(';
+    struct attvaluelist *l;
+    char *extname = *mboxname ?
+        mboxname_to_external(mboxname, &imapd_namespace, imapd_userid) :
+        xstrdup("");  /* server annotation */
+
+    prot_printf(imapd_out, "* ANNOTATION ");
+    prot_printastring(imapd_out, extname);
+    prot_putc(' ', imapd_out);
+    prot_printstring(imapd_out, entry);
+    prot_putc(' ', imapd_out);
+    for (l = attvalues ; l ; l = l->next) {
+        prot_putc(sep, imapd_out);
+        sep = ' ';
+        prot_printstring(imapd_out, l->attrib);
+        prot_putc(' ',  imapd_out);
+        prot_printmap(imapd_out, l->value.s, l->value.len);
+    }
+    prot_printf(imapd_out, ")\r\n");
+    free(extname);
 }
 
 struct annot_fetch_rock
@@ -9633,6 +9682,69 @@ static int apply_mailbox_array(annotate_state_t *state,
     return r;
 }
 
+
+/*
+ * Perform a GETANNOTATION command
+ *
+ * The command has been parsed up to the entries
+ */
+static void cmd_getannotation(const char *tag, char *mboxpat)
+{
+    int c, r = 0;
+    strarray_t entries = STRARRAY_INITIALIZER;
+    strarray_t attribs = STRARRAY_INITIALIZER;
+    annotate_state_t *astate = NULL;
+
+    c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
+    if (c == EOF) {
+        eatline(imapd_in, c);
+        goto freeargs;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+        prot_printf(imapd_out,
+                    "%s BAD Unexpected extra arguments to Getannotation\r\n",
+                    tag);
+        eatline(imapd_in, c);
+        goto freeargs;
+    }
+
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate,
+                            imapd_userisadmin || imapd_userisproxyadmin,
+                            imapd_userid, imapd_authstate);
+    if (!*mboxpat) {
+        r = annotate_state_set_server(astate);
+        if (!r)
+            r = annotate_state_fetch(astate, &entries, &attribs,
+                                     getannotation_response, NULL);
+    }
+    else {
+        struct annot_fetch_rock arock;
+        arock.entries = &entries;
+        arock.attribs = &attribs;
+        arock.callback = getannotation_response;
+        arock.cbrock = NULL;
+        r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
+    }
+    /* we didn't write anything */
+    annotate_state_abort(&astate);
+
+    imapd_check(NULL, 0);
+
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+        prot_printf(imapd_out, "%s OK %s\r\n",
+                    tag, error_message(IMAP_OK_COMPLETED));
+    }
+
+ freeargs:
+    strarray_fini(&entries);
+    strarray_fini(&attribs);
+}
 
 static void getmetadata_response(const char *mboxname,
                                  uint32_t uid __attribute__((unused)),
@@ -9958,6 +10070,66 @@ missingargs:
     prot_printf(imapd_out, "%s BAD Missing arguments to Getmetadata\r\n", tag);
     eatline(imapd_in, c);
     goto freeargs;
+}
+
+/*
+ * Perform a SETANNOTATION command
+ *
+ * The command has been parsed up to the entry-att list
+ */
+static void cmd_setannotation(const char *tag, char *mboxpat)
+{
+    int c, r = 0;
+    struct entryattlist *entryatts = NULL;
+    annotate_state_t *astate = NULL;
+
+    c = parse_annotate_store_data(tag, 0, &entryatts);
+    if (c == EOF) {
+        eatline(imapd_in, c);
+        goto freeargs;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+        prot_printf(imapd_out,
+                    "%s BAD Unexpected extra arguments to Setannotation\r\n",
+                    tag);
+        eatline(imapd_in, c);
+        goto freeargs;
+    }
+
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, imapd_userisadmin,
+                            imapd_userid, imapd_authstate);
+    if (!r) {
+        if (!*mboxpat) {
+            r = annotate_state_set_server(astate);
+            if (!r)
+                r = annotate_state_store(astate, entryatts);
+        }
+        else {
+            struct annot_store_rock arock;
+            arock.entryatts = entryatts;
+            r = apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
+        }
+    }
+    if (!r)
+        annotate_state_commit(&astate);
+    else
+        annotate_state_abort(&astate);
+
+    imapd_check(NULL, 0);
+
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+        prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED));
+    }
+
+  freeargs:
+    if (entryatts) freeentryatts(entryatts);
 }
 
 /*
