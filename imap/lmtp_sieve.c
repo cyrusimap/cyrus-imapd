@@ -705,7 +705,7 @@ static int sieve_reject(void *ac,
         }
     }
 
-    if (rc->is_extended || !need_encode) {
+    if (rc->is_extended || (config_getswitch(IMAPOPT_SIEVE_USE_LMTP_REJECT) && !need_encode)) {
         char *msg = need_encode ?
             charset_qpencode_mimebody(rc->msg, strlen(rc->msg), NULL) :
             xstrdup(rc->msg);

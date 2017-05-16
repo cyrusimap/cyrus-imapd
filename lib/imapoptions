@@ -2024,6 +2024,10 @@ product version in the capabilities */
 /* If enabled, timsieved will emit a capability response after a successful
    SASL authentication, per draft-martin-managesieve-12.txt . */
 
+{ "sieve_use_lmtp_reject", 1, SWITCH }
+/* Enabled by default.  If reject can be done via LMTP, then return a 550
+   rather than generating the bounce message in Cyrus. */
+
 { "sieve_vacation_min_response", 259200 /* 3 days */, INT }
 /* Minimum time interval (in seconds) between consecutive vacation responses,
    per draft-ietf-vacation-seconds.txt . */
