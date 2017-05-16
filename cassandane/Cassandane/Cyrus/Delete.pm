@@ -110,7 +110,7 @@ sub check_folder_ondisk
 }
 
 sub test_repeated_delete
-    :DelayedDelete :DefaultExpunge :min_version_3_0
+    :DelayedDelete :SemidelayedExpunge :min_version_3_0
 {
     my ($self) = @_;
 
@@ -169,7 +169,7 @@ sub check_folder_not_ondisk
 }
 
 sub test_self_inbox_imm
-    :ImmediateDelete :DefaultExpunge
+    :ImmediateDelete :SemidelayedExpunge
 {
     my ($self) = @_;
 
@@ -237,7 +237,7 @@ sub test_self_inbox_imm
 }
 
 sub test_self_inbox_del
-    :DelayedDelete :DefaultExpunge
+    :DelayedDelete :SemidelayedExpunge
 {
     my ($self) = @_;
 
@@ -312,7 +312,7 @@ sub test_self_inbox_del
 }
 
 sub test_admin_inbox_imm
-    :ImmediateDelete :DefaultExpunge
+    :ImmediateDelete :SemidelayedExpunge
 {
     my ($self) = @_;
 
@@ -386,7 +386,7 @@ sub test_admin_inbox_imm
 }
 
 sub test_admin_inbox_del
-    :DelayedDelete :DefaultExpunge
+    :DelayedDelete :SemidelayedExpunge
 {
     my ($self) = @_;
 
@@ -467,7 +467,7 @@ sub test_admin_inbox_del
 }
 
 sub test_bz3781
-    :ImmediateDelete :DefaultExpunge
+    :ImmediateDelete :SemidelayedExpunge
 {
     my ($self) = @_;
 

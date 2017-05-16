@@ -191,8 +191,14 @@ magic(UnixHierarchySep => sub {
 magic(ImmediateExpunge => sub {
     shift->config_set(expunge_mode => 'immediate');
 });
-magic(DefaultExpunge => sub {
-    shift->config_set(expunge_mode => 'default');
+magic(SemidelayedExpunge => sub {
+    my $semidelayed = 'semidelayed';
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 1)) {
+	# this value used to be called 'default' in 3.0 and earlier
+	$semidelayed = 'default';
+    }
+    shift->config_set(expunge_mode => $semidelayed);
 });
 magic(DelayedExpunge => sub {
     shift->config_set(expunge_mode => 'delayed');
