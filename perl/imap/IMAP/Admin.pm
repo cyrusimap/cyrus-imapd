@@ -817,125 +817,6 @@ sub _attribname2access {
   }
 }
 
-sub getinfo {
-  my $self = shift;
-  my $box = shift;
-  my @entries = @_;
-
-  if(!defined($box)) {
-    $box = "";
-  }
-
-  if(!$self->{support_annotatemore}) {
-    $self->{error} = "Remote does not support ANNOTATEMORE.";
-    return undef;
-  }
-
-  my %info = ();
-  $self->addcallback({-trigger => 'ANNOTATION',
-                      -callback => sub {
-                        my %d = @_;
-                        my $text = $d{-text};
-
-                        # There were several draft iterations of this,
-                        # but since we send only the latest form command,
-                        # this is the only possible response.
-
-                        # Regex 1 (Shared-Folder, user folder looks similar):
-                        # cyrus imapd 2.5.0
-                        # folder "/vendor/cmu/cyrus-imapd/expire" ("value.shared" "90")
-                        # 1      2                                 3              4
-                        # folder "/vendor/cmu/cyrus-imapd/pop3showafter" ("value.shared" NIL)
-                        # 1      2                                        3              4
-                        # folder "/specialuse" ("value.priv" NIL "value.shared" NIL)
-                        # 1      2              3            4   5              6
-
-                        # cyrus imapd 2.4.17
-                        # "folder" "/vendor/cmu/cyrus-imapd/partition" ("value.shared" "default")
-                        # 1        2                                    3              4
-
-                        # cyrus imapd 2.2.13
-                        # "folder" "/vendor/cmu/cyrus-imapd/expire" ("value.shared" "90")
-                        # 1        2                                 3              4
-
-                        # Regex 1: server info
-                        # cyrus imapd 2.5.0
-                        # "" "/comment" ("value.shared" "test")
-                        # 1  2           3              4
-                        # "" "/motd" ("value.shared" NIL)
-                        # 1  2        3              4
-                        # "" "/vendor/cmu/cyrus-imapd/expire" ("value.priv" NIL "value.shared" NIL)
-                        # 1  2                                 3            4   5              6
-
-                        # cyrus imapd 2.4.17
-                        # "" "/vendor/cmu/cyrus-imapd/freespace" ("value.shared" "3122744")
-                        # 1  2                                    3              4
-
-                        # Regex 2
-                        # cyrus imapd 2.5.0 (user folder, authorized as user)
-                        # Note: two lines
-                        # INBOX.Sent "/specialuse" ("value.priv" {5}\r\n
-                        # \Sent)>
-                        # 1          2              3            4\r\n
-                        # 5
-
-                        if ($text =~
-                               /^\s*\"?([^"]*)"?\s+"?([^"]*)"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\{]*)\"?(?:\s+\"?([^"\{]*)\"?\s+\"?([^"\{]*)\"?)?\)/) {
-                          my $key;
-                          if($1 ne "") {
-                                $key = "/mailbox/$2";
-                          } else {
-                                $key = "/server/$2";
-                          }
-                          $d{-rock}->{"$1"}->{_attribname2access($3)}->{$key} = $4;
-                          $d{-rock}->{"$1"}->{_attribname2access($5)}->{$key} = $6 if (defined ($5) && defined ($6));
-                        }  elsif ($text =~
-                               /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n/ ||
-                           $text =~
-                               /^\s*([^\s]+)\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n/) {
-                          my $len = $4;
-                          $text =~ s/^\s*"*([^"\s]*)"*\s+"([^"]*)"\s+\("([^"\{]*)"\s+\{(.*)\}\r\n//s;
-                          $text = substr($text, 0, $len);
-                          # Single annotation (literal style),
-                          # possibly multiple values -- multiple
-                          # values not tested.
-
-                          my $key;
-                          if($1 ne "") {
-                                $key = "/mailbox/$2";
-                          } else {
-                                $key = "/server$2";
-                          }
-                          $d{-rock}{"$1"}->{_attribname2access($3)}->{$key} = $text;
-                        } else {
-                          ; # XXX: unrecognized line, how to notify caller?
-                        }
-                      },
-                      -rock => \%info});
-
-  # send getannotation "/mailbox/name/* or /server/*"
-  my($rc, $msg);
-  if(scalar(@entries)) {
-    foreach my $annot (@entries) {
-      ($rc, $msg) = $self->send('', '', 'GETANNOTATION %s %q ("value.priv" "value.shared")',
-                                $box, $annot);
-      last if($rc ne 'OK');
-    }
-  } else {
-    ($rc, $msg) = $self->send('', '', 'GETANNOTATION %s "*" ("value.priv" "value.shared")',
-                              $box);
-  }
-  $self->addcallback({-trigger => 'ANNOTATION'});
-  if ($rc eq 'OK') {
-    $self->{error} = undef;
-    %info;
-  } else {
-    $self->{error} = $msg;
-    ();
-  }
-}
-*info = *getinfo;
-
 sub mboxconfig {
   my ($self, $mailbox, $entry, $value, $private) = @_;
 
@@ -947,8 +828,8 @@ sub mboxconfig {
                  "squat" => "/vendor/cmu/cyrus-imapd/squat",
                  "pop3showafter" => "/vendor/cmu/cyrus-imapd/pop3showafter" );
 
-  if(!$self->{support_annotatemore}) {
-    $self->{error} = "Remote does not support ANNOTATEMORE.";
+  if(!$self->{support_metadata}) {
+    $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
@@ -961,21 +842,20 @@ sub mboxconfig {
   my ($rc, $msg);
 
   $value = undef if($value eq "none");
-  my $attribname;
   if (defined ($private)) {
-    $attribname = "value.priv";
+    $entry = "/private" . $entry;
   } else {
-    $attribname = "value.shared";
+    $entry = "/shared" . $entry;
   }
 
   if(defined($value)) {
     ($rc, $msg) = $self->send('', '',
-                              'SETANNOTATION %q %q (%q %q)',
-                              $mailbox, $entry, $attribname, $value);
+                              'SETMETADATA %q (%q %q)',
+                              $mailbox, $entry, $value);
   } else {
     ($rc, $msg) = $self->send('', '',
-                              'SETANNOTATION %q %q (%q NIL)',
-                              $mailbox, $entry, $attribname);
+                              'SETMETADATA %q (%q NIL)',
+                              $mailbox, $entry);
   }
 
   if ($rc eq 'OK') {
@@ -1011,8 +891,8 @@ sub mboxconfig {
 sub setinfoserver {
   my ($self, $entry, $value) = @_;
 
-  if(!$self->{support_annotatemore}) {
-    $self->{error} = "Remote does not support ANNOTATEMORE.";
+  if(!$self->{support_metadata}) {
+    $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
@@ -1029,13 +909,15 @@ sub setinfoserver {
 
   my ($rc, $msg);
 
+  $entry = "/shared" . $entry;
+
   if(defined($value)) {
     ($rc, $msg) = $self->send('', '',
-                              "SETANNOTATION \"\" %q (\"value.shared\" %q)",
+                              "SETMETADATA \"\" (%q %q)",
                               $entry, $value);
   } else {
     ($rc, $msg) = $self->send('', '',
-                              "SETANNOTATION \"\" %q (\"value.shared\" NIL)",
+                              "SETMETADATA \"\" (%q NIL)",
                               $entry);
   }
 
@@ -1070,10 +952,38 @@ sub getmetadata {
                         my $text = $d{-text};
 
                         # There were several draft iterations of this,
-                        # but since we send only the latest form command,
-                        # this is the only possible response.
-
+                        # but we only support the latest form command.
+                        # Still, we might encounter entry-value pairs
+                        # with nstring or literal8 values, possibly
+                        # mixed in the same response.
+                        # XXX Known bug:
+                        # We support single nstring and literal8 entry
+                        # value pairs, but only multiple nstring pairs.
                         if ($text =~
+                                /^\s*\"?([^\(]*?)\"?\s+\(((\"?[^"\{]+\"?\s+\"?[^"\)\{]+\"?\s*)+)\)/) {
+                            my $mdbox = $1;
+                            my $pairs = $2;
+                            while ($pairs =~ /\"?([^"\{]+)\"?\s+\"?([^"\)\{]+)\"?/g) {
+                                my $mdkey = $1;
+                                my $mdvalue = $2;
+                                if($mdbox ne "") {
+                                    $mdkey = "/mailbox/$mdkey";
+                                    if ($mdkey =~ /private/) {
+                                        $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                                    } elsif ($mdkey =~ /shared/) {
+                                        $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+                                    }
+                                } else {
+                                    $mdkey = "/server/$mdkey";
+                                    if ($mdkey =~ /private/) {
+                                        $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+                                    } elsif ($mdkey =~ /shared/) {
+                                        $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+                                    }
+                                }
+                            }
+                        }
+                        elsif ($text =~
                                 /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\)\{]*)\"?\)/) {
                             my $mdbox = $1;
                             my $mdkey = $2;
@@ -1129,14 +1039,14 @@ sub getmetadata {
   my($rc, $msg);
   if(scalar(@entries)) {
     foreach my $annot (@entries) {
-      ($rc, $msg) = $self->send('', '', "GETMETADATA %s (%q)",
+      ($rc, $msg) = $self->send('', '', "GETMETADATA %q (%q)",
                                 $box, $annot);
       last if($rc ne 'OK');
     }
   } else {
-    ($rc, $msg) = $self->send('', '', "GETMETADATA %s (\"/private/*\")",
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/private/*\")",
                               $box);
-    ($rc, $msg) = $self->send('', '', "GETMETADATA %s (\"/shared/*\")",
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/shared/*\")",
                               $box);
   }
   $self->addcallback({-trigger => 'METADATA'});
@@ -1149,6 +1059,23 @@ sub getmetadata {
   }
 }
 *info = *getmetadata;
+
+sub getinfo {
+  my $self = shift;
+  my $box = shift;
+  my @entries = @_;
+  my @myentries;
+
+  if(scalar(@entries)) {
+      foreach my $annot (@entries) {
+          push @myentries, '/private' . $annot;
+          push @myentries, '/shared' . $annot;
+      }
+  }
+  return $self->getmetadata($box, @myentries);
+}
+*info = *getinfo;
+
 
 sub setmetadata {
   my ($self, $mailbox, $entry, $value, $private) = @_;
