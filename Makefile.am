@@ -1203,6 +1203,7 @@ imap_httpd_SOURCES = \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_prometheus.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
@@ -1352,6 +1353,8 @@ lib_libcyrus_la_SOURCES = \
 	lib/murmurhash.c \
 	lib/mkgmtime.c \
 	lib/parseaddr.c \
+	lib/prometheus.c \
+	lib/prometheus.h \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
