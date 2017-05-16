@@ -540,7 +540,28 @@ static void test_iterator(void)
     CU_ASSERT_PTR_NULL(a->next);
     address_itr_fini(&ai);
 
-    /* XXX need tests with reverse_path non-zero */
+    address_itr_init(&ai, "", 1);
+    a = address_itr_next(&ai);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_PTR_NULL(a->mailbox);
+    CU_ASSERT_PTR_NULL(a->domain);
+    CU_ASSERT_PTR_NULL(a->next);
+    address_itr_fini(&ai);
+
+    address_itr_init(&ai, "Fred Bloggs <fbloggs@fastmail.fm>, Sarah Jane Smith <sjsmith@gmail.com>", 1);
+    a = address_itr_next(&ai);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "Fred Bloggs");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(a->domain, "fastmail.fm");
+    a = address_itr_next(&ai);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "Sarah Jane Smith");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "sjsmith");
+    CU_ASSERT_STRING_EQUAL(a->domain, "gmail.com");
+    CU_ASSERT_PTR_NULL(a->next);
+    address_itr_fini(&ai);
 }
 
 static void test_canonicalise(void)
