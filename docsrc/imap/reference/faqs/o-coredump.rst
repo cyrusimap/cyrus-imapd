@@ -25,6 +25,14 @@ Finally, some Linux systems might require to unlimit the size of core dumps.
 
     # ulimit -c unlimited
 
+Then you can fire up gdb:
+
+.. code-block:: bash
+
+    gdb /usr/local/cyrus/lmtpd /tmo/core.XXX  (use proper locations)
+
+At the (gdb) prompt run the backtrace command (``bt``).
+
 .. warning::
 
     These parameters are disabled for a reason and should only be used for debugging. We do not recommend to regularly enable setuid cores and unlimited core sizes on production systems.
