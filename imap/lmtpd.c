@@ -239,10 +239,6 @@ int service_init(int argc __attribute__((unused)),
         carddav_init();
 #endif
 
-        /* Initialize the annotatemore db (for sieve on shared mailboxes) */
-        annotate_init(NULL, NULL);
-        annotatemore_open();
-
         /* setup for statuscache invalidation */
         statuscache_open();
 
@@ -940,9 +936,6 @@ void shut_down(int code)
         carddav_done();
         caldav_done();
 #endif
-
-        annotatemore_close();
-        annotate_done();
 
         statuscache_close();
         statuscache_done();

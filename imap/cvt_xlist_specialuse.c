@@ -198,13 +198,7 @@ int main (int argc, char **argv)
     quotadb_init(0);
     quotadb_open(NULL);
 
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
     r = mboxlist_findallmulti(NULL, &patterns, 1, NULL, NULL, set_specialuse, &xlist);
-
-    annotatemore_close();
-    annotate_done();
 
     quotadb_close();
     quotadb_done();

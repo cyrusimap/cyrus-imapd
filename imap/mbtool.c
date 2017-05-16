@@ -149,18 +149,12 @@ int main(int argc, char **argv)
         fatal(error_message(r), EC_CONFIG);
     }
 
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
     for (i = optind; i < argc; i++) {
         mboxlist_findall(&mbtool_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
     }
-
-    annotatemore_close();
-    annotate_done();
 
     exit(0);
 }

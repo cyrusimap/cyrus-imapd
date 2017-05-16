@@ -95,9 +95,6 @@ static void shut_down(int code)
 {
     in_shutdown = 1;
 
-    annotatemore_close();
-    annotate_done();
-
     if (sync_userid)    free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 
@@ -226,9 +223,6 @@ main(int argc, char **argv)
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
-
-    annotate_init(NULL, NULL);
-    annotatemore_open();
 
     if (!force) {
         fprintf(stderr, "Usage: sync_reset -f user user user ...\n");

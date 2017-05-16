@@ -118,8 +118,6 @@ static void shut_down(int code)
     in_shutdown = 1;
 
     seen_done();
-    annotatemore_close();
-    annotate_done();
     quotadb_close();
     quotadb_done();
     cyrus_done();
@@ -1050,10 +1048,6 @@ int main(int argc, char **argv)
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);
     quotadb_open(NULL);
-
-    /* open the annotation db */
-    annotate_init(NULL, NULL);
-    annotatemore_open();
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);

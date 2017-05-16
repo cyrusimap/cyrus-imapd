@@ -505,10 +505,6 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
-    /* Initialize the annotatemore extension */
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
     newsmaster = (char *) config_getstring(IMAPOPT_NEWSMASTER);
     newsmaster_authstate = auth_newstate(newsmaster);
 
@@ -658,9 +654,6 @@ void shut_down(int code)
 
     denydb_close();
     denydb_done();
-
-    annotatemore_close();
-    annotate_done();
 
     idle_done();
 

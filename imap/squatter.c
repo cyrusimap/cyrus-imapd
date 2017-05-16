@@ -791,8 +791,6 @@ static void shut_down(int code)
     if (running_daemon)
         search_stop_daemon(verbose);
     seen_done();
-    annotatemore_close();
-    annotate_done();
 
     cyrus_done();
 
@@ -978,9 +976,6 @@ int main(int argc, char **argv)
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
-
-    annotate_init(NULL, NULL);
-    annotatemore_open();
 
     if (mode == ROLLING || mode == SYNCLOG) {
         signals_set_shutdown(&shut_down);

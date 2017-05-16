@@ -285,10 +285,6 @@ int service_init(int argc __attribute__((unused)),
     quotadb_init(0);
     quotadb_open(NULL);
 
-    /* Initialize the annotatemore extension */
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
     /* Open the statuscache so we can invalidate seen states */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         statuscache_open();
@@ -452,9 +448,6 @@ void shut_down(int code)
 
     quotadb_close();
     quotadb_done();
-
-    annotatemore_close();
-    annotate_done();
 
     partlist_local_done();
 

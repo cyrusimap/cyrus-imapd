@@ -265,6 +265,11 @@ static void annotate_begin(annotate_db_t *d);
 static void annotate_abort(annotate_db_t *d);
 static int annotate_commit(annotate_db_t *d);
 
+static void init_internal();
+
+static int annotate_initialized = 0;
+static int annotatemore_dbopen = 0;
+
 /* String List Management */
 /*
  * Append 's' to the strlist 'l'.
@@ -480,10 +485,29 @@ EXPORTED void freeentryatts(struct entryattlist *l)
     }
 }
 
+static void done_cb(void*rock __attribute__((unused)))
+{
+    if (annotatemore_dbopen) {
+        annotatemore_close();
+    }
+    annotate_done();
+}
+
+static void init_internal()
+{
+    if (!annotate_initialized) {
+        annotate_init(NULL, NULL);
+        cyrus_modules_add(done_cb, NULL);
+    }
+    if (!annotatemore_dbopen) {
+        annotatemore_open();
+    }
+}
+
 /* must be called after cyrus_init */
 EXPORTED void annotate_init(int (*fetch_func)(const char *, const char *,
                                      const strarray_t *, const strarray_t *),
-                   int (*store_func)(const char *, const char *,
+                            int (*store_func)(const char *, const char *,
                                      struct entryattlist *))
 {
     if (fetch_func) {
@@ -494,6 +518,7 @@ EXPORTED void annotate_init(int (*fetch_func)(const char *, const char *,
     }
 
     init_annotation_definitions();
+    annotate_initialized = 1;
 }
 
 /* detach the db_t from the global list */
@@ -724,6 +749,8 @@ EXPORTED void annotatemore_open(void)
     r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
     if (r)
         fatal("can't open global annotations database", EC_TEMPFAIL);
+
+    annotatemore_dbopen = 1;
 }
 
 EXPORTED void annotatemore_close(void)
@@ -731,6 +758,8 @@ EXPORTED void annotatemore_close(void)
     /* close all the open databases */
     while (all_dbs_head)
         annotate_closedb(all_dbs_head);
+
+    annotatemore_dbopen = 0;
 }
 
 /* Begin a txn if one is not already started.  Can be called multiple
@@ -780,6 +809,10 @@ static int annotate_commit(annotate_db_t *d)
 EXPORTED void annotate_done(void)
 {
     /* DB->done() handled by cyrus_done() */
+    if (annotatemore_dbopen) {
+        annotatemore_close();
+    }
+    annotate_initialized = 0;
 }
 
 static int make_key(const char *mboxname,
@@ -1038,6 +1071,8 @@ EXPORTED int annotatemore_findall(const char *mboxname, /* internal */
     int r;
     struct find_rock frock;
 
+    init_internal();
+
     assert(mboxname);
     assert(entry);
     frock.mglob = glob_init(mboxname, '.');
@@ -1124,6 +1159,8 @@ static void annotate_state_free(annotate_state_t **statep)
 
 EXPORTED void annotate_state_begin(annotate_state_t *state)
 {
+    init_internal();
+
     annotate_begin(state->d);
 }
 
@@ -1201,6 +1238,8 @@ HIDDEN int annotate_state_set_message(annotate_state_t *state,
 /* unset any state from a previous scope */
 static void annotate_state_unset_scope(annotate_state_t *state)
 {
+    init_internal();
+
     if (state->ourmailbox)
         mailbox_close(&state->ourmailbox);
     state->mailbox = NULL;
@@ -1222,6 +1261,8 @@ static int annotate_state_set_scope(annotate_state_t *state,
     int r = 0;
     annotate_db_t *oldd = NULL;
     int oldwhich = state->which;
+
+    init_internal();
 
     /* Carefully preserve the reference on the old DB just in case it
      * turns out to be the same as the new DB, so we avoid the overhead
@@ -2263,6 +2304,8 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
     const annotate_entrydesc_t *db_entry;
     int r = 0;
 
+    init_internal();
+
     annotate_state_start(state);
     state->callback = callback;
     state->callback_rock = rock;
@@ -2434,6 +2477,8 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     annotate_db_t *d = NULL;
     struct annotate_metadata mdata;
 
+    init_internal();
+
     r = _annotate_getdb(mboxname, uid, 0, &d);
     if (r)
         return (r == CYRUSDB_NOTFOUND ? 0 : r);
@@ -2467,6 +2512,9 @@ EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, con
 {
     int r = 0;
     value->len = 0; /* just in case! */
+
+    init_internal();
+
     /* only if the user isn't the owner, we look for a masking value */
     if (!mboxname_userownsmailbox(userid, mboxname))
         r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
@@ -2646,6 +2694,8 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     annotate_db_t *d = NULL;
     uint32_t uid = 0;
 
+    init_internal();
+
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r) goto done;
 
@@ -2685,6 +2735,8 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
     struct mailbox *mailbox = NULL;
     int r = 0;
     annotate_db_t *d = NULL;
+
+    init_internal();
 
     r = _annotate_getdb(mboxname, /*uid*/0, CYRUSDB_CREATE, &d);
     if (r) goto done;
@@ -3358,6 +3410,8 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     annotate_db_t *d = NULL;
     int r = 0;
 
+    init_internal();
+
     /* rewrite any per-folder annotations from the global db */
     r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
     if (r == CYRUSDB_NOTFOUND) {
@@ -3423,6 +3477,8 @@ EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
     char *fname = NULL;
     annotate_db_t *d = NULL;
 
+    init_internal();
+
     assert(mailbox);
 
     /* remove any per-folder annotations from the global db */
@@ -3466,6 +3522,8 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 {
     annotate_db_t *d = NULL;
     int r;
+
+    init_internal();
 
     r = _annotate_getdb(newmailbox->name, newuid, CYRUSDB_CREATE, &d);
     if (r) return r;

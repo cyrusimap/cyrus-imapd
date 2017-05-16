@@ -850,9 +850,6 @@ int service_init(int argc __attribute__((unused)),
     denydb_init(0);
     denydb_open(/*create*/0);
 
-    /* open annotations.db, we'll need it for collection properties */
-    annotatemore_open();
-
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 

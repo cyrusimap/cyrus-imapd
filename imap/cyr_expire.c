@@ -572,9 +572,6 @@ int main(int argc, char *argv[])
     if (do_cid_expire < 0)
         do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
-    annotate_init(NULL, NULL);
-    annotatemore_open();
-
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -740,8 +737,6 @@ finish:
 
     quotadb_close();
     quotadb_done();
-    annotatemore_close();
-    annotate_done();
     duplicate_done();
     sasl_done();
     cyrus_done();

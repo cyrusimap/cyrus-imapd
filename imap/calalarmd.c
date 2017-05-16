@@ -82,7 +82,6 @@ static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
     caldav_done();
-    annotatemore_close();
     quotadb_close();
     quotadb_done();
     sync_log_done();
@@ -127,8 +126,6 @@ int main(int argc, char **argv)
 
     quotadb_init(0);
     quotadb_open(NULL);
-
-    annotatemore_open();
 
     caldav_init();
 
