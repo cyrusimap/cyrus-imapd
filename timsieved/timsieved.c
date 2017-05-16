@@ -133,10 +133,6 @@ void shut_down(int code)
         free(backend);
     }
 
-    /* close mailboxes */
-    mboxlist_close();
-    mboxlist_done();
-
     /* cleanup */
     if (sieved_out) {
         prot_flush(sieved_out);
@@ -221,8 +217,6 @@ EXPORTED int service_init(int argc __attribute__((unused)),
     global_sasl_init(1, 1, mysasl_cb);
 
     /* open mailboxes */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     if (build_sieve_interp() != TIMSIEVE_OK) shut_down(EX_SOFTWARE);
 

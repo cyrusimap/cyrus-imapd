@@ -133,9 +133,6 @@ int main(int argc, char **argv)
         fatal(error_message(r), EC_CONFIG);
     }
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
@@ -167,9 +164,6 @@ int main(int argc, char **argv)
 
     carddav_done();
     caldav_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     exit(code);
 }

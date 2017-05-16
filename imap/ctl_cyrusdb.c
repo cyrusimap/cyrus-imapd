@@ -168,9 +168,6 @@ static int fixmbox(const mbentry_t *mbentry,
 
 static void process_mboxlist(void)
 {
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* Need annotations.db for mboxlist_deletemailbox() and also
      * for fixing legacy specialuse support */
     annotate_init(NULL, NULL);
@@ -191,9 +188,6 @@ static void process_mboxlist(void)
 
     annotatemore_close();
     annotate_done();
-
-    mboxlist_close();
-    mboxlist_done();
 }
 
 static const char *dbfname(struct cyrusdb *db)

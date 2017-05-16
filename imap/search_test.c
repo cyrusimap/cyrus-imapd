@@ -302,8 +302,6 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "search_test",
                CYRUSINIT_PERROR, CONFIG_NEED_PARTITION_DATA);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
     search_attr_init();
 
     char *freeme = NULL;
@@ -325,9 +323,6 @@ int main(int argc, char **argv)
         r = do_serialise(argv+optind, argc-optind);
         break;
     }
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

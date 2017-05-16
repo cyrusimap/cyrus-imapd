@@ -106,8 +106,6 @@ static void shut_down(int code)
     quotadb_close();
     quotadb_done();
 
-    mboxlist_close();
-    mboxlist_done();
     exit(code);
 }
 
@@ -222,10 +220,6 @@ main(int argc, char **argv)
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
-
-    /* open the mboxlist and quotadb, we'll need them for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     quotadb_init(0);
     quotadb_open(NULL);

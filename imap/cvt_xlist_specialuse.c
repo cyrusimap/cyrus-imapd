@@ -195,9 +195,6 @@ int main (int argc, char **argv)
         strarray_append(&patterns, argv[i]);
     }
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     quotadb_init(0);
     quotadb_open(NULL);
 
@@ -211,9 +208,6 @@ int main (int argc, char **argv)
 
     quotadb_close();
     quotadb_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
 done:
     free_hash_table(&xlist, (void (*)(void*)) buf_free);

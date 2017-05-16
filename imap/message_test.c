@@ -207,9 +207,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "message_test", 0, CONFIG_NEED_PARTITION_DATA);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     if (mboxname && record_flag) {
         struct mailbox *mailbox = NULL;
         struct index_record record;
@@ -295,9 +292,6 @@ int main(int argc, char **argv)
         message_unref(&message);
         buf_free(&buf);
     }
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

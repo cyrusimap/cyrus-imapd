@@ -1391,10 +1391,6 @@ static void *thread_main(void *rock __attribute__((unused)))
 static void database_init(void)
 {
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
-
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 

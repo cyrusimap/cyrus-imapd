@@ -357,9 +357,6 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "unexpunge", 0, 0);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     quotadb_init(0);
     quotadb_open(NULL);
 
@@ -428,9 +425,6 @@ done:
 
     quotadb_close();
     quotadb_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

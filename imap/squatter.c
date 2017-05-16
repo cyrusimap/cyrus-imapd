@@ -791,8 +791,6 @@ static void shut_down(int code)
     if (running_daemon)
         search_stop_daemon(verbose);
     seen_done();
-    mboxlist_close();
-    mboxlist_done();
     annotatemore_close();
     annotate_done();
 
@@ -983,9 +981,6 @@ int main(int argc, char **argv)
 
     annotate_init(NULL, NULL);
     annotatemore_open();
-
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     if (mode == ROLLING || mode == SYNCLOG) {
         signals_set_shutdown(&shut_down);

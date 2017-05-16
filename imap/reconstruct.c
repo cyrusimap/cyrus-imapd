@@ -254,9 +254,6 @@ int main(int argc, char **argv)
         do_mboxlist();
     }
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     quotadb_init(0);
     quotadb_open(NULL);
 
@@ -394,9 +391,6 @@ int main(int argc, char **argv)
     buf_free(&buf);
 
     sync_log_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     quotadb_close();
     quotadb_done();

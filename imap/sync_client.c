@@ -122,8 +122,6 @@ static void shut_down(int code)
     annotate_done();
     quotadb_close();
     quotadb_done();
-    mboxlist_close();
-    mboxlist_done();
     cyrus_done();
     exit(code);
 }
@@ -1048,10 +1046,6 @@ int main(int argc, char **argv)
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
-
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);

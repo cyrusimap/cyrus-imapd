@@ -152,18 +152,12 @@ int main(int argc, char **argv)
     annotate_init(NULL, NULL);
     annotatemore_open();
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
     for (i = optind; i < argc; i++) {
         mboxlist_findall(&mbtool_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
     }
-
-    mboxlist_close();
-    mboxlist_done();
 
     annotatemore_close();
     annotate_done();

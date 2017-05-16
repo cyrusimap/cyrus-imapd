@@ -141,9 +141,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "chk_cyrus", 0, CONFIG_NEED_PARTITION_DATA);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     if(mailbox) {
         fprintf(stderr, "Examining mailbox: %s\n", mailbox);
         mboxlist_findone(NULL, mailbox, 1, NULL,
@@ -156,9 +153,6 @@ int main(int argc, char **argv)
         mboxlist_findall(NULL, pattern, 1, NULL,
                          NULL, chkmbox, NULL);
     }
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

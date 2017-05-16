@@ -575,9 +575,6 @@ int main(int argc, char *argv[])
     annotate_init(NULL, NULL);
     annotatemore_open();
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -743,8 +740,6 @@ finish:
 
     quotadb_close();
     quotadb_done();
-    mboxlist_close();
-    mboxlist_done();
     annotatemore_close();
     annotate_done();
     duplicate_done();

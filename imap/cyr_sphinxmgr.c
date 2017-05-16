@@ -1257,10 +1257,6 @@ static void shut_down(int code)
     if (server_sock >= 0) close(server_sock);
     hash_enumerate(&itable, kill_indexd, NULL);
 
-    /* mboxlist might not have been opened yet, but that's harmless */
-    mboxlist_close();
-    mboxlist_done();
-
     cyrus_done();
 
     exit(code);
@@ -1344,9 +1340,6 @@ int main(int argc, char **argv)
             exit(0);/* parent */
         /* child */
     }
-
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     syslog(LOG_INFO, "cyr_sphinxmgr running");
 

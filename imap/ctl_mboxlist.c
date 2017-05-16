@@ -999,6 +999,8 @@ int main(int argc, char *argv[])
     case CHECKPOINT:
         syslog(LOG_NOTICE, "checkpointing mboxlist");
         mboxlist_init(MBOXLIST_SYNC);
+        mboxlist_open(NULL);
+        mboxlist_close();
         mboxlist_done();
         syslog(LOG_NOTICE, "done checkpointing mboxlist");
         break;

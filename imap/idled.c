@@ -299,11 +299,7 @@ int main(int argc, char **argv)
     idle_timeout *= 60;
 
     /* count the number of mailboxes */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
     mboxlist_allmbox("", &mbox_count_cb, &nmbox, /*incdel*/0);
-    mboxlist_close();
-    mboxlist_done();
 
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);

@@ -107,8 +107,6 @@ int main(int argc, char *argv[])
     }
 
     cyrus_init(alt_config, "dump", 0, CONFIG_NEED_PARTITION_DATA);
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     irec.incruid = 0;
     strarray_t *array = strarray_new();
@@ -119,9 +117,6 @@ int main(int argc, char *argv[])
         mboxlist_findallmulti(NULL, array, 1, 0, 0, dump_me, &irec);
 
     strarray_free(array);
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

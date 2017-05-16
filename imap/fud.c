@@ -139,8 +139,6 @@ void shut_down(int code)
     in_shutdown = 1;
 
     seen_done();
-    mboxlist_close();
-    mboxlist_done();
     closelog();
     cyrus_done();
     exit(code);
@@ -158,9 +156,6 @@ int service_init(int argc, char **argv, char **envp)
     setproctitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
-
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     return 0;
 }

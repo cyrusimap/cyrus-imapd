@@ -115,9 +115,6 @@ main(int argc, char **argv)
     fatal(error_message(rc), -1);
   }
 
-  mboxlist_init(0);
-  mboxlist_open(NULL);
-
   for (i = optind; i < argc; i++) {
     /* Translate mailboxname */
     char *intname = mboxname_from_external(argv[i], &mbpath_namespace, NULL);
@@ -147,9 +144,6 @@ main(int argc, char **argv)
     }
     free(intname);
   }
-
-  mboxlist_close();
-  mboxlist_done();
 
   cyrus_done();
 

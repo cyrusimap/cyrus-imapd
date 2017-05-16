@@ -179,9 +179,6 @@ int main (int argc, char *argv[]) {
   /* setup for mailbox event notifications */
   mboxevent_init();
 
-  mboxlist_init(0);
-  mboxlist_open(NULL);
-
   /* open the quota db, we'll need it for expunge */
   quotadb_init(0);
   quotadb_open(NULL);
@@ -205,9 +202,6 @@ int main (int argc, char *argv[]) {
 
   quotadb_close();
   quotadb_done();
-
-  mboxlist_close();
-  mboxlist_done();
 
   cyrus_done();
 

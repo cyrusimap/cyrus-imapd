@@ -189,9 +189,6 @@ int main(int argc,char **argv)
     /* Init Cyrus Backend Foo */
     cyrus_init(alt_config, "arbitron", 0, 0);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
@@ -231,8 +228,6 @@ int main(int argc,char **argv)
     free_hash_table(&mailbox_table, NULL);
     free_hash_table(&mboxname_table, NULL);
     free_mpool(arb_pool);
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

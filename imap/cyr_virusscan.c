@@ -321,9 +321,6 @@ int main (int argc, char *argv[]) {
         if (engine.init) engine.state = engine.init();
     }
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -350,9 +347,6 @@ int main (int argc, char *argv[]) {
 
     quotadb_close();
     quotadb_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     printf("\n%d mailboxes scanned, %d infected messages %s\n",
            srock.mailboxes_scanned,

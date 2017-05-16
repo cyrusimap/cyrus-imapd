@@ -201,17 +201,11 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "squat_dump", 0, CONFIG_NEED_PARTITION_DATA);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     if (optind == argc)
         usage(argv[0]);
 
     for (i = optind; i < argc; i++)
         dump_one(argv[i]);
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

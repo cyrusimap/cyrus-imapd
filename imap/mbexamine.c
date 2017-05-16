@@ -154,9 +154,6 @@ int main(int argc, char **argv)
         fatal(error_message(r), EC_CONFIG);
     }
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
@@ -169,8 +166,7 @@ int main(int argc, char **argv)
         mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, NULL);
     }
 
-    mboxlist_close();
-    mboxlist_done();
+    cyrus_done();
 
     exit(0);
 }

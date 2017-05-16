@@ -281,10 +281,6 @@ int service_init(int argc __attribute__((unused)),
         fatal(error_message(r), EC_CONFIG);
     }
 
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -453,8 +449,6 @@ void shut_down(int code)
     }
 
     seen_done();
-    mboxlist_close();
-    mboxlist_done();
 
     quotadb_close();
     quotadb_done();

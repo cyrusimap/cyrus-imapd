@@ -282,9 +282,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_jmapauth", 0, 0);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     sync_log_init();
 
     struct db *db = NULL;
@@ -380,9 +377,6 @@ int main(int argc, char **argv)
 done:
     if (r && db) jmapauth_close(db);
     sync_log_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     cyrus_done();
 

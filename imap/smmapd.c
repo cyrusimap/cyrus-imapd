@@ -149,9 +149,6 @@ void shut_down(int code)
 
     sync_log_done();
 
-    mboxlist_close();
-    mboxlist_done();
-
     quotadb_close();
     quotadb_done();
 
@@ -190,10 +187,6 @@ int service_init(int argc, char **argv, char **envp)
 
     BB = config_getstring(IMAPOPT_POSTUSER);
     forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
 
     /* so we can check the quotas */
     quotadb_init(0);

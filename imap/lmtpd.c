@@ -201,10 +201,6 @@ int service_init(int argc __attribute__((unused)),
 
     initialize_lmtp_error_table();
 
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     if (config_mupdate_server &&
         (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
         !config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -929,9 +925,6 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
-
-    mboxlist_close();
-    mboxlist_done();
 
     if (!isproxy) {
         if (dupelim)

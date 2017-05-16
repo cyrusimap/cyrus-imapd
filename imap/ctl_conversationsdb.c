@@ -901,9 +901,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     quotadb_init(0);
     quotadb_open(NULL);
 
@@ -922,9 +919,6 @@ int main(int argc, char **argv)
         do_user(userid, NULL);
 
     sync_log_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     quotadb_close();
     quotadb_done();

@@ -842,10 +842,6 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -1097,8 +1093,6 @@ void shut_down(int code)
     sync_log_done();
     seen_done();
     mboxkey_done();
-    mboxlist_close();
-    mboxlist_done();
 
     quotadb_close();
     quotadb_done();

@@ -119,14 +119,10 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_userseen", 0, 0);
 
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox("", deluserseen, NULL, /*incdel*/0);
 
-    mboxlist_close();
-    mboxlist_done();
+    cyrus_done();
 
     return 0;
 }

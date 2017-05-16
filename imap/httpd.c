@@ -842,10 +842,6 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
@@ -1187,9 +1183,6 @@ void shut_down(int code)
     if (backend_cached) free(backend_cached);
 
     sync_log_done();
-
-    mboxlist_close();
-    mboxlist_done();
 
     quotadb_close();
     quotadb_done();
