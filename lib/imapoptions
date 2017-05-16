@@ -776,19 +776,18 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "EVENT" notifications which are based on
    the RFC 5423.  If not set, "EVENT" notifications are disabled. */
 
-{ "expunge_mode", "delayed", ENUM("default", "immediate", "delayed") }
+{ "expunge_mode", "delayed", ENUM("immediate", "semidelayed", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
-   are expunged.  "default" mode is the old behavior in which the
+   are expunged.  "semidelayed" mode is the old behavior in which the
    message files are purged at the time of the EXPUNGE, but index
-   and cache records are retained to facilitate QRESYNC.  (Note that
-   this behaviour is no longer the default, but is so named for historical
-   reasons.)  In "delayed" mode, which is the default since Cyrus 2.5.0,
+   and cache records are retained to facilitate QRESYNC.
+   In "delayed" mode, which is the default since Cyrus 2.5.0,
    the message files are also retained, allowing unexpunge to
    rescue them.  In "immediate" mode, both the message files and the
    index records are removed as soon as possible.  In all cases,
    nothing will be finally purged until all other processes have
    closed the mailbox to ensure they never see data disappear under
-   them.  In "default" or "delayed" mode, a later run of "cyr_expire"
+   them.  In "semidelayed" or "delayed" mode, a later run of "cyr_expire"
    will clean out the retained records (and possibly message files).
    This reduces the amount of I/O that takes place at the time of
    EXPUNGE and should result in greater responsiveness for the client,

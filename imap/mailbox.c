@@ -3439,7 +3439,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     struct index_record oldrecord;
     int expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
     int immediate = (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE ||
-                     expunge_mode == IMAP_ENUM_EXPUNGE_MODE_DEFAULT ||
+                     expunge_mode == IMAP_ENUM_EXPUNGE_MODE_SEMIDELAYED ||
                      mailbox->i.minor_version < 12);
     int changeflags = 0;
 
