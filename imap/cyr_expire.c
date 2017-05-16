@@ -572,10 +572,6 @@ int main(int argc, char *argv[])
     if (do_cid_expire < 0)
         do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
-    /* open the quota db, we'll need it for expunge */
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     /* setup for mailbox event notifications */
     mboxevent_init();
 
@@ -735,8 +731,6 @@ finish:
     free_hash_table(&crock.seen, NULL);
     strarray_fini(&drock.to_delete);
 
-    quotadb_close();
-    quotadb_done();
     duplicate_done();
     sasl_done();
     cyrus_done();

@@ -82,8 +82,6 @@ static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
     caldav_done();
-    quotadb_close();
-    quotadb_done();
     sync_log_done();
     cyrus_done();
     exit(ec);
@@ -123,9 +121,6 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
-
-    quotadb_init(0);
-    quotadb_open(NULL);
 
     caldav_init();
 

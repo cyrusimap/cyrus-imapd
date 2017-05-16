@@ -281,10 +281,6 @@ int service_init(int argc __attribute__((unused)),
         fatal(error_message(r), EC_CONFIG);
     }
 
-    /* open the quota db, we'll need it for real work */
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     /* Open the statuscache so we can invalidate seen states */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         statuscache_open();
@@ -445,9 +441,6 @@ void shut_down(int code)
     }
 
     seen_done();
-
-    quotadb_close();
-    quotadb_done();
 
     partlist_local_done();
 

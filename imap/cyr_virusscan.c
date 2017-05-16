@@ -321,10 +321,6 @@ int main (int argc, char *argv[]) {
         if (engine.init) engine.state = engine.init();
     }
 
-    /* open the quota db, we'll need it for expunge */
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     sync_log_init();
 
     /* setup for mailbox event notifications */
@@ -344,9 +340,6 @@ int main (int argc, char *argv[]) {
     if (email_notification) append_notifications();
 
     sync_log_done();
-
-    quotadb_close();
-    quotadb_done();
 
     printf("\n%d mailboxes scanned, %d infected messages %s\n",
            srock.mailboxes_scanned,

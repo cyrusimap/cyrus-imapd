@@ -195,13 +195,7 @@ int main (int argc, char **argv)
         strarray_append(&patterns, argv[i]);
     }
 
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     r = mboxlist_findallmulti(NULL, &patterns, 1, NULL, NULL, set_specialuse, &xlist);
-
-    quotadb_close();
-    quotadb_done();
 
 done:
     free_hash_table(&xlist, (void (*)(void*)) buf_free);

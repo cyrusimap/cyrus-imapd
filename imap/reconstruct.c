@@ -254,9 +254,6 @@ int main(int argc, char **argv)
         do_mboxlist();
     }
 
-    quotadb_init(0);
-    quotadb_open(NULL);
-
 #ifdef WITH_DAV
     caldav_init();
     carddav_init();
@@ -391,9 +388,6 @@ int main(int argc, char **argv)
     buf_free(&buf);
 
     sync_log_done();
-
-    quotadb_close();
-    quotadb_done();
 
     partlist_local_done();
 #ifdef WITH_DAV

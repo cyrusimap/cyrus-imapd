@@ -459,11 +459,8 @@ static int find_cb(void *rockp __attribute__((unused)),
 int user_deletequotaroots(const char *userid)
 {
     char *inbox = mboxname_user_mbox(userid, NULL);
-    int r = cyrusdb_foreach(qdb, inbox, strlen(inbox),
-                            &find_p, &find_cb, inbox, NULL);
-
+    int r = quotadb_foreach(inbox, strlen(inbox), &find_p, &find_cb, inbox);
     free(inbox);
-
     return r;
 }
 

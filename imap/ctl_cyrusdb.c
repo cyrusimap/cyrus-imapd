@@ -168,18 +168,11 @@ static int fixmbox(const mbentry_t *mbentry,
 
 static void process_mboxlist(void)
 {
-    /* Need quotadb for deleting mailboxes with quotas */
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox(NULL, fixmbox, NULL, 0);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
-
-    quotadb_close();
-    quotadb_done();
 }
 
 static const char *dbfname(struct cyrusdb *db)

@@ -179,10 +179,6 @@ int main (int argc, char *argv[]) {
   /* setup for mailbox event notifications */
   mboxevent_init();
 
-  /* open the quota db, we'll need it for expunge */
-  quotadb_init(0);
-  quotadb_open(NULL);
-
   sync_log_init();
 
   if (optind == argc) { /* do the whole partition */
@@ -199,9 +195,6 @@ int main (int argc, char *argv[]) {
   }
 
   sync_log_done();
-
-  quotadb_close();
-  quotadb_done();
 
   cyrus_done();
 

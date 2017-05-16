@@ -466,10 +466,6 @@ int service_init(int argc __attribute__((unused)),
         fatal("unable to init duplicate delivery database", EC_SOFTWARE);
     }
 
-    /* open the quota db, we'll need it for expunge */
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     /* open the user deny db */
     denydb_init(0);
     denydb_open(0);
@@ -648,9 +644,6 @@ void shut_down(int code)
     sync_log_done();
 
     duplicate_done();
-
-    quotadb_close();
-    quotadb_done();
 
     denydb_close();
     denydb_done();

@@ -1012,13 +1012,7 @@ int main(int argc, char *argv[])
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
-        quotadb_init(0);
-        quotadb_open(NULL);
-
         do_dump(op, partition, dopurge);
-
-        quotadb_close();
-        quotadb_done();
 
         mboxlist_close();
         mboxlist_done();
@@ -1033,13 +1027,7 @@ int main(int argc, char *argv[])
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
-        quotadb_init(0);
-        quotadb_open(NULL);
-
         do_undump();
-
-        quotadb_close();
-        quotadb_done();
 
         mboxlist_close();
         mboxlist_done();

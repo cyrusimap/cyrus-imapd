@@ -149,9 +149,6 @@ void shut_down(int code)
 
     sync_log_done();
 
-    quotadb_close();
-    quotadb_done();
-
     cyrus_done();
     exit(code);
 }
@@ -187,10 +184,6 @@ int service_init(int argc, char **argv, char **envp)
 
     BB = config_getstring(IMAPOPT_POSTUSER);
     forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-
-    /* so we can check the quotas */
-    quotadb_init(0);
-    quotadb_open(NULL);
 
     /* so we can log sync information on closing mailboxes */
     sync_log_init();

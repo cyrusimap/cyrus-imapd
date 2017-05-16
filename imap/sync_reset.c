@@ -100,9 +100,6 @@ static void shut_down(int code)
 
     seen_done();
 
-    quotadb_close();
-    quotadb_done();
-
     exit(code);
 }
 
@@ -217,9 +214,6 @@ main(int argc, char **argv)
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
-
-    quotadb_init(0);
-    quotadb_open(NULL);
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);

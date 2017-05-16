@@ -357,9 +357,6 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "unexpunge", 0, 0);
 
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     sync_log_init();
 
     if (addflag && addflag[0] == '\\') {
@@ -422,9 +419,6 @@ done:
     free(intname);
     free(extname);
     sync_log_done();
-
-    quotadb_close();
-    quotadb_done();
 
     cyrus_done();
 

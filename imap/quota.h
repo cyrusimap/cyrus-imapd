@@ -58,8 +58,6 @@
 typedef long long int quota_t;
 #define QUOTA_T_FMT      "%lld"
 
-extern struct db *qdb;
-
 enum quota_resource {
     QUOTA_STORAGE       =0,
     QUOTA_MESSAGE       =1,
@@ -128,6 +126,10 @@ extern int quota_foreach(const char *prefix, quotaproc_t *proc,
 
 /* open the quotas db */
 void quotadb_open(const char *fname);
+
+/* iterate all entries starting with prefix */
+extern int quotadb_foreach(const char *prefix, size_t prefixlen,
+                           foreach_p *p, foreach_cb *cb, void *rock);
 
 /* close the database */
 void quotadb_close(void);

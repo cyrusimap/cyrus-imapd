@@ -74,6 +74,9 @@ HIDDEN struct db *qdb;
  * them to something more general and use them elsewhere */
 static struct mboxlock *qchangelock;
 
+static void init_internal();
+
+static int quota_initialized = 0;
 static int quota_dbopen = 0;
 
 /* keywords used when storing fields in the new quota db format */
@@ -234,6 +237,8 @@ EXPORTED int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     const char *data;
     size_t datalen;
 
+    init_internal();
+
     if (!quota->root || !(qrlen = strlen(quota->root)))
         return IMAP_QUOTAROOT_NONEXISTENT;
 
@@ -340,6 +345,8 @@ static int do_onequota(void *rock,
     char *root = xstrndup(key, keylen);
     int iswrite = fd->tid ? 1 : 0;
 
+    init_internal();
+
     quota_init(&quota, root);
 
     /* XXX - error if not parsable? */
@@ -359,6 +366,8 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     int r;
     char *search = prefix ? (char *)prefix : "";
     struct quota_foreach_t foreach_d;
+
+    init_internal();
 
     foreach_d.proc = proc;
     foreach_d.rock = rock;
@@ -406,6 +415,8 @@ EXPORTED int quota_write(struct quota *quota, struct txn **tid)
     int res;
     struct buf buf = BUF_INITIALIZER;
     struct dlist *dl = NULL;
+
+    init_internal();
 
     if (!quota->root) return IMAP_QUOTAROOT_NONEXISTENT;
 
@@ -461,6 +472,8 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     struct txn *tid = NULL;
     int r = 0;
     struct mboxevent *mboxevents = NULL;
+
+    init_internal();
 
     if (!quotaroot || !*quotaroot)
         return IMAP_QUOTAROOT_NONEXISTENT;
@@ -520,6 +533,8 @@ EXPORTED int quota_check_useds(const char *quotaroot,
     struct quota q;
     int res;
 
+    init_internal();
+
     /*
      * We are always allowed to *reduce* usage even if it doesn't get us
      * below the quota.  As a side effect this allows our caller to pass
@@ -558,6 +573,8 @@ EXPORTED int quota_deleteroot(const char *quotaroot)
 {
     int r;
 
+    init_internal();
+
     if (!quotaroot || !*quotaroot)
         return IMAP_QUOTAROOT_NONEXISTENT;
 
@@ -588,6 +605,8 @@ EXPORTED int quota_findroot(char *ret, size_t retlen, const char *name)
 {
     char *tail, *p, *mbox;
 
+    init_internal();
+
     strlcpy(ret, name, retlen);
 
     /* find the start of the unqualified mailbox name */
@@ -607,12 +626,31 @@ EXPORTED int quota_findroot(char *ret, size_t retlen, const char *name)
     return (cyrusdb_fetch(qdb, ret, strlen(ret), NULL, NULL, NULL) == 0);
 }
 
+static void done_cb(void*rock __attribute__((unused)))
+{
+    if (quota_dbopen) {
+        quotadb_close();
+    }
+    quotadb_done();
+}
+
+static void init_internal() {
+    if (!quota_initialized) {
+        quotadb_init(0);
+        quota_initialized = 1;
+    }
+    if (!quota_dbopen) {
+        quotadb_open(NULL);
+    }
+}
+
 /* must be called after cyrus_init */
 EXPORTED void quotadb_init(int myflags)
 {
     if (myflags & QUOTADB_SYNC) {
         cyrusdb_sync(QDB);
     }
+    cyrus_modules_add(done_cb, NULL);
 }
 
 EXPORTED void quotadb_open(const char *fname)
@@ -647,6 +685,13 @@ EXPORTED void quotadb_open(const char *fname)
     quota_dbopen = 1;
 }
 
+EXPORTED int quotadb_foreach(const char *prefix, size_t prefixlen,
+                             foreach_p *p, foreach_cb *cb, void *rock)
+{
+    init_internal();
+    return cyrusdb_foreach(qdb, prefix, prefixlen, p, cb, rock, NULL);
+}
+
 EXPORTED void quotadb_close(void)
 {
     int r;
@@ -664,6 +709,7 @@ EXPORTED void quotadb_close(void)
 EXPORTED void quotadb_done(void)
 {
     /* DB->done() handled by cyrus_done() */
+    quota_initialized = 0;
 }
 
 EXPORTED int quota_is_overquota(const struct quota *quota, enum quota_resource res,

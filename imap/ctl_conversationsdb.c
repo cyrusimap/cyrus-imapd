@@ -901,9 +901,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
-    quotadb_init(0);
-    quotadb_open(NULL);
-
 #ifdef WITH_DAV
     caldav_init();
     carddav_init();
@@ -919,9 +916,6 @@ int main(int argc, char **argv)
         do_user(userid, NULL);
 
     sync_log_done();
-
-    quotadb_close();
-    quotadb_done();
 
 #ifdef WITH_DAV
     webdav_done();

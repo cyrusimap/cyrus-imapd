@@ -190,9 +190,6 @@ int main(int argc,char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    quotadb_init(0);
-    quotadb_open(NULL);
-
     quota_changelock();
 
     if (!r)
@@ -205,9 +202,6 @@ int main(int argc,char **argv)
 
     if (r) code = convert_code(r);
     else if (do_report) reportquota();
-
-    quotadb_close();
-    quotadb_done();
 
     mboxlist_close();
     mboxlist_done();
