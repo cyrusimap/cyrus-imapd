@@ -94,14 +94,18 @@ struct namespace_t namespace_prometheus = {
 
 static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
 {
-    /* XXX do we want to require auth? probably make it configurable */
-    return 0;
+    const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
+
+    if (!strcmp(need_auth, "none"))
+        return 0;
+
+    return HTTP_UNAUTHORIZED;
 }
 
-static void prom_init(struct buf *serverinfo)
+static void prom_init(struct buf *serverinfo __attribute__((unused)))
 {
-    (void) serverinfo;
-    /* FIXME set enabled based on config */
+    namespace_prometheus.enabled =
+        config_httpmodules & IMAP_ENUM_HTTPMODULES_PROMETHEUS;
 }
 
 static void prom_auth(const char *userid)
@@ -127,6 +131,12 @@ static int prom_get(struct transaction_t *txn,
 
     if (strcmp(txn->req_uri->path, "/prometheus"))
         return HTTP_NOT_FOUND;
+
+    const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
+    if (!strcmp(need_auth, "admin") && !httpd_userisadmin)
+        return HTTP_UNAUTHORIZED;
+    if (!strcmp(need_auth, "user") && !httpd_userid)
+        return HTTP_UNAUTHORIZED;
 
     /* FIXME populate buf with the prometheus report here */
 

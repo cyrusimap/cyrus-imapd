@@ -895,7 +895,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
+{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).
@@ -1637,6 +1637,9 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Path to proc directory.  Default is NULL - must be an absolute path
    if specified.  If not specified, the path $confdir/proc/ will be
    used. */
+
+{ "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin") }
+/* Authentication level required to fetch Prometheus prometheus metrics. */
 
 { "proxy_authname", "proxy", STRING }
 /* The authentication name to use when authenticating to a backend server
