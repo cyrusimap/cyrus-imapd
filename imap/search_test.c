@@ -302,8 +302,6 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "search_test",
                CYRUSINIT_PERROR, CONFIG_NEED_PARTITION_DATA);
 
-    search_attr_init();
-
     char *freeme = NULL;
 
     switch (mode) {

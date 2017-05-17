@@ -300,8 +300,6 @@ int main (int argc, char *argv[]) {
             fatal(error_message(r), EC_CONFIG);
         }
 
-        search_attr_init();
-
         srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
                                           &scan_namespace, NULL, NULL, 1);
         c = get_search_program(scan_in, scan_out, srock.searchargs);

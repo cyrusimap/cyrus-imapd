@@ -2041,6 +2041,19 @@ enum search_cost {
     SEARCH_COST_BODY
 };
 
+static int search_attr_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    /* do nothing */
+}
+
+static void init_internal() {
+    if (!search_attr_initialized) {
+        search_attr_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
+
 /*
  * Call search_attr_init() before doing any work with search
  * expressions.
@@ -2448,6 +2461,8 @@ EXPORTED void search_attr_init(void)
     construct_hash_table(&attrs_by_name, VECTOR_SIZE(attrs), 0);
     for (i = 0 ; i < VECTOR_SIZE(attrs) ; i++)
         hash_insert(attrs[i].name, (void *)&attrs[i], &attrs_by_name);
+
+    search_attr_initialized = 1;
 }
 
 /*
@@ -2459,6 +2474,8 @@ EXPORTED void search_attr_init(void)
 EXPORTED const search_attr_t *search_attr_find(const char *name)
 {
     char tmp[128];
+
+    init_internal();
 
     strlcpy(tmp, name, sizeof(tmp));
     lcase(tmp);
@@ -2491,6 +2508,8 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
         search_string_free,
         NULL
     };
+
+    init_internal();
 
     /* some header fields can be reduced to search terms */
     if (!strcasecmp(field, "bcc") ||

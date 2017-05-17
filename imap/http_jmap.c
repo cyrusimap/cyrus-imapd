@@ -166,8 +166,6 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     for (mp = jmap_calendar_messages; mp->name; mp++) {
         ptrarray_append(&messages, mp);
     }
-
-    search_attr_init();
 }
 
 
