@@ -1364,18 +1364,6 @@ AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
 
 dnl
-dnl Test for mailbox event notification
-dnl enable requires the installation of jansson library
-dnl
-AC_ARG_ENABLE(event-notification,
-        [AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (that needs jansson library)])],,
-        [enable_event_notification="yes";])
-
-if test "$enable_event_notification" != "no"; then
-    AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])
-fi
-
-dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
@@ -2232,7 +2220,6 @@ AC_OUTPUT
 echo "
 Cyrus Server configured components
 
-   event notification: $enable_event_notification
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled

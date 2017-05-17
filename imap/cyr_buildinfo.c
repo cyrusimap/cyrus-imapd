@@ -93,11 +93,7 @@ static json_t *buildinfo()
     /* Yikes... */
 
     /* Enabled components */
-#ifdef ENABLE_MBOXEVENT
     json_object_set_new(component, "event_notification", json_true());
-#else
-    json_object_set_new(component, "event_notification", json_false());
-#endif
 #ifdef HAVE_GSSAPI_H
     json_object_set_new(component, "gssapi", json_true());
 #else
