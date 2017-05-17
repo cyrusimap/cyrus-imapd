@@ -842,10 +842,6 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open the user deny db */
-    denydb_init(0);
-    denydb_open(0);
-
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
@@ -1086,9 +1082,6 @@ void shut_down(int code)
 
     seen_done();
     mboxkey_done();
-
-    denydb_close();
-    denydb_done();
 
     annotatemore_close();
     annotate_done();

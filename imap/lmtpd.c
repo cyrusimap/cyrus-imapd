@@ -222,10 +222,6 @@ int service_init(int argc __attribute__((unused)),
             }
         }
 
-        /* open the user deny db */
-        denydb_init(0);
-        denydb_open(0);
-
         /* setup for statuscache invalidation */
         statuscache_open();
 
@@ -907,9 +903,6 @@ void shut_down(int code)
     if (!isproxy) {
         if (dupelim)
             duplicate_done();
-
-        denydb_close();
-        denydb_done();
 
         statuscache_close();
         statuscache_done();

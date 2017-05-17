@@ -841,10 +841,6 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open the user deny db */
-    denydb_init(0);
-    denydb_open(/*create*/0);
-
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
@@ -1171,9 +1167,6 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
-
-    denydb_close();
-    denydb_done();
 
     annotatemore_close();
 

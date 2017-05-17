@@ -441,10 +441,6 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open the user deny db */
-    denydb_init(0);
-    denydb_open(0);
-
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* open statuscache db to optimize handling an empty maildrop */
         statuscache_open();
@@ -651,9 +647,6 @@ void shut_down(int code)
         statuscache_close();
         statuscache_done();
     }
-
-    denydb_close();
-    denydb_done();
 
     idle_done();
 

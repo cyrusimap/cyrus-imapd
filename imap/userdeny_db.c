@@ -68,6 +68,10 @@
 
 static struct db *denydb;
 
+static int denydb_initialized = 0;
+
+static void init_internal();
+
 static const char default_message[] = "Access to this service has been blocked";
 
 /* parse the data */
@@ -119,6 +123,8 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     tok_t tok;
     char *pat;
     int not;
+
+    init_internal();
 
     if (!denydb) denydb_open(/*create*/0);
     if (!denydb) return 0;
@@ -195,6 +201,8 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
     struct buf data = BUF_INITIALIZER;
     int r = 0;
 
+    init_internal();
+
     if (!denydb) {
         r = IMAP_INTERNAL;
         goto out;
@@ -247,6 +255,8 @@ EXPORTED int denydb_delete(const char *user)
 {
     struct txn *txn = NULL;
     int r = 0;
+
+    init_internal();
 
     if (!denydb) return 0;
 
@@ -315,6 +325,8 @@ EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
 {
     struct denydb_rock dr;
 
+    init_internal();
+
     if (!denydb) return 0;
 
     dr.proc = proc;
@@ -325,12 +337,32 @@ EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
                            /* txn */NULL);
 }
 
+static void done_cb(void*rock __attribute__((unused)))
+{
+    if (denydb) {
+        denydb_close();
+    }
+    denydb_done();
+}
+
+static void init_internal()
+{
+    if (!denydb_initialized) {
+        denydb_init(0);
+        cyrus_modules_add(done_cb, NULL);
+    }
+    if (!denydb) {
+        denydb_open(0);
+    }
+}
+
 /* must be called after cyrus_init */
 EXPORTED void denydb_init(int myflags)
 {
     if (myflags & DENYDB_SYNC) {
         cyrusdb_sync(DENYDB);
     }
+    denydb_initialized = 1;
 }
 
 /*
@@ -384,4 +416,5 @@ EXPORTED void denydb_close(void)
 EXPORTED void denydb_done(void)
 {
     /* DB->done() handled by cyrus_done() */
+    denydb_initialized = 0;
 }
