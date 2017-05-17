@@ -78,9 +78,6 @@
 #include "acl.h"
 #include "assert.h"
 #include "bsearch.h"
-#ifdef WITH_DAV
-#include "webdav_db.h"
-#endif
 #include "crc32.h"
 #include "hash.h"
 #include "global.h"
@@ -252,10 +249,6 @@ int main(int argc, char **argv)
         do_mboxlist();
     }
 
-#ifdef WITH_DAV
-    webdav_init();
-#endif
-
     /* Deal with nonexistent mailboxes */
     if (start_part) {
         /* We were handed a mailbox that does not exist currently */
@@ -386,9 +379,6 @@ int main(int argc, char **argv)
     sync_log_done();
 
     partlist_local_done();
-#ifdef WITH_DAV
-    webdav_done();
-#endif
 
     cyrus_done();
 

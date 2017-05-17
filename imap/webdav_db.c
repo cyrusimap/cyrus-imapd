@@ -88,22 +88,40 @@ struct webdav_db {
     unsigned ref_count;
 };
 
+static int webdav_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    webdav_done();
+}
+
+static void init_internal() {
+    if (!webdav_initialized) {
+        webdav_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
 
 EXPORTED int webdav_init(void)
 {
-    return sqldb_init();
+    int r = sqldb_init();
+    if (!r) webdav_initialized = 1;
+    return r;
 }
 
 
 EXPORTED int webdav_done(void)
 {
-    return sqldb_done();
+    int r = sqldb_done();
+    if (!r) webdav_initialized = 0;
+    return r;
 }
 
 /* Open DAV DB corresponding to userid */
 EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
 {
     struct webdav_db *webdavdb = NULL;
+
+    init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
     if (!db) return NULL;
@@ -120,6 +138,8 @@ EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
 {
     struct webdav_db *webdavdb = NULL;
     char *userid = mboxname_to_userid(mailbox->name);
+
+    init_internal();
 
     if (userid) {
         webdavdb = webdav_open_userid(userid);

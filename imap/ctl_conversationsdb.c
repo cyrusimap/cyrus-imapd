@@ -53,9 +53,6 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
-#ifdef WITH_DAV
-#include "webdav_db.h"
-#endif
 #include "exitcodes.h"
 #include "global.h"
 #include "index.h"
@@ -899,10 +896,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
-#ifdef WITH_DAV
-    webdav_init();
-#endif
-
     sync_log_init();
 
     if (recursive) {
@@ -912,10 +905,6 @@ int main(int argc, char **argv)
         do_user(userid, NULL);
 
     sync_log_done();
-
-#ifdef WITH_DAV
-    webdav_done();
-#endif
 
     cyrus_done();
 
