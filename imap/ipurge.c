@@ -176,9 +176,6 @@ int main (int argc, char *argv[]) {
 
   cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
-  /* setup for mailbox event notifications */
-  mboxevent_init();
-
   sync_log_init();
 
   if (optind == argc) { /* do the whole partition */

@@ -323,9 +323,6 @@ int main (int argc, char *argv[]) {
 
     sync_log_init();
 
-    /* setup for mailbox event notifications */
-    mboxevent_init();
-
     if (optind == argc) { /* do the whole partition */
         mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, &srock);
     } else {

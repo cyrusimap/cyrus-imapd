@@ -124,8 +124,6 @@ int main(int argc, char **argv)
 
     caldav_init();
 
-    mboxevent_init();
-
     sync_log_init();
 
     if (upgrade) {

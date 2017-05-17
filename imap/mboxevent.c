@@ -188,6 +188,19 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
 
+static int mboxevent_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    /* do nothing */
+}
+
+static void init_internal() {
+    if (!mboxevent_initialized) {
+        mboxevent_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
+
 EXPORTED int mboxevent_init(void)
 {
     const char *options;
@@ -237,6 +250,8 @@ EXPORTED int mboxevent_init(void)
     if (groups & IMAP_ENUM_EVENT_GROUPS_APPLEPUSHSERVICE)
         enabled_events |= APPLEPUSHSERVICE_EVENTS;
 
+    mboxevent_initialized = 1;
+
     return enabled_events;
 }
 
@@ -256,6 +271,8 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
     int enabled = 1;
     int i = 0;
     int r = 0;
+
+    init_internal();
 
     if (!enable_subfolder && !mboxname_isusermailbox(mailbox->name, 1)) {
         enabled = 0;
@@ -291,6 +308,9 @@ done:
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 {
     struct mboxevent *mboxevent = NULL;
+
+    init_internal();
+
     /* event notification is completely disabled */
     if (!notifier)
         return NULL;
@@ -602,6 +622,8 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
     if (!*mboxevents)
         return;
 
+    init_internal();
+
     /* loop over the chained list of events */
     for (event = *mboxevents; event; event = event->next) {
         if (event->type == EVENT_CANCELLED)
@@ -780,6 +802,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (!event)
         return;
 
+    init_internal();
+
     /* only notify Logout after successful Login */
     if (!userid && event->type & EVENT_LOGOUT) {
         event->type = EVENT_CANCELLED;
@@ -839,6 +863,8 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     if (!event)
         return;
 
+    init_internal();
+
     FILL_STRING_PARAM(event, EVENT_ACL_SUBJECT, xstrdup(identifier));
     // If rights == 0x0, perhaps this is a Deleteacl command, that
     // deletes the rights for a subject, rather than a *setting* the
@@ -859,6 +885,8 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     if (!event)
         return;
+
+    init_internal();
 
     /* add modseq only on first call, cancel otherwise */
     if (mboxevent_expected_param(event->type, EVENT_MODSEQ)) {
@@ -971,6 +999,8 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
     if (!event)
         return;
+
+    init_internal();
 
     if ((r = msgrecord_get_uid(msgrec, &uid))) {
         syslog(LOG_ERR, "mboxevent: can't extract uid: %s", error_message(r));
@@ -1355,6 +1385,8 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     if (!event)
         return;
 
+    init_internal();
+
     if (mboxevent_expected_param(event->type, EVENT_UNSEEN_MESSAGES)) {
         unsigned count = (numunseen >= 0) ? (unsigned)numunseen
                                           : mailbox_count_unseen(mailbox);
@@ -1373,6 +1405,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     if (!event)
         return;
+
+    init_internal();
 
     /* mboxevent_extract_mailbox should be called only once */
     if (event->params[EVENT_URI].filled)

@@ -572,9 +572,6 @@ int main(int argc, char *argv[])
     if (do_cid_expire < 0)
         do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
-    /* setup for mailbox event notifications */
-    mboxevent_init();
-
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));

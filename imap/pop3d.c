@@ -454,9 +454,6 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
-    /* setup for mailbox event notifications */
-    mboxevent_init();
-
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));

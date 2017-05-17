@@ -240,9 +240,6 @@ int service_init(int argc __attribute__((unused)),
 
         /* setup for sending IMAP IDLE notifications */
         idle_init();
-
-        /* setup for mailbox event notifications */
-        mboxevent_init();
     }
 
     /* Set namespace */
