@@ -88,7 +88,6 @@
 #include "notify.h"
 #include "prot.h"
 #include "proxy.h"
-#include "statuscache.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "userdeny.h"
@@ -221,9 +220,6 @@ int service_init(int argc __attribute__((unused)),
                       EC_SOFTWARE);
             }
         }
-
-        /* setup for statuscache invalidation */
-        statuscache_open();
 
         /* setup for sending IMAP IDLE notifications */
         idle_init();
@@ -903,9 +899,6 @@ void shut_down(int code)
     if (!isproxy) {
         if (dupelim)
             duplicate_done();
-
-        statuscache_close();
-        statuscache_done();
 
         idle_done();
     }

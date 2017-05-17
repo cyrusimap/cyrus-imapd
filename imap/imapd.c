@@ -888,10 +888,6 @@ int service_init(int argc, char **argv, char **envp)
         annotate_init(NULL, NULL);
     annotatemore_open();
 
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        statuscache_open();
-    }
-
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
 
@@ -1087,11 +1083,6 @@ void shut_down(int code)
     annotate_done();
 
     idle_done();
-
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        statuscache_close();
-        statuscache_done();
-    }
 
     partlist_local_done();
 

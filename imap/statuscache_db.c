@@ -75,6 +75,20 @@
 static struct db *statuscachedb;
 static int statuscache_dbopen = 0;
 
+static void done_cb(void *rock __attribute__((unused))) {
+    if (statuscache_dbopen) {
+        statuscache_close();
+    }
+    statuscache_done();
+}
+
+static void init_internal() {
+    if (!statuscache_dbopen) {
+        statuscache_open();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
+
 char *statuscache_filename(void)
 {
     const char *fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
@@ -90,6 +104,9 @@ EXPORTED void statuscache_open(void)
 {
     char *fname = statuscache_filename();
     int ret;
+
+    if (!config_getswitch(IMAPOPT_STATUSCACHE))
+        return;
 
     ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (ret != 0) {
@@ -171,6 +188,8 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
     unsigned numunseen = 0;
     unsigned c_statusitems;
     int r;
+
+    init_internal();
 
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
@@ -274,6 +293,8 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
     unsigned c_statusitems;
     int r = 0;
 
+    init_internal();
+
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* Do actual lookup of cache item. */
@@ -367,6 +388,8 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
     char *p, *key = statuscache_buildkey(mboxname, userid, &keylen);
     unsigned version;
 
+    init_internal();
+
     /* Don't access DB if it hasn't been opened */
     if (!statuscache_dbopen)
         return IMAP_NO_NOSUCHMSG;
@@ -417,6 +440,8 @@ static int statuscache_store(const char *mboxname,
     size_t keylen, datalen;
     char *key = statuscache_buildkey(mboxname, sdata->userid, &keylen);
     int r;
+
+    init_internal();
 
     /* Don't access DB if it hasn't been opened */
     if (!statuscache_dbopen)

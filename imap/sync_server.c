@@ -90,7 +90,6 @@
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
-#include "statuscache.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -279,11 +278,6 @@ int service_init(int argc __attribute__((unused)),
         fatal(error_message(r), EC_CONFIG);
     }
 
-    /* Open the statuscache so we can invalidate seen states */
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        statuscache_open();
-    }
-
     return 0;
 }
 
@@ -422,11 +416,6 @@ void shut_down(int code)
     in_shutdown = 1;
 
     proc_cleanup();
-
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        statuscache_close();
-        statuscache_done();
-    }
 
     seen_done();
 

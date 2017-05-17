@@ -441,11 +441,6 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        /* open statuscache db to optimize handling an empty maildrop */
-        statuscache_open();
-    }
-
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
@@ -642,11 +637,6 @@ void shut_down(int code)
 
     syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
                        count_retr, count_top, count_dele);
-
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        statuscache_close();
-        statuscache_done();
-    }
 
     idle_done();
 
