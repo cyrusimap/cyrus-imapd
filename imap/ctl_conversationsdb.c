@@ -54,7 +54,6 @@
 #include "assert.h"
 #include "bsearch.h"
 #ifdef WITH_DAV
-#include "caldav_db.h"
 #include "carddav_db.h"
 #include "webdav_db.h"
 #endif
@@ -902,7 +901,6 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
 #ifdef WITH_DAV
-    caldav_init();
     carddav_init();
     webdav_init();
 #endif
@@ -920,7 +918,6 @@ int main(int argc, char **argv)
 #ifdef WITH_DAV
     webdav_done();
     carddav_done();
-    caldav_done();
 #endif
 
     cyrus_done();

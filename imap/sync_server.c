@@ -75,7 +75,6 @@
 #include "append.h"
 #include "auth.h"
 #ifdef WITH_DAV
-#include "caldav_db.h"
 #include "carddav_db.h"
 #include "dav_db.h"
 #endif /* WITH_DAV */
@@ -287,7 +286,6 @@ int service_init(int argc __attribute__((unused)),
     }
 
 #ifdef WITH_DAV
-    caldav_init();
     carddav_init();
 #endif
 
@@ -432,7 +430,6 @@ void shut_down(int code)
 
 #ifdef WITH_DAV
     carddav_done();
-    caldav_done();
 #endif
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

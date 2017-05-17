@@ -82,6 +82,19 @@ static struct namespace caldav_namespace;
 time_t caldav_epoch = -1;
 time_t caldav_eternity = -1;
 
+static int caldav_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    caldav_done();
+}
+
+static void init_internal() {
+    if (!caldav_initialized) {
+        caldav_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
+
 EXPORTED int caldav_init(void)
 {
     int r;
@@ -109,19 +122,26 @@ EXPORTED int caldav_init(void)
 
     r = sqldb_init();
     caldav_alarm_init();
+
+    if (!r) caldav_initialized = 1;
     return r;
 }
 
 
 EXPORTED int caldav_done(void)
 {
+    int r;
     caldav_alarm_done();
-    return sqldb_done();
+    r = sqldb_done();
+    if (!r) caldav_initialized = 0;
+    return r;
 }
 
 EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 {
     struct caldav_db *caldavdb = NULL;
+
+    init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
     if (!db) return NULL;
@@ -140,6 +160,8 @@ EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
     char *userid = mboxname_to_userid(mailbox->name);
+
+    init_internal();
 
     if (userid) {
         caldavdb = caldav_open_userid(userid);

@@ -55,7 +55,6 @@
 #include <libical/ical.h>
 
 #include "annotate.h"
-#include "caldav_db.h"
 #include "carddav_db.h"
 #include "exitcodes.h"
 #include "global.h"
@@ -147,7 +146,6 @@ int main(int argc, char **argv)
     }
 #endif
 
-    caldav_init();
     carddav_init();
 
     if (allusers) {
@@ -163,7 +161,6 @@ int main(int argc, char **argv)
     }
 
     carddav_done();
-    caldav_done();
 
     exit(code);
 }
@@ -186,6 +183,5 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
-    caldav_done();
     exit(code);
 }

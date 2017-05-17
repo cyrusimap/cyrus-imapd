@@ -81,7 +81,6 @@ EXPORTED void fatal(const char *msg, int err)
 static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
-    caldav_done();
     sync_log_done();
     cyrus_done();
     exit(ec);
@@ -121,8 +120,6 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
-
-    caldav_init();
 
     sync_log_init();
 
