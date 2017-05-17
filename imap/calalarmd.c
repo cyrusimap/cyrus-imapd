@@ -55,7 +55,6 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "sync_log.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
@@ -81,7 +80,6 @@ EXPORTED void fatal(const char *msg, int err)
 static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
-    sync_log_done();
     cyrus_done();
     exit(ec);
 }
@@ -120,8 +118,6 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
-
-    sync_log_init();
 
     if (upgrade) {
         caldav_alarm_upgrade();

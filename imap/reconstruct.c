@@ -96,7 +96,6 @@
 #include "quota.h"
 #include "seen.h"
 #include "util.h"
-#include "sync_log.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -239,8 +238,6 @@ int main(int argc, char **argv)
         fatal(error_message(r), EC_CONFIG);
     }
 
-    sync_log_init();
-
     if (mflag) {
         if (rflag || fflag || optind != argc) {
             cyrus_done();
@@ -375,8 +372,6 @@ int main(int argc, char **argv)
     free_hash_table(&unqid_table, free);
 
     buf_free(&buf);
-
-    sync_log_done();
 
     partlist_local_done();
 

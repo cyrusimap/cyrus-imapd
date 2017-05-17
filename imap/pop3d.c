@@ -91,7 +91,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#include "sync_log.h"
 #include "statuscache.h"
 
 #include "iostat.h"
@@ -510,8 +509,6 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
-    sync_log_init();
-
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
@@ -649,8 +646,6 @@ void shut_down(int code)
 
     syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
                        count_retr, count_top, count_dele);
-
-    sync_log_done();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         statuscache_close();

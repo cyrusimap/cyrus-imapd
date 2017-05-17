@@ -92,7 +92,6 @@
 #include "mupdate-client.h"
 #include "proc.h"
 #include "quota.h"
-#include "sync_log.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -147,8 +146,6 @@ void shut_down(int code)
 
     smmapd_reset();
 
-    sync_log_done();
-
     cyrus_done();
     exit(code);
 }
@@ -184,9 +181,6 @@ int service_init(int argc, char **argv, char **envp)
 
     BB = config_getstring(IMAPOPT_POSTUSER);
     forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-
-    /* so we can log sync information on closing mailboxes */
-    sync_log_init();
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {

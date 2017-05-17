@@ -54,7 +54,6 @@
 #include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "sync_log.h"
 #include "sysexits.h"
 #include "times.h"
 #include "util.h"
@@ -282,8 +281,6 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_jmapauth", 0, 0);
 
-    sync_log_init();
-
     struct db *db = NULL;
 
     r = jmapauth_open(&db, 0, fname);
@@ -376,7 +373,6 @@ int main(int argc, char **argv)
 
 done:
     if (r && db) jmapauth_close(db);
-    sync_log_done();
 
     cyrus_done();
 

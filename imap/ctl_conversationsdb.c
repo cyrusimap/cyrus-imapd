@@ -60,7 +60,6 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
-#include "sync_log.h"
 #include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -896,15 +895,11 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
-    sync_log_init();
-
     if (recursive) {
         mboxlist_alluser(do_user, NULL);
     }
     else
         do_user(userid, NULL);
-
-    sync_log_done();
 
     cyrus_done();
 

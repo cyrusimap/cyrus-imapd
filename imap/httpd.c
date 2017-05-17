@@ -83,7 +83,6 @@
 #include "version.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "sync_log.h"
 #include "telemetry.h"
 #include "backend.h"
 #include "proxy.h"
@@ -981,8 +980,6 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
-    sync_log_init();
-
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
     protgroup_insert(protin, httpd_in);
@@ -1174,8 +1171,6 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
-
-    sync_log_done();
 
     denydb_close();
     denydb_done();

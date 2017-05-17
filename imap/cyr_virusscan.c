@@ -62,7 +62,6 @@
 #include "mboxlist.h"
 #include "prot.h"
 #include "util.h"
-#include "sync_log.h"
 #include "times.h"
 #include "xstrlcpy.h"
 
@@ -321,8 +320,6 @@ int main (int argc, char *argv[]) {
         if (engine.init) engine.state = engine.init();
     }
 
-    sync_log_init();
-
     if (optind == argc) { /* do the whole partition */
         mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, &srock);
     } else {
@@ -335,8 +332,6 @@ int main (int argc, char *argv[]) {
     }
 
     if (email_notification) append_notifications();
-
-    sync_log_done();
 
     printf("\n%d mailboxes scanned, %d infected messages %s\n",
            srock.mailboxes_scanned,

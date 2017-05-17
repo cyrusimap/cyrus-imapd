@@ -366,9 +366,6 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
 
     /* And then run tasks. */
 
-    /* we want to be able to defer items to the subsequent sync log */
-    sync_log_init();
-
     for (action = quota_list->head; action; action = action->next) {
         if (!action->active)
             continue;
@@ -533,8 +530,6 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
 
         syslog(LOG_ERR, "Error in do_sync(): bailing out! %s", error_message(r));
     }
-
-    sync_log_done();
 
     sync_action_list_free(&user_list);
     sync_action_list_free(&unuser_list);

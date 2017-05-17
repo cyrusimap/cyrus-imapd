@@ -75,11 +75,23 @@ static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
 static strarray_t *unsuppressable = NULL;
 
+static int sync_log_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    sync_log_done();
+}
+
+static void init_internal() {
+    if (!sync_log_initialized) {
+        sync_log_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
+
 EXPORTED void sync_log_init(void)
 {
     const char *conf;
     int i;
-
 
     /* sync_log_init() may be called more than once */
     if (channels) strarray_free(channels);
@@ -102,6 +114,8 @@ EXPORTED void sync_log_init(void)
     conf = config_getstring(IMAPOPT_SYNC_LOG_UNSUPPRESSABLE_CHANNELS);
     if (conf)
         unsuppressable = strarray_split(conf, " ", 0);
+
+    sync_log_initialized = 1;
 }
 
 EXPORTED void sync_log_suppress(void)
@@ -116,6 +130,8 @@ EXPORTED void sync_log_done(void)
 
     strarray_free(unsuppressable);
     unsuppressable = NULL;
+
+    sync_log_initialized = 0;
 }
 
 static char *sync_log_fname(const char *channel)
@@ -293,6 +309,8 @@ EXPORTED void sync_log(const char *fmt, ...)
     const char *val;
     int i;
 
+    init_internal();
+
     if (!channels) return;
 
     va_start(ap, fmt);
@@ -310,6 +328,8 @@ EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
 {
     va_list ap;
     const char *val;
+
+    init_internal();
 
     va_start(ap, fmt);
     val = va_format(fmt, ap);

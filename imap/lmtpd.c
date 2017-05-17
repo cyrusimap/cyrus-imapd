@@ -109,8 +109,6 @@
 #include "lmtp_sieve.h"
 #endif
 
-#include "sync_log.h"
-
 #include "iostat.h"
 
 /* forward declarations */
@@ -266,8 +264,6 @@ int service_main(int argc, char **argv,
         io_count_stop = xmalloc (sizeof (struct io_count));
         read_io_count(io_count_start);
     }
-
-    sync_log_init();
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -930,8 +926,6 @@ void shut_down(int code)
         /* one less active connection */
         snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
-
-    sync_log_done();
 
     cyrus_done();
 

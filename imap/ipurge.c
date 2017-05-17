@@ -61,7 +61,6 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "util.h"
-#include "sync_log.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -176,8 +175,6 @@ int main (int argc, char *argv[]) {
 
   cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
-  sync_log_init();
-
   if (optind == argc) { /* do the whole partition */
     mboxlist_findall(NULL, "*", 1, 0, 0, purge_me, NULL);
   } else {
@@ -190,8 +187,6 @@ int main (int argc, char *argv[]) {
       mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_me, NULL);
     strarray_free(array);
   }
-
-  sync_log_done();
 
   cyrus_done();
 

@@ -526,8 +526,6 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
-    sync_log_init();
-
     nntp_in = prot_new(0, 0);
     nntp_out = prot_new(1, 1);
     protgroup_insert(protin, nntp_in);
@@ -640,8 +638,6 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
-
-    sync_log_done();
 
     duplicate_done();
 

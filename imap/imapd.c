@@ -934,8 +934,6 @@ int service_main(int argc __attribute__((unused)),
     id_getcmdline(argc, argv);
 #endif
 
-    sync_log_init();
-
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
     protgroup_insert(protin, imapd_in);
@@ -1086,7 +1084,6 @@ void shut_down(int code)
 
     if (imapd_index) index_close(&imapd_index);
 
-    sync_log_done();
     seen_done();
     mboxkey_done();
 
