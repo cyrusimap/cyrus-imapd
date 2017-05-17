@@ -39,3 +39,9 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+#include <config.h>
+
+#include "lib/util.h"
+
+extern int prometheus_text_report(struct buf *buf, const char **mimetype);

@@ -40,3 +40,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <config.h>
+
+#include "lib/prometheus.h"
+
+EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
+{
+    if (mimetype)
+        *mimetype = "text/plain; version=0.0.4";
+
+    /* FIXME produce the report into buf */
+    buf_reset(buf);
+
+    return 0;
+}

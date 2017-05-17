@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#include "lib/prometheus.h"
+
 #include "imap/httpd.h"
 #include "imap/http_err.h"
 
@@ -128,6 +130,8 @@ static int prom_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
+    const char *mimetype = NULL;
+    int r;
 
     if (strcmp(txn->req_uri->path, "/prometheus"))
         return HTTP_NOT_FOUND;
@@ -138,9 +142,13 @@ static int prom_get(struct transaction_t *txn,
     if (!strcmp(need_auth, "user") && !httpd_userid)
         return HTTP_UNAUTHORIZED;
 
-    /* FIXME populate buf with the prometheus report here */
+    r = prometheus_text_report(&buf, &mimetype);
+    if (r) {
+        txn->error.desc = error_message(r);
+        return HTTP_SERVER_ERROR;
+    }
 
-    txn->resp_body.type = "text/plain; version=0.0.4";
+    txn->resp_body.type = mimetype;
     txn->resp_body.len = buf_len(&buf);
 
     write_body(HTTP_OK, txn, buf_cstring(&buf), buf_len(&buf));
