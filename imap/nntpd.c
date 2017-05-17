@@ -466,9 +466,6 @@ int service_init(int argc __attribute__((unused)),
         fatal("unable to init duplicate delivery database", EC_SOFTWARE);
     }
 
-    /* setup for sending IMAP IDLE notifications */
-    idle_init();
-
     while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
         switch(opt) {
         case 's': /* nntps (do starttls right away) */
@@ -636,8 +633,6 @@ void shut_down(int code)
     if (backend_cached) free(backend_cached);
 
     duplicate_done();
-
-    idle_done();
 
     partlist_local_done();
 

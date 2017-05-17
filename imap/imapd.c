@@ -842,9 +842,6 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* setup for sending IMAP IDLE notifications */
-    idle_init();
-
     /* setup for mailbox event notifications */
     events = mboxevent_init();
     apns_enabled =
@@ -1081,8 +1078,6 @@ void shut_down(int code)
 
     annotatemore_close();
     annotate_done();
-
-    idle_done();
 
     partlist_local_done();
 

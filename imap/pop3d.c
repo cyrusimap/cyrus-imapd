@@ -441,9 +441,6 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* setup for sending IMAP IDLE notifications */
-    idle_init();
-
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
@@ -637,8 +634,6 @@ void shut_down(int code)
 
     syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
                        count_retr, count_top, count_dele);
-
-    idle_done();
 
     if (popd_in) {
         prot_NONBLOCK(popd_in);
