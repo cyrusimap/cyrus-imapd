@@ -55,7 +55,6 @@
 #include <libical/ical.h>
 
 #include "annotate.h"
-#include "carddav_db.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "http_dav.h"
@@ -146,8 +145,6 @@ int main(int argc, char **argv)
     }
 #endif
 
-    carddav_init();
-
     if (allusers) {
         mboxlist_alluser(do_user, (void *)audit_tool);
     }
@@ -159,8 +156,6 @@ int main(int argc, char **argv)
         for (i = optind; i < argc; i++)
             do_user(argv[i], (void *)audit_tool);
     }
-
-    carddav_done();
 
     exit(code);
 }

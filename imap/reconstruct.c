@@ -79,7 +79,6 @@
 #include "assert.h"
 #include "bsearch.h"
 #ifdef WITH_DAV
-#include "carddav_db.h"
 #include "webdav_db.h"
 #endif
 #include "crc32.h"
@@ -254,7 +253,6 @@ int main(int argc, char **argv)
     }
 
 #ifdef WITH_DAV
-    carddav_init();
     webdav_init();
 #endif
 
@@ -390,7 +388,6 @@ int main(int argc, char **argv)
     partlist_local_done();
 #ifdef WITH_DAV
     webdav_done();
-    carddav_done();
 #endif
 
     cyrus_done();

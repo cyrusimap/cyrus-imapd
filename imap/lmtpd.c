@@ -228,11 +228,6 @@ int service_init(int argc __attribute__((unused)),
         denydb_init(0);
         denydb_open(0);
 
-#ifdef WITH_DAV
-        /* so we can do DAV operations */
-        carddav_init();
-#endif
-
         /* setup for statuscache invalidation */
         statuscache_open();
 
@@ -919,10 +914,6 @@ void shut_down(int code)
 
         denydb_close();
         denydb_done();
-
-#ifdef WITH_DAV
-        carddav_done();
-#endif
 
         statuscache_close();
         statuscache_done();

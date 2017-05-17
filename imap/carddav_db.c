@@ -67,21 +67,39 @@ struct carddav_db {
     char *userid;
 };
 
+static int carddav_initialized = 0;
+
+static void done_cb(void *rock __attribute__((unused))) {
+    carddav_done();
+}
+
+static void init_internal() {
+    if (!carddav_initialized) {
+        carddav_init();
+        cyrus_modules_add(done_cb, NULL);
+    }
+}
 
 EXPORTED int carddav_init(void)
 {
-    return sqldb_init();
+    int r = sqldb_init();
+    if (!r) carddav_initialized = 1;
+    return r;
 }
 
 
 EXPORTED int carddav_done(void)
 {
-    return sqldb_done();
+    int r = sqldb_done();
+    if (!r) carddav_initialized = 0;
+    return r;
 }
 
 EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 {
     struct carddav_db *carddavdb = NULL;
+
+    init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
     if (!db) return NULL;
@@ -97,6 +115,8 @@ EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
 {
     struct carddav_db *carddavdb = NULL;
     char *userid = mboxname_to_userid(mailbox->name);
+
+    init_internal();
 
     if (userid) {
         carddavdb = carddav_open_userid(userid);
@@ -829,6 +849,8 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     char *freeme = NULL;
     char datestr[80];
 
+    init_internal();
+
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
@@ -927,6 +949,9 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
     int userflag;
     int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
     struct index_record oldrecord;
+
+    init_internal();
+
     if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
     if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
         if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
@@ -954,6 +979,8 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
 {
     struct buf boxbuf = BUF_INITIALIZER;
     char *res = NULL;
+
+    init_internal();
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
 
