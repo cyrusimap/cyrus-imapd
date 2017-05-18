@@ -401,7 +401,7 @@ additional backslash.  For example:
 
 =over 4
 
-  setmetadata --private Spam "\\Junk"
+  setmetadata --private Spam specialuse "\\Junk"
 
 =back
 
