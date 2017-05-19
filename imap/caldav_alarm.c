@@ -87,13 +87,10 @@ struct get_alarm_rock {
 };
 
 static struct namespace caldav_alarm_namespace;
-icaltimezone *utc_zone = NULL;
 
 EXPORTED int caldav_alarm_init(void)
 {
     int r;
-
-    utc_zone = icaltimezone_get_utc_timezone();
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_alarm_namespace, 1))) {
