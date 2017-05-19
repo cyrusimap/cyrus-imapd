@@ -112,6 +112,75 @@ structure: use :cyrusman:`mkimap(8)`.
 8. Launch Cyrus
 ---------------
 
+8(a). Prepare ephemeral (run-time) storage directories
+######################################################
+
+If you will be using ephemeral (run-time) storage locations on an OS or
+distro on which the directory skeleton does not persist over reboots,
+you will need to use your distro's standard method to ensure that any
+such directories your installation depends upon exist `prior` to
+launching the daemon.
+
+Here's how to do so for Debian/Ubuntu.  Use the provided
+``statoverride`` facility to manage the ownership and permissions of
+these directories::
+
+    sudo dpkg-statoverride cyrus mail 755 /run/cyrus
+    sudo dpkg-statoverride cyrus mail 750 /run/cyrus/socket
+
+Then you can use something like this in your init script (like those
+packaged by Debian team)::
+
+    dir=$(dpkg-statoverride --list /var/run/cyrus)
+    [ -z "$dir" ] || createdir $dir
+
+where the ``createdir()`` shell function looks like this::
+
+    createdir() {
+    # $1 = user
+    # $2 = group
+    # $3 = permissions (octal)
+    # $4 = path to directory
+        [ "$VERBOSE" = "yes" ] && OPT="-c"
+        [ -d "$4" ] || mkdir -p "$4"
+        chown $OPT -h "$1:$2" "$4"
+        chmod $OPT "$3" "$4"
+    }
+
+Putting it all together, this blob from the stock Debian packaging
+would go between pre-flight checks (checking for config sanity, file
+locations, etc.) and initialization::
+
+    createdir() {
+    # $1 = user
+    # $2 = group
+    # $3 = permissions (octal)
+    # $4 = path to directory
+        [ "$VERBOSE" = "yes" ] && OPT="-c"
+        [ -d "$4" ] || mkdir -p "$4"
+        chown $OPT -h "$1:$2" "$4"
+        chmod $OPT "$3" "$4"
+    }
+
+    missingstatoverride () {
+        echo "$0: You are missing a dpkg-statoverride on $1.  Add it." >&2
+        exit 1
+    }
+
+    fixdirs () {
+        dir=$(dpkg-statoverride --list /run/cyrus) \
+            || missingstatoverride /run/cyrus
+        [ -z "$dir" ] \
+            || createdir $dir
+        dir=$(dpkg-statoverride --list /run/cyrus/socket) \
+            || missingstatoverride /run/cyrus/socket
+        [ -z "$dir" ] \
+            || createdir $dir
+    }
+
+8(b). Start the server
+######################
+
 ::
 
     sudo ./master/master -d
