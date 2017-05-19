@@ -57,7 +57,7 @@ or if you are :ref:`using jmap <developer-jmap>`.
     --enable-coverage --enable-calalarmd --enable-apple-push-service --enable-autocreate \
     --enable-nntp --enable-http --enable-unit-tests \
     --enable-replication --with-openssl=yes --enable-murder \
-    --enable-idled --enable-event-notification --enable-sieve --prefix=/usr/cyrus
+    --enable-idled --enable-sieve --prefix=/usr/cyrus
 
     make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
