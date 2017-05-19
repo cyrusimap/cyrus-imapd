@@ -29,7 +29,7 @@ Then you can fire up gdb:
 
 .. code-block:: bash
 
-    gdb /usr/local/cyrus/lmtpd /tmo/core.XXX  (use proper locations)
+    gdb /usr/local/cyrus/lmtpd /tmp/core.XXX  (use proper locations)
 
 At the (gdb) prompt run the backtrace command (``bt``).
 
