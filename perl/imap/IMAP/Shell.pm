@@ -1941,13 +1941,23 @@ Show help for C<command> or all commands.
 
 aliases: C<?>
 
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-getmetadata:
+
+=head2 getmetadata
+
+B<getmetadata> [I<mailbox>]
+
+Display mailbox/server metadata
+
+aliases: C<getmd>
+
 =for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-info:
 
 =head2 info
 
 B<info> [I<mailbox>]
 
-Display the mailbox/server metadata.
+Display the mailbox/server annotations.
 
 =for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-listaclmailbox:
 
@@ -2198,6 +2208,41 @@ Indicates that all mailboxes should have a squat indexes created for
 them (unless overridden by a mailbox annotation).
 
 =back
+
+=for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-setmetadata:
+
+=head2 setmetadata
+
+B<setmetadata> [--private] mailbox [I<annotation>] I<value>
+
+Set metadata on mailbox, where I<annotation> is one of
+[comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|
+squat|/<explicit annotation>].
+
+Note that I<value> with a leading backslash must be escaped with an
+additional backslash.  For example:
+
+=over 4
+
+  setmetadata --private Spam specialuse "\\Junk"
+
+=back
+
+Note, too, that "private" annotations are private to the user currently
+authenticated as, not necessarily the owner of the mailbox.  To set
+annotations for another user you must authorize as that user.
+
+In addition to the use of optional flag B<--private>, one may use a more
+explicit syntax, prefixing the annotation with '/shared/' or '/private/'
+as in this example:
+
+=over 4
+
+  setmetadata Spam /private/specialuse "\\Junk"
+
+=back
+
+aliases: C<setmd>
 
 =for pod2rst .. _imap-reference-manpages-systemcommands-cyradm-setquota:
 
