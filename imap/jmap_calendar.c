@@ -1287,6 +1287,7 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
          * to a Cyrus hash, but the jmapical API requires a JSON object. */
         strarray_t *keys = hash_keys(crock->props);
         int i;
+        jprops = json_pack("{}");
         for (i = 0; i < strarray_size(keys); i++) {
             json_object_set(jprops, strarray_nth(keys, i), json_null());
         }
