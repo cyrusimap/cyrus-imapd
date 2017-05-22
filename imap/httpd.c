@@ -3787,7 +3787,8 @@ static void auth_success(struct transaction_t *txn, const char *userid)
         /* Rewind log to current request and truncate it */
         off_t end = lseek(httpd_logfd, 0, SEEK_END);
 
-        ftruncate(httpd_logfd, end - buf_len(&txn->buf));
+        if (ftruncate(httpd_logfd, end - buf_len(&txn->buf)))
+            syslog(LOG_ERR, "IOERROR: failed to truncate http log");
 
         /* Close existing telemetry log */
         close(httpd_logfd);
@@ -3801,7 +3802,8 @@ static void auth_success(struct transaction_t *txn, const char *userid)
 
     if (httpd_logfd != -1) {
         /* Log credential-redacted request */
-        write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
+        if (write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
+            syslog(LOG_ERR, "IOERROR: failed to write to http log");
     }
 
     buf_reset(&txn->buf);

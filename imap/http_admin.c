@@ -457,7 +457,7 @@ static int add_procinfo(pid_t pid,
         unsigned long long starttime = 0;
         char state = 0, *s = NULL;
 
-        fscanf(f, "%d %ms %c " /* 1-3 */
+        int c = fscanf(f, "%d %ms %c " /* 1-3 */
                "%d %d %d %d %d %u " /* 4-9 */
                "%lu %lu %lu %lu %lu %lu " /* 10-15 */
                "%ld %ld %ld %ld %ld %ld " /* 16-21 */
@@ -471,9 +471,11 @@ static int add_procinfo(pid_t pid,
         free(s);
         fclose(f);
 
-        pinfo->state = state;
-        pinfo->vmsize = vmsize;
-        pinfo->start = starttime/sysconf(_SC_CLK_TCK);
+        if (c != EOF) {
+            pinfo->state = state;
+            pinfo->vmsize = vmsize;
+            pinfo->start = starttime/sysconf(_SC_CLK_TCK);
+        }
     }
 
     return 0;
@@ -1250,7 +1252,7 @@ static int action_conf(struct transaction_t *txn)
         /* Add the overflow options */
         for (k = OVER_PARTITION; k >= OVER_UNKNOWN; k--) {
             if (crock.overflow[k].count) {
-                const char *colname;
+                const char *colname = "UNKNOWN";
 
                 switch (k) {
                 case OVER_UNKNOWN:

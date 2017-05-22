@@ -897,8 +897,10 @@ static int lock_run_pipe(const char *userid, const char *fname,
 
     /* wait until stdin closes */
     char buf[PROT_BUFSIZE] = {0};
-    while (!feof(stdin))
-        fgets(buf, sizeof(buf), stdin);
+    while (!feof(stdin)) {
+        if (!fgets(buf, sizeof(buf), stdin))
+            break;
+    }
 
     r = backup_close(&backup);
     if (r) fprintf(stderr, "warning: backup_close() returned %i\n", r);

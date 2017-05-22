@@ -147,7 +147,7 @@ static int compact_closerename(struct backup **originalp,
 
     /* link original files into timestamped names */
     r = link(original->data_fname, buf_cstring(&ts_data_fname));
-    if (!r) link(original->index_fname, buf_cstring(&ts_index_fname));
+    if (!r) r = link(original->index_fname, buf_cstring(&ts_index_fname));
 
     if (r) {
         /* on error, trash the new links and bail out */
@@ -164,8 +164,10 @@ static int compact_closerename(struct backup **originalp,
         /* on error, put original files back */
         unlink(original->data_fname);
         unlink(original->index_fname);
-        link(buf_cstring(&ts_data_fname), original->data_fname);
-        link(buf_cstring(&ts_index_fname), original->index_fname);
+        if (link(buf_cstring(&ts_data_fname), original->data_fname))
+            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_data_fname), original->data_fname);
+        if (link(buf_cstring(&ts_index_fname), original->index_fname))
+            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_index_fname), original->index_fname);
         goto done;
     }
 

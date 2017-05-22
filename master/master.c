@@ -2194,8 +2194,9 @@ int main(int argc, char **argv)
                 if (path == NULL)
                         path = "/tmp";
         }
-        (void) chdir(path);
-        (void) chdir("cores");
+        if (chdir(path))
+            fatalf(2, "couldn't chdir to %s: %m", path);
+        r = chdir("cores");
 
         do {
             pid = fork();
