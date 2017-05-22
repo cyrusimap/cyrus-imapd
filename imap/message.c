@@ -4721,7 +4721,7 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
                                     void *rock)
 {
     char *tmp, *key;
-    int r;
+    int r = 0;
 
     tmp = charset_unfold(headers, len, 0);
     if (!tmp) return IMAP_INTERNAL;
