@@ -286,6 +286,7 @@ sub _create_instances
     my ($self) = @_;
     my $sync_port;
     my $mupdate_port;
+    my $frontend_imapd_port;
     my $backend1_imapd_port;
     my $backend2_imapd_port;
     my $backupd_port;
@@ -392,11 +393,13 @@ sub _create_instances
 
 	if ($want->{murder})
 	{
+	    $frontend_imapd_port = Cassandane::PortManager::alloc();
 	    $backend2_imapd_port = Cassandane::PortManager::alloc();
 
 	    # set up a front end on which we also run the mupdate master
 	    my $frontend_conf = $self->{_config}->clone();
 	    $frontend_conf->set(
+		servername => "localhost:$frontend_imapd_port",
 		mupdate_server => "localhost:$mupdate_port",
 		# XXX documentation says to use mupdate_port, but
 		# XXX this doesn't work -- need to embed port number in
@@ -426,6 +429,13 @@ sub _create_instances
 					   argv => ['mupdate', '-m'],
 					   prefork => 1);
 	    $self->{frontend}->add_services(@{$want->{services}});
+	    $self->{frontend}->_setup_for_deliver()
+		if ($want->{deliver});
+
+	    # arrange for frontend imapd to run on a known port
+	    $self->{frontend}->remove_service('imap');
+	    $self->{frontend}->add_service(name => 'imap',
+					   port => $frontend_imapd_port);
 
 	    # arrange for backend1 to push to mupdate on startup
 	    $self->{instance}->add_start(name => 'mupdatepush',
