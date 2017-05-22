@@ -1076,13 +1076,12 @@ static void free_internalised(void *internalised)
 
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
+    int r = check_config();
+    if (r) return NULL;
+
     xapian_builder_t *bb;
     strarray_t *dirs = NULL;
     strarray_t *active = NULL;
-    int r;
-
-    r = check_config();
-    if (r) goto out;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -1721,14 +1720,14 @@ static int end_message_snippets(search_text_receiver_t *rx)
     int i;
     struct segment *seg;
     int last_part = -1;
-    int r;
+    int r = 0;
+
+    if (!tr->root) {
+        goto out;
+    }
 
     if (!tr->snipgen) {
         r = IMAP_INTERNAL;          /* need to call begin_mailbox() */
-        goto out;
-    }
-    if (!tr->root) {
-        r = 0;
         goto out;
     }
 

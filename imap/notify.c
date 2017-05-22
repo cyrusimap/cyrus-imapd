@@ -165,7 +165,7 @@ EXPORTED int notify_at(time_t when, const char *method,
     int r = mailbox_open_iwl("#events", &mailbox);
     struct buf buf = BUF_INITIALIZER;
 
-    FILE *f;
+    FILE *f = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
     struct stagemsg *stage = NULL;
