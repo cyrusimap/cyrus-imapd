@@ -463,18 +463,22 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     char yn;
     int i;
 
-    if (vacation_answer)
+    if (vacation_answer) {
         yn = vacation_answer;
-    else {
-    printf("Have I already responded to '");
-    for (i = 0; i < SIEVE_HASHLEN; i++) {
-        printf("%x", arc->hash[i]);
     }
-    if (arc->seconds % DAY2SEC)
-        printf("' in %d seconds? ", arc->seconds);
-    else
-        printf("' in %d days? ", arc->seconds / DAY2SEC);
-    scanf(" %c", &yn);
+    else {
+        printf("Have I already responded to '");
+        for (i = 0; i < SIEVE_HASHLEN; i++) {
+            printf("%x", arc->hash[i]);
+        }
+        if (arc->seconds % DAY2SEC) {
+            printf("' in %d seconds? ", arc->seconds);
+        }
+        else {
+            printf("' in %d days? ", arc->seconds / DAY2SEC);
+        }
+        if (!scanf(" %c", &yn))
+            return SIEVE_FAIL;
     }
 
     if (TOLOWER(yn) == 'y') return SIEVE_DONE;
