@@ -603,7 +603,7 @@ sub assert_normalized_event_equals
 
 sub putandget_vevent
 {
-    my ($self, $id, $ical) = @_;
+    my ($self, $id, $ical, @props) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
@@ -621,7 +621,7 @@ sub putandget_vevent
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
     xlog "get event $id";
-    $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
+    $res = $jmap->Request([['getCalendarEvents', {ids => [$id], properties => @props}, "R1"]]);
 
     my $event = $res->[0][1]{list}[0];
     $self->assert_not_null($event);
@@ -666,6 +666,22 @@ sub test_getcalendarevents_simple
     $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
     $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
     $self->assert_num_equals($event->{sequence}, 9);
+}
+
+sub test_getcalendarevents_properties
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('simple');
+
+    my $event = $self->putandget_vevent($id, $ical, ["x-href", "calendarId"]);
+    $self->assert_not_null($event);
+    $self->assert_not_null($event->{id});
+    $self->assert_not_null($event->{uid});
+    $self->assert_not_null($event->{"x-href"});
+    $self->assert_not_null($event->{calendarId});
+    $self->assert_num_equals(4, scalar keys %$event);
 }
 
 sub test_getcalendarevents_relatedto
