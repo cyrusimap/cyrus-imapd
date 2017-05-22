@@ -202,6 +202,10 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* so we can do quota operations */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     if (config_mupdate_server &&
         (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
         !config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -225,10 +229,6 @@ int service_init(int argc __attribute__((unused)),
                       EC_SOFTWARE);
             }
         }
-
-        /* so we can do quota operations */
-        quotadb_init(0);
-        quotadb_open(NULL);
 
         /* open the user deny db */
         denydb_init(0);
@@ -926,12 +926,12 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
 
+    quotadb_close();
+    quotadb_done();
+
     if (!isproxy) {
         if (dupelim)
             duplicate_done();
-
-        quotadb_close();
-        quotadb_done();
 
         denydb_close();
         denydb_done();
