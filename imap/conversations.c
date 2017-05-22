@@ -1651,7 +1651,7 @@ static int _guid_cb(void *rock,
                     size_t datalen)
 {
     struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
-    int r;
+    int r = 0;
 
     if (keylen < 41)
         return IMAP_INTERNAL;
