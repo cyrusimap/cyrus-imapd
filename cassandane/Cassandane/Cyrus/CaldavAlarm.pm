@@ -1204,4 +1204,187 @@ EOF
     $self->assert_alarms({summary => 'Simple'});
 }
 
+sub test_reschedule_exception
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Europe/Vienna');
+
+    # define an event that started yesterday and repeats daily
+    my $startdt = $now->clone();
+    $startdt->subtract(DateTime::Duration->new(hours => 23));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(minutes => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    # the next event will start in one hour
+    my $recuriddt = $now->clone();
+    $recuriddt->add(DateTime::Duration->new(hours => 1));
+    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
+
+    # but it exceptionally starts in two hours
+    my $rstartdt = $now->clone();
+    $rstartdt->add(DateTime::Duration->new(hours => 2));
+    my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
+    my $renddt = $rstartdt->clone();
+    $renddt->add(DateTime::Duration->new(minutes => 15));
+    my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Europe/Vienna
+X-LIC-LOCATION:Europe/Vienna
+TZUNTIL:20170523T130000Z
+BEGIN:DAYLIGHT
+TZNAME:CEST
+DTSTART:20170522T140000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0200
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:OPAQUE
+DTEND;TZID=Europe/Vienna:$end
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTSTAMP:20160420T141259Z
+SEQUENCE:0
+SUMMARY:main
+DTSTART;TZID=Europe/Vienna:$start
+CREATED:20160420T141217Z
+RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alert
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20160420T141217Z
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTEND;TZID=Europe/Vienna:$recurend
+TRANSP:OPAQUE
+SUMMARY:exception
+DTSTART;TZID=Europe/Vienna:$recurstart
+DTSTAMP:20160420T141312Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=Europe/Vienna:$recurid
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm exception
+DESCRIPTION:My alarm exception has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "PUT VEVENT";
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    # trigger processing of alarms: wall clock for calalarmd is 10 seconds *after*
+    # the occurrence of the exception. This will trigger it to fire its alarm.
+    xlog "run calalarmd";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
+
+    $self->assert_alarms({summary => 'exception', start => $recurstart});
+
+    # reschedule the exception event to start one hour later than the original
+    # exceptional start time.
+    $rstartdt->add(DateTime::Duration->new(hours => 1));
+    $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
+    $renddt = $rstartdt->clone();
+    $renddt->add(DateTime::Duration->new(minutes => 15));
+    $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Europe/Vienna
+X-LIC-LOCATION:Europe/Vienna
+TZUNTIL:20170523T130000Z
+BEGIN:DAYLIGHT
+TZNAME:CEST
+DTSTART:20170522T140000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0200
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:OPAQUE
+DTEND;TZID=Europe/Vienna:$end
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTSTAMP:20160420T141259Z
+SEQUENCE:0
+SUMMARY:main
+DTSTART;TZID=Europe/Vienna:$start
+CREATED:20160420T141217Z
+RRULE:FREQ=HOURLY;INTERVAL=1;COUNT=3
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alert
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20160420T141217Z
+UID:12A08570-CF92-4418-986C-6173001AB557
+DTEND;TZID=Europe/Vienna:$recurend
+TRANSP:OPAQUE
+SUMMARY:rescheduled
+DTSTART;TZID=Europe/Vienna:$recurstart
+DTSTAMP:20160420T141312Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=Europe/Vienna:$recurid
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm exception
+DESCRIPTION:My alarm exception has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "PUT rescheduled VEVENT";
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Re-run calalarmd";
+    # trigger processing of alarms: wall clock now is 10 seconds after the
+    # newly scheduled exception time
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
+
+    $self->assert_alarms({summary => 'rescheduled', start => $recurstart});
+}
+
 1;
