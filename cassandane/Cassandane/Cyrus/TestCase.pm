@@ -173,9 +173,9 @@ sub config_set
 magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
-magic(replication => sub { shift->want('replica'); });
-magic(murder => sub { shift->want('murder'); });
-magic(backups => sub { shift->want('backups'); });
+magic(Replication => sub { shift->want('replica'); });
+magic(Murder => sub { shift->want('murder'); });
+magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
