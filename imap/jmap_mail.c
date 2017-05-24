@@ -6242,6 +6242,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (r) goto done;
 
     jmap_closembox(req, &mbox);
+    msgrecord_unref(&mr);
 
     /* Write the message to the file system */
     if (json_object_get(msg, "isDraft") == json_true())
