@@ -1,3 +1,4 @@
+[![Build Status](https://api.travis-ci.org/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.org/cyrusimap/cyrus-imapd)
 Welcome
 =======
 
