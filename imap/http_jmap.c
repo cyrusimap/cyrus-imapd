@@ -709,6 +709,9 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         message_free_body(body);
         free(body);
     }
+    if (mr) {
+        msgrecord_unref(&mr);
+    }
     buf_free(&msg_buf);
     free(blobid);
     jmap_finireq(&req);
