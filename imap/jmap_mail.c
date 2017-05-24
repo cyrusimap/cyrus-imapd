@@ -5399,6 +5399,7 @@ static int copyrecord(jmap_req_t *req, struct mailbox *src, struct mailbox *dst,
 
     sync_log_mailbox_double(src->name, dst->name);
 done:
+    ptrarray_fini(&msgrecs);
     return r;
 }
 
