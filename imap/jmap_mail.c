@@ -1391,10 +1391,30 @@ static int setMailboxes(jmap_req_t *req)
             if (jmapmbox_isparent(mboxname)) {
                 json_t *err = json_pack("{s:s}", "type", "mailboxHasChild");
                 json_object_set_new(notDestroyed, uid, err);
-                if (mboxname) {
-                    free(mboxname);
-                    mboxname = NULL;
-                }
+                free(mboxname);
+                mboxname = NULL;
+                r = 0;
+                continue;
+            }
+
+            /* Check if the mailbox has any messages */
+            struct mailbox *mbox = NULL;
+            int hasmsg = 0;
+            r = jmap_openmbox(req, mboxname, &mbox, 0);
+            if (r) {
+                syslog(LOG_ERR, "failed to inspect mailbox(%s) for messages: %s",
+                        mboxname, error_message(r));
+                goto done;
+            }
+            struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+            hasmsg = mailbox_iter_step(iter) != NULL;
+            mailbox_iter_done(&iter);
+            jmap_closembox(req, &mbox);
+            if (hasmsg) {
+                json_t *err = json_pack("{s:s}", "type", "mailboxHasMessage");
+                json_object_set_new(notDestroyed, uid, err);
+                free(mboxname);
+                mboxname = NULL;
                 r = 0;
                 continue;
             }
