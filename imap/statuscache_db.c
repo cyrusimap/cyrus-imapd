@@ -106,7 +106,7 @@ EXPORTED void statuscache_open(void)
     int ret;
 
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
-        return;
+        goto out;
 
     ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (ret != 0) {
