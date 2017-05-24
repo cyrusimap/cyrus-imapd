@@ -4316,6 +4316,7 @@ doneloop:
         } else {
             json_array_append_new(notfound, json_string(id));
         }
+        if (mr) msgrecord_unref(&mr);
         if (r) goto done;
     }
 
