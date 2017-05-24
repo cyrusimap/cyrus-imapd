@@ -2045,6 +2045,8 @@ void sched_deliver(const char *recipient, void *data, void *rock)
     /* don't schedule to yourself */
     if (sparam.isyou) return;
 
+    syslog(LOG_NOTICE, "iMIP scheduling delivery to %s", recipient);
+
     if (sparam.flags) {
         /* Remote recipient */
         sched_deliver_remote(recipient, &sparam, sched_data);
@@ -2729,6 +2731,8 @@ void sched_request(const char *userid, const char *organizer,
     int i;
     for (i = 0; i < strarray_size(&attendees); i++) {
         const char *attendee = strarray_nth(&attendees, i);
+        syslog(LOG_NOTICE, "iMIP scheduling request from %s to %s",
+               organizer, attendee);
         schedule_one_attendee(attendee, oldical, newical);
     }
 
@@ -3094,6 +3098,8 @@ void sched_reply(const char *userid, const char *attendee,
     schedule_sub_replies(attendee, oldical, newical, &reply);
     schedule_sub_declines(attendee, oldical, newical, &reply);
 
+    syslog(LOG_NOTICE, "iMIP scheduling reply from %s to %s",
+           attendee, reply.organizer ? reply.organizer : "<unknown>");
     if (reply.do_send) {
         struct sched_data sched = { 0, 1, 0, reply.itip, reply.force_send, NULL };
         sched_deliver(reply.organizer, &sched, httpd_authstate);
