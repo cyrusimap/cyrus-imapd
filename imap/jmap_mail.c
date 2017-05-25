@@ -2395,25 +2395,33 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
             /* name */
             const char *fname = NULL;
+            int is_extended = 0;
             for (param = part->disposition_params; param; param = param->next) {
-                if (!strcasecmp(param->attribute, "filename")) {
+                if (!strncasecmp(param->attribute, "filename", 8)) {
+                    is_extended = param->attribute[8] == '*';
                     fname = param->value;
                     break;
                 }
             }
             if (!fname) {
                 for (param = part->params; param; param = param->next) {
-                    if (!strcasecmp(param->attribute, "name")) {
+                    if (!strncasecmp(param->attribute, "name", 4)) {
+                        is_extended = param->attribute[4] == '*';
                         fname = param->value;
                         break;
                     }
                 }
             }
-            if (fname) {
-                freeme = charset_parse_mimeheader(fname, charset_flags & CHARSET_MIME_UTF8);
-                json_object_set_new(att, "name", json_string(freeme));
-                free(freeme);
-                freeme = NULL;
+            if (fname && is_extended) {
+                char *s = charset_parse_mimexvalue(fname, NULL);
+                json_object_set_new(att, "name", s ? json_string(s) : json_null());
+                free(s);
+            }
+            else if (fname) {
+                int mime_flags = charset_flags & CHARSET_MIME_UTF8;
+                char *s = charset_parse_mimeheader(fname, mime_flags);
+                json_object_set_new(att, "name", s ? json_string(s) : json_null());
+                free(s);
             }
             else {
                 json_object_set_new(att, "name", json_null());
