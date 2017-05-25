@@ -1701,6 +1701,95 @@ sub test_getmessages_body_multi
     $self->assert_null($att->{cid});
 }
 
+sub test_getmessages_attachment_name
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "".
+    "--sub\r\n".
+    "Content-Type: image/jpeg;\r\n name=\"image1.jpg\"\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "\r\n" .
+    "beefc0de".
+    "\r\n--sub\r\n".
+    "Content-Type: image/tiff\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "\r\n" .
+    "abc=".
+    "\r\n--sub\r\n".
+    "Content-Type: application/x-excel\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "Content-Disposition: attachment; filename\r\n\t=\"f.xls\"\r\n".
+    "\r\n" .
+    "012312312313".
+    "\r\n--sub\r\n".
+    "Content-Type: application/foo;name=y.dat\r\n".
+    "Content-Disposition: attachment; filename=z.dat\r\n".
+    "\r\n" .
+    "foo".
+    "\r\n--sub\r\n".
+    "Content-Type: application/bar;name*0=looo;name*1=ooong;name*2=.name\r\n".
+    "\r\n" .
+    "bar".
+    "\r\n--sub\r\n".
+    "Content-Type: application/baz\r\n".
+    "Content-Disposition: attachment; filename*0=cont;\r\n filename*1=inue\r\n".
+    "\r\n" .
+    "baz".
+    "\r\n--sub--";
+
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => $body
+    );
+    $talk->store('1', '+flags', '($HasAttachment)');
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_equals(JSON::true, $msg->{hasAttachment});
+
+    # Assert embedded message support
+    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
+    my $att;
+
+    $att = $m{"image/tiff"};
+    $self->assert_null($att->{name});
+
+    $att = $m{"application/x-excel"};
+    $self->assert_str_equals("f.xls", $att->{name});
+
+    $att = $m{"image/jpeg"};
+    $self->assert_str_equals("image1.jpg", $att->{name});
+
+    $att = $m{"application/foo"};
+    $self->assert_str_equals("z.dat", $att->{name});
+
+    $att = $m{"application/bar"};
+    $self->assert_str_equals("loooooong.name", $att->{name});
+
+    $att = $m{"application/baz"};
+    $self->assert_str_equals("continue", $att->{name});
+}
+
 sub test_getmessages_body_nontext
     :JMAP :min_version_3_0
 {
