@@ -83,6 +83,7 @@ extern const char *encoding_name(int);
 extern char *charset_convert(const char *s, charset_t charset, int flags);
 extern char *charset_decode_mimeheader(const char *s, int flags);
 extern char *charset_parse_mimeheader(const char *s, int flags);
+extern char *charset_parse_mimexvalue(const char *s, struct buf *language);
 extern char *charset_utf8_to_searchform(const char *s, int flags);
 
 

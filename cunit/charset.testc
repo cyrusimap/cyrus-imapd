@@ -463,6 +463,45 @@ static void test_mimeheader_badcharset(void)
     free(s);
 }
 
+static void test_parse_mimexvalue(void)
+{
+    char *s;
+    struct buf lang = BUF_INITIALIZER;
+    static const char SIMPLE[] = "utf-8'en'foo";
+    static const char OCTETS[] = "utf-8''%F0%9F%98%80";
+    static const char LATIN1[] = "iso-8859-1'de'R%e4tsel";
+
+    s = charset_parse_mimexvalue(NULL, NULL);
+    CU_ASSERT_PTR_NULL(s);
+    free(s);
+
+    s = charset_parse_mimexvalue("foo", NULL);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "foo");
+    free(s);
+
+    s = charset_parse_mimexvalue(SIMPLE, &lang);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "foo");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&lang), "en");
+    buf_reset(&lang);
+    free(s);
+
+    s = charset_parse_mimexvalue(OCTETS, NULL);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "\xf0\x9f\x98\x80");
+    free(s);
+
+    s = charset_parse_mimexvalue(LATIN1, &lang);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "Rätsel");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&lang), "de");
+    buf_reset(&lang);
+    free(s);
+
+    buf_free(&lang);
+}
+
 static void test_unfold(void)
 {
 #define TESTCASE(in, wantSkip, wantKeep) \

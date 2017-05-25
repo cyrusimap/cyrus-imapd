@@ -2341,6 +2341,60 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
     return res;
 }
 
+/* Decode extended MIME values (per RFC 2231). Returns a newly allocated UTF-8
+ * encoded string, containing the decoded string, which must be free()d by the
+ * caller. If lang is not NULL, sets the buffer contents to the 'language'
+ * field as encoded in the MIME value */
+EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
+{
+    if (!s) return NULL;
+    const char *p, *q;
+    struct buf buf = BUF_INITIALIZER;
+    charset_t cs;
+    char *ret = NULL;
+
+    /* Determine charset */
+    p = s;
+    q = strchr(p, '\'');
+    if (!q) return charset_parse_mimeheader(s, 0);
+
+    buf_setmap(&buf, p, q - p);
+    cs = charset_lookupname(buf_cstring(&buf));
+    if (cs == CHARSET_UNKNOWN_CHARSET)
+        goto done;
+
+    /* Determine language */
+    p = q + 1;
+    q = strchr(p, '\'');
+    if (!q) goto done;
+    if (lang) {
+        buf_setmap(lang, p, q - p);
+    }
+
+    /* Decode octects */
+    buf_reset(&buf);
+    p = q + 1;
+    while (*p) {
+        if (*p == '%') {
+            char c;
+            if (*(p+1) == 0 || *(p+2) == 0)
+                goto done;
+            if (hex_to_bin(p+1, 2, &c) == -1)
+                goto done;
+            buf_appendmap(&buf, &c, 1);
+            p += 3;
+        } else {
+            buf_appendmap(&buf, p++, 1);
+        }
+    }
+    ret = charset_to_utf8(buf_base(&buf), buf_len(&buf), cs, 0);
+
+done:
+    charset_free(&cs);
+    buf_free(&buf);
+    return ret;
+}
+
 EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
                               const char *s, int flags)
 {
