@@ -2396,9 +2396,17 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             /* name */
             const char *fname = NULL;
             for (param = part->disposition_params; param; param = param->next) {
-                if (!strncasecmp(param->attribute, "filename", 8)) {
+                if (!strcasecmp(param->attribute, "filename")) {
                     fname = param->value;
                     break;
+                }
+            }
+            if (!fname) {
+                for (param = part->params; param; param = param->next) {
+                    if (!strcasecmp(param->attribute, "name")) {
+                        fname = param->value;
+                        break;
+                    }
                 }
             }
             json_object_set_new(att, "name", fname ? json_string(fname) : json_null());
