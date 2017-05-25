@@ -2409,7 +2409,15 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                     }
                 }
             }
-            json_object_set_new(att, "name", fname ? json_string(fname) : json_null());
+            if (fname) {
+                freeme = charset_parse_mimeheader(fname, charset_flags & CHARSET_MIME_UTF8);
+                json_object_set_new(att, "name", json_string(freeme));
+                free(freeme);
+                freeme = NULL;
+            }
+            else {
+                json_object_set_new(att, "name", json_null());
+            }
 
             /* size */
             if (part->charset_enc) {
