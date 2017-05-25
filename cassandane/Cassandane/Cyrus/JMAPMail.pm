@@ -1752,6 +1752,11 @@ sub test_getmessages_attachment_name
     "Content-Type: application/bam; name=\"=?utf-8?Q?=F0=9F=98=80=2Etxt?=\"\r\n".
     "\r\n" .
     "bam".
+    "\r\n--sub\r\n".
+    "Content-Type: application/tux\r\n".
+    "Content-Disposition: attachment; filename*0*=utf-8''%F0%9F%98%80;\r\n filename*1=\".txt\"\r\n".
+    "\r\n" .
+    "baz".
     "\r\n--sub--";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -1794,6 +1799,9 @@ sub test_getmessages_attachment_name
     $self->assert_str_equals("continue", $att->{name});
 
     $att = $m{"application/bam"};
+    $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
+
+    $att = $m{"application/tux"};
     $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
 }
 
