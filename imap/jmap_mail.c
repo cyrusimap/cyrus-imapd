@@ -2394,12 +2394,14 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_object_set_new(att, "type", json_string(buf_lcase(&buf)));
 
             /* name */
+            const char *fname = NULL;
             for (param = part->disposition_params; param; param = param->next) {
                 if (!strncasecmp(param->attribute, "filename", 8)) {
-                    json_object_set_new(att, "name", json_string(param->value));
+                    fname = param->value;
                     break;
                 }
             }
+            json_object_set_new(att, "name", fname ? json_string(fname) : json_null());
 
             /* size */
             if (part->charset_enc) {
