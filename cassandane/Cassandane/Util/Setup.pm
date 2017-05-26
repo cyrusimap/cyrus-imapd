@@ -57,7 +57,8 @@ my @saved_argv = @ARGV;
 
 sub become_cyrus
 {
-    my $cyrus = 'cyrus';
+    my $cyrus = $ENV{CYRUS_USER};
+    $cyrus //= 'cyrus';
     my $pw = getpwnam($cyrus);
     die "No user named '$cyrus'"
 	unless defined $pw;
