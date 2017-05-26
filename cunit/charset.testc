@@ -502,6 +502,25 @@ static void test_parse_mimexvalue(void)
     buf_free(&lang);
 }
 
+static void test_encode_mimexvalue(void)
+{
+    char *s;
+
+    s = charset_encode_mimexvalue(NULL, NULL);
+    CU_ASSERT_PTR_NULL(s);
+
+    /* naively encode everything in octets, including ASCII */
+    s = charset_encode_mimexvalue("foo", NULL);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "utf-8''%66%6f%6f");
+    free(s);
+
+    s = charset_encode_mimexvalue("foo", "en");
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "utf-8'en'%66%6f%6f");
+    free(s);
+}
+
 static void test_unfold(void)
 {
 #define TESTCASE(in, wantSkip, wantKeep) \
