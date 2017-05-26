@@ -4622,8 +4622,23 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     }
 
     if (name) {
+        const unsigned char *p;
         struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "attachment; filename=\"%s\"", name);
+        int is_xvalue = 0;
+
+        for (p = (const unsigned char*) name; *p; p++) {
+            if (!isascii(*p)) {
+                is_xvalue = 1;
+                break;
+            }
+        }
+        if (is_xvalue) {
+            char *s = charset_encode_mimexvalue(name, NULL);
+            buf_printf(&buf, "attachment; filename*=%s", s);
+            free(s);
+        } else {
+            buf_printf(&buf, "attachment; filename=\"%s\"", name);
+        }
         JMAPMSG_HEADER_TO_MIME("Content-Disposition", buf_cstring(&buf));
         buf_free(&buf);
     }
