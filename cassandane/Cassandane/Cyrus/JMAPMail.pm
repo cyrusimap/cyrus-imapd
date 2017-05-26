@@ -2318,7 +2318,7 @@ sub test_setmessages_attachments
                     "<img src=\"cid:foo\@local\"></html>",
         attachments => [{
             blobId => $blobid1,
-            name => "test.jpg",
+            name => "test\N{GRINNING FACE}.jpg",
         }, {
             blobId => $blobid2,
             cid => "<foo\@local>",
@@ -2341,7 +2341,7 @@ sub test_setmessages_attachments
     $self->assert_not_null($att2);
 
     $self->assert_str_equals($att1->{type}, "image/jpeg");
-    $self->assert_str_equals($att1->{name}, "test.jpg");
+    $self->assert_str_equals($att1->{name}, "test\N{GRINNING FACE}.jpg");
     $self->assert_num_equals($att1->{size}, 6);
     $self->assert_null($att1->{cid});
     $self->assert_equals(JSON::false, $att1->{isInline});
