@@ -169,6 +169,13 @@ As user ``cyrus``, run the tests.
     cd /path/to/cassandane
     sudo -u cyrus ./testrunner.pl -f pretty -j 8
 
+Debugging and stacktraces
+=========================
+
+Check out the guide to :ref:`running Cyrus components under gdb <faqs-o-gdb>`.
+
+In the event of a crash, here's how to :ref:`generate a stacktrace <faqs-o-coredump>`.
+
 Tips and Tricks
 ===============
 
