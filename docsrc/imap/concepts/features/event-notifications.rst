@@ -353,6 +353,12 @@ alarm.
 
 ApplePushService
 ----------------
+
+While Cyrus supports the Apple Push Service, Apple has only licensed Apple Push
+for mail to a couple of large mail providers: FastMail and Yahoo. If you own an
+OS X Server license, you also get a key for personal use. But it's not
+a supported option for third party developers at this time.
+
 The ``ApplePushService`` event occurs when
 
 .. literalinclude:: ../../../_static/event_notifications/ApplePushService.json
