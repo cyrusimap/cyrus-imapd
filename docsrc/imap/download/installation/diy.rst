@@ -66,7 +66,7 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
     `gperf`_, gperf, gperf
     `jansson`_, libjansson-dev, jansson-devel
     `libtool`_, libtool, libtool
-    `ICU`_, libicu-dev, libicu
+    `ICU`_, libicu-dev, libicu-devel
     `uuid`_, uuid-dev, libuuid-devel
     `openssl`_, libssl-dev, openssl-devel
     `pkgconfig`_, pkg-config, pkgconfig
