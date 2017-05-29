@@ -4576,14 +4576,24 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     const char *blobid, *type, *cid, *name;
     strarray_t headers = STRARRAY_INITIALIZER;
     msgrecord_t *mr;
-    char *ctenc = NULL;
+    char *ctenc = NULL, *content_type = NULL;
     uint32_t size;
-    int r;
+    int r, name_is_ascii = 1;
 
     type = json_string_value(json_object_get(att, "type"));
     blobid = json_string_value(json_object_get(att, "blobId"));
     cid = json_string_value(json_object_get(att, "cid"));
     name = json_string_value(json_object_get(att, "name"));
+
+    if (name) {
+        const unsigned char *p;
+        for (p = (const unsigned char*) name; *p; p++) {
+            if (!isascii(*p)) {
+                name_is_ascii = 0;
+                break;
+            }
+        }
+    }
 
     /* Find part containing blob */
     r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part);
@@ -4601,47 +4611,72 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     }
 
     /* Write headers */
+
+    /* Content-Type */
     if (type) {
-        JMAPMSG_HEADER_TO_MIME("Content-Type", type);
+        content_type = xstrdup(content_type);
     }
     else if (part) {
-        char *ctype;
-        strarray_add(&headers, "Content-Type");
-        ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-        message_pruneheader(ctype, &headers, NULL);
-        fwrite(ctype, 1, strlen(ctype), out);
-        strarray_truncate(&headers, 0);
-        free(ctype);
+        content_type = strconcat(part->type, "/", part->subtype, NULL);
+        lcase(content_type);
     }
     else {
-        fputs("Content-Type: message/rfc822\r\n", out);
+        content_type = xstrdup("message/rfc822");
     }
+    fprintf(out, "Content-Type: ");
+    fprintf(out, content_type);
+    if (name) {
+        /* RFC 2045 dropped the "name" parameter value for Content-Type,
+         * but the quasi-standard is to QP-encode any attachment name in
+         * this parameter value */
+        char *qpname = charset_encode_mimeheader(name, strlen(name));
+        fprintf(out, "; name=\"%s\"", qpname);
+        free(qpname);
+    }
+    if (part && part->params) {
+        /* Copy any additional Content-Type parameters from original body */
+        struct param *param;
+        for (param = part->params; param; param = param->next) {
+            char *param_name = lcase(xstrdup(param->attribute));
+            if (strcmp(param_name, "name")) {
+                const char *p;
+                int need_quote = 0;
+                for (p = param->value; p && *p; p++) {
+                    if (strchr(MIME_TSPECIALS, *p)) {
+                        need_quote = 1;
+                        break;
+                    }
+                }
+                /* XXX break excessively long parameter values */
+                fprintf(out, ";\r\n\t%s=%s%s%s", param_name,
+                        need_quote ? "\"" : "",
+                        param->value,
+                        need_quote ? "\"" : "");
+            }
+            free(param_name);
+        }
+    }
+    fprintf(out, "\r\n");
+    free(content_type);
 
+    /* Content-ID */
     if (cid) {
         JMAPMSG_HEADER_TO_MIME("Content-ID", cid);
     }
 
+    /* Content-Disposition */
+    fprintf(out, "Content-Disposition: attachment");
     if (name) {
-        const unsigned char *p;
-        struct buf buf = BUF_INITIALIZER;
-        int is_xvalue = 0;
-
-        for (p = (const unsigned char*) name; *p; p++) {
-            if (!isascii(*p)) {
-                is_xvalue = 1;
-                break;
-            }
-        }
-        if (is_xvalue) {
+        /* XXX break excessively long parameter values */
+        if (!name_is_ascii) {
             char *s = charset_encode_mimexvalue(name, NULL);
-            buf_printf(&buf, "attachment; filename*=%s", s);
+            fprintf(out, ";filename*=%s", s);
             free(s);
         } else {
-            buf_printf(&buf, "attachment; filename=\"%s\"", name);
+            fprintf(out, ";filename=\"%s\"", name);
         }
-        JMAPMSG_HEADER_TO_MIME("Content-Disposition", buf_cstring(&buf));
-        buf_free(&buf);
     }
+    fprintf(out, "\r\n");
 
     /* Raw file */
     if (!part) {
