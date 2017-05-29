@@ -124,6 +124,17 @@ Options
 
     The default is to log the error, and continue with the next backup.
 
+.. option:: -V
+
+    Don't verify backup checksums for read-only operations.
+
+    The read-only operations **list** and **stat** will normally perform a
+    "quick" verification of the backup file being read, which checks the
+    checksums of the most recent chunk.  This can be slow for backups
+    whose most recent backup chunk is very large.
+
+    With this option, the verification step will be skipped.
+
 .. option:: -v
 
     Increase the verbosity.  Can be specified multiple times.
