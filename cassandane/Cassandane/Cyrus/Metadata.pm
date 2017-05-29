@@ -208,8 +208,8 @@ sub list_annotations
 	};
 
     if ($entry[2]) {
-        my ($modseq, $modtime, $flags) =
-            unpack("Q>Q>C", bytes::substr($entry[2], $Config{longsize}));
+        my ($modseq, $flags) =
+            unpack("Q>C", bytes::substr($entry[2], $Config{longsize}));
         if ($flags and not $tombstones) {
             next;
         }
