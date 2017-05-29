@@ -96,6 +96,7 @@ static void usage(void)
             "    -C alt_config       # alternate config file\n"
             "    -F                  # force (run command even if not needed)\n"
             "    -S                  # stop on error\n"
+            "    -V                  # don't verify checksums (faster read-only ops)\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
             "    -w                  # wait for locks (don't skip locked backups)\n"
     );
@@ -154,6 +155,7 @@ struct ctlbu_cmd_options {
     int stop_on_error;
     int list_stale;
     int force;
+    int noverify;
     const char *lock_exec_cmd;
     const char *domain;
 };
@@ -329,7 +331,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, ":AC:DFPScfmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:DFPSVcfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -351,6 +353,9 @@ int main(int argc, char **argv)
             break;
         case 'S':
             options.stop_on_error = 1;
+            break;
+        case 'V':
+            options.noverify = 1;
             break;
         case 'c':
             options.create = BACKUP_OPEN_CREATE_EXCL;
@@ -612,7 +617,7 @@ static int cmd_list_one(void *rock,
 
     r = backup_open_paths(&backup, fname, NULL,
                           options->wait, BACKUP_OPEN_NOCREATE);
-    if (!r)
+    if (!r && !options->noverify)
         r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
 
     if (r) {
@@ -769,8 +774,10 @@ static int cmd_stat_one(void *rock,
                           options->wait, BACKUP_OPEN_NOCREATE);
     if (r) goto done;
 
-    r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
-    if (r) goto done;
+    if (!options->noverify) {
+        r = backup_verify(backup, BACKUP_VERIFY_QUICK, 0, NULL);
+        if (r) goto done;
+    }
 
     const int retention_days = config_getint(IMAPOPT_BACKUP_RETENTION_DAYS);
     if (retention_days > 0) {
@@ -861,6 +868,7 @@ static int cmd_verify_one(void *rock,
     r = backup_open_paths(&backup, fname, NULL,
                           options->wait, BACKUP_OPEN_NOCREATE);
 
+    /* n.b. deliberately ignoring nonsensical noverify option here */
     if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL, options->verbose, stdout);
 
     print_status("verify", userid, fname, r);
