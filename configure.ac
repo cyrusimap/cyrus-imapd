@@ -55,6 +55,13 @@ AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM
 
+dnl shared or static
+ENABLE_SHARED="$enable_shared"
+AC_SUBST(ENABLE_SHARED)
+
+ENABLE_STATIC="$enable_static"
+AC_SUBST(ENABLE_STATIC)
+
 dnl carve the version string (defined in AC_INIT above) into useful chunks
 dnl e.g. for version 3.0.0-beta:
 dnl   CYRUS_IMAPD_SERIES   => 3.0
@@ -2196,6 +2203,13 @@ enum {
 #endif /* _CYRUS_IMAPD_CONFIG_H_ */
 ])
 
+dnl We need to link with stdc++ when building static cyrus libs dnl and binaries.
+dnl libstdc++ is required because we link with libxapian, which is written in C++.
+if test "X$enable_shared" = "Xno"
+then
+        LIBS="$LIBS -lstdc++";
+fi
+
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     libcyrus_imap.pc
@@ -2270,4 +2284,9 @@ Hardware support:
 Installation directories:
    prefix:             $prefix
    sysconfdir:         $sysconfdir
+
+Build info:
+   shared:             $enable_shared
+   static:             $enable_static
+   cflags:             $CFLAGS
 "
