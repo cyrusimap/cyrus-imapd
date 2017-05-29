@@ -100,9 +100,6 @@ struct msg {
 
 #define MAX_FIELDNAME_LENGTH   256
 
-/* (draft standard) MIME tspecials */
-#define TSPECIALS "()<>@,;:\\\"/[]?="
-
 /* Default MIME Content-type */
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
@@ -941,7 +938,7 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
 
     /* Find end of encoding token */
     for (p = hdr; *p && !Uisspace(*p) && *p != '('; p++) {
-        if (*p < ' ' || strchr(TSPECIALS, *p)) return;
+        if (*p < ' ' || strchr(MIME_TSPECIALS, *p)) return;
     }
     len = p - hdr;
 
@@ -1124,7 +1121,7 @@ static void message_parse_type(const char *hdr, struct body *body)
     /* Find end of type token */
     type = hdr;
     for (; *hdr && !Uisspace(*hdr) && *hdr != '/' && *hdr != '('; hdr++) {
-        if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) return;
     }
     typelen = hdr - type;
 
@@ -1142,7 +1139,7 @@ static void message_parse_type(const char *hdr, struct body *body)
     /* Find end of subtype token */
     subtype = hdr;
     for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-        if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) return;
     }
     subtypelen = hdr - subtype;
 
@@ -1185,7 +1182,7 @@ static void message_parse_disposition(const char *hdr, struct body *body)
     /* Find end of disposition token */
     disposition = hdr;
     for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-        if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) return;
     }
     dispositionlen = hdr - disposition;
 
@@ -1232,7 +1229,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
         /* Find end of attribute */
         attribute = hdr;
         for (; *hdr && !Uisspace(*hdr) && *hdr != '=' && *hdr != '('; hdr++) {
-            if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) goto skip;
+            if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) goto skip;
         }
         attributelen = hdr - attribute;
 
@@ -1267,7 +1264,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
         }
         else {
             for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-                if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) goto skip;
+                if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) goto skip;
             }
         }
         valuelen = hdr - value;
@@ -1384,7 +1381,7 @@ static void message_fold_params(struct param **params)
                         while (*from) {
                             if (*from <= ' ' || *from >= 0x7f ||
                                 *from == '*' || *from == '\'' ||
-                                *from == '%' || strchr(TSPECIALS, *from)) {
+                                *from == '%' || strchr(MIME_TSPECIALS, *from)) {
                                 *to++ = '%';
                                 to += bin_to_hex(from, 1, to, BH_UPPER);
                             } else {
@@ -1430,7 +1427,7 @@ static void message_fold_params(struct param **params)
                         while (*from) {
                             if (*from <= ' ' || *from >= 0x7f ||
                                 *from == '*' || *from == '\'' ||
-                                *from == '%' || strchr(TSPECIALS, *from)) {
+                                *from == '%' || strchr(MIME_TSPECIALS, *from)) {
                                 *to++ = '%';
                                 to += bin_to_hex(from, 1, to, BH_UPPER);
                             } else {

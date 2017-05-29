@@ -59,6 +59,9 @@
 #include "util.h"
 #include "charset.h"
 
+/* (draft standard) MIME tspecials */
+#define MIME_TSPECIALS "()<>@,;:\\\"/[]?="
+
 /*
  * Parsed form of a body-part
  */
