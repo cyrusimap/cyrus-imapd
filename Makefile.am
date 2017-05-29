@@ -117,8 +117,6 @@ sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-EXTRA_DIST = \
-	$(wildcard tools/vzic/*)
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -193,11 +191,6 @@ if SQUATTER
 sbin_PROGRAMS += imap/squatter
 endif
 
-if NNTPD
-libexec_PROGRAMS += imap/nntpd
-sbin_PROGRAMS += imap/fetchnews
-endif # NNTPD
-
 libexec_PROGRAMS += imap/fud
 
 if IDLED
@@ -210,6 +203,7 @@ endif # MURDER
 
 if NNTPD
 libexec_PROGRAMS += imap/nntpd
+sbin_PROGRAMS += imap/fetchnews
 endif
 
 if CALALARMD
@@ -258,25 +252,6 @@ if SIEVE
 check_PROGRAMS += notifyd/notifytest
 libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
-
-else # SERVER
-EXTRA_DIST += \
-    imap/mupdate_err.c \
-    imap/nntp_err.c \
-    imap/lmtp_err.c \
-    imap/lmtpstats.c \
-    imap/pushstats.c \
-    imap/rfc822_header.c \
-    imap/rfc822_header.h
-
-if !HTTPD
-EXTRA_DIST += \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-endif # HTTPD
-
 endif # SERVER
 
 if CMULOCAL
@@ -314,7 +289,7 @@ endif # SERVER
 
 endif # SIEVE
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	COPYING \
 	README.md \
 	SMakefile \
@@ -327,8 +302,8 @@ EXTRA_DIST += \
 	contrib/sieve-spamassassin \
 	contrib/fud-client.c \
 	contrib/deliver-notify-zephyr.patch \
-	contrib/add-cyrus-user \
 	contrib/README \
+	contrib/add-cyrus-user \
 	contrib/cyrus-graphtools.1.0 \
 	contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl \
 	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl \
@@ -341,15 +316,28 @@ EXTRA_DIST += \
 	contrib/cyrus-graphtools.1.0/script/run \
 	contrib/cyrus-graphtools.1.0/script/cyrusrc \
 	contrib/cyrusv2.mc \
+	contrib/deliver-notify-zephyr.patch \
 	contrib/dkim_canon_ischedule.patch \
+	contrib/drac_auth.patch \
+	contrib/drydock.sh \
+	contrib/drydock-functions.sh \
+	contrib/drydock-tests \
+	contrib/drydock-tests/D16.sh \
+	contrib/drydock-tests/D7.sh \
+	contrib/drydock-tests/enable-all.sh \
+	contrib/drydock-tests/test-make-dist.sh \
+	contrib/drydock-tests/D12.sh \
+	contrib/fud-client.c \
+	contrib/mupdate-test.pl \
 	contrib/notify_unix/notify \
 	contrib/notify_unix/net-server-prefork-0.01.tgz \
 	contrib/notify_unix/README \
 	contrib/notify_unix/sql_notify.pl \
 	contrib/notify_unix/simple_notify.pl \
+	contrib/sieve-spamasssassin \
 	contrib/squatrunner.pl \
-	contrib/mupdate-test.pl \
 	contrib/squatrunner.txt \
+	contrib/xapian_quilt.tar \
 	cunit/cacert.pem \
 	cunit/cert.pem \
 	cunit/cunit.pl \
@@ -360,8 +348,6 @@ EXTRA_DIST += \
 	doc/legacy/netnews.png \
 	doc \
 	docsrc \
-	imap/dav_util.h \
-	imap/http_caldav_js.h \
 	imap/http_caldav.js \
 	imap/http_carddav_js.h \
 	imap/http_carddav.js \
@@ -372,6 +358,21 @@ EXTRA_DIST += \
 	imap/nntp_err.et \
 	imap/rfc822_header.st \
 	imap/tz_err.et \
+	languages/stopwords/danish.list \
+	languages/stopwords/swedish.list \
+	languages/stopwords/french.list \
+	languages/stopwords/portuguese.list \
+	languages/stopwords/dutch.list \
+	languages/stopwords/hungarian.list \
+	languages/stopwords/LICENSE \
+	languages/stopwords/english.list \
+	languages/stopwords/arabic.list \
+	languages/stopwords/spanish.list \
+	languages/stopwords/russian.list \
+	languages/stopwords/finnish.list \
+	languages/stopwords/norwegian.list \
+	languages/stopwords/german.list \
+	languages/stopwords/italian.list \
 	lib/charset/aliases.txt \
 	lib/charset/UnicodeData.txt \
 	lib/charset/unifix.txt \
@@ -387,6 +388,14 @@ EXTRA_DIST += \
 	lib/test/cyrusdbtxn.OUTPUT \
 	lib/test/pool.c \
 	lib/test/rnddb.c \
+	man/ctl_zoneinfo.8 \
+	man/fetchnews.8 \
+	man/httpd.8 \
+	man/nntpd.8 \
+	man/squatter.8 \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8 \
 	master/CYRUS-MASTER.mib \
 	master/README \
 	netnews/inn.diffs \
@@ -400,9 +409,13 @@ EXTRA_DIST += \
 	perl/imap/Changes \
 	perl/imap/cyradm.sh \
 	perl/imap/cyrperl.h \
+	perl/imap/Cyrus/IndexFile.pm \
+	perl/imap/Cyrus/CacheFile.pm \
+	perl/imap/Cyrus/HeaderFile.pm \
 	perl/imap/examples/auditmbox.pl \
 	perl/imap/examples/imapcollate.pl \
 	perl/imap/examples/imapdu.pl \
+	perl/imap/examples/index_uids.pl \
 	perl/imap/examples/test-imsp.pl \
 	perl/imap/IMAP/Admin.pm \
 	perl/imap/IMAP/IMSP.pm \
@@ -429,6 +442,12 @@ EXTRA_DIST += \
 	ptclient/README \
 	ptclient/test.c \
 	ptclient/test2.c \
+	ptclient/test3.c \
+	sieve/ChangeLog \
+	sieve/NEWS \
+	sieve/README \
+	sieve/COPYING \
+	sieve/AUTHORS \
 	sieve/addr.h \
 	sieve/sieve.h \
 	sieve/sieve_err.et \
@@ -509,6 +528,23 @@ EXTRA_DIST += \
 	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
 	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
 	sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	tools/build-with-cyruslibs.sh \
+	tools/perl2rst \
+	tools/vzic/ChangeLog \
+	tools/vzic/Makefile \
+	tools/vzic/README \
+	tools/vzic/test-vzic.c \
+	tools/vzic/vzic-dump.c \
+	tools/vzic/vzic-dump.h \
+	tools/vzic/vzic-dump.pl \
+	tools/vzic/vzic-merge.pl \
+	tools/vzic/vzic-output.c \
+	tools/vzic/vzic-output.h \
+	tools/vzic/vzic-parse.c \
+	tools/vzic/vzic-parse.h \
+	tools/vzic/vzic-test.pl \
+	tools/vzic/vzic.c \
+	tools/vzic/vzic.h \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -733,6 +769,7 @@ include_HEADERS = \
 	lib/bloom.h \
 	lib/bsearch.h \
 	lib/bufarray.h \
+	lib/byteorder64.h \
 	lib/charset.h \
 	lib/chartable.h \
 	lib/command.h \
@@ -759,6 +796,7 @@ include_HEADERS = \
 	lib/murmurhash2.h \
 	lib/nonblock.h \
 	lib/parseaddr.h \
+	lib/prot.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
@@ -769,6 +807,7 @@ include_HEADERS = \
 	lib/sysexits.h \
 	lib/times.h \
 	lib/tok.h \
+	lib/util.h \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h
@@ -776,17 +815,21 @@ include_HEADERS = \
 nodist_include_HEADERS = \
 	lib/imapopts.h
 
-nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_include_HEADERS = \
+	imap/mailbox.h \
+	imap/message.h \
+	imap/message_guid.h \
+	imap/quota.h \
+	imap/sequence.h \
+	sieve/sieve_interface.h \
+	sieve/varlist.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
-	lib/byteorder64.h \
 	lib/gai.h \
 	lib/libconfig.h \
 	lib/md5.h \
-	lib/prot.h \
 	lib/ptrarray.h \
-	lib/util.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
@@ -858,6 +901,9 @@ imap_ctl_jmapauth_LDADD = $(LD_UTILITY_ADD)
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
+imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
+
 imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
@@ -896,9 +942,6 @@ imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
-
-imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
-imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
@@ -948,13 +991,6 @@ imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libcyrus_imap_la_SOURCES = \
-	imap/imap_err.c \
-	imap/mupdate_err.c \
-	imap/mupdate_err.h
-
-dist_imap_libcyrus_imap_la_SOURCES =
-
 imap_libcyrus_imap_la_LIBADD = \
     $(COM_ERR_LIBS) \
     $(LIB_UUID) \
@@ -989,10 +1025,11 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/idlemsg.h \
 	imap/imapparse.c \
 	imap/imapparse.h \
+	imap/imap_err.c \
+	imap/imap_err.h \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
-	imap/mailbox.h \
 	imap/mbdump.c \
 	imap/mbdump.h \
 	imap/mboxkey.c \
@@ -1004,14 +1041,14 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/mboxname.c \
 	imap/mboxname.h \
 	imap/message_guid.c \
-	imap/message_guid.h \
 	imap/message.c \
-	imap/message.h \
 	imap/message_priv.h \
 	imap/msgrecord.c \
 	imap/msgrecord.h \
 	imap/mupdate-client.c \
 	imap/mupdate-client.h \
+	imap/mupdate_err.c \
+	imap/mupdate_err.h \
 	imap/mutex.h \
 	imap/notify.c \
 	imap/notify.h \
@@ -1036,7 +1073,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/seen.h \
 	imap/seen_db.c \
 	imap/sequence.c \
-	imap/sequence.h \
 	imap/setproctitle.c \
 	imap/statuscache.h \
 	imap/statuscache_db.c \
@@ -1113,7 +1149,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/vcard_support.h \
 	imap/webdav_db.c \
 	imap/webdav_db.h
-
 endif # HTTPD
 
 if USE_XAPIAN
@@ -1180,12 +1215,11 @@ imap_mupdate_SOURCES = \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
-nodist_imap_nntpd_SOURCES = \
-	imap/nntp_err.c \
-	imap/nntp_err.h
 imap_nntpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/nntpd.c \
+	imap/nntp_err.c \
+	imap/nntp_err.h \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/smtpclient.h \
@@ -1194,29 +1228,24 @@ imap_nntpd_SOURCES = \
 	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
-nodist_imap_httpd_SOURCES = \
-	imap/http_caldav_js.h \
-	imap/http_carddav_js.h \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-
 imap_httpd_SOURCES = \
-	imap/caldav_db.c \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
 	imap/http_caldav.h \
+	imap/http_caldav_js.h \
 	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_carddav.h \
+	imap/http_carddav_js.h \
 	imap/http_client.c \
 	imap/http_client.h \
 	imap/http_dav.c \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/http_ischedule.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
@@ -1228,12 +1257,31 @@ imap_httpd_SOURCES = \
 	imap/ical_support.c \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/http_jmap.c \
+	imap/http_jmap.h \
+	imap/http_proxy.c \
+	imap/http_proxy.h \
+	imap/http_rss.c \
+	imap/http_tzdist.c \
+	imap/http_webdav.c \
+	imap/httpd.c \
+	imap/httpd.h \
+	imap/jcal.c \
+	imap/jcal.h \
+	imap/jmap_common.c \
+	imap/jmap_common.h \
+	imap/jmap_mail.c \
+	imap/jmap_contact.c \
+	imap/jmap_calendar.c \
+	imap/jmap_ical.c \
+	imap/jmap_ical.h \
 	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
-	imap/vcard_support.c \
+	imap/tz_err.c \
+	imap/tz_err.h \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \
@@ -1270,7 +1318,7 @@ endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
-imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
+imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
 imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
@@ -1508,6 +1556,7 @@ dist_man5_MANS = \
 	man/imapd.conf.5 \
 	man/krb.equiv.5
 
+man8_MANS =
 dist_man8_MANS = \
 	man/arbitron.8 \
 	man/backupd.8 \
@@ -1549,51 +1598,27 @@ dist_man8_MANS = \
 	man/unexpunge.8
 
 if USE_SQUAT
-dist_man8_MANS += \
+man8_MANS += \
 	man/squatter.8
-
-else
-EXTRA_DIST += \
-	man/squatter.8
-
 endif # USE_SQUAT
 
 if NNTPD
-dist_man8_MANS += \
+man8_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
-
-else # NNTPD
-EXTRA_DIST += \
-	man/fetchnews.8 \
-	man/nntpd.8
-
 endif # NNTPD
 
 if HTTPD
-dist_man8_MANS += \
+man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
-
-else # HTTPD
-EXTRA_DIST += \
-	man/ctl_zoneinfo.8 \
-	man/httpd.8
-
 endif # HTTPD
 
 if REPLICATION
-dist_man8_MANS += \
+man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
-
-else
-EXTRA_DIST += \
-	man/sync_client.8 \
-	man/sync_reset.8 \
-	man/sync_server.8
-
 endif
 
 master_master_SOURCES = \

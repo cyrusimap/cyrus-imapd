@@ -48,7 +48,7 @@
 
 #include "global.h"
 
-struct vparse_card *vcard_parse_string(const char *str, int repair)
+EXPORTED struct vparse_card *vcard_parse_string(const char *str, int repair)
 {
     struct vparse_state vparser;
     struct vparse_card *vcard = NULL;
@@ -97,13 +97,13 @@ struct vparse_card *vcard_parse_string(const char *str, int repair)
     return vcard;
 }
 
-struct vparse_card *vcard_parse_buf(const struct buf *buf)
+EXPORTED struct vparse_card *vcard_parse_buf(const struct buf *buf)
 {
     int repair = config_getswitch(IMAPOPT_CARDDAV_REPAIR_VCARD);
     return vcard_parse_string(buf_cstring(buf), repair);
 }
 
-struct buf *vcard_as_buf(struct vparse_card *vcard)
+EXPORTED struct buf *vcard_as_buf(struct vparse_card *vcard)
 {
     struct buf *buf = buf_new();
 
@@ -112,7 +112,7 @@ struct buf *vcard_as_buf(struct vparse_card *vcard)
     return buf;
 }
 
-struct vparse_card *record_to_vcard(struct mailbox *mailbox,
+EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
                                     const struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
