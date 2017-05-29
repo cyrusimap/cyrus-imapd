@@ -570,11 +570,14 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
                       &data, &datalen,
                       &state->txn);
 
+    if (r == CYRUSDB_NOTFOUND)
+        return 0; /* not an error, but nothing more to do */
+
     if (!r) r = _conversations_parse(data, datalen, cids, NULL);
 
     if (r) arrayu64_truncate(cids, 0);
 
-    return 0;
+    return r;
 }
 
 /*
