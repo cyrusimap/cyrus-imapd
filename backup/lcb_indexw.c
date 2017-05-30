@@ -470,10 +470,19 @@ static int _index_message(struct backup *backup, struct dlist *dl,
             { NULL,         SQLITE_NULL,    { .s = NULL      } },
         };
 
-        int r = sqldb_exec(backup->db, backup_index_message_insert_sql, bval, NULL,
-                           NULL);
-        if (r) {
-            syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
+        r = sqldb_exec(backup->db, backup_index_message_update_sql, bval, NULL,
+                       NULL);
+
+        if (!r && sqldb_changes(backup->db) == 0) {
+            r = sqldb_exec(backup->db, backup_index_message_insert_sql, bval,
+                           NULL, NULL);
+            if (r) {
+                syslog(LOG_DEBUG, "%s: something went wrong: %i insert message %s\n",
+                       __func__, r, message_guid_encode(guid));
+            }
+        }
+        else if (r) {
+            syslog(LOG_DEBUG, "%s: something went wrong: %i update message %s\n",
                    __func__, r, message_guid_encode(guid));
         }
     }
