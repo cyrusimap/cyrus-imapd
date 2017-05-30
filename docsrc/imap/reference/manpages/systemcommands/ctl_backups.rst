@@ -135,6 +135,10 @@ Options
 
     With this option, the verification step will be skipped.
 
+.. option:: -j
+
+    Produce output in JSON format.  The default is plain text.
+
 .. option:: -v
 
     Increase the verbosity.  Can be specified multiple times.

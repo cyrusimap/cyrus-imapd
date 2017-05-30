@@ -49,6 +49,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <jansson.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -57,6 +58,7 @@
 #include "lib/cyrusdb.h"
 #include "lib/exitcodes.h"
 #include "lib/util.h"
+#include "lib/xmalloc.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -97,6 +99,7 @@ static void usage(void)
             "    -F                  # force (run command even if not needed)\n"
             "    -S                  # stop on error\n"
             "    -V                  # don't verify checksums (faster read-only ops)\n"
+            "    -j                  # output in JSON format\n"
             "    -v                  # verbose (repeat for more verbosity)\n"
             "    -w                  # wait for locks (don't skip locked backups)\n"
     );
@@ -156,6 +159,7 @@ struct ctlbu_cmd_options {
     int list_stale;
     int force;
     int noverify;
+    int jsonout;
     const char *lock_exec_cmd;
     const char *domain;
 };
@@ -260,23 +264,42 @@ static enum ctlbu_cmd parse_cmd_string(const char *cmd)
 
 static void print_status(const char *cmd,
                          const char *userid, const char *fname,
+                         const struct ctlbu_cmd_options *options,
                          int r)
 {
-    printf("%s %s: ", cmd, userid ? userid : fname);
-    switch(r) {
+    char *status = NULL;
+    switch (r) {
         case 1:
-            puts("skipped");
+            status = xstrdup("skipped");
             break;
         case 0:
-            puts("ok");
+            status = xstrdup("ok");
             break;
         case IMAP_MAILBOX_LOCKED:
-            puts("locked");
+            status = xstrdup("locked");
             break;
         default:
-            printf("failed (%s)\n", error_message(r));
+            status = strconcat("failed (", error_message(r), ")", NULL);
             break;
     }
+
+    if (options->jsonout) {
+        json_t *out = json_object();
+        json_object_set_new(out, "command", json_string(cmd));
+        json_object_set_new(out, "userid", json_string(userid));
+        json_object_set_new(out, "fname", json_string(fname));
+        json_object_set_new(out, "status", json_string(status));
+
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
+        json_dumpf(out, stdout, flags);
+        puts("");
+        json_decref(out);
+    }
+    else {
+        printf("%s %s: %s\n", cmd, userid ? userid : fname, status);
+    }
+
+    free(status);
 }
 
 static int domain_filter(void *rock,
@@ -331,7 +354,7 @@ int main(int argc, char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, ":AC:DFPSVcfmpst:x:uvw")) != EOF) {
+    while ((opt = getopt(argc, argv, ":AC:DFPSVcfjmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -359,6 +382,9 @@ int main(int argc, char **argv)
             break;
         case 'c':
             options.create = BACKUP_OPEN_CREATE_EXCL;
+            break;
+        case 'j':
+            options.jsonout = 1;
             break;
         case 'f':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -575,7 +601,7 @@ static int cmd_compact_one(void *rock,
     r = backup_compact(fname, options->wait, options->force,
                        options->verbose, stdout);
 
-    print_status("compact", userid, fname, r);
+    print_status("compact", userid, fname, options, r);
 
     if (userid) free(userid);
     if (fname) free(fname);
@@ -643,11 +669,25 @@ static int cmd_list_one(void *rock,
         data_stat_buf.st_size = -1;
     }
 
-    printf("%s\t" OFF_T_FMT "\t%s\t%s\n",
-           timestamp,
-           data_stat_buf.st_size,
-           userid ? userid : "[unknown]",
-           fname);
+    if (options->jsonout) {
+        json_t *out = json_object();
+        json_object_set_new(out, "timestamp", json_string(timestamp));
+        json_object_set_new(out, "compressed", json_integer(data_stat_buf.st_size));
+        json_object_set_new(out, "userid", json_string(userid));
+        json_object_set_new(out, "fname", json_string(fname));
+
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
+        json_dumpf(out, stdout, flags);
+        puts("");
+        json_decref(out);
+    }
+    else {
+        printf("%s\t" OFF_T_FMT "\t%s\t%s\n",
+               timestamp,
+               data_stat_buf.st_size,
+               userid ? userid : "[unknown]",
+               fname);
+    }
 
 done:
     if (latest_chunk) backup_chunk_free(&latest_chunk);
@@ -725,7 +765,7 @@ static int cmd_reindex_one(void *rock,
 
     r = backup_reindex(fname, options->wait, options->verbose, stdout);
 
-    print_status("reindex", userid, fname, r);
+    print_status("reindex", userid, fname, options, r);
 
     if (userid) free(userid);
     if (fname) free(fname);
@@ -824,15 +864,34 @@ static int cmd_stat_one(void *rock,
                  localtime(&latest_chunk->ts_end));
     }
 
-    printf("%s\t" OFF_T_FMT "\t" SIZE_T_FMT "\t" SIZE_T_FMT "\t%6.1f%%\t%6.1f%%\t%21s\t%s\n",
-           userid ? userid : fname,
-           data_stat.st_size,
-           uncompressed,
-           compactable,
-           cmp_ratio,
-           utl_ratio,
-           start_time,
-           end_time);
+    if (options->jsonout) {
+        json_t *out = json_object();
+        json_object_set_new(out, "userid", json_string(userid));
+        json_object_set_new(out, "fname", json_string(fname));
+        json_object_set_new(out, "compressed", json_integer(data_stat.st_size));
+        json_object_set_new(out, "uncompressed", json_integer(uncompressed));
+        json_object_set_new(out, "compactable", json_integer(compactable));
+        json_object_set_new(out, "compression_ratio", json_real(cmp_ratio));
+        json_object_set_new(out, "utilisation_ratio", json_real(utl_ratio));
+        json_object_set_new(out, "last_start_time", json_string(start_time));
+        json_object_set_new(out, "last_end_time", json_string(end_time));
+
+        const size_t flags = JSON_INDENT(2) | JSON_PRESERVE_ORDER;
+        json_dumpf(out, stdout, flags);
+        puts("");
+        json_decref(out);
+    }
+    else {
+        printf("%s\t" OFF_T_FMT "\t" SIZE_T_FMT "\t" SIZE_T_FMT "\t%6.1f%%\t%6.1f%%\t%21s\t%s\n",
+               userid ? userid : fname,
+               data_stat.st_size,
+               uncompressed,
+               compactable,
+               cmp_ratio,
+               utl_ratio,
+               start_time,
+               end_time);
+    }
 
 done:
     if (r) {
@@ -871,7 +930,7 @@ static int cmd_verify_one(void *rock,
     /* n.b. deliberately ignoring nonsensical noverify option here */
     if (!r) r = backup_verify(backup, BACKUP_VERIFY_FULL, options->verbose, stdout);
 
-    print_status("verify", userid, fname, r);
+    print_status("verify", userid, fname, options, r);
 
     if (backup) backup_close(&backup);
     if (userid) free(userid);
