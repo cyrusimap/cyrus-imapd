@@ -115,7 +115,8 @@ noinst_HEADERS =
 noinst_LTLIBRARIES =
 CLEANFILES =
 EXTRA_DIST = \
-	$(wildcard tools/vzic/*)
+	$(wildcard tools/vzic/*) \
+	VERSION
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -1594,6 +1595,9 @@ doc: tools/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 		tools/htmlstrip $$file > doc/text/`basename $$file .html`; \
 	done
 	@echo "== done =="
+
+VERSION: tools/git-version.sh
+	$(AM_V_GEN)$< > $@.NEW && mv $@.NEW $@
 
 install-data-hook:
 if CMULOCAL

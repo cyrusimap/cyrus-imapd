@@ -15,6 +15,7 @@
 .deps
 .dirstamp
 .libs
+VERSION
 Makefile.in
 Makefile
 Makefile.bak
