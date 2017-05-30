@@ -41,6 +41,10 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+# if we've come from a release package, ignore git entirely
+test -s VERSION &&
+    exec head -1 VERSION
+
 # first try: based on annotated git tags (real releases)
 version=$(git describe --dirty=-dirty 2>/dev/null)
 test -n "$version" &&

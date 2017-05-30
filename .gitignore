@@ -20,6 +20,7 @@
 .libs
 .sphinx-build.stamp
 README
+VERSION
 Makefile.in
 Makefile
 Makefile.bak
