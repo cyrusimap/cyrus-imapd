@@ -782,6 +782,7 @@ static void index_refresh_locked(struct index_state *state)
     state->oldexists = state->exists; /* we last knew about this many */
     state->exists = msgno - 1; /* we actually got this many */
     state->delayed_modseq = delayed_modseq;
+    state->oldhighestmodseq = state->highestmodseq;
     state->highestmodseq = mailbox->i.highestmodseq;
     state->generation = mailbox->i.generation_no;
     state->uidvalidity = mailbox->i.uidvalidity;
@@ -1080,22 +1081,34 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     start = 1;
     end = state->exists;
 
-    /* compress the search range down if a sequence was given */
-    if (seq) {
-        unsigned first = seqset_first(seq);
-        unsigned last = seqset_last(seq);
+    /* if we haven't told exists and we're fetching something past the end of the
+     * old size, we need to tell exists now...
+     * https://github.com/cyrusimap/cyrus-imapd/issues/1967
+     */
+    if (state->exists != state->oldexists) index_tellexists(state);
 
-        if (usinguid) {
-            if (first > 1)
-                start = index_finduid(state, first);
-            if (first == last)
-                end = start;
-            else if (last < state->last_uid)
-                end = index_finduid(state, last);
-        }
-        else {
-            start = first;
-            end = last;
+    /* if the modseq hasn't changed then there will be no unsolicited updates
+     * to send, so we only need to scan messages inside the sequence range.
+     * https://github.com/cyrusimap/cyrus-imapd/issues/1971
+     */
+    if (state->oldhighestmodseq == state->highestmodseq) {
+        /* compress the search range down if a sequence was given */
+        if (seq) {
+            unsigned first = seqset_first(seq);
+            unsigned last = seqset_last(seq);
+
+            if (usinguid) {
+                if (first > 1)
+                    start = index_finduid(state, first);
+                if (first == last)
+                    end = start;
+                else if (last < state->last_uid)
+                    end = index_finduid(state, last);
+            }
+            else {
+                start = first;
+                end = last;
+            }
         }
     }
 
@@ -1105,17 +1118,19 @@ EXPORTED void index_fetchresponses(struct index_state *state,
 
     for (msgno = start; msgno <= end; msgno++) {
         im = &state->map[msgno-1];
-        if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno))
+        if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno)) {
+            if (im->told_modseq !=0 && im->modseq > im->told_modseq)
+                index_printflags(state, msgno, usinguid, 0);
             continue;
-        /* if we haven't told exists and we're fetching something past the end of the
-         * old size, we need to tell exists now...
-         * https://github.com/cyrusimap/cyrus-imapd/issues/1967
-         */
-        if (msgno > state->oldexists) index_tellexists(state);
+        }
+
         if (index_fetchreply(state, msgno, fetchargs))
             break;
         fetched = 1;
     }
+
+    /* Update oldhighestmodseq, ensuring we don't have unsolicited updates */
+    state->oldhighestmodseq = state->highestmodseq;
 
     if (fetchedsomething) *fetchedsomething = fetched;
     annotate_putdb(&annot_db);
@@ -3700,6 +3715,8 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
     if (canexpunge) index_tellexpunge(state);
 
     if (state->oldexists != state->exists) index_tellexists(state);
+
+    if (state->oldhighestmodseq == state->highestmodseq) return;
 
     index_checkflags(state, 1, 0);
 

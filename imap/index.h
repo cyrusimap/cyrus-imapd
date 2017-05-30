@@ -113,6 +113,7 @@ struct index_state {
     unsigned long last_uid;
     uint32_t generation; /* to notice repacks */
     uint32_t uidvalidity; /* to notice delete/recreate */
+    modseq_t oldhighestmodseq;
     modseq_t highestmodseq;
     modseq_t delayed_modseq;
     struct index_map *map;
