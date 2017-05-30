@@ -580,6 +580,9 @@ sub normalize_event
     if (not exists $event->{status}) {
         $event->{status} = "confirmed";
     }
+    if (not exists $event->{privacy}) {
+        $event->{privacy} = "public";
+    }
 
     # undefine dynamically generated values
     $event->{created} = undef;
@@ -666,6 +669,19 @@ sub test_getcalendarevents_simple
     $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
     $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
     $self->assert_num_equals($event->{sequence}, 9);
+    $self->assert_str_equals($event->{privacy}, "public");
+}
+
+sub test_getcalendarevents_privacy
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('privacy');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals("private",  $event->{privacy});
 }
 
 sub test_getcalendarevents_properties
@@ -1109,6 +1125,7 @@ sub test_setcalendarevents_simple
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
         "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
