@@ -4567,6 +4567,80 @@ static int is_7bit_safe(const char *base, size_t len, const char *boundary __att
     return 1;
 }
 
+#define MIME_MAX_HEADER_LENGTH 78
+
+static int writeparam(FILE *out, const char *name, const char *value,
+                      int quote, int is_extended)
+{
+    /* Normalize arguments */
+    if (quote) quote = 1;
+    if (is_extended) is_extended = 1;
+
+    if (strlen(name) + strlen(value) + 4 + quote*2 < MIME_MAX_HEADER_LENGTH) {
+        /* It all fits in one line, great! */
+        return fprintf(out, ";\r\n\t%s=%s%s%s",
+                name,
+                quote ? "\"" : "",
+                value,
+                quote ? "\"" : "");
+    }
+    else if (!is_extended && strchr(value, '\r')) {
+        /* The non-extended value already includes continuations  */
+        const char *p = value, *top = value + strlen(value);
+        int section = 0;
+
+        do {
+            const char *q = strchr(p, '\r');
+            if (!q) q = top;
+            fprintf(out, ";\r\n\t%s*%d=", name, section);
+            if (quote) fputc('"', out);
+            fwrite(p, 1, q - p, out);
+            if (quote) fputc('"', out);
+            p = q + 3;
+            section++;
+        } while (p < top);
+
+        return 0;
+    }
+    else {
+        /* We have to break the values by ourselves into continuations */
+        const char *p = value, *top = value + strlen(value);
+        int section = 0;
+        struct buf buf = BUF_INITIALIZER;
+
+        while (p < top) {
+            buf_printf(&buf, ";\r\n\t%s%s%d%s=", name,
+                    is_extended ? "" : "*",
+                    section,
+                    is_extended ? "*" : "");
+
+            size_t n = fwrite(buf_base(&buf), 1, buf_len(&buf), out);
+            if (!n) return -1;
+            buf_reset(&buf);
+
+            if (n > MIME_MAX_HEADER_LENGTH) {
+                /* We already overran the maximum length by just writing the
+                 * parameter name. Let's insert a continuation so we can
+                 * write any bytes of the parameter value */
+                fprintf(out, "\r\n\t");
+                n = 3;
+            }
+
+            const char *q, *eol = p + MIME_MAX_HEADER_LENGTH - n - quote*2;
+            if (quote) fputc('"', out);
+            for (q = p; q < top && q < eol; q++) {
+                fputc(*q, out);
+            }
+            if (quote) fputc('"', out);
+            p = q;
+            section++;
+        }
+        buf_free(&buf);
+    }
+
+    return 0;
+}
+
 static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
 {
     struct mailbox *mbox = NULL;
@@ -4614,7 +4688,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
 
     /* Content-Type */
     if (type) {
-        content_type = xstrdup(content_type);
+        content_type = xstrdup(type);
     }
     else if (part) {
         content_type = strconcat(part->type, "/", part->subtype, NULL);
@@ -4630,7 +4704,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
          * but the quasi-standard is to QP-encode any attachment name in
          * this parameter value */
         char *qpname = charset_encode_mimeheader(name, strlen(name));
-        fprintf(out, "; name=\"%s\"", qpname);
+        writeparam(out, "name", qpname, 1, 0);
         free(qpname);
     }
     if (part && part->params) {
@@ -4647,11 +4721,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
                         break;
                     }
                 }
-                /* XXX break excessively long parameter values */
-                fprintf(out, ";\r\n\t%s=%s%s%s", param_name,
-                        need_quote ? "\"" : "",
-                        param->value,
-                        need_quote ? "\"" : "");
+                writeparam(out, param_name, param->value, need_quote, 0);
             }
             free(param_name);
         }
@@ -4670,10 +4740,10 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         /* XXX break excessively long parameter values */
         if (!name_is_ascii) {
             char *s = charset_encode_mimexvalue(name, NULL);
-            fprintf(out, ";filename*=%s", s);
+            writeparam(out, "filename*", s, 0, 1);
             free(s);
         } else {
-            fprintf(out, ";filename=\"%s\"", name);
+            writeparam(out, "filename", name, 1, 0);
         }
     }
     fprintf(out, "\r\n");
