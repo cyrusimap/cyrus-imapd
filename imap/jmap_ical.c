@@ -2375,14 +2375,15 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         if (status) json_object_set_new(event, "status", json_string(status));
     }
 
-    /* showAsFree */
-    if (wantprop(ctx, "showAsFree")) {
-        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop) {
-            json_object_set_new(event, "showAsFree",
-                    json_boolean(prop &&
-                        !strcmp(icalproperty_get_value_as_string(prop), "TRANSPARENT")));
+    /* freeBusyStatus */
+    if (wantprop(ctx, "freeBusyStatus")) {
+        const char *fbs = "busy";
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY))) {
+            if (icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT) {
+                fbs = "free";
+            }
         }
+        json_object_set_new(event, "freeBusyStatus", json_string(fbs));
     }
 
     /* replyTo */
@@ -4082,7 +4083,6 @@ static void
 calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     int pe; /* parse error */
     const char *val = NULL;
-    int transp = 0;
     icalproperty *prop = NULL;
     int is_create = !(ctx->mode & JMAPICAL_UPDATE_MODE);
     int is_exc = ctx->mode & JMAPICAL_EXC_MODE;
@@ -4254,15 +4254,24 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
         icalcomponent_set_status(comp, status);
     }
 
-    /* showAsFree */
-    pe = readprop(ctx, event, "showAsFree", is_create, "b", &transp);
+    /* freeBusyStatus */
+    pe = readprop(ctx, event, "freeBusyStatus", 0, "s", &val);
     if (pe > 0) {
-        enum icalproperty_transp v = transp ? ICAL_TRANSP_TRANSPARENT : ICAL_TRANSP_OPAQUE;
-        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop) {
-            icalproperty_set_transp(prop, v);
+        enum icalproperty_transp v = ICAL_TRANSP_NONE;
+        if (!strcmp(val, "free")) {
+            v = ICAL_TRANSP_TRANSPARENT;
+        } else if (!strcmp(val, "busy")) {
+            v = ICAL_TRANSP_OPAQUE;
         } else {
-            icalcomponent_add_property(comp, icalproperty_new_transp(v));
+            invalidprop(ctx, "freeBusyStatus");
+        }
+        if (v != ICAL_TRANSP_NONE) {
+            prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+            if (prop) {
+                icalproperty_set_transp(prop, v);
+            } else {
+                icalcomponent_add_property(comp, icalproperty_new_transp(v));
+            }
         }
     }
 
