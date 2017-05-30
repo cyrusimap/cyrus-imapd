@@ -384,6 +384,7 @@ int main(int argc, char **argv)
             options.create = BACKUP_OPEN_CREATE_EXCL;
             break;
         case 'j':
+            if (options.verbose) usage();
             options.jsonout = 1;
             break;
         case 'f':
@@ -411,6 +412,7 @@ int main(int argc, char **argv)
             options.mode = CTLBU_MODE_USERNAME;
             break;
         case 'v':
+            if (options.jsonout) usage();
             options.verbose ++;
             break;
         case 'x':
