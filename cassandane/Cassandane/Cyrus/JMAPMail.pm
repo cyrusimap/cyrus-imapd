@@ -2271,7 +2271,7 @@ sub test_setmessages_attachments
           . "Content-Disposition: inline\r\n" . "\r\n"
           . "some text"
           . "\r\n--sub\r\n"
-          . "Content-Type: image/jpeg\r\n"
+          . "Content-Type: image/jpeg;foo=bar\r\n"
           . "Content-Transfer-Encoding: base64\r\n" . "\r\n"
           . "beefc0de"
           . "\r\n--sub\r\n"
@@ -2308,6 +2308,7 @@ sub test_setmessages_attachments
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    my $longfname = "a_very_long_filename_thats_looking_quite_bogus_but_in_fact_is_absolutely_valid\N{GRINNING FACE}!.bin";
 
     my $draft =  {
         mailboxIds => [$draftsmbox],
@@ -2323,6 +2324,14 @@ sub test_setmessages_attachments
             blobId => $blobid2,
             cid => "<foo\@local>",
             isInline => JSON::true,
+        }, {
+            blobId => $blobid1,
+            type => "application/test",
+            name => $longfname,
+        }, {
+            blobId => $blobid2,
+            type => "application/test2",
+            name => "simple",
         }],
     };
 
@@ -2335,29 +2344,35 @@ sub test_setmessages_attachments
     $msg = $res->[0][1]->{list}[0];
 
     %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
-    my $att1 = $m{"image/jpeg"};
-    my $att2 = $m{"image/png"};
-    $self->assert_not_null($att1);
-    $self->assert_not_null($att2);
 
-    $self->assert_str_equals($att1->{type}, "image/jpeg");
-    $self->assert_str_equals($att1->{name}, "test\N{GRINNING FACE}.jpg");
-    $self->assert_num_equals($att1->{size}, 6);
-    $self->assert_null($att1->{cid});
-    $self->assert_equals(JSON::false, $att1->{isInline});
-    $self->assert_null($att1->{width});
-    $self->assert_null($att1->{height});
+    my $att = $m{"image/jpeg"};
+    $self->assert_not_null($att);
+    $self->assert_str_equals($att->{name}, "test\N{GRINNING FACE}.jpg");
+    $self->assert_num_equals($att->{size}, 6);
+    $self->assert_null($att->{cid});
+    $self->assert_equals(JSON::false, $att->{isInline});
+    $self->assert_null($att->{width});
+    $self->assert_null($att->{height});
 
-    $self->assert_str_equals($att2->{type}, "image/png");
-    $self->assert_num_equals($att2->{size}, 4);
-    $self->assert_str_equals("<foo\@local>", $att2->{cid});
+    $att = $m{"image/png"};
+    $self->assert_not_null($att);
+    $self->assert_num_equals($att->{size}, 4);
+    $self->assert_str_equals("<foo\@local>", $att->{cid});
     # FIXME this test is too brittle to setup. We'd need to:
     # - add our custom annotation to both the annotations
     #   definition file and in cassandane.ini's cyrus config
     # - run an annotator daemon or set the annotation via IMAP
-    #$self->assert_equals(JSON::true, $att2->{isInline});
-    $self->assert_null($att2->{width});
-    $self->assert_null($att2->{height});
+    #$self->assert_equals(JSON::true, $att->{isInline});
+    $self->assert_null($att->{width});
+    $self->assert_null($att->{height});
+
+    $att = $m{"application/test"};
+    $self->assert_not_null($att);
+    $self->assert_str_equals($longfname, $att->{name});
+
+    $att = $m{"application/test2"};
+    $self->assert_not_null($att);
+    $self->assert_str_equals("simple", $att->{name});
 }
 
 sub test_setmessages_flagged
