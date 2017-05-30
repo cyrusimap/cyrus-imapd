@@ -44,6 +44,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <syslog.h>
 #include <zlib.h>
@@ -86,26 +87,42 @@ EXPORTED const char *backup_get_staging_path(void)
 }
 
 /* remove this process's staging directory.
- * will warn in syslog if the path couldn't be removed
- * (e.g. if it still has files in it)
+ * will warn about and clean up files that are hanging around - these should
+ * be removed by dlist_unlink_files but may be missed if we're shutdown by a
+ * signal.
  */
 EXPORTED void backup_cleanup_staging_path(void)
 {
-    char buf[MAX_MAILBOX_PATH];
+    char name[MAX_MAILBOX_PATH];
     const char *base = backup_get_staging_path();
+    DIR *dirp;
     int r;
 
-    r = snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
-                      base, (unsigned long) getpid());
+    r = snprintf(name, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                 base, (unsigned long) getpid());
     if (r >= MAX_MAILBOX_PATH) {
         /* path was truncated, don't try to delete it */
         return;
     }
 
-    r = rmdir(buf);
+    /* make sure it's empty */
+    if ((dirp = opendir(name))) {
+        struct dirent *d;
+        while ((d = readdir(dirp))) {
+            if (!strcmp(d->d_name, ".") || !strcmp(d->d_name, ".."))
+                continue;
 
+            char *tmp = strconcat(name, "/", d->d_name, NULL);
+            syslog(LOG_INFO, "%s: unlinking leftover stage file: %s", __func__, tmp);
+            unlink(tmp);
+            free(tmp);
+        }
+        closedir(dirp);
+    }
+
+    r = rmdir(name);
     if (r && errno != ENOENT)
-        syslog(LOG_WARNING, "%s rmdir %s: %m", __func__, buf);
+        syslog(LOG_WARNING, "%s rmdir %s: %m", __func__, name);
 }
 
 /*
