@@ -118,7 +118,8 @@ noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
 EXTRA_DIST = \
-	$(wildcard tools/vzic/*)
+	$(wildcard tools/vzic/*) \
+	VERSION
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -1933,6 +1934,9 @@ dist-hook:
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
 	find $(top_distdir) -type f -name .gitignore -delete
 	rm -rf $(top_distdir)/$(SPHINX_CACHE)
+
+VERSION: tools/git-version.sh
+	$(AM_V_GEN)$< > $@.NEW && mv $@.NEW $@
 
 install-data-hook:
 if CMULOCAL
