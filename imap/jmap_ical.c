@@ -2386,6 +2386,24 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         json_object_set_new(event, "freeBusyStatus", json_string(fbs));
     }
 
+    /* privacy */
+    if (wantprop(ctx, "privacy")) {
+        const char *prv = "public";
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY))) {
+            switch (icalproperty_get_class(prop)) {
+                case ICAL_CLASS_CONFIDENTIAL:
+                    prv = "secret";
+                    break;
+                case ICAL_CLASS_PRIVATE:
+                    prv = "private";
+                    break;
+                default:
+                    prv = "public";
+            }
+        }
+        json_object_set_new(event, "privacy", json_string(prv));
+    }
+
     /* replyTo */
     if (wantprop(ctx, "replyTo") && !is_exc) {
         json_object_set_new(event, "replyTo", replyto_from_ical(ctx, comp));
@@ -4271,6 +4289,29 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
                 icalproperty_set_transp(prop, v);
             } else {
                 icalcomponent_add_property(comp, icalproperty_new_transp(v));
+            }
+        }
+    }
+
+    /* privacy */
+    pe = readprop(ctx, event, "privacy", 0, "s", &val);
+    if (pe > 0) {
+        enum icalproperty_class v = ICAL_CLASS_NONE;
+        if (!strcmp(val, "public")) {
+            v = ICAL_CLASS_PUBLIC;
+        } else if (!strcmp(val, "private")) {
+            v = ICAL_CLASS_PRIVATE;
+        } else if (!strcmp(val, "secret")) {
+            v = ICAL_CLASS_CONFIDENTIAL;
+        } else {
+            invalidprop(ctx, "privacy");
+        }
+        if (v != ICAL_CLASS_NONE) {
+            prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+            if (prop) {
+                icalproperty_set_class(prop, v);
+            } else {
+                icalcomponent_add_property(comp, icalproperty_new_class(v));
             }
         }
     }
