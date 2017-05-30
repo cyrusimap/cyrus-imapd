@@ -658,7 +658,7 @@ sub test_getcalendarevents_simple
     $self->assert_str_equals($event->{prodId}, "-//Apple Inc.//Mac OS X 10.9.5//EN");
     $self->assert_str_equals($event->{locale}, "en");
     $self->assert_str_equals($event->{description}, "double yo");
-    $self->assert_equals($event->{showAsFree}, JSON::true);
+    $self->assert_equals($event->{freeBusyStatus}, "free");
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals($event->{start}, "2016-09-28T16:00:00");
     $self->assert_str_equals($event->{timeZone}, "Etc/UTC");
@@ -1108,7 +1108,7 @@ sub test_setcalendarevents_simple
         "locale" => "en",
         "status" => "tentative",
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
@@ -1143,7 +1143,7 @@ sub test_setcalendarevents_relatedto
         "locale" => "en",
         "status" => "tentative",
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
@@ -1169,7 +1169,7 @@ sub test_setcalendarevents_prodid
         "timeZone" => "Europe/Amsterdam",
         "isAllDay"=> JSON::false,
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
     };
 
     my $ret;
@@ -1200,7 +1200,7 @@ sub test_setcalendarevents_endtimezone
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "prodId" => "foo",
     };
 
@@ -1247,7 +1247,7 @@ sub test_setcalendarevents_endtimezone_recurrence
         },
         "isAllDay"=> JSON::false,
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "prodId" => "foo",
         "recurrenceRule" => {
             "frequency" => "monthly",
@@ -1283,7 +1283,7 @@ sub test_setcalendarevents_links
         "timeZone" => "Europe/Vienna",
         "isAllDay"=> JSON::false,
         "description"=> "",
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "links" => {
             "http://jmap.io/spec.html#calendar-events" => {
                 href => "http://jmap.io/spec.html#calendar-events",
@@ -1324,7 +1324,7 @@ sub test_setcalendarevents_localizations
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "alerts" => {
             "alert1" => {
                 relativeTo => "before-start",
@@ -1417,7 +1417,7 @@ sub test_setcalendarevents_locations
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "free",
         "locations" => $locations,
     };
 
@@ -1456,7 +1456,7 @@ sub test_setcalendarevents_recurrence
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "recurrenceRule" => $recurrence,
     };
 
@@ -1487,7 +1487,7 @@ sub test_setcalendarevents_recurrenceoverrides
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "locations" => {
             locA => {
                 "name" => "location A",
@@ -1519,7 +1519,7 @@ sub test_setcalendarevents_recurrenceoverrides
                 "title" => "Labour Day",
             },
             "2016-06-01T10:00:00" => {
-                showAsFree => JSON::true,
+                freeBusyStatus => "free",
             },
             "2016-07-01T09:00:00" => {
                 "uid" => "foo",
@@ -1574,7 +1574,7 @@ sub test_setcalendarevents_participants
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "status" => "confirmed",
         "replyTo" => {
             "imip" => "mailto:foo\@local",
@@ -1634,7 +1634,7 @@ sub test_setcalendarevents_alerts
         "duration"=> "PT2H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "status" => "confirmed",
         "alerts" => $alerts,
         "useDefaultAlerts" => JSON::true,
@@ -1676,7 +1676,7 @@ sub test_setcalendarevents_participantid
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "isAllDay"=> JSON::false,
-        "showAsFree"=> JSON::false,
+        "freeBusyStatus"=> "busy",
         "status" => "confirmed",
         "replyTo" => { imip => "mailto:cassandane\@example.com" },
         "participants" => $participants,
@@ -1705,7 +1705,7 @@ sub test_setcalendarevents_isallday
         "calendarId" => "Default",
         "title" => "foo",
         "description" => "foo's description",
-        "showAsFree" => JSON::false,
+        "freeBusyStatus" => "busy",
         "isAllDay" => JSON::true,
     };
 
@@ -1773,7 +1773,7 @@ sub test_setcalendarevents_move
                             "calendarId" => $calidA,
                             "title" => "foo",
                             "description" => "foo's description",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
                         }
@@ -1848,7 +1848,7 @@ sub test_getcalendareventupdates
                             "calendarId" => $calidA,
                             "title" => "1",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
                         },
@@ -1856,7 +1856,7 @@ sub test_getcalendareventupdates
                             "calendarId" => $calidB,
                             "title" => "2",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
                         }
@@ -2019,7 +2019,7 @@ sub test_getcalendareventlist
                             "calendarId" => $calidA,
                             "title" => "foo",
                             "description" => "bar",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2016-07-01T10:00:00",
                             "timeZone" => "Etc/GMT+1",
@@ -2029,7 +2029,7 @@ sub test_getcalendareventlist
                             "calendarId" => $calidB,
                             "title" => "foo",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2016-01-01T00:00:00",
                             "duration" => "P2D",
@@ -2133,7 +2133,7 @@ sub test_getcalendareventlist_datetime
                             "calendarId" => $calid,
                             "title" => "1",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2016-01-01T09:00:00",
                             "timeZone" => "Etc/GMT-1",
@@ -2199,7 +2199,7 @@ sub test_getcalendareventlist_datetime
                             "calendarId" => $calid,
                             "title" => "e",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2017-01-01T09:00:00",
                             "timeZone" => "Etc/GMT-1",
@@ -2241,7 +2241,7 @@ sub test_getcalendareventlist_date
                             "calendarId" => $calid,
                             "title" => "1",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2016-01-01T00:00:00",
                             "duration" => "P3D",
@@ -2329,7 +2329,7 @@ sub test_getcalendareventlist_date
                             "calendarId" => $calid,
                             "title" => "2",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2017-01-01T00:00:00",
                             "duration" => "P1D",
@@ -2372,7 +2372,7 @@ sub test_getcalendareventlist_text
                                     name => "baz",
                                 },
                             },
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "start"=> "2016-01-01T09:00:00",
                             "duration"=> "PT1H",
                             "timeZone" => "Europe/London",
@@ -2489,7 +2489,7 @@ sub test_setcalendarevents_caldav
                             "calendarId" => $calid,
                             "title" => "foo",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-06T00:00:00",
                             "duration" => "P1D",
@@ -2557,7 +2557,7 @@ EOF
                             "calendarId" => $calid,
                             "title" => "bam",
                             "description" => "",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::true,
                             "start" => "2015-10-10T00:00:00",
                             "duration" => "P1D",
@@ -2624,7 +2624,7 @@ sub test_setcalendarevents_schedule_request
                             "calendarId" => "Default",
                             "title" => "foo",
                             "description" => "foo's description",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
@@ -2673,7 +2673,7 @@ sub test_setcalendarevents_schedule_reply
                             "calendarId" => "Default",
                             "title" => "foo",
                             "description" => "foo's description",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
@@ -2730,7 +2730,7 @@ sub test_setcalendarevents_schedule_cancel
                             "calendarId" => $calid,
                             "title" => "foo",
                             "description" => "foo's description",
-                            "showAsFree" => JSON::false,
+                            "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2015-10-06T16:45:00",
                             "timeZone" => "Australia/Melbourne",
@@ -2791,7 +2791,7 @@ sub test_creationids
             "calendarId" => "#1",
             "title" => "bar",
             "description" => "description",
-            "showAsFree" => JSON::false,
+            "freeBusyStatus" => "busy",
             "isAllDay" => JSON::true,
             "start" => "2015-10-06T00:00:00",
         }}}, "R2"],
