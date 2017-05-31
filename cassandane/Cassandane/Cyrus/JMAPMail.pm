@@ -3477,6 +3477,63 @@ sub test_getmessagelist_attachments
     $self->assert_str_equals($id1, $res->[0][1]->{messageIds}[0]);
 }
 
+sub test_getmessagelist_attachmentname
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    # create a message with an attachment
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    $res = $jmap->Request([
+      ['setMessages', { create => {
+                  "1" => {
+                      mailboxIds => [$draftsmbox],
+                      from => [ { name => "", email => "sam\@acme.local" } ] ,
+                      to => [ { name => "", email => "bugs\@acme.local" } ],
+                      subject => "msg1",
+                      textBody => "foo",
+                      attachments => [{
+                              blobId => $data->{blobId},
+                              name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
+                          }],
+                  },
+              }}, 'R2'],
+    ]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "filter attachmentName";
+    $res = $jmap->Request([['getMessageList', {
+        filter => {
+            attachmentName => "r\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($id1, $res->[0][1]->{messageIds}[0]);
+}
+
 sub test_getthreads
     :JMAP :min_version_3_0
 {
