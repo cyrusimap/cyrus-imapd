@@ -589,6 +589,7 @@ cunit_FRAMEWORK = \
 	cunit/timeout.h
 
 cunit_TESTS = \
+	cunit/aaa-db.testc \
 	cunit/annotate.testc \
 	cunit/backend.testc \
 	cunit/binhex.testc \
@@ -597,7 +598,6 @@ cunit_TESTS = \
 	cunit/byteorder64.testc \
 	cunit/charset.testc \
 	cunit/crc32.testc \
-	cunit/db.testc \
 	cunit/dlist.testc \
 	cunit/duplicate.testc \
 	cunit/getxstring.testc \
