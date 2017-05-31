@@ -623,6 +623,7 @@ cunit_FRAMEWORK = \
 	cunit/timeofday.h
 
 cunit_TESTS = \
+	cunit/aaa-db.testc \
 	cunit/annotate.testc \
 	cunit/backend.testc \
 	cunit/binhex.testc \
@@ -633,7 +634,6 @@ cunit_TESTS = \
 	cunit/command.testc \
 	cunit/conversations.testc \
 	cunit/crc32.testc \
-	cunit/db.testc \
 	cunit/dlist.testc \
 	cunit/duplicate.testc \
 	cunit/getxstring.testc \
