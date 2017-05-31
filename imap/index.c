@@ -4746,20 +4746,33 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         if (disposition && !strcmp(disposition, "ATTACHMENT")) {
             /* Look for "Content-Disposition: attachment;filename=" header */
             for (param = disposition_params; param; param = param->next) {
-                if (strcmp(param->attribute, "FILENAME"))
-                    continue;
-                buf_init_ro_cstr(&text, param->value);
-                stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
-                buf_free(&text);
+                if (!strcmp(param->attribute, "FILENAME")) {
+                    char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+                    buf_init_ro_cstr(&text, tmp);
+                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    buf_free(&text);
+                    free(tmp);
+                }
+                else if (!strcmp(param->attribute, "FILENAME*")) {
+                    char *xval = charset_parse_mimexvalue(param->value, NULL);
+                    char *tmp = charset_decode_mimeheader(xval, charset_flags);
+                    buf_init_ro_cstr(&text, tmp);
+                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    buf_free(&text);
+                    free(tmp);
+                    free(xval);
+                }
             }
         }
         for(param = type_params; param; param = param->next) {
             /* Look for "Content-Type: foo;name=" header */
             if (strcmp(param->attribute, "NAME"))
                 continue;
-            buf_init_ro_cstr(&text, param->value);
+            char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+            buf_init_ro_cstr(&text, tmp);
             stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
             buf_free(&text);
+            free(tmp);
         }
     }
     else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
