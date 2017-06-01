@@ -961,6 +961,103 @@ sub test_getmailboxupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
+sub test_getmailboxupdates_counts
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_not_null($res->[0][1]{created});
+    my $mboxid = $res->[0][1]{created}{"1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    my $draft =  {
+        mailboxIds => [$mboxid],
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => "foo",
+    };
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $state = $res->[0][1]{newState};
+
+    xlog "Create a draft";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    my $msgid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "update message";
+    $res = $jmap->Request([['setMessages', { update => { $msgid => { isUnread => JSON::true }}
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]->{updated}{$msgid});
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+
+    xlog "update mailbox";
+    $res = $jmap->Request([['setMailboxes', { update => { $mboxid => { name => "bar" }}}, "R1"]]);
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+
+    xlog "update message";
+    $res = $jmap->Request([['setMessages', { update => { $msgid => { isUnread => JSON::false }}
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]->{updated}{$msgid});
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+
+    xlog "update mailbox";
+    $res = $jmap->Request([['setMailboxes', { update => { $mboxid => { name => "baz" }}}, "R1"]]);
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+
+    xlog "get mailbox updates (expect no changes)";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+
+    $draft->{subject} = "memo2";
+
+    xlog "Create another draft";
+    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $msgid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $state = $res->[0][1]{newState};
+}
+
 sub test_getmessages
     :JMAP :min_version_3_0
 {
