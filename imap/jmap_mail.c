@@ -5299,17 +5299,9 @@ static void jmapmsg_validate(json_t *msg, json_t *invalid, int isdraft)
         }
     }
 
-    pe = readprop(msg, "isUnread", 0, invalid, "b", &bval);
-    if (pe > 0 && bval) {
-        json_array_append_new(invalid, json_string("isUnread"));
-    }
-
+    readprop(msg, "isUnread", 0, invalid, "b", &bval);
     readprop(msg, "isFlagged", 0, invalid, "b", &bval);
-
-    pe = readprop(msg, "isAnswered", 0, invalid, "b", &bval);
-    if (pe > 0 && bval) {
-        json_array_append_new(invalid, json_string("isAnswered"));
-    }
+    readprop(msg, "isAnswered", 0, invalid, "b", &bval);
 
     if (json_object_get(msg, "hasAttachment")) {
         json_array_append_new(invalid, json_string("hasAttachment"));
