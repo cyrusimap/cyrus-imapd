@@ -1,0 +1,59 @@
+language: c
+sudo: required
+dist: trusty
+addons:
+  apt:
+    packages:
+      #- libjansson-dev
+      - libxml2-dev
+      - libsqlite3-dev
+      #- libical-dev
+      - libsasl2-dev
+      - libssl-dev
+      #- libopendkim-dev
+      - libcunit1-dev
+      - libpcre3-dev
+      - uuid-dev
+      - libdb-dev
+      - libbsd-dev
+      - libmilter-dev
+      - graphviz # Needed for `dot` by `xapian`
+      - doxygen  # Needed by `xapian`
+      - help2man # Needed by `xapian`
+      - python-docutils # Needed by `xapian`
+      - libmagic-dev
+env:
+  global:
+    - CYRUSLIBS="/usr/local/cyruslibs"
+    - PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
+    - LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
+    - XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
+    - USE_CCACHE=1
+    
+cache:
+  apt: true
+  ccache: true
+os: linux
+compiler: gcc
+
+# First build cyrus libs
+install:
+  - git clone https://github.com/cyrusimap/cyruslibs.git cyruslibs
+  - pushd cyruslibs
+  - sh build.sh
+  - popd
+
+before_script:
+  - ccache --version
+  - ccache --zero-stats
+  - autoreconf -i -s
+  - ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http --enable-jmap --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes --enable-murder --enable-idled --enable-sieve
+  - make
+
+script:
+  - make check
+
+#safelist
+branches:
+  only:
+    - master
