@@ -483,7 +483,7 @@ static json_t *jmapmbox_getstate(jmap_req_t *req)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
-    modseq_t modseq = req->counters.mailfoldersmodseq;
+    modseq_t modseq = req->counters.mailmodseq;
     buf_printf(&buf, MODSEQ_FMT, modseq);
     state = json_string(buf_cstring(&buf));
     buf_free(&buf);
@@ -1184,6 +1184,7 @@ static int setMailboxes(jmap_req_t *req)
     char *mboxname = NULL;
     char *parentname = NULL;
     json_t *state, *create, *update, *destroy;
+    int bump_modseq = 0;
 
     mbentry_t *inboxentry = NULL;
     mboxlist_lookup(req->inboxname, &inboxentry, NULL);
@@ -1191,7 +1192,7 @@ static int setMailboxes(jmap_req_t *req)
     state = json_object_get(req->args, "ifInState");
     if (JNOTNULL(state)) {
         const char *s = json_string_value(state);
-        if (!s || atomodseq_t(s) != req->counters.mailfoldersmodseq) {
+        if (!s || atomodseq_t(s) != req->counters.mailmodseq) {
             json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
                         "error", "type", "stateMismatch", req->tag));
             goto done;
@@ -1276,6 +1277,7 @@ static int setMailboxes(jmap_req_t *req)
 
         if (json_object_size(created)) {
             json_object_set(set, "created", created);
+            bump_modseq = 1;
         }
         json_decref(created);
 
@@ -1338,6 +1340,7 @@ static int setMailboxes(jmap_req_t *req)
 
         if (json_object_size(updated)) {
             json_object_set(set, "updated", updated);
+            bump_modseq = 1;
         }
         json_decref(updated);
 
@@ -1456,6 +1459,7 @@ static int setMailboxes(jmap_req_t *req)
         }
         if (json_array_size(destroyed)) {
             json_object_set(set, "destroyed", destroyed);
+            bump_modseq = 1;
         }
         json_decref(destroyed);
         if (json_object_size(notDestroyed)) {
@@ -1464,7 +1468,7 @@ static int setMailboxes(jmap_req_t *req)
         json_decref(notDestroyed);
     }
 
-    mboxname_read_counters(inboxentry->name, &req->counters);
+    if (bump_modseq) jmap_bumpstate(0, req);
     json_object_set_new(set, "newState", jmapmbox_getstate(req));
 
     json_incref(set);
@@ -1553,7 +1557,8 @@ static int jmapmbox_updates_cmp(const void **pa, const void **pb)
 static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
                             size_t limit,
                             json_t **changed, json_t **removed,
-                            int *has_more, json_t **newstate)
+                            int *has_more, json_t **newstate,
+                            int *only_counts_changed)
 {
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     struct jmapmbox_updates_data data = {
@@ -1565,6 +1570,8 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
     const char *id;
     json_t *val;
     int r, i;
+
+    *only_counts_changed = 0;
 
     /* Search for updates */
     r = mboxlist_usermboxtree(req->userid, jmapmbox_updates_cb, &data,
@@ -1605,7 +1612,19 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
         }
     }
 
-    *newstate = jmap_fmtstate(*has_more ? windowmodseq : req->counters.mailfoldersmodseq);
+
+    if (json_array_size(*changed) || json_array_size(*removed)) {
+        /* At least one mailbox changed */
+        *newstate = jmap_fmtstate(*has_more ? windowmodseq :
+                                  req->counters.mailmodseq);
+    } else if (frommodseq < req->counters.mailmodseq) {
+        /* No mailbox changed, but mailbox counters have */
+        *only_counts_changed = 1;
+        *newstate = jmap_fmtstate(req->counters.mailmodseq);
+    } else {
+        /* No change at alle */
+        *newstate = jmap_fmtstate(frommodseq);
+    }
 
 done:
     if (data.changed) json_decref(data.changed);
@@ -1617,7 +1636,7 @@ done:
 static int getMailboxUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
-    int fetch = 0, has_more = 0;
+    int fetch = 0, has_more = 0, only_counts_changed = 0;
     json_t *changed, *removed, *invalid, *item, *res;
     json_int_t max_changes = 0;
     json_t *oldstate, *newstate;
@@ -1650,7 +1669,8 @@ static int getMailboxUpdates(jmap_req_t *req)
 
     /* Search for updates */
     r = jmapmbox_updates(req, atomodseq_t(since), max_changes,
-                         &changed, &removed, &has_more, &newstate);
+                         &changed, &removed, &has_more, &newstate,
+                         &only_counts_changed);
     if (r) goto done;
     oldstate = json_string(since);
 
@@ -1662,6 +1682,7 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
     json_object_set_new(res, "changed", changed);
     json_object_set_new(res, "removed", removed);
+    json_object_set_new(res, "onlyCountsChanged", json_boolean(only_counts_changed));
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("mailboxUpdates"));
@@ -1674,8 +1695,18 @@ static int getMailboxUpdates(jmap_req_t *req)
             struct jmap_req subreq = *req;
             subreq.args = json_pack("{}");
             json_object_set(subreq.args, "ids", changed);
+
             json_t *props = json_object_get(req->args, "fetchRecordProperties");
-            if (props) json_object_set(subreq.args, "properties", props);
+            if (props) {
+                json_object_set(subreq.args, "properties", props);
+            }
+            else if (only_counts_changed) {
+                json_object_set_new(subreq.args, "properties",
+                        json_pack("[s,s,s,s]",
+                            "totalMessages", "unreadMessages",
+                            "totalthreads",  "unreadThreads"));
+            }
+
             r = getMailboxes(&subreq);
             json_decref(subreq.args);
             if (r) goto done;

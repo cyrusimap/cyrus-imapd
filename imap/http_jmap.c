@@ -1084,7 +1084,7 @@ EXPORTED int jmap_bumpstate(int mbtype, struct jmap_req *req) {
             modseq = req->counters.carddavmodseq;
             break;
         default:
-            modseq = req->counters.highestmodseq;
+            modseq = req->counters.mailmodseq;
     }
 
     modseq = mboxname_nextmodseq(mboxname, modseq, mbtype, 1);
