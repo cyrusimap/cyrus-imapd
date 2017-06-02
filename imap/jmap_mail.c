@@ -1490,28 +1490,41 @@ struct jmapmbox_updates_data {
     json_t *changed;        /* maps mailbox ids to {id:foldermodseq} */
     json_t *removed;        /* maps mailbox ids to {id:foldermodseq} */
     modseq_t frommodseq;
+    int *only_counts_changed;
+    jmap_req_t *req;
 };
 
 static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
 {
     struct jmapmbox_updates_data *data = rock;
     json_t *updates, *update;
-    modseq_t modseq;
+    struct statusdata sdata;
+    modseq_t modseq, mbmodseq;
 
     /* Ignore anything but regular mailboxes */
     if (mbentry->mbtype & ~(MBTYPE_DELETED)) {
         return 0;
     }
 
+    /* Lookup status. */
+    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+        int r = status_lookup(mbentry->name, data->req->userid,
+                              STATUS_HIGHESTMODSEQ, &sdata);
+        if (r) return r;
+        mbmodseq = sdata.highestmodseq;
+    } else {
+        mbmodseq = mbentry->foldermodseq;
+    }
+
     /* Ignore old changes */
-    if (mbentry->foldermodseq <= data->frommodseq) {
+    if (mbmodseq <= data->frommodseq) {
         return 0;
     }
 
     /* Is this a more recent update for an id that we have already seen? */
     if ((update = json_object_get(data->removed, mbentry->uniqueid))) {
         modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
-        if (modseq <= mbentry->foldermodseq) {
+        if (modseq <= mbmodseq) {
             json_object_del(data->removed, mbentry->uniqueid);
         } else {
             return 0;
@@ -1519,16 +1532,20 @@ static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
     }
     if ((update = json_object_get(data->changed, mbentry->uniqueid))) {
         modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
-        if (modseq <= mbentry->foldermodseq) {
+        if (modseq <= mbmodseq) {
             json_object_del(data->changed, mbentry->uniqueid);
         } else {
             return 0;
         }
     }
 
+    /* Did any of the mailbox metadata change? */
+    if (mbentry->foldermodseq > data->frommodseq) {
+        *(data->only_counts_changed) = 0;
+    }
+
     /* OK, report that update */
-    update = json_pack("{s:s s:i}", "id", mbentry->uniqueid,
-                                    "modseq", mbentry->foldermodseq);
+    update = json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq);
     if (mbentry->mbtype & MBTYPE_DELETED) {
         updates = data->removed;
     } else {
@@ -1560,18 +1577,21 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
                             int *has_more, json_t **newstate,
                             int *only_counts_changed)
 {
+    *only_counts_changed = 1;
+
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     struct jmapmbox_updates_data data = {
         json_pack("{}"),
         json_pack("{}"),
-        frommodseq
+        frommodseq,
+        only_counts_changed,
+        req
     };
     modseq_t windowmodseq;
     const char *id;
     json_t *val;
     int r, i;
 
-    *only_counts_changed = 0;
 
     /* Search for updates */
     r = mboxlist_usermboxtree(req->userid, jmapmbox_updates_cb, &data,
@@ -1613,18 +1633,10 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
     }
 
 
-    if (json_array_size(*changed) || json_array_size(*removed)) {
-        /* At least one mailbox changed */
-        *newstate = jmap_fmtstate(*has_more ? windowmodseq :
-                                  req->counters.mailmodseq);
-    } else if (frommodseq < req->counters.mailmodseq) {
-        /* No mailbox changed, but mailbox counters have */
-        *only_counts_changed = 1;
-        *newstate = jmap_fmtstate(req->counters.mailmodseq);
-    } else {
-        /* No change at alle */
-        *newstate = jmap_fmtstate(frommodseq);
+    if (!json_array_size(*changed) && !json_array_size(*removed)) {
+        *only_counts_changed = 0;
     }
+    *newstate = jmap_fmtstate(*has_more ? windowmodseq : req->counters.mailmodseq);
 
 done:
     if (data.changed) json_decref(data.changed);
