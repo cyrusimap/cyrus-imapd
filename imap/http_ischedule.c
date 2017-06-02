@@ -540,7 +540,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
 		while ((recipient = tok_next(&tok))) {
 		    /* Is recipient remote or local? */
-		    struct sched_param sparam;
+		    struct caldav_sched_param sparam;
 		    int r = caladdress_lookup(recipient, &sparam);
 
 		    /* Don't allow scheduling with remote users via iSchedule */
@@ -583,7 +583,7 @@ static int meth_post_isched(struct transaction_t *txn,
 }
 
 
-int isched_send(struct sched_param *sparam, const char *recipient,
+int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 		icalcomponent *ical, xmlNodePtr *xml)
 {
     int r = 0;

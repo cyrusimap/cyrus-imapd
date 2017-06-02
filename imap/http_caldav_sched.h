@@ -109,7 +109,7 @@ struct proplist {
 };
 
 /* Each calendar user address has the following scheduling protocol params */
-struct sched_param {
+struct caldav_sched_param {
     char *userid;	/* Userid corresponding to calendar address */ 
     char *server;	/* Remote server user lives on */
     unsigned port;	/* Remote server port, default = 80 */
@@ -119,7 +119,7 @@ struct sched_param {
 
 extern icalarray *rscale_calendars;
 extern const char *get_icalcomponent_errstr(icalcomponent *ical);
-extern int isched_send(struct sched_param *sparam, const char *recipient,
+extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 		       icalcomponent *ical, xmlNodePtr *xml);
 
 extern int sched_busytime_query(struct transaction_t *txn,
@@ -127,6 +127,6 @@ extern int sched_busytime_query(struct transaction_t *txn,
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 					xmlChar *recipient, xmlChar *status);
-extern int caladdress_lookup(const char *addr, struct sched_param *param);
+extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param);
 
 #endif /* HTTP_CALDAV_SCHED_H */
