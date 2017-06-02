@@ -4741,8 +4741,8 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         content_type = xstrdup("message/rfc822");
     }
 
-    fwrite("Content-Type: ", 1, strlen("Content-Type: "), out);
-    fwrite(content_type, 1, strlen(content_type), out);
+    fputs("Content-Type: ", out);
+    fputs(content_type, out);
 
     if (name) {
         /* RFC 2045 dropped the "name" parameter value for Content-Type,
@@ -4780,8 +4780,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     }
 
     /* Content-Disposition */
-    fwrite("Content-Disposition: attachment", 1,
-           strlen("Content-Disposition: attachment"), out);
+    fputs("Content-Disposition: attachment", out);
     if (name) {
         /* XXX break excessively long parameter values */
         if (!name_is_ascii) {
