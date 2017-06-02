@@ -181,6 +181,48 @@ sub test_set_user_flag_deliver
     $self->check_messages(\%exp, check_guid => 0);
 }
 
+sub test_reconstruct_after_delivery
+{
+    my ($self) = @_;
+
+    xlog "Testing reconstruct after delivery";
+
+    xlog "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $msgs{1}->set_body("set_shared_annotation /comment testvalue\r\n");
+    $imaptalk->create("INBOX.subfolder");
+    $self->{instance}->deliver($msgs{1}, user => "cassandane");
+
+    xlog "Check that the message made it";
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    # run a fresh reconstruct
+    my $out = "$self->{instance}->{basedir}/$self->{_name}-reconstruct.stdout";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => { 'stdout' => $out },
+        }, 'reconstruct', '-u', 'cassandane');
+
+    # check the output
+    {
+        local $/;
+        open my $fh, '<', $out
+            or die "Cannot open $out for reading: $!";
+        $out = <$fh>;
+        close $fh;
+        xlog $out;
+    }
+
+    $self->assert($out !~ m/ updating /);
+}
+
+
 # Note: remove_annotation can't really be tested with local
 # delivery, just with the APPEND command.
 
