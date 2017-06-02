@@ -432,6 +432,14 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
     if (r) return r;
     annotate_state_begin(mr->annot_state); /* safe to call multiple times */
 
+    if (mr->isappend) {
+        /* Write index record before any annotation, otherwise we
+         * screw up mailbox checksum and quotas */
+        r = mailbox_append_index_record(mr->mbox, &mr->record);
+        if (r) return r;
+        mr->isappend = 0;
+    }
+
     r = annotate_state_write(mr->annot_state, entry, userid, value);
     if (!r) {
         mr->record.modseq = mr->mbox->i.highestmodseq;
@@ -446,6 +454,14 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
     int r = msgrecord_need(mr, M_ANNOTATIONS);
     if (r) return r;
     annotate_state_begin(mr->annot_state); /* safe to call multiple times */
+
+    if (mr->isappend) {
+        /* Write index record before any annotation, otherwise we
+         * screw up mailbox checksum and quotas */
+        r = mailbox_append_index_record(mr->mbox, &mr->record);
+        if (r) return r;
+        mr->isappend = 0;
+    }
 
     r = annotate_state_store(mr->annot_state, l);
     if (!r) {
