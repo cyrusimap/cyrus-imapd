@@ -54,6 +54,6 @@ script:
   - make check
 
 #safelist
-branches:
-  only:
-    - master
+#branches:
+#  only:
+#    - master
