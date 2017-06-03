@@ -1462,9 +1462,6 @@ EXPORTED int index_run_annotator(struct index_state *state,
         if (r) goto out;
 
         msgrecord_unref(&msgrec);
-
-        r = index_rewrite_record(state, msgno, &record, /*silent*/0);
-        if (r) goto out;
     }
 
 out:
