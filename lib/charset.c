@@ -1782,10 +1782,12 @@ static struct convert_rock *search_init(const char *substr, comp_pat *pat) {
     return rock;
 }
 
-static struct convert_rock *buffer_init(void)
+static struct convert_rock *buffer_init(size_t hint)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct buf *buf = xzmalloc(sizeof(struct buf));
+
+    if (hint) buf_ensure(buf, hint);
 
     rock->f = byte2buffer;
     rock->cleanup = buffer_free;
@@ -1975,7 +1977,7 @@ EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
     utf8 = charset_lookupname("utf-8");
 
     /* set up the conversion path */
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(0);
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
     input = convert_init(charset, 1/*to_uni*/, input);
@@ -2013,7 +2015,7 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
 
     /* set up the conversion path */
     imaputf7 = charset_lookupname("imap-mailbox-name");
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(len);
     input = convert_init(imaputf7, 0/*to_uni*/, tobuffer);
     input = convert_init(charset, 1/*to_uni*/, input);
 
@@ -2081,7 +2083,7 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(len);
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = convert_init(charset, 1/*to_uni*/, input);
 
@@ -2130,7 +2132,7 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
     }
 
     /* set up the conversion path */
-    input = buffer_init();
+    input = buffer_init(len);
     buffer_setbuf(input, dst);
 
     /* choose encoding extraction if needed */
@@ -2275,7 +2277,7 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     if (!s) return NULL;
 
     utf8 = charset_lookupname("utf-8");
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(0);
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
 
@@ -2302,7 +2304,7 @@ EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
 
     if (!s) return NULL;
 
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(len);
     input = unfold_init(flags&CHARSET_UNFOLD_SKIPWS, tobuffer);
 
     convert_catn(input, s, len);
@@ -2328,7 +2330,7 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
     if (!s) return NULL;
 
     utf8 = charset_lookupname("utf-8");
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(0);
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
 
     mimeheader_cat(input, s, flags);
@@ -2601,7 +2603,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
-    tobuffer = buffer_init();
+    tobuffer = buffer_init(buf_len(data));
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
 
@@ -2689,12 +2691,12 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
         return msg_base;
 
     case ENCODING_QP:
-        tobuffer = buffer_init();
+        tobuffer = buffer_init(len);
         input = qp_init(0, tobuffer);
         break;
 
     case ENCODING_BASE64:
-        tobuffer = buffer_init();
+        tobuffer = buffer_init(len);
         input = b64_init(tobuffer);
         break;
 
