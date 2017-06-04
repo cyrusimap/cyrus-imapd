@@ -5497,23 +5497,24 @@ static int parse_annotation(struct dlist *kin,
 {
     struct dlist *kl;
     const char *entry;
-    const char *userid;
+    const char *userid = "";
     const char *valmap = NULL;
     size_t vallen = 0;
     struct buf value = BUF_INITIALIZER;
-    modseq_t modseq;
+    modseq_t modseq = 0;
 
     for (kl = kin->head; kl; kl = kl->next) {
         if (!dlist_getatom(kl, "ENTRY", &entry))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!dlist_getatom(kl, "USERID", &userid))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!dlist_getnum64(kl, "MODSEQ", &modseq))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getmap(kl, "VALUE", &valmap, &vallen))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+        dlist_getatom(kl, "USERID", &userid); /* optional */
+        dlist_getnum64(kl, "MODSEQ", &modseq); /* optional */
+
         buf_init_ro(&value, valmap, vallen);
         sync_annot_list_add(replica_annot, entry, userid, &value, modseq);
+        buf_free(&value);
     }
 
     return 0;
