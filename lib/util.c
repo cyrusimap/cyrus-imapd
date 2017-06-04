@@ -883,7 +883,7 @@ static inline size_t roundup(size_t size)
         return 256;
     if (size < 512)
         return 512;
-    return ((size + 1024) & ~1023);
+    return ((size * 2) & ~1023);
 }
 
 /* this function has a side-effect of always leaving the buffer writable */
