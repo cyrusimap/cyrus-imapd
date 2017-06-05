@@ -1,6 +1,5 @@
 [![Build Status:master](https://api.travis-ci.org/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.org/cyrusimap/cyrus-imapd)
 [![Build Status:3.x](https://api.travis-ci.org/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.0)](https://travis-ci.org/cyrusimap/cyrus-imapd)
-[![Documentation Status](https://www.cyrusimap.org/?version=latest)](https://www.cyrusimap.org/?badge=latest)
 [![IRC](https://img.shields.io/badge/IRC-%23cyrus-1e72ff.svg?style=flat)](http://webchat.freenode.net/?channels=cyrus)
 
 
