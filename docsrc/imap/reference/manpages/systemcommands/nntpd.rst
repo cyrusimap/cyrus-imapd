@@ -1,5 +1,7 @@
 .. cyrusman:: nntpd(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-nntpd:
 
 =========
@@ -31,9 +33,9 @@ setting specifies the special userid to be used when contructing the
 *To:* header address for following up to articles when read via IMAP.
 The optional ``newspeer`` setting specifies the fully qualified hostname
 of the upstream news server to which articles are fed.  The optional
-``allownewnews`` setting enables the NNTP NEWNEWS command.  
+``allownewnews`` setting enables the NNTP NEWNEWS command.
 
-.. Note:: 
+.. Note::
   For servers with a large volume of articles, the NEWNEWS command can
   be expensive.
 

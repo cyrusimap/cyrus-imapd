@@ -1,5 +1,8 @@
 .. cyrusman:: chk_cyrus(8)
 
+.. author: Nic Bernstein (Onlight)
+.. author: Jeroen van Meeuwen (Kolab Systems)
+
 .. _imap-reference-manpages-systemcommands-chk_cyrus:
 
 =============

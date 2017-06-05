@@ -36,7 +36,7 @@ Man pages
     systemcommands/cyr_df
     systemcommands/cyr_expire
     systemcommands/cyr_info
-    systemcommands/cyr_sequence    
+    systemcommands/cyr_sequence
     systemcommands/cyr_synclog
     systemcommands/cyr_userseen
     systemcommands/cyr_virusscan
@@ -51,7 +51,7 @@ Man pages
     systemcommands/ipurge
     systemcommands/lmtpd
     systemcommands/lmtpproxyd
-    systemcommands/master 
+    systemcommands/master
     systemcommands/mbexamine
     systemcommands/mbpath
     systemcommands/mbtool
@@ -60,7 +60,7 @@ Man pages
     systemcommands/nntpd
     systemcommands/notifyd
     systemcommands/pop3d
-    systemcommands/pop3proxyd    
+    systemcommands/pop3proxyd
     systemcommands/ptdump
     systemcommands/ptexpire
     systemcommands/ptloader
@@ -69,7 +69,7 @@ Man pages
     systemcommands/restore
     systemcommands/rmnews
     systemcommands/sievec
-    systemcommands/sieved    
+    systemcommands/sieved
     systemcommands/smmapd
     systemcommands/squatter
     systemcommands/sync_client
@@ -85,7 +85,7 @@ Man pages
 .. toctree::
     :maxdepth: 1
     :glob:
-    
+
     usercommands/*
 
 Work-in-Progress
@@ -100,17 +100,21 @@ the form of actual man-pages.
 
     systemcommands/proxyd
 
+.. These are all hidden because the files are possibly obsolete, or they
+    don't match any active scripts/commands, or there's no info on what they
+    do.
+
 .. toctree::
     :maxdepth: 1
     :hidden:
-    
+
     systemcommands/compile_st.pl
 
     systemcommands/cyr_systemd_helper
 
-    systemcommands/convert-sieve.pl       
-    systemcommands/masssievec    
-    systemcommands/arbitronsort.pl    
+    systemcommands/convert-sieve.pl
+    systemcommands/masssievec
+    systemcommands/arbitronsort.pl
     systemcommands/fixsearchpath.pl
     systemcommands/migrate-metadata
     systemcommands/mknewsgroups
@@ -124,6 +128,6 @@ the form of actual man-pages.
     systemcommands/translatesieve
     systemcommands/template
 
-   
-..  systemcommands/template: this is just the template for new command files so it obeys man and html formatting.   
+
+..  systemcommands/template: this is just the template for new command files so it obeys man and html formatting.
 .. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]

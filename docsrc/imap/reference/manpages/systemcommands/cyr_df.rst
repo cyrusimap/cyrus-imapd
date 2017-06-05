@@ -1,5 +1,8 @@
 .. cyrusman:: cyr_df(8)
 
+.. author: Nic Bernstein (Onlight)
+.. author: Jeroen van Meeuwen (Kolab Systems)
+
 .. _imap-reference-manpages-systemcommands-cyr_df:
 
 ==========

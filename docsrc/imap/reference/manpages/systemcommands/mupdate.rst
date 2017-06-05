@@ -1,5 +1,7 @@
 .. cyrusman:: mupdate(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-mupdate:
 
 ===========
@@ -18,9 +20,9 @@ Synopsis
 Description
 ===========
 
-**mupdate** is the mailboxdb aggregation server.  It accepts commands 
-on its standard input and responds on its standard output.  It MUST be 
-invoked by :cyrusman:`master(8)` with those descriptors attached to a 
+**mupdate** is the mailboxdb aggregation server.  It accepts commands
+on its standard input and responds on its standard output.  It MUST be
+invoked by :cyrusman:`master(8)` with those descriptors attached to a
 remote client connection.
 
 **mupdate** |default-conf-text|

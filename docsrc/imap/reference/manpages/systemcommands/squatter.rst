@@ -1,5 +1,7 @@
 .. cyrusman:: squatter(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-squatter:
 
 ============
@@ -22,9 +24,9 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]   **-u** *user*...
     **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
     **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
-    **squatter** [ **-C** *config-file* ] **-I** *file* 
+    **squatter** [ **-C** *config-file* ] **-I** *file*
     **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ]
-    
+
 
 
 Description
@@ -141,7 +143,7 @@ Options
 .. option:: -h
 
     Display this usage information.
-    
+
 .. option:: -I file
 
     Read from *file* and index individual messages described by

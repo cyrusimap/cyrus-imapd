@@ -1,5 +1,7 @@
 .. cyrusman:: cyr_virusscan(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-cyr_virusscan:
 
 =================
@@ -40,7 +42,7 @@ flag is only operable in combination with **-r**.
 via crontab(5) or your preferred method (i.e. /etc/cron.hourly), or by
 :cyrusman:`master(8)` via the EVENTS{} stanza in
 :cyrusman:`cyrus.conf(5)`.
-    
+
 **cyr_virusscan** |default-conf-text|
 
 Options
@@ -52,7 +54,7 @@ Options
 
     |cli-dash-c-text|
 
-   
+
 .. option:: -n
 
     Notify mailbox owner of deleted messages via email.  This flag is
@@ -61,7 +63,7 @@ Options
 .. option:: -r
 
     Remove infected messages.
-    
+
 .. option:: -s imap-search-string
 
     Rather than scanning for viruses, messages matching the search
@@ -144,7 +146,7 @@ Examples
         Search mailbox user/bovik for messages which have Fedex in the
         subject line, removing them all, and appending notifications to
         Bovik's inbox.
-        
+
 .. only:: html
 
     ::

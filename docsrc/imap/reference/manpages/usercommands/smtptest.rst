@@ -1,5 +1,7 @@
 .. cyrusman:: smtptest(1)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-usercommands-smtptest:
 
 ============

@@ -1,5 +1,7 @@
 .. cyrusman:: installsieve(1)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-usercommands-installsieve:
 
 ================
@@ -48,10 +50,10 @@ Options
 
 .. option:: -i  file
 
-    Install a file onto the server. If a script with the same name 
-    already exists on the server it is overwritten. Upon sucessfully 
-    putting the script on the server the script is set active. If 
-    *file* has the extension .script it is chopped when put on the 
+    Install a file onto the server. If a script with the same name
+    already exists on the server it is overwritten. Upon sucessfully
+    putting the script on the server the script is set active. If
+    *file* has the extension .script it is chopped when put on the
     server since sieve names may not contain a '.'.
 
 .. option:: -a  name
@@ -65,20 +67,20 @@ Options
 
 .. option:: -m  mechanism
 
-    Force **installsieve** to use *mechanism* for authentication. If 
-    not specified the strongest authentication mechanism supported by 
-    the server is chosen.  Specify *login* to use the LOGIN command 
+    Force **installsieve** to use *mechanism* for authentication. If
+    not specified the strongest authentication mechanism supported by
+    the server is chosen.  Specify *login* to use the LOGIN command
     instead of AUTHENTICATE.
 
 .. option:: -g  name
 
-    Get the sieve script with *name* and save it to disk with a 
-    ".script" extension. If a file with that name already exists it is 
+    Get the sieve script with *name* and save it to disk with a
+    ".script" extension. If a file with that name already exists it is
     overwritten.
 
 .. option:: -u  userid
 
-    Userid/Authname to use for authentication; by default, the current 
+    Userid/Authname to use for authentication; by default, the current
     user.
 
 History

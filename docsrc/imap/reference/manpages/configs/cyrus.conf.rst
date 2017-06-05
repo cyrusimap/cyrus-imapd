@@ -1,5 +1,7 @@
 .. cyrusman:: cyrus.conf(5)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-configs-cyrus.conf:
 
 ==============

@@ -1,5 +1,7 @@
 .. cyrusman:: ptexpire(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-ptexpire:
 
 ============
@@ -32,7 +34,7 @@ Options
 .. option::  -C config-file
 
   |cli-dash-c-text|
-  
+
 .. option::  -E time
 
   Expire entries older than this time.
