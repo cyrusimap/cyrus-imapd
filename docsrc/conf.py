@@ -268,7 +268,7 @@ latex_documents = [
 
 man_pages = []
 
-import glob, os
+import glob, os, io
 
 # Which paths relate to which man page sections
 pathset = [
@@ -288,7 +288,7 @@ for tuple in pathset:
     os.chdir(tuple[0])
     for rstfile in glob.glob("*.rst"):
         author = [("The Cyrus Team")]
-        with open(rstfile,'r',encoding="utf8") as f:
+        with io.open(rstfile,'r',encoding="utf8") as f:
             for line in f:
                 if line.startswith('.. author: '):
                     author.append(line[11: len(line.strip())])
