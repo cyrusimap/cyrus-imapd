@@ -611,7 +611,7 @@ static const uint32_t crc32_lookup[16][256] =
     }
 };
 
-#ifndef LITTLE_ENDIAN
+#if BYTE_ORDER != LITTLE_ENDIAN
 /* swap endianness */
 static uint32_t swap(uint32_t x)
 {
@@ -634,7 +634,7 @@ static uint32_t crc32_slice8(uint32_t prev, const void *data, size_t length)
 
     /* process eight bytes at once (Slicing-by-8) */
     while (length >= 8) {
-#ifdef LITTLE_ENDIAN
+#if BYTE_ORDER == LITTLE_ENDIAN
         uint32_t one = *current++ ^ crc;
         uint32_t two = *current++;
         crc = crc32_lookup[0][(two>>24) & 0xFF] ^
@@ -682,7 +682,7 @@ static uint32_t crc32_slice16(uint32_t prev, const void *data, size_t length)
     while (length >= bytes_at_once) {
         size_t unrolling;
         for (unrolling = 0; unrolling < unroll; unrolling++) {
-#ifdef LITTLE_ENDIAN
+#if BYTE_ORDER == LITTLE_ENDIAN
         uint32_t one   = *current++ ^ crc;
         uint32_t two   = *current++;
         uint32_t three = *current++;
