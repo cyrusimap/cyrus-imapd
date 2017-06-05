@@ -1,5 +1,8 @@
 .. cyrusman:: mkimap(8)
 
+.. author: Jeroen van Meeuwen (Kolab Systems)
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-mkimap:
 
 ==========

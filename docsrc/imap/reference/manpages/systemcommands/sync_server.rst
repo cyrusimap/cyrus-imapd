@@ -1,5 +1,9 @@
 .. cyrusman:: sync_server(8)
 
+.. author: David Carter (dpc22@cam.ac.uk)
+.. author: Ken Murchison (ken@oceana.com)
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-sync_server:
 
 ===============

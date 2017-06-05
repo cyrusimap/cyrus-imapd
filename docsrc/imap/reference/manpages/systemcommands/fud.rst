@@ -1,5 +1,7 @@
 .. cyrusman:: fud(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-fud:
 
 =======

@@ -1,3 +1,7 @@
+.. cyrusman:: imclient(3)
+
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-admin-commands-imclient-library:
 
 ====================
@@ -126,7 +130,7 @@ See below for a description of each function.
     The defined %-sequences are:
 
         ::
-       
+
             %% for %
             %a for an IMAP atom
             %s for an astring (which will be quoted or literalized as needed)

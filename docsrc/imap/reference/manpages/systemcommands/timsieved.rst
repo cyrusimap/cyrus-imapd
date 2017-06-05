@@ -1,5 +1,9 @@
 .. cyrusman:: timsieved(8)
 
+.. author: David Carter (dpc22@cam.ac.uk)
+.. author: Ken Murchison (ken@oceana.com)
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-timsieved:
 
 =============
@@ -18,10 +22,10 @@ Synopsis
 Description
 ===========
 
-**timsieved** is a server that allows users to remotely manage their 
-sieve scripts kept on the server.  It accepts commands on its standard 
-input and responds on its standard output. It MUST be invoked by 
-:cyrusman:`master(8)` with those descriptors attached to a remote client 
+**timsieved** is a server that allows users to remotely manage their
+sieve scripts kept on the server.  It accepts commands on its standard
+input and responds on its standard output. It MUST be invoked by
+:cyrusman:`master(8)` with those descriptors attached to a remote client
 connection.
 
 Cyrus admins who authenticate and authorize as themselves (e.g. don't

@@ -1,5 +1,7 @@
 .. cyrusman:: lmtptest(1)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-usercommands-lmtptest:
 
 ============
@@ -15,7 +17,7 @@ Synopsis
 
     **lmtptest** [ **-t** *keyfile* ] [ **-p** *port* ] [ **-m** *mechanism* ]
         [ **-a** *userid* ] [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ]
-        [ **-r** *realm* ] [ **-f** *file* ] [ **-n** *num* ] [ **-c** ] [ **-i** ] 
+        [ **-r** *realm* ] [ **-f** *file* ] [ **-n** *num* ] [ **-c** ] [ **-i** ]
         [ **-v** ] [ **-w** *passwd* ] [ **-o** *option*\ =\ *value* ] *hostname*
 
 Description

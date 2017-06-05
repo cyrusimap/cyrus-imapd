@@ -1,5 +1,7 @@
 .. cyrusman:: smmapd(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-smmapd:
 
 ==========
@@ -18,10 +20,10 @@ Synopsis
 Description
 ===========
 
-**smmapd** is a Sendmail socket map daemon which is used to verify that 
-a Cyrus mailbox exists, that it is postable and it is under quota.  It 
-accepts commands on its standard input and responds on its standard 
-output.  It MUST be invoked by :cyrusman:`master(8)` with those 
+**smmapd** is a Sendmail socket map daemon which is used to verify that
+a Cyrus mailbox exists, that it is postable and it is under quota.  It
+accepts commands on its standard input and responds on its standard
+output.  It MUST be invoked by :cyrusman:`master(8)` with those
 descriptors attached to a remote client connection.
 
 **smmapd** |default-conf-text|

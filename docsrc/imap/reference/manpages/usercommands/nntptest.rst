@@ -1,5 +1,7 @@
 .. cyrusman:: nntptest(1)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-usercommands-nntptest:
 
 ============
@@ -15,7 +17,7 @@ Synopsis
 
     **nntptest** [ **-t** *keyfile* ] [ **-p** *port* ] [ **-m** *mechanism* ] [ **-a** *userid* ]
         [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ] [ **-r** *realm* ] [ **-f** *file* ]
-        [ **-n** *num* ] [ **-s** ] [ **-c** ] [ **-i** ] [ **-v** ] [ **-w** *passwd* ] [ **-q** ] 
+        [ **-n** *num* ] [ **-s** ] [ **-c** ] [ **-i** ] [ **-v** ] [ **-w** *passwd* ] [ **-q** ]
         [ **-o** *option*\ =\ *value* ] *hostname*
 
 Description
@@ -98,7 +100,7 @@ Options
 .. option:: -s
 
     Enable NNTP over SSL (nntps).
-    
+
 .. option:: -q
 
     Enable NNTP COMPRESSion (after authentication)
