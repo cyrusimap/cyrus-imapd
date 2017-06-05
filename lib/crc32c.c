@@ -591,7 +591,7 @@ static const uint32_t crc32c_lookup[4][256] = {
     },
 };
 
-#ifndef LITTLE_ENDIAN
+#if BYTE_ORDER != LITTLE_ENDIAN
 /* swap endianness */
 static uint32_t swap(uint32_t x)
 {
@@ -615,7 +615,7 @@ static uint32_t crc32c_sw(uint32_t crc, const void *buf, size_t len) {
 
     /* process four bytes at once (slicing-by-4) */
     while (len >= 4) {
-#ifdef LITTLE_ENDIAN
+#if BYTE_ORDER == LITTLE_ENDIAN
         crc1 = *cur++ ^ crc0;
         crc0 = crc32c_lookup[0][(crc1>>24) & 0xff] ^
                crc32c_lookup[1][(crc1>>16) & 0xff] ^
