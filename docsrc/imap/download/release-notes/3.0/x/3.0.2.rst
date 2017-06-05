@@ -29,13 +29,37 @@ Changes Since 3.0.1
 
 Dependency changes
 ------------------
-* Cyrus will now be have mboxevents feature compiled in, it is no
-  longer optional.
 
+* Cyrus will now have the mboxevents feature compiled in, it is no
+  longer optional.
 
 Other changes
 -------------
 
+* Improved JMAP support, including attachment name searching
+* Improved spelling/gramar in documentation (thanks Josh Soref)
+* Distribution now includes a libcyrus_imap.pc (thanks Дилян Палаузов)
+* Improved CUnit unit tests
+* :cyrusman:`ctl_backups(8)` now supports `-V` argument for faster list/stat operations
+* Cyrus distributions now contain a VERSION file, containing the released
+  Cyrus version, which is preserved across autoreconf calls.
 
 Bug fixes
 ---------
+
+* Fixed :issue:`1933`: activation of replicated sieve scripts now occurs atomically
+* Fixed :issue:`1931`: improved handling of missing mysql in configure
+* Fixed :issue:`1901`: CyrusDB API is now C++-friendly
+* Fixed: don't mix up X-NUM-FOLDERS quota usage on rename
+* Fixed :issue:`1944`: SQLite only required if compiling with features that need it
+* Fixed :issue:`1914`: VPATH builds now work correctly again
+* Fixed :issue:`1948`: ACL changes are now auditlogged
+* Fixed: JMAP downloadURL format
+* Fixed: memory leak in httpd
+* Fixed :issue:`1967`: imapd reports EXISTS count earlier and faster
+* Fixed :issue:`1964`: correctly detect when librt is needed
+* Fixed :issue:`1909`: tidy up --enable-sphinx/enable-xapian configure options
+  (thanks Дилян Палаузов)
+* Fixed: pkgconfig files now contain exec_prefix (thanks Дилян Палаузов)
+* Fixed :issue:`1993`: crc32c and xsha1 modules now build correctly on big-endian
+  platforms (thanks Jason Tibbitts)
