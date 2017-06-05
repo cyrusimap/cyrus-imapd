@@ -1,5 +1,7 @@
 .. cyrusman:: ctl_conversationsdb(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-ctl_conversationsdb:
 
 =======================

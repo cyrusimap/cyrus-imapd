@@ -1,5 +1,9 @@
 .. cyrusman:: sync_client(8)
 
+.. author: David Carter (dpc22@cam.ac.uk)
+.. author: Ken Murchison (ken@oceana.com)
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-sync_client:
 
 ===============
@@ -144,10 +148,10 @@ Options
 
 .. option:: -p partition
 
-    In mailbox or user replication mode: provides the name of the 
-    partition on the replica to which the mailboxes/users should be 
+    In mailbox or user replication mode: provides the name of the
+    partition on the replica to which the mailboxes/users should be
     replicated.
-        
+
 Examples
 ========
 

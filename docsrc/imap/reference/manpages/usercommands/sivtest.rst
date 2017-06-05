@@ -1,5 +1,8 @@
 .. cyrusman:: sivtest(1)
 
+.. author: Nic Bernstein (Onlight)
+
+
 .. _imap-reference-manpages-usercommands-sivtest:
 
 ===========

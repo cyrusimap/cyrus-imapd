@@ -1,5 +1,8 @@
 .. cyrusman:: unexpunge(8)
 
+.. author: Nic Bernstein (Onlight)
+.. author: Jeroen van Meeuwen (Kolab Systems)
+
 .. _imap-reference-manpages-systemcommands-unexpunge:
 
 =============

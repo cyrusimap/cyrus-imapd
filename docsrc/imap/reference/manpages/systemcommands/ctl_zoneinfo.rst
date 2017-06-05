@@ -1,5 +1,7 @@
 .. cyrusman:: ctl_zoneinfo(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-**ctl_zoneinfo**:
 
 ================

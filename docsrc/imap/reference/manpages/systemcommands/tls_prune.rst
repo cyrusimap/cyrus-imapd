@@ -1,5 +1,7 @@
 .. cyrusman:: tls_prune(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-tls_prune:
 
 =============

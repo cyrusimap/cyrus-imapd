@@ -1,5 +1,8 @@
 .. cyrusman:: arbitron(8)
 
+.. author: Nic Bernstein (Onlight)
+.. author: Jeroen van Meeuwen (Kolab Systems)
+
 .. _imap-reference-manpages-systemcommands-arbitron:
 
 ============
@@ -102,9 +105,9 @@ Examples
         Long-format list.
 
 .. only:: html
-   
+
     ::
-   
+
         tech.Commits,john,s,04-28-2015 09:45:35,05-28-2015 09:45:35
         tech.Commits.archive,mary,s,04-28-2015 09:45:35,05-28-2015 09:45:35
         tech.Commits.archive,john,s,04-28-2015 09:45:35,05-28-2015 09:45:35

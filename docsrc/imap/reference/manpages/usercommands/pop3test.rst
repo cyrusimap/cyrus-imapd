@@ -1,5 +1,7 @@
 .. cyrusman:: pop3test(1)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-usercommands-pop3test:
 
 ============

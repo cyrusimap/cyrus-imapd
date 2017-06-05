@@ -1,5 +1,7 @@
 .. cyrusman:: ptdump(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-ptdump:
 
 ==========
@@ -14,7 +16,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **ptdump** [**-C** *filename*] 
+    **ptdump** [**-C** *filename*]
 
 Description
 ===========

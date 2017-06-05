@@ -1,5 +1,7 @@
 .. cyrusman:: krb.equiv(5)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-configs-krb.equiv:
 
 =============

@@ -281,15 +281,22 @@ current = os.path.abspath(os.getcwd())
 
 for tuple in pathset:
     os.chdir(tuple[0])
-    for file in glob.glob("*.rst"):
+    for rstfile in glob.glob("*.rst"):
+        author = [("The Cyrus Team")]
+        with open(rstfile,'r',encoding="utf8") as f:
+            for line in f:
+                if line.startswith('.. author: '):
+                    author.append(line[11: len(line.strip())])
+            f.close()
         man_pages.append(
-            (os.path.splitext(os.path.join(tuple[0],file))[0],
-            os.path.splitext(file)[0],
+            (os.path.splitext(os.path.join(tuple[0],rstfile))[0],
+            os.path.splitext(rstfile)[0],
             u'Cyrus IMAP documentation',
-            [ u'The Cyrus Team'],
+            author,
             tuple[1]
             ))
     os.chdir(current)
+
 
 # If true, show URL addresses after external links.
 #man_show_urls = False

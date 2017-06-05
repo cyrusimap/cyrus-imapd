@@ -1,5 +1,7 @@
 .. cyrusman:: cyr_deny(8)
 
+.. author: Nic Bernstein (Onlight)
+
 .. _imap-reference-manpages-systemcommands-cyr_deny:
 
 ============
