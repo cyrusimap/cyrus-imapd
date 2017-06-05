@@ -270,6 +270,7 @@ man_pages = []
 
 import glob, os
 
+# Which paths relate to which man page sections
 pathset = [
     ("imap/reference/manpages/systemcommands/", 8),
     ("imap/developer/libraries/", 3),
@@ -277,8 +278,12 @@ pathset = [
     ("imap/reference/manpages/configs/", 5)
 ]
 
+# For each man page section/path,
+# look for all the rst files.
+# With each file, check if there's an '.. author: ' attribution (strict on
+# spacing and case sensitivity) and add to the author info.
+# Then add the file with all its details into the man_page array.
 current = os.path.abspath(os.getcwd())
-
 for tuple in pathset:
     os.chdir(tuple[0])
     for rstfile in glob.glob("*.rst"):
