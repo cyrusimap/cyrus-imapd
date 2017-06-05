@@ -4,13 +4,13 @@ dist: trusty
 addons:
   apt:
     packages:
-      #- libjansson-dev
+      - libjansson-dev
       - libxml2-dev
       - libsqlite3-dev
-      #- libical-dev
+      - libical-dev
       - libsasl2-dev
       - libssl-dev
-      #- libopendkim-dev
+      - libopendkim-dev
       - libcunit1-dev
       - libpcre3-dev
       - uuid-dev
@@ -28,6 +28,7 @@ env:
     - PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
     - LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
     - XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
+    - PATH="$CYRUSLIBS/bin:$PATH"
     - USE_CCACHE=1
     
 cache:
@@ -36,12 +37,17 @@ cache:
 os: linux
 compiler: gcc
 
-# First build cyrus libs
+# First build xapian
 install:
-  - git clone https://github.com/cyrusimap/cyruslibs.git cyruslibs
-  - pushd cyruslibs
-  - sh build.sh
-  - popd
+  - git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
+  - pushd xapian
+  - ./bootstrap
+  - ./configure --enable-silent-rules --prefix=$CYRUSLIBS
+  - pushd xapian-core
+  - make -j 8
+  - sudo make install
+  - popd #xapian-core
+  - popd #xapian
 
 before_script:
   - ccache --version
@@ -57,3 +63,5 @@ script:
 branches:
   only:
     - master
+    - cyrus-imapd-3.0
+
