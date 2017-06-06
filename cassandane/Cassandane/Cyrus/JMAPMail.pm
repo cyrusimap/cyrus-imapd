@@ -1812,7 +1812,7 @@ sub test_getmessages_body_multi
 }
 
 sub test_getmessages_attachment_name
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2361,7 +2361,7 @@ sub test_download
 }
 
 sub test_setmessages_attachments
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3588,7 +3588,7 @@ sub test_getmessagelist_attachments
 }
 
 sub test_getmessagelist_attachmentname
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
