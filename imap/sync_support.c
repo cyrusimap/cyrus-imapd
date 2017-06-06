@@ -1723,7 +1723,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
-            r = read_annotations(mailbox, record, &annots, since_modseq, ANNOTATE_TOMBSTONES);
+            r = read_annotations(mailbox, record, &annots, since_modseq,
+                                /*XXX ANNOTATE_TOMBSTONES*/0);
             if (r) goto done;
 
             encode_annotations(il, record, annots);
@@ -1928,12 +1929,12 @@ static int read_one_annot(const char *mailbox __attribute__((unused)),
 int read_annotations(const struct mailbox *mailbox,
                      const struct index_record *record,
                      struct sync_annot_list **resp,
-                     modseq_t since_modseq,
+                     modseq_t since_modseq __attribute__((unused)),
                      int flags)
 {
     *resp = NULL;
     return annotatemore_findall(mailbox->name, record ? record->uid : 0,
-                                /* all entries*/"*", since_modseq,
+                                /* all entries*/"*", /*XXX since_modseq*/0,
                                 read_one_annot, (void *)resp, flags);
 }
 
@@ -2485,7 +2486,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
 
-            r = read_annotations(mailbox, &copy, &rannots, rrecord->modseq, ANNOTATE_TOMBSTONES);
+            r = read_annotations(mailbox, &copy, &rannots, rrecord->modseq,
+                                 /*XXX ANNOTATE_TOMBSTONES*/0);
             if (r) {
                 syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
                        mailbox->name, rrecord->recno, error_message(r));
@@ -2934,7 +2936,8 @@ static int sync_mailbox_byname(const char *name, void *rock)
          !sync_name_lookup(qrl, mailbox->quotaroot))
         sync_name_list_add(qrl, mailbox->quotaroot);
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0, 0);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
+                            /*XXX fullannots*/1);
     if (!r) sync_send_response(kl, mrock->pout);
 
 out:
@@ -2962,7 +2965,8 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
-    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1, 0);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1,
+                            /*XXX fullannots*/1);
     if (r) goto out;
 
     sync_send_response(kl, sstate->pout);
@@ -5342,7 +5346,7 @@ static int update_mailbox_once(struct sync_folder *local,
     if (!topart) topart = mailbox->part;
     part_list = sync_reserve_partlist(reserve_list, topart);
     r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl,
-                            kupload, 1, flags & SYNC_FLAG_FULLANNOTS);
+                            kupload, 1, /*XXX flags & SYNC_FLAG_FULLANNOTS*/1);
     if (r) goto done;
 
     /* keep the mailbox locked for shorter time! Unlock the index now
