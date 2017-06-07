@@ -108,8 +108,6 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    systemcommands/compile_st.pl
-
     systemcommands/cyr_systemd_helper
 
     systemcommands/convert-sieve.pl
