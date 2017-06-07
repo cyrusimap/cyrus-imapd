@@ -1042,7 +1042,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
         return 0;
     }
 
-    if ((mdata.flags & ANNOTATE_FLAG_DELETED) &&
+    if (((mdata.flags & ANNOTATE_FLAG_DELETED) || !buf_len(&value)) &&
         !(frock->flags & ANNOTATE_TOMBSTONES)) {
 #if DEBUG
     syslog(LOG_ERR, "find_cb: ignoring key %s, tombstones are ignored",
