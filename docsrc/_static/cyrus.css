@@ -256,3 +256,14 @@ h4 {
 .rst-content .sidebar p {
     line-height: 18px;
 }
+
+div.buildstatus {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 80%;
+}
+
+div.buildstatus a:visited {
+    color: white;
+}
