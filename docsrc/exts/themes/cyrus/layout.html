@@ -82,7 +82,7 @@
 
 <body class="wy-body-for-nav" role="document">
 
-  
+
   {% block header %}
   {% endblock %}
 
@@ -97,7 +97,7 @@
  {#       {% if logo and theme_logo_only %} #}
           <a href="{{ pathto(master_doc) }}">
  {#       {% else %}
-          <a href="{{ pathto(master_doc) }}" class="icon icon-home"> {{ project }} 
+          <a href="{{ pathto(master_doc) }}" class="icon icon-home"> {{ project }}
         {% endif %} #}
 
   {#      {% if logo %} #}
@@ -122,6 +122,7 @@
           {% endif %}
         {% endblock %}
       </div>
+        {% include "buildstatus.html" %}
       &nbsp;
     </nav>
 
@@ -137,7 +138,7 @@
       {# PAGE CONTENT #}
       <div class="wy-nav-content">
         <div class="rst-content">
-          
+
           {% include "breadcrumbs.html" %}
           <div role="main" class="document">
             {% block body %}{% endblock %}
