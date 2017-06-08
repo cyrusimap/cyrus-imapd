@@ -1,6 +1,6 @@
-.. cyrusman:: arbitronsort.pl(8)
+.. cyrusman:: arbitronsort.pl(1)
 
-.. _imap-reference-manpages-systemcommands-arbitronsort.pl:
+.. _imap-reference-manpages-usercommands-arbitronsort.pl:
 
 ===================
 **arbitronsort.pl**
@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **arbitronsort.pl** 
+    **arbitronsort.pl**
 
 Description
 ===========
@@ -31,7 +31,7 @@ Example
 
     **arbitron -l \| arbitronsort.pl**
 
-..    
+..
 
 See Also
 ========
