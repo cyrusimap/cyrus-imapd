@@ -80,6 +80,12 @@ Install and configure Cassandane
             [imaptest]
             basedir=/path/to/imaptest/imaptest
             suppress=append-binary urlauth-binary fetch-binary-mime fetch-binary-mime-qp
+    * Ensure that the following config items are off:
+
+      .. code-block:: ini
+
+         altnamespace = no
+         unixhierarchysep = no
 
 6. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
 
@@ -143,7 +149,8 @@ Configure the environment.
     ./configure --prefix=/usr/cyrus --with-cyrus-prefix=/usr/cyrus \
     --enable-autocreate --enable-http --enable-unit-tests \
     --enable-replication --enable-nntp --enable-murder \
-    --enable-idled --enable-xapian --enable-calalarmd
+    --enable-idled --enable-xapian --enable-calalarmd \
+    --enable-backup
 
     make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
 
