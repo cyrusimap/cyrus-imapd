@@ -185,6 +185,55 @@ sub test_stem_any
     $self->assert_num_equals(3, scalar @$r);
 }
 
+sub test_snippet_wildcard
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    # Set up Xapian database
+    xlog "Generate and index test messages";
+    my %params = (
+        mime_charset => "utf-8",
+    );
+    my $subject;
+    my $body;
+
+    $subject = "1";
+    $body = "Waiter! There's a foo in my soup!";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $subject = "2";
+    $body = "Let's foop the loop.";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $term = "foo";
+    xlog "SEARCH for FUZZY body $term*";
+    my $r = $talk->search(
+        "fuzzy", ["body", { Quote => "$term*" }],
+    ) || die;
+    $self->assert_num_equals(2, scalar @$r);
+    my $uids = $r;
+
+    xlog "Select INBOX";
+    $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+
+    xlog "XSNIPPETS for $term";
+    $r = $talk->xsnippets(
+        [['INBOX', $uidvalidity, $uids]], 'utf-8',
+        ['fuzzy', 'text', { Quote => "$term*" }]
+    ) || die;
+    xlog Dumper($r);
+    $self->assert_num_equals(2, scalar @{$r->{snippets}});
+}
+
 sub test_mix_fuzzy_and_nonfuzzy
     :min_version_3_0
 {
