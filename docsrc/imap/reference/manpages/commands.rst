@@ -57,6 +57,7 @@ Man pages
     systemcommands/mbpath
     systemcommands/mbtool
     systemcommands/mkimap
+    systemcommands/mknewsgroups
     systemcommands/mupdate
     systemcommands/nntpd
     systemcommands/notifyd
@@ -110,10 +111,8 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    systemcommands/arbitronsort.pl
     systemcommands/fixsearchpath.pl
     systemcommands/migrate-metadata
-    systemcommands/mknewsgroups
     systemcommands/mupdate-loadgen.pl
     systemcommands/rehash
     systemcommands/cvt_cyrusdb_all
