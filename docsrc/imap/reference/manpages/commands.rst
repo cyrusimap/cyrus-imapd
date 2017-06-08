@@ -108,7 +108,6 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    systemcommands/convert-sieve.pl
     systemcommands/masssievec
     systemcommands/arbitronsort.pl
     systemcommands/fixsearchpath.pl
@@ -121,7 +120,6 @@ the form of actual man-pages.
     systemcommands/dohash
     systemcommands/undohash
     systemcommands/upgradesieve
-    systemcommands/translatesieve
     systemcommands/template
 
 
