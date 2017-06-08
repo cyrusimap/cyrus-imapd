@@ -51,6 +51,7 @@ Man pages
     systemcommands/ipurge
     systemcommands/lmtpd
     systemcommands/lmtpproxyd
+    systemcommands/masssievec
     systemcommands/master
     systemcommands/mbexamine
     systemcommands/mbpath
@@ -77,6 +78,7 @@ Man pages
     systemcommands/sync_server
     systemcommands/timsieved
     systemcommands/tls_prune
+    systemcommands/translatesieve
     systemcommands/unexpunge
 
 (1) User Commands
@@ -108,7 +110,6 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    systemcommands/masssievec
     systemcommands/arbitronsort.pl
     systemcommands/fixsearchpath.pl
     systemcommands/migrate-metadata
