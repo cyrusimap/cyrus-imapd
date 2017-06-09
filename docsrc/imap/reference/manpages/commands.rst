@@ -112,14 +112,11 @@ the form of actual man-pages.
     :hidden:
 
     systemcommands/fixsearchpath.pl
-    systemcommands/migrate-metadata
-    systemcommands/mupdate-loadgen.pl
     systemcommands/rehash
     systemcommands/cvt_cyrusdb_all
     systemcommands/cyr_userseen
     systemcommands/dohash
     systemcommands/undohash
-    systemcommands/upgradesieve
     systemcommands/template
 
 
