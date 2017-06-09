@@ -111,7 +111,6 @@ the form of actual man-pages.
     :maxdepth: 1
     :hidden:
 
-    systemcommands/fixsearchpath.pl
     systemcommands/rehash
     systemcommands/cvt_cyrusdb_all
     systemcommands/cyr_userseen
