@@ -68,6 +68,7 @@ Man pages
     systemcommands/ptloader
     systemcommands/quota
     systemcommands/reconstruct
+    systemcommands/rehash
     systemcommands/restore
     systemcommands/rmnews
     systemcommands/sievec
@@ -102,15 +103,5 @@ the form of actual man-pages.
     :maxdepth: 1
 
     systemcommands/proxyd
-
-.. These are all hidden because the files are possibly obsolete, or they
-    don't match any active scripts/commands, or there's no info on what they
-    do.
-
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-
-    systemcommands/rehash
 
 ..  systemcommands/template: template for manpages so they obey man and html formatting.
