@@ -112,8 +112,5 @@ the form of actual man-pages.
     :hidden:
 
     systemcommands/rehash
-    systemcommands/dohash
-    systemcommands/undohash
-
 
 ..  systemcommands/template: template for manpages so they obey man and html formatting.
