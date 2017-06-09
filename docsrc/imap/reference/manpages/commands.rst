@@ -112,7 +112,6 @@ the form of actual man-pages.
     :hidden:
 
     systemcommands/rehash
-    systemcommands/cvt_cyrusdb_all
     systemcommands/dohash
     systemcommands/undohash
 
