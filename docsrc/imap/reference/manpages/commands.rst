@@ -113,7 +113,6 @@ the form of actual man-pages.
 
     systemcommands/rehash
     systemcommands/cvt_cyrusdb_all
-    systemcommands/cyr_userseen
     systemcommands/dohash
     systemcommands/undohash
     systemcommands/template
