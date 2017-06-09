@@ -115,8 +115,6 @@ the form of actual man-pages.
     systemcommands/cvt_cyrusdb_all
     systemcommands/dohash
     systemcommands/undohash
-    systemcommands/template
 
 
-..  systemcommands/template: this is just the template for new command files so it obeys man and html formatting.
-.. translatesieve better version of convert-sieve (does this make convert-sieve obsolete?)]
+..  systemcommands/template: template for manpages so they obey man and html formatting.

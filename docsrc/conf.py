@@ -98,7 +98,7 @@ release = '3.0.1 (stable)'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = [ 'assets' ]
+exclude_patterns = [ 'assets', '**/template.rst' ]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -283,23 +283,30 @@ pathset = [
 # With each file, check if there's an '.. author: ' attribution (strict on
 # spacing and case sensitivity) and add to the author info.
 # Then add the file with all its details into the man_page array.
+# If the file is an :orphan:, then don't include it.
 current = os.path.abspath(os.getcwd())
 for tuple in pathset:
     os.chdir(tuple[0])
     for rstfile in glob.glob("*.rst"):
         author = [("The Cyrus Team")]
+        orphan = 'False';
         with io.open(rstfile,'r',encoding="utf8") as f:
             for line in f:
+                if line.startswith(':orphan:'):
+                    orphan = 'True';
+                    break;
                 if line.startswith('.. author: '):
                     author.append(line[11: len(line.strip())])
             f.close()
-        man_pages.append(
-            (os.path.splitext(os.path.join(tuple[0],rstfile))[0],
-            os.path.splitext(rstfile)[0],
-            u'Cyrus IMAP documentation',
-            author,
-            tuple[1]
-            ))
+        if orphan == 'False':
+            man_pages.append(
+                (os.path.splitext(os.path.join(tuple[0],rstfile))[0],
+                os.path.splitext(rstfile)[0],
+                u'Cyrus IMAP documentation',
+                author,
+                tuple[1])
+                )
+
     os.chdir(current)
 
 
