@@ -4959,8 +4959,6 @@ EXPORTED int index_getsearchtext(message_t *msg,
     }
     else {
 #endif
-        /* A regular message */
-        message_foreach_section(msg, getsearchtext_cb, &str);
 
         if (!message_get_field(msg, "From", format, &buf))
             stuff_part(receiver, SEARCH_PART_FROM, &buf);
@@ -5010,6 +5008,9 @@ EXPORTED int index_getsearchtext(message_t *msg,
             }
             receiver->end_part(receiver, SEARCH_PART_TYPE);
         }
+
+        /* A regular message */
+        message_foreach_section(msg, getsearchtext_cb, &str);
 #ifdef USE_HTTPD
     }
 #endif
