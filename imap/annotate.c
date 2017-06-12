@@ -915,11 +915,12 @@ static const char *key_as_string(const annotate_db_t *d,
 }
 #endif
 
-static int split_attribs(const char *data, int datalen __attribute__((unused)),
+static int split_attribs(const char *data, int datalen,
                          struct buf *value, struct annotate_metadata *mdata)
 {
     unsigned long tmp; /* for alignment */
     const char *tmps;
+    const char *end = data + datalen;
 
     /* initialize metadata */
     memset(mdata, 0, sizeof(struct annotate_metadata));
@@ -944,14 +945,20 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
      * and skip to the entry's metadata.
      */
     tmps = data + ntohl(tmp) + 1;  /* Skip zero-terminated value */
-    tmps += strlen(tmps) + 1;      /* Skip zero-terminated content-type */
-    tmps += sizeof(unsigned long); /* Skip modifiedsince value */
+    if (tmps < end) {
+        tmps += strlen(tmps) + 1;      /* Skip zero-terminated content-type */
+        tmps += sizeof(unsigned long); /* Skip modifiedsince value */
+    }
 
-    mdata->modseq = ntohll(*((unsigned long long *)tmps));
-    tmps += sizeof(unsigned long long);
+    if (tmps < end) {
+        mdata->modseq = ntohll(*((unsigned long long *)tmps));
+        tmps += sizeof(unsigned long long);
+    }
 
-    mdata->flags = *tmps;
-    tmps++;
+    if (tmps < end) {
+        mdata->flags = *tmps;
+        tmps++;
+    }
 
     /* normalise deleted entries */
     if (mdata->flags & ANNOTATE_FLAG_DELETED) {
