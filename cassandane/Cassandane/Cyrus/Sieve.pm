@@ -207,6 +207,46 @@ sub compile_sieve_script
     return $self->$meth($name, $script);
 }
 
+sub test_vacation_with_following_rules {
+    my ($self) = @_;
+
+    my $target = "INBOX.target";
+
+    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    $self->{instance}->install_sieve_script(<<'EOF'
+
+require ["fileinto", "reject", "vacation", "imapflags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
+
+### 5. Sieve generated for vacation responses
+if 
+  allof(
+  currentdate :zone "+0000" :value "ge" "iso8601" "2017-06-08T05:00:00Z",
+  currentdate :zone "+0000" :value "le" "iso8601" "2017-06-13T19:00:00Z"
+  )
+{
+  vacation :days 3 :addresses ["one@example.com", "two@example.com"] text:
+I am out of the office today. I will answer your email as soon as I can.
+.
+;
+}
+
+### 7. Sieve generated for organise rules
+if header :contains ["To","Cc","From","Subject","Date","Content-Type","Delivered-To","In-Reply-To","List-Post","List-Id","Mailing-List","Message-Id","Received","References","Reply-To","Return-Path","Sender","X-AntiAbuse","X-Apparently-From","X-Attached","X-Delivered-To","X-LinkName","X-Mail-From","X-Resolved-To","X-Sender","X-Sender-IP","X-Spam-Charsets","X-Spam-Hits","X-Spam-Known-Sender","X-Spam-Source","X-Version"] "urgent@example.com" {
+  addflag "\\Flagged";
+  fileinto "INBOX.Work";
+  removeflag "\\Flagged";
+}
+
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    # This will crash if we have broken parsing of vacation
+}
+
 sub test_deliver
 {
     my ($self) = @_;
