@@ -45,7 +45,6 @@
 
 #include <ctype.h>
 #include <assert.h>
-#include <jansson.h>
 #include <string.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
@@ -62,6 +61,7 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "ical_support.h"
+#include "json_support.h"
 #include "jmap_ical.h"
 #include "search_query.h"
 #include "stristr.h"

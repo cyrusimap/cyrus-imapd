@@ -44,11 +44,10 @@
 #ifndef HTTP_JMAP_H
 #define HTTP_JMAP_H
 
-#include <jansson.h>
-
 #include "auth.h"
 #include "conversations.h"
 #include "httpd.h"
+#include "json_support.h"
 #include "mailbox.h"
 #include "mboxname.h"
 #include "msgrecord.h"

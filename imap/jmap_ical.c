@@ -50,7 +50,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
-#include <jansson.h>
 
 #include "acl.h"
 #include "annotate.h"
