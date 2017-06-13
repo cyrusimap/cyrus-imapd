@@ -50,7 +50,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
-#include <jansson.h>
 #include <sys/mman.h>
 
 #include "acl.h"
@@ -59,6 +58,7 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
+#include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
