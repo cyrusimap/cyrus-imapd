@@ -2183,7 +2183,7 @@ static conversation_id_t jmap_decode_thrid(const char *thrid)
 }
 
 static json_t *jmapmsg_annot_read(const jmap_req_t *req, msgrecord_t *mr,
-                                  const char *annot)
+                                  const char *annot, int structured)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *annotvalue = NULL;
@@ -2198,13 +2198,22 @@ static json_t *jmapmsg_annot_read(const jmap_req_t *req, msgrecord_t *mr,
         msgrecord_annot_lookup(mr, annot+7, "", &buf);
     }
     if (buf_len(&buf)) {
-        json_error_t jerr;
-        if (!(annotvalue = json_loads(buf_base(&buf), JSON_DECODE_ANY, &jerr))) {
+        if (structured) {
+            json_error_t jerr;
+            annotvalue = json_loads(buf_base(&buf), JSON_DECODE_ANY, &jerr);
+            /* XXX - log error? */
+        }
+        else {
+            annotvalue = json_string(buf_cstring(&buf));
+        }
+
+        if (!annotvalue) {
             syslog(LOG_ERR, "jmap: annotation %s has bogus value", annot);
         }
     }
 
     buf_free(&buf);
+
     return annotvalue;
 }
 
@@ -2407,12 +2416,12 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
         /* Load the message annotation with the hash of cid: urls */
         if ((annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT))) {
-            inlinedcids = jmapmsg_annot_read(req, mr, annot);
+            inlinedcids = jmapmsg_annot_read(req, mr, annot, /*structured*/1);
         }
 
         /* Load the message annotation with the hash of image dimensions */
         if ((annot = config_getstring(IMAPOPT_JMAP_IMAGESIZE_ANNOT))) {
-            imgsizes = jmapmsg_annot_read(req, mr, annot);
+            imgsizes = jmapmsg_annot_read(req, mr, annot, /*structured*/1);
         }
 
         for (i = 0; i < bodies.atts.count; i++) {
@@ -2648,7 +2657,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         if (_wantprop(props, "preview")) {
             const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
             if (annot) {
-                json_t *preview = jmapmsg_annot_read(req, mr, annot);
+                json_t *preview = jmapmsg_annot_read(req, mr, annot, /*structured*/0);
                 json_object_set_new(msg, "preview", preview ? preview : json_string(""));
             }
             else {
