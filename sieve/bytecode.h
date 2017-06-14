@@ -106,6 +106,7 @@ typedef union
  * version 0x07 scripts implemented updated INCLUDE (:once and :optional)
  * version 0x08 scripts implemented DATE and INDEX extensions
  * version 0x09 scripts implemented IMAP4FLAGS extension
+ * version 0x0a-0x0f skipped by someone who didn't read hex
  * version 0x10 scripts implemented Mailbox and Metadata (RFC5490)
  * version 0x11 scripts implemented Variables (RFC5229)
  * version 0x12 scripts implemented Editheader (RFC5293),
