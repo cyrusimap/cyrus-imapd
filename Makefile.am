@@ -528,20 +528,14 @@ dist_noinst_SCRIPTS = \
 	tools/config2man \
 	tools/config2rst \
 	tools/config2sample \
-	tools/convert-sieve.pl \
-	tools/dohash \
 	tools/fixsearchpath.pl \
 	tools/git-version.sh \
 	tools/jenkins-build.sh \
 	tools/masssievec \
-	tools/migrate-metadata \
 	tools/mkimap \
 	tools/mknewsgroups \
-	tools/mupdate-loadgen.pl \
 	tools/rehash \
 	tools/translatesieve \
-	tools/undohash \
-	tools/upgradesieve \
 	snmp/snmpgen
 noinst_MAN = \
 	com_err/et/com_err.3 \

@@ -10,9 +10,6 @@ arbitronsort.pl
 chk_cyrus
 +++++++++
 
-convert-sieve.pl
-++++++++++++++++
-
 ctl_cyrusdb
 +++++++++++
 
@@ -61,16 +58,13 @@ cyr_userseen
 masssievec
 ++++++++++
 
-Script to mass compile Sieve scripts 
+Script to mass compile Sieve scripts
 
 mbexamine
 +++++++++
 
 mbpath
 ++++++
-
-migrate-metadata
-++++++++++++++++
 
 mkimap
 ++++++
@@ -84,14 +78,9 @@ rehash
 translatesieve
 ++++++++++++++
 
-script to translate sieve scripts to use unixhierarchysep and/or altnamespace 
+script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 
 undohash
 ++++++++
 
-absolutely ancient (downgrade to prior 1.6.2+), probably should be obsoleted entirely 
-
-upgradesieve
-++++++++++++
-
-absolutely ancient (upgrade from 1.6.13), probably should be obsoleted entirely 
+absolutely ancient (downgrade to prior 1.6.2+), probably should be obsoleted entirely
