@@ -1105,6 +1105,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             if(write_int(fd,bc->data[codep].value) == -1)
                 return -1;
             codep++;
+            filelen += sizeof(int);
 
             /* From, Handle, Fcc */
             for(i=0; i<3; i++) {/*writing strings*/
