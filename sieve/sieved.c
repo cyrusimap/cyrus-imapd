@@ -862,7 +862,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
                     printf("%d FCC({%d}%s)", i, len, (!data ? "[nil]" : data));
 
-                    if (data) {
+                    if (data && data[0]) {
                         data = NULL;
                         len = -1;
 

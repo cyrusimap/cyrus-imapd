@@ -2553,7 +2553,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     if (op == B_VACATION || op == B_VACATION_FCC) {
                         ip = unwrap_string(bc, ip, &data, NULL);
 
-                        if (data && strlen(data)) {
+                        if (data && data[0]) {
                             /* user specified fcc mailbox */
                             if (requires & BFE_VARIABLES) {
                                 data = parse_string(data, variables);
@@ -2599,7 +2599,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                         /* skip fcc */
                         ip = unwrap_string(bc, ip, &data, NULL);
 
-                        if (data && strlen(data)) {
+                        if (data && data[0]) {
                             ip++; /* skip create flag */
 
                             /* skip flag list */
