@@ -3698,7 +3698,7 @@ static void index_tellexpunge(struct index_state *state)
     seqset_free(vanishedlist);
 
     /* highestmodseq can now come forward to real-time */
-    state->highestmodseq = state->mailbox->i.highestmodseq;
+    state->delayed_modseq = 0;
 }
 
 static void index_tellexists(struct index_state *state)
