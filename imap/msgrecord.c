@@ -466,13 +466,7 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
         mr->isappend = 0;
     }
 
-    r = annotate_state_write(mr->annot_state, entry, userid, value);
-    if (!r) {
-        mr->record.modseq = mr->mbox->i.highestmodseq;
-        mr->mbox->silentchanges = 1;
-    }
-
-    return r;
+    return annotate_state_write(mr->annot_state, entry, userid, value);
 }
 
 EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
@@ -489,12 +483,7 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
         mr->isappend = 0;
     }
 
-    r = annotate_state_store(mr->annot_state, l);
-    if (!r) {
-        mr->record.modseq = mr->mbox->i.highestmodseq;
-        mr->mbox->silentchanges = 1;
-    }
-    return r;
+    return annotate_state_store(mr->annot_state, l);
 }
 
 EXPORTED int msgrecord_extract_annots(msgrecord_t *mr,
