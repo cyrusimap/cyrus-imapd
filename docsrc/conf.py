@@ -43,7 +43,7 @@ extensions = [
 extensions.append('sphinxlocal.builders.manpage')
 extensions.append('sphinxlocal.roles.cyrusman')
 
-intersphinx_mapping = {'cyrussasl': ('http://www.cyrusimap.org/sasl', None)}
+intersphinx_mapping = {'cyrussasl': ('https://www.cyrusimap.org/sasl', None)}
 
 mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
 
@@ -495,8 +495,8 @@ rst_prolog += """
 # Use this as :task:`18`
 extlinks = {
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
-        'cyrus-2.5':('http://www.cyrusimap.org/2.5%s',None),
-        'cyrus-3.0':('http://www.cyrusimap.org/3.0%s',None),
-        'cyrus-stable':('http://www.cyrusimap.org/3.0%s',None),
-        'cyrus-dev':('http://www.cyrusimap.org/dev%s',None),
+        'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
+        'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
+        'cyrus-dev':('https://www.cyrusimap.org/dev%s',None),
+        'cyrus-stable': ('https://www.cyrusimap.org/3.0%s',None),
     }
