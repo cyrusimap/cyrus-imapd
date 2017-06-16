@@ -502,8 +502,9 @@ EXPORTED int msgrecord_extract_annots(msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_MAILBOX|M_RECORD);
     if (r) return r;
+    // XXX - is there a way to get error return?
     *annots = mailbox_extract_annots(mr->mbox, &mr->record);
-    return *annots == NULL ? IMAP_INTERNAL : 0;
+    return 0;
 }
 
 EXPORTED int msgrecord_extract_flags(msgrecord_t *mr,
