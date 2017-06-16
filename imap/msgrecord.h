@@ -53,8 +53,11 @@ extern int msgrecord_find_index_record(struct mailbox *mbox, struct index_record
                                        msgrecord_t **mrp);
 extern int msgrecord_save(msgrecord_t *mr);
 
-extern msgrecord_t *msgrecord_new_from_uid(struct mailbox *mbox, uint32_t uid);
-extern msgrecord_t *msgrecord_new_from_msgrecord(struct mailbox *mbox, msgrecord_t *mr);
+extern msgrecord_t *msgrecord_new(struct mailbox *mbox);
+extern msgrecord_t *msgrecord_from_uid(struct mailbox *mbox, uint32_t uid);
+extern msgrecord_t *msgrecord_from_recno(struct mailbox *mbox, uint32_t recno);
+extern msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox, struct index_record *record);
+extern msgrecord_t *msgrecord_copy_msgrecord(struct mailbox *mbox, msgrecord_t *mr);
 extern void msgrecord_unref(msgrecord_t **mr);
 
 /* Getters: all pointer values are owned by msgrecord */

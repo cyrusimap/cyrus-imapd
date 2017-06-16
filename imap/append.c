@@ -933,7 +933,9 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     }
 
     /* we need to parse the record first */
-    msgrec = msgrecord_new_from_uid(mailbox, as->baseuid + as->nummsg);
+    msgrec = msgrecord_new(mailbox);
+    r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
+    if (r) goto out;
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
     r = msgrecord_set_bodystructure(msgrec, *body);
@@ -1136,7 +1138,9 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     assert(size != 0);
 
     /* Setup */
-    msgrec = msgrecord_new_from_uid(mailbox, as->baseuid + as->nummsg);
+    msgrec = msgrecord_new(mailbox);
+    r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
+    if (r) goto out;
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 
@@ -1355,7 +1359,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         uint32_t dst_system_flags;
         uint32_t dst_user_flags[MAX_USER_FLAGS/32];
 
-        dst_msgrec = msgrecord_new_from_msgrecord(as->mailbox, src_msgrec);
+        dst_msgrec = msgrecord_copy_msgrecord(as->mailbox, src_msgrec);
 
         r = msgrecord_get_systemflags(dst_msgrec, &dst_system_flags);
         if (r) goto out;
