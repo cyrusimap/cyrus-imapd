@@ -25,6 +25,7 @@
     {%- if last_updated %}
       {% trans last_updated=last_updated|e %}Last updated on {{ last_updated }}.{% endtrans %}
     {%- endif %}
+    {%- if gitstamp %} Last updated on {{ gitstamp }} {%- endif %}
     </p>
   </div>
 
@@ -33,4 +34,3 @@
   {%- endif %}
 
 </footer>
-
