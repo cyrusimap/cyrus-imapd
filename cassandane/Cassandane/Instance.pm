@@ -439,6 +439,10 @@ sub _find_binary
 {
     my ($self, $name) = @_;
 
+    my $cassini = Cassandane::Cassini->instance();
+    my $name_override = $cassini->val("cyrus $self->{installation}", $name);
+    $name = $name_override if defined $name_override;
+
     return $name if $name =~ m/^\//;
 
     my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
