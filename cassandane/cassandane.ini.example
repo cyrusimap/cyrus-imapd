@@ -90,6 +90,9 @@
 # e.g. by make DESTDIR=/tmp/my-cyrus-inst install
 # If set, binaries will be in {destdir}{prefix}/bin (etc)
 ##destdir =
+# If your Cyrus build has renamed binaries, you can tell Cassandane how
+# to find them like this:
+##quota = cyr_quota
 
 # This optional section describes the Cyrus installation used for the
 # replica side of replication tests.  You can use this to test
