@@ -3484,7 +3484,6 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
      * too?  Maybe replication should be more strict about it */
     assert(record->uid == oldrecord.uid);
     assert(message_guid_equal(&oldrecord.guid, &record->guid));
-    assert(record->modseq >= oldrecord.modseq);
 
     if (oldrecord.system_flags & FLAG_EXPUNGED) {
         /* it is a sin to unexpunge a message.  unexpunge.c copies
@@ -3518,6 +3517,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         record->modseq = mailbox->i.highestmodseq;
         record->last_updated = mailbox->last_updated;
     }
+    assert(record->modseq >= oldrecord.modseq);
 
     if (record->system_flags & FLAG_UNLINKED) {
         /* mark required actions */
