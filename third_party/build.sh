@@ -3,6 +3,7 @@
 set -e
 
 NAME=${1:-cyruslibs}
+ITEM=$2
 PREFIX=/usr/local/$NAME
 MAKEOPTS="-j 8"
 
@@ -13,6 +14,7 @@ export PATH=$PREFIX/bin:$PATH
 git submodule init
 git submodule update
 
+if [ ! $ITEM ] || [ $ITEM = icu ] ; then
 (
   cd icu4c
   git clean -f -x -d
@@ -21,7 +23,9 @@ git submodule update
   make $MAKEOPTS
   sudo make install
 )
+fi
 
+if [ ! $ITEM ] || [ $ITEM = jansson ] ; then
 (
   cd jansson
   git clean -f -x -d
@@ -30,7 +34,9 @@ git submodule update
   make $MAKEOPTS
   sudo make install
 )
+fi
 
+if [ ! $ITEM ] || [ $ITEM = dkim ] ; then
 (
   cd opendkim
   git clean -f -x -d
@@ -39,8 +45,10 @@ git submodule update
   make $MAKEOPTS
   sudo make install
 )
+fi
 
 # XXX - can we find the platform?
+if [ ! $ITEM ] || [ $ITEM = libical ] ; then
 (
   cd libical
   git clean -f -x -d
@@ -51,7 +59,9 @@ git submodule update
   make $MAKEOPTS
   sudo make install
 )
+fi
 
+if [ ! $ITEM ] || [ $ITEM = xapian ] ; then
 (
   cd xapian
   git clean -f -x -d
@@ -61,4 +71,4 @@ git submodule update
   make $MAKEOPTS
   sudo make install
 )
-
+fi
