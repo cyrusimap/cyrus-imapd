@@ -1359,6 +1359,9 @@ static int reset_saslconn(sasl_conn_t **conn)
     int ret;
     sasl_security_properties_t *secprops = NULL;
 
+    /* Reset auth schemes for each transaction */
+    avail_auth_schemes &= ~AUTH_BEARER;
+
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
