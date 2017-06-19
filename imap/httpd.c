@@ -725,6 +725,9 @@ static void httpd_reset(void)
             namespaces[i]->reset();
     }
 
+    /* Reset available authentication schemes */
+    avail_auth_schemes = 0;
+
     proc_cleanup();
 
     /* close backend connections */
@@ -1017,6 +1020,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* See which auth schemes are available to us */
+    avail_auth_schemes = 0; /* Reset auth schemes for each connection */
     if ((extprops_ssf >= 2) || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
         avail_auth_schemes |= (1 << AUTH_BASIC);
     }
