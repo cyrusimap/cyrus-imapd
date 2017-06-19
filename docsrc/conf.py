@@ -42,7 +42,9 @@ extensions = [
 
 extensions.append('sphinxlocal.builders.manpage')
 extensions.append('sphinxlocal.roles.cyrusman')
-extensions.append('sphinxlocal.builders.insertdatestamp')
+extensions.append('sphinxlocal.builders.gitstamp')
+
+gitstamp_fmt = "%b %d %Y"
 
 intersphinx_mapping = {'cyrussasl': ('https://www.cyrusimap.org/sasl', None)}
 
