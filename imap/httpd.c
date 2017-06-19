@@ -1359,9 +1359,6 @@ static int reset_saslconn(sasl_conn_t **conn)
     int ret;
     sasl_security_properties_t *secprops = NULL;
 
-    /* Reset auth schemes for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
-
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
@@ -1868,6 +1865,9 @@ static void transaction_reset(struct transaction_t *txn)
     txn->flags.vary = VARY_AE;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
+
+    /* Reset Bearer auth scheme for each transaction */
+    avail_auth_schemes &= ~AUTH_BEARER;
 
     if (txn->req_uri) xmlFreeURI(txn->req_uri);
     txn->req_uri = NULL;
