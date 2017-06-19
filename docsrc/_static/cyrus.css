@@ -258,7 +258,7 @@ h4 {
 }
 
 div.buildstatus {
-    position: absolute;
+    position: fixed;
     bottom: 10px;
     left: 10px;
     font-size: 80%;
