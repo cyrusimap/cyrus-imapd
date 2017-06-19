@@ -27,6 +27,11 @@ For basic reStructured Text operations, we are using Sphinx version 1.3.6:
 * python-sphinxcontrib.seqdiag
 * python-sphinxcontrib.spelling
 
+You will need the `gitpython <https://gitpython.readthedocs.io/en/stable/>`_
+python package for performing datestamp operations:
+
+* gitpython
+
 You will also need the perl package, which is used to build some docs from their Perl source:
 
 * Pod::POM::View::Restructured
