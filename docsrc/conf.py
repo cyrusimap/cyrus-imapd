@@ -46,6 +46,13 @@ extensions.append('sphinxlocal.builders.gitstamp')
 
 gitstamp_fmt = "%b %d %Y"
 
+extensions.append('sphinxlocal.sitemap')
+
+# We publish master branch at /dev
+# Other branches are available at multiple locations (3.0 is at 3.0 and stable and /).
+# Supply all webroots that this set of docs is available at.
+sitemap_website = ["https://www.cyrusimap.org/dev/"]
+
 intersphinx_mapping = {'cyrussasl': ('https://www.cyrusimap.org/sasl', None)}
 
 mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
