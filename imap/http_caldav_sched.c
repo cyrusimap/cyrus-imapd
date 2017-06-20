@@ -2863,6 +2863,7 @@ static icalparameter_partstat get_partstat(icalcomponent *comp,
 static int partstat_changed(icalcomponent *oldcomp,
                             icalcomponent *newcomp, const char *attendee)
 {
+    if (!attendee) return 1; // something weird is going on, treat it as a change
     return (get_partstat(oldcomp, attendee) != get_partstat(newcomp, attendee));
 }
 
