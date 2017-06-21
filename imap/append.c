@@ -1040,7 +1040,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     }
 
     /* Write the new message record */
-    r = msgrecord_save(msgrec);
+    r = msgrecord_append(msgrec);
     if (r) return r;
 
     if (in_object_storage) {  // must delete local file
@@ -1189,7 +1189,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
 
     /* Write out index file entry; if we abort later, it's not
        important */
-    r = msgrecord_save(msgrec);
+    r = msgrecord_append(msgrec);
 
 out:
     if (r) {
@@ -1294,7 +1294,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         }
     }
 
-    r = msgrecord_save(msgrec);
+    r = msgrecord_rewrite(msgrec);
 
 out:
     if (f) fclose(f);
@@ -1472,7 +1472,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         }
 
         /* Write out index file entry */
-        r = msgrecord_save(dst_msgrec);
+        r = msgrecord_append(dst_msgrec);
         if (r) goto out;
 
         /* ensure we have an astate connected to the destination

@@ -121,7 +121,7 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
 
     if (is_missing(M_ANNOTATIONS)) {
         if (mr->isappend) {
-            syslog(LOG_ERR, "msgrecord: msgrecord is not appended");
+            syslog(LOG_ERR, "msgrecord: msgrecord msut be appended");
             return IMAP_NOTFOUND;
         }
         r = msgrecord_need(mr, M_MAILBOX|M_UID);
@@ -657,7 +657,7 @@ done:
     return r;
 }
 
-EXPORTED int msgrecord_save(msgrecord_t *mr)
+static int msgrecord_save(msgrecord_t *mr)
 {
     int r = 0;
 
@@ -676,3 +676,21 @@ EXPORTED int msgrecord_save(msgrecord_t *mr)
     return r;
 }
 
+EXPORTED int msgrecord_append(msgrecord_t *mr)
+{
+    if (!mr->isappend) {
+        syslog(LOG_ERR, "msgrecord: can't append, record %s:%d already exists",
+                mr->mbox->name, mr->record.uid);
+        return IMAP_INTERNAL;
+    }
+    return msgrecord_save(mr);
+}
+
+EXPORTED int msgrecord_rewrite(msgrecord_t *mr)
+{
+    if (mr->isappend) {
+        syslog(LOG_ERR, "msgrecord: can't rewrite, record must be appended");
+        return IMAP_INTERNAL;
+    }
+    return msgrecord_save(mr);
+}

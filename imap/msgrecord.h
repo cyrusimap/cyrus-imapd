@@ -51,7 +51,8 @@ struct mailbox;
 extern int msgrecord_find(struct mailbox *mbox, uint32_t uid, msgrecord_t **mr);
 extern int msgrecord_find_index_record(struct mailbox *mbox, struct index_record record,
                                        msgrecord_t **mrp);
-extern int msgrecord_save(msgrecord_t *mr);
+extern int msgrecord_append(msgrecord_t *mr);
+extern int msgrecord_rewrite(msgrecord_t *mr);
 
 extern msgrecord_t *msgrecord_new(struct mailbox *mbox);
 extern msgrecord_t *msgrecord_from_uid(struct mailbox *mbox, uint32_t uid);

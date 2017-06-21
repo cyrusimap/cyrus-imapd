@@ -1335,10 +1335,10 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
         if (!dirty)
             continue;
 
-        r = msgrecord_save(msgrec);
+        r = msgrecord_rewrite(msgrec);
         if (r) goto out;
 
-        /* msgrecord_save already took care of rewriting the index_record,
+        /* msgrecord_rewrite already took care of rewriting the index_record,
          * but we want to stay up to date of the changes in the index_map.
          * Pass the silent flag to index_rewrite_record. */
         r = msgrecord_get_index_record(msgrec, &record);

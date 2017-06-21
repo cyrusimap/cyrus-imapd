@@ -5659,7 +5659,7 @@ static int updaterecord_cb(const conv_guidrec_t *rec, void *rock)
         r = updaterecord(mrw, d->flagged, d->unread, d->answered);
         if (r) goto done;
 
-        r = msgrecord_save(mrw);
+        r = msgrecord_rewrite(mrw);
         if (r) goto done;
 
         msgrecord_unref(&mrw);
@@ -5693,7 +5693,7 @@ static int delrecord(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     r = msgrecord_add_systemflags(mrw, FLAG_DELETED | FLAG_EXPUNGED);
     if (r) goto done;
 
-    r = msgrecord_save(mrw);
+    r = msgrecord_rewrite(mrw);
     if (r) goto done;
 
     /* Report mailbox event. */
@@ -5864,7 +5864,7 @@ static int jmapmsg_write(jmap_req_t *req, json_t *mailboxids, int system_flags, 
         r = msgrecord_add_systemflags(mr, system_flags);
         if (r) goto done;
 
-        r = msgrecord_save(mr);
+        r = msgrecord_rewrite(mr);
         if (r) goto done;
 
         /* Flag mailbox */
@@ -6137,7 +6137,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     r = updaterecord(mrw, flagged, unread, answered);
     if (r) goto done;
 
-    r = msgrecord_save(mrw);
+    r = msgrecord_rewrite(mrw);
     if (r) goto done;
 
     /* Update record in kept mailboxes, except its master copy. */
