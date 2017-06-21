@@ -4,64 +4,62 @@ dist: trusty
 addons:
   apt:
     packages:
-      - libjansson-dev
-      - libxml2-dev
-      - libsqlite3-dev
-      - libical-dev
-      - libsasl2-dev
-      - libssl-dev
-      - libopendkim-dev
-      - libcunit1-dev
-      - libpcre3-dev
-      - uuid-dev
-      - libdb-dev
-      - libbsd-dev
-      - libmilter-dev
-      - graphviz # Needed for `dot` by `xapian`
-      - doxygen  # Needed by `xapian`
-      - help2man # Needed by `xapian`
-      - python-docutils # Needed by `xapian`
-      - libmagic-dev
+    - libjansson-dev
+    - libxml2-dev
+    - libsqlite3-dev
+    - libical-dev
+    - libsasl2-dev
+    - libssl-dev
+    - libopendkim-dev
+    - libcunit1-dev
+    - libpcre3-dev
+    - uuid-dev
+    - libdb-dev
+    - libbsd-dev
+    - libmilter-dev
+    - graphviz
+    - doxygen
+    - help2man
+    - python-docutils
+    - libmagic-dev
 env:
   global:
-    - CYRUSLIBS="/usr/local/cyruslibs"
-    - PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
-    - LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
-    - XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
-    - PATH="$CYRUSLIBS/bin:$PATH"
-    - USE_CCACHE=1
-    
+  - CYRUSLIBS="/usr/local/cyruslibs"
+  - PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
+  - LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
+  - XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
+  - PATH="$CYRUSLIBS/bin:$PATH"
+  - USE_CCACHE=1
 cache:
   apt: true
   ccache: true
 os: linux
 compiler: gcc
-
-# First build xapian
 install:
-  - git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
-  - pushd xapian
-  - ./bootstrap
-  - ./configure --enable-silent-rules --prefix=$CYRUSLIBS
-  - pushd xapian-core
-  - make -j 8
-  - sudo make install
-  - popd #xapian-core
-  - popd #xapian
-
+- git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
+- pushd xapian
+- "./bootstrap"
+- "./configure --enable-silent-rules --prefix=$CYRUSLIBS"
+- pushd xapian-core
+- make -j 8
+- sudo make install
+- popd
+- popd
 before_script:
-  - ccache --version
-  - ccache --zero-stats
-  - autoreconf -i -s
-  - ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http --enable-jmap --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes --enable-murder --enable-idled --enable-sieve
-  - make
-
+- ccache --version
+- ccache --zero-stats
+- autoreconf -i -s
+- ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC"
+  --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http
+  --enable-jmap --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes
+  --enable-murder --enable-idled --enable-sieve
+- make
 script:
-  - make check
-
-#safelist
+- make check
 branches:
   only:
-    - master
-    - cyrus-imapd-3.0
-
+  - master
+  - cyrus-imapd-3.0
+notifications:
+  slack:
+    secure: OTU43fAGhkPnoQTGC5siLf+Myy3EE21PIg135YdabsvobBsbBvHgq2ORCD4Yuhcb3kDPprackBS97tp7o0+e5B7sljoCrqg5Vf9yxF6KIN8WzLo1A8dpFyOydy8ISLK7gcQQUp989OTEDtqsCiR4yYKjH91taZRThlcIxR7e6ITBq5vneJNUgDTqzYjRL/x4MOx4fNOBM2+WuqadEfKeChU8US3ZVqb5ry3O5iZgycB6g+x8fX1rR1voZEcfjR1FYKBaFnhIoZO7dRcQPRFCoAuILxOY8tSM8lBqj2F3iQo0kQPoNTbyrhOR/SNPQpPuGw4PQv4pTHzrCQ2xkQmul2LhFi1bpdcOX/0G0yKBRLyf32BTou7M+mHAQdoLTeLd3S9+jortp5QfYE8Hkmq6TcjwgOneDbYc1R8IsZSuJW61eijA2kZ0a8NUQOn3NI1n2k6m4CJRJFw4qt080TxRkWuIlBFmZRdK2fR3XM5NZ3sJSaKZjfmQwWGaWw+jzAmVT19I5i80fZ9/pJAbF34DbiWbfaRgs22aCA53VrTcdKP8D7stP87Y0vEuF38VjFhRsIQg75UGGFTDyvWKDfiG+lIGfYckf37CIGqKy1cRjq+MK06WBnCBsVPCwsuJUaXeMk8zZoV4pGLoiaw16Jy9yhdCy1dWL4cQ4VVOCcxSVFI=
