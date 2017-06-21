@@ -23,6 +23,10 @@ Cyrus annotations are based on a draft (http://tools.ietf.org/html/draft-daboo-i
 
 * **/vendor/cmu/cyrus-imapd/expire** - Sets the number of days after which messages will be expired from the mailbox. (cyradm(8))
 
+* **/vendor/cmu/cyrus-imapd/archive** - Sets the number of days after which messages will be archived from the mailbox. (cyradm(8))
+
+* **/vendor/cmu/cyrus-imapd/delete** - Sets the number of days after which messages will be deleted from the mailbox. (cyradm(8))
+
 * **/vendor/cmu/cyrus-imapd/freespace** - Undocumented.
 
 * **/vendor/cmu/cyrus-imapd/lastpop** - (time_t) of the last pop3 login to this INBOX, used to enforce the "poptimeout" imapd.conf option. (https://cyrusimap.org/docs/cyrus-imapd/2.5.7/internal/mailbox-format.php)

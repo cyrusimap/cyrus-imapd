@@ -30,13 +30,20 @@ on Cyrus databases, specifically:
 - expire entries from the duplicate delivery database, and
 - cleanse mailboxes of partially expunged messages (when using the "delayed" expunge mode), and
 - remove deleted mailboxes (when using the "delayed" delete mode), and
-- expire entries from conversations databases.
+- expire entries from conversations databases, and
+- archive messages from mailbox.
 
-The expiration of messages is controlled by the
-``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation which specifies
-the age (in days) of messages in the given mailbox that should be
-deleted.  A value of 0 means that no expiration is to be performed on
-that mailbox.
+There are various annotations that **cyr_expire** respects:
+
+- ``/vendor/cmu/cyrus-imapd/expire`` which controls the expirations of
+  messages
+- ``/vendor/cmu/cyrus-imapd/archive`` which controls the archival of
+  messages
+- ``/vendor/cmu/cyrus-imapd/delete`` which controls the deletion of
+  messages
+
+These mailbox annotations specify the age(in days) of messages in the
+given mailbox that should be expired/archived/deleted.
 
 The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
 inherited by all children of the mailbox on which it is set, so an
@@ -51,7 +58,8 @@ The annotation can be examined using the **info** command of
 
 Expiration of duplicate delivery database entries for a given mailbox
 is also controlled by the ``/vendor/cmu/cyrus-imapd/expire`` annotation
-which applies to that mailbox.  Unlike message expiration, if no
+which applies to that mailbox.  A value of 0 on the annotation means
+that no expiration is to be performed on that mailbox. Unlike message expiration, if no
 annotation applies to the mailbox then duplicate database entries are
 expired using the value given to the **-E** option.
 
@@ -81,6 +89,8 @@ Options
     archive partition, allowing mailbox messages to be split between fast
     storage and slow large storage.  Only does anything if
     ``archivepartition-*`` has been set in your config.
+    This value is only used for entries which do not have a
+    corresponding ``/vendonr/cmu/cyrus-imapd/archive`` mailbox annotation.
 
     |v3-new-feature|
 
@@ -92,6 +102,8 @@ Options
     specify the unit of time.  If no suffix, the value is number of days.
     Valid suffixes are **d** (days), **h** (hours), **m** (minutes) and
     **s** (seconds).
+    This value is only used for entries which do not have a
+    corresponding ``/verdor/cmu/cyrus-imapd/delete`` mailbox annotation.
 
 .. option:: -E expire-duration
 
