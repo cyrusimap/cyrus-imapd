@@ -5322,7 +5322,7 @@ static void add_found(struct found_uids *ff, uint32_t uid, int isarchive)
     /* make sure there's space */
     if (ff->nused >= ff->nalloc) {
         ff->nalloc += UIDGROW;
-        ff->found = xrealloc(ff->found, ff->nalloc * sizeof(struct found_uid));
+        ff->found = xrealloc(ff->found, ff->nalloc * sizeof(ff->found[0]));
     }
     ff->found[ff->nused].uid = uid;
     ff->found[ff->nused].isarchive = !!isarchive;
@@ -5427,7 +5427,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     }
 
     /* make sure UIDs are sorted for comparison */
-    qsort(files->found, files->nused, sizeof(unsigned long), sort_found);
+    qsort(files->found, files->nused, sizeof(files->found[0]), sort_found);
 
     strarray_fini(&paths);
 
@@ -6208,7 +6208,7 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
     if (r) return r;
 
     /* make sure UIDs are sorted for comparison */
-    qsort(annots->found, annots->nused, sizeof(unsigned long), sort_found);
+    qsort(annots->found, annots->nused, sizeof(annots->found[0]), sort_found);
 
     return 0;
 }
