@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
-#  reserved.
+#  Copyright (c) 2017 FastMail Pty. Ltd.  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions
@@ -15,22 +14,20 @@
 #     the documentation and/or other materials provided with the
 #     distribution.
 #
-#  3. The name "Opera Software Australia" must not be used to
+#  3. The name "Fastmail" must not be used to
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#         FastMail Pty. Ltd.
+#         Level 1, 91 William St
+#         Melbourne 3000
+#         Victoria
+#         Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
-#     "This product includes software developed by Opera Software
-#     Australia Pty. Ltd."
-#
-#  OPERA SOFTWARE AUSTRALIA DISCLAIMS ALL WARRANTIES WITH REGARD TO
+#     "This product includes software developed by FastMail Pty. Ltd."
+#  FASTMAIL PTY LTD DISCLAIMS ALL WARRANTIES WITH REGARD TO
 #  THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 #  AND FITNESS, IN NO EVENT SHALL OPERA SOFTWARE AUSTRALIA BE LIABLE
 #  FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
@@ -340,31 +337,36 @@ sub test_shared
     $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'});
     delete $r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'};
     my %specific_entries = (
-	    '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/size' => '0',
-	    '/shared/vendor/cmu/cyrus-imapd/sieve' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false',
-	    '/shared/vendor/cmu/cyrus-imapd/pop3showafter' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/pop3newuidl' => 'true',
-	    '/shared/vendor/cmu/cyrus-imapd/partition' => 'default',
-	    '/shared/vendor/cmu/cyrus-imapd/news2mail' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/lastpop' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
-	    '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
-	    '/shared/specialuse' => undef,
-	    '/shared/thread' => undef,
-	    '/shared/sort' => undef,
-	    '/shared/specialuse' => undef,
-	    '/shared/comment' => undef,
-	    '/shared/checkperiod' => undef,
-	    '/shared/check' => undef,
-	    '/shared' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/size' => '0',
+            '/shared/vendor/cmu/cyrus-imapd/sieve' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false',
+            '/shared/vendor/cmu/cyrus-imapd/pop3showafter' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/pop3newuidl' => 'true',
+            '/shared/vendor/cmu/cyrus-imapd/partition' => 'default',
+            '/shared/vendor/cmu/cyrus-imapd/news2mail' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/lastpop' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
+            '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
+            '/shared/specialuse' => undef,
+            '/shared/thread' => undef,
+            '/shared/sort' => undef,
+            '/shared/specialuse' => undef,
+            '/shared/comment' => undef,
+            '/shared/checkperiod' => undef,
+            '/shared/check' => undef,
+            '/shared' => undef,
     );
     # Note: annotsize/synccrcs new in 3.0
-    my ($v) = Cassandane::Instance->get_version();
-    if ($v >= 3) {
-	$specific_entries{'/shared/vendor/cmu/cyrus-imapd/annotsize'} = '0';
-	$specific_entries{'/shared/vendor/cmu/cyrus-imapd/synccrcs'} = '0 0';
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj >= 3) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/annotsize'} = '0';
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/synccrcs'} = '0 0';
+    }
+    # We introduced vendor/cmu/cyrus-imapd/{archive,delete} in 3.1.0
+    if ($maj > 3 or ($maj == 3 and $min >= 1)) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/archive'} = undef;
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/delete'} = undef;
     }
     $self->assert_deep_equals(\%specific_entries, $r);
 
@@ -743,19 +745,26 @@ sub test_private
     my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
     my $r = $res->{INBOX};
     $self->assert_not_null($r);
-    $self->assert_deep_equals({
-	    '/private/vendor/cmu/cyrus-imapd/squat' => undef,
-	    '/private/vendor/cmu/cyrus-imapd/sieve' => undef,
-	    '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
-	    '/private/vendor/cmu/cyrus-imapd/expire' => undef,
-	    '/private/thread' => undef,
-	    '/private/sort' => undef,
-	    '/private/comment' => undef,
-	    '/private/checkperiod' => undef,
-	    '/private/check' => undef,
-	    '/private/specialuse' => undef,
-	    '/private' => undef,
-	}, $r);
+    my %specific_entries = (
+            '/private/vendor/cmu/cyrus-imapd/squat' => undef,
+            '/private/vendor/cmu/cyrus-imapd/sieve' => undef,
+            '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
+            '/private/vendor/cmu/cyrus-imapd/expire' => undef,
+            '/private/thread' => undef,
+            '/private/sort' => undef,
+            '/private/comment' => undef,
+            '/private/checkperiod' => undef,
+            '/private/check' => undef,
+            '/private/specialuse' => undef,
+            '/private' => undef,
+    );
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    # We introduced vendor/cmu/cyrus-imapd/{archive,delete} in 3.1.0
+    if ($maj > 3 or ($maj == 3 and $min >= 1)) {
+        $specific_entries{'/private/vendor/cmu/cyrus-imapd/archive'} = undef;
+        $specific_entries{'/private/vendor/cmu/cyrus-imapd/delete'} = undef;
+    }
+    $self->assert_deep_equals(\%specific_entries, $r);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
