@@ -3236,6 +3236,47 @@ sub test_getmessagelist_collapse
     $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
 }
 
+sub test_collapsethreads_issue2024
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # test that the collapseThreads property is echoed back verbatim
+    # see https://github.com/cyrusimap/cyrus-imapd/issues/2024
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message C referencing A";
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    $res = $jmap->Request([['getMessageList', { collapseThreads => JSON::true }, "R1"]]);
+    $self->assert_equals(JSON::true, $res->[0][1]->{collapseThreads});
+
+    $res = $jmap->Request([['getMessageList', { collapseThreads => JSON::false }, "R1"]]);
+    $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
+
+    $res = $jmap->Request([['getMessageList', { collapseThreads => undef }, "R1"]]);
+    $self->assert_null($res->[0][1]->{collapseThreads});
+
+    $res = $jmap->Request([['getMessageList', { }, "R1"]]);
+    $self->assert_null($res->[0][1]->{collapseThreads});
+}
+
 sub test_getmessagelist_window
     :JMAP :min_version_3_0
 {
