@@ -3479,7 +3479,7 @@ static int getMessageList(jmap_req_t *req)
     int r;
     int fetchthreads = 0, fetchmsgs = 0, fetchsnippets = 0;
     json_t *filter, *sort;
-    json_t *messageids = NULL, *threadids = NULL, *item, *res;
+    json_t *messageids = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
     struct getmsglist_window window;
     json_int_t i = 0;
     size_t total, total_threads;
@@ -3502,7 +3502,9 @@ static int getMessageList(jmap_req_t *req)
 
     /* windowing */
     memset(&window, 0, sizeof(struct getmsglist_window));
-    readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
+    if ((collapse = json_object_get(req->args, "collapseThreads"))) {
+        readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
+    }
     readprop(req->args, "anchor", 0, invalid, "s", &window.anchor);
     readprop(req->args, "anchorOffset", 0, invalid, "i", &window.anchor_off);
 
@@ -3551,7 +3553,11 @@ static int getMessageList(jmap_req_t *req)
     /* Prepare response. */
     res = json_pack("{}");
     json_object_set_new(res, "accountId", json_string(req->userid));
-    json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
+    if (JNOTNULL(collapse)) {
+        json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
+    } else {
+        json_object_set_new(res, "collapseThreads", json_null());
+    }
     json_object_set_new(res, "state", jmapmsg_getstate(req));
     json_object_set_new(res, "canCalculateUpdates", json_false()); /* TODO getMessageListUpdates */
     json_object_set_new(res, "position", json_integer(window.position));
