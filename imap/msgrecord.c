@@ -120,10 +120,13 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
     }
 
     if (is_missing(M_ANNOTATIONS)) {
+        if (mr->isappend) {
+            syslog(LOG_ERR, "msgrecord: msgrecord is not appended");
+            return IMAP_NOTFOUND;
+        }
         r = msgrecord_need(mr, M_MAILBOX|M_UID);
         if (r) return r;
-        mr->annot_state = annotate_state_new();
-        r = annotate_state_set_message(mr->annot_state, mr->mbox, mr->record.uid);
+        r = mailbox_get_annotate_state(mr->mbox, mr->record.uid, &mr->annot_state);
         if (r) return r;
         found(M_ANNOTATIONS);
     }
@@ -224,9 +227,6 @@ EXPORTED void msgrecord_unref(msgrecord_t **mrp)
 
     assert(mr->refcount >= 1);
     if (--mr->refcount == 0) {
-        if (mr->annot_state) {
-            annotate_state_abort(&mr->annot_state);
-        }
         msgrecord_free(mr);
     }
     *mrp = NULL;
@@ -456,15 +456,7 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_ANNOTATIONS);
     if (r) return r;
-    annotate_state_begin(mr->annot_state); /* safe to call multiple times */
-
-    if (mr->isappend) {
-        /* Write index record before any annotation, otherwise we
-         * screw up mailbox checksum and quotas */
-        r = mailbox_append_index_record(mr->mbox, &mr->record);
-        if (r) return r;
-        mr->isappend = 0;
-    }
+    annotate_state_begin(mr->annot_state);
 
     return annotate_state_write(mr->annot_state, entry, userid, value);
 }
@@ -473,15 +465,7 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
 {
     int r = msgrecord_need(mr, M_ANNOTATIONS);
     if (r) return r;
-    annotate_state_begin(mr->annot_state); /* safe to call multiple times */
-
-    if (mr->isappend) {
-        /* Write index record before any annotation, otherwise we
-         * screw up mailbox checksum and quotas */
-        r = mailbox_append_index_record(mr->mbox, &mr->record);
-        if (r) return r;
-        mr->isappend = 0;
-    }
+    annotate_state_begin(mr->annot_state);
 
     return annotate_state_store(mr->annot_state, l);
 }
@@ -682,18 +666,13 @@ EXPORTED int msgrecord_save(msgrecord_t *mr)
                 mr->mbox->name, mr->record.uid);
         return IMAP_INTERNAL;
     }
-    if (mr->have & M_ANNOTATIONS) {
-        r = annotate_state_commit(&mr->annot_state);
-        if (r) return r;
-    }
-
-    if (mr->isappend)
+    if (mr->isappend) {
         r = mailbox_append_index_record(mr->mbox, &mr->record);
-    else
+        mr->isappend = 0;
+    }
+    else {
         r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
-    if (r) return r;
-    mr->isappend = 0;
-
+    }
     return r;
 }
 

@@ -1038,6 +1038,11 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         r = notify_at(internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
         if (r) goto out;
     }
+
+    /* Write the new message record */
+    r = msgrecord_save(msgrec);
+    if (r) return r;
+
     if (in_object_storage) {  // must delete local file
         if (unlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
@@ -1064,9 +1069,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             goto out;
         }
     }
-
-    /* All done! Write the message record */
-    r = msgrecord_save(msgrec);
 
 out:
     if (newflags)
