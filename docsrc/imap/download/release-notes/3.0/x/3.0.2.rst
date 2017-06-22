@@ -44,6 +44,7 @@ Other changes
 * Cyrus distributions now contain a VERSION file, containing the released
   Cyrus version, which is preserved across autoreconf calls.
 * Removed convert-sieve.pl: :cyrusman:`translatesieve(8)` does everything you need and more.
+* Distribution now contains Cyrus::DList, Cyrus::ImapClone, and Cyrus::SyncProto perl modules
 
 Bug fixes
 ---------
@@ -64,3 +65,4 @@ Bug fixes
 * Fixed: pkgconfig files now contain exec_prefix (thanks Дилян Палаузов)
 * Fixed :issue:`1993`: crc32c and xsha1 modules now build correctly on big-endian
   platforms (thanks Jason Tibbitts)
+* Fixed: reconstruct no longer crashes on non-64bit platforms (thanks Jason Tibbitts)
