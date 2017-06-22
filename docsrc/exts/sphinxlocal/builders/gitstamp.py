@@ -26,13 +26,15 @@ import datetime
 # Expected git datestamp format: 2017-06-07 11:57:38 +1000
 # Output to June 7, 2017
 def page_context_handler(app, pagename, templatename, context, doctree):
+        import git
         global g
         if g is None:
             # We have already errored about this
             pass
         try:
             updated = g.log('--pretty=format:%ai','-n 1',"%s.rst" % pagename)
-            context['gitstamp'] = datetime.datetime.strptime(updated, "%Y-%m-%d %H:%M:%S %z").strftime(app.config.gitstamp_fmt)
+            updated = updated[:10]
+            context['gitstamp'] = datetime.datetime.strptime(updated, "%Y-%m-%d").strftime(app.config.gitstamp_fmt)
         except (git.exc.GitCommandError, ValueError):
             # File not in git. No point trying to add in a datestamp, or
             # Datestamp can't be parsed.
@@ -48,7 +50,9 @@ def what_build_am_i(app):
         import git
     except ImportError:
         raise errors.ExtensionError("gitpython package not installed. Required to generate html. Please run: pip install gitpython")
+
     try:
+        global g
         g = git.Git('.')
     except:
         app.info(sys.exc_info()[0])
