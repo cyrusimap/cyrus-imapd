@@ -1,0 +1,63 @@
+#include <config.h>
+
+#include "cunit/cunit.h"
+
+#include "lib/imparse.h"
+
+/* XXX test imparse_word() */
+
+/* XXX test imparse_astring() */
+
+/* tests for imparse_isatom() and imparse_isnatom()
+ * XXX test strings not just single chars */
+static void test_isatom(void)
+{
+    const char contains_null[] = "he\0llo";
+    const char hello[] = "hello";
+
+    /* not an atom if there's a NULL byte in the mapped space */
+    CU_ASSERT_EQUAL_FATAL(sizeof(contains_null), 7);
+    CU_ASSERT_EQUAL(imparse_isnatom(contains_null, sizeof(contains_null)), 0);
+
+    /*
+     * https://tools.ietf.org/html/rfc3501#page-81
+     *
+     * atom            = 1*ATOM-CHAR
+     *
+     * ATOM-CHAR       = <any CHAR except atom-specials>
+     *
+     * atom-specials   = "(" / ")" / "{" / SP / CTL / list-wildcards /
+     * 				     quoted-specials / resp-specials
+     *
+     * list-wildcards  = "%" / "*"
+     *
+     * quoted-specials = DQUOTE / "\"
+     *
+     * resp-specials   = "]"
+     */
+
+    /* atom-specials */
+    CU_ASSERT_EQUAL(imparse_isatom("("), 0);
+    CU_ASSERT_EQUAL(imparse_isatom(")"), 0);
+    CU_ASSERT_EQUAL(imparse_isatom("{"), 0);
+    CU_ASSERT_EQUAL(imparse_isatom(" "), 0);
+    /* XXX CTL */
+
+    /* list-wildcards */
+    CU_ASSERT_EQUAL(imparse_isatom("%"), 0);
+    CU_ASSERT_EQUAL(imparse_isatom("*"), 0);
+
+    /* quoted-specials */
+    CU_ASSERT_EQUAL(imparse_isatom("\""), 0);
+    CU_ASSERT_EQUAL(imparse_isatom("\\"), 0);
+
+    /* resp-specials */
+    CU_ASSERT_EQUAL(imparse_isatom("]"), 0);
+
+    /* make sure it doesn't just always return zero... */
+    CU_ASSERT_NOT_EQUAL(imparse_isatom(hello), 0);
+}
+
+/* XXX test imparse_issequence() */
+
+/* XXX test imparse_isnumber() */

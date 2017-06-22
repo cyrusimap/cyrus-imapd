@@ -632,6 +632,7 @@ cunit_TESTS = \
 	cunit/guid.testc \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
+	cunit/imparse.testc \
 	cunit/jmapauth.testc \
 	cunit/libconfig.testc \
 	cunit/mboxname.testc \
