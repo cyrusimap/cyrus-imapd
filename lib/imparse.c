@@ -157,7 +157,8 @@ EXPORTED int imparse_isnatom(const char *s, int len)
         if (len && count > len) break;
         if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
             *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
-            *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
+            *s == '\"' || *s == '%' || *s == '*' || *s == '\\' ||
+            *s == ']') return 0;
     }
     if (count >= 1024) return 0;
     return count;
