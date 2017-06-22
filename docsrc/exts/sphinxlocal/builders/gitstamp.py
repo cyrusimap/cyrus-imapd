@@ -4,7 +4,8 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Inserts a git datestamp into the context as 'gitstamp',
-    to make it available for template use.
+    to make it available for template use. Only runs for builders that
+    generate html. (not manpage)
 
     Adds itself as a page context handler: gets invoked after source
     is read but before html is output.
@@ -16,11 +17,6 @@
     :license: BSD, see LICENSE for details.
 """
 from sphinx import errors
-
-try:
-    import git
-except ImportError:
-    raise errors.ExtensionError("gitpython package not installed. Required to generate html. Please run: pip install gitpython")
 
 import datetime
 
@@ -42,8 +38,16 @@ def page_context_handler(app, pagename, templatename, context, doctree):
             # Datestamp can't be parsed.
             pass
 
-def setup(app):
+# Only add the page context handler if we're generating html
+def what_build_am_i(app):
     global g
+    if (app.builder.format != 'html'):
+        return;
+
+    try:
+        import git
+    except ImportError:
+        raise errors.ExtensionError("gitpython package not installed. Required to generate html. Please run: pip install gitpython")
     try:
         g = git.Git('.')
     except:
@@ -52,3 +56,8 @@ def setup(app):
     else:
         app.add_config_value('gitstamp_fmt', "%b %d %Y", 'html')
         app.connect('html-page-context', page_context_handler)
+
+# We can't immediately add a page context handler: we need to wait until we
+# know what the build output format is.
+def setup(app):
+    app.connect('builder-inited', what_build_am_i)
