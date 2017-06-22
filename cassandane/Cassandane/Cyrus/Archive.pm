@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
-#  reserved.
+#  Copyright (c) 2017 FastMail Pty. Ltd.  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions
@@ -15,22 +14,20 @@
 #     the documentation and/or other materials provided with the
 #     distribution.
 #
-#  3. The name "Opera Software Australia" must not be used to
+#  3. The name "Fastmail" must not be used to
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#         FastMail Pty. Ltd.
+#         Level 1, 91 William St
+#         Melbourne 3000
+#         Victoria
+#         Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
-#     "This product includes software developed by Opera Software
-#     Australia Pty. Ltd."
-#
-#  OPERA SOFTWARE AUSTRALIA DISCLAIMS ALL WARRANTIES WITH REGARD TO
+#     "This product includes software developed by FastMail Pty. Ltd."
+#  FASTMAIL PTY LTD DISCLAIMS ALL WARRANTIES WITH REGARD TO
 #  THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 #  AND FITNESS, IN NO EVENT SHALL OPERA SOFTWARE AUSTRALIA BE LIABLE
 #  FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
@@ -52,8 +49,8 @@ use Cassandane::Util::Words;
 
 sub new
 {
-    my $class = shift;
-    return $class->SUPER::new({}, @_);
+    my ($class, @args) = @_;
+    return $class->SUPER::new({ adminstore => 1 }, @args);
 }
 
 sub set_up
@@ -104,16 +101,16 @@ sub test_archive_messages
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $msg{C} = $self->make_message('Message C');
     $msg{C}->set_attributes(id => 3,
-			    uid => 3,
-			    flags => []);
+                            uid => 3,
+                            flags => []);
     $self->check_messages(\%msg);
 
     my $basedir = $self->{instance}->{basedir};
@@ -163,16 +160,16 @@ sub test_archivenow_messages
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $msg{C} = $self->make_message('Message C');
     $msg{C}->set_attributes(id => 3,
-			    uid => 3,
-			    flags => []);
+                            uid => 3,
+                            flags => []);
     $self->check_messages(\%msg);
 
     my $basedir = $self->{instance}->{basedir};
@@ -210,3 +207,79 @@ sub test_archivenow_messages
 }
 
 1;
+
+sub test_archive_messages_archive_annotation
+    :ArchivePartition :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Append 3 messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $msg{C} = $self->make_message('Message C');
+    $msg{C}->set_attributes(id => 3,
+                            uid => 3,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    my $basedir = $self->{instance}->{basedir};
+
+    -f "$basedir/data/user/cassandane/1." || die;
+    -f "$basedir/data/user/cassandane/2." || die;
+    -f "$basedir/data/user/cassandane/3." || die;
+
+    -f "$basedir/archive/user/cassandane/1." && die;
+    -f "$basedir/archive/user/cassandane/2." && die;
+    -f "$basedir/archive/user/cassandane/3." && die;
+
+    xlog "Run cyr_expire but no messages should move";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+
+    -f "$basedir/data/user/cassandane/1." || die;
+    -f "$basedir/data/user/cassandane/2." || die;
+    -f "$basedir/data/user/cassandane/3." || die;
+
+    -f "$basedir/archive/user/cassandane/1." && die;
+    -f "$basedir/archive/user/cassandane/2." && die;
+    -f "$basedir/archive/user/cassandane/3." && die;
+
+    $admintalk->setmetadata('user.cassandane',
+                            "/shared/vendor/cmu/cyrus-imapd/archive",
+                            '3');
+
+    xlog "Run cyr_expire asking to archive now, but it shouldn't";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
+
+    -f "$basedir/data/user/cassandane/1." || die;
+    -f "$basedir/data/user/cassandane/2." || die;
+    -f "$basedir/data/user/cassandane/3." || die;
+
+    -f "$basedir/archive/user/cassandane/1." && die;
+    -f "$basedir/archive/user/cassandane/2." && die;
+    -f "$basedir/archive/user/cassandane/3." && die;
+
+    xlog "Run cyr_expire asking to archive now, with skip annotation";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' , '-a');
+
+    -f "$basedir/data/user/cassandane/1." && die;
+    -f "$basedir/data/user/cassandane/2." && die;
+    -f "$basedir/data/user/cassandane/3." && die;
+
+    -f "$basedir/archive/user/cassandane/1." || die;
+    -f "$basedir/archive/user/cassandane/2." || die;
+    -f "$basedir/archive/user/cassandane/3." || die;
+}
