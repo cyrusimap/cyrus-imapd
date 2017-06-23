@@ -392,7 +392,6 @@ EXTRA_DIST += \
 	master/README \
 	netnews/inn.diffs \
 	perl/annotator/Daemon.pm \
-	perl/annotator/Makefile.PL \
 	perl/annotator/Makefile.PL.in \
 	perl/annotator/MANIFEST \
 	perl/annotator/Message.pm \
@@ -409,7 +408,6 @@ EXTRA_DIST += \
 	perl/imap/IMAP/Shell.pm \
 	perl/imap/IMAP.pm \
 	perl/imap/IMAP.xs \
-	perl/imap/Makefile.PL \
 	perl/imap/Makefile.PL.in \
 	perl/imap/MANIFEST \
 	perl/imap/README \
@@ -417,7 +415,6 @@ EXTRA_DIST += \
 	perl/imap/t/02-admin.t \
 	perl/imap/typemap \
 	perl/imap/xsutil.c \
-	perl/sieve/managesieve/Makefile.PL \
 	perl/sieve/managesieve/Makefile.PL.in \
 	perl/sieve/managesieve/managesieve.h \
 	perl/sieve/managesieve/managesieve.pm \
