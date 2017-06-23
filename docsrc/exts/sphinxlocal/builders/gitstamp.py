@@ -19,24 +19,39 @@
 from sphinx import errors
 
 import datetime
+import os
 
 # Gets the datestamp of the latest commit on the given file
 # Converts the datestamp into something more readable
-# Skips files not known to git or those whose datestamp we can't parse.
+# Skips files whose datestamp we can't parse.
 # Expected git datestamp format: 2017-06-07 11:57:38 +1000
 # Output to June 7, 2017
+# Use the DOCSRC environment variable to determine the root of the
+# tree in git where the rst lives. Used if you are invoking this extension
+# from a makefile external to the conf.py directory
 def page_context_handler(app, pagename, templatename, context, doctree):
         import git
         global g
         if g is None:
             # We have already errored about this
             pass
+        fullpagename = pagename
+        docsrc = ''
         try:
-            updated = g.log('--pretty=format:%ai','-n 1',"%s.rst" % pagename)
+            docsrc = os.environ['DOCSRC'] + "/"
+            if docsrc != "/":
+                fullpagename = docsrc + pagename
+        except KeyError:
+            pass
+
+        try:
+            updated = g.log('--pretty=format:%ai','-n 1',"%s.rst" % fullpagename)
             updated = updated[:10]
             context['gitstamp'] = datetime.datetime.strptime(updated, "%Y-%m-%d").strftime(app.config.gitstamp_fmt)
-        except (git.exc.GitCommandError, ValueError):
-            # File not in git. No point trying to add in a datestamp, or
+        except git.exc.GitCommandError:
+            # File not in git. No point trying to add in a datestamp.
+            raise errors.ExtensionError("Can't fetch git history for %s.rst. Is DOCSRC set correctly? (DOCSRC=%s)" % (fullpagename, docsrc))
+        except ValueError:
             # Datestamp can't be parsed.
             pass
 
