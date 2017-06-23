@@ -1803,20 +1803,20 @@ clean-docsrc:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
-	@touch $@
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
+	        	@touch $@
 
 clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
-	$(AM_V_GEN)$(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 else
 clean-docsrc:

@@ -44,15 +44,25 @@ def page_context_handler(app, pagename, templatename, context, doctree):
         except KeyError:
             pass
 
+        # Don't barf on "genindex", "search", etc
+        if not os.path.isfile("%s.rst" % fullpagename):
+            return
+
         try:
             updated = g.log('--pretty=format:%ai','-n 1',"%s.rst" % fullpagename)
             updated = updated[:10]
+            if updated == "":
+                # Don't datestamp generated rst's (e.g. imapd.conf.rst)
+                # Ideally want to check their source - lib/imapoptions, etc, but
+                # that involves getting their source/output pair into the extension.
+                return
             context['gitstamp'] = datetime.datetime.strptime(updated, "%Y-%m-%d").strftime(app.config.gitstamp_fmt)
         except git.exc.GitCommandError:
-            # File not in git. No point trying to add in a datestamp.
+            # File doesn't exist or something else went wrong.
             raise errors.ExtensionError("Can't fetch git history for %s.rst. Is DOCSRC set correctly? (DOCSRC=%s)" % (fullpagename, docsrc))
         except ValueError:
             # Datestamp can't be parsed.
+            app.info("%s: Can't parse datestamp () %s ) for gitstamp, output won't have last updated time." % (pagename,updated))
             pass
 
 # Only add the page context handler if we're generating html
