@@ -5,4 +5,4 @@ Cflags: @SSL_CPPFLAGS@ @SASLFLAGS@
 Version: @PACKAGE_VERSION@
 Requires.private: libcyrus_min = @PACKAGE_VERSION@
 Libs: -lcyrus
-Libs.private: @LIB_RT@ @LIB_SASL@ @SSL_LIBS@
+Libs.private: @LIB_SASL@ @SSL_LIBS@
