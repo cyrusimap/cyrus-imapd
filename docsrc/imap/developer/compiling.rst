@@ -27,11 +27,11 @@ Building a basic Cyrus that can send and receive email: the minimum libraries re
     `gcc`_, gcc, gcc
     `gperf`_, gperf, gperf
     `jansson`_, libjansson-dev, jansson-devel
-    `libbsd`_ libbsd-dev, libbsd-devel
+    `libbsd`_ ,libbsd-dev, libbsd-devel
     `libtool`_, libtool, libtool
     `ICU`_, libicu-dev, libicu-devel
     `uuid`_, uuid-dev, libuuid-devel
-    `openssl`_, libssl-dev, openssl-devel
+    `openssl`_ :ref:`(Note about versions) <openssl-versions>`, libssl-dev, openssl-devel
     `pkgconfig`_, pkg-config, pkgconfig
     `sqlite`_, libsqlite3-dev, sqlite-devel
 
@@ -256,7 +256,8 @@ The ``--prefix`` option sets where Cyrus is installed to.
 
 It may be of use to also add ``--std=gnu99`` to the ``CFLAGS``.  That generates TONS of warnings.
 
-You may see warnings regarding libical v2.0 being recommended to support certain functionality. Currently libical v1.0.1 is sufficient, unless you need/want RSCALE (non-gregorian recurrences), VPOLL (consensus scheduling), or VAVAILABILITY (specifying availability over time) functionality. If v2 is required, it will need to be installed from `github <https://github.com/libical/libical>`_.
+Having problems with :ref:`compilation <compilationerrors>` or
+:ref:`linking <linker-warnings>`?
 
 If you're running on Debian, and you install to ``/usr/local``, you may need to update your library loader. Edit ``/etc/ld.so.conf.d/x86_64-linux-gnu.conf`` so it includes the following additional line::
 

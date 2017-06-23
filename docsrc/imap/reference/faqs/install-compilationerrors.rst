@@ -1,3 +1,5 @@
+.. _compilationerrors:
+
 Compilation errors about kssl.h and krb5.h on Red Hat Linux/Fedora
 ------------------------------------------------------------------
 
@@ -43,21 +45,21 @@ When trying to compile Cyrus IMAPd on Red Hat Linux or Fedora, you may be encoun
     make[1]: *** [prot.o] Error 1
     make[1]: Leaving directory `/opt/cyrus-imapd-2.2.3/lib'
     make: *** [all] Error 1
-    
+
 The key bit of this error is::
 
     /usr/include/openssl/kssl.h:72:18: krb5.h: No such file or directory
-    
+
 Essentially, what is happening is that Cyrus is trying to use OpenSSL, and OpenSSL's headers include some Kerberos header files. Red Hat, in their infinite wisdom, chose to place the Kerberos headers outside the normal header search path, despite having built OpenSSL to require the Kerberos headers. As a result, even if your program is not using Kerberos, it may fail to compile if gcc can't find the Kerberos headers.
 
 The solution is to either add the Kerberos headers to gcc's header search path, or prevent OpenSSL from trying to use the Kerberos includes in the first place. To tell OpenSSL you really don't want kerberos, just run::
 
     export LOCALDEFS="-DOPENSSL_NO_KRB5"
-    
+
 (as suggested by Ken Murchison on info-cyrus) before you run ./configure. Alternately, you can tell gcc where to find the Kerberos includes so that it'll stop complaining::
 
     export C_INCLUDE_PATH="/usr/kerberos/include"
-    
+
 If neither of these work, make sure you have the Kerberos development libraries installed ( you should have if you have openssl-devel, but one never does know ...). If you run ``rpm -q openssl-devel krb5-devel`` you should get a result like::
 
     openssl-devel-0.9.7a-23
