@@ -122,7 +122,7 @@ sub test_repeated_delete
     for (1..30) {
         xlog "First create a sub folder $_";
         $talk->create($subfolder)
-            or die "Cannot create folder $subfolder: $@";
+            or $self->fail("Cannot create folder $subfolder: $@");
         $self->assert_str_equals('ok', $talk->get_last_completion_response());
         xlog "Then delete it $_";
         $talk->delete($subfolder);
@@ -180,7 +180,7 @@ sub test_self_inbox_imm
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Generate a message in $inbox";
@@ -204,7 +204,7 @@ sub test_self_inbox_imm
     xlog "can delete the subfolder";
     $talk->unselect();
     $talk->delete($subfolder)
-        or die "Cannot delete folder $subfolder: $@";
+        or $self->fail("Cannot delete folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Cannot select the subfolder anymore";
@@ -248,7 +248,7 @@ sub test_self_inbox_del
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Generate a message in $inbox";
@@ -272,7 +272,7 @@ sub test_self_inbox_del
     xlog "can delete the subfolder";
     $talk->unselect();
     $talk->delete($subfolder)
-        or die "Cannot delete folder $subfolder: $@";
+        or $self->fail("Cannot delete folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Cannot select the subfolder anymore";
@@ -327,7 +327,7 @@ sub test_admin_inbox_imm
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Generate a message in $inbox";
@@ -401,7 +401,7 @@ sub test_admin_inbox_del
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Generate a message in $inbox";
@@ -478,7 +478,7 @@ sub test_bz3781
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     $self->check_folder_ondisk($subfolder);
@@ -514,7 +514,7 @@ sub test_cyr_expire_delete
     my $subfoldername = 'foo';
     my $subfolder = 'INBOX.foo';
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Append a messages to $inbox";
@@ -540,7 +540,7 @@ sub test_cyr_expire_delete
     xlog "Delete $subfolder";
     $talk->unselect();
     $talk->delete($subfolder)
-        or die "Cannot delete folder $subfolder: $@";
+        or $self->fail("Cannot delete folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Ensure we can't select $subfolder anymore";
@@ -556,11 +556,11 @@ sub test_cyr_expire_delete
     $self->check_messages(\%msg_inbox);
 
     my $basedir = $self->{instance}->{basedir};
-    -d "$basedir/data/DELETED/user/cassandane/$subfoldername" || die;
+    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 
     xlog "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    -d "$basedir/data/DELETED/user/cassandane/$subfoldername" && die;
+    $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 }
 
 sub test_cyr_expire_delete_with_annotation
@@ -577,7 +577,7 @@ sub test_cyr_expire_delete_with_annotation
     my $subfoldername = 'foo';
     my $subfolder = 'INBOX.foo';
     $talk->create($subfolder)
-        or die "Cannot create folder $subfolder: $@";
+        or $self->fail("Cannot create folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Append a messages to $inbox";
@@ -606,7 +606,7 @@ sub test_cyr_expire_delete_with_annotation
     xlog "Delete $subfolder";
     $talk->unselect();
     $talk->delete($subfolder)
-        or die "Cannot delete folder $subfolder: $@";
+        or $self->fail("Cannot delete folder $subfolder: $@");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Ensure we can't select $subfolder anymore";
@@ -622,15 +622,15 @@ sub test_cyr_expire_delete_with_annotation
     $self->check_messages(\%msg_inbox);
 
     my $basedir = $self->{instance}->{basedir};
-    -d "$basedir/data/DELETED/user/cassandane/$subfoldername" || die;
+    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 
     xlog "Run cyr_expire -D now, it shouldn't delete.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    -d "$basedir/data/DELETED/user/cassandane/$subfoldername" || die;
+    $self->assert(-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 
     xlog "Run cyr_expire -D now, with -a, skipping annotation.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
-    -d "$basedir/data/DELETED/user/cassandane/$subfoldername" && die;
+    $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 }
 
 1;
