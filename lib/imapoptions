@@ -2084,7 +2084,7 @@ product version in the capabilities */
    extending that list in the future or adding your own
    if needed. */
 
-{ "specialusealways", 0, SWITCH }
+{ "specialusealways", 1, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
    the XLIST "special-use" flags */
 
