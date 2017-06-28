@@ -102,14 +102,6 @@ Alternate database formats
     :header: "Package", "Debian", "RedHat",  "Required for ``make check``?", "Notes"
     :widths: 20,15,15,5,45
 
-    `lmdb`_, lmdb-dev, lmdb, "no", "Lightning Memory-Mapped Database Manager (LMDB) backend for Cyrus IMAP
-    databases.     LMDB requires database environments to be set to a (user-configurable)
-    maximum size. The Cyrus backend uses 512MB as default size. Cyrus
-    installations may override this by setting the environment variable
-    CYRUSDB_LMDB_MAXSIZE. The value of this variable must be an integer,
-    optionally followed (without space) by 'mb' or 'gb' to define the
-    maximum size in bytes, megabytes or gigabytes. The size should be a
-    multiple of the OS page size. "
     `mysql`_ or `mariadb`_, libmysqlclient-dev or libmariadb-dev, mysql-devel or mariadb-devel, "no", "MariaDB or MySQL development headers, to allow Cyrus IMAP to use
     it as the backend for its databases.
 
@@ -153,7 +145,6 @@ Other
 .. _Cyrus SASL Plain: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
 .. _Cyrus SASL MD5: :ref:`Cyrus SASL <cyrussasl:sasl-index`
 .. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index`
-.. _lmdb: http://lmdb.tech/
 .. _Kerberos: http://web.mit.edu/kerberos/www/
 .. _libical: http://freeassociation.sourceforge.net/
 .. _libxml: http://xmlsoft.org/

@@ -391,21 +391,6 @@ fi
 AM_CONDITIONAL([USE_CYRUSDB_SQL], [test $HAVE_CYRUSDB_SQL = 1])
 dnl End SQL DB Detection
 
-dnl LMDB configuration
-AC_ARG_WITH(lmdb,
-        [AS_HELP_STRING([--with-lmdb], [use LMDB backend [no]])],
-        with_lmdb="$withval", with_lmdb="no")
-if test "$with_lmdb" = "yes"; then
-  AC_CHECK_LIB(lmdb,mdb_env_create,
-      use_lmdb="yes"
-      LMDB_LIB="-llmdb"
-      AC_DEFINE([HAVE_LMDB],[],[Build in cyrusdb_lmdb support?]),
-      AC_MSG_ERROR([The LMDB library is required for Cyrus DB LMDB support.]))
-else
-    use_lmdb="no"
-fi
-AM_CONDITIONAL([USE_CYRUSDB_LMDB], [test "x$use_lmdb" = "xyes"])
-
 dnl
 dnl Object Store support
 dnl
@@ -2276,7 +2261,6 @@ Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
-   lmdb:               $use_lmdb
 
 Search engine:
    squat:              $enable_squat

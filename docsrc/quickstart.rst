@@ -213,7 +213,6 @@ Database support
     * mysql             : no
     * postgresql        : no
     * sqlite            : yes
-    * lmdb              : no
 
 Search engine
     * squat             : yes

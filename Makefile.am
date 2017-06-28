@@ -1390,9 +1390,6 @@ lib_libcyrus_la_SOURCES = \
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
-if USE_CYRUSDB_LMDB
-lib_libcyrus_la_SOURCES += lib/cyrusdb_lmdb.c
-endif
 if USE_SQLITE
 lib_libcyrus_la_SOURCES += lib/sqldb.c
 endif
@@ -1407,9 +1404,6 @@ else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
 lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
-if USE_CYRUSDB_LMDB
-lib_libcyrus_la_LIBADD += -llmdb
-endif
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 noinst_LTLIBRARIES += libcrc32.la

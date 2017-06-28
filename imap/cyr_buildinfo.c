@@ -253,11 +253,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(database, "sqlite", json_false());
 #endif
-#ifdef HAVE_LMDB
-    json_object_set_new(database, "lmdb", json_true());
-#else
-    json_object_set_new(database, "lmdb", json_false());
-#endif
 
     /* Enabled search engines */
 #ifdef USE_SQUAT

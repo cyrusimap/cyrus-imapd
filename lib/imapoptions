@@ -180,7 +180,7 @@ are listed with ``<none>''.
 /* Alternative INBOX spellings that can't be accessed in altnamespace
    otherwise go under here */
 
-{ "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
+{ "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING }
@@ -476,7 +476,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    from the source.  If set to a negative value or zero, deleted content
    will be kept indefinitely. */
 
-{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "lmdb")}
+{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the backup locations database. */
 
 { "backup_db_path", NULL, STRING }
@@ -597,7 +597,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    database with ctl_conversationsdb if you change this option on a
    running server, or the counts will be wrong.  */
 
-{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip", "lmdb")}
+{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the per-user conversations database. */
 
 { "conversations_expire_days", 90, INT }
@@ -732,7 +732,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    specifies the actual key used for iSchedule DKIM signing within the
    domain. */
 
-{ "duplicate_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "lmdb")}
+{ "duplicate_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -970,7 +970,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
 
-{ "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
+{ "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for the JMAP authentication database. */
 
 { "jmapauth_db_path", NULL, STRING }
@@ -1312,10 +1312,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "maxword", 131072, INT }
 /* Maximum size of a single word for the parser.  Default 128k */
 
-{ "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb") }
+{ "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip") }
 /* The cyrusdb backend to use for mailbox keys. */
 
-{ "mboxlist_db", "twoskip", STRINGLIST("flat", "skiplist", "sql", "twoskip", "lmdb")}
+{ "mboxlist_db", "twoskip", STRINGLIST("flat", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "mboxlist_db_path", NULL, STRING }
@@ -1689,7 +1689,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
+{ "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING }
@@ -1714,7 +1714,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* This specifies the Class Selector or Differentiated Services Code Point
    designation on IP headers (in the ToS field). */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "skiplist", "sql", "quotalegacy", "twoskip", "lmdb")}
+{ "quota_db", "quotalegacy", STRINGLIST("flat", "skiplist", "sql", "quotalegacy", "twoskip")}
 /* The cyrusdb backend to use for quotas. */
 
 { "quota_db_path", NULL, STRING }
@@ -1864,7 +1864,7 @@ If all partitions are over that limit, this feature is not used anymore.
    headers can still be searched, the searches will just be slower.
  */
 
-{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
+{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the search latest indexed uid state. */
 
 { "search_maxtime", NULL, STRING }
@@ -1916,7 +1916,7 @@ If all partitions are over that limit, this feature is not used anymore.
 .PP
    This option MUST be specified for xapian search. */
 
-{ "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
+{ "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the seen state. */
 
 { "sendmail", "/usr/lib/sendmail", STRING }
@@ -2073,7 +2073,7 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
-{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
+{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for caching sort results (currently only
    used for xconvmultisort) */
 
@@ -2130,7 +2130,7 @@ product version in the capabilities */
    allowed to fetch the contents of any valid "urlauth=submit+" IMAP URL:
    use with caution. */
 
-{ "subscription_db", "flat", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
+{ "subscription_db", "flat", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the subscriptions list. */
 
 { "suppress_capabilities", NULL, STRING }
@@ -2143,7 +2143,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "lmdb") }
+{ "statuscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "statuscache_db_path", NULL, STRING }
@@ -2269,7 +2269,7 @@ product version in the capabilities */
 { "tls_ca_path", NULL, STRING, "2.5.0", "tls_client_ca_dir" }
 /* Deprecated in favor of \fItls_client_ca_dir\fR. */
 
-{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "lmdb"), "2.5.0", "tls_sessions_db" }
+{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "2.5.0", "tls_sessions_db" }
 /* Deprecated in favor of \fItls_sessions_db\fR. */
 
 { "tlscache_db_path", NULL, STRING, "2.5.0", "tls_sessions_db_path" }
@@ -2342,7 +2342,7 @@ product version in the capabilities */
 /* File containing the private key belonging to the certificate in
    tls_server_cert. */
 
-{ "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "lmdb")}
+{ "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_sessions_db_path", NULL, STRING }
@@ -2369,7 +2369,7 @@ product version in the capabilities */
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
 
-{ "userdeny_db", "flat", STRINGLIST("flat", "skiplist", "sql", "twoskip", "lmdb")}
+{ "userdeny_db", "flat", STRINGLIST("flat", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the user access list. */
 
 { "userdeny_db_path", NULL, STRING }
@@ -2429,7 +2429,7 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
-{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "lmdb")}
+{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for zoneinfo. */
 
 { "zoneinfo_db_path", NULL, STRING }

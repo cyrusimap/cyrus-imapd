@@ -19,7 +19,7 @@ struct binary_result
     size_t datalen;
 };
 
-static char *backend = CUNIT_PARAM("skiplist,flat,twoskip,lmdb");
+static char *backend = CUNIT_PARAM("skiplist,flat,twoskip");
 static char *filename;
 static char *filename2;
 
@@ -203,13 +203,6 @@ static char *make_basedir(const char * const *reldirs)
 static int skiptest()
 {
     /* cunit.pl doesn't play nice with #ifdef'ed CUNIT_PARAMS */
-    if (!strcmp(backend, "lmdb")) {
-#ifdef HAVE_LMDB
-        return 0;
-#else
-        return 1;
-#endif
-    }
     return 0;
 }
 
