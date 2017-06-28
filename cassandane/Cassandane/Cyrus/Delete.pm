@@ -564,7 +564,7 @@ sub test_cyr_expire_delete
 }
 
 sub test_cyr_expire_delete_with_annotation
-    :DelayedDelete :min_version_3_0
+    :DelayedDelete :min_version_3_1
 {
     my ($self) = @_;
 

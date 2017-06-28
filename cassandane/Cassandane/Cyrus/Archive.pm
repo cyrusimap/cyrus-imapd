@@ -210,7 +210,7 @@ sub test_archivenow_messages
 1;
 
 sub test_archive_messages_archive_annotation
-    :ArchivePartition :min_version_3_0
+    :ArchivePartition :min_version_3_1
 {
     my ($self) = @_;
 
