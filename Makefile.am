@@ -1161,6 +1161,7 @@ imap_mupdate_SOURCES = \
 	imap/tls_th-lock.c \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
+imap_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
 
 nodist_imap_nntpd_SOURCES = \
 	imap/nntp_err.c \
