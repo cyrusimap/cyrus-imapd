@@ -425,6 +425,13 @@ static int ptload(const char *identifier, struct auth_state **state)
 	fname = tofree;
     }
 
+    if (strlen(fname) >= sizeof(srvaddr.sun_path)) {
+	syslog(LOG_ERR, "ptload(): socket filename %s too long for " SIZE_T_FMT "-byte buffer",
+			fname, sizeof(srvaddr.sun_path));
+	rc = -1;
+	goto done;
+    }
+
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fname);
