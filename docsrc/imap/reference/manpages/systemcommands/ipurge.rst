@@ -16,7 +16,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] [ **-n** ] [ **-v** ]
+    **ipurge** [ **-f** ] [ **-C** *config-file* ] [ **-x** ] [ **-M** ] [ **-X** ] [ **-i** ] [ **-s** ] [ **-o** ] [ **-n** ] [ **-v** ]
             [ **-d** *days* | **-b** *bytes* | **-k** *Kbytes* | **-m** *Mbytes* ]
             [ *mailbox-pattern*... ]
 
@@ -34,7 +34,7 @@ of **-d**, **-b**, **-k** or **-m** MUST be specified.
 *Ipurge* by default only deletes mail below shared folders, which means
 that mails in mailbox(es) below INBOX.* and user.* stay untouched. Use
 the option **-f** to also delete mail in mailbox(es) below these
-folders.
+folders. Use the **-M** option to not recurse into the mailboxes.
 
 *ipurge* |default-conf-text|
 

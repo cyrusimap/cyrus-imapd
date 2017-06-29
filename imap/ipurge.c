@@ -94,10 +94,14 @@ static int dryrun = 0;
 static int verbose = 0;
 static int forceall = 0;
 
-static int purge_me(struct findall_data *, void *);
+/* current namespace */
+static struct namespace purge_namespace;
+
+static int purge_findall(struct findall_data *, void *);
 static unsigned purge_check(struct mailbox *mailbox,
                             const struct index_record *record,
                             void *rock);
+static void expand_mboxnames(int nmboxnames, const char **mboxnames);
 static int usage(const char *name);
 static void print_record(struct mailbox *mailbox,
                          const struct index_record *record);
@@ -106,12 +110,13 @@ static void print_stats(mbox_stats_t *stats);
 int main (int argc, char *argv[]) {
   int option;           /* getopt() returns an int */
   char *alt_config = NULL;
+  int matchmailbox = 0;
 
   if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
       fatal("must run as the Cyrus user", EC_USAGE);
   }
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXionv")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsMXionv")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -155,6 +160,9 @@ int main (int argc, char *argv[]) {
     case 's' : {
       skipflagged = 1;
     } break;
+    case 'M' : {
+      matchmailbox = 1;
+    } break;
     case 'X' : {
       use_sentdate = 0;
     } break;
@@ -176,7 +184,14 @@ int main (int argc, char *argv[]) {
   cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
   if (optind == argc) { /* do the whole partition */
-    mboxlist_findall(NULL, "*", 1, 0, 0, purge_me, NULL);
+    mboxlist_findall(NULL, "*", 1, 0, 0, purge_findall, NULL);
+  } else if (matchmailbox) {
+    int r;
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
+        fatal(error_message(r), EC_CONFIG);
+    }
+    expand_mboxnames(argc-optind, (const char **)argv+optind);
   } else {
     /* do all matching mailboxes in one pass */
     strarray_t *array = strarray_new();
@@ -184,7 +199,7 @@ int main (int argc, char *argv[]) {
       strarray_append(array, argv[optind]);
     }
     if (array->count)
-      mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_me, NULL);
+      mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_findall, NULL);
     strarray_free(array);
   }
 
@@ -203,6 +218,7 @@ static int usage(const char *name)
   printf("\t -s skip over messages that are flagged.\n");
   printf("\t -X use delivery time instead of date header for date matches.\n");
   printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
+  printf("\t -M don't recurse mailboxes.\n");
   printf("\t -o only purge messages that are deleted.\n");
   printf("\t -n only print messages that would be deleted (dry run).\n");
   printf("\t -v enable verbose output/logging.\n");
@@ -210,40 +226,66 @@ static int usage(const char *name)
 }
 
 /* we don't check what comes in on matchlen and category, should we? */
-static int purge_me(struct findall_data *data, void *rock __attribute__((unused)))
+static int purge_one(const mbname_t *mbname)
 {
-    if (!data) return 0;
     struct mailbox *mailbox = NULL;
     int r;
     mbox_stats_t stats;
-    const char *name = mbname_intname(data->mbname);
+    const char *name = mbname_intname(mbname);
 
     if (!forceall) {
         /* DON'T purge INBOX* and user.* */
-        if (mbname_userid(data->mbname))
+        if (mbname_userid(mbname))
             return 0;
     }
 
-  memset(&stats, '\0', sizeof(mbox_stats_t));
+    memset(&stats, '\0', sizeof(mbox_stats_t));
 
-  if (verbose) {
-      printf("Working on %s...\n", name);
-  }
+    if (verbose) {
+        printf("Working on %s...\n", name);
+    }
 
-  r = mailbox_open_iwl(name, &mailbox);
-  if (r) { /* did we find it? */
-    syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
-    return r;
-  }
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) { /* did we find it? */
+        syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
+        return r;
+    }
 
-  mailbox_expunge(mailbox, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
 
-  mailbox_close(&mailbox);
+    mailbox_close(&mailbox);
 
-  print_stats(&stats);
+    print_stats(&stats);
 
-  return 0;
+    return 0;
 }
+
+static int purge_findall(struct findall_data *data, void *rock __attribute__((unused)))
+{
+    if (!data || !data->mbname) return 0;
+    return purge_one(data->mbname);
+}
+
+static int purge_mbentry(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+{
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    int r = purge_one(mbname);
+    mbname_free(&mbname);
+    return r;
+}
+
+static void expand_mboxnames(int nmboxnames, const char **mboxnames)
+{
+    int i;
+
+    for (i = 0; i < nmboxnames; i++) {
+        /* Translate any separators in mailboxname */
+        char *intname = mboxname_from_external(mboxnames[i], &purge_namespace, NULL);
+        mboxlist_mboxtree(intname, purge_mbentry, NULL, MBOXTREE_SKIP_CHILDREN);
+        free(intname);
+    }
+}
+
 
 static void deleteit(bit32 msgsize, mbox_stats_t *stats)
 {
