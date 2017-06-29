@@ -3445,7 +3445,7 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
                 buf_appendcstr(&buf, ",");
             }
             if (nth) {
-                buf_printf(&buf, "%+lld", nth);
+                buf_printf(&buf, "%+"JSON_INTEGER_FORMAT, nth);
             }
             buf_appendcstr(&buf, day);
             free(day);
@@ -3660,7 +3660,7 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
 
             /* size */
             if (size >= 0) {
-                buf_printf(&buf, "%lld", (long long) size);
+                buf_printf(&buf, "%"JSON_INTEGER_FORMAT, size);
                 icalproperty_add_parameter(prop, icalparameter_new_size(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
