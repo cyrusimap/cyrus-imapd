@@ -45,6 +45,7 @@
 #endif
 
 #include "sieve_interface.h"
+#include "grammar.h"
 #include "interp.h"
 #include "message.h"
 #include "script.h"
