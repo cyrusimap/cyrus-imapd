@@ -364,16 +364,18 @@ struct mailbox_iter {
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
 
-#define FLAG_ANSWERED (1<<0)
-#define FLAG_FLAGGED (1<<1)
-#define FLAG_DELETED (1<<2)
-#define FLAG_DRAFT (1<<3)
-#define FLAG_SEEN (1<<4)
-#define FLAG_SPLITCONVERSATION (1<<27)
-#define FLAG_NEEDS_CLEANUP (1<<28)
-#define FLAG_ARCHIVED (1<<29)
-#define FLAG_UNLINKED (1<<30)
-#define FLAG_EXPUNGED (1U<<31)
+typedef enum _MsgFlags {
+    FLAG_ANSWERED           = (1<<0),
+    FLAG_FLAGGED            = (1<<1),
+    FLAG_DELETED            = (1<<2),
+    FLAG_DRAFT              = (1<<3),
+    FLAG_SEEN               = (1<<4),
+    FLAG_SPLITCONVERSATION  = (1<<27),
+    FLAG_NEEDS_CLEANUP      = (1<<28),
+    FLAG_ARCHIVED           = (1<<29),
+    FLAG_UNLINKED           = (1<<30),
+    FLAG_EXPUNGED           = (1U<<31),
+} MsgFlags;
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
 #define FLAGS_INTERNAL (FLAG_SPLITCONVERSATION|FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED|FLAG_EXPUNGED)
@@ -469,6 +471,14 @@ enum {
     ENV_MSGID
 };
 #define NUMENVTOKENS (10)
+
+/*
+ * This structure maintains a list of FLAG_ to the string literal mapping.
+ */
+struct MsgFlagMap {
+    const char *code;
+    MsgFlags flag;
+};
 
 unsigned mailbox_cached_header(const char *s);
 unsigned mailbox_cached_header_inline(const char *text);
