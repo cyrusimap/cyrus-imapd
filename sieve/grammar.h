@@ -8,7 +8,6 @@
 #ifndef SIEVE_GRAMMAR_H_
 #define SIEVE_GRAMMAR_H_
 
-#include "strarray.h"
 #include "varlist.h"
 
 int is_identifier(char *s);
