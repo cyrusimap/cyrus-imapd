@@ -20,6 +20,11 @@ Documentation is at :cyrus-dev:`/`.
 Supported Product Series
 ========================
 
+.. toctree::
+    :hidden:
+
+    3.1/index
+
 Series 3.0
 ----------
 
