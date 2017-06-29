@@ -1750,10 +1750,10 @@ static void cmd_auth(char *arg)
            popd_userid, popd_subfolder ? popd_subfolder : "",
            authtype, popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
-    sasl_getprop(popd_saslconn, SASL_SSF, &val);
-    saslprops.ssf = *((sasl_ssf_t *) val);
-
     if (!openinbox()) {
+        sasl_getprop(popd_saslconn, SASL_SSF, &val);
+        saslprops.ssf = *((sasl_ssf_t *) val);
+
         prot_setsasl(popd_in,  popd_saslconn);
         prot_setsasl(popd_out, popd_saslconn);
     }
