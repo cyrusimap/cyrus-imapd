@@ -1030,12 +1030,23 @@ static int get_search_criterion(struct protstream *pin,
             indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
         }
         else if (!strcmp(criteria.s, "older")) {    /* RFC 5032 */
+#if SIZEOF_TIME_T >= 8
+            int64_t uu;
+#endif
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+#if SIZEOF_TIME_T >= 8
+            c = getint64(pin, (int64_t *)&uu);
+#else
+            c = getint32(pin, (int64_t *)&u);
+#endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
+#if SIZEOF_TIME_T >= 8
+            e->value.u = now - uu;
+#else
             e->value.u = now - u;
+#endif
         }
         else if (!strcmp(criteria.s, "on")) {   /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1206,12 +1217,23 @@ static int get_search_criterion(struct protstream *pin,
 
     case 'y':
         if (!strcmp(criteria.s, "younger")) {           /* RFC 5032 */
+#if SIZEOF_TIME_T >= 8
+            int64_t uu;
+#endif
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+#if SIZEOF_TIME_T >= 8
+            c = getint64(pin, (int64_t *)&uu);
+#else
+            c = getint32(pin, (int64_t *)&u);
+#endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
+#if SIZEOF_TIME_T >= 8
+            e->value.u = now - uu;
+#else
             e->value.u = now - u;
+#endif
         }
         else goto badcri;
         break;
