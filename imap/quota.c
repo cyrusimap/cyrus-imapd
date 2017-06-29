@@ -103,7 +103,7 @@ struct quotaentry {
 /* forward declarations */
 static void usage(void);
 static void reportquota(void);
-static int buildquotalist(char *domain, char **roots, int nroots);
+static int buildquotalist(char *domain, char **roots, int nroots, int isuser);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
                            mboxlist_cb *pass);
@@ -126,6 +126,7 @@ int main(int argc,char **argv)
     int opt;
     int i;
     int fflag = 0;
+    int isuser = 0;
     int r, code = 0;
     int do_report = 1;
     char *alt_config = NULL, *domain = NULL;
@@ -134,7 +135,7 @@ int main(int argc,char **argv)
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:d:fqJZ")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d:fqJZu")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -150,6 +151,10 @@ int main(int argc,char **argv)
 
         case 'f':
             fflag = 1;
+            break;
+
+        case 'u':
+            isuser = 1;
             break;
 
         case 'J':
@@ -193,7 +198,7 @@ int main(int argc,char **argv)
     quota_changelock();
 
     if (!r)
-        r = buildquotalist(domain, argv+optind, argc-optind);
+        r = buildquotalist(domain, argv+optind, argc-optind, isuser);
 
     if (!r && fflag)
         r = fixquotas(domain, argv+optind, argc-optind);
@@ -361,7 +366,7 @@ done:
 /*
  * Build the list of quota roots in 'quota'
  */
-int buildquotalist(char *domain, char **roots, int nroots)
+int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 {
     int i, r = 0;
     char buf[MAX_MAILBOX_BUFFER], *tail;
@@ -387,9 +392,15 @@ int buildquotalist(char *domain, char **roots, int nroots)
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-        strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+        if (isuser) {
+            char *res = mboxname_user_mbox(roots[i], NULL);
+            strlcpy(buf, res, sizeof(buf));
+            free(res);
+        }
+        else {
+            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+        }
         /* XXX - namespace fixes here */
-
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
         if (r) {
             errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
