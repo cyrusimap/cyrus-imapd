@@ -16,7 +16,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **quota** [ **-C** *config-file* ] [ **-d** *domain* ] [ **-f** ] [ *mailbox-prefix*... ]
+    **quota** [ **-C** *config-file* ] [ **-d** *domain* ] [ **-f** ] [ **-u** ] [ *mailbox-spec*... ]
 
 Description
 ===========
@@ -32,13 +32,16 @@ If an optional *domain* is specified with the **-d** option, the quota
 listing (and any inconsistency fixing) is performed only in that domain
 rather than all mailboxes.
 
-If one or more *mailbox-prefix* arguments are specified, the quota
-listing (and inconsistency fixing) is limited to quota roots with names
-that start with one of the given prefixes.
+If one or more *mailbox-spec* arguments are specified, these are interpreted
+as mailbox prefixes, and the quota listing (and inconsistency fixing) is
+limited to quota roots with names that start with one of the given prefixes.
+If the **-u** is provided, *mailbox-spec* arguments are instead interpreted
+as userids, and the quota listing (and inconsistency fixing) is limited to
+quota roots for only the specified users.
 
 .. WARNING::
 
-    Running **quota** with both the **-f** option and *mailbox-prefix*
+    Running **quota** with both the **-f** option and *mailbox-spec*
     arguments is not recommended.
 
 **quota** |default-conf-text|
@@ -70,10 +73,15 @@ Options
 
     Output the quota values as JSON for automated tooling support
 
-.. option:: mailbox-prefix
+.. option:: -u
 
-    Only report and/or fix quota in mailboxes starting with the
-    specified *mailbox-prefix*.
+    Interpret *mailbox-spec* arguments as userids.  The default is to
+    interpret them as mailbox prefixes
+
+.. option:: mailbox-spec
+
+    Only report and/or fix quota in mailboxes matching the specified
+    *mailbox-spec* arguments.  See also **-u**.
 
 Examples
 ========
