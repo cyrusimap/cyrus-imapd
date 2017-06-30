@@ -180,7 +180,7 @@ static const char *flags_to_str(MsgFlags flag)
     static char flagstr[FLAGMAPSTR_MAXLEN];
     char *p;
 
-    bzero(flagstr, FLAGMAPSTR_MAXLEN);
+    memset(flagstr, 0, FLAGMAPSTR_MAXLEN);
     p = flagstr;
     map_size = sizeof(msgflagmap) / sizeof(struct MsgFlagMap);
 
@@ -6088,10 +6088,10 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
     memset(&record, 0, sizeof(struct index_record));
 
-    int remove_temp_spool_file = 0 ;
-    int object_storage_enabled = 0 ;
+    int remove_temp_spool_file = 0;
+    int object_storage_enabled = 0;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
 
     if (isarchive && !object_storage_enabled)
@@ -6102,19 +6102,19 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 #if defined ENABLE_OBJECTSTORE
     if (object_storage_enabled)
     {
-        uint32_t i , count = 0 ;
-        struct message *list = get_list_of_message (mailbox, &count) ;
+        uint32_t i , count = 0;
+        struct message *list = get_list_of_message (mailbox, &count);
         for (i = 0; i < count; i++) {
-            if (uid == list [i].message_uid){
+            if (uid == list[i].message_uid){
 
-                record.uid = uid ;
-                record.guid = list [i].message_guid ;
+                record.uid = uid;
+                record.guid = list[i].message_guid;
                 remove_temp_spool_file = 1;
                 r = objectstore_get(mailbox, &record, fname);
-                break ;
+                break;
             }
         }
-        discard_list( ) ;
+        discard_list();
     }
 #endif
 
@@ -6134,12 +6134,11 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (r) {
         syslog(LOG_ERR, "%s uid %u not found", mailbox->name, uid);
         printf("%s uid %u not found", mailbox->name, uid);
-        if (!make_changes){
-            r = 0 ;
-            goto out;
-        }
-        unlink(fname);
-        r = 0 ;
+        r = 0;
+
+        if (make_changes)
+            unlink(fname);
+
         goto out;
     }
 

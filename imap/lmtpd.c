@@ -89,6 +89,7 @@
 #include "prot.h"
 #include "proxy.h"
 #include "telemetry.h"
+#include "times.h"
 #include "tls.h"
 #include "userdeny.h"
 #include "util.h"
@@ -468,6 +469,7 @@ int deliver_mailbox(FILE *f,
     char *uuid = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    time_t internaldate = 0;
 
     /* open the mailbox separately so we can hold it open until
      * after the duplicate elimination is done */
@@ -513,11 +515,14 @@ int deliver_mailbox(FILE *f,
         /* parse the message body if we haven't already,
            and keep the file mmap'ed */
         r = message_parse_file(f, &content->base, &content->len, &content->body);
+        /* If the body contains received_date, we should always use that. */
+        if (content->body->received_date)
+            time_from_rfc822(content->body->received_date, &internaldate);
     }
 
     if (!r) {
-        r = append_fromstage(&as, &content->body, stage, 0,
-                             flags, !singleinstance,
+        r = append_fromstage(&as, &content->body, stage,
+                             internaldate, flags, !singleinstance,
                              /*annotations*/NULL);
 
         if (r) {

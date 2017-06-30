@@ -964,12 +964,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    the same has to be done (cyr_dbtool) for each subscription database
    See improved_mboxlist_sort.html.*/
 
-{ "internaldate_heuristic", "standard", ENUM("standard", "receivedheader") }
-/* Mechanism to determine email internaldates on delivery/reconstruct.
-   "standard" uses time() when delivering a message, mtime on reconstruct.
-   "receivedheader" looks at the top most Received header
-   or time/mtime otherwise */
-
 { "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for the JMAP authentication database. */
 
