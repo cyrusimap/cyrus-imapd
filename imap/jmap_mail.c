@@ -1664,7 +1664,7 @@ static int getMailboxUpdates(jmap_req_t *req)
         json_array_append_new(invalid, json_string("sinceState"));
     }
     /* maxChanges */
-    pe = readprop(req->args, "maxChanges", 0, invalid, "i", &max_changes);
+    pe = readprop(req->args, "maxChanges", 0, invalid, "I", &max_changes);
     if (pe > 0 && max_changes < 0) {
         json_array_append_new(invalid, json_string("maxChanges"));
     }
@@ -3143,8 +3143,8 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
 
         readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "inMailboxOtherThan", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "minSize", 0, invalid, "i", &num);
-        readprop_full(filter, prefix, "maxSize", 0, invalid, "i", &num);
+        readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
+        readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
         readprop_full(filter, prefix, "threadIsFlagged", 0, invalid, "b", &b);
         readprop_full(filter, prefix, "threadIsUnread", 0, invalid, "b", &b);
         readprop_full(filter, prefix, "isFlagged", 0, invalid, "b", &b);
@@ -3575,12 +3575,12 @@ static int getMessageList(jmap_req_t *req)
     readprop(req->args, "anchor", 0, invalid, "s", &window.anchor);
     readprop(req->args, "anchorOffset", 0, invalid, "i", &window.anchor_off);
 
-    if (readprop(req->args, "position", 0, invalid, "i", &i) > 0) {
+    if (readprop(req->args, "position", 0, invalid, "I", &i) > 0) {
         if (i < 0) json_array_append_new(invalid, json_string("position"));
         window.position = i;
     }
 
-    if (readprop(req->args, "limit", 0, invalid, "i", &i) > 0) {
+    if (readprop(req->args, "limit", 0, invalid, "I", &i) > 0) {
         if (i < 0) json_array_append_new(invalid, json_string("limit"));
         window.limit = i;
     }
@@ -3708,7 +3708,7 @@ static int getMessageUpdates(jmap_req_t *req)
     }
     /* maxChanges */
     memset(&window, 0, sizeof(struct getmsglist_window));
-    readprop(req->args, "maxChanges", 0, invalid, "i", &max);
+    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
     /* fetch */
@@ -3803,7 +3803,7 @@ static int getThreadUpdates(jmap_req_t *req)
     }
     /* maxChanges */
     memset(&window, 0, sizeof(struct getmsglist_window));
-    readprop(req->args, "maxChanges", 0, invalid, "i", &max);
+    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
 

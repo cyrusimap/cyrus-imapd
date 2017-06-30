@@ -3428,7 +3428,7 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
 
             /* nthOfPeriod */
             nth = 0;
-            pe = readprop(ctx, bd, "nthOfPeriod", 0, "i", &nth);
+            pe = readprop(ctx, bd, "nthOfPeriod", 0, "I", &nth);
             if (pe > 0 && !nth) {
                 invalidprop(ctx, "nthOfPeriod");
             }
