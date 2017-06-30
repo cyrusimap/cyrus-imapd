@@ -753,6 +753,7 @@ sub test_fetch_flags_before_exists
 }
 
 sub test_tell_exists_count_earlier
+    :min_version_3_0
 {
     my ($self) = @_;
 
