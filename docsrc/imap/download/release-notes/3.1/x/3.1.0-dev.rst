@@ -18,7 +18,9 @@ Major changes since the 3.0.x series
 Updates to default configuration
 ================================
 
-*
+* The `specialusealways` option is now enabled by default. It must
+  explicitly be disabled for interoperability with legacy clients that
+  can't handle RFC 6154 attributes in extended LIST commands.
 
 Significant bugfixes
 ====================
