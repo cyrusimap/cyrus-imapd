@@ -602,7 +602,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     json_t *invalid = json_pack("[]");
 
     json_int_t max_records = 0;
-    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
+    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "I", &max_records);
     if (pe > 0) {
         if (max_records <= 0) {
             json_array_append_new(invalid, json_string("maxChanges"));
@@ -1676,7 +1676,7 @@ static int getContactUpdates(struct jmap_req *req)
     invalid = json_pack("[]");
 
     json_int_t max_records = 0;
-    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &max_records);
+    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "I", &max_records);
     if (pe > 0) {
         if (max_records <= 0) {
             json_array_append_new(invalid, json_string("maxChanges"));
@@ -2137,7 +2137,7 @@ static int getContactList(struct jmap_req *req)
     /* position */
     json_int_t pos = 0;
     if (JNOTNULL(json_object_get(req->args, "position"))) {
-        pe = readprop(req->args, "position", 0 /*mandatory*/, invalid, "i", &pos);
+        pe = readprop(req->args, "position", 0 /*mandatory*/, invalid, "I", &pos);
         if (pe > 0 && pos < 0) {
             json_array_append_new(invalid, json_string("position"));
         }
@@ -2147,7 +2147,7 @@ static int getContactList(struct jmap_req *req)
     /* limit */
     json_int_t limit = 0;
     if (JNOTNULL(json_object_get(req->args, "limit"))) {
-        pe = readprop(req->args, "limit", 0 /*mandatory*/, invalid, "i", &limit);
+        pe = readprop(req->args, "limit", 0 /*mandatory*/, invalid, "I", &limit);
         if (pe > 0 && limit < 0) {
             json_array_append_new(invalid, json_string("limit"));
         }

@@ -2029,7 +2029,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
             json_array_append_new(invalid, json_string("sinceState"));
         }
     }
-    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "i", &maxChanges);
+    pe = readprop(req->args, "maxChanges", 0 /*mandatory*/, invalid, "I", &maxChanges);
     if (pe > 0) {
         if (maxChanges <= 0) {
             json_array_append_new(invalid, json_string("maxChanges"));
@@ -2562,7 +2562,7 @@ static int getCalendarEventList(struct jmap_req *req)
     /* position */
     json_int_t pos = 0;
     if (JNOTNULL(json_object_get(req->args, "position"))) {
-        pe = readprop(req->args, "position", 0 /*mandatory*/, invalid, "i", &pos);
+        pe = readprop(req->args, "position", 0 /*mandatory*/, invalid, "I", &pos);
         if (pe > 0 && pos < 0) {
             json_array_append_new(invalid, json_string("position"));
         }
@@ -2571,7 +2571,7 @@ static int getCalendarEventList(struct jmap_req *req)
     /* limit */
     json_int_t limit = 0;
     if (JNOTNULL(json_object_get(req->args, "limit"))) {
-        pe = readprop(req->args, "limit", 0 /*mandatory*/, invalid, "i", &limit);
+        pe = readprop(req->args, "limit", 0 /*mandatory*/, invalid, "I", &limit);
         if (pe > 0 && limit < 0) {
             json_array_append_new(invalid, json_string("limit"));
         }
