@@ -143,7 +143,7 @@ sub run_test
     if (!defined $basedir)
     {
         xlog "JMAP Tests are not enabled.  To enabled them, please";
-        xlog "install JMAP-TestSuite from https://github.com/pobox/JMAP-TestSuite";
+        xlog "install JMAP-TestSuite from https://github.com/fastmail/JMAP-TestSuite";
         xlog "and edit [jmaptester]basedir in cassandane.ini";
         xlog "This is not a failure";
         return;
