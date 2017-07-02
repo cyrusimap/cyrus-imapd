@@ -104,9 +104,9 @@ struct quotaentry {
 static void usage(void);
 static void reportquota(void);
 static int buildquotalist(char *domain, char **roots, int nroots, int isuser);
-static int fixquotas(char *domain, char **roots, int nroots);
+static int fixquotas(char *domain, char **roots, int nroots, int isuser);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
-                           mboxlist_cb *pass);
+                           mboxlist_cb *pass, int isuser);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
 static int (*compar)(const char *s1, const char *s2);
@@ -201,7 +201,7 @@ int main(int argc,char **argv)
         r = buildquotalist(domain, argv+optind, argc-optind, isuser);
 
     if (!r && fflag)
-        r = fixquotas(domain, argv+optind, argc-optind);
+        r = fixquotas(domain, argv+optind, argc-optind, isuser);
 
     quota_changelockrelease();
 
@@ -617,7 +617,7 @@ done:
  * Run a pass over all the quota roots
  */
 int fixquota_dopass(char *domain, char **roots, int nroots,
-                    mboxlist_cb *cb)
+                    mboxlist_cb *cb, int isuser)
 {
     int i, r = 0;
     char buf[MAX_MAILBOX_BUFFER], *tail;
@@ -643,9 +643,15 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-        strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-
-        r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
+        if (isuser) {
+            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+            r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
+        }
+        else {
+            char *inbox = mboxname_user_mbox(roots[i], NULL);
+            r = mboxlist_usermboxtree(roots[i], cb, inbox, /*incdel*/0);
+            free(inbox);
+        }
         if (r) {
             errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
             break;
@@ -658,11 +664,11 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 /*
  * Fix all the quota roots
  */
-int fixquotas(char *domain, char **roots, int nroots)
+int fixquotas(char *domain, char **roots, int nroots, int isuser)
 {
     int r;
 
-    r = fixquota_dopass(domain, roots, nroots, fixquota_dombox);
+    r = fixquota_dopass(domain, roots, nroots, fixquota_dombox, isuser);
 
     while (!r && quota_todo < quota_num) {
         r = fixquota_finish(quota_todo);
