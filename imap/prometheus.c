@@ -44,14 +44,22 @@
 
 #include <sys/types.h>
 
+#include <dirent.h>
+#include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "lib/assert.h"
+#include "lib/cyr_lock.h"
 #include "lib/exitcodes.h"
 #include "lib/libconfig.h"
+#include "lib/map.h"
+#include "lib/ptrarray.h"
 #include "lib/util.h"
 
 #include "imap/prometheus.h"
+
+#define PROM_STATS_DIR "stats"
 
 EXPORTED struct prometheus_handle *prometheus_register(void)
 {
@@ -62,7 +70,8 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
 
     buf.pid = getpid();
 
-    r = snprintf(fname, sizeof(fname), "%s/stats/%jd", config_dir, (intmax_t) buf.pid);
+    r = snprintf(fname, sizeof(fname), "%s/%s/%jd",
+                 config_dir, PROM_STATS_DIR, (intmax_t) buf.pid);
     if (r < 0 || (size_t) r >= sizeof(fname))
         fatal("unable to register stats for prometheus", EC_CONFIG);
 
@@ -101,7 +110,7 @@ EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
     if (!handle) return; /* make double-call safe */
 
     mappedfile_writelock(handle->mf);
-    unlink(mappedfile_fname(handle->mf));
+//    unlink(mappedfile_fname(handle->mf)); /* XXX ? */
     mappedfile_unlock(handle->mf);
     mappedfile_close(&handle->mf);
 
@@ -138,13 +147,118 @@ EXPORTED int prometheus_adjust_at_offset(struct prometheus_handle *handle,
     return 0;
 }
 
+
+/* n.b. This function -CANNOT- use mappedfile because doing so would clash
+ * with the caller's own statistics collection.
+ */
+typedef int prometheus_foreach_cb(const struct prom_stats *stats, void *rock);
+static int prometheus_foreach(prometheus_foreach_cb *proc, void *rock)
+{
+    char basedir[PATH_MAX];
+    DIR *dh;
+    struct dirent *dirent;
+    int r;
+
+    r = snprintf(basedir, sizeof(basedir), "%s/%s", config_dir, PROM_STATS_DIR);
+    if (r < 0 || (size_t) r >= sizeof(basedir))
+        fatal("cannot iterate prometheus stats directory", EC_CONFIG);
+
+    dh = opendir(basedir);
+    if (!dh) {
+        syslog(LOG_ERR, "IOERROR: prometheus_foreach opendir(%s): %m", basedir);
+        return -1;
+    }
+
+    while ((dirent = readdir(dh))) {
+        char path[PATH_MAX];
+        struct prom_stats stats;
+        const char *base = NULL;
+        size_t len = 0;
+        int fd;
+
+        /* skip filenames that aren't pids */
+        if (!cyrus_isdigit(dirent->d_name[0])) continue;
+
+        r = snprintf(path, sizeof(path), "%s/%s", basedir, dirent->d_name);
+        if (r < 0 || (size_t) r >= sizeof(path))
+            fatal("cannot iterate prometheus stats directory", EC_CONFIG);
+
+        fd = open(path, O_RDONLY);
+        if (fd < 0) continue;
+
+        r = lock_shared(fd, path);
+        if (r) continue;
+
+        /* grab a copy so we can unlock/close the file */
+        map_refresh(fd, /*onceonly*/ 1,
+                    &base, &len, sizeof(stats),
+                    path, NULL);
+        assert(len == sizeof(stats));
+        memcpy(&stats, base, sizeof(stats));
+        map_free(&base, &len);
+
+        lock_unlock(fd, path);
+        close(fd);
+
+        r = proc(&stats, rock);
+        if (r) break;
+    }
+
+    closedir(dh);
+
+    return r;
+}
+
+static int read_into_array(const struct prom_stats *stats, void *rock)
+{
+    ptrarray_t *p = (ptrarray_t *) rock;
+
+    struct prom_stats *stats_copy = xmalloc(sizeof *stats_copy);
+    memcpy(stats_copy, stats, sizeof(*stats_copy));
+    ptrarray_append(p, stats_copy);
+
+    return 0;
+}
+
 EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
 {
+    ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
+    double accumulator;
+    int i;
+
     if (mimetype)
         *mimetype = "text/plain; version=0.0.4";
 
-    /* FIXME produce the report into buf */
     buf_reset(buf);
 
+    /* slurp up current stats */
+    prometheus_foreach(&read_into_array, &proc_stats);
+
+    /* format it into buf */
+    buf_appendcstr(buf, "# HELP imap_connections_total The total number of IMAP connections.\n");
+    buf_appendcstr(buf, "# TYPE imap_connections_total counter\n");
+    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
+        buf_printf(buf, "imap_connections_total{pid=\"%jd\"} %.0f\n",
+                   (intmax_t) p->pid, p->total_connections);
+        accumulator += p->total_connections;
+    }
+    buf_printf(buf, "imap_connections_total %.0f\n", accumulator);
+
+    buf_appendcstr(buf, "# HELP imap_connections_active The number of active IMAP connections.\n");
+    buf_appendcstr(buf, "# TYPE imap_connections_active gauge\n");
+    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
+        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f\n",
+                   (intmax_t) p->pid, p->active_connections);
+        accumulator += p->active_connections;
+    }
+    buf_printf(buf, "imap_connections_active %.0f\n", accumulator);
+
+    void *p;
+    while ((p = ptrarray_shift(&proc_stats))) {
+        free(p);
+    }
+    ptrarray_fini(&proc_stats);
     return 0;
 }
