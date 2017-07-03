@@ -63,7 +63,7 @@ extern int mappedfile_unlock(struct mappedfile *mf);
 
 extern int mappedfile_commit(struct mappedfile *mf);
 extern ssize_t mappedfile_pwrite(struct mappedfile *mf,
-                                 const char *base, size_t len,
+                                 const void *base, size_t len,
                                  off_t offset);
 extern ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
                                     const struct buf *buf,
