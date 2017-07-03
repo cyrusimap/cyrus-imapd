@@ -49,8 +49,9 @@
 #include "lib/assert.h"
 #include "lib/exitcodes.h"
 #include "lib/libconfig.h"
-#include "lib/prometheus.h"
 #include "lib/util.h"
+
+#include "imap/prometheus.h"
 
 EXPORTED struct prometheus_handle *prometheus_register(void)
 {

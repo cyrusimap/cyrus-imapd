@@ -43,10 +43,9 @@
 
 #include <config.h>
 
-#include "lib/prometheus.h"
-
 #include "imap/httpd.h"
 #include "imap/http_err.h"
+#include "imap/prometheus.h"
 
 static int prom_need_auth(struct transaction_t *txn);
 static void prom_init(struct buf *);

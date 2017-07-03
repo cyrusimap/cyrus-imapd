@@ -1007,6 +1007,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
+	imap/prometheus.c \
+	imap/prometheus.h \
 	imap/protocol.h \
 	imap/quota_db.c \
 	imap/rfc822_header.c \
@@ -1353,8 +1355,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/murmurhash.c \
 	lib/mkgmtime.c \
 	lib/parseaddr.c \
-	lib/prometheus.c \
-	lib/prometheus.h \
 	lib/prot.c \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
