@@ -644,13 +644,13 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
      */
     for (i = 0; i < nroots; i++) {
         if (isuser) {
-            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-            r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
-        }
-        else {
             char *inbox = mboxname_user_mbox(roots[i], NULL);
             r = mboxlist_usermboxtree(roots[i], cb, inbox, /*incdel*/0);
             free(inbox);
+        }
+        else {
+            strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+            r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
         }
         if (r) {
             errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
