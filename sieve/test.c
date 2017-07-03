@@ -525,13 +525,15 @@ int main(int argc, char *argv[])
     sieve_interp_t *i;
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
-    char *script = NULL, *message = NULL;
+    char *tmpscript = NULL, *script = NULL, *message = NULL;
     int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
     static strarray_t mark = STRARRAY_INITIALIZER;
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
+    FILE *f;
+
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
@@ -569,6 +571,63 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* Check if script is bytecode or text */
+    f = fopen(script, "r");
+    if (f == NULL) {
+        fprintf(stderr, "Unable to open %s for reading\n", script);
+        exit(1);
+    }
+    else {
+        char magic[BYTECODE_MAGIC_LEN];
+        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
+        sieve_script_t *s;
+        bytecode_info_t *bc;
+        char *err = NULL;
+
+        if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0 ||
+            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN != 0)) {
+            /* Not Sieve bytecode - try to parse as text */
+
+            if (sieve_script_parse_only(f, &err, &s) != SIEVE_OK) {
+                if(err) {
+                    fprintf(stderr, "Unable to parse script: %s\n", err);
+                } else {
+                    fprintf(stderr, "Unable to parse script\n");
+                }
+
+                exit(1);
+            }
+            
+            /* Now, generate the bytecode */
+            if (sieve_generate_bytecode(&bc, s) == -1) {
+                fprintf(stderr, "bytecode generate failed\n");
+                exit(1);
+            }
+
+            /* Now, open a temp bytecode file */
+            script = tmpscript = tempname;
+            fd = mkstemp(script);
+            if (fd < 0) {
+                fprintf(stderr, "couldn't open bytecode output file %s\n", script);
+                exit(1);
+            }
+            printf("tmpnam: '%s'\n", script);
+
+            /* Now, emit the bytecode */
+            if (sieve_emit_bytecode(fd, bc) == -1) {
+                fprintf(stderr, "bytecode emit failed\n");
+                exit(1);
+            }
+
+            close(fd);
+
+            sieve_free_bytecode(&bc);
+            sieve_script_free(&s);
+        }
+
+        fclose(f);
+    }
+
     i = sieve_interp_alloc(&force_fail);
     assert(i != NULL);
 
@@ -602,9 +661,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (message) {
-        FILE *f;
+    if (tmpscript) {
+        /* Remove temp bytecode file */
+        unlink(tmpscript);
+    }
 
+    if (message) {
         fd = open(message, O_RDONLY);
         res = fstat(fd, &sbuf);
         if (res != 0) {
