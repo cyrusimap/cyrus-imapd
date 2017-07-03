@@ -361,7 +361,6 @@ EXTRA_DIST += \
 	doc/legacy/netnews.png \
 	doc \
 	docsrc \
-	imap/dav_util.h \
 	imap/http_caldav_js.h \
 	imap/http_caldav.js \
 	imap/http_carddav_js.h \
@@ -1197,7 +1196,6 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
-	imap/caldav_db.c \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
@@ -1219,7 +1217,6 @@ imap_httpd_SOURCES = \
 	imap/http_webdav.c \
 	imap/httpd.c \
 	imap/httpd.h \
-	imap/ical_support.c \
 	imap/jcal.c \
 	imap/jcal.h \
 	imap/json_support.h \
@@ -1227,7 +1224,6 @@ imap_httpd_SOURCES = \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
-	imap/vcard_support.c \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/xml_support.c \

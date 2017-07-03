@@ -67,7 +67,7 @@ struct recurrence_data {
     icaltime_span span; /* for sorting, etc */
 };
 
-const char *icalparameter_get_value_as_string(icalparameter *param)
+EXPORTED const char *icalparameter_get_value_as_string(icalparameter *param)
 {
     char *buf;
 
@@ -79,7 +79,7 @@ const char *icalparameter_get_value_as_string(icalparameter *param)
     return buf;
 }
 
-struct icaldatetimeperiodtype
+EXPORTED struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop)
 {
     struct icaldatetimeperiodtype ret = { icaltime_null_time(),
@@ -187,7 +187,7 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
-extern int icalcomponent_myforeach(icalcomponent *ical,
+EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                    struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
@@ -395,12 +395,12 @@ extern int icalcomponent_myforeach(icalcomponent *ical,
 }
 
 
-icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
+EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
     return icalparser_parse_string(buf_cstring(buf));
 }
 
-struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
+EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
 {
     char *str = icalcomponent_as_ical_string_r(comp);
     struct buf *ret = buf_new();
@@ -410,7 +410,7 @@ struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
     return ret;
 }
 
-icalcomponent *record_to_ical(struct mailbox *mailbox,
+EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
                               const struct index_record *record,
                               char **schedule_userid)
 {
@@ -437,7 +437,7 @@ icalcomponent *record_to_ical(struct mailbox *mailbox,
     return ical;
 }
 
-const char *get_icalcomponent_errstr(icalcomponent *ical)
+EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
 {
     icalcomponent *comp;
 
@@ -480,7 +480,8 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 }
 
 
-void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
+EXPORTED void icalcomponent_remove_invitee(icalcomponent *comp,
+                                           icalproperty *prop)
 {
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
         icalcomponent *vvoter = icalproperty_get_parent(prop);
@@ -495,7 +496,7 @@ void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
 }
 
 
-icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
+EXPORTED icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
 {
     icalproperty *prop;
 
@@ -512,7 +513,7 @@ icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
     return prop;
 }
 
-icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
+EXPORTED icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
 {
     icalproperty *prop;
 
@@ -529,7 +530,7 @@ icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
     return prop;
 }
 
-const char *icalproperty_get_invitee(icalproperty *prop)
+EXPORTED const char *icalproperty_get_invitee(icalproperty *prop)
 {
     const char *recip;
 
@@ -544,7 +545,8 @@ const char *icalproperty_get_invitee(icalproperty *prop)
 }
 
 
-icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
+EXPORTED icaltimetype
+icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 {
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
@@ -554,8 +556,8 @@ icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
 }
 
 
-icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
-                                                   const char *name)
+EXPORTED icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
+                                                            const char *name)
 {
     icalproperty *prop;
 
@@ -568,8 +570,9 @@ icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
 
 
 /* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
-struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
-                                                     icalcomponent_kind kind)
+EXPORTED struct icalperiodtype
+icalcomponent_get_utc_timespan(icalcomponent *comp,
+                               icalcomponent_kind kind)
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icalperiodtype period;
@@ -736,12 +739,12 @@ static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, voi
 }
 
 /* Determine the UTC time span of all components within ical of type kind. */
-struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
-                                                         icalcomponent_kind kind,
-                                                         unsigned *is_recurring,
-                                                         void (*comp_cb)(icalcomponent*,
-                                                                         void*),
-                                                         void *cb_rock)
+EXPORTED struct icalperiodtype
+icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
+                                   icalcomponent_kind kind,
+                                   unsigned *is_recurring,
+                                   void (*comp_cb)(icalcomponent*, void*),
+                                   void *cb_rock)
 {
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
@@ -832,14 +835,14 @@ struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
 
 /* Functions to replace those not available in libical < v2.0 */
 
-icalproperty *icalproperty_new_tzidaliasof(const char *v)
+EXPORTED icalproperty *icalproperty_new_tzidaliasof(const char *v)
 {
     icalproperty *prop = icalproperty_new_x(v);
     icalproperty_set_x_name(prop, "TZID-ALIAS-OF");
     return prop;
 }
 
-icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
+EXPORTED icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
 {
     icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
     icalproperty_set_x_name(prop, "TZUNTIL");
@@ -853,19 +856,21 @@ icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
 
 /* Functions to replace those not available in libical < v1.0 */
 
-icalproperty *icalproperty_new_acknowledged(struct icaltimetype v)
+EXPORTED icalproperty *icalproperty_new_acknowledged(struct icaltimetype v)
 {
     icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
     icalproperty_set_x_name(prop, "ACKNOWLEDGED");
     return prop;
 }
 
-void icalproperty_set_acknowledged(icalproperty *prop, struct icaltimetype v)
+EXPORTED void icalproperty_set_acknowledged(icalproperty *prop,
+                                            struct icaltimetype v)
 {
     icalproperty_set_x(prop, icaltime_as_ical_string(v));
 }
 
-struct icaltimetype icalproperty_get_acknowledged(const icalproperty *prop)
+EXPORTED struct icaltimetype
+icalproperty_get_acknowledged(const icalproperty *prop)
 {
     return icaltime_from_string(icalproperty_get_x(prop));
 }
@@ -877,8 +882,9 @@ struct icaltimetype icalproperty_get_acknowledged(const icalproperty *prop)
 
 #ifndef HAVE_MANAGED_ATTACH_PARAMS
 
-icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
-                                                       const char *name)
+EXPORTED icalparameter*
+icalproperty_get_iana_parameter_by_name(icalproperty *prop,
+                                        const char *name)
 {
     icalparameter *param;
 
@@ -891,7 +897,7 @@ icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
 
 /* Functions to replace those not available in libical < v2.0 */
 
-icalparameter *icalparameter_new_filename(const char *fname)
+EXPORTED icalparameter *icalparameter_new_filename(const char *fname)
 {
     icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
 
@@ -901,12 +907,12 @@ icalparameter *icalparameter_new_filename(const char *fname)
     return param;
 }
 
-void icalparameter_set_filename(icalparameter *param, const char *fname)
+EXPORTED void icalparameter_set_filename(icalparameter *param, const char *fname)
 {
     icalparameter_set_iana_value(param, fname);
 }
 
-icalparameter *icalparameter_new_managedid(const char *id)
+EXPORTED icalparameter *icalparameter_new_managedid(const char *id)
 {
     icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
 
@@ -916,17 +922,17 @@ icalparameter *icalparameter_new_managedid(const char *id)
     return param;
 }
 
-const char *icalparameter_get_managedid(icalparameter *param)
+EXPORTED const char *icalparameter_get_managedid(icalparameter *param)
 {
     return icalparameter_get_iana_value(param);
 }
 
-void icalparameter_set_managedid(icalparameter *param, const char *id)
+EXPORTED void icalparameter_set_managedid(icalparameter *param, const char *id)
 {
     icalparameter_set_iana_value(param, id);
 }
 
-icalparameter *icalparameter_new_size(const char *sz)
+EXPORTED icalparameter *icalparameter_new_size(const char *sz)
 {
     icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
 
@@ -936,12 +942,12 @@ icalparameter *icalparameter_new_size(const char *sz)
     return param;
 }
 
-const char *icalparameter_get_size(icalparameter *param)
+EXPORTED const char *icalparameter_get_size(icalparameter *param)
 {
     return icalparameter_get_iana_value(param);
 }
 
-void icalparameter_set_size(icalparameter *param, const char *sz)
+EXPORTED void icalparameter_set_size(icalparameter *param, const char *sz)
 {
     icalparameter_set_iana_value(param, sz);
 }
@@ -953,7 +959,7 @@ void icalparameter_set_size(icalparameter *param, const char *sz)
 
 /* Functions to replace those not available in libical < v1.0 */
 
-icalparameter_scheduleagent
+EXPORTED icalparameter_scheduleagent
 icalparameter_get_scheduleagent(icalparameter *param)
 {
     const char *agent = NULL;
@@ -966,7 +972,7 @@ icalparameter_get_scheduleagent(icalparameter *param)
     else return ICAL_SCHEDULEAGENT_X;
 }
 
-icalparameter_scheduleforcesend
+EXPORTED icalparameter_scheduleforcesend
 icalparameter_get_scheduleforcesend(icalparameter *param)
 {
     const char *force = NULL;
@@ -979,7 +985,7 @@ icalparameter_get_scheduleforcesend(icalparameter *param)
     else return ICAL_SCHEDULEFORCESEND_X;
 }
 
-icalparameter *icalparameter_new_schedulestatus(const char *stat)
+EXPORTED icalparameter *icalparameter_new_schedulestatus(const char *stat)
 {
     icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
 
