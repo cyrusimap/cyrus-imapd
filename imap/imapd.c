@@ -102,6 +102,7 @@
 #include "mupdate-client.h"
 #include "partlist.h"
 #include "proc.h"
+#include "prometheus.h"
 #include "quota.h"
 #include "seen.h"
 #include "statuscache.h"
@@ -135,6 +136,8 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
+
+static struct prometheus_handle *promhandle = NULL;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -847,6 +850,8 @@ int service_init(int argc, char **argv, char **envp)
     apns_enabled =
       (events & EVENT_APPLEPUSHSERVICE) && config_getstring(IMAPOPT_APS_TOPIC);
 
+    promhandle = prometheus_register();
+
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
@@ -963,6 +968,8 @@ int service_main(int argc __attribute__((unused)),
        TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
 
+    prometheus_increment(promhandle, total_connections);
+    prometheus_increment(promhandle, active_connections);
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
@@ -974,6 +981,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* LOGOUT executed */
     prot_flush(imapd_out);
+    prometheus_decrement(promhandle, active_connections);
     snmp_increment(ACTIVE_CONNECTIONS, -1);
 
     /* send a Logout event notification */
@@ -1052,6 +1060,7 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    prometheus_unregister(&promhandle);
     proc_cleanup();
 
     i = 0;
@@ -1094,6 +1103,7 @@ void shut_down(int code)
         prot_free(imapd_out);
 
         /* one less active connection */
+        prometheus_decrement(promhandle, active_connections);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
 
@@ -1119,6 +1129,7 @@ EXPORTED void fatal(const char *s, int code)
     if (recurse_code) {
         /* We were called recursively. Just give up */
         proc_cleanup();
+        prometheus_decrement(promhandle, active_connections);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
         exit(recurse_code);
     }
@@ -1315,6 +1326,7 @@ static void cmdloop(void)
                 }
                 cmd_authenticate(tag.s, arg1.s, haveinitresp ? arg2.s : NULL);
 
+                prometheus_increment(promhandle, authenticate_count);
                 snmp_increment(AUTHENTICATE_COUNT, 1);
             }
             else if (!imapd_userid) goto nologin;
@@ -1325,6 +1337,7 @@ static void cmdloop(void)
 
                 cmd_append(tag.s, arg1.s, NULL);
 
+                prometheus_increment(promhandle, append_count);
                 snmp_increment(APPEND_COUNT, 1);
             }
             else goto badcmd;
@@ -1336,6 +1349,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_capability(tag.s);
 
+                prometheus_increment(promhandle, capability_count);
                 snmp_increment(CAPABILITY_COUNT, 1);
             }
             else if (!imapd_userid) goto nologin;
@@ -1349,6 +1363,7 @@ static void cmdloop(void)
 
                 cmd_compress(tag.s, arg1.s);
 
+                prometheus_increment(promhandle, compress_count);
                 snmp_increment(COMPRESS_COUNT, 1);
             }
 #endif /* HAVE_ZLIB */
@@ -1359,6 +1374,7 @@ static void cmdloop(void)
 
                 cmd_noop(tag.s, cmd.s);
 
+                prometheus_increment(promhandle, check_count);
                 snmp_increment(CHECK_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Copy")) {
@@ -1376,6 +1392,7 @@ static void cmdloop(void)
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/0);
 
+                prometheus_increment(promhandle, copy_count);
                 snmp_increment(COPY_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Create")) {
@@ -1393,6 +1410,7 @@ static void cmdloop(void)
                 cmd_create(tag.s, arg1.s, extargs, 0);
                 dlist_free(&extargs);
 
+                prometheus_increment(promhandle, create_count);
                 snmp_increment(CREATE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Close")) {
@@ -1402,6 +1420,7 @@ static void cmdloop(void)
 
                 cmd_close(tag.s, cmd.s);
 
+                prometheus_increment(promhandle, close_count);
                 snmp_increment(CLOSE_COUNT, 1);
             }
             else goto badcmd;
@@ -1416,6 +1435,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_delete(tag.s, arg1.s, 0, 0);
 
+                prometheus_increment(promhandle, delete_count);
                 snmp_increment(DELETE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Deleteacl")) {
@@ -1428,6 +1448,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, NULL);
 
+                prometheus_increment(promhandle, deleteacl_count);
                 snmp_increment(DELETEACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Dump")) {
@@ -1445,6 +1466,7 @@ static void cmdloop(void)
                 if(c != '\n') goto extraargs;
 
                 cmd_dump(tag.s, arg1.s, uid_start);
+                prometheus_increment(promhandle, dump_count);
             /*  snmp_increment(DUMP_COUNT, 1);*/
             }
             else goto badcmd;
@@ -1464,6 +1486,7 @@ static void cmdloop(void)
 
                 cmd_expunge(tag.s, 0);
 
+                prometheus_increment(promhandle, expunge_count);
                 snmp_increment(EXPUNGE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Examine")) {
@@ -1474,6 +1497,7 @@ static void cmdloop(void)
 
                 cmd_select(tag.s, cmd.s, arg1.s);
 
+                prometheus_increment(promhandle, examine_count);
                 snmp_increment(EXAMINE_COUNT, 1);
             }
             else goto badcmd;
@@ -1491,6 +1515,7 @@ static void cmdloop(void)
 
                 cmd_fetch(tag.s, arg1.s, usinguid);
 
+                prometheus_increment(promhandle, fetch_count);
                 snmp_increment(FETCH_COUNT, 1);
             }
             else goto badcmd;
@@ -1505,6 +1530,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_getacl(tag.s, arg1.s);
 
+                prometheus_increment(promhandle, getacl_count);
                 snmp_increment(GETACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Getmetadata")) {

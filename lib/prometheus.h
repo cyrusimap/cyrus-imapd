@@ -54,6 +54,23 @@
 struct prom_stats {
     pid_t pid;
     char  label[128];
+    double total_connections;
+    double active_connections;
+    double authenticate_count;
+    double append_count;
+    double capability_count;
+    double compress_count;
+    double check_count;
+    double copy_count;
+    double create_count;
+    double close_count;
+    double delete_count;
+    double deleteacl_count;
+    double dump_count;
+    double expunge_count;
+    double examine_count;
+    double fetch_count;
+    double getacl_count;
 };
 #define PROM_STATS_INITIALIZER {0}
 
