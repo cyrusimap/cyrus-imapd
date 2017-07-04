@@ -667,6 +667,39 @@ static void test_toexternal_specials(void)
     toexternal_helper("bloggs.com!user.fred.*!^", "INBOX/*!.");
 }
 
+static void test_virtdomains_at(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.userid = "fred";
+
+    toexternal_helper("user.fred.a@b", "INBOX.a@b");
+
+    conf.unixhierarchysep = 1;
+
+    toexternal_helper("user.fred.a@b", "INBOX/a@b");
+
+    conf.userid = "fred@bloggs.com";
+    conf.virtdomains = 1;
+    conf.unixhierarchysep = 0;
+
+    toexternal_helper("bloggs.com!user.fred.a@b", "INBOX.a@b");
+
+    conf.unixhierarchysep = 1;
+
+    toexternal_helper("bloggs.com!user.fred.a@b", "INBOX/a@b");
+
+    conf.defdomain = "bloggs.com";
+    conf.userid = "fred";
+
+    conf.unixhierarchysep = 0;
+
+    toexternal_helper("user.fred.a@b", "INBOX.a@b");
+
+    conf.unixhierarchysep = 1;
+
+    toexternal_helper("user.fred.a@b", "INBOX/a@b");
+}
+
 static void test_toexternal_unixhier(void)
 {
     memset(&conf, 0, sizeof(conf));
