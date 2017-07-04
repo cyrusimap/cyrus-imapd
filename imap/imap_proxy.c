@@ -1450,6 +1450,8 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     struct entryattlist *e;
     struct attvaluelist *av;
     char mytag[128];
+    struct buf entrybuf = BUF_INITIALIZER;
+
 
     assert(server && mbox_pat && entryatts);
 
@@ -1463,29 +1465,31 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     prot_printf(be->out, "%s SETMETADATA \"%s\" (", mytag, mbox_pat);
     for (e = entryatts; e; e = e->next) {
         for (av = e->attvalues; av; av = av->next) {
-            const char *scope;
-
             assert(av->attrib);
             if (!strcmp(av->attrib, "value.shared")) {
-                scope = "/shared";
+                buf_setcstr(&entrybuf, "/shared");
             }
             else if (!strcmp(av->attrib, "value.priv")) {
-                scope = "/private";
+                buf_setcstr(&entrybuf, "/private");
             }
             else {
                 syslog(LOG_ERR,
                        "won't proxy annotation with deprecated attribute %s",
                        av->attrib);
+                buf_free(&entrybuf);
                 return IMAP_INTERNAL;
             }
 
+            buf_appendcstr(&entrybuf, e->entry);
+
             /* Print the entry-value pair */
-            prot_printf(be->out, "%s%s ", scope, e->entry);
+            prot_printamap(be->out, entrybuf.s, entrybuf.len);
+            prot_putc(' ', be->out);
             prot_printamap(be->out, av->value.s, av->value.len);
 
-            if (av->next) prot_printf(be->out, " ");
+            if (av->next) prot_putc(' ', be->out);
         }
-        if (e->next) prot_printf(be->out, " ");
+        if (e->next) prot_putc(' ', be->out);
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);
@@ -1493,6 +1497,8 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     /* Pipe the results.  Note that backend-current may also pipe us other
        messages. */
     pipe_until_tag(be, mytag, 0);
+
+    buf_free(&entrybuf);
 
     return 0;
 }
