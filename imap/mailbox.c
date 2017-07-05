@@ -1415,9 +1415,6 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     int userflag;
     int emptyflag = -1;
 
-    if (!imparse_isatom(flag))
-        return IMAP_INVALID_IDENTIFIER;
-
     for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
         if (mailbox->flagname[userflag]) {
             if (!strcasecmp(flag, mailbox->flagname[userflag]))
@@ -1445,6 +1442,9 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
         /* need to be index locked to make flag changes */
         if (!mailbox_index_islocked(mailbox, 1))
             return IMAP_MAILBOX_LOCKED;
+
+        if (!imparse_isatom(flag))
+            return IMAP_INVALID_IDENTIFIER;
 
         /* set the flag and mark the header dirty */
         userflag = emptyflag;
