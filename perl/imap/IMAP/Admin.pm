@@ -370,6 +370,8 @@ sub listmailbox {
     } else {
       $list_cmd = 'RLIST';
     }
+  } else {
+    $list_cmd = 'LIST';
   }
 
   if(defined ($$opts{'-sel-special-use'}) && !$self->{support_list_special_use}) {
