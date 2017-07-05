@@ -133,6 +133,7 @@ int main(int argc, char **argv)
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
+    sqldb_init();
 
 #ifdef HAVE_TZ_BY_REF
     /* Use TZdist VTIMEZONEs if we have them */
@@ -178,5 +179,6 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+    sqldb_done();
     exit(code);
 }
