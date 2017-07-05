@@ -494,6 +494,17 @@ struct lastalarm_data {
     time_t nextcheck;
 };
 
+static int write_lastalarm(struct mailbox *mailbox, const struct index_record *record,
+                           struct lastalarm_data *data)
+{
+    struct buf annot_buf = BUF_INITIALIZER;
+    buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
+    const char *annotname = DAV_ANNOT_NS "lastalarm";
+    int r = mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
+    buf_free(&annot_buf);
+    return r;
+}
+
 static int read_lastalarm(struct mailbox *mailbox, const struct index_record *record,
                           struct lastalarm_data *data)
 {
@@ -532,12 +543,20 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
      * but this is really rare - only dav_reconstruct maybe */
     icaltimezone *floatingtz = get_floatingtz(mailbox);
 
+    time_t lastrun = record->internaldate; /* default is record creation time */
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
-        data.lastrun = record->internaldate;
-    data.nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
-                                    ical, data.lastrun, data.lastrun);
-    rc = update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+        lastrun = data.lastrun;
+
+    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
+                                    ical, lastrun, lastrun);
+    rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
+
+    /* update the annotation now if we've changed the nextcheck value */
+    if (!rc && data.nextcheck && nextcheck != data.nextcheck) {
+        data.nextcheck = nextcheck;
+        write_lastalarm(mailbox, record, &data);
+    }
 
     if (floatingtz) icaltimezone_free(floatingtz, 1);
 
@@ -673,11 +692,8 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (runtime > data.nextcheck)
         data.nextcheck = process_alarms(mailbox->name, record.uid, floatingtz, ical, data.lastrun, runtime);
 
-    struct buf annot_buf = BUF_INITIALIZER;
-    buf_printf(&annot_buf, "%ld %ld", runtime, data.nextcheck);
-    const char *annotname = DAV_ANNOT_NS "lastalarm";
-    mailbox_annotation_write(mailbox, record.uid, annotname, "", &annot_buf);
-    buf_free(&annot_buf);
+    data.lastrun = runtime;
+    write_lastalarm(mailbox, &record, &data);
 
 done_item:
     buf_free(&msg_buf);
@@ -785,8 +801,6 @@ EXPORTED int caldav_alarm_upgrade()
     caldav_alarm_close(alarmdb);
 
     time_t runtime = time(NULL);
-    const char *annotname = DAV_ANNOT_NS "lastalarm";
-    struct buf annot_buf = BUF_INITIALIZER;
 
     int i;
     for (i = 0; i < strarray_size(&mailboxes); i++) {
@@ -819,9 +833,8 @@ EXPORTED int caldav_alarm_upgrade()
             if (ical) {
                 if (has_alarms(ical)) {
                     time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz, ical, runtime, runtime);
-                    buf_reset(&annot_buf);
-                    buf_printf(&annot_buf, "%ld %ld", runtime, nextcheck);
-                    mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
+                    struct lastalarm_data data = { runtime, nextcheck };
+                    write_lastalarm(mailbox, record, &data);
                 }
                 icalcomponent_free(ical);
             }
@@ -840,8 +853,6 @@ EXPORTED int caldav_alarm_upgrade()
     sqldb_exec(alarmdb, "DROP TABLE alarm_recipients;", NULL, NULL, NULL);
     sqldb_exec(alarmdb, "DROP TABLE alarms;", NULL, NULL, NULL);
     caldav_alarm_close(alarmdb);
-
-    buf_free(&annot_buf);
 
     return rc;
 }
