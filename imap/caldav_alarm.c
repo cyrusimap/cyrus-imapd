@@ -537,30 +537,12 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
     // is done after the annotations are written, and processes the alarms if needed then, and
     // regardless will always update the alarmdb
     if (record->silent) return 0;
-    int rc = 0;
 
-    /* XXX - we COULD cache this in the mailbox object so it doesn't get read multiple times,
-     * but this is really rare - only dav_reconstruct maybe */
-    icaltimezone *floatingtz = get_floatingtz(mailbox);
-
-    time_t lastrun = record->internaldate; /* default is record creation time */
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
-        lastrun = data.lastrun;
+        data.nextcheck = record->internaldate;
 
-    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz,
-                                    ical, lastrun, lastrun);
-    rc = update_alarmdb(mailbox->name, record->uid, nextcheck);
-
-    /* update the annotation now if we've changed the nextcheck value */
-    if (!rc && data.nextcheck && nextcheck != data.nextcheck) {
-        data.nextcheck = nextcheck;
-        write_lastalarm(mailbox, record, &data);
-    }
-
-    if (floatingtz) icaltimezone_free(floatingtz, 1);
-
-    return rc;
+    return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
 }
 
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record)
