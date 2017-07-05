@@ -782,7 +782,8 @@ noinst_HEADERS += \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
-	lib/xstrnchr.h
+	lib/xstrnchr.h \
+	lib/times-private.h
 
 backup_libcyrus_backup_la_SOURCES = \
     lib/gzuncat.c \
