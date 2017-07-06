@@ -80,6 +80,8 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    %s [-C alt_config] [-v] [-d]\n", argv0);
+    fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
     exit(EC_USAGE);
 }
 
