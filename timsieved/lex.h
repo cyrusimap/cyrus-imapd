@@ -83,7 +83,7 @@
 #define RENAMESCRIPT 413
 
 
-int lex_init(void);
+void lex_init(void);
 
 int timlex(struct buf *outstr, unsigned long *outnum,  struct protstream *stream);
 

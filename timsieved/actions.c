@@ -749,7 +749,7 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
 {
     int result;
     int maxscripts;
-    unsigned long maxscriptsize;
+    extern unsigned long maxscriptsize;
 
     result = scriptname_valid(sieve_name);
     if (result!=TIMSIEVE_OK)
@@ -759,9 +759,6 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
     }
 
     /* see if the size of the script is too big */
-    maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
-    maxscriptsize *= 1024;
-
     if (num > maxscriptsize)
     {
         prot_printf(conn,

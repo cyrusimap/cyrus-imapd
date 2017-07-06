@@ -116,7 +116,7 @@ static int token_lookup(const char *str)
 
 /* current state the lexer is in */
 static int lexer_state = LEXER_STATE_NORMAL;
-static unsigned long maxscriptsize=0;
+HIDDEN unsigned long maxscriptsize = 0;
 static char *buffer;
 
 #define ERR() {                                                         \
@@ -134,14 +134,11 @@ void lex_setrecovering(void)
   lexer_state = LEXER_STATE_RECOVER;
 }
 
-int lex_init(void)
+void lex_init(void)
 {
-  maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
-  maxscriptsize *= 1024;
+  maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
 
   buffer = (char *) xmalloc(maxscriptsize);
-
-  return 0;
 }
 
 /**
