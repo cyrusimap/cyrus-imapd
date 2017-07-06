@@ -55,12 +55,15 @@
 #include "imap/global.h"
 #include "imap/prometheus.h"
 
-static struct buf report = BUF_INITIALIZER;
+/* globals so that shut_down() can clean up */
+static struct buf report_buf = BUF_INITIALIZER;
+static struct mappedfile *report_file = NULL;
 
 static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
-    buf_free(&report);
+    mappedfile_close(&report_file);
+    buf_free(&report_buf);
     cyrus_done();
     exit(ec);
 }
@@ -218,18 +221,37 @@ static void do_collate_report(struct buf *buf)
     ptrarray_fini(&proc_stats);
 }
 
+static void do_write_report(struct mappedfile *mf, const struct buf *report)
+{
+    int r;
+
+    r = mappedfile_writelock(mf);
+    if (r) fatal("couldn't write lock report file", EC_IOERR);
+
+    r = mappedfile_pwritebuf(mf, report, 0);
+    if (r < 0) fatal("error writing report file", EC_IOERR);
+
+    mappedfile_truncate(mf, buf_len(report));
+
+    r = mappedfile_commit(mf);
+    if (r) fatal("error committing report file", EC_IOERR);
+
+    mappedfile_unlock(mf);
+}
+
 int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
 
     const char *alt_config = NULL;
-    const char *report_path = NULL;
-    const char *report_path_new = NULL;
+    char *report_fname = NULL;
+    struct mappedfile *report_file = NULL;
     const char *p;
     int cleanup = 0;
     int debugmode = 0;
     int verbose = 0;
     int opt;
+    int r;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
@@ -262,17 +284,13 @@ int main(int argc, char **argv)
         }
     }
 
-    cyrus_init(alt_config, "idled", 0, 0);
+    cyrus_init(alt_config, "promstatsd", 0, 0);
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);
 
     if (cleanup) {
         shut_down(do_cleanup());
     }
-
-    report_path = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
-    report_path_new = strconcat(report_path, ".NEW", NULL);
-    cyrus_mkdir(report_path, 0755);
 
     /* fork unless we were given the -d option or we're running as a daemon */
     if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
@@ -287,45 +305,29 @@ int main(int argc, char **argv)
         }
     }
 
-    for (;;) {
-        int fd, r;
+    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
+    unlink(report_fname);
+    r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+    free(report_fname);
+    if (r) fatal("couldn't open report file", EC_IOERR);
 
+    for (;;) {
         signals_poll();
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
             if (verbose || debugmode)
                 syslog(LOG_DEBUG, "Detected shutdown file\n");
-            shut_down(1);
+            shut_down(0);
         }
 
-        /* collate statistics */
-        unlink(report_path_new);
-        fd = open(report_path_new, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-        if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: open(%s): %m", report_path_new);
-            fatal("unable to open report temp file", EC_IOERR);
-        }
-
-        do_collate_report(&report);
-
-        r = retry_write(fd, buf_cstring(&report), buf_len(&report));
-        if (r < 0) {
-            syslog(LOG_ERR, "IOERROR: retry_write(%s): %m", report_path_new);
-            unlink(report_path_new);
-            fatal("unable to write to report temp file", EC_IOERR);
-        }
-
-        r = rename(report_path_new, report_path);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: rename(%s,%s): %m", report_path_new, report_path);
-            fatal("unable to rename report temp file into place", EC_IOERR);
-        }
+        do_collate_report(&report_buf);
+        do_write_report(report_file, &report_buf);
 
         /* then wait around a bit */
         sleep(10); /* XXX make it configurable -- what's a good default? */
     }
 
     /* NOTREACHED */
-    shut_down(1);
+    shut_down(EC_SOFTWARE);
 }
