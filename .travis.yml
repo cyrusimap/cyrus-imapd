@@ -63,6 +63,7 @@ branches:
   - cyrus-imapd-3.0
 notifications:
   slack:
+    on_pull_requests: false
     on_success: change
     on_failure: always
     secure:
