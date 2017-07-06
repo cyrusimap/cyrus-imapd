@@ -59,7 +59,35 @@
 
 #include "imap/prometheus.h"
 
-#define PROM_STATS_DIR "stats"
+#define FNAME_PROM_STATS_DIR "/stats"
+
+static const char *prometheus_stats_dir(void)
+{
+    static struct buf statsdir = BUF_INITIALIZER;
+    const char *tmp;
+
+    if (buf_len(&statsdir) > 0) return buf_cstring(&statsdir);
+
+    if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
+        if (tmp[0] != '/')
+            fatal("prometheus_stats_dir must be fully qualified", EC_CONFIG);
+
+        if (strlen(tmp) < 2)
+            fatal("prometheus_stats_dir must not be '/'", EC_CONFIG);
+
+        buf_setcstr(&statsdir, tmp);
+
+        if (statsdir.s[statsdir.len-1] != '/')
+            buf_putc(&statsdir, '/');
+    }
+    else {
+        buf_setcstr(&statsdir, config_dir);
+        buf_appendcstr(&statsdir, FNAME_PROM_STATS_DIR);
+        buf_putc(&statsdir, '/');
+    }
+
+    return buf_cstring(&statsdir);
+}
 
 EXPORTED struct prometheus_handle *prometheus_register(void)
 {
@@ -70,8 +98,8 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
 
     buf.pid = getpid();
 
-    r = snprintf(fname, sizeof(fname), "%s/%s/%jd",
-                 config_dir, PROM_STATS_DIR, (intmax_t) buf.pid);
+    r = snprintf(fname, sizeof(fname), "%s%jd",
+                 prometheus_stats_dir(), (intmax_t) buf.pid);
     if (r < 0 || (size_t) r >= sizeof(fname))
         fatal("unable to register stats for prometheus", EC_CONFIG);
 
@@ -170,14 +198,12 @@ EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
 typedef int prometheus_foreach_cb(const struct prom_stats *stats, void *rock);
 static int prometheus_foreach(prometheus_foreach_cb *proc, void *rock)
 {
-    char basedir[PATH_MAX];
+    const char *basedir;
     DIR *dh;
     struct dirent *dirent;
     int r;
 
-    r = snprintf(basedir, sizeof(basedir), "%s/%s", config_dir, PROM_STATS_DIR);
-    if (r < 0 || (size_t) r >= sizeof(basedir))
-        fatal("cannot iterate prometheus stats directory", EC_CONFIG);
+    basedir = prometheus_stats_dir();
 
     dh = opendir(basedir);
     if (!dh) {
@@ -195,7 +221,7 @@ static int prometheus_foreach(prometheus_foreach_cb *proc, void *rock)
         /* skip filenames that aren't pids */
         if (!cyrus_isdigit(dirent->d_name[0])) continue;
 
-        r = snprintf(path, sizeof(path), "%s/%s", basedir, dirent->d_name);
+        r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(path))
             fatal("cannot iterate prometheus stats directory", EC_CONFIG);
 
