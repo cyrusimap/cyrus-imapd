@@ -80,7 +80,7 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [-C alt_config] [-v] [-d]\n", argv0);
+    fprintf(stderr, "    %s [-C alt_config] [-v] [-f frequency] [-d]\n", argv0);
     fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
     exit(EC_USAGE);
 }
@@ -252,6 +252,7 @@ int main(int argc, char **argv)
     int cleanup = 0;
     int debugmode = 0;
     int verbose = 0;
+    int frequency = 0;
     int opt;
     int r;
 
@@ -262,7 +263,7 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "C:cdv")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:cdf:v")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -274,6 +275,11 @@ int main(int argc, char **argv)
 
         case 'd': /* debug mode (no fork) */
             debugmode = 1;
+            break;
+
+        case 'f': /* set frequency */
+            frequency = atoi(optarg);
+            if (frequency <= 0) usage();
             break;
 
         case 'v': /* verbose */
@@ -307,7 +313,12 @@ int main(int argc, char **argv)
         }
     }
 
+    if (frequency <= 0) frequency = config_getint(IMAPOPT_PROMETHEUS_UPDATE_FREQ);
+    if (frequency <= 0) frequency = 10;
+
     report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
+    syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);
+
     unlink(report_fname);
     r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     free(report_fname);
@@ -327,7 +338,7 @@ int main(int argc, char **argv)
         do_write_report(report_file, &report_buf);
 
         /* then wait around a bit */
-        sleep(10); /* XXX make it configurable -- what's a good default? */
+        sleep(frequency); /* XXX substract elapsed time? */
     }
 
     /* NOTREACHED */

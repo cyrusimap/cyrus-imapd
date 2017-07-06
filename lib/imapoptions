@@ -1639,7 +1639,11 @@ If all partitions are over that limit, this feature is not used anymore.
    used. */
 
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin") }
-/* Authentication level required to fetch Prometheus prometheus metrics. */
+/* Authentication level required to fetch Prometheus metrics. */
+
+{ "prometheus_update_freq", 10, INT }
+/* Frequency in seconds at which promstatsd should re-collate its
+   statistics report.  The minimum value is 1, the default is 10. */
 
 { "prometheus_stats_dir", NULL, STRING }
 /* Directory to use for gathering prometheus statistics.  Default is NULL
