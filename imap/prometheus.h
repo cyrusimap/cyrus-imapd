@@ -87,7 +87,7 @@ extern void prometheus_unregister(struct prometheus_handle **handlep);
 #define prometheus_decrement(handle, metric) \
     prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), -1.0)
 
-extern int prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                       size_t offset, double delta);
+extern void prometheus_adjust_at_offset(struct prometheus_handle *handle,
+                                        size_t offset, double delta);
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);

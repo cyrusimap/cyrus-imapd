@@ -86,7 +86,12 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
     if (r) goto error;
 
     r = mappedfile_pwrite(handle->mf, &buf, sizeof(buf), 0);
-    if (r) goto error;
+    if (r != sizeof(buf)) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
+                        "actually wrote %d",
+                        sizeof(buf), r);
+        goto error;
+    }
 
     r = mappedfile_commit(handle->mf);
     if (r) goto error;
@@ -97,7 +102,13 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
     return handle;
 
 error:
-    if (handle) free(handle);
+    if (handle) {
+        if (handle->mf) {
+            mappedfile_unlock(handle->mf);
+            mappedfile_close(&handle->mf);
+        }
+        free(handle);
+    }
     return NULL;
 }
 
@@ -120,31 +131,36 @@ EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
 /* do not call this directly! use the prometheus_increment() and
  * prometheus_decrement() wrapper macros.
  */
-EXPORTED int prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                         size_t offset, double delta)
+EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
+                                          size_t offset, double delta)
 {
     int r;
 
-    if (!handle) return 0;
+    if (!handle) return;
 
     assert(offset < sizeof(struct prom_stats));
 
     r = mappedfile_writelock(handle->mf);
-    if (r) return r;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_writelock unable to obtain lock on %s",
+                        mappedfile_fname(handle->mf));
+        return;
+    }
 
     double v = *(double *)(mappedfile_base(handle->mf) + offset);
     v += delta;
 
     r = mappedfile_pwrite(handle->mf, &v, sizeof(v), offset);
-    if (r) return r;
+    if (r != sizeof(v)) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
+                        SIZE_T_FMT " bytes, actually wrote %d",
+                        sizeof(v), r);
+    }
+    else {
+        mappedfile_commit(handle->mf);
+    }
 
-    r = mappedfile_commit(handle->mf);
-    if (r) return r;
-
-    r = mappedfile_unlock(handle->mf);
-    if (r) return r;
-
-    return 0;
+    mappedfile_unlock(handle->mf);
 }
 
 
