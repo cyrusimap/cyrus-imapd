@@ -1,0 +1,331 @@
+/* promstatsd.c - daemon for collating statistics for Prometheus
+ *
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any legal
+ *    details, please contact
+ *      Carnegie Mellon University
+ *      Center for Technology Transfer and Enterprise Creation
+ *      4615 Forbes Avenue
+ *      Suite 302
+ *      Pittsburgh, PA  15213
+ *      (412) 268-7393, fax: (412) 268-7395
+ *      innovation@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <config.h>
+
+#include <sys/types.h>
+
+#include <dirent.h>
+#include <stdio.h>
+#include <syslog.h>
+#include <unistd.h>
+
+#include "lib/exitcodes.h"
+#include "lib/retry.h"
+
+#include "imap/global.h"
+#include "imap/prometheus.h"
+
+static struct buf report = BUF_INITIALIZER;
+
+static void shut_down(int ec) __attribute__((noreturn));
+static void shut_down(int ec)
+{
+    buf_free(&report);
+    cyrus_done();
+    exit(ec);
+}
+
+EXPORTED void fatal(const char *msg, int err)
+{
+    syslog(LOG_CRIT, "%s", msg);
+    syslog(LOG_NOTICE, "exiting");
+
+    shut_down(err);
+}
+
+static const char *argv0 = NULL;
+static void usage(void)
+{
+    fprintf(stderr, "Usage:\n");
+    exit(EC_USAGE);
+}
+
+static void save_argv0(const char *s)
+{
+    const char *slash = strrchr(s, '/');
+    if (slash)
+        argv0 = slash + 1;
+    else
+        argv0 = s;
+}
+
+static int do_cleanup(void)
+{
+    const char *basedir = prometheus_stats_dir();
+    DIR *dh;
+    struct dirent *dirent;
+
+    dh = opendir(basedir);
+    if (!dh) {
+        syslog(LOG_ERR, "IOERROR: opendir(%s): %m", basedir);
+        return EC_IOERR;
+    }
+
+    while ((dirent = readdir(dh))) {
+        char path[PATH_MAX];
+        int r;
+
+        if (dirent->d_name[0] == '.') continue;
+
+        r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
+        if (r < 0 || (size_t) r >= sizeof(path)) {
+            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+            continue;
+        }
+
+        unlink(path);
+    }
+
+    closedir(dh);
+    return 0;
+}
+
+typedef int promdir_foreach_cb(const struct prom_stats *stats, void *rock);
+static int promdir_foreach(promdir_foreach_cb *proc, void *rock)
+{
+    const char *basedir;
+    DIR *dh;
+    struct dirent *dirent;
+    int r;
+
+    basedir = prometheus_stats_dir();
+
+    dh = opendir(basedir);
+    if (!dh) {
+        syslog(LOG_ERR, "IOERROR: prometheus_foreach opendir(%s): %m", basedir);
+        return -1;
+    }
+
+    while ((dirent = readdir(dh))) {
+        char fname[PATH_MAX];
+        struct prom_stats stats;
+        struct mappedfile *mf = NULL;
+
+        /* skip filenames that aren't pids */
+        if (!cyrus_isdigit(dirent->d_name[0])) continue;
+
+        r = snprintf(fname, sizeof(fname), "%s%s", basedir, dirent->d_name);
+        if (r < 0 || (size_t) r >= sizeof(fname)) {
+            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+            continue;
+        }
+
+        r = mappedfile_open(&mf, fname, 0);
+        if (r) continue;
+        r = mappedfile_readlock(mf);
+        if (!r) {
+            memcpy(&stats, mappedfile_base(mf), mappedfile_size(mf));
+            mappedfile_unlock(mf);
+        }
+        mappedfile_close(&mf);
+
+        r = proc(&stats, rock);
+        if (r) break;
+    }
+
+    closedir(dh);
+
+    return r;
+}
+
+static int read_into_array(const struct prom_stats *stats, void *rock)
+{
+    ptrarray_t *p = (ptrarray_t *) rock;
+
+    struct prom_stats *stats_copy = xmalloc(sizeof *stats_copy);
+    memcpy(stats_copy, stats, sizeof(*stats_copy));
+    ptrarray_append(p, stats_copy);
+
+    return 0;
+}
+
+static void do_collate_report(struct buf *buf)
+{
+    ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
+    double accumulator;
+    int i;
+
+    buf_reset(buf);
+
+    /* slurp up current stats */
+    promdir_foreach(&read_into_array, &proc_stats);
+
+    /* format it into buf */
+    buf_appendcstr(buf, "# HELP imap_connections_total The total number of IMAP connections.\n");
+    buf_appendcstr(buf, "# TYPE imap_connections_total counter\n");
+    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
+        buf_printf(buf, "imap_connections_total{pid=\"%jd\"} %.0f\n",
+                   (intmax_t) p->pid, p->total_connections);
+        accumulator += p->total_connections;
+    }
+    buf_printf(buf, "imap_connections_total %.0f\n", accumulator);
+
+    buf_appendcstr(buf, "# HELP imap_connections_active The number of active IMAP connections.\n");
+    buf_appendcstr(buf, "# TYPE imap_connections_active gauge\n");
+    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
+        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f\n",
+                   (intmax_t) p->pid, p->active_connections);
+        accumulator += p->active_connections;
+    }
+    buf_printf(buf, "imap_connections_active %.0f\n", accumulator);
+
+    void *p;
+    while ((p = ptrarray_shift(&proc_stats))) {
+        free(p);
+    }
+    ptrarray_fini(&proc_stats);
+}
+
+int main(int argc, char **argv)
+{
+    save_argv0(argv[0]);
+
+    const char *alt_config = NULL;
+    const char *report_path = NULL;
+    const char *report_path_new = NULL;
+    const char *p;
+    int cleanup = 0;
+    int debugmode = 0;
+    int verbose = 0;
+    int opt;
+
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
+
+    p = getenv("CYRUS_VERBOSE");
+    if (p) verbose = atoi(p) + 1;
+
+    while ((opt = getopt(argc, argv, "C:cdv")) != EOF) {
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+
+        case 'c': /* cleanup stats directory and exit */
+            cleanup = 1;
+            break;
+
+        case 'd': /* debug mode (no fork) */
+            debugmode = 1;
+            break;
+
+        case 'v': /* verbose */
+            verbose ++;
+            break;
+
+        default:
+            usage();
+            break;
+        }
+    }
+
+    cyrus_init(alt_config, "idled", 0, 0);
+    signals_set_shutdown(shut_down);
+    signals_add_handlers(0);
+
+    if (cleanup) {
+        shut_down(do_cleanup());
+    }
+
+    report_path = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
+    report_path_new = strconcat(report_path, ".NEW", NULL);
+    cyrus_mkdir(report_path, 0755);
+
+    /* fork unless we were given the -d option or we're running as a daemon */
+    if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
+        pid_t pid = fork();
+
+        if (pid == -1) {
+            fatal("fork failed", EC_OSERR);
+        }
+
+        if (pid != 0) { /* parent */
+            exit(0);
+        }
+    }
+
+    for (;;) {
+        int fd, r;
+
+        signals_poll();
+
+        /* check for shutdown file */
+        if (shutdown_file(NULL, 0)) {
+            if (verbose || debugmode)
+                syslog(LOG_DEBUG, "Detected shutdown file\n");
+            shut_down(1);
+        }
+
+        /* collate statistics */
+        unlink(report_path_new);
+        fd = open(report_path_new, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if (fd == -1) {
+            syslog(LOG_ERR, "IOERROR: open(%s): %m", report_path_new);
+            fatal("unable to open report temp file", EC_IOERR);
+        }
+
+        do_collate_report(&report);
+
+        r = retry_write(fd, buf_cstring(&report), buf_len(&report));
+        if (r < 0) {
+            syslog(LOG_ERR, "IOERROR: retry_write(%s): %m", report_path_new);
+            unlink(report_path_new);
+            fatal("unable to write to report temp file", EC_IOERR);
+        }
+
+        r = rename(report_path_new, report_path);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: rename(%s,%s): %m", report_path_new, report_path);
+            fatal("unable to rename report temp file into place", EC_IOERR);
+        }
+
+        /* then wait around a bit */
+        sleep(10); /* XXX make it configurable -- what's a good default? */
+    }
+
+    /* NOTREACHED */
+    shut_down(1);
+}

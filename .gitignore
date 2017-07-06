@@ -115,6 +115,7 @@ imap/nntp_err.c
 imap/nntp_err.h
 imap/nntpd
 imap/pop3d
+imap/promstatsd
 imap/pushstats.c
 imap/pushstats.h
 imap/quota

@@ -59,9 +59,7 @@
 
 #include "imap/prometheus.h"
 
-#define FNAME_PROM_STATS_DIR "/stats"
-
-static const char *prometheus_stats_dir(void)
+EXPORTED const char *prometheus_stats_dir(void)
 {
     static struct buf statsdir = BUF_INITIALIZER;
     const char *tmp;
@@ -191,116 +189,29 @@ EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
     mappedfile_unlock(handle->mf);
 }
 
-
-/* n.b. This function -CANNOT- use mappedfile because doing so would clash
- * with the caller's own statistics collection.
- */
-typedef int prometheus_foreach_cb(const struct prom_stats *stats, void *rock);
-static int prometheus_foreach(prometheus_foreach_cb *proc, void *rock)
-{
-    const char *basedir;
-    DIR *dh;
-    struct dirent *dirent;
-    int r;
-
-    basedir = prometheus_stats_dir();
-
-    dh = opendir(basedir);
-    if (!dh) {
-        syslog(LOG_ERR, "IOERROR: prometheus_foreach opendir(%s): %m", basedir);
-        return -1;
-    }
-
-    while ((dirent = readdir(dh))) {
-        char path[PATH_MAX];
-        struct prom_stats stats;
-        const char *base = NULL;
-        size_t len = 0;
-        int fd;
-
-        /* skip filenames that aren't pids */
-        if (!cyrus_isdigit(dirent->d_name[0])) continue;
-
-        r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
-        if (r < 0 || (size_t) r >= sizeof(path))
-            fatal("cannot iterate prometheus stats directory", EC_CONFIG);
-
-        fd = open(path, O_RDONLY);
-        if (fd < 0) continue;
-
-        r = lock_shared(fd, path);
-        if (r) continue;
-
-        /* grab a copy so we can unlock/close the file */
-        map_refresh(fd, /*onceonly*/ 1,
-                    &base, &len, sizeof(stats),
-                    path, NULL);
-        assert(len == sizeof(stats));
-        memcpy(&stats, base, sizeof(stats));
-        map_free(&base, &len);
-
-        lock_unlock(fd, path);
-        close(fd);
-
-        r = proc(&stats, rock);
-        if (r) break;
-    }
-
-    closedir(dh);
-
-    return r;
-}
-
-static int read_into_array(const struct prom_stats *stats, void *rock)
-{
-    ptrarray_t *p = (ptrarray_t *) rock;
-
-    struct prom_stats *stats_copy = xmalloc(sizeof *stats_copy);
-    memcpy(stats_copy, stats, sizeof(*stats_copy));
-    ptrarray_append(p, stats_copy);
-
-    return 0;
-}
-
 EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
 {
-    ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
-    double accumulator;
-    int i;
+    char *report_fname = NULL;
+    struct mappedfile *mf = NULL;
+    int r;
 
-    if (mimetype)
-        *mimetype = "text/plain; version=0.0.4";
+    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
 
-    buf_reset(buf);
-
-    /* slurp up current stats */
-    prometheus_foreach(&read_into_array, &proc_stats);
-
-    /* format it into buf */
-    buf_appendcstr(buf, "# HELP imap_connections_total The total number of IMAP connections.\n");
-    buf_appendcstr(buf, "# TYPE imap_connections_total counter\n");
-    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
-        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-        buf_printf(buf, "imap_connections_total{pid=\"%jd\"} %.0f\n",
-                   (intmax_t) p->pid, p->total_connections);
-        accumulator += p->total_connections;
+    r = mappedfile_open(&mf, report_fname, 0);
+    if (r) {
+        free(report_fname);
+        return r;
     }
-    buf_printf(buf, "imap_connections_total %.0f\n", accumulator);
 
-    buf_appendcstr(buf, "# HELP imap_connections_active The number of active IMAP connections.\n");
-    buf_appendcstr(buf, "# TYPE imap_connections_active gauge\n");
-    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
-        struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f\n",
-                   (intmax_t) p->pid, p->active_connections);
-        accumulator += p->active_connections;
+    r = mappedfile_readlock(mf);
+    if (!r) {
+        buf_setmap(buf, mappedfile_base(mf), mappedfile_size(mf));
+        if (mimetype)
+            *mimetype = "text/plain; version=0.0.4";
     }
-    buf_printf(buf, "imap_connections_active %.0f\n", accumulator);
 
-    void *p;
-    while ((p = ptrarray_shift(&proc_stats))) {
-        free(p);
-    }
-    ptrarray_fini(&proc_stats);
-    return 0;
+    mappedfile_unlock(mf);
+    mappedfile_close(&mf);
+    free(report_fname);
+    return r;
 }
