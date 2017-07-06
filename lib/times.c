@@ -54,11 +54,11 @@
 #include "times-private.h"
 
 static const char * const monthname[12] = {
-    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 static const char * const wday[7] = {
-    "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
 
@@ -1127,7 +1127,9 @@ static int tokenise_str_and_create_tm(struct rfc822dtbuf *buf,
         !(charset[str_token[0] + 1] & Alpha))
         goto failed;
 
-    to_upper_str_in_place(&str_token, len);
+    str_token[0] = to_upper(str_token[0]);
+    str_token[1] = to_lower(str_token[1]);
+    str_token[2] = to_lower(str_token[2]);
     for (i = 0; i < 12; i++) {
         if (memcmp(monthname[i], str_token, 3) == 0) {
             tm->tm_mon = i;
@@ -1270,7 +1272,6 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date)
  * `buf` which is the buffer this function is going to write into, needs to
  * be atleast RFC5322_DATETIME_MAX (32), if not more.
  *
- * This function is exactly like time_to_rfc3501().
  */
 EXPORTED int time_to_rfc5322(time_t date, char *buf, size_t len)
 {
@@ -1286,8 +1287,9 @@ EXPORTED int time_to_rfc5322(time_t date, char *buf, size_t len)
     gmtoff /= 60;
 
     return snprintf(buf, len,
-            "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
-            tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
-            tm->tm_hour, tm->tm_min, tm->tm_sec,
-            gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+             "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
+             wday[tm->tm_wday],
+             tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
+             tm->tm_hour, tm->tm_min, tm->tm_sec,
+             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 }
