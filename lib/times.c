@@ -932,7 +932,8 @@ static inline int get_previous_char(struct rfc5322dtbuf *buf)
 /*
   TODO: Support comments as per RFC.
 */
-static int skip_ws(struct rfc5322dtbuf *buf, int skipcomment)
+static int skip_ws(struct rfc5322dtbuf *buf,
+                   int skipcomment __attribute__((unused)))
 {
     int c = buf->str[buf->offset];
 
