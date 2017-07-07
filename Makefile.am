@@ -209,10 +209,6 @@ if MURDER
 libexec_PROGRAMS += imap/mupdate
 endif # MURDER
 
-if NNTPD
-libexec_PROGRAMS += imap/nntpd
-endif
-
 if CALALARMD
 libexec_PROGRAMS += imap/calalarmd
 endif
