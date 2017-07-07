@@ -1145,10 +1145,7 @@ imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 SNMPGEN = $(abs_top_srcdir)/snmp/snmpgen
 
-imap/lmtpstats.c: imap/lmtpstats.snmp $(SNMPGEN)
-	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
-
-imap/pushstats.c: imap/pushstats.snmp $(SNMPGEN)
+imap/%stats.h imap/%stats.c: imap/%stats.snmp $(SNMPGEN)
 	$(AM_V_GEN)(cd $(@D) && $(SNMPGEN) $(realpath $<))
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
@@ -1298,32 +1295,14 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 # $(COMPILE_ET) creates its output files in the directory it's run from,
 # so do a tricky directory change
-imap/imap_err.h imap/imap_err.c: imap/imap_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
-
-imap/lmtp_err.h imap/lmtp_err.c: imap/lmtp_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
-
-imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
-
-imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
-
-imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
-
-imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
+%_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 # xxd cannot have path details in its input filename, otherwise it junks up
 # the variable names in the output file.  so do a tricky directory change.
 # the /dev/null redirection on cd is to prevent shell environments with
 # CDPATH echoing the path change on stdout and consequently into the .h file
-imap/http_caldav_js.h: imap/http_caldav.js
-	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
-
-imap/http_carddav_js.h: imap/http_carddav.js
+%_js.h: %.js
 	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
 
 if MAINTAINER_MODE
@@ -1713,9 +1692,6 @@ sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
-
-sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
-	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
