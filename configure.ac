@@ -1073,6 +1073,27 @@ AC_ARG_ENABLE(statickrb,
         [AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
         with_statickrb="yes", with_statickrb="no")
 
+AC_ARG_WITH(krb5-config,
+        [AS_HELP_STRING([--with-krb5-config=PATH], [use krb5-config from PATH])],
+        with_krb5config="$withval", with_krb5config="no")
+
+if test "$with_krb5config" != "no"; then
+    AC_MSG_CHECKING([$with_krb5config works])
+
+    dnl run with exec to avoid leaking output on "real" bourne shells
+    if (exec >&5 2>&5 ; $with_krb5config --libs --cflags; exit $?) then
+        AC_MSG_RESULT(yes)
+    else
+        AC_MSG_ERROR([\`$with_krb5config --libs --cflags' doesn't work, aborting])
+    fi
+
+    KRB5_CFLAGS="`$with_krb5config --cflags`"
+    KRB5_LDFLAGS="`$with_krb5config --libs`"
+
+    LDFLAGS="$KRB5_LDFLAGS $LDFLAGS"
+    CFLAGS="$KRB5_CFLAGS $CFLAGS"
+fi
+
 dnl In order to compile kerberos4, we need libkrb and libdes.
 
 dnl we might need -lresolv for kerberos
