@@ -1603,7 +1603,7 @@ static void cmdloop(void)
 
                 cmd_login(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_LOGIN_COUNT);
+                /* prometheus stat is counted by cmd_login based on success/failure */
                 snmp_increment(LOGIN_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Logout")) {
@@ -2703,7 +2703,7 @@ static void cmd_login(char *tag, char *user)
             prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
         }
 
-        prometheus_increment(promhandle, IMAP_AUTHENTICATE_NO_COUNT);
+        prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
         snmp_increment_args(AUTHENTICATION_NO, 1,
                             VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
                             VARIABLE_LISTEND);
@@ -2721,7 +2721,7 @@ static void cmd_login(char *tag, char *user)
                 prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
             }
 
-            prometheus_increment(promhandle, IMAP_AUTHENTICATE_NO_COUNT);
+            prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
                                 VARIABLE_LISTEND);
@@ -2733,7 +2733,7 @@ static void cmd_login(char *tag, char *user)
             "User logged in SESSIONID=<%s>", session_id());
         reply = replybuf;
         imapd_userid = xstrdup((const char *) val);
-        prometheus_increment(promhandle, IMAP_AUTHENTICATE_YES_COUNT);
+        prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_YES);
         snmp_increment_args(AUTHENTICATION_YES, 1,
                             VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */,
                             VARIABLE_LISTEND);
@@ -2811,7 +2811,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
                    imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
 
-            prometheus_increment(promhandle, IMAP_AUTHENTICATE_NO_COUNT);
+            prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                                 VARIABLE_LISTEND);
@@ -2899,7 +2899,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         }
     }
 
-    prometheus_increment(promhandle, IMAP_AUTHENTICATE_YES_COUNT);
+    prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_YES);
     snmp_increment_args(AUTHENTICATION_YES, 1,
                         VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                         VARIABLE_LISTEND);

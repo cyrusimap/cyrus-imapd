@@ -73,7 +73,6 @@ while (my $line = <>) {
     
         if (not exists $types{$type}) {
             die "\"$type\" is not a valid type at line $lineno\n";
-            next;
         }
 
         if ($name !~ m{^[a-z][a-z0-9_]*$}) {
@@ -82,6 +81,33 @@ while (my $line = <>) {
 
         push @metrics, { type => $type, name => $name, help => $help };
 
+    }
+    elsif ($line =~ m{^\s*label\s}) {
+        # parse a label:
+        # label imap_authenticate_count result yes no
+        $line =~ s{^\s*label\s+}{};
+        my ($name, $label, @values) = split /\s+/, $line;
+
+        if (not scalar grep { $_->{name} eq $name } @metrics) {
+            die "cannot define label \"$label\" for unknown metric \"$name\" at line $lineno\n";
+        }
+
+        if ($label !~ m{^[a-z][a-z0-9_]*$}) {
+            die "\"$label\" is not a valid label at line $lineno\n";
+        }
+
+        foreach my $v (@values) {
+            if ($v !~ m{^[a-z][a-z0-9_]*$}) {
+                die "\"$v\" is not a valid value at line $lineno\n";
+            }
+        }
+
+        foreach my $metric (@metrics) {
+            if ($metric->{name} eq $name) {
+                $metric->{label} = { label => $label, values => [ @values ] };
+                last;
+            }
+        }
     }
     else {
         warn "skipping unparseable line at line $lineno: $line\n";
@@ -113,6 +139,7 @@ enum prom_metric_type {
     PROM_METRIC_GAUGE     = 1,
     PROM_METRIC_HISTOGRAM = 2, /* unused */
     PROM_METRIC_SUMMARY   = 3, /* unused */
+    PROM_METRIC_CONTINUED = 4, /* internal use only */
 };
 extern const char *prom_metric_type_names[];
 
@@ -121,10 +148,20 @@ OKAY
     print $header "enum prom_metric_id {\n";
     my $first = 1;
     foreach my $metric (@{$metrics}) {
-        print $header q{    }, uc($metric->{name});
-        print $header q{ = 0} if $first;
-        $first = 0;
-        print $header qq{,\n};
+        if (exists $metric->{label}) {
+            foreach my $v (@{$metric->{label}->{values}}) {
+                print $header "    \U$metric->{name}_$metric->{label}->{label}_$v\E";
+                print $header q{ = 0} if $first;
+                $first = 0;
+                print $header qq{,\n};
+            }
+        }
+        else {
+            print $header q{    }, uc($metric->{name});
+            print $header q{ = 0} if $first;
+            $first = 0;
+            print $header qq{,\n};
+        }
     }
     print $header "\n    PROM_NUM_METRICS /* n.b. leave last! */\n";
     print $header "};\n";
@@ -135,6 +172,7 @@ struct prom_metric_desc {
     const char *name;
     enum prom_metric_type type;
     const char *help;
+    const char *label;
 };
 extern const struct prom_metric_desc prom_metric_descs[];
 
@@ -180,18 +218,37 @@ OKAY
 
     print $source "EXPORTED const struct prom_metric_desc prom_metric_descs[] = {\n";
     foreach my $metric (@{$metrics}) {
-        printf $source '    { "%s", %s, ',
-                       $metric->{name},
-                       $types{$metric->{type}};
-        if (defined $metric->{help}) {
-            printf $source '"%s"', $metric->{help};
+        if (exists $metric->{label}) {
+            my $first = 1;
+            foreach my $v (@{$metric->{label}->{values}}) {
+                printf $source '    { "%s", %s, ',
+                            $metric->{name},
+                            ($first ? $types{$metric->{type}} : "PROM_METRIC_CONTINUED");
+                if ($first && defined $metric->{help}) {
+                    printf $source '"%s",', $metric->{help};
+                }
+                else {
+                    print $source "NULL,";
+                }
+                printf $source '"%s=\\"%s\\""', $metric->{label}->{label}, $v;
+                print $source " },\n";
+                $first = 0;
+            }
         }
         else {
-            print $source "NULL";
+            printf $source '    { "%s", %s, ',
+                        $metric->{name},
+                        $types{$metric->{type}};
+            if (defined $metric->{help}) {
+                printf $source '"%s",', $metric->{help};
+            }
+            else {
+                print $source "NULL,";
+            }
+            print $source " NULL },\n";
         }
-        print $source " },\n";
     }
-    print $source "    { NULL, 0, NULL },\n";
+    print $source "    { NULL, 0, NULL, NULL },\n";
     print $source "};\n";
 
     close $source;

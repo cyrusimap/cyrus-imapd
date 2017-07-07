@@ -10,6 +10,8 @@
 metric counter imap_connections_total   The total number of IMAP connections
 metric gauge   imap_active_connections  The number of currently active IMAP connections
 metric counter imap_append_count        The total number of IMAP APPENDs
+metric counter imap_authenticate_count  The total number of IMAP AUTHENTICATEs
+    label imap_authenticate_count result yes no
 metric counter imap_capability_count    The total number of IMAP CAPABILITYs
 metric counter imap_compress_count      The total number of IMAP COMPRESSs
 metric counter imap_check_count         The total number of IMAP checks
@@ -29,7 +31,6 @@ metric counter imap_getquotaroot_count  The total number of IMAP GETQUOTAROOTs
 metric counter imap_genurlauth_count    The total number of IMAP GENURLAUTHs
 metric counter imap_id_count            The total number of IMAP IDs
 metric counter imap_idle_count          The total number of IMAP IDLEs
-metric counter imap_login_count         The total number of IMAP LOGINs
 metric counter imap_logout_count        The total number of IMAP LOGOUTs
 metric counter imap_list_count          The total number of IMAP LISTs
 metric counter imap_lsub_count          The total number of IMAP LSUBs
@@ -51,6 +52,3 @@ metric counter imap_thread_count        The total number of IMAP THREADs
 metric counter imap_unsubscribe_count   The total number of IMAP UNSUBSCRIBEs
 metric counter imap_unselect_count      The total number of IMAP UNSELECTs
 metric counter imap_xbackup_count       The total number of IMAP XBACKUPs
-# XXX turn these into labels on an imap_authentication_count metric
-metric counter imap_authenticate_no_count     The total number of IMAP AUTHENTICATE=NOs
-metric counter imap_authenticate_yes_count    The total number of IMAP AUTHENTICATE=YESs

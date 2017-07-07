@@ -207,8 +207,10 @@ static void do_collate_report(struct buf *buf)
             buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[j].name,
                             prom_metric_descs[j].help);
         }
-        buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
-                        prom_metric_type_names[prom_metric_descs[j].type]);
+        if (prom_metric_descs[j].type != PROM_METRIC_CONTINUED) {
+            buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
+                            prom_metric_type_names[prom_metric_descs[j].type]);
+        }
 
         for (i = 0; i < proc_stats.count; i++) {
             const struct prom_stats *p = ptrarray_nth(&proc_stats, i);
@@ -216,8 +218,10 @@ static void do_collate_report(struct buf *buf)
             last_updated = MAX(last_updated, p->metrics[j].last_updated);
         }
 
-        buf_printf(buf, "%s %.0f %" PRId64 "\n",
-                        prom_metric_descs[j].name, sum, last_updated);
+        buf_appendcstr(buf, prom_metric_descs[j].name);
+        if (prom_metric_descs[j].label)
+            buf_printf(buf, "{%s}", prom_metric_descs[j].label);
+        buf_printf(buf, " %.0f %" PRId64 "\n", sum, last_updated);
     }
 
     /* clean up the copy */
