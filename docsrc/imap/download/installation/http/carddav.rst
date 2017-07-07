@@ -9,6 +9,8 @@ Configuration
 
 .. sidebar:: addressbookprefix
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob addressbookprefix
        :end-before: endblob addressbookprefix

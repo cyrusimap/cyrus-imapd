@@ -75,6 +75,8 @@ all versions of SASL, the remaining schemes are only available in Cyrus SASL
 
 .. sidebar:: allowplaintext
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob allowplaintext
        :end-before: endblob allowplaintext
