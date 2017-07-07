@@ -47,7 +47,6 @@
 #include <sys/stat.h>
 #include <syslog.h>
 
-#include "xmalloc.h"
 #include "map.h"
 #include "exitcodes.h"
 #include "xmalloc.h"

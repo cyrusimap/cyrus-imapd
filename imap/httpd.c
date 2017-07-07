@@ -76,7 +76,6 @@
 #include "tls.h"
 #include "map.h"
 
-#include "acl.h"
 #include "exitcodes.h"
 #include "imapd.h"
 #include "proc.h"

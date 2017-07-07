@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#include "xmalloc.h"
 #include "vparse.h"
 #include "xmalloc.h"
 
