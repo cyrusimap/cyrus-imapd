@@ -1672,7 +1672,7 @@ static int verify_patternlist(sieve_script_t *sscript,
 {
     if (verify && !verify_stringlist(sscript, sa, verify)) return 0;
 
-    canon_comptags(c);
+    canon_comptags(c, sscript);
 
     return (c->match == REGEX) ?
         verify_regexlist(sscript, sa, c->collation) : 1;
@@ -2013,7 +2013,7 @@ static commandlist_t *build_denotify(sieve_script_t *sscript,
 {
     assert(t && t->type == DENOTIFY);
 
-    canon_comptags(&t->u.d.comp);
+    canon_comptags(&t->u.d.comp, sscript);
     if (t->u.d.priority == -1) t->u.d.priority = ANY;
     if (t->u.d.pattern) {
         strarray_t sa = STRARRAY_INITIALIZER;
@@ -2285,7 +2285,7 @@ static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
     return t;
 }
 
-static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
+static test_t *build_mbox_meta(sieve_script_t *sscript,
                                test_t *t, char *extname,
                                char *keyname, strarray_t *keylist)
 {
@@ -2294,7 +2294,7 @@ static test_t *build_mbox_meta(sieve_script_t *s __attribute__((unused)),
                  t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
                  t->type == SPECIALUSEEXISTS));
 
-    canon_comptags(&t->u.mm.comp);
+    canon_comptags(&t->u.mm.comp, sscript);
     t->u.mm.extname = extname;
     t->u.mm.keyname = keyname;
     t->u.mm.keylist = keylist;

@@ -200,7 +200,7 @@ struct Commandlist {
     struct Commandlist *next;
 };
 
-comp_t *canon_comptags(comp_t *c);
+comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script);
 
 test_t *new_test(int type, sieve_script_t *parse_script);
 testlist_t *new_testlist(test_t *t, testlist_t *n);

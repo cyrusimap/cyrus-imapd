@@ -60,10 +60,14 @@ static void init_comptags(comp_t *c)
     c->match = c->relation = c->collation = -1;
 }
 
-comp_t *canon_comptags(comp_t *c)
+comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 {
     if (c->match == -1) c->match = IS;
     if (c->collation == -1) c->collation = ASCIICASEMAP;
+    if (c->match == COUNT && c->collation != ASCIINUMERIC) {
+        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                     ":count", "i;ascii-numeric");
+    }
     return c;
 }
 
