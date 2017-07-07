@@ -9,6 +9,8 @@ Configuration
 
 .. sidebar:: calendarprefix
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob calendarprefix
        :end-before: endblob calendarprefix
@@ -35,6 +37,8 @@ calendar named Default for user "murch" would reside in the mailbox named
 
 .. sidebar:: caldav_allowscheduling
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob caldav_allowscheduling
        :end-before: endblob caldav_allowscheduling
@@ -52,6 +56,8 @@ the first time that the user authenticates to the CalDAV server. Note that the
 user MUST have an existing IMAP Inbox in order for the calendars to be created.
 
 .. sidebar:: autocreate options
+
+    |change-default-config|
 
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
       :start-after: startblob caldav_create_default
@@ -316,6 +322,8 @@ Configuration
 
 .. sidebar:: zoneinfo config
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob zoneinfo_db_path
        :end-before: endblob zoneinfo_db_path
@@ -404,6 +412,8 @@ allows CalDAV servers to:
   would result in too much mail traffic and extra manual overhead for the users.
 
 .. sidebar:: caldav_allowscheduling
+
+    |change-default-config|
 
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob caldav_allowscheduling

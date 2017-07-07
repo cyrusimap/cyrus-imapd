@@ -25,6 +25,8 @@ specified in the ``configdirectory`` option in :cyrusman:`imapd.conf(5)`.
 
 .. sidebar:: configdirectory
 
+    |change-default-config|
+
     .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob configdirectory
         :end-before: endblob configdirectory
