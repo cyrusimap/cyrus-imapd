@@ -136,6 +136,8 @@ BUILT_SOURCES += \
 	imap/lmtp_err.c \
 	imap/lmtpstats.c \
 	imap/pushstats.c \
+	imap/promdata.c \
+	imap/promdata.h \
 	lib/htmlchar.c \
 	lib/htmlchar.h \
 	imap/rfc822_header.c \
@@ -264,6 +266,8 @@ EXTRA_DIST += \
     imap/lmtp_err.c \
     imap/lmtpstats.c \
     imap/pushstats.c \
+    imap/promdata.c \
+    imap/promdata.h \
     imap/rfc822_header.c \
     imap/rfc822_header.h
 
@@ -1008,6 +1012,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
+	imap/promdata.c \
+	imap/promdata.h \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
@@ -1256,6 +1262,14 @@ imap_pop3d_SOURCES += \
 endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+
+PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
+
+imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
+	$(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
+
+imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
+	$(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
 
 imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)

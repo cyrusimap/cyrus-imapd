@@ -59,40 +59,6 @@
 
 #include "imap/prometheus.h"
 
-/* XXX this will be generated content */
-
-EXPORTED const char *prom_metric_type_names[] = {
-    "counter",
-    "gauge",
-    "histogram",
-    "summary",
-    NULL,
-};
-
-/* XXX fix these help strings */
-EXPORTED const struct prom_metric_desc prom_metric_descs[] = {
-    { "imap_connections_total", PROM_METRIC_COUNTER, "The total number of IMAP connections" },
-    { "imap_active_connections", PROM_METRIC_GAUGE, "The number of currently active IMAP connections" },
-    { "imap_authenticate_count", PROM_METRIC_COUNTER, "The total number of IMAP authentications" },
-    { "imap_append_count", PROM_METRIC_COUNTER, "The total number of IMAP APPENDs" },
-    { "imap_capability_count", PROM_METRIC_COUNTER, "The total number of IMAP CAPABILITYs" },
-    { "imap_compress_count", PROM_METRIC_COUNTER, "The total number of IMAP COMPRESSs" },
-    { "imap_check_count", PROM_METRIC_COUNTER, "The total number of IMAP checks" },
-    { "imap_copy_count", PROM_METRIC_COUNTER, "The total number of IMAP COPYs" },
-    { "imap_create_count", PROM_METRIC_COUNTER, "The total number of IMAP CREATEs" },
-    { "imap_close_count", PROM_METRIC_COUNTER, "The total number of IMAP CLOSEs" },
-    { "imap_delete_count", PROM_METRIC_COUNTER, "The total number of IMAP DELETEs" },
-    { "imap_deleteacl_count", PROM_METRIC_COUNTER, "The total number of IMAP DELETEACLs" },
-    { "imap_dump_count", PROM_METRIC_COUNTER, "The total number of IMAP DUMPs" },
-    { "imap_expunge_count", PROM_METRIC_COUNTER, "The total number of IMAP EXPUNGEs" },
-    { "imap_examine_count", PROM_METRIC_COUNTER, "The total number of IMAP EXAMINEs" },
-    { "imap_fetch_count", PROM_METRIC_COUNTER, "The total number of IMAP FETCHs" },
-    { "imap_getacl_count", PROM_METRIC_COUNTER, "The total number of IMAP GETACLs" },
-    { NULL, 0, NULL },
-};
-
-/* XXX end generated content */
-
 EXPORTED const char *prometheus_stats_dir(void)
 {
     static struct buf statsdir = BUF_INITIALIZER;
