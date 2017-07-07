@@ -76,6 +76,11 @@ CLEANFILES = \
 	lib/imapopts.h
 
 DISTCLEANFILES = \
+	com_err/et/compile_et \
+	imap/http_caldav_js.h \
+	imap/http_carddav_js.h \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/imap_err.c \
 	imap/imap_err.h \
 	imap/lmtp_err.c \
@@ -84,13 +89,8 @@ DISTCLEANFILES = \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
-	imap/http_caldav_js.h \
-	imap/http_carddav_js.h \
-	imap/http_err.c \
-	imap/http_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
-	com_err/et/compile_et \
 	perl/sieve/scripts/installsieve \
 	perl/sieve/scripts/sieveshell \
 	sieve/sieve_err.c \
@@ -846,6 +846,9 @@ imap_ctl_jmapauth_LDADD = $(LD_UTILITY_ADD)
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
+imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
+
 imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
@@ -884,9 +887,6 @@ imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
-
-imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
-imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
