@@ -91,13 +91,17 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
 {
     char fname[PATH_MAX];
     struct prometheus_handle *handle = NULL;
-    struct prom_stats buf = PROM_STATS_INITIALIZER;
+    struct prom_stats stats = PROM_STATS_INITIALIZER;
+    int i;
     int r;
 
-    buf.pid = getpid();
+    stats.pid = getpid();
+    for (i = 0; i < PROM_NUM_METRICS; i++) {
+        stats.metrics[i].last_updated = time(NULL) * 1000;
+    }
 
     r = snprintf(fname, sizeof(fname), "%s%jd",
-                 prometheus_stats_dir(), (intmax_t) buf.pid);
+                 prometheus_stats_dir(), (intmax_t) stats.pid);
     if (r < 0 || (size_t) r >= sizeof(fname))
         fatal("unable to register stats for prometheus", EC_CONFIG);
 
@@ -111,11 +115,11 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
     r = mappedfile_writelock(handle->mf);
     if (r) goto error;
 
-    r = mappedfile_pwrite(handle->mf, &buf, sizeof(buf), 0);
-    if (r != sizeof(buf)) {
+    r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
+    if (r != sizeof(stats)) {
         syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
                         "actually wrote %d",
-                        sizeof(buf), r);
+                        sizeof(stats), r);
         goto error;
     }
 
