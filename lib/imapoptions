@@ -642,8 +642,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
    is a C format string that gets 3 options: the first is the name of the
-   executable (without path).  The second is the pid (integer) and the third
-   is the service ID.  Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
+   executable (as specified in the cmd parameter in cyrus.conf). The second
+   is the pid (integer) and the third is the service ID.
+   Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
 
 { "defaultacl", "anyone lrs", STRING }
 /* The Access Control List (ACL) placed on a newly-created (non-user)
