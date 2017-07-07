@@ -611,7 +611,6 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "couldn't open bytecode output file %s\n", script);
                 exit(1);
             }
-            printf("tmpnam: '%s'\n", script);
 
             /* Now, emit the bytecode */
             if (sieve_emit_bytecode(fd, bc) == -1) {
