@@ -825,6 +825,10 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
 
 
     /* client new connection */
+#if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
+    if (!strcasecmp(service, "HTTP")) flags |= SASL_NEED_HTTP;
+#endif
+
     saslresult=sasl_client_new(service,
                                serverFQDN,
                                localip,
@@ -2365,6 +2369,16 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     imt_stat status;
     char *username;
     unsigned int userlen;
+
+#ifdef SASL_HTTP_REQUEST
+    /* Set HTTP request (REQUIRED) */
+    sasl_http_request_t httpreq = { "OPTIONS",      /* Method */
+                                    "*",            /* URI */
+                                    (u_char *) "",  /* Empty body */
+                                    0,              /* Zero-length body */
+                                    1 };            /* Persistent cxn? */
+    sasl_setprop(conn, SASL_HTTP_REQUEST, &httpreq);
+#endif
 
     interaction(SASL_CB_USER, NULL, "Username", &username, &userlen);
 
