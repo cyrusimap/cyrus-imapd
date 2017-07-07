@@ -26,6 +26,8 @@ so manually, assuming you have the source.
 
 .. sidebar:: JMAP configuration
 
+    |change-default-config|
+
    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
        :start-after: startblob conversations
        :end-before: endblob conversations

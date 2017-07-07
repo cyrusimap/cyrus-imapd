@@ -492,6 +492,10 @@ rst_prolog += """
 .. |CMU| replace:: :abbr:`CMU (Carnegie Mellon University)`
 """
 
+rst_prolog += """
+.. |change-default-config| replace:: *This shows the default value: change it in imapd.conf to suit your needs.*
+"""
+
 # Uncomment this if you publish to, like, www.cyrusimap.org/~vanmeeuwen/
 #rst_prolog += """
 #.. WARNING::
