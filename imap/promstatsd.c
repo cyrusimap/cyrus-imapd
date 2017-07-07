@@ -45,12 +45,15 @@
 #include <sys/types.h>
 
 #include <dirent.h>
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <unistd.h>
 
 #include "lib/exitcodes.h"
 #include "lib/retry.h"
+#include "lib/util.h"
 
 #include "imap/global.h"
 #include "imap/prometheus.h"
@@ -188,9 +191,11 @@ static void do_collate_report(struct buf *buf)
 {
     ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
     double accumulator;
+    int64_t last_updated;
     int i;
 
     buf_reset(buf);
+    syslog(LOG_DEBUG, "updating prometheus report");
 
     /* slurp up current stats */
     promdir_foreach(&read_into_array, &proc_stats);
@@ -198,23 +203,27 @@ static void do_collate_report(struct buf *buf)
     /* format it into buf */
     buf_appendcstr(buf, "# HELP imap_connections_total The total number of IMAP connections.\n");
     buf_appendcstr(buf, "# TYPE imap_connections_total counter\n");
-    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+    for (i = 0, accumulator = 0.0, last_updated = 0; i < proc_stats.count; i++) {
         struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-        buf_printf(buf, "imap_connections_total{pid=\"%jd\"} %.0f\n",
-                   (intmax_t) p->pid, p->total_connections);
-        accumulator += p->total_connections;
+        buf_printf(buf, "imap_connections_total{pid=\"%jd\"} %.0f %" PRId64 "\n",
+                   (intmax_t) p->pid, p->total_connections.value,
+                   p->total_connections.last_updated);
+        accumulator += p->total_connections.value;
+        last_updated = MAX(last_updated, p->total_connections.last_updated);
     }
-    buf_printf(buf, "imap_connections_total %.0f\n", accumulator);
+    buf_printf(buf, "imap_connections_total %.0f %" PRId64 "\n", accumulator, last_updated);
 
     buf_appendcstr(buf, "# HELP imap_connections_active The number of active IMAP connections.\n");
     buf_appendcstr(buf, "# TYPE imap_connections_active gauge\n");
-    for (i = 0, accumulator = 0.0; i < proc_stats.count; i++) {
+    for (i = 0, accumulator = 0.0, last_updated = 0; i < proc_stats.count; i++) {
         struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f\n",
-                   (intmax_t) p->pid, p->active_connections);
-        accumulator += p->active_connections;
+        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f %" PRId64 "\n",
+                   (intmax_t) p->pid, p->active_connections.value,
+                   p->active_connections.last_updated);
+        accumulator += p->active_connections.value;
+        last_updated = MAX(last_updated, p->active_connections.last_updated);
     }
-    buf_printf(buf, "imap_connections_active %.0f\n", accumulator);
+    buf_printf(buf, "imap_connections_active %.0f %" PRId64 "\n", accumulator, last_updated);
 
     void *p;
     while ((p = ptrarray_shift(&proc_stats))) {

@@ -146,9 +146,10 @@ EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
 
     if (!handle) return; /* make double-call safe */
 
-    mappedfile_writelock(handle->mf);
-//    unlink(mappedfile_fname(handle->mf)); /* XXX ? */
-    mappedfile_unlock(handle->mf);
+    /* n.b. we do not unlink the file on unregister, as we still want
+     * to be able to keep track of the terminated process's stats while
+     * this session is active.
+     */
     mappedfile_close(&handle->mf);
 
     free(handle);
@@ -158,8 +159,9 @@ EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
  * prometheus_decrement() wrapper macros.
  */
 EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                          size_t offset, double delta)
+                                          size_t offset, int delta)
 {
+    struct prom_metric metric;
     int r;
 
     if (!handle) return;
@@ -173,14 +175,19 @@ EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
         return;
     }
 
-    double v = *(double *)(mappedfile_base(handle->mf) + offset);
-    v += delta;
+    memcpy(&metric, mappedfile_base(handle->mf) + offset, sizeof(metric));
+    if (delta < 0) {
+        /* counters must not be decremented */
+        assert(metric.type != PROM_METRIC_COUNTER);
+    }
+    metric.value = metric.value + delta;
+    metric.last_updated = time(NULL) * 1000; /* millisec since 1970 XXX finer granularity? */
 
-    r = mappedfile_pwrite(handle->mf, &v, sizeof(v), offset);
-    if (r != sizeof(v)) {
+    r = mappedfile_pwrite(handle->mf, &metric, sizeof(metric), offset);
+    if (r != sizeof(metric)) {
         syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
                         SIZE_T_FMT " bytes, actually wrote %d",
-                        sizeof(v), r);
+                        sizeof(metric), r);
     }
     else {
         mappedfile_commit(handle->mf);

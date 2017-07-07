@@ -54,28 +54,63 @@
  * XXX some sort of config file, but hard coding it for now until we know
  * XXX what we want from it.
  */
+enum prom_metric_type {
+    PROM_METRIC_COUNTER   = 0,
+    PROM_METRIC_GAUGE     = 1,
+    PROM_METRIC_HISTOGRAM = 2, /* unused */
+    PROM_METRIC_SUMMARY   = 3, /* unused */
+};
+
+struct prom_metric {
+    enum prom_metric_type type;
+    double value;
+    int64_t last_updated;
+};
+
 struct prom_stats {
     pid_t pid;
     char  label[128];
-    double total_connections;
-    double active_connections;
-    double authenticate_count;
-    double append_count;
-    double capability_count;
-    double compress_count;
-    double check_count;
-    double copy_count;
-    double create_count;
-    double close_count;
-    double delete_count;
-    double deleteacl_count;
-    double dump_count;
-    double expunge_count;
-    double examine_count;
-    double fetch_count;
-    double getacl_count;
+    struct prom_metric total_connections;
+    struct prom_metric active_connections;
+    struct prom_metric authenticate_count;
+    struct prom_metric append_count;
+    struct prom_metric capability_count;
+    struct prom_metric compress_count;
+    struct prom_metric check_count;
+    struct prom_metric copy_count;
+    struct prom_metric create_count;
+    struct prom_metric close_count;
+    struct prom_metric delete_count;
+    struct prom_metric deleteacl_count;
+    struct prom_metric dump_count;
+    struct prom_metric expunge_count;
+    struct prom_metric examine_count;
+    struct prom_metric fetch_count;
+    struct prom_metric getacl_count;
 };
-#define PROM_STATS_INITIALIZER {0}
+#define PROM_STATS_INITIALIZER {    \
+    0,                              \
+    {0},                            \
+    {0},                            \
+    {PROM_METRIC_GAUGE, 0.0, 0},    \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+    {0},                            \
+}
+
+/* XXX end of to-be-generated stuff */
 
 struct prometheus_handle {
     struct mappedfile *mf;
@@ -87,12 +122,12 @@ extern struct prometheus_handle *prometheus_register(void);
 extern void prometheus_unregister(struct prometheus_handle **handlep);
 
 #define prometheus_increment(handle, metric) \
-    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), 1.0)
+    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), 1)
 
 #define prometheus_decrement(handle, metric) \
-    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), -1.0)
+    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), -1)
 
 extern void prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                        size_t offset, double delta);
+                                        size_t offset, int delta);
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);
