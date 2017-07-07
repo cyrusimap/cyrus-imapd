@@ -203,8 +203,10 @@ static void do_collate_report(struct buf *buf)
         double sum = 0.0;
         int64_t last_updated = 0;
 
-        buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[j].name,
-                        prom_metric_descs[j].help);
+        if (prom_metric_descs[j].help) {
+            buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[j].name,
+                            prom_metric_descs[j].help);
+        }
         buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
                         prom_metric_type_names[prom_metric_descs[j].type]);
 

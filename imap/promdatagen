@@ -69,7 +69,7 @@ while (my $line = <>) {
         # parse a metric:
         # metric counter imap_connections_total  The total number of IMAP connections
         $line =~ s{^\s*metric\s+}{};
-        my ($type, $name, $desc) = split /\s+/, $line, 3;
+        my ($type, $name, $help) = split /\s+/, $line, 3;
     
         if (not exists $types{$type}) {
             die "\"$type\" is not a valid type at line $lineno\n";
@@ -80,7 +80,7 @@ while (my $line = <>) {
             die "\"$name\" is not a valid metric name at line $lineno\n";
         }
 
-        push @metrics, { type => $type, name => $name, desc => $desc };
+        push @metrics, { type => $type, name => $name, help => $help };
 
     }
     else {
@@ -180,11 +180,16 @@ OKAY
 
     print $source "EXPORTED const struct prom_metric_desc prom_metric_descs[] = {\n";
     foreach my $metric (@{$metrics}) {
-        printf $source '    { "%s", %s, "%s" },%s',
+        printf $source '    { "%s", %s, ',
                        $metric->{name},
-                       $types{$metric->{type}},
-                       $metric->{desc},
-                       "\n";
+                       $types{$metric->{type}};
+        if (defined $metric->{help}) {
+            printf $source '"%s"', $metric->{help};
+        }
+        else {
+            print $source "NULL";
+        }
+        print $source " },\n";
     }
     print $source "    { NULL, 0, NULL },\n";
     print $source "};\n";
