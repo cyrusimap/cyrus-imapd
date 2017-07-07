@@ -336,7 +336,7 @@ static int get_annotation_value(const char *mboxname,
     buf_free(&attrib);
     free(buf);
 
-    syslog(LOG_NOTICE, "get_annotation_value: ret(%d):secondsp(%d)\n", ret, *secondsp);
+    syslog(LOG_DEBUG, "get_annotation_value: ret(%d):secondsp(%d)\n", ret, *secondsp);
     return ret;
 }
 
