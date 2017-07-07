@@ -3935,20 +3935,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     }
     if (!realm) realm = config_servername;
 
-#ifdef SASL_HTTP_REQUEST
-    /* Setup SASL HTTP request, if necessary */
-    if (scheme->flags & AUTH_NEED_REQUEST) {
-        sasl_http_request_t sasl_http_req;
-
-        sasl_http_req.method = txn->req_line.meth;
-        sasl_http_req.uri = txn->req_line.uri;
-        sasl_http_req.entity = NULL;
-        sasl_http_req.elen = 0;
-        sasl_http_req.non_persist = txn->flags.conn & CONN_CLOSE;
-        sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
-    }
-#endif /* SASL_HTTP_REQUEST */
-
     if (scheme->idx == AUTH_BASIC) {
         /* Basic (plaintext) authentication */
         char *pass;
@@ -4030,6 +4016,20 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* SASL-based authentication (Digest, Negotiate, NTLM) */
         const char *serverout = NULL;
         unsigned int serveroutlen = 0;
+
+#ifdef SASL_HTTP_REQUEST
+        /* Setup SASL HTTP request, if necessary */
+        sasl_http_request_t sasl_http_req;
+
+        if (scheme->flags & AUTH_NEED_REQUEST) {
+            sasl_http_req.method = txn->req_line.meth;
+            sasl_http_req.uri = txn->req_line.uri;
+            sasl_http_req.entity = NULL;
+            sasl_http_req.elen = 0;
+            sasl_http_req.non_persist = txn->flags.conn & CONN_CLOSE;
+            sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
+        }
+#endif /* SASL_HTTP_REQUEST */
 
         if (status == SASL_CONTINUE) {
             /* Continue current authentication exchange */
