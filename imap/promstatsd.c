@@ -200,6 +200,9 @@ static void do_collate_report(struct buf *buf)
 
     /* format it into buf */
     for (j = 0; j < PROM_NUM_METRICS; j++) {
+        double sum = 0.0;
+        int64_t last_updated = 0;
+
         buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[j].name,
                         prom_metric_descs[j].help);
         buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
@@ -207,12 +210,12 @@ static void do_collate_report(struct buf *buf)
 
         for (i = 0; i < proc_stats.count; i++) {
             const struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-            buf_printf(buf, "%s{pid=\"%jd\"} %.0f %" PRId64 "\n",
-                            prom_metric_descs[j].name,
-                            (intmax_t) p->pid,
-                            p->metrics[j].value,
-                            p->metrics[j].last_updated);
+            sum += p->metrics[j].value;
+            last_updated = MAX(last_updated, p->metrics[j].last_updated);
         }
+
+        buf_printf(buf, "%s %.0f %" PRId64 "\n",
+                        prom_metric_descs[j].name, sum, last_updated);
     }
 
     /* clean up the copy */
