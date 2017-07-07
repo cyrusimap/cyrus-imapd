@@ -3030,7 +3030,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     }
 
     /* add internal date */
-    time_to_rfc3501(record.internaldate, datebuf, sizeof(datebuf));
+    time_to_rfc5322(record.internaldate, datebuf, sizeof(datebuf));
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
@@ -3966,7 +3966,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         time_t msgdate = record.internaldate;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
-        time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
+        time_to_rfc5322(msgdate, datebuf, sizeof(datebuf));
 
         prot_printf(state->out, "%cINTERNALDATE \"%s\"",
                     sepchar, datebuf);

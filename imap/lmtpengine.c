@@ -636,7 +636,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* add a received header */
-    time_to_rfc822(now, datestr, sizeof(datestr));
+    time_to_rfc5322(now, datestr, sizeof(datestr));
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
     addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);

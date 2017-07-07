@@ -1430,7 +1430,7 @@ envelope_err:
                         header_data = header;
                 }
 
-                if (-1 == time_from_rfc822(header_data, &t)) {
+                if (-1 == time_from_rfc5322(header_data, &t, DATETIME_FULL)) {
                         res = 0;
                         free(bc_makeArray(bc, &i));
                         break;
@@ -1528,7 +1528,7 @@ envelope_err:
                         time_to_iso8601(t, buffer, sizeof(buffer), 1);
                         break;
                 case B_STD11:
-                        time_to_rfc822(t, buffer, sizeof(buffer));
+                        time_to_rfc5322(t, buffer, sizeof(buffer));
                         break;
                 case B_ZONE:
                         snprintf(buffer, sizeof(buffer), "%c%02d%02d",

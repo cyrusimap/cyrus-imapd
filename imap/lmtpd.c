@@ -517,7 +517,8 @@ int deliver_mailbox(FILE *f,
         r = message_parse_file(f, &content->base, &content->len, &content->body);
         /* If the body contains received_date, we should always use that. */
         if (content->body->received_date)
-            time_from_rfc822(content->body->received_date, &internaldate);
+            time_from_rfc5322(content->body->received_date, &internaldate,
+                              DATETIME_FULL);
     }
 
     if (!r) {

@@ -7510,7 +7510,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                              mimehdr, txn->req_hdrs);
     }
 
-    time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
+    time_to_rfc5322(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
                                                utc_zone),
                    datestr, sizeof(datestr));
     spool_replace_header(xstrdup("Date"), xstrdup(datestr), txn->req_hdrs);

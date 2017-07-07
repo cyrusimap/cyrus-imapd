@@ -542,11 +542,11 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
                 printf("\t%-50u", fs_record.size);
             printf("\n");
 
-            if (record) time_to_rfc822(record->sentdate, sent, sizeof(sent));
+            if (record) time_to_rfc5322(record->sentdate, sent, sizeof(sent));
             printf("   Date: %-50s", sent);
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
-                time_to_rfc822(fs_record.sentdate, sent, sizeof(sent));
+                time_to_rfc5322(fs_record.sentdate, sent, sizeof(sent));
                 printf("\t%-50s", sent);
             }
             printf("\n");

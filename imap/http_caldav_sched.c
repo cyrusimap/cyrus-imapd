@@ -400,7 +400,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     }
     fputs("\r\n", sm);
 
-    time_to_rfc822(t, datestr, sizeof(datestr));
+    time_to_rfc5322(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "Message-ID: <cyrus-caldav-%u-%ld-%u@%s>\r\n",

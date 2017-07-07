@@ -8301,8 +8301,8 @@ int dav_store_resource(struct transaction_t *txn,
         fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
-        char datestr[80];
-        time_to_rfc822(now, datestr, sizeof(datestr));
+        char datestr[80];       /* XXX: Why do we need 80 character buffer? */
+        time_to_rfc5322(now, datestr, sizeof(datestr));
         fprintf(f, "Date: %s\r\n", datestr);
     }
 

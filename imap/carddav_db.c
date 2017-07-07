@@ -869,7 +869,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     vparse_tobuf(vcard, &buf);
     char *mbuserid = mboxname_to_userid(mailbox->name);
 
-    time_to_rfc822(now, datestr, sizeof(datestr));
+    time_to_rfc5322(now, datestr, sizeof(datestr));
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
     header = charset_encode_mimeheader(mbuserid, 0);

@@ -12104,7 +12104,7 @@ static int getdatetime(time_t *date)
     }
     buf[i] = '\0';
 
-    r = time_from_rfc3501(buf, date);
+    r = time_from_rfc5322(buf, date, DATETIME_FULL);
     if (r < 0)
         goto baddate;
 

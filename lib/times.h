@@ -88,8 +88,12 @@ int time_to_rfc3339(time_t t, char *buf, size_t len);
 /*
  * RFC5322 datetime format
  */
+enum datetime_parse_mode {
+    DATETIME_DATE_ONLY = 0,
+    DATETIME_FULL,
+};
 #define RFC5322_DATETIME_MAX 32 /* 32 because we support 5 digit year format */
 int time_to_rfc5322(time_t date, char *buf, size_t len);
-int time_from_rfc5322(const char *s, time_t *date);
+int time_from_rfc5322(const char *s, time_t *date, enum datetime_parse_mode mode);
 
 #endif /* __CYRUS__TIME_H__ */

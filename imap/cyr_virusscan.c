@@ -535,7 +535,7 @@ void append_notifications()
                      (int) p, (int) t,
                      outgoing_count++, config_servername);
             fprintf(f, "Message-ID: %s\r\n", buf);
-            time_to_rfc822(t, datestr, sizeof(datestr));
+            time_to_rfc5322(t, datestr, sizeof(datestr));
             fprintf(f, "Date: %s\r\n", datestr);
             fprintf(f, "From: Mail System Administrator <%s>\r\n",
                     config_getstring(IMAPOPT_POSTMASTER));

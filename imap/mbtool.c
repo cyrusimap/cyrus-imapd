@@ -203,8 +203,8 @@ static int do_timestamp(const mbname_t *mbname)
 
         struct index_record copyrecord = *record;
 
-        time_to_rfc822(copyrecord.internaldate, olddate, sizeof(olddate));
-        time_to_rfc822(copyrecord.gmtime, newdate, sizeof(newdate));
+        time_to_rfc5322(copyrecord.internaldate, olddate, sizeof(olddate));
+        time_to_rfc5322(copyrecord.gmtime, newdate, sizeof(newdate));
         printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
 
         /* switch internaldate */

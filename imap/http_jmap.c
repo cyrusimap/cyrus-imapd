@@ -893,7 +893,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     }
     else {
         char datestr[80];
-        time_to_rfc822(now, datestr, sizeof(datestr));
+        time_to_rfc5322(now, datestr, sizeof(datestr));
         fprintf(f, "Date: %s\r\n", datestr);
     }
 
