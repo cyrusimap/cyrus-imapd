@@ -60,9 +60,38 @@ enum prom_metric_type {
     PROM_METRIC_HISTOGRAM = 2, /* unused */
     PROM_METRIC_SUMMARY   = 3, /* unused */
 };
+extern const char *prom_metric_type_names[];
+
+enum prom_metric_id {
+    IMAP_CONNECTIONS_TOTAL = 0,
+    IMAP_ACTIVE_CONNECTIONS,
+    IMAP_AUTHENTICATE_COUNT,
+    IMAP_APPEND_COUNT,
+    IMAP_CAPABILITY_COUNT,
+    IMAP_COMPRESS_COUNT,
+    IMAP_CHECK_COUNT,
+    IMAP_COPY_COUNT,
+    IMAP_CREATE_COUNT,
+    IMAP_CLOSE_COUNT,
+    IMAP_DELETE_COUNT,
+    IMAP_DELETEACL_COUNT,
+    IMAP_DUMP_COUNT,
+    IMAP_EXPUNGE_COUNT,
+    IMAP_EXAMINE_COUNT,
+    IMAP_FETCH_COUNT,
+    IMAP_GETACL_COUNT,
+
+    PROM_NUM_METRICS /* n.b. leave last! */
+};
+
+struct prom_metric_desc {
+    const char *name;
+    enum prom_metric_type type;
+    const char *help;
+};
+extern const struct prom_metric_desc prom_metric_descs[];
 
 struct prom_metric {
-    enum prom_metric_type type;
     double value;
     int64_t last_updated;
 };
@@ -70,45 +99,9 @@ struct prom_metric {
 struct prom_stats {
     pid_t pid;
     char  label[128];
-    struct prom_metric total_connections;
-    struct prom_metric active_connections;
-    struct prom_metric authenticate_count;
-    struct prom_metric append_count;
-    struct prom_metric capability_count;
-    struct prom_metric compress_count;
-    struct prom_metric check_count;
-    struct prom_metric copy_count;
-    struct prom_metric create_count;
-    struct prom_metric close_count;
-    struct prom_metric delete_count;
-    struct prom_metric deleteacl_count;
-    struct prom_metric dump_count;
-    struct prom_metric expunge_count;
-    struct prom_metric examine_count;
-    struct prom_metric fetch_count;
-    struct prom_metric getacl_count;
+    struct prom_metric metrics[PROM_NUM_METRICS];
 };
-#define PROM_STATS_INITIALIZER {    \
-    0,                              \
-    {0},                            \
-    {0},                            \
-    {PROM_METRIC_GAUGE, 0.0, 0},    \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-    {0},                            \
-}
+#define PROM_STATS_INITIALIZER {0}
 
 /* XXX end of to-be-generated stuff */
 
@@ -122,12 +115,13 @@ extern struct prometheus_handle *prometheus_register(void);
 extern void prometheus_unregister(struct prometheus_handle **handlep);
 
 #define prometheus_increment(handle, metric) \
-    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), 1)
+    prometheus_change(handle, metric, 1)
 
 #define prometheus_decrement(handle, metric) \
-    prometheus_adjust_at_offset(handle, offsetof(struct prom_stats, metric), -1)
+    prometheus_change(handle, metric, -1)
 
-extern void prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                        size_t offset, int delta);
+extern void prometheus_change(struct prometheus_handle *handle,
+                              enum prom_metric_id metric_id,
+                              int delta);
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);

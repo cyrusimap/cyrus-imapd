@@ -59,6 +59,40 @@
 
 #include "imap/prometheus.h"
 
+/* XXX this will be generated content */
+
+EXPORTED const char *prom_metric_type_names[] = {
+    "counter",
+    "gauge",
+    "histogram",
+    "summary",
+    NULL,
+};
+
+/* XXX fix these help strings */
+EXPORTED const struct prom_metric_desc prom_metric_descs[] = {
+    { "imap_connections_total", PROM_METRIC_COUNTER, "The total number of IMAP connections" },
+    { "imap_active_connections", PROM_METRIC_GAUGE, "The number of currently active IMAP connections" },
+    { "imap_authenticate_count", PROM_METRIC_COUNTER, "The total number of IMAP authentications" },
+    { "imap_append_count", PROM_METRIC_COUNTER, "The total number of IMAP APPENDs" },
+    { "imap_capability_count", PROM_METRIC_COUNTER, "The total number of IMAP CAPABILITYs" },
+    { "imap_compress_count", PROM_METRIC_COUNTER, "The total number of IMAP COMPRESSs" },
+    { "imap_check_count", PROM_METRIC_COUNTER, "The total number of IMAP checks" },
+    { "imap_copy_count", PROM_METRIC_COUNTER, "The total number of IMAP COPYs" },
+    { "imap_create_count", PROM_METRIC_COUNTER, "The total number of IMAP CREATEs" },
+    { "imap_close_count", PROM_METRIC_COUNTER, "The total number of IMAP CLOSEs" },
+    { "imap_delete_count", PROM_METRIC_COUNTER, "The total number of IMAP DELETEs" },
+    { "imap_deleteacl_count", PROM_METRIC_COUNTER, "The total number of IMAP DELETEACLs" },
+    { "imap_dump_count", PROM_METRIC_COUNTER, "The total number of IMAP DUMPs" },
+    { "imap_expunge_count", PROM_METRIC_COUNTER, "The total number of IMAP EXPUNGEs" },
+    { "imap_examine_count", PROM_METRIC_COUNTER, "The total number of IMAP EXAMINEs" },
+    { "imap_fetch_count", PROM_METRIC_COUNTER, "The total number of IMAP FETCHs" },
+    { "imap_getacl_count", PROM_METRIC_COUNTER, "The total number of IMAP GETACLs" },
+    { NULL, 0, NULL },
+};
+
+/* XXX end generated content */
+
 EXPORTED const char *prometheus_stats_dir(void)
 {
     static struct buf statsdir = BUF_INITIALIZER;
@@ -158,15 +192,17 @@ EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
 /* do not call this directly! use the prometheus_increment() and
  * prometheus_decrement() wrapper macros.
  */
-EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
-                                          size_t offset, int delta)
+EXPORTED void prometheus_change(struct prometheus_handle *handle,
+                                enum prom_metric_id metric_id,
+                                int delta)
 {
     struct prom_metric metric;
+    size_t offset;
     int r;
 
     if (!handle) return;
 
-    assert(offset < sizeof(struct prom_stats));
+    assert(metric_id >= 0 && metric_id < PROM_NUM_METRICS);
 
     r = mappedfile_writelock(handle->mf);
     if (r) {
@@ -175,10 +211,11 @@ EXPORTED void prometheus_adjust_at_offset(struct prometheus_handle *handle,
         return;
     }
 
+    offset = offsetof(struct prom_stats, metrics) + metric_id * sizeof(metric);
     memcpy(&metric, mappedfile_base(handle->mf) + offset, sizeof(metric));
     if (delta < 0) {
         /* counters must not be decremented */
-        assert(metric.type != PROM_METRIC_COUNTER);
+        assert(prom_metric_descs[metric_id].type != PROM_METRIC_COUNTER);
     }
     metric.value = metric.value + delta;
     metric.last_updated = time(NULL) * 1000; /* millisec since 1970 XXX finer granularity? */
