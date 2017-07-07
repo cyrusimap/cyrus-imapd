@@ -208,11 +208,11 @@ static void do_collate_report(struct buf *buf)
                    p->total_connections.last_updated);
     }
 
-    buf_appendcstr(buf, "# HELP imap_connections_active The number of active IMAP connections.\n");
-    buf_appendcstr(buf, "# TYPE imap_connections_active gauge\n");
+    buf_appendcstr(buf, "# HELP imap_active_connections The number of active IMAP connections.\n");
+    buf_appendcstr(buf, "# TYPE imap_active_connections gauge\n");
     for (i = 0; i < proc_stats.count; i++) {
         struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-        buf_printf(buf, "imap_connections_active{pid=\"%jd\"} %.0f %" PRId64 "\n",
+        buf_printf(buf, "imap_active_connections{pid=\"%jd\"} %.0f %" PRId64 "\n",
                    (intmax_t) p->pid, p->active_connections.value,
                    p->active_connections.last_updated);
     }
