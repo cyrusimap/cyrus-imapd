@@ -52,7 +52,8 @@ static void test_isatom(void)
     CU_ASSERT_EQUAL(imparse_isatom("\\"), 0);
 
     /* resp-specials */
-    CU_ASSERT_EQUAL(imparse_isatom("]"), 0);
+    // XXX - revert this when we block ] in atoms again
+    CU_ASSERT_NOT_EQUAL(imparse_isatom("]"), 0);
 
     /* make sure it doesn't just always return zero... */
     CU_ASSERT_NOT_EQUAL(imparse_isatom(hello), 0);
