@@ -538,11 +538,7 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
     // regardless will always update the alarmdb
     if (record->silent) return 0;
 
-    struct lastalarm_data data;
-    if (read_lastalarm(mailbox, record, &data))
-        data.nextcheck = record->internaldate;
-
-    return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+    return update_alarmdb(mailbox->name, record->uid, record->internaldate);
 }
 
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record)
