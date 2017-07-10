@@ -758,6 +758,39 @@ sub test_setmailboxes_parent
     $self->assert_str_equals($res->[0][1]{destroyed}[2], $id2);
 }
 
+sub test_setmailboxes_parent_acl
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "get inbox";
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    xlog "get inbox ACL";
+    my $parentacl = $admintalk->getacl("user.cassandane");
+
+    xlog "create mailbox";
+    $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => undef
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+
+    xlog "get new mailbox ACL";
+    my $myacl = $admintalk->getacl("user.cassandane.foo");
+
+    xlog "assert ACL matches parent ACL";
+    $self->assert_deep_equals($parentacl, $myacl);
+}
+
 sub test_setmailboxes_destroy_empty
     :JMAP :min_version_3_0
 {
