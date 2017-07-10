@@ -999,6 +999,8 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
             parentname = mboxlist_find_uniqueid(parentId, req->userid);
             if (!parentname) {
                 json_array_append_new(invalid, json_string("parentId"));
+                r = 0;
+                goto done;
             }
         } else {
             /* parent must be INBOX */
@@ -1019,26 +1021,27 @@ static int jmapmbox_write(jmap_req_t *req, char **uid, json_t *arg,
     }
 
     if (is_create) {
-        /* Create mailbox. */
-        struct buf acl = BUF_INITIALIZER;
-        char rights[100];
-        buf_reset(&acl);
-        cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-        buf_printf(&acl, "%s\t%s\t", req->userid, rights);
+        /* Create mailbox using parent ACL */
+        mbentry_t *mbparent = NULL;
+        r = mboxlist_lookup(parentname, &mbparent, NULL);
+        if (r) {
+            syslog(LOG_ERR, "failed to lookup parent mailbox %s: %s",
+                    parentname, error_message(r));
+            goto done;
+        }
         r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
                 NULL /* partition */,
                 req->userid, req->authstate,
                 0 /* options */, 0 /* uidvalidity */,
-                0 /* highestmodseq */, buf_cstring(&acl),
+                0 /* highestmodseq */, mbparent->acl,
                 NULL /* uniqueid */, 0 /* local_only */,
                 NULL /* mboxptr */);
-        buf_free(&acl);
+        mboxlist_entry_free(&mbparent);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                     mboxname, error_message(r));
             goto done;
         }
-        buf_free(&acl);
     } else {
         /* Do we need to move this mailbox to a new parent? */
         int force_rename = 0;
