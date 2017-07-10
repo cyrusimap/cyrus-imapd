@@ -343,7 +343,7 @@ EXPORTED mbname_t *mbname_from_userid(const char *userid)
 
     mbname->userid = xstrdup(userid); // may as well cache it
 
-    p = strchr(userid, '@');
+    p = strrchr(userid, '@');
     if (p) {
         mbname->localpart = xstrndup(userid, p - userid);
         const char *domain = p+1;
@@ -366,7 +366,7 @@ EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct nam
     mbname->recipient = xstrdup(recipient); // may as well cache it
     mbname->extns = ns;
 
-    const char *at = strchr(recipient, '@');
+    const char *at = strrchr(recipient, '@');
     if (at) {
         mbname->localpart = xstrndup(recipient, at - recipient);
         const char *domain = at+1;
@@ -576,7 +576,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     mbname_t *userparts = mbname_from_userid(userid);
 
     if (admindomains) {
-        p = strchr(mbname->extname, '@');
+        p = strrchr(mbname->extname, '@');
         if (p) {
             *p = '\0';
             if (strcmpsafe(p+1, config_defdomain))
@@ -629,7 +629,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
             free(strarray_shift(mbname->boxes));
             mbname->localpart = strarray_shift(mbname->boxes);
             if (crossdomains && mbname->localpart) {
-                char *p = strchr(mbname->localpart, '@');
+                char *p = strrchr(mbname->localpart, '@');
                 if (p) {
                     *p = '\0';
                     if (strcmpsafe(p+1, config_defdomain))
@@ -649,8 +649,8 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
             free(strarray_shift(mbname->boxes));
             if (crossdomains) {
                 const char *toplevel = strarray_nth(mbname->boxes, 0);
-                if (toplevel && strchr(toplevel, '@')) {
-                    char *p = (char *)strchr(toplevel, '@');
+                if (toplevel && strrchr(toplevel, '@')) {
+                    char *p = (char *)strrchr(toplevel, '@');
                     *p = '\0';
                     if (strcmpsafe(p+1, config_defdomain))
                         mbname->domain = xstrdup(p+1);
@@ -711,7 +711,7 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
         free(strarray_shift(mbname->boxes));
         mbname->localpart = strarray_shift(mbname->boxes);
         if (crossdomains && mbname->localpart) {
-            char *p = strchr(mbname->localpart, '@');
+            char *p = strrchr(mbname->localpart, '@');
             if (p) {
                 *p = '\0';
                 if (strcmpsafe(p+1, config_defdomain))
