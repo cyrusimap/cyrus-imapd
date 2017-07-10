@@ -1311,10 +1311,10 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     if (tokenise_str_and_create_tm(&buf, &tm, &tzone_offset, mode) == -1)
         goto baddate;
 
-    if (mode == DATETIME_FULL)
-        tmp_time = mkgmtime(&tm);
-    else if (mode == DATETIME_DATE_ONLY)
+    if (mode == DATETIME_DATE_ONLY)
         tmp_time = mktime(&tm);
+    else
+        tmp_time = mkgmtime(&tm);
 
     if (tmp_time == -1)
         goto baddate;
