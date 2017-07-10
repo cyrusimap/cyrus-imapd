@@ -371,7 +371,7 @@ static int send_rejection(const char *origid,
 
     namebuf = make_sieve_db(mailreceip);
 
-    time_to_rfc822(t, datestr, sizeof(datestr));
+    time_to_rfc5322(t, datestr, sizeof(datestr));
 
     dkey.id = buf;
     dkey.to = namebuf;
@@ -1166,7 +1166,7 @@ static int send_response(void *ac,
 
     buf_printf(&header, "Message-ID: %s\r\n", outmsgid);
 
-    time_to_rfc822(t, datestr, sizeof(datestr));
+    time_to_rfc5322(t, datestr, sizeof(datestr));
     buf_printf(&header, "Date: %s\r\n", datestr);
 
     buf_printf(&header, "X-Sieve: %s\r\n", SIEVE_VERSION);

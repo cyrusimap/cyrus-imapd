@@ -3082,7 +3082,7 @@ static int savemsg(message_data_t *m, FILE *f)
         /* no date, create one */
         char datestr[RFC822_DATETIME_MAX+1];
 
-        time_to_rfc822(now, datestr, sizeof(datestr));
+        time_to_rfc5322(now, datestr, sizeof(datestr));
         m->date = xstrdup(datestr);
         fprintf(f, "Date: %s\r\n", datestr);
         spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);

@@ -357,38 +357,38 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if (_wantprop(crock->props, "mayReadFreeBusy")) {
-        int bool = rights & DACL_READFB;
-        json_object_set_new(obj, "mayReadFreeBusy", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayReadFreeBusy",
+                            rights & DACL_READFB ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayReadItems")) {
-        int bool = rights & DACL_READ;
-        json_object_set_new(obj, "mayReadItems", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayReadItems",
+                            rights & DACL_READ ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayAddItems")) {
-        int bool = rights & DACL_WRITECONT;
-        json_object_set_new(obj, "mayAddItems", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayAddItems",
+                            rights & DACL_WRITECONT ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayModifyItems")) {
-        int bool = rights & DACL_WRITECONT;
-        json_object_set_new(obj, "mayModifyItems", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayModifyItems",
+                            rights & DACL_WRITECONT ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayRemoveItems")) {
-        int bool = rights & DACL_RMRES;
-        json_object_set_new(obj, "mayRemoveItems", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayRemoveItems",
+                            rights & DACL_RMRES ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayRename")) {
-        int bool = rights & DACL_RMCOL;
-        json_object_set_new(obj, "mayRename", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayRename",
+                            rights & DACL_RMCOL ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayDelete")) {
-        int bool = rights & DACL_RMCOL;
-        json_object_set_new(obj, "mayDelete", bool ? json_true() : json_false());
+        json_object_set_new(obj, "mayDelete",
+                            rights & DACL_RMCOL ? json_true() : json_false());
     }
 
     json_array_append_new(crock->array, obj);

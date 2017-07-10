@@ -1651,7 +1651,7 @@ static void annotation_get_lastupdate(annotate_state_t *state,
     if (stat(fname, &sbuf) == -1)
         goto out;
 
-    time_to_rfc3501(sbuf.st_mtime, valuebuf, sizeof(valuebuf));
+    time_to_rfc5322(sbuf.st_mtime, valuebuf, sizeof(valuebuf));
     buf_appendcstr(&value, valuebuf);
 
     output_entryatt(state, entry->name, "", &value);
@@ -1669,7 +1669,7 @@ static void annotation_get_lastpop(annotate_state_t *state,
     assert(mailbox);
 
     if (mailbox->i.pop3_last_login) {
-        time_to_rfc3501(mailbox->i.pop3_last_login, valuebuf,
+        time_to_rfc5322(mailbox->i.pop3_last_login, valuebuf,
                         sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
@@ -1704,7 +1704,7 @@ static void annotation_get_pop3showafter(annotate_state_t *state,
 
     if (mailbox->i.pop3_show_after)
     {
-        time_to_rfc3501(mailbox->i.pop3_show_after, valuebuf, sizeof(valuebuf));
+        time_to_rfc5322(mailbox->i.pop3_show_after, valuebuf, sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
 
@@ -3090,7 +3090,7 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
         date = 0;
     }
     else {
-        r = time_from_rfc3501(buf_cstring(&entry->shared), &date);
+        r = time_from_rfc5322(buf_cstring(&entry->shared), &date, DATETIME_FULL);
         if (r < 0)
             return IMAP_PROTOCOL_BAD_PARAMETERS;
     }

@@ -2360,7 +2360,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         if (r) return r;
 
         if (is_embedded)
-            time_from_rfc822(body->date, &t);
+            time_from_rfc5322(body->date, &t, DATETIME_FULL);
 
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(msg, "date", json_string(datestr));
@@ -5220,9 +5220,9 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
         date = mktime(&tm);
     }
     if (json_object_get(msg, "date") || !d.date) {
-        char fmt[RFC822_DATETIME_MAX+1];
-        memset(fmt, 0, RFC822_DATETIME_MAX+1);
-        time_to_rfc822(date, fmt, RFC822_DATETIME_MAX+1);
+        char fmt[RFC5322_DATETIME_MAX+1];
+        memset(fmt, 0, RFC5322_DATETIME_MAX+1);
+        time_to_rfc5322(date, fmt, RFC5322_DATETIME_MAX+1);
         if (d.date) free(d.date);
         d.date = xstrdup(fmt);
     }

@@ -1113,9 +1113,9 @@ static int compute_tzoffset(char *str, int len, int sign)
  *
  */
 
-static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf,
-                                      struct tm *tm,
-                                      int *tz_offset)
+static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
+                                      int *tz_offset,
+                                      enum datetime_parse_mode mode)
 {
     long ch;
     int c, i, len;
@@ -1199,6 +1199,11 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf,
         tm->tm_year -= 1900;
     }
 
+    if (mode == DATETIME_DATE_ONLY) {
+        *tz_offset = 0;
+        goto done;
+    }
+
     /** TIME **/
     skip_ws(buf, 0);
     /* hour */
@@ -1261,6 +1266,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf,
         *tz_offset = compute_tzoffset(str_token, len, c);
     }
 
+ done:
     /* dst */
     tm->tm_isdst = -1;
     return buf->offset;
@@ -1274,14 +1280,22 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf,
  * time_from_rfc5322()
  * This is meant to be the replacement function for time_from_rfc822() and
  * time_from_rfc3501() functions.
+ *
+ * The argument `mode` is set to `DATETIME_DATE_ONLY` when we don't want to
+ * parse the time and timezone parts of the RFC5322 date-time string. This is
+ * a hack designed to support the Cyrus implementation of the IMAP SEARCH
+ * command.
+ * For all other cases, the mode should be set to `DATETIME_FULL`.
+ *
  * Returns: Number of characters consumed from @s on success,
  *          or -1 on error.
  */
-EXPORTED int time_from_rfc5322(const char *s, time_t *date)
+EXPORTED int time_from_rfc5322(const char *s, time_t *date,
+                               enum datetime_parse_mode mode)
 {
     struct rfc5322dtbuf buf;
     struct tm tm;
-    time_t tmp_gmtime;
+    time_t tmp_time;
     int tzone_offset = 0;
 
     if (!s)
@@ -1294,14 +1308,18 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date)
     buf.len = strlen(s);
     buf.offset = 0;
 
-    if (tokenise_str_and_create_tm(&buf, &tm, &tzone_offset) == -1)
+    if (tokenise_str_and_create_tm(&buf, &tm, &tzone_offset, mode) == -1)
         goto baddate;
 
-    tmp_gmtime = mkgmtime(&tm);
-    if (tmp_gmtime == -1)
+    if (mode == DATETIME_FULL)
+        tmp_time = mkgmtime(&tm);
+    else if (mode == DATETIME_DATE_ONLY)
+        tmp_time = mktime(&tm);
+
+    if (tmp_time == -1)
         goto baddate;
 
-    *date = tmp_gmtime - tzone_offset * 60;
+    *date = tmp_time - tzone_offset * 60;
 
     return buf.offset;
 

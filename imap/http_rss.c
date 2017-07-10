@@ -910,7 +910,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* <subtitle> - optional */
     annotatemore_lookup(mailbox->name, "/comment", NULL, &attrib);
     if (age_mark) {
-        time_to_rfc822(age_mark, datestr, sizeof(datestr));
+        time_to_rfc5322(age_mark, datestr, sizeof(datestr));
         buf_printf_markup(buf, level,
                         "<subtitle>%s [posts since %s]</subtitle>",
                           buf_cstring(&attrib), datestr);

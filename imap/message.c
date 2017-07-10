@@ -586,11 +586,11 @@ HIDDEN int message_create_record(struct index_record *record,
                           const struct body *body)
 {
     /* used for sent time searching, truncated to day with no TZ */
-    if (day_from_rfc822(body->date, &record->sentdate) < 0)
+    if (time_from_rfc5322(body->date, &record->sentdate, DATETIME_DATE_ONLY) < 0)
         record->sentdate = 0;
 
     /* used for sent time sorting, full gmtime of Date: header */
-    if (time_from_rfc822(body->date, &record->gmtime) < 0)
+    if (time_from_rfc5322(body->date, &record->gmtime, DATETIME_FULL) < 0)
         record->gmtime = 0;
 
     record->size = body->filesize;

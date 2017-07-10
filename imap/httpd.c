@@ -4242,7 +4242,8 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 2 */
     else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
+        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0)
+            return HTTP_BAD_REQUEST;
 
         if (lastmod > since) return HTTP_PRECOND_FAILED;
 
@@ -4264,7 +4265,8 @@ EXPORTED int check_precond(struct transaction_t *txn,
     /* Step 4 */
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
              (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
-        if (time_from_rfc822(hdr[0], &since) < 0) return HTTP_BAD_REQUEST;
+        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0)
+            return HTTP_BAD_REQUEST;
 
         if (lastmod <= since) return HTTP_NOT_MODIFIED;
 
@@ -4276,7 +4278,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
         txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
 
         if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
-            time_from_rfc822(hdr[0], &since); /* error OK here, could be an etag */
+            time_from_rfc5322(hdr[0], &since, DATETIME_FULL); /* error OK here, could be an etag */
         }
 
         /* Only process Range if If-Range isn't present or validator matches */
