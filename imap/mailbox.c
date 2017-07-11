@@ -738,7 +738,7 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
                                  const struct index_record *record)
 {
     struct mappedfile *cachefile;
-    bit32 crc;
+    bit32 crc = 0;
     int r = 0;
 
     /* we do something nasty here to work around lazy loading while still
@@ -781,8 +781,8 @@ err:
         syslog(LOG_ERR, "IOERROR: missing cache offset for %s uid %u",
                mailbox->name, record->uid);
     else if (r)
-        syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s)",
-               mailbox->name, record->uid, error_message(r));
+        syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s) %d at %llu",
+               mailbox->name, record->uid, error_message(r), crc, (long long unsigned)record->cache_offset);
 
     /* parse the file again */
     {
