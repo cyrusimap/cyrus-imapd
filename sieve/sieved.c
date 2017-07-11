@@ -573,14 +573,17 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
 
     case BC_METADATA:/*17*/
     case BC_SERVERMETADATA:/*19*/
+    case BC_ENVIRONMENT:/*26*/
     {
         const char *data;
         int len;
 
         if (BC_METADATA == opcode) {
             printf("MetaData [");
-        } else {
+        } else if (BC_SERVERMETADATA == opcode) {
             printf("ServerMetaData [");
+        } else {
+            printf("Environment [");
         }
         i= printComparison(d, i+1);
 

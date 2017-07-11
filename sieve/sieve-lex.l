@@ -245,6 +245,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:text                return yylval->nval = TEXT;
 <INITIAL>:content             return yylval->nval = CONTENT;
 
+    /* environment - RFC 5183 */
+<INITIAL>environment          return ENVIRONMENT;
+
     /* variables - RFC 5229 */
 <INITIAL>string               return STRINGT;
 <INITIAL>set                  return SET;

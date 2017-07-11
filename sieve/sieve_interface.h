@@ -79,6 +79,8 @@ typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,
                                const char ***contents);
+typedef int sieve_get_environment(void *script_context,
+                                  const char *keyname, char **res);
 typedef int sieve_get_include(void *script_context, const char *script,
                               int isglobal, char *fpath, size_t size);
 typedef int sieve_list_validator(void *interp_context, const char *list);
@@ -196,6 +198,7 @@ void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
 void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
+void sieve_register_environment(sieve_interp_t *interp, sieve_get_environment *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 
 void sieve_register_listvalidator(sieve_interp_t *interp,

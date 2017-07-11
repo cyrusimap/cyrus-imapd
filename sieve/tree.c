@@ -107,6 +107,13 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         p->u.ae.addrpart = -1;
         break;
 
+    case ENVIRONMENT:
+        capability = "environment";
+        supported = parse_script->support & SIEVE_CAPA_ENVIRONMENT;
+
+        init_comptags(&p->u.mm.comp);
+        break;
+
     case BODY:
         capability = "body";
         supported = parse_script->support & SIEVE_CAPA_BODY;
@@ -353,6 +360,7 @@ void free_test(test_t *t)
         strarray_free(t->u.dt.kl);
         break;
 
+    case ENVIRONMENT:
     case MAILBOXEXISTS:
     case METADATA:
     case METADATAEXISTS:

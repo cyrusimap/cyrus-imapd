@@ -1591,6 +1591,8 @@ envelope_err:
         break;
 
     case BC_METADATA:/*17*/
+    case BC_SERVERMETADATA:/*19*/
+    case BC_ENVIRONMENT:/*26*/
     {
         res = 0;
         const char *extname = NULL;
@@ -1618,13 +1620,14 @@ envelope_err:
             break;
         }
 
-        i = unwrap_string(bc, i, &extname, NULL);
+        if (op == BC_METADATA) i = unwrap_string(bc, i, &extname, NULL);
         i = unwrap_string(bc, i, &keyname, NULL);
         /* unpack the world */
         list_len=ntohl(bc[i++].len);
         list_end=ntohl(bc[i++].len)/4;
 
-        interp->getmetadata(sc, extname, keyname, &val);
+        if (op == BC_ENVIRONMENT) interp->getenvironment(sc, keyname, &val);
+        else interp->getmetadata(sc, extname, keyname, &val);
 
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
@@ -1664,11 +1667,12 @@ envelope_err:
     }
 
     case BC_METADATAEXISTS:/*18*/
+    case BC_SERVERMETADATAEXISTS:/*20*/
     {
         res = 1;
         const char *extname = NULL;
         i++;
-        i = unwrap_string(bc, i, &extname, NULL);
+        if (op == BC_METADATAEXISTS) i = unwrap_string(bc, i, &extname, NULL);
         /* unpack the world */
         list_len=ntohl(bc[i++].len);
         list_end=ntohl(bc[i++].len)/4;
@@ -1683,103 +1687,6 @@ envelope_err:
             i = unwrap_string(bc, i, &keyname, NULL);
 
             interp->getmetadata(sc, extname, keyname, &val);
-            if (!val) res = 0;
-            free(val);
-            if (!res) break;
-        }
-
-        i = list_end; /* handle short-circuting */
-        break;
-    }
-
-    case BC_SERVERMETADATA:/*19*/
-    {
-        res = 0;
-        const char *keyname = NULL;
-        char *val = NULL;
-        i++;
-        int match=ntohl(bc[i++].value);
-        int relation=ntohl(bc[i++].value);
-        int comparator=ntohl(bc[i++].value);
-        int isReg = (match==B_REGEX);
-        int ctag = 0;
-        regex_t *reg;
-        char errbuf[100]; /* Basically unused, regexps tested at compile */
-
-        /* set up variables needed for compiling regex */
-        if (isReg) {
-            ctag = regcomp_flags(comparator, requires);
-        }
-
-        /*find the correct comparator fcn*/
-        comp=lookup_comp(interp, comparator, match, relation, &comprock);
-
-        if(!comp) {
-            res = SIEVE_RUN_ERROR;
-            break;
-        }
-        i = unwrap_string(bc, i, &keyname, NULL);
-        /* unpack the world */
-        list_len=ntohl(bc[i++].len);
-        list_end=ntohl(bc[i++].len)/4;
-
-        interp->getmetadata(sc, NULL, keyname, &val);
-
-        /* need to process all of them, to ensure our instruction pointer stays
-         * in the right place */
-        for (x=0; val && x<list_len; x++) {
-            const char *testval;
-
-            /* this is a mailbox name in external namespace */
-            i = unwrap_string(bc, i, &testval, NULL);
-
-            if (isReg) {
-                reg = bc_compile_regex(testval, ctag,
-                                       errbuf, sizeof(errbuf));
-                if (!reg) {
-                    /* Oops */
-                    free(val);
-                    res=-1;
-                    goto alldone;
-                }
-
-                res |= comp(val, strlen(val),
-                            (const char *)reg, match_vars, comprock);
-                free(reg);
-            } else {
-#if VERBOSE
-                printf("%s compared to %s(from script)\n",
-                       val, testval);
-#endif
-                res |= comp(val, strlen(val),
-                            testval, match_vars, comprock);
-            }
-            if (res) break;
-        }
-
-        i = list_end; /* handle short-circuting */
-        free(val);
-        break;
-    }
-
-    case BC_SERVERMETADATAEXISTS:/*20*/
-    {
-        res = 1;
-        /* unpack the world */
-        i++;
-        list_len=ntohl(bc[i++].len);
-        list_end=ntohl(bc[i++].len)/4;
-
-        /* need to process all of them, to ensure our instruction pointer stays
-         * in the right place */
-        for (x=0; x<list_len; x++) {
-            const char *keyname = NULL;
-            char *val = NULL;
-
-            /* this is an annotation name */
-            i = unwrap_string(bc, i, &keyname, NULL);
-
-            interp->getmetadata(sc, NULL, keyname, &val);
             if (!val) res = 0;
             free(val);
             if (!res) break;

@@ -202,6 +202,10 @@ extern void sieverestart(FILE *f);
 %type <test> btags
 %type <nval> transform
 
+/* environment - RFC 5183 */
+%token ENVIRONMENT
+%type <test> envtags
+
 /* variables - RFC 5229 */
 %token STRINGT SET
 %token <nval> LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
@@ -1012,6 +1016,10 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
 
         | BODY btags stringlist  { $$ = build_body(sscript, $2, $3); }
 
+        | ENVIRONMENT envtags STRING stringlist
+                                 { $$ = build_mbox_meta(sscript,
+                                                        $2, NULL, $3, $4); }
+
         | STRINGT strtags stringlist stringlist
                                  { $$ = build_stringt(sscript, $2, $3, $4); }
 
@@ -1304,6 +1312,13 @@ etags: /* empty */               { $$ = new_test(ENVELOPE, sscript); }
         | etags { ctags = &($1->u.ae.comp); } matchtype
         | etags { ctags = &($1->u.ae.comp); } listmatch
         | etags { ctags = &($1->u.ae.comp); } comparator
+        ;
+
+
+/* ENVIRONMENT tagged arguments */
+envtags: /* empty */               { $$ = new_test(ENVIRONMENT, sscript); }
+        | envtags { ctags = &($1->u.mm.comp); } matchtype
+        | envtags { ctags = &($1->u.mm.comp); } comparator
         ;
 
 
@@ -2292,7 +2307,7 @@ static test_t *build_mbox_meta(sieve_script_t *sscript,
     assert(t && (t->type == MAILBOXEXISTS ||
                  t->type == METADATA || t->type == METADATAEXISTS ||
                  t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
-                 t->type == SPECIALUSEEXISTS));
+                 t->type == ENVIRONMENT || t->type == SPECIALUSEEXISTS));
 
     canon_comptags(&t->u.mm.comp, sscript);
     t->u.mm.extname = extname;

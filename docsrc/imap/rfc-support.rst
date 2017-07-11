@@ -393,6 +393,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Body Extension
 
+:rfc:`5183`
+
+    Sieve Email Filtering: Environment Extension
+
 :rfc:`5228`
 
     Sieve: A Mail Filtering Language
@@ -437,6 +441,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. versionadded:: 2.5.0
 
+:rfc:`5293`
+
+    Sieve Email Filtering: Editheader Extension
+
 :rfc:`5321`
 
     Simple Mail Transfer Protocol
@@ -457,10 +465,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Reject and Extended Reject Extensions
 
-    .. NOTE::
-
-        Only the ``reject`` action is currently implemented.
-
 :rfc:`5435`
 
     Sieve Email Filtering: Extension for Notifications
@@ -476,6 +480,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`5465`
 
     The IMAP NOTIFY Extension
+
+:rfc:`5490`
+
+    The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
+    Status and Accessing Mailbox Metadata
 
 :rfc:`5524`
 
@@ -720,35 +729,14 @@ draft-ietf-httpbis-cice
 RFC Wishlist
 ============
 
-:rfc:`5183`
-
-    Sieve Email Filtering: Environment Extension
-
-:rfc:`5229`
-
-    Sieve Email Filtering: Variables Extension
-
 :rfc:`5235`
 
     Sieve Email Filtering: Spamtest and Virustest Extensions
-
-:rfc:`5293`
-
-    Sieve Email Filtering: Editheader Extension
-
-:rfc:`5429`
-
-    Sieve Email Filtering: Reject and Extended Reject Extensions
 
 :rfc:`5437`
 
     Sieve Notification Mechanism: Extensible Messaging and Presence
     Protocol (XMPP)
-
-:rfc:`5490`
-
-    The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
-    Status and Accessing Mailbox Metadata
 
 :rfc:`5703`
 

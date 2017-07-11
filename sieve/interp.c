@@ -125,6 +125,9 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->getenvelope &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
             buf_appendcstr(&buf, " envelope");
+        if (i->getenvironment &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT))
+            buf_appendcstr(&buf, " environment");
         if (i->getbody &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
             buf_appendcstr(&buf, " body");
@@ -277,6 +280,12 @@ EXPORTED void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope
 EXPORTED void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
 {
     interp->getinclude = f;
+}
+
+EXPORTED void sieve_register_environment(sieve_interp_t *interp,
+                                         sieve_get_environment *f)
+{
+    interp->getenvironment = f;
 }
 
 EXPORTED void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
@@ -499,6 +508,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_COPY:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_ENVIRONMENT:
+        if (!(interp->getenvironment &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT))) capa = 0;
         break;
 
     case SIEVE_CAPA_BODY:

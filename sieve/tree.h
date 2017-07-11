@@ -97,7 +97,7 @@ struct Test {
             char *header_name;
             strarray_t *kl;
         } dt;
-        struct { /* it's one of the mailbox or metadata type tests */
+        struct { /* it's a mailbox or metadata or environment test */
             comp_t comp;
             char *extname;
             char *keyname;

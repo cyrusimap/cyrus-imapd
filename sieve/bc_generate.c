@@ -612,8 +612,10 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         break;
 
     case SERVERMETADATA:
+    case ENVIRONMENT:
         if (!atleast(retval, codep+1)) return -1;
-        retval->data[codep++].op = BC_SERVERMETADATA;
+        retval->data[codep++].op =
+            t->type == ENVIRONMENT ? BC_ENVIRONMENT : BC_SERVERMETADATA;
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,

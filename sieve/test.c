@@ -59,6 +59,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "libconfig.h"
 #include "assert.h"
 #include "sieve_interface.h"
 #include "bytecode.h"
@@ -87,6 +88,12 @@ typedef struct {
     strarray_t *env_from;
     strarray_t *env_to;
 } message_data_t;
+
+typedef struct {
+    const char *host;
+    const char *remotehost;
+    const char *remoteip;
+} script_data_t;
 
 /* take a list of headers, pull the first one out and return it in
    name and contents.
@@ -267,6 +274,56 @@ static int getheader(void *v, const char *phead, const char ***body)
     } else {
         return SIEVE_FAIL;
     }
+}
+
+static int getenvironment(void *sc, const char *keyname, char **res)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    *res = NULL;
+
+    switch (*keyname) {
+    case 'd':
+        if (!strcmp(keyname, "domain")) {
+            const char *domain = strchr(sd->host, '.');
+
+            if (domain) domain++;
+            else domain = "";
+
+            *res = xstrdup(domain);
+        }
+        break;
+
+    case 'h':
+        if (!strcmp(keyname, "host")) *res = xstrdup(sd->host);
+        break;
+
+    case 'l':
+        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        break;
+
+    case 'n':
+        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        break;
+
+    case 'p':
+        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        break;
+
+    case 'r':
+        if (!strncmp(keyname, "remote-", 7)) {
+            if (!strcmp(keyname+7, "host"))
+                *res = xstrdup(sd->remotehost);
+            else if (sd->remoteip && !strcmp(keyname+7, "ip"))
+                *res = xstrdup(sd->remoteip);
+        }
+        break;
+
+    case 'v':
+        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        break;
+    }
+
+    return (*res ? SIEVE_OK : SIEVE_FAIL);
 }
 
 static message_data_t *new_msg(FILE *msg, int size, const char *name)
@@ -517,6 +574,9 @@ static int usage(const char *argv0)
     fprintf(stderr, "   -e envelope_from\n");
     fprintf(stderr, "   -t envelope_to\n");
     fprintf(stderr, "   -r y|n - have sent vacation response already? (if required)\n");
+    fprintf(stderr, "   -h local_hostname\n");
+    fprintf(stderr, "   -H remote_hostname\n");
+    fprintf(stderr, "   -I remote_ipaddr\n");
     exit(1);
 }
 
@@ -532,14 +592,19 @@ int main(int argc, char *argv[])
     static strarray_t mark = STRARRAY_INITIALIZER;
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
+    char *alt_config = NULL;
+    script_data_t sd = { NULL, "", NULL };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
 
-    while ((c = getopt(argc, argv, "v:fe:t:r:")) != EOF)
+    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:")) != EOF)
         switch (c) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
         case 'v':
             script = optarg;
             break;
@@ -557,6 +622,15 @@ int main(int argc, char *argv[])
         case 'r':
             vacation_answer = optarg[0];
             break;
+        case 'h':
+            sd.host = optarg;
+            break;
+        case 'H':
+            sd.remotehost = optarg;
+            break;
+        case 'I':
+            sd.remoteip = optarg;
+            break;
         default:
             usage(argv[0]);
             break;
@@ -570,6 +644,11 @@ int main(int argc, char *argv[])
             script = argv[optind+1];
         }
     }
+
+    /* Load configuration file. */
+    config_read(alt_config, 0);
+
+    if (!sd.host) sd.host = config_servername;
 
     /* Check if script is bytecode or text */
     f = fopen(script, "r");
@@ -638,6 +717,7 @@ int main(int argc, char *argv[])
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);
     sieve_register_envelope(i, getenvelope);
+    sieve_register_environment(i, getenvironment);
     sieve_register_body(i, getbody);
     sieve_register_include(i, getinclude);
 
@@ -682,7 +762,7 @@ int main(int argc, char *argv[])
         m->env_from = &e_from;
         m->env_to = &e_to;
 
-        res = sieve_execute_bytecode(exe, i, NULL, m);
+        res = sieve_execute_bytecode(exe, i, &sd, m);
         if (res != SIEVE_OK) {
             printf("sieve_execute_bytecode() returns %d\n", res);
             exit(1);

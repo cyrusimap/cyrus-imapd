@@ -57,6 +57,7 @@ struct sieve_interp {
     sieve_add_header *addheader;
     sieve_delete_header *deleteheader;
     sieve_get_envelope *getenvelope;
+    sieve_get_environment *getenvironment;
     sieve_get_body *getbody;
     sieve_get_include *getinclude;
     sieve_get_fname *getfname;
@@ -110,7 +111,7 @@ enum sieve_capa_flag {
     SIEVE_CAPA_BODY         = 1LL<<7,
 
     /* Environment - RFC 5183 */
-    SIEVE_CAPA_ENVIRONMENT  = 0LL<<8, /* currently unsupported */
+    SIEVE_CAPA_ENVIRONMENT  = 1LL<<8,
 
     /* Variables - RFC 5229 */
     SIEVE_CAPA_VARIABLES    = 1LL<<9,

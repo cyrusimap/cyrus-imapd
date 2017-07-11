@@ -464,6 +464,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
         break;
     }
     case BC_SERVERMETADATA:
+    case BC_ENVIRONMENT:
     {
         int ret;
         int datalen;
