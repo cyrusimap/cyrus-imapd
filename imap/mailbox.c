@@ -6410,6 +6410,14 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     r = mailbox_reconstruct_uniqueid(mailbox, flags);
     if (r) goto close;
 
+    /* open and lock the annotation state */
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, NULL);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
+               mailbox->name, error_message(r));
+        goto close;
+    }
+
     /* Validate user flags */
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
         valid_user_flags[i] = 0;
