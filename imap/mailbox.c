@@ -6061,10 +6061,21 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* rewrite the cache record */
     if (re_pack || record->cache_crc != copy.cache_crc) {
+        int32_t oldcrc = copy.cache_crc;
+        int32_t newcrc = record->cache_crc;
+        size_t oldoff = record->cache_offset;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         record->cache_offset = 0;
         r = mailbox_append_cache(mailbox, record);
         if (r) goto out ;
+        printf("%s rewrote cache for %u (offset %llu to %llu, crc %u to %u/%u)\n",
+               mailbox->name, record->uid,
+               (long long unsigned)oldoff, (long long unsigned)record->cache_offset,
+               oldcrc, newcrc, record->cache_crc);
+        syslog(LOG_NOTICE, "%s rewrote cache for %u (offset %llu to %llu, crc %u to %u/%u)",
+               mailbox->name, record->uid,
+               (long long unsigned)oldoff, (long long unsigned)record->cache_offset,
+               oldcrc, newcrc, record->cache_crc);
     }
 
     r = mailbox_rewrite_index_record(mailbox, record);
