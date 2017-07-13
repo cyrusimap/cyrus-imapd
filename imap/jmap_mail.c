@@ -119,6 +119,11 @@ jmap_msg_t jmap_mail_messages[] = {
 #define JMAP_INREPLYTO_HEADER "X-JMAP-In-Reply-To"
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
 
+typedef enum MsgType {
+        MSG_IS_ROOT = 0,
+        MSG_IS_ATTACHED = 1,
+} MsgType;
+
 static int _wantprop(hash_table *props, const char *name)
 {
     if (!props) return 1;
@@ -2222,7 +2227,7 @@ static json_t *jmapmsg_annot_read(const jmap_req_t *req, msgrecord_t *mr,
 
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
-                             msgrecord_t *mr, int is_embedded,
+                             msgrecord_t *mr, MsgType type,
                              json_t **msgp)
 {
     struct msgbodies bodies = MSGBODIES_INITIALIZER;
@@ -2362,7 +2367,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         r = msgrecord_get_internaldate(mr, &t);
         if (r) return r;
 
-        if (is_embedded)
+        if (type == MSG_IS_ATTACHED)
             time_from_rfc5322(body->date, &t, DATETIME_FULL);
 
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
@@ -2402,7 +2407,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
     if (_wantprop(props, "hasAttachment")) {
         int b = 0;
-        if (is_embedded) {
+        if (type == MSG_IS_ATTACHED) {
             b = bodies.atts.count + bodies.msgs.count;
         } else {
             msgrecord_hasflag(mr, JMAP_HAS_ATTACHMENT_FLAG, &b);
@@ -2552,7 +2557,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_t *submsg = NULL;
 
             r = jmapmsg_from_body(req, props, part->subpart, msg_buf,
-                                  mr, 1, &submsg);
+                                  mr, MSG_IS_ATTACHED, &submsg);
             if (r) goto done;
 
             char *blobid = jmap_blobid(&part->content_guid);
@@ -2566,7 +2571,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         json_object_set_new(msg, "attachedMessages", msgs);
     }
 
-    if (!is_embedded) {
+    if (type == MSG_IS_ROOT) {
         uint32_t flags;
         bit64 cid;
         uint32_t size;
@@ -2880,7 +2885,8 @@ static int jmapmsg_from_record(jmap_req_t *req, hash_table *props,
     r = msgrecord_get_bodystructure(mr, &body);
     if (r) return r;
 
-    r = jmapmsg_from_body(req, props, body, &msg_buf, mr, 0, msgp);
+    r = jmapmsg_from_body(req, props, body, &msg_buf, mr, MSG_IS_ROOT,
+                          msgp);
     message_free_body(body);
     free(body);
     buf_free(&msg_buf);
