@@ -111,14 +111,14 @@ enum meta_filename {
 #define NUM_CACHE_FIELDS 10
 
 struct cacheitem {
-    unsigned offset;
-    unsigned len;
+    size_t offset;
+    size_t len;
 };
 
 struct cacherecord {
     const struct buf *buf;
-    unsigned offset;
-    unsigned len;
+    size_t offset;
+    size_t len;
     struct cacheitem item[NUM_CACHE_FIELDS];
 };
 
@@ -144,7 +144,7 @@ struct index_record {
     uint32_t size;
     uint32_t header_size;
     time_t gmtime;
-    uint64_t cache_offset;
+    size_t cache_offset;
     time_t last_updated;
     uint32_t system_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
