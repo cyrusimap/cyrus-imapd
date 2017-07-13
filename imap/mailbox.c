@@ -6060,7 +6060,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     }
 
     /* rewrite the cache record */
-    if (re_pack || record->cache_crc != copy.cache_crc) {
+    if (re_pack || !record->cache_offset || record->cache_crc != copy.cache_crc) {
         int32_t oldcrc = copy.cache_crc;
         int32_t newcrc = record->cache_crc;
         size_t oldoff = record->cache_offset;
