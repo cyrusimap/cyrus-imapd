@@ -734,12 +734,19 @@ static int mailbox_append_cache(struct mailbox *mailbox,
     return 0;
 }
 
-EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
-                                 const struct index_record *record)
+enum mbcache_rewrite_t {
+    MBCACHE_NOPARSE,
+    MBCACHE_PARSEONLY,
+    MBCACHE_REWRITE
+};
+
+static int mailbox_cacherecord_internal(struct mailbox *mailbox,
+                                        const struct index_record *record,
+                                        enum mbcache_rewrite_t rewrite)
 {
     struct mappedfile *cachefile;
     bit32 crc = 0;
-    int r = 0;
+    int r = IMAP_IOERROR;
 
     /* we do something nasty here to work around lazy loading while still
      * giving const protection to records which are only used for read */
@@ -784,27 +791,44 @@ err:
         syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s) %d at %llu",
                mailbox->name, record->uid, error_message(r), crc, (long long unsigned)record->cache_offset);
 
-    /* parse the file again */
-    {
-        /* parse directly into the cache for this record */
-        const char *fname = mailbox_record_fname(mailbox, record);
-        if (!fname) {
-            syslog(LOG_ERR, "IOERROR: no spool file for %s uid %u",
-                   mailbox->name, record->uid);
-            return IMAP_IOERROR;
-        }
+    if (rewrite == MBCACHE_NOPARSE)
+        return r;
 
-        r = message_parse(fname, backdoor);
+    /* parse the file again */
+
+    /* parse directly into the cache for this record */
+    const char *fname = mailbox_record_fname(mailbox, record);
+    if (!fname) {
+        syslog(LOG_ERR, "IOERROR: no spool file for %s uid %u",
+               mailbox->name, record->uid);
+        return IMAP_IOERROR;
+    }
+
+    /* parse into the file and zero the cache offset */
+    r = message_parse(fname, backdoor);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to parse message for %s uid %u",
+               mailbox->name, record->uid);
+        return r;
+    }
+    backdoor->cache_offset = 0;
+
+    if (rewrite == MBCACHE_REWRITE) {
+        r = mailbox_append_cache(mailbox, backdoor);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to parse message for %s uid %u",
+            syslog(LOG_ERR, "IOERROR: failed to append cache for %s uid %u",
                    mailbox->name, record->uid);
             return r;
         }
-
-        backdoor->cache_offset = 0;
     }
 
     return 0;
+}
+
+EXPORTED int mailbox_cacherecord(struct mailbox *mailbox, const struct index_record *record)
+{
+    enum mbcache_rewrite_t rewrite = mailbox_index_islocked(mailbox, 1) ? MBCACHE_REWRITE : MBCACHE_PARSEONLY;
+    return mailbox_cacherecord_internal(mailbox, record, rewrite);
 }
 
 static int mailbox_abort_cache(struct mailbox *mailbox)
@@ -5912,7 +5936,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         goto out;
     }
 
-    if (mailbox_cacherecord(mailbox, record) || record->crec.len == 0) {
+    if (mailbox_cacherecord_internal(mailbox, record, MBCACHE_NOPARSE) || record->crec.len == 0) {
         re_parse = 1;
         re_pack = 1; /* cache record will have to be rewritten */
     }
