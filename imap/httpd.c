@@ -848,7 +848,6 @@ int service_init(int argc __attribute__((unused)),
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&httpd_namespace, 1)) != 0) {
-        syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EC_CONFIG);
     }
 
@@ -863,7 +862,6 @@ int service_init(int argc __attribute__((unused)),
         case 's': /* https (do TLS right away) */
             https = 1;
             if (!tls_enabled()) {
-                syslog(LOG_ERR, "https: required OpenSSL options not present");
                 fatal("https: required OpenSSL options not present",
                       EC_CONFIG);
             }
@@ -1217,6 +1215,7 @@ void shut_down(int code)
 void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
+    const char *fatal = "Fatal error: ";
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
@@ -1228,12 +1227,15 @@ void fatal(const char* s, int code)
         prot_printf(httpd_out,
                     "HTTP/1.1 %s\r\n"
                     "Content-Type: text/plain\r\n"
-                    "Connection: close\r\n\r\n"
-                    "Fatal error: %s\r\n",
-                    error_message(HTTP_SERVER_ERROR), s);
+                    "Content-Length: %zu\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "%s%s\r\n",
+                    error_message(HTTP_SERVER_ERROR),
+                    strlen(fatal) + strlen(s) + 2, fatal, s);
         prot_flush(httpd_out);
     }
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    syslog(LOG_ERR, "%s%s", fatal, s);
     shut_down(code);
 }
 
@@ -1300,8 +1302,6 @@ static int starttls(struct transaction_t *txn, int *http2)
         result = sasl_setprop(httpd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     }
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop() failed: starttls()");
-
         fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
     }
     if (saslprops.authid) {
@@ -3286,7 +3286,6 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
             if (!BrotliEncoderCompressStream(brotli, op,
                                              &avail_in, &next_in,
                                              &avail_out, &next_out, NULL)) {
-                syslog(LOG_ERR, "Brotli: Error while compressing data");
                 fatal("Brotli: Error while compressing data", EC_SOFTWARE);
             }
 
