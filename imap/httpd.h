@@ -312,6 +312,8 @@ struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
 
+    xmlParserCtxtPtr xml;               /* XML parser content */
+
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
 

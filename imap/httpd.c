@@ -1051,8 +1051,13 @@ int service_main(int argc __attribute__((unused)),
     http_conn.pin = httpd_in;
     http_conn.pout = httpd_out;
 
+    /* Create XML parser context */
+    if (!(http_conn.xml = xmlNewParserCtxt())) {
+        fatal("Unable to create XML parser", EC_TEMPFAIL);
+    }
+
     /* we were connected on https port so we should do
-       TLS negotiation immediatly */
+       TLS negotiation immediately */
     if (https == 1) {
         int r, http2 = 0;
 
@@ -1102,6 +1107,8 @@ int service_main(int argc __attribute__((unused)),
     /* cleanup */
     signal(SIGALRM, SIG_IGN);
     httpd_reset();
+
+    xmlFreeParserCtxt(http_conn.xml);
 
 #ifdef HAVE_NGHTTP2
     nghttp2_option_del(http_conn.http2_options);

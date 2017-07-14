@@ -3221,7 +3221,6 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
                    const char *spec_type)
 {
     const char **hdr;
-    xmlParserCtxtPtr ctxt;
     xmlDocPtr doc = NULL;
     int r = 0;
 
@@ -3243,26 +3242,31 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
         (!is_mediatype("text/xml", hdr[0]) &&
          !is_mediatype("application/xml", hdr[0]) &&
          !(spec_type && is_mediatype(spec_type, hdr[0])))) {
-        txn->error.desc = "This method requires an XML body\r\n";
+        txn->error.desc = "This method requires an XML body";
         return HTTP_BAD_MEDIATYPE;
     }
 
     /* Parse the XML request */
-    ctxt = xmlNewParserCtxt();
-    if (ctxt) {
-        doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body.payload),
-                                buf_len(&txn->req_body.payload), NULL, NULL,
-                                XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
-        xmlFreeParserCtxt(ctxt);
-    }
+    doc = xmlCtxtReadMemory(txn->conn->xml, buf_cstring(&txn->req_body.payload),
+                            buf_len(&txn->req_body.payload), NULL, NULL,
+                            XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
     if (!doc) {
-        txn->error.desc = "Unable to parse XML body\r\n";
+        txn->error.desc = "Unable to parse XML body";
         return HTTP_BAD_REQUEST;
+    }
+    else {
+        xmlErrorPtr err = xmlCtxtGetLastError(txn->conn->xml);
+        if (err) {
+            xmlFreeDoc(doc);
+            txn->error.desc = err->message;
+            return HTTP_BAD_REQUEST;
+        }
     }
 
     /* Get the root element of the XML request */
     if (!(*root = xmlDocGetRootElement(doc))) {
-        txn->error.desc = "Missing root element in request\r\n";
+        xmlFreeDoc(doc);
+        txn->error.desc = "Missing root element in request";
         return HTTP_BAD_REQUEST;
     }
 
