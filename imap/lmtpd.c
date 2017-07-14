@@ -86,6 +86,7 @@
 #include "message.h"
 #include "mupdate.h"
 #include "notify.h"
+#include "prometheus.h"
 #include "prot.h"
 #include "proxy.h"
 #include "telemetry.h"
@@ -148,6 +149,8 @@ static int singleinstance = 1;  /* attempt single instance store */
 static int isproxy = 0;
 
 static struct stagemsg *stage = NULL;
+
+struct prometheus_handle *promhandle = NULL;
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
@@ -231,6 +234,8 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&lmtpd_namespace);
 
+    promhandle = prometheus_register();
+
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
@@ -271,10 +276,16 @@ int service_main(int argc, char **argv,
         }
     }
 
+    prometheus_increment(promhandle, LMTP_CONNECTIONS_TOTAL);
+    prometheus_increment(promhandle, LMTP_ACTIVE_CONNECTIONS);
+
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+
+    prometheus_decrement(promhandle, LMTP_ACTIVE_CONNECTIONS);
+    snmp_increment(ACTIVE_CONNECTIONS, -1);
 
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
@@ -861,6 +872,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if(recurse_code) {
         /* We were called recursively. Just give up */
+        prometheus_decrement(promhandle, LMTP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
         exit(recurse_code);
     }
@@ -911,8 +923,11 @@ void shut_down(int code)
         prot_flush(deliver_out);
 
         /* one less active connection */
+        prometheus_decrement(promhandle, LMTP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
+
+    prometheus_unregister(&promhandle);
 
     cyrus_done();
 

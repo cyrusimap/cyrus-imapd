@@ -52,3 +52,21 @@ metric counter imap_thread_count        The total number of IMAP THREADs
 metric counter imap_unsubscribe_count   The total number of IMAP UNSUBSCRIBEs
 metric counter imap_unselect_count      The total number of IMAP UNSELECTs
 metric counter imap_xbackup_count       The total number of IMAP XBACKUPs
+
+metric counter lmtp_connections_total       The total number of LMTP connections
+metric gauge   lmtp_active_connections      The number of active LMTP connections
+metric counter lmtp_authenticate_count      The total number of IMAP AUTHENTICATEs
+    label lmtp_authenticate_count result yes no
+metric counter lmtp_received_messages       The number of messages received
+metric counter lmtp_received_bytes          The number of received bytes
+metric counter lmtp_received_recipients     The number of received recipients
+metric counter lmtp_transmitted_messages    The number of messages transmitted
+metric counter lmtp_transmitted_bytes       The number of bytes transmitted
+metric counter lmtp_sieve_redirect_count    The number of sieve REDIRECTs
+metric counter lmtp_sieve_discard_count     The number of sieve DISCARDs
+metric counter lmtp_sieve_reject_count      The number of sieve REJECTs
+metric counter lmtp_sieve_fileinto_count    The number of sieve FILEINTOs
+metric counter lmtp_sieve_keep_count        The number of sieve KEEPs
+metric counter lmtp_sieve_notify_count      The number of sieve NOTIFYs
+metric counter lmtp_sieve_autorespond_total The number of sieve AUTORESPONDs considered
+metric counter lmtp_sieve_autorespond_sent_count The number of sieve AUTORESPONDs sent

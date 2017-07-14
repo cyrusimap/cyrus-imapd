@@ -102,6 +102,7 @@ static struct protocol_t lmtp_protocol =
 };
 
 /* unused for deliver.c, but needed to make lmtpengine.c happy */
+struct prometheus_handle *promhandle = NULL;
 int deliver_logfd = -1;
 
 /* forward declarations */
