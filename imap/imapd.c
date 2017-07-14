@@ -1060,7 +1060,6 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
-    prometheus_unregister(&promhandle);
     proc_cleanup();
 
     i = 0;
@@ -1116,6 +1115,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    prometheus_unregister(&promhandle);
 
     cyrus_done();
 
