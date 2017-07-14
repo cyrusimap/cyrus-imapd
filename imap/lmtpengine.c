@@ -122,7 +122,6 @@ struct clientdata {
 
 /* defined in lmtpd.c */
 extern int deliver_logfd;
-extern struct prometheus_handle *promhandle;
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
                       const char *init_resp, const char *resp_prefix,
@@ -1124,7 +1123,7 @@ void lmtpmode(struct lmtp_func *func,
                           syslog(LOG_ERR, "badlogin: %s %s %s",
                                  cd.clienthost, mech, sasl_errdetail(cd.conn));
 
-                          prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
+                          prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_NO);
                           snmp_increment_args(AUTHENTICATION_NO, 1,
                                               VARIABLE_AUTH, hash_simple(mech),
                                               VARIABLE_LISTEND);
@@ -1160,7 +1159,7 @@ void lmtpmode(struct lmtp_func *func,
 
               /* authenticated successfully! */
 
-              prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_YES);
+              prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_YES);
               snmp_increment_args(AUTHENTICATION_YES,1,
                                   VARIABLE_AUTH, hash_simple(mech),
                                   VARIABLE_LISTEND);
@@ -1202,9 +1201,9 @@ void lmtpmode(struct lmtp_func *func,
                     continue;
                 }
 
-                prometheus_increment(promhandle, LMTP_RECEIVED_MESSAGES);
-                prometheus_change(promhandle, LMTP_RECEIVED_BYTES, msg->size);
-                prometheus_change(promhandle, LMTP_RECEIVED_RECIPIENTS, msg->rcpt_num);
+                prometheus_increment(LMTP_RECEIVED_MESSAGES);
+                prometheus_change(LMTP_RECEIVED_BYTES, msg->size);
+                prometheus_change(LMTP_RECEIVED_RECIPIENTS, msg->rcpt_num);
 
                 snmp_increment(mtaReceivedMessages, 1);
                 snmp_increment(mtaReceivedVolume, roundToK(msg->size));
@@ -1218,8 +1217,8 @@ void lmtpmode(struct lmtp_func *func,
                                     msg->rcpt[j]->resp);
                 }
 
-                prometheus_increment(promhandle, LMTP_TRANSMITTED_MESSAGES);
-                prometheus_change(promhandle, LMTP_TRANSMITTED_BYTES, delivered * msg->size);
+                prometheus_increment(LMTP_TRANSMITTED_MESSAGES);
+                prometheus_change(LMTP_TRANSMITTED_BYTES, delivered * msg->size);
 
                 snmp_increment(mtaTransmittedMessages, delivered);
                 snmp_increment(mtaTransmittedVolume,

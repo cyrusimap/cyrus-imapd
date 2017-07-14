@@ -55,23 +55,15 @@
 #define FNAME_PROM_REPORT "report.txt"
 #define FNAME_PROM_STATS_DIR "/stats"
 
-struct prometheus_handle {
-    struct mappedfile *mf;
-};
-
 extern const char *prometheus_stats_dir(void);
 
-extern struct prometheus_handle *prometheus_register(void);
-extern void prometheus_unregister(struct prometheus_handle **handlep);
+#define prometheus_increment(metric_id) \
+    prometheus_change(metric_id, 1)
 
-#define prometheus_increment(handle, metric_id) \
-    prometheus_change(handle, metric_id, 1)
+#define prometheus_decrement(metric_id) \
+    prometheus_change(metric_id, -1)
 
-#define prometheus_decrement(handle, metric_id) \
-    prometheus_change(handle, metric_id, -1)
-
-extern void prometheus_change(struct prometheus_handle *handle,
-                              enum prom_metric_id metric_id,
+extern void prometheus_change(enum prom_metric_id metric_id,
                               int delta);
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);

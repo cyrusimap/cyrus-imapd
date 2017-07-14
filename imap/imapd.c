@@ -137,8 +137,6 @@ static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
 
-static struct prometheus_handle *promhandle = NULL;
-
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
@@ -850,8 +848,6 @@ int service_init(int argc, char **argv, char **envp)
     apns_enabled =
       (events & EVENT_APPLEPUSHSERVICE) && config_getstring(IMAPOPT_APS_TOPIC);
 
-    promhandle = prometheus_register();
-
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
@@ -968,8 +964,8 @@ int service_main(int argc __attribute__((unused)),
        TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
 
-    prometheus_increment(promhandle, IMAP_CONNECTIONS_TOTAL);
-    prometheus_increment(promhandle, IMAP_ACTIVE_CONNECTIONS);
+    prometheus_increment(IMAP_CONNECTIONS_TOTAL);
+    prometheus_increment(IMAP_ACTIVE_CONNECTIONS);
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
@@ -981,7 +977,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* LOGOUT executed */
     prot_flush(imapd_out);
-    prometheus_decrement(promhandle, IMAP_ACTIVE_CONNECTIONS);
+    prometheus_decrement(IMAP_ACTIVE_CONNECTIONS);
     snmp_increment(ACTIVE_CONNECTIONS, -1);
 
     /* send a Logout event notification */
@@ -1102,7 +1098,7 @@ void shut_down(int code)
         prot_free(imapd_out);
 
         /* one less active connection */
-        prometheus_decrement(promhandle, IMAP_ACTIVE_CONNECTIONS);
+        prometheus_decrement(IMAP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
 
@@ -1116,8 +1112,6 @@ void shut_down(int code)
     tls_shutdown_serverengine();
 #endif
 
-    prometheus_unregister(&promhandle);
-
     cyrus_done();
 
     exit(code);
@@ -1130,7 +1124,7 @@ EXPORTED void fatal(const char *s, int code)
     if (recurse_code) {
         /* We were called recursively. Just give up */
         proc_cleanup();
-        prometheus_decrement(promhandle, IMAP_ACTIVE_CONNECTIONS);
+        prometheus_decrement(IMAP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
         exit(recurse_code);
     }
@@ -1338,7 +1332,7 @@ static void cmdloop(void)
 
                 cmd_append(tag.s, arg1.s, NULL);
 
-                prometheus_increment(promhandle, IMAP_APPEND_COUNT);
+                prometheus_increment(IMAP_APPEND_COUNT);
                 snmp_increment(APPEND_COUNT, 1);
             }
             else goto badcmd;
@@ -1350,7 +1344,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_capability(tag.s);
 
-                prometheus_increment(promhandle, IMAP_CAPABILITY_COUNT);
+                prometheus_increment(IMAP_CAPABILITY_COUNT);
                 snmp_increment(CAPABILITY_COUNT, 1);
             }
             else if (!imapd_userid) goto nologin;
@@ -1364,7 +1358,7 @@ static void cmdloop(void)
 
                 cmd_compress(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_COMPRESS_COUNT);
+                prometheus_increment(IMAP_COMPRESS_COUNT);
                 snmp_increment(COMPRESS_COUNT, 1);
             }
 #endif /* HAVE_ZLIB */
@@ -1375,7 +1369,7 @@ static void cmdloop(void)
 
                 cmd_noop(tag.s, cmd.s);
 
-                prometheus_increment(promhandle, IMAP_CHECK_COUNT);
+                prometheus_increment(IMAP_CHECK_COUNT);
                 snmp_increment(CHECK_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Copy")) {
@@ -1393,7 +1387,7 @@ static void cmdloop(void)
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/0);
 
-                prometheus_increment(promhandle, IMAP_COPY_COUNT);
+                prometheus_increment(IMAP_COPY_COUNT);
                 snmp_increment(COPY_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Create")) {
@@ -1411,7 +1405,7 @@ static void cmdloop(void)
                 cmd_create(tag.s, arg1.s, extargs, 0);
                 dlist_free(&extargs);
 
-                prometheus_increment(promhandle, IMAP_CREATE_COUNT);
+                prometheus_increment(IMAP_CREATE_COUNT);
                 snmp_increment(CREATE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Close")) {
@@ -1421,7 +1415,7 @@ static void cmdloop(void)
 
                 cmd_close(tag.s, cmd.s);
 
-                prometheus_increment(promhandle, IMAP_CLOSE_COUNT);
+                prometheus_increment(IMAP_CLOSE_COUNT);
                 snmp_increment(CLOSE_COUNT, 1);
             }
             else goto badcmd;
@@ -1436,7 +1430,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_delete(tag.s, arg1.s, 0, 0);
 
-                prometheus_increment(promhandle, IMAP_DELETE_COUNT);
+                prometheus_increment(IMAP_DELETE_COUNT);
                 snmp_increment(DELETE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Deleteacl")) {
@@ -1449,7 +1443,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, NULL);
 
-                prometheus_increment(promhandle, IMAP_DELETEACL_COUNT);
+                prometheus_increment(IMAP_DELETEACL_COUNT);
                 snmp_increment(DELETEACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Dump")) {
@@ -1467,7 +1461,7 @@ static void cmdloop(void)
                 if(c != '\n') goto extraargs;
 
                 cmd_dump(tag.s, arg1.s, uid_start);
-                prometheus_increment(promhandle, IMAP_DUMP_COUNT);
+                prometheus_increment(IMAP_DUMP_COUNT);
             /*  snmp_increment(DUMP_COUNT, 1);*/
             }
             else goto badcmd;
@@ -1487,7 +1481,7 @@ static void cmdloop(void)
 
                 cmd_expunge(tag.s, 0);
 
-                prometheus_increment(promhandle, IMAP_EXPUNGE_COUNT);
+                prometheus_increment(IMAP_EXPUNGE_COUNT);
                 snmp_increment(EXPUNGE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Examine")) {
@@ -1498,7 +1492,7 @@ static void cmdloop(void)
 
                 cmd_select(tag.s, cmd.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_EXAMINE_COUNT);
+                prometheus_increment(IMAP_EXAMINE_COUNT);
                 snmp_increment(EXAMINE_COUNT, 1);
             }
             else goto badcmd;
@@ -1516,7 +1510,7 @@ static void cmdloop(void)
 
                 cmd_fetch(tag.s, arg1.s, usinguid);
 
-                prometheus_increment(promhandle, IMAP_FETCH_COUNT);
+                prometheus_increment(IMAP_FETCH_COUNT);
                 snmp_increment(FETCH_COUNT, 1);
             }
             else goto badcmd;
@@ -1531,7 +1525,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_getacl(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_GETACL_COUNT);
+                prometheus_increment(IMAP_GETACL_COUNT);
                 snmp_increment(GETACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Getmetadata")) {
@@ -1539,7 +1533,7 @@ static void cmdloop(void)
 
                 cmd_getmetadata(tag.s);
 
-                prometheus_increment(promhandle, IMAP_GETMETADATA_COUNT);
+                prometheus_increment(IMAP_GETMETADATA_COUNT);
                 snmp_increment(GETANNOTATION_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Getquota")) {
@@ -1550,7 +1544,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_getquota(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_GETQUOTA_COUNT);
+                prometheus_increment(IMAP_GETQUOTA_COUNT);
                 snmp_increment(GETQUOTA_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Getquotaroot")) {
@@ -1561,7 +1555,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_getquotaroot(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_GETQUOTAROOT_COUNT);
+                prometheus_increment(IMAP_GETQUOTAROOT_COUNT);
                 snmp_increment(GETQUOTAROOT_COUNT, 1);
             }
 #ifdef HAVE_SSL
@@ -1569,7 +1563,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
 
                 cmd_genurlauth(tag.s);
-                prometheus_increment(promhandle, IMAP_GENURLAUTH_COUNT);
+                prometheus_increment(IMAP_GENURLAUTH_COUNT);
             /*  snmp_increment(GENURLAUTH_COUNT, 1);*/
             }
 #endif
@@ -1581,7 +1575,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 cmd_id(tag.s);
 
-                prometheus_increment(promhandle, IMAP_ID_COUNT);
+                prometheus_increment(IMAP_ID_COUNT);
                 snmp_increment(ID_COUNT, 1);
             }
             else if (!imapd_userid) goto nologin;
@@ -1590,7 +1584,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_idle(tag.s);
 
-                prometheus_increment(promhandle, IMAP_IDLE_COUNT);
+                prometheus_increment(IMAP_IDLE_COUNT);
                 snmp_increment(IDLE_COUNT, 1);
             }
             else goto badcmd;
@@ -1611,7 +1605,7 @@ static void cmdloop(void)
                 if (c == '\r') c = prot_getc(imapd_in);
                 if (c != '\n') goto extraargs;
 
-                prometheus_increment(promhandle, IMAP_LOGOUT_COUNT);
+                prometheus_increment(IMAP_LOGOUT_COUNT);
                 snmp_increment(LOGOUT_COUNT, 1);
 
                 /* force any responses from our selected backend */
@@ -1639,7 +1633,7 @@ static void cmdloop(void)
                 getlistargs(tag.s, &listargs);
                 if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
-                prometheus_increment(promhandle, IMAP_LIST_COUNT);
+                prometheus_increment(IMAP_LIST_COUNT);
                 snmp_increment(LIST_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Lsub")) {
@@ -1661,7 +1655,7 @@ static void cmdloop(void)
 
                 cmd_list(tag.s, &listargs);
 
-                prometheus_increment(promhandle, IMAP_LSUB_COUNT);
+                prometheus_increment(IMAP_LSUB_COUNT);
                 snmp_increment(LSUB_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Listrights")) {
@@ -1672,7 +1666,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_listrights(tag.s, arg1.s, arg2.s);
 
-                prometheus_increment(promhandle, IMAP_LISTRIGHTS_COUNT);
+                prometheus_increment(IMAP_LISTRIGHTS_COUNT);
                 snmp_increment(LISTRIGHTS_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Localappend")) {
@@ -1685,7 +1679,7 @@ static void cmdloop(void)
 
                 cmd_append(tag.s, arg1.s, *arg2.s ? arg2.s : NULL);
 
-                prometheus_increment(promhandle, IMAP_APPEND_COUNT);
+                prometheus_increment(IMAP_APPEND_COUNT);
                 snmp_increment(APPEND_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Localcreate")) {
@@ -1704,7 +1698,7 @@ static void cmdloop(void)
                 cmd_create(tag.s, arg1.s, extargs, 1);
                 dlist_free(&extargs);
 
-                /* XXX prometheus_increment(promhandle, IMAP_CREATE_COUNT); */
+                /* XXX prometheus_increment(IMAP_CREATE_COUNT); */
                 /* xxxx snmp_increment(CREATE_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Localdelete")) {
@@ -1716,7 +1710,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_delete(tag.s, arg1.s, 1, 1);
 
-                /* XXX prometheus_increment(promhandle, IMAP_DELETE_COUNT); */
+                /* XXX prometheus_increment(IMAP_DELETE_COUNT); */
                 /* xxxx snmp_increment(DELETE_COUNT, 1); */
             }
             else goto badcmd;
@@ -1731,7 +1725,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_myrights(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_MYRIGHTS_COUNT);
+                prometheus_increment(IMAP_MYRIGHTS_COUNT);
                 /* xxxx snmp_increment(MYRIGHTS_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Mupdatepush")) {
@@ -1742,7 +1736,7 @@ static void cmdloop(void)
                 if(c != '\n') goto extraargs;
                 cmd_mupdatepush(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_MUPDATEPUSH_COUNT);
+                prometheus_increment(IMAP_MUPDATEPUSH_COUNT);
                 /* xxxx snmp_increment(MUPDATEPUSH_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Move")) {
@@ -1760,7 +1754,7 @@ static void cmdloop(void)
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
 
-                prometheus_increment(promhandle, IMAP_COPY_COUNT);
+                prometheus_increment(IMAP_COPY_COUNT);
                 snmp_increment(COPY_COUNT, 1);
             } else goto badcmd;
             break;
@@ -1772,7 +1766,7 @@ static void cmdloop(void)
 
                 cmd_noop(tag.s, cmd.s);
 
-                /* XXX prometheus_increment(promhandle, IMAP_NOOP_COUNT); */
+                /* XXX prometheus_increment(IMAP_NOOP_COUNT); */
                 /* xxxx snmp_increment(NOOP_COUNT, 1); */
             }
             else if (!imapd_userid) goto nologin;
@@ -1781,7 +1775,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_namespace(tag.s);
 
-                /* XXX prometheus_increment(promhandle, IMAP_NAMESPACE_COUNT); */
+                /* XXX prometheus_increment(IMAP_NAMESPACE_COUNT); */
                 /* xxxx snmp_increment(NAMESPACE_COUNT, 1); */
             }
             else goto badcmd;
@@ -1804,7 +1798,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 
-                /* XXX prometheus_increment(promhandle, IMAP_RENAME_COUNT); */
+                /* XXX prometheus_increment(IMAP_RENAME_COUNT); */
                 /* xxxx snmp_increment(RENAME_COUNT, 1); */
             } else if(!strcmp(cmd.s, "Reconstruct")) {
                 recursive = 0;
@@ -1824,7 +1818,7 @@ static void cmdloop(void)
                 if(c != '\n') goto extraargs;
                 cmd_reconstruct(tag.s, arg1.s, recursive);
 
-                /* XXX prometheus_increment(promhandle, IMAP_RECONSTRUCT_COUNT); */
+                /* XXX prometheus_increment(IMAP_RECONSTRUCT_COUNT); */
                 /* snmp_increment(RECONSTRUCT_COUNT, 1); */
             }
             else if (!strcmp(cmd.s, "Rlist")) {
@@ -1885,7 +1879,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_resetkey(tag.s, have_mbox ? arg1.s : 0,
                              have_mech ? arg2.s : 0);
-                /* XXX prometheus_increment(promhandle, IMAP_RESETKEY_COUNT); */
+                /* XXX prometheus_increment(IMAP_RESETKEY_COUNT); */
             /*  snmp_increment(RESETKEY_COUNT, 1);*/
             }
 #endif
@@ -1928,7 +1922,7 @@ static void cmdloop(void)
                 }
                 cmd_starttls(tag.s, 0);
 
-                prometheus_increment(promhandle, IMAP_STARTTLS_COUNT);
+                prometheus_increment(IMAP_STARTTLS_COUNT);
                 snmp_increment(STARTTLS_COUNT, 1);
                 continue;
             }
@@ -1944,7 +1938,7 @@ static void cmdloop(void)
 
                 cmd_store(tag.s, arg1.s, usinguid);
 
-                prometheus_increment(promhandle, IMAP_STORE_COUNT);
+                prometheus_increment(IMAP_STORE_COUNT);
                 snmp_increment(STORE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Select")) {
@@ -1955,7 +1949,7 @@ static void cmdloop(void)
 
                 cmd_select(tag.s, cmd.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_SELECT_COUNT);
+                prometheus_increment(IMAP_SELECT_COUNT);
                 snmp_increment(SELECT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Search")) {
@@ -1966,7 +1960,7 @@ static void cmdloop(void)
 
                 cmd_search(tag.s, usinguid);
 
-                prometheus_increment(promhandle, IMAP_SEARCH_COUNT);
+                prometheus_increment(IMAP_SEARCH_COUNT);
                 snmp_increment(SEARCH_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Subscribe")) {
@@ -1986,7 +1980,7 @@ static void cmdloop(void)
                 else {
                     cmd_changesub(tag.s, (char *)0, arg1.s, 1);
                 }
-                prometheus_increment(promhandle, IMAP_SUBSCRIBE_COUNT);
+                prometheus_increment(IMAP_SUBSCRIBE_COUNT);
                 snmp_increment(SUBSCRIBE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setacl")) {
@@ -2001,7 +1995,7 @@ static void cmdloop(void)
                 if (c != '\n') goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 
-                prometheus_increment(promhandle, IMAP_SETACL_COUNT);
+                prometheus_increment(IMAP_SETACL_COUNT);
                 snmp_increment(SETACL_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setmetadata")) {
@@ -2011,7 +2005,7 @@ static void cmdloop(void)
 
                 cmd_setmetadata(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_SETMETADATA_COUNT);
+                prometheus_increment(IMAP_SETMETADATA_COUNT);
                 snmp_increment(SETMETADATA_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setquota")) {
@@ -2020,7 +2014,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 cmd_setquota(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_SETQUOTA_COUNT);
+                prometheus_increment(IMAP_SETQUOTA_COUNT);
                 snmp_increment(SETQUOTA_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Sort")) {
@@ -2030,7 +2024,7 @@ static void cmdloop(void)
             sort:
                 cmd_sort(tag.s, usinguid);
 
-                prometheus_increment(promhandle, IMAP_SORT_COUNT);
+                prometheus_increment(IMAP_SORT_COUNT);
                 snmp_increment(SORT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Status")) {
@@ -2039,7 +2033,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 cmd_status(tag.s, arg1.s);
 
-                prometheus_increment(promhandle, IMAP_STATUS_COUNT);
+                prometheus_increment(IMAP_STATUS_COUNT);
                 snmp_increment(STATUS_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Scan")) {
@@ -2060,7 +2054,7 @@ static void cmdloop(void)
 
                 cmd_list(tag.s, &listargs);
 
-                prometheus_increment(promhandle, IMAP_SCAN_COUNT);
+                prometheus_increment(IMAP_SCAN_COUNT);
                 snmp_increment(SCAN_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Syncapply")) {
@@ -2108,7 +2102,7 @@ static void cmdloop(void)
             thread:
                 cmd_thread(tag.s, usinguid);
 
-                prometheus_increment(promhandle, IMAP_THREAD_COUNT);
+                prometheus_increment(IMAP_THREAD_COUNT);
                 snmp_increment(THREAD_COUNT, 1);
             }
             else goto badcmd;
@@ -2154,7 +2148,7 @@ static void cmdloop(void)
                     if (c != '\n') goto extraargs;
                     cmd_expunge(tag.s, arg1.s);
 
-                    prometheus_increment(promhandle, IMAP_EXPUNGE_COUNT);
+                    prometheus_increment(IMAP_EXPUNGE_COUNT);
                     snmp_increment(EXPUNGE_COUNT, 1);
                 }
                 else if (!strcmp(arg1.s, "xrunannotator")) {
@@ -2183,7 +2177,7 @@ static void cmdloop(void)
                     cmd_changesub(tag.s, (char *)0, arg1.s, 0);
                 }
 
-                prometheus_increment(promhandle, IMAP_UNSUBSCRIBE_COUNT);
+                prometheus_increment(IMAP_UNSUBSCRIBE_COUNT);
                 snmp_increment(UNSUBSCRIBE_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Unselect")) {
@@ -2193,7 +2187,7 @@ static void cmdloop(void)
 
                 cmd_close(tag.s, cmd.s);
 
-                prometheus_increment(promhandle, IMAP_UNSELECT_COUNT);
+                prometheus_increment(IMAP_UNSELECT_COUNT);
                 snmp_increment(UNSELECT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Undump")) {
@@ -2204,7 +2198,7 @@ static void cmdloop(void)
                 if(c != ' ') goto missingargs;
 
                 cmd_undump(tag.s, arg1.s);
-                /* XXX prometheus_increment(promhandle, IMAP_UNDUMP_COUNT); */
+                /* XXX prometheus_increment(IMAP_UNDUMP_COUNT); */
             /*  snmp_increment(UNDUMP_COUNT, 1);*/
             }
 #ifdef HAVE_SSL
@@ -2212,7 +2206,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
 
                 cmd_urlfetch(tag.s);
-                /* XXX prometheus_increment(promhandle, IMAP_URLFETCH_COUNT); */
+                /* XXX prometheus_increment(IMAP_URLFETCH_COUNT); */
             /*  snmp_increment(URLFETCH_COUNT, 1);*/
             }
 #endif
@@ -2242,13 +2236,13 @@ static void cmdloop(void)
 
                 cmd_xbackup(tag.s, arg1.s, havechannel ? arg2.s : NULL);
 
-                prometheus_increment(promhandle, IMAP_XBACKUP_COUNT);
+                prometheus_increment(IMAP_XBACKUP_COUNT);
 //              snmp_increment(XBACKUP_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xconvfetch")) {
                 cmd_xconvfetch(tag.s);
 
-                /* XXX prometheus_increment(promhandle, IMAP_XCONVFETCH_COUNT); */
+                /* XXX prometheus_increment(IMAP_XCONVFETCH_COUNT); */
 //              snmp_increment(XCONVFETCH_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xconvmultisort")) {
@@ -2256,7 +2250,7 @@ static void cmdloop(void)
                 if (!imapd_index && !backend_current) goto nomailbox;
                 cmd_xconvmultisort(tag.s);
 
-                /* XXX prometheus_increment(promhandle, IMAP_XCONVMULTISORT_COUNT); */
+                /* XXX prometheus_increment(IMAP_XCONVMULTISORT_COUNT); */
 //              snmp_increment(XCONVMULTISORT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xconvsort")) {
@@ -2264,7 +2258,7 @@ static void cmdloop(void)
                 if (!imapd_index && !backend_current) goto nomailbox;
                 cmd_xconvsort(tag.s, 0);
 
-                /* XXX prometheus_increment(promhandle, IMAP_XCONVSORT_COUNT); */
+                /* XXX prometheus_increment(IMAP_XCONVSORT_COUNT); */
 //              snmp_increment(XCONVSORT_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xconvupdates")) {
@@ -2272,7 +2266,7 @@ static void cmdloop(void)
                 if (!imapd_index && !backend_current) goto nomailbox;
                 cmd_xconvsort(tag.s, 1);
 
-                /* XXX prometheus_increment(promhandle, IMAP_XCONVUPDATES_COUNT); */
+                /* XXX prometheus_increment(IMAP_XCONVUPDATES_COUNT); */
 //              snmp_increment(XCONVUPDATES_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xfer")) {
@@ -2298,7 +2292,7 @@ static void cmdloop(void)
 
                 cmd_xfer(tag.s, arg1.s, arg2.s,
                          (havepartition ? arg3.s : NULL));
-                /* XXX prometheus_increment(promhandle, IMAP_XFER_COUNT); */
+                /* XXX prometheus_increment(IMAP_XFER_COUNT); */
             /*  snmp_increment(XFER_COUNT, 1);*/
             }
             else if (!strcmp(cmd.s, "Xconvmeta")) {
@@ -2315,7 +2309,7 @@ static void cmdloop(void)
                 getlistargs(tag.s, &listargs);
                 if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
-                prometheus_increment(promhandle, IMAP_LIST_COUNT);
+                prometheus_increment(IMAP_LIST_COUNT);
                 snmp_increment(LIST_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xmove")) {
@@ -2332,7 +2326,7 @@ static void cmdloop(void)
                 c = getword(imapd_in, &arg1);
                 if (!arg1.len || !imparse_issequence(arg1.s)) goto badsequence;
                 cmd_xrunannotator(tag.s, arg1.s, usinguid);
-                /* XXX prometheus_increment(promhandle, IMAP_XRUNANNOTATOR_COUNT); */
+                /* XXX prometheus_increment(IMAP_XRUNANNOTATOR_COUNT); */
 //              snmp_increment(XRUNANNOTATOR_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xsnippets")) {
@@ -2340,7 +2334,7 @@ static void cmdloop(void)
                 if (!imapd_index && !backend_current) goto nomailbox;
                 cmd_xsnippets(tag.s);
 
-                /* XXX prometheus_increment(promhandle, IMAP_XSNIPPETS_COUNT); */
+                /* XXX prometheus_increment(IMAP_XSNIPPETS_COUNT); */
 //              snmp_increment(XSNIPPETS_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xstats")) {
@@ -2350,7 +2344,7 @@ static void cmdloop(void)
                 /* XWARMUP doesn't need a mailbox to be selected */
                 if (c != ' ') goto missingargs;
                 cmd_xwarmup(tag.s);
-                /* XXX prometheus_increment(promhandle, IMAP_XWARMUP_COUNT); */
+                /* XXX prometheus_increment(IMAP_XWARMUP_COUNT); */
 //              snmp_increment(XWARMUP_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Xkillmy")) {
@@ -2704,7 +2698,7 @@ static void cmd_login(char *tag, char *user)
             prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
         }
 
-        prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
+        prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_NO);
         snmp_increment_args(AUTHENTICATION_NO, 1,
                             VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
                             VARIABLE_LISTEND);
@@ -2722,7 +2716,7 @@ static void cmd_login(char *tag, char *user)
                 prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
             }
 
-            prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
+            prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_NO);
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
                                 VARIABLE_LISTEND);
@@ -2734,7 +2728,7 @@ static void cmd_login(char *tag, char *user)
             "User logged in SESSIONID=<%s>", session_id());
         reply = replybuf;
         imapd_userid = xstrdup((const char *) val);
-        prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_YES);
+        prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_YES);
         snmp_increment_args(AUTHENTICATION_YES, 1,
                             VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */,
                             VARIABLE_LISTEND);
@@ -2812,7 +2806,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
                    imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
 
-            prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_NO);
+            prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_NO);
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                                 VARIABLE_LISTEND);
@@ -2900,7 +2894,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         }
     }
 
-    prometheus_increment(promhandle, IMAP_AUTHENTICATE_COUNT_RESULT_YES);
+    prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_YES);
     snmp_increment_args(AUTHENTICATION_YES, 1,
                         VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                         VARIABLE_LISTEND);

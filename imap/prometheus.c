@@ -57,7 +57,17 @@
 #include "lib/ptrarray.h"
 #include "lib/util.h"
 
+#include "imap/global.h"
 #include "imap/prometheus.h"
+
+struct prometheus_handle {
+    struct mappedfile *mf;
+};
+
+static struct prometheus_handle *promhandle = NULL;
+
+static void prometheus_init(void);
+static void prometheus_done(void *rock __attribute__((unused)));
 
 EXPORTED const char *prometheus_stats_dir(void)
 {
@@ -87,13 +97,15 @@ EXPORTED const char *prometheus_stats_dir(void)
     return buf_cstring(&statsdir);
 }
 
-EXPORTED struct prometheus_handle *prometheus_register(void)
+static void prometheus_init(void)
 {
     char fname[PATH_MAX];
     struct prometheus_handle *handle = NULL;
     struct prom_stats stats = PROM_STATS_INITIALIZER;
     int i;
     int r;
+
+    if (promhandle != NULL) return;
 
     stats.pid = getpid();
     for (i = 0; i < PROM_NUM_METRICS; i++) {
@@ -106,7 +118,7 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
         fatal("unable to register stats for prometheus", EC_CONFIG);
 
     r = cyrus_mkdir(fname, 0755);
-    if (r) return NULL;
+    if (r) return;
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
@@ -129,7 +141,9 @@ EXPORTED struct prometheus_handle *prometheus_register(void)
     r = mappedfile_unlock(handle->mf);
     if (r) goto error;
 
-    return handle;
+    promhandle = handle;
+    cyrus_modules_add(&prometheus_done, NULL);
+    return;
 
 error:
     if (handle) {
@@ -139,50 +153,46 @@ error:
         }
         free(handle);
     }
-    return NULL;
+    promhandle = NULL;
 }
 
-EXPORTED void prometheus_unregister(struct prometheus_handle **handlep)
+static void prometheus_done(void *rock __attribute__((unused)))
 {
-    struct prometheus_handle *handle = *handlep;
-
-    *handlep = NULL;
-
-    if (!handle) return; /* make double-call safe */
+    if (!promhandle) return; /* make double-call safe */
 
     /* n.b. we do not unlink the file on unregister, as we still want
      * to be able to keep track of the terminated process's stats while
      * this session is active.
      */
-    mappedfile_close(&handle->mf);
+    mappedfile_close(&promhandle->mf);
 
-    free(handle);
+    free(promhandle);
+    promhandle = NULL;
 }
 
 /* do not call this directly! use the prometheus_increment() and
  * prometheus_decrement() wrapper macros.
  */
-EXPORTED void prometheus_change(struct prometheus_handle *handle,
-                                enum prom_metric_id metric_id,
+EXPORTED void prometheus_change(enum prom_metric_id metric_id,
                                 int delta)
 {
     struct prom_metric metric;
     size_t offset;
     int r;
 
-    if (!handle) return;
+    if (!promhandle) prometheus_init();
 
     assert(metric_id >= 0 && metric_id < PROM_NUM_METRICS);
 
-    r = mappedfile_writelock(handle->mf);
+    r = mappedfile_writelock(promhandle->mf);
     if (r) {
         syslog(LOG_ERR, "IOERROR: mappedfile_writelock unable to obtain lock on %s",
-                        mappedfile_fname(handle->mf));
+                        mappedfile_fname(promhandle->mf));
         return;
     }
 
     offset = offsetof(struct prom_stats, metrics) + metric_id * sizeof(metric);
-    memcpy(&metric, mappedfile_base(handle->mf) + offset, sizeof(metric));
+    memcpy(&metric, mappedfile_base(promhandle->mf) + offset, sizeof(metric));
     if (delta < 0) {
         /* counters must not be decremented */
         assert(prom_metric_descs[metric_id].type != PROM_METRIC_COUNTER);
@@ -190,17 +200,17 @@ EXPORTED void prometheus_change(struct prometheus_handle *handle,
     metric.value = metric.value + delta;
     metric.last_updated = time(NULL) * 1000; /* millisec since 1970 XXX finer granularity? */
 
-    r = mappedfile_pwrite(handle->mf, &metric, sizeof(metric), offset);
+    r = mappedfile_pwrite(promhandle->mf, &metric, sizeof(metric), offset);
     if (r != sizeof(metric)) {
         syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
                         SIZE_T_FMT " bytes, actually wrote %d",
                         sizeof(metric), r);
     }
     else {
-        mappedfile_commit(handle->mf);
+        mappedfile_commit(promhandle->mf);
     }
 
-    mappedfile_unlock(handle->mf);
+    mappedfile_unlock(promhandle->mf);
 }
 
 EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
