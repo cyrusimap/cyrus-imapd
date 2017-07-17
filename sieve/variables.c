@@ -94,7 +94,7 @@ EXPORTED char *variables_modify_string(const char *string, int modifiers)
             case '{':
             case '|':
                 if (!(BFV_QUOTEREGEX & modifiers)) break;
-
+                GCC_FALLTHROUGH
                 /* :matches AND :regex special characters */
             case '*':
             case '?':

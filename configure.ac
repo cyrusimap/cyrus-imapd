@@ -154,6 +154,13 @@ AH_BOTTOM([#if HAVE_VISIBILITY
 #define HIDDEN
 #endif])
 
+AH_BOTTOM([#if defined __GNUC__ &&  __GNUC__ > 6
+    #define GCC_FALLTHROUGH __attribute__((fallthrough));
+#else
+    #define GCC_FALLTHROUGH /* fall through */
+#endif
+])
+
 LT_PREREQ([2.2.6])
 LT_INIT([disable-static])
 AC_SUBST([LIBTOOL_DEPS])

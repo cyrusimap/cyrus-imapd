@@ -101,6 +101,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
     case ENVELOPE:
         capability = "envelope";
         supported = parse_script->support & SIEVE_CAPA_ENVELOPE;
+        GCC_FALLTHROUGH
 
     case ADDRESS:
         init_comptags(&p->u.ae.comp);
@@ -143,6 +144,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case METADATA:
         init_comptags(&p->u.mm.comp);
+        GCC_FALLTHROUGH
 
     case METADATAEXISTS:
         capability = "mboxmetadata";
@@ -151,6 +153,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
     case SERVERMETADATA:
         init_comptags(&p->u.mm.comp);
+        GCC_FALLTHROUGH
 
     case SERVERMETADATAEXISTS:
         capability = "servermetadata";
@@ -257,6 +260,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
     case INCLUDE:
         p->u.inc.once = p->u.inc.location = p->u.inc.optional = -1;
+        GCC_FALLTHROUGH
 
     case RETURN:
         capability = "include";
@@ -270,6 +274,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
     case DELETEHEADER:
         init_comptags(&p->u.dh.comp);
+        GCC_FALLTHROUGH
 
     case ADDHEADER:
         capability = "editheader";

@@ -947,8 +947,6 @@ int main(int argc, char **argv)
             break;
 
         case 'h':
-            usage("squatter");
-
         default:
             usage("squatter");
         }

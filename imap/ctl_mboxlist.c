@@ -1007,6 +1007,7 @@ int main(int argc, char *argv[])
 
     case M_POPULATE:
         syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
+        GCC_FALLTHROUGH
 
     case DUMP:
         mboxlist_init(0);

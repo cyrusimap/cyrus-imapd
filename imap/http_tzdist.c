@@ -790,6 +790,8 @@ static int action_capa(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         return precond;
@@ -939,6 +941,8 @@ static int action_leap(struct transaction_t *txn)
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -1156,6 +1160,8 @@ static int action_list(struct transaction_t *txn)
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -1813,6 +1819,8 @@ static int action_get(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         resp_body->type = NULL;
@@ -2008,6 +2016,8 @@ static int action_expand(struct transaction_t *txn)
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
