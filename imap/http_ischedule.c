@@ -175,7 +175,7 @@ struct namespace_t namespace_domainkey = {
 };
 
 
-void isched_capa_hdr(struct transaction_t *txn, time_t *lastmod)
+void isched_capa_hdr(struct transaction_t *txn, time_t *lastmod, struct stat *sb)
 {
     struct stat sbuf;
     time_t mtime;
@@ -185,6 +185,7 @@ void isched_capa_hdr(struct transaction_t *txn, time_t *lastmod)
     txn->resp_body.iserial = mtime +
         (rscale_calendars ? rscale_calendars->num_elements : 0);
     if (lastmod) *lastmod = mtime;
+    if (sb) *sb = sbuf;
 }
 
 
@@ -206,7 +207,7 @@ static int meth_get_isched(struct transaction_t *txn,
     if (!lastmod) message_guid_set_null(&prev_guid);
 
     /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, &lastmod);
+    isched_capa_hdr(txn, &lastmod, &sbuf);
 
     /* We don't handle GET on a anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
@@ -383,7 +384,7 @@ static int meth_get_isched(struct transaction_t *txn,
 static int meth_options_isched(struct transaction_t *txn, void *params)
 {
     /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, NULL);
+    isched_capa_hdr(txn, NULL, NULL);
 
     return meth_options(txn, params);
 }
@@ -403,7 +404,7 @@ static int meth_post_isched(struct transaction_t *txn,
     const char *uid = NULL;
 
     /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, NULL);
+    isched_capa_hdr(txn, NULL, NULL);
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
