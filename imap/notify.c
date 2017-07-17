@@ -160,7 +160,7 @@ EXPORTED int notify_at(time_t when, const char *method,
             const char *message)
 {
     struct mailbox *mailbox = NULL;
-    char datestr[RFC822_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX+1];
     int i;
     int r = mailbox_open_iwl("#events", &mailbox);
     struct buf buf = BUF_INITIALIZER;

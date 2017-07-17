@@ -501,7 +501,7 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
         do {
             struct index_record fs_record = { .uid = 0 };
             const struct buf *citem, empty_buf = BUF_INITIALIZER;
-            char sent[RFC822_DATETIME_MAX+1] = "";
+            char sent[RFC5322_DATETIME_MAX+1] = "";
 
             if (msgno < count) {
                 char fname[100];

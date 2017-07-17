@@ -178,8 +178,8 @@ static int do_timestamp(const mbname_t *mbname)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
-    char olddate[RFC822_DATETIME_MAX+1];
-    char newdate[RFC822_DATETIME_MAX+1];
+    char olddate[RFC5322_DATETIME_MAX+1];
+    char newdate[RFC5322_DATETIME_MAX+1];
 
     signals_poll();
 

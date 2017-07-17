@@ -401,7 +401,7 @@ static int send_rejection(const char *origid,
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
-    char datestr[RFC822_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX+1];
     pid_t sm_pid, p;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
@@ -1191,7 +1191,7 @@ static int send_response(void *ac,
     char outmsgid[8192], *sievedb, *subj;
     int i, sl, sm_stat, ret;
     time_t t;
-    char datestr[RFC822_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX+1];
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((deliver_data_t *) mc)->m;

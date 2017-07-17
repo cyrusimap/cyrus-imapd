@@ -263,7 +263,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     const char *argv[7], *msg_type, *filename;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
-    char *cp, when[2*RFC822_DATETIME_MAX+4], datestr[RFC822_DATETIME_MAX+1];
+    char *cp, when[2*RFC5322_DATETIME_MAX+4], datestr[RFC5322_DATETIME_MAX+1];
     char boundary[100], *mimebody, *ical_str;
     size_t outlen;
     struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER;
