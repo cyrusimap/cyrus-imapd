@@ -3004,6 +3004,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
             }
         }
         /* Fall through and build hash table of namespaces */
+        GCC_FALLTHROUGH
 
     case PROPFIND_EXPAND:
         /* Add all namespaces attached to the response to our hash table */
@@ -4172,6 +4173,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         txn->error.precond = DAV_NEED_LOCK_TOKEN;
         txn->error.resource = txn->req_tgt.path;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         ret = precond;
@@ -4552,6 +4555,8 @@ int meth_delete(struct transaction_t *txn, void *params)
         txn->error.precond = DAV_NEED_LOCK_TOKEN;
         txn->error.resource = txn->req_tgt.path;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         ret = precond;
@@ -4720,6 +4725,8 @@ int meth_get_head(struct transaction_t *txn, void *params)
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
 
         if (precond != HTTP_NOT_MODIFIED && record.uid) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -4917,6 +4924,8 @@ int meth_lock(struct transaction_t *txn, void *params)
         else
             txn->error.precond = DAV_NEED_LOCK_TOKEN;
         txn->error.resource = txn->req_tgt.path;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -6460,6 +6469,8 @@ static int dav_post_import(struct transaction_t *txn,
         txn->error.precond = DAV_NEED_LOCK_TOKEN;
         txn->error.resource = txn->req_tgt.path;
 
+        GCC_FALLTHROUGH
+
     case HTTP_PRECOND_FAILED:
     default:
         /* We failed a precondition */
@@ -6714,6 +6725,7 @@ int meth_patch(struct transaction_t *txn, void *params)
         txn->resp_body.lastmod = lastmod;
 
         /* Fall through and load message */
+        GCC_FALLTHROUGH
 
     case HTTP_OK: {
         unsigned offset;
@@ -6766,6 +6778,8 @@ int meth_patch(struct transaction_t *txn, void *params)
         switch (ret) {
         case HTTP_NO_CONTENT:
             ret = HTTP_OK;
+
+            GCC_FALLTHROUGH
 
         case HTTP_CREATED:
         case HTTP_PRECOND_FAILED:
@@ -7028,6 +7042,8 @@ int meth_put(struct transaction_t *txn, void *params)
         switch (ret) {
         case HTTP_NO_CONTENT:
             ret = HTTP_OK;
+
+            GCC_FALLTHROUGH
 
         case HTTP_CREATED:
         case HTTP_PRECOND_FAILED:
@@ -8721,6 +8737,8 @@ static int get_server_info(struct transaction_t *txn)
         txn->flags.cc |= CC_MAXAGE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

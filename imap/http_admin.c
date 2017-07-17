@@ -275,6 +275,8 @@ static int action_murder(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         return precond;
@@ -355,6 +357,8 @@ static int action_menu(struct transaction_t *txn)
         txn->flags.cc |= CC_MAXAGE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -853,6 +857,8 @@ static int action_df(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         return precond;
@@ -1182,6 +1188,8 @@ static int action_conf(struct transaction_t *txn)
         txn->flags.cc |= CC_MAXAGE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

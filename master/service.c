@@ -542,6 +542,7 @@ int main(int argc, char **argv, char **envp)
 
                     case EINVAL:
                         if (signals_poll() == SIGHUP) break;
+                        GCC_FALLTHROUGH
 
                     default:
                         syslog(LOG_ERR, "accept failed: %m");

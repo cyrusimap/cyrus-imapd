@@ -1463,6 +1463,8 @@ static int export_calendar(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         ret = precond;
@@ -1777,6 +1779,8 @@ static int list_calendars(struct transaction_t *txn)
         txn->flags.cc |= CC_REVALIDATE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */
@@ -2409,6 +2413,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     case HTTP_LOCKED:
         txn->error.precond = DAV_NEED_LOCK_TOKEN;
         txn->error.resource = txn->req_tgt.path;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

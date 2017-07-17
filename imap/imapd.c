@@ -3270,6 +3270,8 @@ static void cmd_idle(char *tag)
             for (p = buf; *p == '['; p++); /* can't have [ be first char */
             prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
             /* fallthrough */
+            GCC_FALLTHROUGH
+
         case shutdown_silent:
             shut_down(0);
             break;
@@ -11490,6 +11492,7 @@ static void xfer_recover(struct xfer_header *xfer)
                        "Could not back out MOVING flag during move of %s (%s)",
                        item->mbentry->name, error_message(r));
             }
+            GCC_FALLTHROUGH
 
         case XFER_REMOTE_CREATED:
             if (!xfer->use_replication) {
@@ -11504,6 +11507,7 @@ static void xfer_recover(struct xfer_header *xfer)
                         item->mbentry->name, error_message(r));
                 }
             }
+            GCC_FALLTHROUGH
 
         case XFER_DEACTIVATED:
             /* Tell murder it's back here and active */

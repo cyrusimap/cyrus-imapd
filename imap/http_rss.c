@@ -255,6 +255,8 @@ static int meth_get(struct transaction_t *txn,
 
                 if (precond != HTTP_NOT_MODIFIED) break;
 
+                GCC_FALLTHROUGH
+
             default:
                 /* We failed a precondition - don't perform the request */
                 ret = precond;
@@ -630,6 +632,8 @@ static int list_feeds(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         ret = precond;
@@ -817,6 +821,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         txn->flags.cc |= CC_MAXAGE;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

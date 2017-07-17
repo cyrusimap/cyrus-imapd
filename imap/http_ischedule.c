@@ -242,6 +242,8 @@ static int meth_get_isched(struct transaction_t *txn,
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         return precond;
@@ -522,6 +524,8 @@ static int meth_post_isched(struct transaction_t *txn,
         switch (meth) {
         case ICAL_METHOD_POLLSTATUS:
             if (kind != ICAL_VPOLL_COMPONENT) goto invalid_meth;
+
+            GCC_FALLTHROUGH
 
         case ICAL_METHOD_REQUEST:
         case ICAL_METHOD_REPLY:
@@ -1022,6 +1026,8 @@ static int meth_get_domainkey(struct transaction_t *txn,
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

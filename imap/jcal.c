@@ -254,9 +254,11 @@ static void icalparameter_as_json_object_member(icalparameter *param,
         break;
 #endif
 
-    default:
+    default:                    /* XXX: Is the default case here deliberate?? */
         kind_string = icalparameter_kind_to_string(kind);
         if (kind_string) break;
+
+        GCC_FALLTHROUGH
 
     case ICAL_NO_PARAMETER:
     case ICAL_ANY_PARAMETER:
@@ -351,6 +353,7 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
                 tok_fini(&tok);
                 break;
             }
+            GCC_FALLTHROUGH
 
         default:
             json_array_append_new(jprop, icalvalue_as_json_object(value));
@@ -726,6 +729,7 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
             buf_free(&buf);
             break;
         }
+        GCC_FALLTHROUGH
 
     default:
         value = json_object_to_icalvalue(jvalue, valkind);

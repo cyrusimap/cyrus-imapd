@@ -403,6 +403,7 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         break;
     case BC_DATE:/*11*/
         has_index=1;
+        GCC_FALLTHROUGH
     case BC_CURRENTDATE:/*12*/
         if (0x07 == version) {
             /* There was a version of the bytecode that had the index extension

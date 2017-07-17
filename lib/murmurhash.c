@@ -11,6 +11,7 @@
 // 1. It will not work incrementally.
 // 2. It will not produce the same results on little-endian and big-endian
 //    machines.
+#include <config.h>
 
 unsigned int murmurhash2(const void * key, int len, const unsigned int seed)
 {
@@ -48,7 +49,9 @@ unsigned int murmurhash2(const void * key, int len, const unsigned int seed)
 	switch(len)
 	{
 	case 3: h ^= data[2] << 16;
+            GCC_FALLTHROUGH
 	case 2: h ^= data[1] << 8;
+            GCC_FALLTHROUGH
 	case 1: h ^= data[0];
 	        h *= m;
 	};

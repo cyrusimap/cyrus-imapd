@@ -917,6 +917,8 @@ envelope_err:
     case BC_STRING:/*21*/
         is_string = 1;
 
+        GCC_FALLTHROUGH
+
     case BC_HASFLAG:/*15*/
     {
         int haystacksi=i+4;/*the i value for the beginning of the variables*/
@@ -1244,6 +1246,8 @@ envelope_err:
     }
     case BC_DATE:/*11*/
         has_index=1;
+        GCC_FALLTHROUGH
+
     case BC_CURRENTDATE:/*12*/
         if (0x07 == version) {
             /* There was a version of the bytecode that had the index extension
