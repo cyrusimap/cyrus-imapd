@@ -520,7 +520,7 @@ void append_notifications()
         if (i_mbox->msgs) {
             FILE *f = fdopen(fd, "w+");
             struct infected_msg *msg;
-            char buf[8192], datestr[RFC822_DATETIME_MAX+1];
+            char buf[8192], datestr[RFC5322_DATETIME_MAX+1];
             time_t t;
             struct protstream *pout;
             struct appendstate as;
