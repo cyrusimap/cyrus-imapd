@@ -51,6 +51,14 @@
 
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
+
+#define HTTP2_MAX_HEADERS  100
+#else /* !HAVE_NGHTTP2 */
+
+#define HTTP2_MAX_HEADERS  1
+#define nghttp2_session void
+#define nghttp2_option void
+typedef struct { void *value; } nghttp2_nv;
 #endif /* HAVE_NGHTTP2 */
 
 #include "annotate.h" /* for strlist */
@@ -317,28 +325,22 @@ struct http_connection {
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
 
-#ifdef HAVE_NGHTTP2
     nghttp2_session *http2_session;     /* HTTP/2 session context */
     nghttp2_option *http2_options;      /* Config options for HTTP/2 session */
 };
-
-#define HTTP2_MAX_HEADERS  100
 
 /* HTTP/2 stream context */
 struct http2_stream {
     int32_t stream_id;                  /* Stream ID */
     size_t num_resp_hdrs;               /* Number of response headers */
     nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
-#endif /* HAVE_NGHTTP2 */
 };
 
 
 /* Transaction context */
 struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
-#ifdef HAVE_NGHTTP2
     struct http2_stream http2;          /* HTTP/2 stream data */
-#endif
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -521,6 +523,8 @@ extern void begin_resp_headers(struct transaction_t *txn, long code);
 extern int end_resp_headers(struct transaction_t *txn, long code);
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...);
+extern void content_md5_hdr(struct transaction_t *txn,
+                            const unsigned char *md5);
 extern void comma_list_hdr(struct transaction_t *txn,
                            const char *hdr, const char *vals[],
                            unsigned flags, ...);

@@ -157,6 +157,10 @@ ec HTTP_BAD_GATEWAY,
 ec HTTP_UNAVAILABLE,
    "503 Service Unavailable"
 
+# Used to differentiate between shutdown file vs other issues
+ec HTTP_SHUTDOWN,
+   "503 Service Unavailable"
+
 ec HTTP_GATEWAY_TIMEOUT,
    "504 Gateway Timeout"
 

@@ -1268,6 +1268,9 @@ if test "$with_ssl" != "no"; then
        AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
        AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
     fi
+
+    AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
+       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
 fi
 AM_CONDITIONAL([HAVE_SSL], [test "$with_ssl" != "no"])
 AC_SUBST(SSL_CPPFLAGS)
