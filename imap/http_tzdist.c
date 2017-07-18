@@ -2157,12 +2157,15 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
                          char **resp)
 {
     size_t flags = JSON_PRESERVE_ORDER;
-    char *buf = NULL;
+    static char *buf = NULL;  /* keep generated data until next call */
+    char *json = NULL;
+
+    free(buf);
 
     if (root) {
         /* Dump JSON object into a text buffer */
         flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-        buf = json_dumps(root, flags);
+        json = buf = json_dumps(root, flags);
         json_decref(root);
 
         if (!buf) {
@@ -2172,18 +2175,17 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
         else if (resp) {
             if (*resp) free(*resp);
             *resp = buf;
+            buf = NULL;
         }
     }
-    else if (resp) buf = *resp;
+    else if (resp) json = *resp;
 
     /* Output the JSON object */
     if (code == HTTP_OK)
         txn->resp_body.type = "application/json; charset=utf-8";
     else
         txn->resp_body.type = "application/problem+json; charset=utf-8";
-    write_body(code, txn, buf, buf ? strlen(buf) : 0);
-
-    if (!resp && buf) free(buf);
+    write_body(code, txn, json, json ? strlen(json) : 0);
 
     return 0;
 }
