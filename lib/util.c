@@ -63,6 +63,7 @@
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
+#include <time.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -682,6 +683,19 @@ EXPORTED double timesub(const struct timeval *start, const struct timeval *end)
 {
     return (double)(end->tv_sec - start->tv_sec) +
            (double)(end->tv_usec - start->tv_usec)/1000000.0;
+}
+
+EXPORTED int64_t now_ms(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+        return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+    }
+    else {
+        syslog(LOG_WARNING, "clock_gettime(): %m");
+        return time(NULL) * 1000;
+    }
 }
 
 EXPORTED void cmdtime_settimer(int enable)

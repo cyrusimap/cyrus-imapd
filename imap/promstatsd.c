@@ -193,10 +193,10 @@ static void do_collate_report(struct buf *buf)
     int i, j;
 
     buf_reset(buf);
-    syslog(LOG_DEBUG, "updating prometheus report");
 
     /* slurp up current stats */
     promdir_foreach(&read_into_array, &proc_stats);
+    syslog(LOG_DEBUG, "updating prometheus report for %d processes", proc_stats.count);
 
     /* format it into buf */
     for (j = 0; j < PROM_NUM_METRICS; j++) {
@@ -211,6 +211,9 @@ static void do_collate_report(struct buf *buf)
             buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
                             prom_metric_type_names[prom_metric_descs[j].type]);
         }
+
+        /* prevent zero timestamp when we don't have any real stats yet */
+        if (proc_stats.count == 0) last_updated = now_ms();
 
         for (i = 0; i < proc_stats.count; i++) {
             const struct prom_stats *p = ptrarray_nth(&proc_stats, i);

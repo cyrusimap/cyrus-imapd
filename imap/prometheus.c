@@ -98,19 +98,6 @@ EXPORTED const char *prometheus_stats_dir(void)
     return buf_cstring(&statsdir);
 }
 
-static int64_t now_ms(void)
-{
-    struct timespec ts;
-
-    if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
-        return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
-    }
-    else {
-        syslog(LOG_WARNING, "clock_gettime(): %m");
-        return time(NULL) * 1000;
-    }
-}
-
 static void prometheus_init(void)
 {
     char fname[PATH_MAX];
