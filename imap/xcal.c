@@ -265,6 +265,8 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
         kind_string = icalparameter_kind_to_string(kind);
         if (kind_string) break;
 
+        GCC_FALLTHROUGH
+
     case ICAL_NO_PARAMETER:
     case ICAL_ANY_PARAMETER:
             icalerror_set_errno(ICAL_BADARG_ERROR);
@@ -946,6 +948,7 @@ static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
             buf_free(&buf);
             break;
         }
+        GCC_FALLTHROUGH
 
     default:
         value = xml_element_to_icalvalue(node, valkind);

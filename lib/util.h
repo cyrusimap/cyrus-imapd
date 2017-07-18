@@ -379,4 +379,14 @@ const char *makeuuid();
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
 
+/*
+ * GCC_VERSION macro usage:
+ * #if GCC_VERSION > 60909    //GCC version 7 and above
+ *   do_something();
+ * #endif
+ */
+#define GCC_VERSION (__GNUC__ * 10000           \
+                     + __GNUC_MINOR__ * 100     \
+                     + __GNUC_PATCHLEVEL__)
+
 #endif /* INCLUDED_UTIL_H */

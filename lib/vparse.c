@@ -123,6 +123,7 @@ static int _parse_param_quoted(struct vparse_state *state, int multiparam)
             if (multiparam)
                 return PE_QSTRING_COMMA;
             /* or fall through, comma isn't special */
+            GCC_FALLTHROUGH
 
         default:
             PUTC(*state->p);
@@ -311,6 +312,7 @@ repeat:
                 break;
             }
             /* or fall through, comma isn't special */
+            GCC_FALLTHROUGH
 
         default:
             PUTC(*state->p);

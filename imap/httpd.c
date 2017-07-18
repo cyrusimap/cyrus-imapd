@@ -409,6 +409,8 @@ static int http2_frame_recv_cb(nghttp2_session *session,
             }
         }
 
+        GCC_FALLTHROUGH
+
     case NGHTTP2_DATA:
         /* Check that the client request has finished */
         if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
@@ -2687,6 +2689,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (txn->flags.ver == VER_2) break;
 
         /* Fall through and specify connection options - HTTP/1.x only */
+        GCC_FALLTHROUGH
 
     case HTTP_SWITCH_PROT:
         if (txn->flags.conn) {
@@ -2715,6 +2718,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (code != HTTP_SWITCH_PROT) break;
 
         /* Fall through as provisional response */
+        GCC_FALLTHROUGH
 
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
@@ -2984,6 +2988,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
 
         /* Fall through and specify framing */
+        GCC_FALLTHROUGH
 
     default:
         if (txn->flags.te) {
@@ -4388,6 +4393,8 @@ static int list_well_known(struct transaction_t *txn)
 
         if (precond != HTTP_NOT_MODIFIED) break;
 
+        GCC_FALLTHROUGH
+
     default:
         /* We failed a precondition - don't perform the request */
         return precond;
@@ -4543,6 +4550,8 @@ static int meth_get(struct transaction_t *txn,
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
         if (precond != HTTP_NOT_MODIFIED) break;
+
+        GCC_FALLTHROUGH
 
     default:
         /* We failed a precondition - don't perform the request */

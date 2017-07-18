@@ -1257,7 +1257,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
 
     /* Reset user flags */
     uint32_t user_flags[MAX_USER_FLAGS/32];
-    memset(user_flags, 0, sizeof(user_flags)/sizeof(user_flags[0]));
+    memset(user_flags, 0, sizeof(user_flags));
     r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) goto out;
 
