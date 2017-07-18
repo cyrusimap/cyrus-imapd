@@ -47,6 +47,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <syslog.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/assert.h"
@@ -97,6 +98,19 @@ EXPORTED const char *prometheus_stats_dir(void)
     return buf_cstring(&statsdir);
 }
 
+static int64_t now_ms(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+        return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+    }
+    else {
+        syslog(LOG_WARNING, "clock_gettime(): %m");
+        return time(NULL) * 1000;
+    }
+}
+
 static void prometheus_init(void)
 {
     char fname[PATH_MAX];
@@ -109,7 +123,7 @@ static void prometheus_init(void)
 
     stats.pid = getpid();
     for (i = 0; i < PROM_NUM_METRICS; i++) {
-        stats.metrics[i].last_updated = time(NULL) * 1000;
+        stats.metrics[i].last_updated = now_ms();
     }
 
     r = snprintf(fname, sizeof(fname), "%s%jd",
@@ -198,7 +212,7 @@ EXPORTED void prometheus_change(enum prom_metric_id metric_id,
         assert(prom_metric_descs[metric_id].type != PROM_METRIC_COUNTER);
     }
     metric.value = metric.value + delta;
-    metric.last_updated = time(NULL) * 1000; /* millisec since 1970 XXX finer granularity? */
+    metric.last_updated = now_ms();
 
     r = mappedfile_pwrite(promhandle->mf, &metric, sizeof(metric), offset);
     if (r != sizeof(metric)) {
