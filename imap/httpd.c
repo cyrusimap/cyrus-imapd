@@ -830,7 +830,7 @@ static void http2_data_chunk(struct transaction_t *txn,
 
 #else /* !HAVE_NGHTTP2 */
 
-#define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID NULL
+#define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID ""
 
 #define alpn_select_cb NULL
 
