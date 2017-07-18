@@ -265,14 +265,14 @@ int main(int argc, char **argv)
     int opt;
     int r;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+    if (geteuid() == 0 && become_cyrus(/*is_master*/0) != 0) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "C:cdf:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:cdf:v")) != -1) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
