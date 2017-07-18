@@ -69,8 +69,6 @@
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"
 
-#define NOTIFY_MAXSIZE 8192
-
 static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 {
     const char *myarg = (arg ? arg : "");
@@ -237,6 +235,8 @@ EXPORTED void notify(const char *method,
     char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
     int buflen = 0;
     int i, r = 0;
+    unsigned bufsiz;
+    socklen_t optlen;
 
     if (!strncmp(notify_sock, "dlist:", 6)) {
         notify_dlist(notify_sock+6, method, class, priority,
@@ -262,6 +262,17 @@ EXPORTED void notify(const char *method,
                 FNAME_NOTIFY_SOCK, sizeof(sun_data.sun_path));
     }
 
+    /* Get send buffer size */
+    optlen = sizeof(bufsiz);
+    r = getsockopt(soc, SOL_SOCKET, SO_SNDBUF, &bufsiz, &optlen);
+    if (r == -1) {
+        syslog(LOG_ERR, "unable to getsockopt(SO_SNDBUF) on notify socket: %m");
+        goto out;
+    }
+
+    /* Use minimum of 1/10 of send buffer size (-overhead) NOTIFY_MAXSIZE */
+    bufsiz = MIN(bufsiz / 10 - 32, NOTIFY_MAXSIZE);
+
     /*
      * build request of the form:
      *
@@ -269,21 +280,21 @@ EXPORTED void notify(const char *method,
      *   nopt NUL N(option NUL) message NUL
      */
 
-    r = add_arg(buf, sizeof(buf), method, &buflen);
-    if (!r) r = add_arg(buf, sizeof(buf), class, &buflen);
-    if (!r) r = add_arg(buf, sizeof(buf), priority, &buflen);
-    if (!r) r = add_arg(buf, sizeof(buf), user, &buflen);
-    if (!r) r = add_arg(buf, sizeof(buf), mailbox, &buflen);
+    r = add_arg(buf, bufsiz, method, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, class, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, priority, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, user, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, mailbox, &buflen);
 
     snprintf(noptstr, sizeof(noptstr), "%d", nopt);
-    if (!r) r = add_arg(buf, sizeof(buf), noptstr, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, noptstr, &buflen);
 
     for (i = 0; !r && i < nopt; i++) {
-        r = add_arg(buf, sizeof(buf), options[i], &buflen);
+        r = add_arg(buf, bufsiz, options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, sizeof(buf), message, &buflen);
-    if (!r && fname) r = add_arg(buf, sizeof(buf), fname, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, message, &buflen);
+    if (!r && fname) r = add_arg(buf, bufsiz, fname, &buflen);
 
     if (r) {
         syslog(LOG_ERR, "notify datagram too large, %s, %s",
