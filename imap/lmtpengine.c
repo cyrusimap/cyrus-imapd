@@ -80,7 +80,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
-#include "imap/lmtpstats.h"
 #include "imap/mupdate_err.h"
 
 #include "lmtpengine.h"
@@ -131,23 +130,6 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
-
-#ifdef USING_SNMPGEN
-/* round to nearest 1024 bytes and return number of Kbytes.
- used for SNMP updates. */
-static int roundToK(int x)
-{
-    double rd = (x*1.0)/1024.0;
-    int ri = x/1024;
-
-    if (rd-ri < 0.5)
-        return ri;
-    else
-        return ri+1;
-}
-#else
-#define roundToK(x)
-#endif /* USING_SNMPGEN */
 
 static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
@@ -1104,9 +1086,6 @@ void lmtpmode(struct lmtp_func *func,
                                  cd.clienthost, mech, userid, sasl_errdetail(cd.conn));
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
-                          snmp_increment_args(AUTHENTICATION_NO, 1,
-                                              VARIABLE_AUTH, hash_simple(mech),
-                                              VARIABLE_LISTEND);
 
                           prot_printf(pout, "501 5.5.4 %s\r\n",
                                       sasl_errstring((r == SASL_NOUSER ?
@@ -1140,9 +1119,6 @@ void lmtpmode(struct lmtp_func *func,
               /* authenticated successfully! */
 
               prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-              snmp_increment_args(AUTHENTICATION_YES,1,
-                                  VARIABLE_AUTH, hash_simple(mech),
-                                  VARIABLE_LISTEND);
               syslog(LOG_NOTICE, "login: %s %s %s%s %s",
                      cd.clienthost, user, mech,
                      cd.starttls_done ? "+TLS" : "", "User logged in");
@@ -1185,10 +1161,6 @@ void lmtpmode(struct lmtp_func *func,
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL, msg->size);
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL, msg->rcpt_num);
 
-                snmp_increment(mtaReceivedMessages, 1);
-                snmp_increment(mtaReceivedVolume, roundToK(msg->size));
-                snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
-
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
                 for (j = 0; j < msg->rcpt_num; j++) {
@@ -1200,9 +1172,6 @@ void lmtpmode(struct lmtp_func *func,
                 prometheus_increment(CYRUS_LMTP_TRANSMITTED_MESSAGES_TOTAL);
                 prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL, delivered * msg->size);
 
-                snmp_increment(mtaTransmittedMessages, delivered);
-                snmp_increment(mtaTransmittedVolume,
-                               roundToK(delivered * msg->size));
                 goto rset;
             }
             goto syntaxerr;
