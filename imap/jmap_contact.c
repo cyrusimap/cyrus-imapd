@@ -2177,7 +2177,7 @@ static int getContactList(struct jmap_req *req)
     /* Prepare response. */
     json_t *contactList = json_pack("{}");
     json_object_set_new(contactList, "accountId", json_string(req->userid));
-    json_object_set_new(contactList, "state", jmap_getstate(MBTYPE_CALENDAR, req));
+    json_object_set_new(contactList, "state", jmap_getstate(MBTYPE_ADDRESSBOOK, req));
     json_object_set_new(contactList, "position", json_integer(rock.position));
     json_object_set_new(contactList, "total", json_integer(rock.total));
     json_object_set(contactList, "contactIds", rock.contacts);
