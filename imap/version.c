@@ -93,7 +93,7 @@ EXPORTED void id_response(struct protstream *pout)
                 "\"name\" \"Cyrus IMAPD\""
                 " \"version\" \"%s\""
                 " \"vendor\" \"Project Cyrus\""
-                " \"support-url\" \"http://www.cyrusimap.org\"",
+                " \"support-url\" \"https://www.cyrusimap.org\"",
                 CYRUS_VERSION);
 
     /* add the os info */
