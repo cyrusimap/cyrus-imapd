@@ -3054,7 +3054,7 @@ static void cmd_id(char *tag)
                 buf_printf(&logbuf, "\"%s\"", val);
         }
 
-        syslog(LOG_INFO, "client id:%s", buf_cstring(&logbuf));
+        syslog(LOG_INFO, "client id sessionid=<%s>:%s", session_id(), buf_cstring(&logbuf));
         buf_free(&logbuf);
     }
 
