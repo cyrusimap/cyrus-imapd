@@ -236,6 +236,8 @@ int service_init(int argc __attribute__((unused)),
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
+    prometheus_increment(LMTP_READY_LISTENERS);
+
     return 0;
 }
 
@@ -249,6 +251,8 @@ int service_main(int argc, char **argv,
 
     struct io_count *io_count_start = NULL;
     struct io_count *io_count_stop = NULL;
+
+    prometheus_decrement(LMTP_READY_LISTENERS);
 
     if (config_iolog) {
         io_count_start = xmalloc (sizeof (struct io_count));
@@ -304,6 +308,8 @@ int service_main(int argc, char **argv,
         free (io_count_start);
         free (io_count_stop);
     }
+
+    prometheus_increment(LMTP_READY_LISTENERS);
 
     return 0;
 }
@@ -921,6 +927,11 @@ void shut_down(int code)
         /* one less active connection */
         prometheus_decrement(LMTP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
+    }
+    else {
+        /* one less ready listener */
+
+        prometheus_decrement(LMTP_READY_LISTENERS);
     }
 
     cyrus_done();

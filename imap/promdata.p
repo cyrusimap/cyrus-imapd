@@ -9,6 +9,7 @@
 #
 metric counter imap_connections_total   The total number of IMAP connections
 metric gauge   imap_active_connections  The number of currently active IMAP connections
+metric gauge   imap_ready_listeners     The number of currently ready IMAP listeners
 metric counter imap_append_count        The total number of IMAP APPENDs
 metric counter imap_authenticate_count  The total number of IMAP AUTHENTICATEs
     label imap_authenticate_count result yes no
@@ -55,6 +56,7 @@ metric counter imap_xbackup_count       The total number of IMAP XBACKUPs
 
 metric counter lmtp_connections_total       The total number of LMTP connections
 metric gauge   lmtp_active_connections      The number of active LMTP connections
+metric gauge   lmtp_ready_listeners         The number of currently ready LMTP listeners
 metric counter lmtp_authenticate_count      The total number of IMAP AUTHENTICATEs
     label lmtp_authenticate_count result yes no
 metric counter lmtp_received_messages       The number of messages received

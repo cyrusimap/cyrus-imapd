@@ -887,6 +887,8 @@ int service_init(int argc, char **argv, char **envp)
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
 
+    prometheus_increment(IMAP_READY_LISTENERS);
+
     return 0;
 }
 
@@ -906,6 +908,8 @@ int service_main(int argc __attribute__((unused)),
     struct mboxevent *mboxevent = NULL;
     struct io_count *io_count_start = NULL;
     struct io_count *io_count_stop = NULL;
+
+    prometheus_decrement(IMAP_READY_LISTENERS);
 
     if (config_iolog) {
         io_count_start = xmalloc (sizeof (struct io_count));
@@ -1002,6 +1006,7 @@ int service_main(int argc __attribute__((unused)),
         free (io_count_stop);
     }
 
+    prometheus_increment(IMAP_READY_LISTENERS);
     return 0;
 }
 
@@ -1100,6 +1105,10 @@ void shut_down(int code)
         /* one less active connection */
         prometheus_decrement(IMAP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
+    }
+    else {
+        /* one less ready listener */
+        prometheus_decrement(IMAP_READY_LISTENERS);
     }
 
     if (config_auditlog)
