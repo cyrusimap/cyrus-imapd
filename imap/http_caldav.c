@@ -3709,6 +3709,133 @@ static void path_segment_free(struct path_segment_t *path_seg)
 }
 
 
+/* Parse and apply a VPATCH component */
+static int process_vpatch(struct transaction_t *txn, icalcomponent *vpatch,
+                          icalcomponent *ical, int *num_changes)
+{
+    icalcomponent *patch;
+    icalproperty *prop, *nextprop;
+    int r;
+
+    /* Process each patch sub-component */
+    for (patch = icalcomponent_get_first_component(vpatch, ICAL_ANY_COMPONENT);
+         patch;
+         patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
+
+        if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
+            /* Unknown patch action */
+            txn->error.desc = "Unsupported patch action";
+            txn->error.precond = CALDAV_SUPP_COMP;
+            return HTTP_BAD_REQUEST;
+        }
+
+        prop = icalcomponent_get_first_property(patch,
+                                                ICAL_PATCHTARGET_PROPERTY);
+        if (!prop) {
+            txn->error.desc = "Missing TARGET";
+            txn->error.precond = CALDAV_VALID_DATA;
+            return HTTP_BAD_REQUEST;
+        }
+
+        /* Parse PATCH-TARGET */
+        char *path = xstrdup(icalproperty_get_patchtarget(prop));
+        struct path_segment_t *target = NULL, *next;
+        struct patch_data_t patch_data = { patch, NULL, NULL };
+
+        icalcomponent_remove_property(patch, prop);
+        icalproperty_free(prop);
+
+        r = parse_target_path(path, &target,
+                              ACTION_UPDATE, &patch_data, &txn->error);
+        free(path);
+
+        if (r) return r;
+        else if (!target || target->type != SEGMENT_COMP ||
+                 target->kind != ICAL_VCALENDAR_COMPONENT ||
+                 target->match.comp.uid) {
+            txn->error.desc = "Initial segment of PATCH-TARGET"
+                " MUST be an unmatched VCALENDAR";
+            return HTTP_BAD_REQUEST;
+        }
+
+        /* Parse and remove all PATCH-DELETEs and PATCH-PARAMETERs */
+        for (prop = icalcomponent_get_first_property(patch, ICAL_ANY_PROPERTY);
+             prop; prop = nextprop) {
+
+            icalproperty_kind kind = icalproperty_isa(prop);
+            struct path_segment_t *ppath = NULL;
+
+            nextprop = icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY);
+
+            if (kind == ICAL_PATCHDELETE_PROPERTY) {
+                path = xstrdup(icalproperty_get_patchdelete(prop));
+
+                icalcomponent_remove_property(patch, prop);
+                icalproperty_free(prop);
+
+                r = parse_target_path(path, &ppath,
+                                      ACTION_DELETE, NULL, &txn->error);
+                free(path);
+
+                if (r) return r;
+                else if (!ppath ||
+                         (ppath->type == SEGMENT_COMP &&
+                          ppath->kind == ICAL_VCALENDAR_COMPONENT)) {
+                    txn->error.desc = "Initial segment of PATCH-DELETE"
+                        " MUST NOT be VCALENDAR";
+                    return HTTP_BAD_REQUEST;
+                }
+                else {
+                    /* Add this delete path to our list */
+                    ppath->sibling = patch_data.delete;
+                    patch_data.delete = ppath;
+                }
+            }
+            else if (kind == ICAL_PATCHPARAMETER_PROPERTY) {
+                path = xstrdup(icalproperty_get_patchparameter(prop));
+
+                icalcomponent_remove_property(patch, prop);
+
+                r = parse_target_path(path, &ppath,
+                                      ACTION_SETPARAM, prop, &txn->error);
+                free(path);
+
+                if (r) return r;
+                else if (!ppath || ppath->type != SEGMENT_PROP) {
+                    txn->error.desc =
+                        "Initial segment of PATCH-PARAMETER"
+                        " MUST be a property";
+                    return HTTP_BAD_REQUEST;
+                }
+                else {
+                    /* Add this setparam path to our list */
+                    ppath->sibling = patch_data.setparam;
+                    patch_data.setparam = ppath;
+                }
+            }
+        }
+
+        /* Apply this patch to the target component */
+        apply_patch(target, ical, num_changes);
+
+        /* Cleanup target paths */
+        path_segment_free(target);
+        for (target = patch_data.delete; target; target = next) {
+            next = target->sibling;
+            if (target->data) free(target->data);
+            path_segment_free(target);
+        }
+        for (target = patch_data.setparam; target; target = next) {
+            next = target->sibling;
+            if (target->data) icalproperty_free(target->data);
+            path_segment_free(target);
+        }
+    }
+
+    return 0;
+}
+
+
 /* Perform a PATCH request
  *
  * preconditions:
@@ -3716,7 +3843,7 @@ static void path_segment_free(struct path_segment_t *path_seg)
 static int caldav_patch(struct transaction_t *txn, void *obj)
 {
     icalcomponent *ical = (icalcomponent *) obj;
-    icalcomponent *pdoc, *vpatch, *patch;
+    icalcomponent *pdoc, *vpatch;
     icalproperty *prop;
     int num_changes = 0;
     int ret = 0;
@@ -3754,140 +3881,17 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
         ret = HTTP_BAD_REQUEST;
     }
 
-    if (ret) goto done;
+    if (!ret) ret = process_vpatch(txn, vpatch, ical, &num_changes);
 
-    /* Process each patch sub-component */
-    for (patch = icalcomponent_get_first_component(vpatch, ICAL_ANY_COMPONENT);
-         patch;
-         patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
-
-        if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
-            /* Unknown patch action */
-            txn->error.desc = "Unsupported patch action";
-            txn->error.precond = CALDAV_SUPP_COMP;
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-
-        prop = icalcomponent_get_first_property(patch,
-                                                ICAL_PATCHTARGET_PROPERTY);
-        if (!prop) {
-            txn->error.desc = "Missing TARGET";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-
-        /* Parse PATCH-TARGET */
-        char *path = xstrdup(icalproperty_get_patchtarget(prop));
-        struct path_segment_t *target = NULL, *next;
-        struct patch_data_t patch_data = { patch, NULL, NULL };
-
-        icalcomponent_remove_property(patch, prop);
-        icalproperty_free(prop);
-
-        ret = parse_target_path(path, &target,
-                                ACTION_UPDATE, &patch_data, &txn->error);
-        free(path);
-        if (!ret) {
-            if (!target || target->type != SEGMENT_COMP ||
-                target->kind != ICAL_VCALENDAR_COMPONENT ||
-                target->match.comp.uid) {
-                txn->error.desc = "Initial segment of PATCH-TARGET"
-                    " MUST be an unmatched VCALENDAR";
-                ret = HTTP_BAD_REQUEST;
-            }
-        }
-
-        if (!ret) {
-            /* Parse and remove all PATCH-DELETEs and PATCH-PARAMETERs */
-            icalproperty *nextprop;
-            for (prop =
-                     icalcomponent_get_first_property(patch, ICAL_ANY_PROPERTY);
-                 !ret && prop; prop = nextprop) {
-
-                icalproperty_kind kind = icalproperty_isa(prop);
-                struct path_segment_t *ppath = NULL;
-
-                nextprop =
-                    icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY);
-
-                if (kind == ICAL_PATCHDELETE_PROPERTY) {
-                    path = xstrdup(icalproperty_get_patchdelete(prop));
-
-                    icalcomponent_remove_property(patch, prop);
-                    icalproperty_free(prop);
-
-                    ret = parse_target_path(path, &ppath,
-                                            ACTION_DELETE, NULL, &txn->error);
-                    free(path);
-                    if (!ret) {
-                        if (!ppath ||
-                            (ppath->type == SEGMENT_COMP &&
-                             ppath->kind == ICAL_VCALENDAR_COMPONENT)) {
-                            txn->error.desc = "Initial segment of PATCH-DELETE"
-                                " MUST NOT be VCALENDAR";
-                            ret = HTTP_BAD_REQUEST;
-                        }
-                        else {
-                            /* Add this delete path to our list */
-                            ppath->sibling = patch_data.delete;
-                            patch_data.delete = ppath;
-                        }
-                    }
-                }
-                else if (kind == ICAL_PATCHPARAMETER_PROPERTY) {
-                    path = xstrdup(icalproperty_get_patchparameter(prop));
-
-                    icalcomponent_remove_property(patch, prop);
-
-                    ret = parse_target_path(path, &ppath,
-                                            ACTION_SETPARAM, prop, &txn->error);
-                    free(path);
-                    if (!ret) {
-                        if (!ppath || ppath->type != SEGMENT_PROP) {
-                            txn->error.desc =
-                                "Initial segment of PATCH-PARAMETER"
-                                " MUST be a property";
-                            ret = HTTP_BAD_REQUEST;
-                        }
-                        else {
-                            /* Add this setparam path to our list */
-                            ppath->sibling = patch_data.setparam;
-                            patch_data.setparam = ppath;
-                        }
-                    }
-                }
-            }
-        }
-
-        /* Apply this patch to the target component */
-        if (!ret) apply_patch(target, ical, &num_changes);
-
-        /* Cleanup target paths */
-        path_segment_free(target);
-        for (target = patch_data.delete; target; target = next) {
-            next = target->sibling;
-            if (target->data) free(target->data);
-            path_segment_free(target);
-        }
-        for (target = patch_data.setparam; target; target = next) {
-            next = target->sibling;
-            if (target->data) icalproperty_free(target->data);
-            path_segment_free(target);
-        }
-
-        if (ret) goto done;
-    }
-
-  done:
     icalcomponent_free(pdoc);
 
     if (ret) return ret;
-
-    /* If no changes are made,
-       return HTTP_NO_CONTENT to suppress storing of resource */
-    return (!num_changes ? HTTP_NO_CONTENT : 0);
+    else if (!num_changes) {
+        /* If no changes are made,
+           return HTTP_NO_CONTENT to suppress storing of resource */
+        return HTTP_NO_CONTENT;
+    }
+    else return 0;
 }
 #else
 static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
