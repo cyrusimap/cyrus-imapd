@@ -3641,17 +3641,18 @@ static void apply_patch_component(struct path_segment_t *path_seg,
         else if (path_seg->action == ACTION_UPDATE) {
             /* Patch existing component */
             struct patch_data_t *patch = (struct patch_data_t *) path_seg->data;
+            struct path_segment_t *path_seg2;
 
             /* Process all PATCH-DELETEs first */
-            for (path_seg = patch->delete;
-                 path_seg; path_seg = path_seg->child) {
-                apply_patch(path_seg, comp, num_changes);
+            for (path_seg2 = patch->delete;
+                 path_seg2; path_seg2 = path_seg2->sibling) {
+                apply_patch(path_seg2, comp, num_changes);
             }
 
             /* Process all PATCH-SETPARAMETERs second */
-            for (path_seg = patch->setparam;
-                 path_seg; path_seg = path_seg->child) {
-                apply_patch(path_seg, comp, num_changes);
+            for (path_seg2 = patch->setparam;
+                 path_seg2; path_seg2 = path_seg2->sibling) {
+                apply_patch(path_seg2, comp, num_changes);
             }
 
             /* Process all components updates third */
@@ -3734,6 +3735,7 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
             buf_setcstr(&txn->buf, txn->error.desc);
             txn->error.desc = buf_cstring(&txn->buf);
         }
+        else txn->error.desc = "Error in VPATCH";
         txn->error.precond = CALDAV_VALID_DATA;
         ret = HTTP_BAD_REQUEST;
     }
@@ -3761,6 +3763,7 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
 
         if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
             /* Unknown patch action */
+            txn->error.desc = "Unsupported patch action";
             txn->error.precond = CALDAV_SUPP_COMP;
             ret = HTTP_BAD_REQUEST;
             goto done;
