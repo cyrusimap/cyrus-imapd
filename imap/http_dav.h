@@ -101,11 +101,11 @@ enum {
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
-#define DACL_PROPRES    ACL_ANNOTATEMSG /* CY:write-properties-resource */
+#define DACL_PROPRSRC   ACL_ANNOTATEMSG /* CY:write-properties-resource */
 #define DACL_MKCOL      ACL_CREATE      /* CY:make-collection */
-#define DACL_ADDRESS    ACL_POST        /* CY:add-resource */
+#define DACL_ADDRSRC    ACL_POST        /* CY:add-resource */
 #define DACL_RMCOL      ACL_DELETEMBOX  /* CY:remove-collection */
-#define DACL_RMRES      (ACL_DELETEMSG\
+#define DACL_RMRSRC     (ACL_DELETEMSG\
                          |ACL_EXPUNGE)  /* CY:remove-resource */
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, DAV:write-acl,
@@ -118,11 +118,11 @@ enum {
                                            and CALDAV:read-free-busy) */
 #define DACL_WRITECONT  ACL_INSERT      /* DAV:write-content */
 #define DACL_WRITEPROPS (DACL_PROPCOL\
-                         |DACL_PROPRES) /* DAV:write-properties */
+                         |DACL_PROPRSRC)/* DAV:write-properties */
 #define DACL_BIND       (DACL_MKCOL\
-                         |DACL_ADDRESS)  /* DAV:bind */
+                         |DACL_ADDRSRC) /* DAV:bind */
 #define DACL_UNBIND     (DACL_RMCOL\
-                         |DACL_RMRES)   /* DAV:unbind */
+                         |DACL_RMRSRC)  /* DAV:unbind */
 #define DACL_WRITE      (DACL_WRITECONT\
                          |DACL_WRITEPROPS\
                          |DACL_BIND\
