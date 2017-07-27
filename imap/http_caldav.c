@@ -261,6 +261,8 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
                                  struct propstat propstat[], void *rock);
 
 static void strip_vtimezones(icalcomponent *ical);
+static int process_vpatch(struct transaction_t *txn, icalcomponent *vpatch,
+                          icalcomponent *ical, int *num_changes);
 
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
@@ -2089,6 +2091,57 @@ static void add_timezone(icalparameter *param, void *data)
 }
 
 
+static void personalize_cal_resource(icalcomponent *ical,
+                                     const char *mboxname, uint32_t uid)
+{
+    const char *annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-data";
+    struct buf value = BUF_INITIALIZER;
+    int r;
+
+    /* lookup per-user calendar data */
+    r = annotatemore_msg_lookup(mboxname, uid, annot, httpd_userid, &value);
+#if 0
+    const char *vpatch =
+        "BEGIN:VPATCH\r\n"
+        "VERSION:1\r\n"
+        "DTSTAMP:20170726T000000Z\r\n"
+        "UID:abc123\r\n"
+        "BEGIN:PATCH\r\n"
+        "PATCH-TARGET:/VCALENDAR/VEVENT\r\n"
+        "PATCH-DELETE:/VALARM\r\n"
+        "PATCH-DELETE:#TRANSP\r\n"
+        "END:PATCH\r\n"
+        "BEGIN:PATCH\r\n"
+        "PATCH-TARGET:/VCALENDAR/VEVENT\r\n"
+        "BEGIN:VALARM\r\n"
+        "UID:4567\r\n"
+        "ACTION:DISPLAY\r\n"
+        "TRIGGER:-PT30M\r\n"
+        "DESCRIPTION:Time to leave\r\n"
+        "END:VALARM\r\n"
+        "TRANSP:TRANSPARENT\r\n"
+        "END:PATCH\r\n"
+        "END:VPATCH\r\n";
+
+    r = 0;
+    buf_setcstr(&value, vpatch);
+#endif
+    if (!r && buf_len(&value)) {
+        /* Need to setup a dummy txn to use process_vpatch() */
+        icalcomponent *vpatch = icalparser_parse_string(buf_cstring(&value));
+        struct transaction_t txn;
+
+        memset(&txn, 0, sizeof(struct transaction_t));
+
+        r = process_vpatch(&txn, vpatch, ical, NULL);
+
+        buf_free(&txn.buf);
+    }
+
+    buf_free(&value);
+}
+
+
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj)
@@ -2113,7 +2166,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct caldav_data *cdata = (struct caldav_data *) data;
         unsigned need_tz = 0;
         const char **hdr;
-        icalcomponent *ical;
+        icalcomponent *ical = NULL;
         int ret = HTTP_CONTINUE;
 
         /* Check for optional CalDAV-Timezones header */
@@ -2183,6 +2236,12 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             txn->resp_body.lastmod = record->internaldate;
 
             caldav_close(caldavdb);
+        }
+
+        /* Personalize resource, if necessary */
+        if (!mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
+            if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+            personalize_cal_resource(ical, mailbox->name, record->uid);
         }
 
         /* iCalendar data in response should not be transformed */
@@ -3715,7 +3774,9 @@ static int process_vpatch(struct transaction_t *txn, icalcomponent *vpatch,
 {
     icalcomponent *patch;
     icalproperty *prop, *nextprop;
-    int r;
+    int r, junk;
+
+    if (!num_changes) num_changes = &junk;
 
     /* Process each patch sub-component */
     for (patch = icalcomponent_get_first_component(vpatch, ICAL_ANY_COMPONENT);
