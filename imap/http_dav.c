@@ -2101,7 +2101,7 @@ static void add_privs(int rights, unsigned flags,
                     xmlNewChild(priv, ns[NS_CYRUS],
                                 BAD_CAST "write-properties-collection", NULL);
                 }
-                if (rights & DACL_PROPRES) {
+                if (rights & DACL_PROPRSRC) {
                     priv = xmlNewChild(parent, NULL,
                                        BAD_CAST "privilege", NULL);
                     xmlNewChild(priv, ns[NS_CYRUS],
@@ -2125,7 +2125,7 @@ static void add_privs(int rights, unsigned flags,
                     xmlNewChild(priv, ns[NS_CYRUS],
                                 BAD_CAST "make-collection", NULL);
                 }
-                if (rights & DACL_ADDRESS) {
+                if (rights & DACL_ADDRSRC) {
                     priv = xmlNewChild(parent, NULL,
                                        BAD_CAST "privilege", NULL);
                     xmlNewChild(priv, ns[NS_CYRUS],
@@ -2149,7 +2149,7 @@ static void add_privs(int rights, unsigned flags,
                     xmlNewChild(priv, ns[NS_CYRUS],
                                 BAD_CAST "remove-collection", NULL);
                 }
-                if ((rights & DACL_RMRES) == DACL_RMRES) {
+                if ((rights & DACL_RMRSRC) == DACL_RMRSRC) {
                     priv = xmlNewChild(parent, NULL,
                                        BAD_CAST "privilege", NULL);
                     xmlNewChild(priv, ns[NS_CYRUS],
@@ -3568,7 +3568,7 @@ int meth_acl(struct transaction_t *txn, void *params)
                             rights |= DACL_PROPCOL;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "write-properties-resource"))
-                            rights |= DACL_PROPRES;
+                            rights |= DACL_PROPRSRC;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "make-collection"))
                             rights |= DACL_MKCOL;
@@ -3577,10 +3577,10 @@ int meth_acl(struct transaction_t *txn, void *params)
                             rights |= DACL_RMCOL;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "add-resource"))
-                            rights |= DACL_ADDRESS;
+                            rights |= DACL_ADDRSRC;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "remove-resource"))
-                            rights |= DACL_RMRES;
+                            rights |= DACL_RMRSRC;
                         else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "admin"))
                             rights |= DACL_ADMIN;
@@ -4033,24 +4033,24 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     /* Check ACL for current user on source mailbox */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (((rights & DACL_READ) != DACL_READ) ||
-        (meth_move && !(rights & DACL_RMRES))) {
+        (meth_move && !(rights & DACL_RMRSRC))) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRES;
+            (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
         ret = HTTP_NO_PRIVS;
         goto done;
     }
 
     /* Check ACL for current user on destination */
     rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry);
-    if (!(rights & DACL_ADDRESS) || !(rights & DACL_WRITECONT)) {
+    if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = dest_tgt.path;
         txn->error.rights =
-            !(rights & DACL_ADDRESS) ? DACL_ADDRESS : DACL_WRITECONT;
+            !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
         ret = HTTP_NO_PRIVS;
         goto done;
     }
@@ -4433,7 +4433,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    needrights = txn->req_tgt.resource ? DACL_RMRES : DACL_RMCOL;
+    needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
     if (!(rights & needrights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
@@ -4841,12 +4841,12 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
         return HTTP_NO_PRIVS;
     }
 
@@ -6404,12 +6404,12 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
         return HTTP_NO_PRIVS;
     }
 
@@ -6886,12 +6886,12 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRESS)) {
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRESS;
+            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
         return HTTP_NO_PRIVS;
     }
 
