@@ -338,7 +338,7 @@ struct http2_stream {
 
 
 /* Transaction context */
-struct transaction_t {
+typedef struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     struct http2_stream http2;          /* HTTP/2 stream data */
     unsigned meth;                      /* Index of Method to be performed */
@@ -368,7 +368,7 @@ struct transaction_t {
                                            http_ischedule:
                                              - error desc string
                                         */
-};
+} txn_t;
 
 /* HTTP version flags */
 enum {
@@ -443,7 +443,7 @@ struct namespace_t {
     unsigned enabled;           /* Is this namespace enabled? */
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
-    int (*need_auth)(struct transaction_t *); /* Run prior unauthorized requests */
+    int (*need_auth)(txn_t *);  /* Function run prior to unauthorized requests */
     unsigned auth_schemes;      /* Bitmask of allowed auth schemes, 0 for any */
     int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
@@ -451,8 +451,9 @@ struct namespace_t {
     void (*auth)(const char *); /* Function run after authentication */
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
-    int (*premethod)(struct transaction_t *); /* Func run prior to any method */
-    int (*bearer)(const char*, char *, size_t); /* Run to authenticate Bearer */
+    int (*premethod)(txn_t *);  /* Function run prior to any method */
+    int (*bearer)(const char *, /* Function run to authenticate Bearer token */
+                  char *, size_t);
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear
