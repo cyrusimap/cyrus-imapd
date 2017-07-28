@@ -378,7 +378,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *rock)
 
     if (_wantprop(crock->props, "mayRemoveItems")) {
         json_object_set_new(obj, "mayRemoveItems",
-                            rights & DACL_RMRES ? json_true() : json_false());
+                            rights & DACL_RMRSRC ? json_true() : json_false());
     }
 
     if (_wantprop(crock->props, "mayRename")) {
@@ -1534,7 +1534,7 @@ static int jmap_write_calendarevent(json_t *event,
                                     struct jmap_req *req)
 {
     int r, rights, pe;
-    int needrights = DACL_RMRES|DACL_WRITE;
+    int needrights = DACL_RMRSRC|DACL_WRITE;
 
     struct caldav_data *cdata = NULL;
     mbentry_t mbentry;
