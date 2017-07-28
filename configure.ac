@@ -123,8 +123,11 @@ if test $sysconfdir = '${prefix}/etc'; then
   sysconfdir="/etc"
 fi
 
-AC_PROG_CC
+dnl for some reason AC_PROG_CXX can succeed even though c++ compiler is missing
+dnl if it is invoked after AC_PROG_CC, so instead invoke it first
+dnl ref: https://lists.gnu.org/archive/html/bug-autoconf/2010-05/msg00001.html
 AC_PROG_CXX
+AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
