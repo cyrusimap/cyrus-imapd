@@ -265,7 +265,7 @@ static int stem_version_get(Xapian::Database *database)
     return version;
 }
 
-static int stem_version_set(Xapian::WritableDatabase *database, int version)
+static void stem_version_set(Xapian::WritableDatabase *database, int version)
 {
     std::ostringstream convert;
     convert << version;
@@ -698,8 +698,6 @@ xapian_query_t *
 xapian_query_new_match(const xapian_db_t *db, int num_part,const char *str)
 {
     std::set<int> *versions = db->stem_versions;
-    const char *prefix;
-    Xapian::Query *query;
 
     // at least one database must be open
     assert(versions);
@@ -975,8 +973,8 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
     int r = 0;
 
     size_t len = strlen(match);
-    int is_query = len > 1 && (match[0] == '"' && match[len-1] == '"') ||
-                              (strchr(match, '*') != NULL);
+    int is_query = len > 1 && ((match[0] == '"' && match[len-1] == '"') ||
+                               (strchr(match, '*') != NULL));
 
     if (is_query) {
         if (!snipgen->queries) {
@@ -993,7 +991,8 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
     return r;
 }
 
-int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned int context_length)
+int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
+                             unsigned int context_length __attribute__((unused)))
 {
     buf_reset(snipgen->buf);
     return 0;
@@ -1069,7 +1068,6 @@ int xapian_filter(const char *dest, const char **sources,
                   void *rock)
 {
     int r = 0;
-    int count = 0;
     const char *thispath = "(unknown path)";
 
     try {
