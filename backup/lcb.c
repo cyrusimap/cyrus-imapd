@@ -212,7 +212,7 @@ HIDDEN int backup_real_open(struct backup **backupp,
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
         char oldindex_fname[PATH_MAX];
-        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s.%ld",
+        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s.%lld",
                  backup->index_fname, (int64_t) time(NULL));
 
         r = rename(backup->index_fname, oldindex_fname);
@@ -597,7 +597,7 @@ EXPORTED int backup_reindex(const char *name,
         off_t member_offset = gzuc_member_offset(gzuc);
 
         if (verbose)
-            fprintf(out, "\nfound chunk at offset %jd\n\n", member_offset);
+            fprintf(out, "\nfound chunk at offset " OFF_T_FMT "\n\n", member_offset);
 
         struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
         prot_setisclient(member, 1); /* don't sync literals */
@@ -615,11 +615,11 @@ EXPORTED int backup_reindex(const char *name,
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset %jd, byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
                            name, member_offset, prot_bytes_in(member), error);
 
                     if (out)
-                        fprintf(out, "error reading chunk at offset %jd, byte %i: %s\n",
+                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
                                 member_offset, prot_bytes_in(member), error);
 
                     r = IMAP_IOERROR;

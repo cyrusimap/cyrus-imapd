@@ -235,10 +235,10 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
             const char *error = prot_error(ps);
             if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                 syslog(LOG_ERR,
-                       "%s: error reading message %i at offset %jd, byte %i: %s",
+                       "%s: error reading message %i at offset " OFF_T_FMT ", byte %i: %s",
                        __func__, message->id, message->offset, prot_bytes_in(ps), error);
                 if (out)
-                    fprintf(out, "error reading message %i at offset %jd, byte %i: %s",
+                    fprintf(out, "error reading message %i at offset " OFF_T_FMT ", byte %i: %s",
                             message->id, message->offset, prot_bytes_in(ps), error);
             }
             prot_free(ps);
@@ -425,11 +425,11 @@ static int mailbox_message_matches(const struct backup_mailbox_message *mailbox_
         return 0;
 
     if (!dlist_getnum32(dlist, "LAST_UPDATED", &last_updated)
-        || last_updated != mailbox_message->last_updated)
+        || (time_t) last_updated != mailbox_message->last_updated)
         return 0;
 
     if (!dlist_getnum32(dlist, "INTERNALDATE", &internaldate)
-        || internaldate != mailbox_message->internaldate)
+        || (time_t) internaldate != mailbox_message->internaldate)
         return 0;
 
     if (!dlist_getnum32(dlist, "SIZE", &size)
@@ -519,10 +519,10 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
 
     r = gzuc_member_start_from(gzuc, chunk->offset);
     if (r) {
-        syslog(LOG_ERR, "%s: error reading chunk %i at offset %jd: %s",
+        syslog(LOG_ERR, "%s: error reading chunk %i at offset " OFF_T_FMT ": %s",
                         __func__, chunk->id, chunk->offset, zError(r));
         if (out)
-            fprintf(out, "error reading chunk %i at offset %jd: %s",
+            fprintf(out, "error reading chunk %i at offset " OFF_T_FMT ": %s",
                     chunk->id, chunk->offset, zError(r));
         goto done;
     }
@@ -541,10 +541,10 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
             const char *error = prot_error(ps);
             if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                 syslog(LOG_ERR,
-                       "%s: error reading chunk %i data at offset %jd, byte %i: %s",
+                       "%s: error reading chunk %i data at offset " OFF_T_FMT ", byte %i: %s",
                        __func__, chunk->id, chunk->offset, prot_bytes_in(ps), error);
                 if (out)
-                    fprintf(out, "error reading chunk %i data at offset %jd, byte %i: %s",
+                    fprintf(out, "error reading chunk %i data at offset " OFF_T_FMT ", byte %i: %s",
                             chunk->id, chunk->offset, prot_bytes_in(ps), error);
                 r = EOF;
             }
