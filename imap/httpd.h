@@ -172,7 +172,7 @@ enum {
                           |ALLOW_PROPPATCH|ALLOW_MKCOL|ALLOW_ACL)
 
 
-struct transaction_t;
+typedef struct transaction_t txn_t;
 
 struct auth_scheme_t {
     unsigned idx;               /* Index value of the scheme */
@@ -180,8 +180,7 @@ struct auth_scheme_t {
     const char *saslmech;       /* Corresponding SASL mech name */
     unsigned flags;             /* Bitmask of requirements/features */
                                 /* Optional function to send success data */
-    void (*send_success)(struct transaction_t *txn,
-                         const char *name, const char *data);
+    void (*send_success)(txn_t *txn, const char *name, const char *data);
                                 /* Optional function to recv success data */
     const char *(*recv_success)(hdrcache_t hdrs);
 };
@@ -338,7 +337,7 @@ struct http2_stream {
 
 
 /* Transaction context */
-typedef struct transaction_t {
+struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     struct http2_stream http2;          /* HTTP/2 stream data */
     unsigned meth;                      /* Index of Method to be performed */
@@ -368,7 +367,7 @@ typedef struct transaction_t {
                                            http_ischedule:
                                              - error desc string
                                         */
-} txn_t;
+};
 
 /* HTTP version flags */
 enum {
