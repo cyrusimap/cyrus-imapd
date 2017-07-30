@@ -1037,7 +1037,7 @@ static int get_search_criterion(struct protstream *pin,
 #if SIZEOF_TIME_T >= 8
             c = getint64(pin, (int64_t *)&uu);
 #else
-            c = getint32(pin, (int64_t *)&u);
+            c = getint32(pin, (int32_t *)&u);
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
@@ -1224,7 +1224,7 @@ static int get_search_criterion(struct protstream *pin,
 #if SIZEOF_TIME_T >= 8
             c = getint64(pin, (int64_t *)&uu);
 #else
-            c = getint32(pin, (int64_t *)&u);
+            c = getint32(pin, (int32_t *)&u);
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);

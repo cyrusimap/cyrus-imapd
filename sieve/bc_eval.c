@@ -962,7 +962,7 @@ envelope_err:
         for (z = 0; z < (is_string ? numhaystacks :
                          numhaystacks ? numhaystacks : 1); z++) {
             const char *this_haystack;
-            strarray_t *this_var;
+            strarray_t *this_var = NULL;
 
             if (numhaystacks) {
                 currhaystack = unwrap_string(bc, currhaystack, &this_haystack,
