@@ -1649,9 +1649,10 @@ If all partitions are over that limit, this feature is not used anymore.
    statistics report.  The minimum value is 1, the default is 10. */
 
 { "prometheus_stats_dir", NULL, STRING }
-/* Directory to use for gathering prometheus statistics.  Default is NULL
-   - must be an absolute path if specified.  If not specified, the path
-   $confdir/stats/ will be used. */
+/* Directory to use for gathering prometheus statistics.  If specified,
+   must be an absolute path.  If not specified, the default path
+   $confdir/stats/ will be used.  It may be advantageous to locate this
+   directory on ephemeral storage. */
 
 { "proxy_authname", "proxy", STRING }
 /* The authentication name to use when authenticating to a backend server
