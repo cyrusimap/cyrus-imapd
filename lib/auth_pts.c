@@ -434,7 +434,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, fname);
+    strlcpy(srvaddr.sun_path, fname, sizeof(srvaddr.sun_path));
     r = nb_connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr), PT_TIMEOUT_SEC);
     free(tofree);
 
@@ -469,6 +469,7 @@ static int ptload(const char *identifier, struct auth_state **state)
       if (n < 1) break;
       start += n;
     }
+    response[sizeof(response)-1] = '\0';
 
     close(s);
     syslog(LOG_DEBUG, "ptload read data back");
