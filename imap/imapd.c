@@ -5095,7 +5095,7 @@ static int do_xbackup(const char *channel,
     unsigned sync_flags = 0; // FIXME ??
     int partial_success = 0;
     int mbox_count = 0;
-    int i, r;
+    int i, r = 0;
 
     hostname = sync_get_config(channel, "sync_host");
     if (!hostname) {
