@@ -116,7 +116,6 @@ jmap_msg_t jmap_mail_messages[] = {
     { NULL,                     NULL}
 };
 
-#define JMAP_INREPLYTO_HEADER "X-JMAP-In-Reply-To"
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
 
 typedef enum MsgType {
@@ -2752,22 +2751,6 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_object_set_new(msg, "mailboxIds", ids);
         }
 
-        /* inReplyToMessageId */
-        if (_wantprop(props, "inReplyToMessageId")) {
-            json_t *reply_id = json_null();
-            if (flags & FLAG_DRAFT) {
-                const char *key;
-                json_t *val;
-
-                json_object_foreach(headers, key, val) {
-                    if (!strcasecmp(key, JMAP_INREPLYTO_HEADER)) {
-                        reply_id = val;
-                        break;
-                    }
-                }
-            }
-            json_object_set(msg, "inReplyToMessageId", reply_id);
-        }
         /* isUnread */
         if (_wantprop(props, "isUnread")) {
             json_object_set_new(msg, "isUnread", json_boolean(!(flags & FLAG_SEEN)));
@@ -4632,50 +4615,6 @@ static int jmap_validate_emailer(json_t *emailer,
     return r;
 }
 
-static int jmapmsg_get_messageid(jmap_req_t *req, const char *id, char **messageid)
-{
-    char *mboxname = NULL;
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    uint32_t uid;
-    struct buf buf = BUF_INITIALIZER;
-    uint32_t flags;
-    int r;
-
-    r = jmapmsg_find(req, id, &mboxname, &uid);
-    if (r) goto done;
-
-    r = jmap_openmbox(req, mboxname, &mbox, 0);
-    if (r) goto done;
-
-    r = msgrecord_find(mbox, uid, &mr);
-    if (!r) {
-
-        r = msgrecord_get_systemflags(mr, &flags);
-        if (r || (flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-            if (!r) r = IMAP_NOTFOUND;
-            goto done;
-        }
-
-        message_t *m = NULL;
-        r = msgrecord_get_message(mr, &m);
-        if (r) goto done;
-
-        r = message_get_messageid(m, &buf);
-        if (r) goto done;
-    }
-
-    buf_cstring(&buf);
-    *messageid = buf_release(&buf);
-
-done:
-    if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
-    if (mboxname) free(mboxname);
-    buf_free(&buf);
-    return r;
-}
-
 static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg);
 
 #define JMAPMSG_HEADER_TO_MIME(k, v) \
@@ -5238,7 +5177,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
 
         char *references;
         char *inreplyto;
-        char *replyto_id;
         json_t *headers;
     } d;
 
@@ -5354,19 +5292,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
         buf_reset(&buf);
     }
 
-    /* Override the In-Reply-To and References headers */
-    if ((prop = json_object_get(msg, "inReplyToMessageId"))) {
-        if ((s = json_string_value(prop))) {
-            d.replyto_id = xstrdup(s);
-
-            if (d.references) free(d.references);
-            if (d.inreplyto) free(d.inreplyto);
-
-            r = jmapmsg_get_messageid(req, d.replyto_id, &d.references);
-            if (!r) d.inreplyto = xstrdup(d.references);
-        }
-    }
-
     /* Override Subject header */
     if ((s = json_string_value(json_object_get(msg, "subject")))) {
         if (d.subject) free(d.subject);
@@ -5423,7 +5348,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     /* References, In-Reply-To and the custom X-JMAP header */
     if (d.inreplyto)  JMAPMSG_HEADER_TO_MIME("In-Reply-To", d.inreplyto);
     if (d.references) JMAPMSG_HEADER_TO_MIME("References", d.references);
-    if (d.replyto_id) JMAPMSG_HEADER_TO_MIME(JMAP_INREPLYTO_HEADER, d.replyto_id);
 
     /* Custom headers */
     json_object_foreach(d.headers, key, val) {
@@ -5475,7 +5399,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, json_t *msg)
     if (d.messageid) free(d.messageid);
     if (d.references) free(d.references);
     if (d.inreplyto) free(d.inreplyto);
-    if (d.replyto_id) free(d.replyto_id);
     if (d.mua) free(d.mua);
     if (d.headers) json_decref(d.headers);
     buf_free(&buf);
@@ -6142,6 +6065,92 @@ done:
     return r;
 }
 
+struct setanswered_rock {
+    jmap_req_t* req;
+    const char *inreplyto;
+    int found;
+};
+
+static int setanswered_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct setanswered_rock *data = rock;
+    jmap_req_t *req = data->req;
+
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    if (rec->part) return 0;
+
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 1);
+    if (r) return r;
+
+    r = msgrecord_find(mbox, rec->uid, &mr);
+    if (r) goto done;
+
+    /* Does this message-id match the one we are looking for? */
+    r = msgrecord_get_messageid(mr, &buf);
+    if (r || strcmp(data->inreplyto, buf_cstring(&buf))) goto done;
+
+    /* Ok, its the In-Reply-To message. Set the answered flag. */
+    r = msgrecord_add_systemflags(mr, FLAG_ANSWERED);
+    if (r) goto done;
+
+    /* Mark the message as found, but keep iterating. We might have
+     * the same message copied across mailboxes */
+    /* XXX could multiple GUIDs have the same Message-ID header value?*/
+    data->found = 1;
+
+    r = msgrecord_rewrite(mr);
+    if (r) goto done;
+
+done:
+    if (mr) msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    buf_free(&buf);
+    return r;
+}
+
+static int setanswered(jmap_req_t *req, const char *inreplyto)
+{
+    int r = 0, i;
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
+    conversation_t *conv = NULL;
+    char *guid = NULL;
+    struct setanswered_rock rock = { req, inreplyto, 0 /*found*/ };
+
+    r = conversations_get_msgid(req->cstate, inreplyto, &cids);
+    if (r) return r;
+
+    /* Iterate the threads returned for the inreplyto message-id. One
+     * of the entries is the message itself, which might have copies
+     * across mailboxes. */
+    for (i = 0; i < cids.count; i++) {
+        conversation_id_t cid = arrayu64_nth(&cids, i);
+        conversation_free(conv);
+        conv = NULL;
+        r = conversation_load(req->cstate, cid, &conv);
+        if (r) continue;
+        struct conv_thread *thread = conv->thread;
+        do {
+            guid = xstrdup(message_guid_encode(&thread->guid));
+            r = conversations_guid_foreach(req->cstate, guid, setanswered_cb, &rock);
+            if (r) goto done;
+
+            thread = thread->next;
+            free(guid);
+            guid = NULL;
+        } while (!rock.found);
+    }
+done:
+    if (conv) conversation_free(conv);
+    arrayu64_fini(&cids);
+    free(guid);
+    return r;
+
+}
+
 static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
                           json_t *invalid)
 {
@@ -6212,9 +6221,23 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     if (json_object_get(msg, "isFlagged") == json_true())
         system_flags |= FLAG_FLAGGED;
 
-    return jmapmsg_write(req, json_object_get(msg, "mailboxIds"), system_flags, internaldate,
-                         (int(*)(jmap_req_t*,FILE*,void*)) jmapmsg_to_mime,
-                         msg, msgid);
+    int r = jmapmsg_write(req, json_object_get(msg, "mailboxIds"), system_flags, internaldate,
+                     (int(*)(jmap_req_t*,FILE*,void*)) jmapmsg_to_mime,
+                     msg, msgid);
+    if (r) return r;
+
+    /* Update ANSWERED flags of replied-to messages */
+    const char *inreplyto = NULL;
+    const char *header;
+    json_object_foreach(json_object_get(msg, "headers"), header, val) {
+        if (!strcasecmp(header, "In-Reply-To")) {
+            inreplyto = json_string_value(val);
+            break;
+        }
+    }
+    if (inreplyto) r = setanswered(req, inreplyto);
+
+    return r;
 }
 
 struct msgupdate_checkacl_rock {

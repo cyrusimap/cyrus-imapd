@@ -67,6 +67,7 @@ extern int msgrecord_get_bodystructure(msgrecord_t *mr, struct body **body);
 extern int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid);
 extern int msgrecord_get_guid(msgrecord_t *mr, struct message_guid *guid);
 extern int msgrecord_get_uid(msgrecord_t *mr, uint32_t *uid);
+extern int msgrecord_get_messageid(msgrecord_t *mr, struct buf *buf);
 extern int msgrecord_get_modseq(msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(msgrecord_t *mr, message_t **msg);
