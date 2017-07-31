@@ -171,11 +171,11 @@ static void prometheus_done(void *rock __attribute__((unused)))
     promhandle = NULL;
 }
 
-/* do not call this directly! use the prometheus_increment() and
- * prometheus_decrement() wrapper macros.
+/* use the prometheus_increment() and prometheus_decrement() wrapper macros
+ * for readability if that's all you're doing.
  */
-EXPORTED void prometheus_change(enum prom_metric_id metric_id,
-                                int delta)
+EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
+                                     double delta)
 {
     struct prom_metric metric;
     size_t offset;

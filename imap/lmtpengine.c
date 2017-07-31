@@ -1202,8 +1202,8 @@ void lmtpmode(struct lmtp_func *func,
                 }
 
                 prometheus_increment(LMTP_RECEIVED_MESSAGES);
-                prometheus_change(LMTP_RECEIVED_BYTES, msg->size);
-                prometheus_change(LMTP_RECEIVED_RECIPIENTS, msg->rcpt_num);
+                prometheus_apply_delta(LMTP_RECEIVED_BYTES, msg->size);
+                prometheus_apply_delta(LMTP_RECEIVED_RECIPIENTS, msg->rcpt_num);
 
                 snmp_increment(mtaReceivedMessages, 1);
                 snmp_increment(mtaReceivedVolume, roundToK(msg->size));
@@ -1218,7 +1218,7 @@ void lmtpmode(struct lmtp_func *func,
                 }
 
                 prometheus_increment(LMTP_TRANSMITTED_MESSAGES);
-                prometheus_change(LMTP_TRANSMITTED_BYTES, delivered * msg->size);
+                prometheus_apply_delta(LMTP_TRANSMITTED_BYTES, delivered * msg->size);
 
                 snmp_increment(mtaTransmittedMessages, delivered);
                 snmp_increment(mtaTransmittedVolume,

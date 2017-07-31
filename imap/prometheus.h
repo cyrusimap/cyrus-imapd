@@ -58,13 +58,13 @@
 extern const char *prometheus_stats_dir(void);
 
 #define prometheus_increment(metric_id) \
-    prometheus_change(metric_id, 1)
+    prometheus_apply_delta(metric_id, 1)
 
 #define prometheus_decrement(metric_id) \
-    prometheus_change(metric_id, -1)
+    prometheus_apply_delta(metric_id, -1)
 
-extern void prometheus_change(enum prom_metric_id metric_id,
-                              int delta);
+extern void prometheus_apply_delta(enum prom_metric_id metric_id,
+                                   double delta);
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);
 
