@@ -469,7 +469,7 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
 
     if (!strarray_size(tzids)) {
         /* No tzids found in shapefile(s) */
-        char tzid_buf[11];
+        char tzid_buf[20];
 
         if (latitude <= -60) {
             /* Antarctic region - guess-timate offset from GMT based on:
@@ -554,8 +554,8 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                XXX  Which offset does an exact multiple of +/- 7.5
                and +/- 180 degrees belong to?
             */
-            sprintf(tzid_buf, "Etc/GMT%+d",
-                    (int) (longitude + copysign(1.0, longitude) * 7.5) / 15);
+            snprintf(tzid_buf, sizeof(tzid_buf), "Etc/GMT%+d",
+                    (short) (longitude + copysign(1.0, longitude) * 7.5) / 15);
             tzid = tzid_buf;
         }
 
