@@ -2299,7 +2299,7 @@ sub test_setmessages_draft
     $self->assert_equals($msg->{isFlagged}, JSON::false);
 }
 
-sub test_setmessages_inreplytoid
+sub test_setmessages_inreplyto
     :JMAP :min_version_3_0
 {
     my ($self) = @_;
@@ -2309,13 +2309,17 @@ sub test_setmessages_inreplytoid
     my $talk = $store->get_client();
 
     my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
-    my $inboxid = $res->[0][1]{list}[0]{id};
+    my $origid = $res->[0][1]{list}[0]{id};
 
     xlog "Create message to reply to";
     $self->make_message("foo") || die;
-    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]->{messageIds}}, 1);
-    my $msgid = $res->[0][1]->{messageIds}[0];
+    $res = $jmap->Request([['getMessageList', { fetchMessages => JSON::true }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+
+    my $orig_msg = $res->[1][1]->{list}[0];
+    my $orig_id= $orig_msg->{id};
+    my $orig_msgid = $orig_msg->{headers}{"message-id"};
+    $self->assert_equals(JSON::false, $orig_msg->{isAnswered});
 
     xlog "create drafts mailbox";
     $res = $jmap->Request([
@@ -2335,7 +2339,7 @@ sub test_setmessages_inreplytoid
         ],
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
-        inReplyToMessageId => $msgid,
+        headers => {"in-reply-to" => $orig_msgid },
     };
 
     $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
@@ -2343,7 +2347,11 @@ sub test_setmessages_inreplytoid
 
     $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
-    $self->assert_str_equals($msg->{inReplyToMessageId}, $msgid);
+    $self->assert_str_equals($orig_msgid, $msg->{headers}->{"in-reply-to"});
+
+    $res = $jmap->Request([['getMessages', { ids => [$orig_id] }, "R1"]]);
+    $orig_msg = $res->[0][1]->{list}[0];
+    $self->assert_equals(JSON::true, $orig_msg->{isAnswered});
 }
 
 sub test_setmessages_attachedmessages
@@ -4468,7 +4476,7 @@ sub test_getthreads
     $res = $jmap->Request(
         [[ 'setMessages', { create => { "1" => {
             mailboxIds           => [$drafts],
-            inReplyToMessageId   => $msgA->{id},
+            headers              => { "In-Reply-To" => $msgA->{headers}{"message-id"}},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Re: Message A",
