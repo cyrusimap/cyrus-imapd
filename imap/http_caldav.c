@@ -3267,6 +3267,7 @@ static void apply_patch_parameter(struct path_segment_t *path_seg,
             }
 
             /* Fall through and delete entire parameter */
+            GCC_FALLTHROUGH
 
         default:
             *num_changes += 1;
@@ -3361,6 +3362,7 @@ static void apply_patch_property(struct path_segment_t *path_seg,
                 }
 
                 /* Fall through and delete entire property */
+                GCC_FALLTHROUGH
 
             default:
                 *num_changes += 1;
