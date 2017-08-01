@@ -42,6 +42,7 @@
 package Cassandane::Cyrus::Replication;
 use strict;
 use warnings;
+use Data::Dumper;
 use DateTime;
 
 use lib '.';
@@ -807,6 +808,44 @@ sub test_replication_mailbox_new_enough
     # successfully replicate a mailbox new enough to contain guids
     my $mailbox12 = $self->{instance}->install_old_mailbox($user, 12);
     $self->run_replication(mailbox => $mailbox12);
+}
+
+#* create mailbox on master with no messages
+#* sync_client to get it copied to replica
+#* create a message in the mailbox on replica (imaptalk on replica_store)
+#* delete the message from the replica (with expunge_mode default or expunge_mode immediate... try both)
+#* run sync_client on the master again and make sure it successfully syncs up
+
+sub test_replication_repair_zero_msgs
+{
+    my ($self) = @_;
+
+    my $replica = $self->{replica_store}->get_client();
+
+    my $msg = $self->make_message("to be deleted", store => $self->{replica_store});
+
+    $replica->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
+    $replica->expunge();
+
+    $self->run_replication(user => 'cassandane');
+}
+
+sub test_replication_repair_zero_msgs_imm_exp
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(expunge_mode => 'immediate');
+    $self->_start_instances();
+
+    my $replica = $self->{replica_store}->get_client();
+
+    my $msg = $self->make_message("to be deleted", store => $self->{replica_store});
+
+    $replica->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
+    $replica->expunge();
+
+    $self->run_replication(user => 'cassandane');
 }
 
 1;
