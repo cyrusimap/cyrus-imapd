@@ -106,7 +106,8 @@ static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
 static void prom_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_prometheus.enabled =
-        config_httpmodules & IMAP_ENUM_HTTPMODULES_PROMETHEUS;
+        (config_httpmodules & IMAP_ENUM_HTTPMODULES_PROMETHEUS)
+        && config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
 }
 
 static void prom_auth(const char *userid)

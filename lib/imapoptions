@@ -1638,6 +1638,9 @@ If all partitions are over that limit, this feature is not used anymore.
    if specified.  If not specified, the path $confdir/proc/ will be
    used. */
 
+{ "prometheus_enabled", 0, SWITCH }
+/* Whether tracking of service metrics for Prometheus is enabled. */
+
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin") }
 /* Authentication level required to fetch Prometheus metrics. */
 

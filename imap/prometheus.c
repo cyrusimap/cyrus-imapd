@@ -59,6 +59,7 @@
 #include "lib/util.h"
 
 #include "imap/global.h"
+#include "imap/imap_err.h"
 #include "imap/prometheus.h"
 
 struct prometheus_handle {
@@ -66,6 +67,7 @@ struct prometheus_handle {
 };
 
 static struct prometheus_handle *promhandle = NULL;
+static int prometheus_enabled = -1;
 
 static void prometheus_init(void);
 static void prometheus_done(void *rock __attribute__((unused)));
@@ -107,6 +109,9 @@ static void prometheus_init(void)
     int r;
 
     if (promhandle != NULL) return;
+
+    prometheus_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
+    if (!prometheus_enabled) return;
 
     stats.pid = getpid();
     for (i = 0; i < PROM_NUM_METRICS; i++) {
@@ -181,7 +186,11 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
     size_t offset;
     int r;
 
+    if (!prometheus_enabled) return;
+
     if (!promhandle) prometheus_init();
+
+    if (!prometheus_enabled) return;
 
     assert(metric_id >= 0 && metric_id < PROM_NUM_METRICS);
 
@@ -219,6 +228,8 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
     char *report_fname = NULL;
     struct mappedfile *mf = NULL;
     int r;
+
+    if (!prometheus_enabled) return IMAP_INTERNAL;
 
     report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
 
