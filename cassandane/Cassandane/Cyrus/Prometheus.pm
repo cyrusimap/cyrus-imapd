@@ -89,6 +89,19 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub http_report
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $url = join(q{},
+                   q{http://}, $service->host(),
+                   q{:}, $service->port(),
+                   q{/prometheus});
+
+    return HTTP::Tiny->new()->get($url);
+}
+
 sub parse_report
 {
     my ($content) = @_;
@@ -133,16 +146,7 @@ sub test_httpreport
 {
     my ($self) = @_;
 
-    my $service = $self->{instance}->get_service("http");
-
-    my $url = join(q{},
-                   q{http://}, $service->host(),
-                   q{:}, $service->port(),
-                   q{/prometheus});
-
-    my $ua = HTTP::Tiny->new();
-
-    my $response = $ua->get($url);
+    my $response = $self->http_report();
 
     $self->assert($response->{success});
     $self->assert(length $response->{content});
@@ -151,6 +155,26 @@ sub test_httpreport
 
     $self->assert(scalar keys %{$report});
     $self->assert(exists $report->{imap_connections_total});
+}
+
+sub test_disabled
+    :min_version_3_1 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{starts} = [ grep { $_->{name} ne 'promstatsd' } @{$instance->{starts}} ];
+    $instance->{config}->set(prometheus_enabled => 'no');
+
+    $self->_start_instances();
+
+    # no stats directory
+    my $stats_dir = "$self->{instance}->{basedir}/conf/stats";
+    $self->assert(! -d $stats_dir);
+
+    # no http report
+    my $response = $self->http_report();
+    $self->assert_equals(404, $response->{status});
 }
 
 1;
