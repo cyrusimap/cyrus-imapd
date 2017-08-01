@@ -45,6 +45,7 @@
 #include <sys/types.h>
 
 #include <dirent.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -105,6 +106,7 @@ static int do_cleanup(void)
 
     dh = opendir(basedir);
     if (!dh) {
+        if (errno == ENOENT) return 0; /* nothing to do */
         syslog(LOG_ERR, "IOERROR: opendir(%s): %m", basedir);
         return EC_IOERR;
     }
