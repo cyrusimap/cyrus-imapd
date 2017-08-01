@@ -75,6 +75,26 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub check_conversations
+{
+    my ($self) = @_;
+    my $filename = $self->{instance}{basedir} . "/ctl_conversationsdb.out";
+    $self->{instance}->run_command({
+        cyrus => 1,
+        redirects => {stdout => $filename},
+    }, 'ctl_conversationsdb', '-A', '-r', '-v');
+
+    local $/;
+    open FH, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    my $str = <FH>;
+    close(FH);
+
+    xlog "RESULT: $str";
+    $self->assert_matches(qr/is OK/, $str);
+    $self->assert($str !~ m/is BROKEN/);
+}
+
 #
 # Test LSUB behaviour
 #
@@ -152,11 +172,14 @@ sub test_rename_user_bigconversation
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
     }
 
+    $self->check_conversations();
+
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
 
     $res = $admintalk->select("user.newuser.foo.sub");
     $self->assert(not $admintalk->get_last_error());
+    $self->check_conversations();
 }
 
 #
@@ -188,6 +211,8 @@ sub test_rename_user_midsizeconversation
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
     }
 
+    $self->check_conversations();
+
     $self->check_messages(\%exp, keyed_on => 'uid');
 
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
@@ -199,6 +224,8 @@ sub test_rename_user_midsizeconversation
     $self->{adminstore}->set_folder("user.newuser.foo");
     $self->{adminstore}->set_fetch_attributes('uid', 'cid');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $self->{adminstore});
+
+    $self->check_conversations();
 }
 
 #
@@ -225,8 +252,12 @@ sub test_rename_bigconversation
 
     $imaptalk->select("INBOX.user-src.subdir") || die;
 
+    $self->check_conversations();
+
     $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
     $imaptalk->select("INBOX.user-dst.subdir") || die;
+
+    $self->check_conversations();
 }
 
 #
@@ -254,6 +285,8 @@ sub test_rename_midsizeconversation
     }
     $self->check_messages(\%exp, keyed_on => 'uid');
 
+    $self->check_conversations();
+
     $imaptalk->select("INBOX.user-src.subdir") || die;
 
     $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
@@ -261,12 +294,15 @@ sub test_rename_midsizeconversation
 
     $self->{store}->set_folder("INBOX.user-dst.subdir");
     $self->check_messages(\%exp, keyed_on => 'uid');
+
+    $self->check_conversations();
 }
 
 #
 # Test Bug #3634 - rename inbox -> inbox.sub
 #
 sub test_rename_inbox
+    :Conversations
 {
     my ($self) = @_;
 
@@ -282,6 +318,8 @@ sub test_rename_inbox
     my @predata = $imaptalk->search("SEEN");
     $self->assert_num_equals(1, scalar @predata);
 
+    $self->check_conversations();
+
     $imaptalk->rename("INBOX", "INBOX.dst") || die;
 
     $imaptalk->select("INBOX") || die;
@@ -291,6 +329,8 @@ sub test_rename_inbox
     $imaptalk->select("INBOX.dst") || die;
     my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
     $self->assert_num_equals(1, scalar @postdata);
+
+    $self->check_conversations();
 }
 
 #
@@ -329,6 +369,39 @@ sub test_rename_withsub_dom
 #
 sub test_rename_withsub
     :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("renameuser\@example.com");
+    my $domstore = $self->{instance}->get_service('imap')->create_store(username => "renameuser\@example.com");
+    my $domtalk = $domstore->get_client();
+
+    $domtalk->create("INBOX.a");
+    $domtalk->create("INBOX.b");
+    $domtalk->create("INBOX.c");
+
+    $domstore->set_folder("INBOX.c");
+    $domstore->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $domstore->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $domstore->write_end();
+
+    $domtalk->select("INBOX.c") || die;
+    my @predata = $domtalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $domtalk->rename("INBOX.c", "INBOX.b.c") || die;
+    $domtalk->rename("INBOX.b", "INBOX.a.b") || die;
+
+    $domtalk->select("INBOX.a.b.c") || die;
+    my @postdata = $domtalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @postdata);
+}
+
+sub test_rename_conversations
+    :Conversations :VirtDomains
 {
     my ($self) = @_;
 
