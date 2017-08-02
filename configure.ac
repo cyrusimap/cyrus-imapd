@@ -578,6 +578,7 @@ if test "x$enable_xapian" != xno ; then
         dnl hooks to the end of AC_PROG_LIBTOOL and AM_PROG_LIBTOOL to enable it
         dnl if either is expanded later.
         XAPIAN_VERSION="`$XAPIAN_CONFIG --version|sed 's/.* //'`"
+        AS_VERSION_COMPARE([$XAPIAN_VERSION], [1.4], AC_MSG_ERROR([need at least Xapian 1.4]), [], [])
         XAPIAN_CXXFLAGS="`$XAPIAN_CONFIG --cxxflags`"
         AC_PROVIDE_IFELSE([AC_PROG_LIBTOOL],
             [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"],
