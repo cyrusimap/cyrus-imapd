@@ -820,30 +820,19 @@ sub test_replication_repair_zero_msgs
 {
     my ($self) = @_;
 
-    my $replica = $self->{replica_store}->get_client();
+    my $mastertalk = $self->{master_store}->get_client();
+    my $replicatalk = $self->{replica_store}->get_client();
+
+    # raise the modseq on the master end
+    $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
+    $mastertalk->setmetadata("INBOX", "/shared/comment", "");
+    $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
+    $mastertalk->setmetadata("INBOX", "/shared/comment", "");
 
     my $msg = $self->make_message("to be deleted", store => $self->{replica_store});
 
-    $replica->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
-    $replica->expunge();
-
-    $self->run_replication(user => 'cassandane');
-}
-
-sub test_replication_repair_zero_msgs_imm_exp
-    :NoStartInstances
-{
-    my ($self) = @_;
-
-    $self->config_set(expunge_mode => 'immediate');
-    $self->_start_instances();
-
-    my $replica = $self->{replica_store}->get_client();
-
-    my $msg = $self->make_message("to be deleted", store => $self->{replica_store});
-
-    $replica->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
-    $replica->expunge();
+    $replicatalk->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
+    $replicatalk->expunge();
 
     $self->run_replication(user => 'cassandane');
 }
