@@ -69,13 +69,13 @@ static struct sockaddr_un idle_local;
 
 EXPORTED int idle_make_server_address(struct sockaddr_un *mysun)
 {
-    const char *idle_sock;
+    const char *idle_sock_opt;
 
     memset(mysun, 0, sizeof(*mysun));
     mysun->sun_family = AF_UNIX;
-    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-    if (idle_sock) {
-        strlcpy(mysun->sun_path, idle_sock, sizeof(mysun->sun_path));
+    idle_sock_opt = config_getstring(IMAPOPT_IDLESOCKET);
+    if (idle_sock_opt) {
+        strlcpy(mysun->sun_path, idle_sock_opt, sizeof(mysun->sun_path));
     }
     else {
         /* TODO: detect overflow and fail */
