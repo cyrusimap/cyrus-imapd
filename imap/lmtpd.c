@@ -221,6 +221,9 @@ int service_init(int argc __attribute__((unused)),
                       EC_SOFTWARE);
             }
         }
+
+        /* setup for sending IMAP IDLE notifications */
+        idle_init();
     }
 
     /* Set namespace */
@@ -902,6 +905,8 @@ void shut_down(int code)
     if (!isproxy) {
         if (dupelim)
             duplicate_done();
+
+        idle_done();
     }
 
 #ifdef HAVE_SSL
