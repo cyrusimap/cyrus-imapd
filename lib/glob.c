@@ -109,7 +109,7 @@ EXPORTED glob *glob_init(const char *str, char sep)
     buf_appendcstr(&buf, "]|$)");
 
     glob *g = xmalloc(sizeof(glob));
-    regcomp(&g->regex, buf_cstring(&buf), 0);
+    regcomp(&g->regex, buf_cstring(&buf), REG_EXTENDED);
     buf_free(&buf);
 
     return g;
