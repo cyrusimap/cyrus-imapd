@@ -5147,8 +5147,10 @@ static int mailbox_full_update(struct sync_folder *local,
 
     /* if replica still has a higher last_uid, bump our local
      * number to match so future records don't clash */
-    if (mailbox->i.last_uid < last_uid)
+    if (mailbox->i.last_uid < last_uid) {
+        mailbox_index_dirty(mailbox);
         mailbox->i.last_uid = last_uid;
+    }
 
     /* ugly variable reuse */
     dlist_getlist(kl, "ANNOTATIONS", &ka);

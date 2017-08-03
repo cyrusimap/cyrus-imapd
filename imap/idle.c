@@ -108,19 +108,6 @@ static void idle_notify(const char *mboxname)
     }
 }
 
-static int idle_initialized = 0;
-
-static void done_cb(void *rock __attribute__((unused))) {
-    idle_done();
-}
-
-static void init_internal() {
-    if (!idle_initialized) {
-        idle_init();
-        cyrus_modules_add(done_cb, NULL);
-    }
-}
-
 /*
  * Create connection to idled for sending notifications
  */
@@ -155,8 +142,6 @@ EXPORTED void idle_init(void)
     }
 
     idle_method_desc = "idled";
-
-    idle_initialized = 1;
 }
 
 EXPORTED int idle_enabled(void)
@@ -172,8 +157,6 @@ EXPORTED void idle_start(const char *mboxname)
     int r;
 
     if (!idle_enabled()) return;
-
-    init_internal();
 
     /* Tell idled that we're idling.  It doesn't
      * matter if it fails, we'll still poll */
@@ -201,8 +184,6 @@ EXPORTED int idle_wait(int otherfd)
     int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
 
     if (!idle_enabled()) return 0;
-
-    init_internal();
 
     /* If idled was not contacted, we still listen on the socket,
      * because we might get ALERTs, but we won't get mailbox
@@ -269,8 +250,6 @@ EXPORTED void idle_stop(const char *mboxname)
 
     if (!idle_started) return;
 
-    init_internal();
-
     /* Tell idled that we're done idling */
     r = idle_send_msg(IDLE_MSG_DONE, mboxname);
     if (r && (r != ENOENT)) {
@@ -287,5 +266,4 @@ EXPORTED void idle_done(void)
 {
     /* close the local socket */
     idle_done_sock();
-    idle_initialized = 0;
 }
