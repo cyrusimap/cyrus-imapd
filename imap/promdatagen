@@ -105,6 +105,9 @@ while (my $line = <>) {
 
         foreach my $metric (@metrics) {
             if ($metric->{name} eq $name) {
+                if (exists $metric->{label} ) {
+                    die "cannot define more than one label for metric \"$name\" at line $lineno\n";
+                }
                 $metric->{label} = { name => $name, label => $label, values => [ @values ] };
                 push @labels, $metric->{label};
                 last;
