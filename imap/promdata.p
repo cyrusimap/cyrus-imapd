@@ -86,3 +86,7 @@ metric counter cyrus_lmtp_sieve_keep_total              The number of sieve KEEP
 metric counter cyrus_lmtp_sieve_notify_total            The number of sieve NOTIFYs
 metric counter cyrus_lmtp_sieve_autorespond_total       The number of sieve AUTORESPONDs considered
 metric counter cyrus_lmtp_sieve_autorespond_sent_total  The number of sieve AUTORESPONDs sent
+
+metric counter cyrus_http_connections_total       The total number of HTTP connections
+metric gauge   cyrus_http_active_connections      The number of active HTTP connections
+metric gauge   cyrus_http_ready_listeners         The number of currently ready HTTP listeners

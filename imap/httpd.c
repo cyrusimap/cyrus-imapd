@@ -85,6 +85,7 @@
 #include "xstrlcat.h"
 #include "telemetry.h"
 #include "backend.h"
+#include "prometheus.h"
 #include "proxy.h"
 #include "userdeny.h"
 #include "message.h"
@@ -681,6 +682,8 @@ int service_init(int argc __attribute__((unused)),
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
+    prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
+
     return 0;
 }
 
@@ -706,6 +709,8 @@ int service_main(int argc __attribute__((unused)),
     size_t mechlen;
     struct auth_scheme_t *scheme;
     struct http_connection http_conn;
+
+    prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
 
     session_new_id();
 
@@ -812,13 +817,20 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
+    prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
+    prometheus_increment(CYRUS_HTTP_ACTIVE_CONNECTIONS);
+
     cmdloop(&http_conn);
+
+    prometheus_decrement(CYRUS_HTTP_ACTIVE_CONNECTIONS);
 
     /* Closing connection */
 
     /* cleanup */
     signal(SIGALRM, SIG_IGN);
     httpd_reset(&http_conn);
+
+    prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
 
     return 0;
 }
@@ -886,6 +898,13 @@ void shut_down(int code)
         prot_flush(httpd_out);
         bytes_out = prot_bytes_out(httpd_out);
         prot_free(httpd_out);
+
+        /* one less active connection */
+        prometheus_decrement(CYRUS_HTTP_ACTIVE_CONNECTIONS);
+    }
+    else {
+        /* one less ready listener */
+        prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
     }
 
     if (protin) protgroup_free(protin);
