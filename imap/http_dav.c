@@ -6838,7 +6838,7 @@ int meth_patch(struct transaction_t *txn, void *params)
 int meth_put(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
-    int ret, r, precond, rights;
+    int ret, r, precond, rights, reqd_rights;
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
     struct mailbox *mailbox = NULL;
@@ -6850,7 +6850,10 @@ int meth_put(struct transaction_t *txn, void *params)
     void *davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
 
-    if (txn->meth == METH_PUT) {
+    if (txn->meth == METH_POST) {
+        reqd_rights = DACL_ADDRSRC;
+    }
+    else {
         /* Response should not be cached */
         txn->flags.cc |= CC_NOCACHE;
 
@@ -6862,6 +6865,10 @@ int meth_put(struct transaction_t *txn, void *params)
 
         /* Make sure method is allowed (only allowed on resources) */
         if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+
+        reqd_rights = DACL_WRITECONT;
+
+        if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
 
     /* Make sure mailbox type is correct */
@@ -6886,12 +6893,11 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+    if (!(rights & reqd_rights)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
-        txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+        txn->error.rights = reqd_rights;
         return HTTP_NO_PRIVS;
     }
 
@@ -6918,14 +6924,16 @@ int meth_put(struct transaction_t *txn, void *params)
         return ret;
     }
 
-    /* Check if we can append a new message to mailbox */
-    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
-    if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
-                          ACL_INSERT, ignorequota ? NULL : qdiffs))) {
-        syslog(LOG_ERR, "append_check(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
-        txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+    if (rights & DACL_WRITECONT) {
+        /* Check if we can append a new message to mailbox */
+        qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+        if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
+                              ACL_INSERT, ignorequota ? NULL : qdiffs))) {
+            syslog(LOG_ERR, "append_check(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            return HTTP_SERVER_ERROR;
+        }
     }
 
     /* Open mailbox for writing */
@@ -6999,25 +7007,31 @@ int meth_put(struct transaction_t *txn, void *params)
         break;
 
     case HTTP_PRECOND_FAILED:
-        if (flags & PREFER_REP) {
-            unsigned offset;
-            struct buf buf;
-
-            /* Load message containing the resource */
-            mailbox_map_record(mailbox, &oldrecord, &msg_buf);
-
-            /* Resource length doesn't include RFC 5322 header */
-            offset = oldrecord.header_size;
-
-            /* Parse existing resource */
-            buf_init_ro(&buf, buf_base(&msg_buf) + offset,
-                        buf_len(&msg_buf) - offset);
-            obj = pparams->mime_types[0].to_object(&buf);
-            buf_free(&buf);
-
+        if ((flags & PREFER_REP) && ((rights & DACL_READ) == DACL_READ)) {
             /* Fill in ETag and Last-Modified */
             txn->resp_body.etag = etag;
             txn->resp_body.lastmod = lastmod;
+
+            if (pparams->get) {
+                r = pparams->get(txn, mailbox, &oldrecord, (void *) ddata, &obj);
+                if (r != HTTP_CONTINUE) flags &= ~PREFER_REP;
+            }
+            else {
+                unsigned offset;
+                struct buf buf;
+
+                /* Load message containing the resource */
+                mailbox_map_record(mailbox, &oldrecord, &msg_buf);
+
+                /* Resource length doesn't include RFC 5322 header */
+                offset = oldrecord.header_size;
+
+                /* Parse existing resource */
+                buf_init_ro(&buf, buf_base(&msg_buf) + offset,
+                            buf_len(&msg_buf) - offset);
+                obj = pparams->mime_types[0].to_object(&buf);
+                buf_free(&buf);
+            }
         }
         break;
 
