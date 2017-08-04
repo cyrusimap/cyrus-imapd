@@ -53,6 +53,7 @@
 #include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
+#include "prometheus.h"
 #include "spool.h"
 
 #define MAX_REQ_LINE    8000  /* minimum size per RFC 7230 */
@@ -101,6 +102,7 @@
 struct known_meth_t {
     const char *name;
     unsigned flags;
+    enum prom_labelled_metric metric;
 };
 extern const struct known_meth_t http_methods[];
 
@@ -430,6 +432,7 @@ struct method_t {
 struct namespace_t {
     unsigned id;                /* Namespace identifier */
     unsigned enabled;           /* Is this namespace enabled? */
+    const char *name;           /* Text name of this namespace ([A-Z][a-z][0-9]+) */
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
     int (*need_auth)(txn_t *);  /* Function run prior to unauthorized requests */

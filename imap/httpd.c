@@ -393,32 +393,32 @@ static struct sasl_callback mysasl_cb[] = {
 
 /* Array of HTTP methods known by our server. */
 const struct known_meth_t http_methods[] = {
-    { "ACL",            0 },
-    { "BIND",           0 },
-    { "COPY",           METH_NOBODY },
-    { "DELETE",         METH_NOBODY },
-    { "GET",            METH_NOBODY },
-    { "HEAD",           METH_NOBODY },
-    { "LOCK",           0 },
-    { "MKCALENDAR",     0 },
-    { "MKCOL",          0 },
-    { "MOVE",           METH_NOBODY },
-    { "OPTIONS",        METH_NOBODY },
-    { "PATCH",          0 },
-    { "POST",           0 },
-    { "PROPFIND",       0 },
-    { "PROPPATCH",      0 },
-    { "PUT",            0 },
-    { "REPORT",         0 },
-    { "TRACE",          METH_NOBODY },
-    { "UNBIND",         0 },
-    { "UNLOCK",         METH_NOBODY },
-    { NULL,             0 }
+    { "ACL",            0,              CYRUS_HTTP_ACL_TOTAL },
+    { "BIND",           0,              CYRUS_HTTP_BIND_TOTAL },
+    { "COPY",           METH_NOBODY,    CYRUS_HTTP_COPY_TOTAL },
+    { "DELETE",         METH_NOBODY,    CYRUS_HTTP_DELETE_TOTAL },
+    { "GET",            METH_NOBODY,    CYRUS_HTTP_GET_TOTAL },
+    { "HEAD",           METH_NOBODY,    CYRUS_HTTP_HEAD_TOTAL },
+    { "LOCK",           0,              CYRUS_HTTP_LOCK_TOTAL },
+    { "MKCALENDAR",     0,              CYRUS_HTTP_MKCALENDAR_TOTAL },
+    { "MKCOL",          0,              CYRUS_HTTP_MKCOL_TOTAL },
+    { "MOVE",           METH_NOBODY,    CYRUS_HTTP_MOVE_TOTAL },
+    { "OPTIONS",        METH_NOBODY,    CYRUS_HTTP_OPTIONS_TOTAL },
+    { "PATCH",          0,              CYRUS_HTTP_PATCH_TOTAL },
+    { "POST",           0,              CYRUS_HTTP_POST_TOTAL },
+    { "PROPFIND",       0,              CYRUS_HTTP_PROPFIND_TOTAL },
+    { "PROPPATCH",      0,              CYRUS_HTTP_PROPPATCH_TOTAL },
+    { "PUT",            0,              CYRUS_HTTP_PUT_TOTAL },
+    { "REPORT",         0,              CYRUS_HTTP_REPORT_TOTAL },
+    { "TRACE",          METH_NOBODY,    CYRUS_HTTP_TRACE_TOTAL },
+    { "UNBIND",         0,              CYRUS_HTTP_UNBIND_TOTAL },
+    { "UNLOCK",         METH_NOBODY,    CYRUS_HTTP_UNLOCK_TOTAL },
+    { NULL,             0,              0 }
 };
 
 /* Namespace to fetch static content from filesystem */
 struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, 1, "", NULL,
+    URL_NS_DEFAULT, 1, "default", "", NULL,
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
@@ -1605,6 +1605,9 @@ static int http1_input(struct transaction_t *txn)
             &txn->req_tgt.namespace->methods[txn->meth];
         
         ret = (*meth_t->proc)(txn, meth_t->params);
+
+        prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
+                                                     txn->req_tgt.namespace->name));
     }
 
     if (ret == HTTP_UNAUTHORIZED) {

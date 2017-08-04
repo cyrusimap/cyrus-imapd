@@ -57,6 +57,7 @@ static int prom_get(struct transaction_t *txn, void *params);
 struct namespace_t namespace_prometheus = {
     URL_NS_PROMETHEUS,
     /*enabled*/ 0,
+    "prometheus",
     "/metrics",
     /* XXX .well-known url*/ NULL,
     prom_need_auth,

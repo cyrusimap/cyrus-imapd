@@ -339,7 +339,7 @@ static struct meth_params carddav_params = {
 
 /* Namespace for Carddav collections */
 struct namespace_t namespace_addressbook = {
-    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav",
+    URL_NS_ADDRESSBOOK, 0, "addressbook", "/dav/addressbooks", "/.well-known/carddav",
     http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_ADDRESSBOOK,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
