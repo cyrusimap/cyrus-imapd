@@ -50,6 +50,7 @@ my %types = ( counter => 'PROM_METRIC_COUNTER', gauge => 'PROM_METRIC_GAUGE' );
 
 my %options;
 my @metrics;
+my @labels;
 
 sub output_header;
 sub output_source;
@@ -104,7 +105,8 @@ while (my $line = <>) {
 
         foreach my $metric (@metrics) {
             if ($metric->{name} eq $name) {
-                $metric->{label} = { label => $label, values => [ @values ] };
+                $metric->{label} = { name => $name, label => $label, values => [ @values ] };
+                push @labels, $metric->{label};
                 last;
             }
         }
@@ -115,14 +117,14 @@ while (my $line = <>) {
     }
 }
 
-output_header($options{h}, \@metrics) if $options{h};
-output_source($options{c}, \@metrics) if $options{c};
+output_header($options{h}, \@metrics, \@labels) if $options{h};
+output_source($options{c}, \@metrics, \@labels) if $options{c};
 
 exit 0;
 
 sub output_header
 {
-    my ($fname, $metrics) = @_;
+    my ($fname, $metrics, $labels) = @_;
 
     open my $header, '>', $fname or die "$fname: $!\n";
     print $header "#ifndef INCLUDE_PROMDATA_H\n#define INCLUDE_PROMDATA_H\n";
@@ -164,7 +166,29 @@ OKAY
         }
     }
     print $header "\n    PROM_NUM_METRICS /* n.b. leave last! */\n";
+    print $header "};\n\n";
+
+    print $header "enum prom_labelled_metric {\n";
+    $first = 1;
+    foreach my $label (@{$labels}) {
+        print $header "    \U$label->{name}\E";
+        print $header q{ = 0} if $first;
+        $first = 0;
+        print $header qq{,\n};
+    }
+    print $header "\n    PROM_NUM_LABELLED_METRICS /* n.b. leave last! */\n";
     print $header "};\n";
+
+print $header <<OKAY;
+
+struct prom_label_lookup_value {
+    const char *value;
+    enum prom_metric_id id;
+};
+
+extern const struct prom_label_lookup_value *prom_label_lookup_table[];
+
+OKAY
 
     print $header <<OKAY;
 
@@ -195,7 +219,7 @@ OKAY
 
 sub output_source
 {
-    my ($fname, $metrics) = @_;
+    my ($fname, $metrics, $labels) = @_;
 
     open my $source, '>', $fname or die "$fname: $!\n";
 
@@ -225,10 +249,10 @@ OKAY
                             $metric->{name},
                             ($first ? $types{$metric->{type}} : "PROM_METRIC_CONTINUED");
                 if ($first && defined $metric->{help}) {
-                    printf $source '"%s",', $metric->{help};
+                    printf $source '"%s", ', $metric->{help};
                 }
                 else {
-                    print $source "NULL,";
+                    print $source "NULL, ";
                 }
                 printf $source '"%s=\\"%s\\""', $metric->{label}->{label}, $v;
                 print $source " },\n";
@@ -249,6 +273,22 @@ OKAY
         }
     }
     print $source "    { NULL, 0, NULL, NULL },\n";
+    print $source "};\n\n";
+
+    foreach my $label(@{$labels}) {
+        print $source "static const struct prom_label_lookup_value ";
+        print $source "\U$label->{name}_$label->{label}\E_values[] = {\n";
+        foreach my $value(sort @{$label->{values}}) {
+            print $source "    { \"$value\", \U$label->{name}_$label->{label}_$value\E },\n";
+        }
+        print $source "    { NULL, 0 },\n";
+        print $source "};\n\n";
+    }
+
+    print $source "EXPORTED const struct prom_label_lookup_value *prom_label_lookup_table[] = {\n";
+    foreach my $label (@{$labels}) {
+        print $source "    \U$label->{name}_$label->{label}\E_values,\n";
+    }
     print $source "};\n";
 
     close $source;

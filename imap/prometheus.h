@@ -69,4 +69,7 @@ extern void prometheus_apply_delta(enum prom_metric_id metric_id,
 
 extern int prometheus_text_report(struct buf *buf, const char **mimetype);
 
+extern enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric metric,
+                                                   const char *value);
+
 #endif

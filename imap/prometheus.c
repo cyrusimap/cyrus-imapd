@@ -313,3 +313,23 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
     free(report_fname);
     return r;
 }
+
+EXPORTED enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric metric,
+                                                     const char *value)
+{
+    size_t i;
+
+    assert(metric >= 0 && metric < PROM_NUM_LABELLED_METRICS);
+
+    for (i = 0; prom_label_lookup_table[metric][i].value != NULL; i++) {
+        const struct prom_label_lookup_value *v = &prom_label_lookup_table[metric][i];
+
+        int cmp = strcmp(v->value, value);
+        if (cmp == 0) /* found it */
+            return v->id;
+        if (cmp > 0) /* gone too far, not found */
+            break;
+    }
+
+    fatal("invalid metric value -- compile time bug", EC_SOFTWARE);
+}
