@@ -314,7 +314,6 @@ endif # SIEVE
 EXTRA_DIST += \
 	COPYING \
 	README.md \
-	SMakefile \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -1860,24 +1859,6 @@ clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples
 
 .PHONY: clean-local
 clean-local: clean-doc clean-sphinx-cache clean-docsrc
-
-dist-old:: distgit
-	@echo "creating configure"
-	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS); \
-	do \
-	(cd dist/cyrus-imapd-$(PACKAGE_VERSION)/$$d; \
-	if [ -f Makefile.dist ]; then \
-	echo "### Making" dist "in" `pwd`; \
-	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
-	COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
-	fi) || exit 1; \
-	done
-	@echo "creating tarfile"
-	@cd dist ; tar cf - cyrus-imapd-$(PACKAGE_VERSION) | \
-	gzip -9 > ../cyrus-imapd-$(PACKAGE_VERSION).tar.gz
-	rm -f distgit
-	rm -rf dist
 
 distgit:
 	$(MKDIR_P) dist
