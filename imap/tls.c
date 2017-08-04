@@ -336,6 +336,8 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
         syslog(LOG_NOTICE, "cert has expired");
         break;
+    case X509_V_ERR_CERT_REVOKED:
+        syslog(LOG_NOTICE, "cert has been revoked");
     }
 
     return (ok);
@@ -694,6 +696,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char   *server_ca_file;
     const char   *server_cert_file;
     const char   *server_key_file;
+    const char   *crl_file_path;
     enum enum_value tls_client_certs;
     int server_cipher_order;
     int timeout;
@@ -942,6 +945,29 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                 );
         }
     }
+
+    /* Set CRL */
+    crl_file_path = config_getstring(IMAPOPT_TLS_CRL_FILE);
+    if (crl_file_path != NULL) {
+        X509_STORE *store = SSL_CTX_get_cert_store(s_ctx);
+        X509_CRL *crl;
+        BIO *crl_file = BIO_new_file(crl_file_path, "r");
+
+        if (crl_file) {
+            while ((crl = PEM_read_bio_X509_CRL(crl_file, NULL, NULL, NULL))) {
+                X509_STORE_add_crl(store, crl);
+                X509_CRL_free(crl);
+            }
+
+            X509_STORE_set_flags(store,
+                                 X509_V_FLAG_CRL_CHECK |
+                                 X509_V_FLAG_CRL_CHECK_ALL);
+        } else {
+            syslog(LOG_ERR, "Can't load CRL file %s.", crl_file_path);
+        }
+
+        BIO_free(crl_file);
+    } /* crl_file_path */
 
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
