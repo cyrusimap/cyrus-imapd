@@ -2092,10 +2092,60 @@ static void add_timezone(icalparameter *param, void *data)
 }
 
 
-/* Perform a GET/HEAD request on a CalDAV resource */
-static void add_personal_data(icalcomponent *ical,
-                              struct mailbox *mailbox, uint32_t uid);
+#define PER_USER_CAL_DATA \
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+
+static int is_personalized(struct mailbox *mailbox, uint32_t uid,
+                           const char *userid, struct buf *userdata)
+{
+    struct buf buf = BUF_INITIALIZER, *value;
+
+    value = userdata ? userdata : &buf;
+
+    /* Lookup per-user calendar data */
+    int r = mailbox_annotation_lookup(mailbox, uid,
+                                      PER_USER_CAL_DATA, userid, value);
+    if (!r && buf_len(value)) {
+        if (!userdata) buf_free(value);
+        return 1;
+    }
+
+    buf_free(value);
+    return 0;
+}
+
+
+static int process_vpatch(struct transaction_t *txn, icalcomponent *vpatch,
+                          icalcomponent *ical, int *num_changes);
+
+
+static void add_personal_data(icalcomponent *ical, struct buf *userdata)
+{
+    struct dlist *dl;
+    const char *icalstr;
+    icalcomponent *vpatch;
+
+    /* Parse the value and fetch the patch */
+    dlist_parsemap(&dl, 1, buf_base(userdata), buf_len(userdata));
+    dlist_getatom(dl, "VPATCH", &icalstr);
+    vpatch = icalparser_parse_string(icalstr);
+    dlist_free(&dl);
+
+    /* Need to setup a dummy txn to use process_vpatch() */
+    struct transaction_t txn;
+
+    memset(&txn, 0, sizeof(struct transaction_t));
+
+    /* Apply the patch to the "base" resource */
+    process_vpatch(&txn, vpatch, ical, NULL);
+
+    icalcomponent_free(vpatch);
+    buf_free(&txn.buf);
+}
+
+
+/* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj)
 {
@@ -2120,6 +2170,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         unsigned need_tz = 0;
         const char **hdr;
         icalcomponent *ical = NULL;
+        struct buf userdata = BUF_INITIALIZER;
         int ret = HTTP_CONTINUE;
 
         /* Check for optional CalDAV-Timezones header */
@@ -2193,9 +2244,11 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
         /* Personalize resource, if necessary */
         if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            !mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
+            is_personalized(mailbox, record->uid, httpd_userid, &userdata)) {
             if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
-            add_personal_data(ical, mailbox, record->uid);
+
+            add_personal_data(ical, &userdata);
+            buf_free(&userdata);
         }
 
         /* iCalendar data in response should not be transformed */
@@ -3926,35 +3979,6 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
     else return 0;
 }
 
-#define PER_USER_CAL_DATA \
-    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
-
-
-static void add_personal_data(icalcomponent *ical,
-                              struct mailbox *mailbox, uint32_t uid)
-{
-    struct buf value = BUF_INITIALIZER;
-    int r;
-
-    /* lookup per-user calendar data */
-    r = mailbox_annotation_lookup(mailbox, uid,
-                                  PER_USER_CAL_DATA, httpd_userid, &value);
-
-    if (!r && buf_len(&value)) {
-        /* Need to setup a dummy txn to use process_vpatch() */
-        icalcomponent *vpatch = icalparser_parse_string(buf_cstring(&value));
-        struct transaction_t txn;
-
-        memset(&txn, 0, sizeof(struct transaction_t));
-
-        r = process_vpatch(&txn, vpatch, ical, NULL);
-
-        icalcomponent_free(vpatch);
-        buf_free(&txn.buf);
-    }
-
-    buf_free(&value);
-}
 
 /*
  * Compare two components and extract per-user data (alarms, transparency).
@@ -4015,18 +4039,37 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         }
 
         if (r == 0) {
-            if (read_only) {
-                /* Compare entire properties (names, values, parameters) */
-                if (strcmp(icalproperty_as_ical_string(prop),
-                           icalproperty_as_ical_string(oldprop))) {
-                    /* Property has been changed in ical */
-                    return HTTP_FORBIDDEN;
+            switch (kind) {
+            case ICAL_CALSCALE_PROPERTY:
+            case ICAL_PRODID_PROPERTY:
+            case ICAL_DTSTAMP_PROPERTY:
+            case ICAL_LASTMODIFIED_PROPERTY:
+                /* Ok to modify these */
+                break;
+
+            default:
+                if (read_only) {
+                    /* Compare entire properties (names, values, parameters) */
+                    if (strcmp(icalproperty_as_ical_string(prop),
+                               icalproperty_as_ical_string(oldprop))) {
+                        /* Property has been updated in ical */
+                        return HTTP_FORBIDDEN;
+                    }
                 }
+                break;
             }
         }
         else if (r < 0) {
             /* Property has been added to ical */
-            if (kind == ICAL_TRANSP_PROPERTY) {
+            switch (kind) {
+            case ICAL_CALSCALE_PROPERTY:
+            case ICAL_PRODID_PROPERTY:
+            case ICAL_DTSTAMP_PROPERTY:
+            case ICAL_LASTMODIFIED_PROPERTY:
+                /* Ok to add these */
+                break;
+
+            case ICAL_TRANSP_PROPERTY:
                 if (!patch) {
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
@@ -4037,18 +4080,29 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
                 icalcomponent_remove_property(ical, prop);
                 icalcomponent_add_property(patch, prop);
-            }
-            else if (read_only) {
-                return HTTP_FORBIDDEN;
+                break;
+
+            default:
+                if (read_only) return HTTP_FORBIDDEN;
+                break;
             }
 
             continue;  /* Do NOT increment to next old property */
         }
-        else if (read_only) {
-            return HTTP_FORBIDDEN;
-        }
         else {
             /* Property has been removed from ical */
+            switch (oldkind) {
+            case ICAL_CALSCALE_PROPERTY:
+            case ICAL_PRODID_PROPERTY:
+            case ICAL_DTSTAMP_PROPERTY:
+            case ICAL_LASTMODIFIED_PROPERTY:
+                /* Ok to remove these */
+                break;
+
+            default:
+                if (read_only) return HTTP_FORBIDDEN;
+                break;
+            }
         }
 
         oldprop = icalcomponent_get_next_property(oldical, ICAL_ANY_PROPERTY);
@@ -4082,11 +4136,13 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         }
 
         if (r == 0) {
-            extract_personal_data(comp, oldcomp, vpatch, path, read_only);
+            r = extract_personal_data(comp, oldcomp, vpatch, path, read_only);
+            if (r) return r;
         }
         else if (r < 0) {
             /* Component has been added to ical */
-            if (kind == ICAL_VALARM_COMPONENT) {
+            switch (kind) {
+            case ICAL_VALARM_COMPONENT:
                 if (!patch) {
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
@@ -4097,9 +4153,14 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
                 icalcomponent_remove_component(ical, comp);
                 icalcomponent_add_component(patch, comp);
-            }
-            else if (read_only) {
-                return HTTP_FORBIDDEN;
+                break;
+
+            default:
+                if (read_only) return HTTP_FORBIDDEN;
+
+                r = extract_personal_data(comp, oldcomp, vpatch, path, read_only);
+                if (r) return r;
+                break;
             }
 
             continue;  /* Do NOT increment to next old component */
@@ -4121,28 +4182,57 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 }
 
 
+static int write_personal_data(struct mailbox *mailbox,
+                               struct caldav_data *cdata,
+                               const char *userid,
+                               icalcomponent *vpatch)
+{
+    struct message_guid guid;
+    struct buf value = BUF_INITIALIZER;
+    const char *icalstr = icalcomponent_as_ical_string(vpatch);
+    struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
+    int ret;
+
+    dlist_setnum64(dl, "MODSEQ", mailbox_modseq_dirty(mailbox));
+    message_guid_generate(&guid, icalstr, strlen(icalstr));
+    dlist_setguid(dl, "GUID", &guid);
+    dlist_setatom(dl, "VPATCH", icalstr);
+    dlist_printbuf(dl, 1, &value);
+    dlist_free(&dl);
+
+    ret = mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
+                                   PER_USER_CAL_DATA, userid, &value);
+    buf_free(&value);
+
+    return ret;
+}
+
+
 static int personalize_resource(struct transaction_t *txn,
                                 struct mailbox *mailbox,
                                 icalcomponent *ical,
                                 struct caldav_data *cdata,
-                                icalcomponent **vpatch,
                                 icalcomponent **oldical,
                                 char **schedule_address)
 {
     int is_owner, rights, read_only;
-    icalcomponent_kind kind;
-    icalcomponent *patch;
+    mbname_t *mbname;
+    const char *owner;
+    icalcomponent *vpatch = NULL;
     struct index_record record;
-    int ret;
+    int ret = 0;
 
     /* Check ownership and ACL for current user */
-    is_owner = mboxname_userownsmailbox(httpd_userid, mailbox->name);
+    mbname = mbname_from_intname(mailbox->name);
+    owner = mbname_userid(mbname);
+    is_owner = !strcmpsafe(owner, httpd_userid);
+
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         read_only = 0;
     }
-    else if (is_owner) return 0;
+    else if (is_owner) goto done;
     else if (cdata->dav.imap_uid && (rights & DACL_PROPRSRC)) {
         /* Sharee has read-only access to existing resource */
         read_only = 1;
@@ -4155,41 +4245,81 @@ static int personalize_resource(struct transaction_t *txn,
         return HTTP_NO_PRIVS;
     }
 
-        
-    /* Create UID for VPATCH */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
-               strhash(cdata->dav.resource), strhash(httpd_userid));
+    if (!is_personalized(mailbox, cdata->dav.imap_uid, owner, NULL)) {
+        if (is_owner) {
+            /* Owner updating unshared resource - nothing to do here */
+            goto done;
+        }
+        else if (cdata->dav.imap_uid) {
+            /* Split owner's personal data from resource */
+            if (!*oldical) {
+                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
-    *vpatch = icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
-                                  icalproperty_new_version("1"),
-                                  icalproperty_new_dtstamp(
-                                      icaltime_from_timet_with_zone(time(0),
-                                                                    0,
-                                                                    utc_zone)),
-                                  icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                  0);
+                /* Load message containing the resource and parse iCal data */
+                ret = mailbox_find_index_record(mailbox,
+                                                cdata->dav.imap_uid, &record);
+                if (ret) {
+                    txn->error.desc = "Failed to read record";
+                    return HTTP_SERVER_ERROR;
+                }
 
-    /* Create PATCH-TARGET for PATCH */
-    buf_reset(&txn->buf);
-    kind = icalcomponent_isa(icalcomponent_get_first_real_component(ical));
-    buf_printf(&txn->buf, "/VCALENDAR/%s", icalcomponent_kind_to_string(kind));
+                *oldical = record_to_ical(mailbox, &record, schedule_address);
+            }
 
-    patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
-                                icalproperty_new_patchtarget(
-                                    buf_cstring(&txn->buf)),
-                                icalproperty_new_patchdelete("/VALARM"),
-                                icalproperty_new_patchdelete("#TRANSP"),
-                                0);
-    icalcomponent_add_component(*vpatch, patch);
-    buf_reset(&txn->buf);
 
-    if (cdata->dav.imap_uid) {
-        /* Need to setup a dummy txn to use process_vpatch() */
-        struct transaction_t mytxn;
+            /* Create UID for owner VPATCH */
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+                       strhash(cdata->dav.resource), strhash(owner));
 
-        memset(&mytxn, 0, sizeof(struct transaction_t));
+            vpatch =
+                icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
+                                    icalproperty_new_version("1"),
+                                    icalproperty_new_dtstamp(
+                                        icaltime_from_timet_with_zone(time(0),
+                                                                      0,
+                                                                      utc_zone)),
+                                    icalproperty_new_uid(buf_cstring(&txn->buf)),
+                                    0);
+            buf_reset(&txn->buf);
 
+            /* Extract personal info from owner's resource and create vpatch */
+            ret = extract_personal_data(*oldical, NULL, vpatch,
+                                        &txn->buf /* path */, 0 /* read_only */);
+            buf_reset(&txn->buf);
+
+            if (!ret) {
+                struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
+
+                ret = caldav_store_resource(txn, *oldical, mailbox,
+                                            cdata->dav.resource, caldavdb, 0,
+                                            *schedule_address);
+
+                if (ret == HTTP_NO_CONTENT) {
+                    /* Fetch the new DAV and index records */
+                    /* NOTE: previous contents of cdata was
+                       freed by store_resource */
+                    ret = caldav_lookup_resource(caldavdb, mailbox->name,
+                                                 txn->req_tgt.resource, &cdata,
+                                                 /* tombstones */ 0);
+                    caldav_close(caldavdb);
+                }
+            }
+
+            icalcomponent_free(*oldical);
+            *oldical = NULL;
+            free(*schedule_address);
+            *schedule_address = NULL;
+
+            if (!ret) ret = write_personal_data(mailbox, cdata, owner, vpatch);
+            icalcomponent_free(vpatch);
+            vpatch = NULL;
+
+            if (ret) goto done;
+        }
+    }
+
+    if (read_only && cdata->dav.imap_uid) {
         if (!*oldical) {
             syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
@@ -4204,34 +4334,43 @@ static int personalize_resource(struct transaction_t *txn,
             *oldical = record_to_ical(mailbox, &record, schedule_address);
         }
 
-        /* Strip personal data from existing resource */
-        process_vpatch(&mytxn, *vpatch, *oldical, NULL);
-
         /* Normalize existing resource for comparison */
         icalcomponent_normalize(*oldical);
 
-        buf_free(&mytxn.buf);
+        /* Normalize new resource for comparison */
+        icalcomponent_normalize(ical);
     }
 
-    /* Normalize new resource for comparison */
-    icalcomponent_normalize(ical);
+    /* Create UID for sharee VPATCH */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+               strhash(cdata->dav.resource), strhash(httpd_userid));
+
+    vpatch =
+        icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
+                            icalproperty_new_version("1"),
+                            icalproperty_new_dtstamp(
+                                icaltime_from_timet_with_zone(time(0),
+                                                              0,
+                                                              utc_zone)),
+                            icalproperty_new_uid(buf_cstring(&txn->buf)),
+                            0);
+    buf_reset(&txn->buf);
 
     /* Extract personal info from new resource and add to vpatch */
-    ret = extract_personal_data(ical, *oldical, *vpatch,
+    ret = extract_personal_data(ical, *oldical, vpatch,
                                 &txn->buf /* path */, read_only);
     buf_reset(&txn->buf);
 
-    if (!ret && read_only) {
-        const char *icalstr = icalcomponent_as_ical_string(*vpatch);
-        struct buf value = BUF_INITIALIZER;
-
-        buf_init_ro_cstr(&value, icalstr);
-        ret = mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
-                                       PER_USER_CAL_DATA, httpd_userid, &value);
-        buf_free(&value);
-
-        ret = ret ? HTTP_SERVER_ERROR : HTTP_NO_CONTENT;
+    if (!ret) {
+        ret = write_personal_data(mailbox, cdata, httpd_userid, vpatch);
+        if (ret) ret = HTTP_SERVER_ERROR;
+        else if (read_only) ret = HTTP_NO_CONTENT;
     }
+
+  done:
+    if (vpatch) icalcomponent_free(vpatch);
+    mbname_free(&mbname);
 
     return ret;
 }
@@ -4243,13 +4382,6 @@ static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
 
 {
     fatal("caldav_patch() called, but no VPATCH", EC_SOFTWARE);
-}
-
-static void add_personal_data(icalcomponent *ical __attribute__((unused)),
-                              struct mailbox *mailbox __attribute__((unused)),
-                              uint32_t uid __attribute__((unused)))
-{
-    return;
 }
 
 static int personalize_resource(struct transaction_t *txn __attribute__((unused)),
@@ -4285,7 +4417,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     int ret = 0;
     struct caldav_db *db = (struct caldav_db *)destdb;
     icalcomponent *ical = (icalcomponent *)obj;
-    icalcomponent *oldical = NULL, *vpatch = NULL;
+    icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty *prop, *rrule = NULL;
@@ -4415,8 +4547,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     if (namespace_calendar.allow & ALLOW_USERDATA) {
-        ret = personalize_resource(txn, mailbox, ical, cdata,
-                                   &vpatch, &oldical, &schedule_address);
+        ret = personalize_resource(txn, mailbox, ical,
+                                   cdata, &oldical, &schedule_address);
         if (ret) goto done;
     }
 
@@ -4533,7 +4665,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
   done:
     if (oldical) icalcomponent_free(oldical);
-    if (vpatch) icalcomponent_free(vpatch);
     free(schedule_address);
     buf_free(&buf);
 
@@ -5691,6 +5822,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
     if (propstat) {
         icalcomponent *ical = NULL;
+        struct buf userdata = BUF_INITIALIZER;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -5730,11 +5862,13 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         /* Personalize resource, if necessary */
         if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            !mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
+            is_personalized(fctx->mailbox, fctx->record->uid,
+                            httpd_userid, &userdata)) {
             if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
             ical = fctx->obj;
 
-            add_personal_data(ical, fctx->mailbox, fctx->record->uid);
+            add_personal_data(ical, &userdata);
+            buf_free(&userdata);
         }
 
         if (!icaltime_is_null_time(partial->range.start)) {
