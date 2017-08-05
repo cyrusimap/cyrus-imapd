@@ -91,7 +91,7 @@ static void ensure_alloc(strarray_t *sa, int newalloc)
         return;
     newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
     sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
-    memset(sa->data+sa->alloc, 0, sizeof(char *) * (newalloc-sa->alloc));
+    memset(sa->data + sa->alloc, 0, sizeof(char *) * (newalloc - sa->alloc));
     sa->alloc = newalloc;
 }
 
