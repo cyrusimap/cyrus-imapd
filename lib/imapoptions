@@ -2284,6 +2284,9 @@ product version in the capabilities */
 .PP
    https://wiki.mozilla.org/Security/Server_Side_TLS */
 
+{ "tls_crl_file", NULL, STRING }
+/* Path to a file containing the Certificate Revocation List */
+
 { "tls_client_ca_dir", NULL, STRING }
 /* Path to a directory containing the CA certificates used to verify
    client SSL certificates used for authentication. */
