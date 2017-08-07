@@ -907,6 +907,9 @@ void shut_down(int code)
         prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
     }
 
+    prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
+                              : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
+
     if (protin) protgroup_free(protin);
 
     if (config_auditlog)

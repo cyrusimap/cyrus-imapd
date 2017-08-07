@@ -90,6 +90,8 @@ metric counter cyrus_lmtp_sieve_autorespond_sent_total  The number of sieve AUTO
 metric counter cyrus_http_connections_total       The total number of HTTP connections
 metric gauge   cyrus_http_active_connections      The number of active HTTP connections
 metric gauge   cyrus_http_ready_listeners         The number of currently ready HTTP listeners
+metric counter cyrus_http_shutdown_total          The number of HTTP process shutdowns
+    label cyrus_http_shutdown_total status ok error
 metric counter cyrus_http_acl_total               The total number of HTTP ACLs
     label cyrus_http_acl_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
 metric counter cyrus_http_bind_total              The total number of HTTP BINDs
