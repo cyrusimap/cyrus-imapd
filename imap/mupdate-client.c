@@ -765,6 +765,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 EXPORTED void kick_mupdate(void)
 {
     char buf[2048];
+    struct buf addrbuf = BUF_INITIALIZER;
     struct sockaddr_un srvaddr;
     int s, r;
     int len;
@@ -784,11 +785,18 @@ EXPORTED void kick_mupdate(void)
         return;
     }
 
-    strlcpy(buf, config_dir, sizeof(buf));
-    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
+    buf_appendcstr(&addrbuf, config_dir);
+    buf_appendcstr(&addrbuf, FNAME_MUPDATE_TARGET_SOCK);
+    if (buf_len(&addrbuf) >= sizeof(srvaddr.sun_path)) {
+        syslog(LOG_ERR, "kick_mupdate: configured socket path '%s' is too long"
+                        " (maximum length is " SIZE_T_FMT ")",
+                        buf_cstring(&addrbuf), sizeof(srvaddr.sun_path) - 1);
+        fatal("socket path too long", EC_CONFIG);
+    }
+
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, buf);
+    strlcpy(srvaddr.sun_path, buf_cstring(&addrbuf), sizeof(srvaddr.sun_path));
     len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
 
     r = connect(s, (struct sockaddr *)&srvaddr, len);
@@ -803,6 +811,7 @@ EXPORTED void kick_mupdate(void)
     }
 
  done:
+    buf_free(&addrbuf);
     close(s);
     return;
 }
