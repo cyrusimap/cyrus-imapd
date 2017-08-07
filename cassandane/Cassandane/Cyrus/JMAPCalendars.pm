@@ -87,33 +87,99 @@ sub test_getcalendars
     xlog "get existing calendar";
     my $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendars');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
-    $self->assert_str_equals($res->[0][1]{list}[0]{color}, 'aqua');
+    $self->assert_str_equals('calendars', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('aqua', $res->[0][1]{list}[0]{color});
 
     xlog "get existing calendar with select properties";
     $res = $jmap->Request([['getCalendars', { ids => [$id], properties => ["name"] }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendars');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
-    $self->assert_str_equals($res->[0][1]{list}[0]{name}, "calname");
+    $self->assert_str_equals('calendars', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals("calname", $res->[0][1]{list}[0]{name});
     $self->assert_null($res->[0][1]{list}[0]{color});
 
     xlog "get unknown calendar";
     $res = $jmap->Request([['getCalendars', {ids => [$unknownId]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendars');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 0);
-    $self->assert_num_equals(scalar(@{$res->[0][1]{notFound}}), 1);
-    $self->assert_str_equals($res->[0][1]{notFound}[0], $unknownId);
-
-    # XXX - test for shared calendars
+    $self->assert_str_equals('calendars', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(0, scalar(@{$res->[0][1]{list}}));
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{notFound}}));
+    $self->assert_str_equals($unknownId, $res->[0][1]{notFound}[0]);
 }
+
+sub test_getcalendars_shared
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+
+    xlog "get calendar";
+    my $res = $jmap->Request([['getCalendars', {accountId => 'manifold'}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "Manifold Calendar");
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]->{mayReadItems});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{mayAddItems});
+    my $id = $res->[0][1]{list}[0]->{id};
+
+    xlog "refetch calendar";
+    $res = $jmap->Request([['getCalendars', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{id}, $id);
+
+    xlog "create another shared calendar";
+    my $CalendarId2 = $mantalk->NewCalendar({name => 'Manifold Calendar 2'});
+    $self->assert_not_null($CalendarId2);
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog "remove access rights to calendar";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => '') or die;
+
+    xlog "refetch calendar (should fail)";
+    $res = $jmap->Request([['getCalendars', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+
+    xlog "remove access rights to all shared calendars";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => '') or die;
+
+    xlog "refetch calendar (should fail)";
+    $res = $jmap->Request([['getCalendars', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($res->[0][0], "error");
+    $self->assert_str_equals($res->[0][1]{type}, "accountNotFound");
+}
+
 
 sub test_getcalendars_default
     :JMAP :min_version_3_0
@@ -127,7 +193,7 @@ sub test_getcalendars_default
     # to create a test user just for this test. How?
     xlog "get default calendar";
     my $res = $jmap->Request([['getCalendars', {ids => ["Default"]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
+    $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
 }
 
 sub test_setcalendars
@@ -147,8 +213,8 @@ sub test_setcalendars
              }}}, "R1"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendarsSet');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('calendarsSet', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{created});
 
@@ -157,9 +223,9 @@ sub test_setcalendars
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_num_equals(scalar(@{$res->[0][1]{list}}), 1);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, $id);
-    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'foo');
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
     $self->assert_equals($res->[0][1]{list}[0]{isVisible}, JSON::true);
 
     xlog "update calendar $id";
@@ -170,27 +236,27 @@ sub test_setcalendars
             }}}, "R1"]
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_str_equals('calendarsSet', $res->[0][0]);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
     $self->assert(exists $res->[0][1]{updated}{$id});
     
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'bar');
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
     $self->assert_equals($res->[0][1]{list}[0]{isVisible}, JSON::false);
 
     xlog "destroy calendar $id";
     $res = $jmap->Request([['setCalendars', {destroy => ["$id"]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'calendarsSet');
+    $self->assert_str_equals('calendarsSet', $res->[0][0]);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{destroyed});
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 }
 
 sub test_setcalendars_state
@@ -207,8 +273,8 @@ sub test_setcalendars_state
                     create => { "1" => { name => "foo" }}
                 }, "R1"]
         ]);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
     xlog "create with wrong state token";
     $res = $jmap->Request([
@@ -217,8 +283,8 @@ sub test_setcalendars_state
                     create => { "1" => { name => "foo" }}
                 }, "R1"]
         ]);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}, 'stateMismatch');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
     xlog "create calendar";
     $res = $jmap->Request([
@@ -242,7 +308,7 @@ sub test_setcalendars_state
             }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
 
     my $oldState = $state;
     $state = $res->[0][1]{newState};
@@ -254,7 +320,7 @@ sub test_setcalendars_state
             ['setCalendars', {}, "R3"]
     ]);
     $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_equals($state, $res->[0][1]{newState});
 
     xlog "update calendar $id with expired state";
     $res = $jmap->Request([
@@ -263,14 +329,14 @@ sub test_setcalendars_state
                     update => {"$id" => {name => "baz"}}
             }, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}, "stateMismatch");
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "get calendar $id to make sure state didn't change";
     $res = $jmap->Request([['getCalendars', {ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{state}, $state);
-    $self->assert_str_equals($res->[0][1]{list}[0]{name}, 'bar');
+    $self->assert_str_equals($state, $res->[0][1]{state});
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
 
     xlog "destroy calendar $id with expired state";
     $res = $jmap->Request([
@@ -279,9 +345,9 @@ sub test_setcalendars_state
                     destroy => [$id]
             }, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][1]{type}, "stateMismatch");
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "destroy calendar $id with current state";
     $res = $jmap->Request([
@@ -290,8 +356,116 @@ sub test_setcalendars_state
                     destroy => [$id]
             }, "R1"]
     ]);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}
+
+sub test_setcalendars_shared
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+    xlog "create shared account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    # Call CalDAV once to create manifold's calendar home #calendars
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "share calendar home read-only to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lr') or die;
+
+    xlog "create calendar (should fail)";
+    my $res = $jmap->Request([
+            ['setCalendars', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    $self->assert_str_equals($res->[0][1]{notCreated}{1}{type}, "accountReadOnly");
+
+    xlog "share calendar home read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog "create calendar";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    my $CalendarId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($CalendarId);
+
+    xlog "share calendar read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+
+    xlog "update calendar (should fail)";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    accountId => 'manifold',
+                    update => {$CalendarId => {
+                            name => "bar",
+                            isVisible => \0
+            }}}, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$CalendarId});
+    $self->assert_str_equals($res->[0][1]{notUpdated}{$CalendarId}{type}, "accountReadOnly");
+
+    xlog "share read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "update calendar";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    accountId => 'manifold',
+                    update => {$CalendarId => {
+                            name => "bar",
+                            isVisible => \0
+            }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    $self->assert(exists $res->[0][1]{updated}{$CalendarId});
+
+    xlog "share read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+
+    xlog "destroy calendar $CalendarId (should fail)";
+    $res = $jmap->Request([['setCalendars', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    $self->assert_str_equals($res->[0][1]{notDestroyed}{$CalendarId}{type}, "accountReadOnly");
+
+    xlog "share read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "destroy calendar $CalendarId";
+    $res = $jmap->Request([['setCalendars', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $CalendarId);
 }
 
 
@@ -329,10 +503,10 @@ sub test_getcalendarupdates
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
-    $self->assert_str_equals(scalar @{$res->[0][1]{changed}}, 0);
-    $self->assert_str_equals(scalar @{$res->[0][1]{removed}}, 0);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{removed}});
 
     xlog "update name of calendar $id1, destroy calendar $id2";
     $res = $jmap->Request([
@@ -343,20 +517,20 @@ sub test_getcalendarupdates
             }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{newState});
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
 
     xlog "get calendar updates";
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_str_equals($res->[0][0], "calendarUpdates");
-    $self->assert_str_equals($res->[0][2], "R1");
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
-    $self->assert_str_equals($res->[0][1]{removed}[0], $id2);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $self->assert_str_equals("calendarUpdates", $res->[0][0]);
+    $self->assert_str_equals("R1", $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($id2, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
 
     xlog "update color of calendar $id1";
@@ -369,9 +543,9 @@ sub test_getcalendarupdates
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
 
     xlog "update sortOrder of calendar $id1";
@@ -384,19 +558,19 @@ sub test_getcalendarupdates
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state,
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
 
     xlog "get empty calendar updates";
     $res = $jmap->Request([['getCalendarUpdates', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
 }
 
 sub test_setcalendars_error
@@ -413,7 +587,7 @@ sub test_setcalendars_error
     $self->assert_not_null($res);
     my $errType = $res->[0][1]{notCreated}{"1"}{type};
     my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals($errProp, [
             "name", "color", "sortOrder", "isVisible"
     ]);
@@ -431,7 +605,7 @@ sub test_setcalendars_error
     ]);
     $errType = $res->[0][1]{notCreated}{"1"}{type};
     $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals($errProp, [
             "mayReadFreeBusy", "mayReadItems", "mayAddItems",
             "mayModifyItems", "mayRemoveItems", "mayRename",
@@ -445,7 +619,7 @@ sub test_setcalendars_error
              }}}, "R1"]
     ]);
     $errType = $res->[0][1]{notUpdated}{"unknown"}{type};
-    $self->assert_str_equals($errType, "notFound");
+    $self->assert_str_equals("notFound", $errType);
 
     xlog "create calendar";
     $res = $jmap->Request([
@@ -469,7 +643,7 @@ sub test_setcalendars_error
     ]);
     $errType = $res->[0][1]{notUpdated}{$id}{type};
     $errProp = $res->[0][1]{notUpdated}{$id}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals($errProp, [
             "mayReadFreeBusy", "mayReadItems", "mayAddItems",
             "mayModifyItems", "mayRemoveItems", "mayRename",
@@ -481,11 +655,11 @@ sub test_setcalendars_error
             ['setCalendars', {destroy => ["unknown"]}, "R1"]
     ]);
     $errType = $res->[0][1]{notDestroyed}{"unknown"}{type};
-    $self->assert_str_equals($errType, "notFound");
+    $self->assert_str_equals("notFound", $errType);
 
     xlog "destroy calendar $id";
     $res = $jmap->Request([['setCalendars', {destroy => ["$id"]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 }
 
 sub test_setcalendars_badname
@@ -508,8 +682,8 @@ sub test_setcalendars_badname
     $self->assert_not_null($res);
     my $errType = $res->[0][1]{notCreated}{"1"}{type};
     my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
-    $self->assert_deep_equals($errProp, ["name"]);
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(["name"], $errProp);
 }
 
 sub test_setcalendars_destroydefault
@@ -528,13 +702,13 @@ sub test_setcalendars_destroydefault
     $self->assert_not_null($res);
 
     my $errType = $res->[0][1]{notDestroyed}{"Default"}{type};
-    $self->assert_str_equals($errType, "isDefault");
+    $self->assert_str_equals("isDefault", $errType);
     $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
-    $self->assert_str_equals($errType, "notFound");
+    $self->assert_str_equals("notFound", $errType);
     $errType = $res->[0][1]{notDestroyed}{"Outbox"}{type};
-    $self->assert_str_equals($errType, "notFound");
+    $self->assert_str_equals("notFound", $errType);
     $errType = $res->[0][1]{notDestroyed}{"Attachments"}{type};
-    $self->assert_str_equals($errType, "notFound");
+    $self->assert_str_equals("notFound", $errType);
 }
 
 sub normalize_event
@@ -601,7 +775,7 @@ sub assert_normalized_event_equals
     my $copyB = dclone($b);
     normalize_event($copyA);
     normalize_event($copyB);
-    return $self->assert_deep_equals($copyA, $copyB);
+    return $self->assert_deep_equals($copyB, $copyA);
 }
 
 sub putandget_vevent
@@ -613,7 +787,7 @@ sub putandget_vevent
 
     xlog "get default calendar id";
     my $res = $jmap->Request([['getCalendars', {ids => ["Default"]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]{id}, "Default");
+    $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
     my $calid = $res->[0][1]{list}[0]{id};
     my $xhref = $res->[0][1]{list}[0]{"x-href"};
 
@@ -655,21 +829,21 @@ sub test_getcalendarevents_simple
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals($event->{uid}, $id);
+    $self->assert_str_equals($id, $event->{uid});
     $self->assert_null($event->{relatedTo});
-    $self->assert_str_equals($event->{title}, "yo");
-    $self->assert_str_equals($event->{prodId}, "-//Apple Inc.//Mac OS X 10.9.5//EN");
-    $self->assert_str_equals($event->{locale}, "en");
-    $self->assert_str_equals($event->{description}, "double yo");
+    $self->assert_str_equals("yo", $event->{title});
+    $self->assert_str_equals("-//Apple Inc.//Mac OS X 10.9.5//EN", $event->{prodId});
+    $self->assert_str_equals("en", $event->{locale});
+    $self->assert_str_equals("double yo", $event->{description});
     $self->assert_equals($event->{freeBusyStatus}, "free");
     $self->assert_equals($event->{isAllDay}, JSON::false);
-    $self->assert_str_equals($event->{start}, "2016-09-28T16:00:00");
-    $self->assert_str_equals($event->{timeZone}, "Etc/UTC");
-    $self->assert_str_equals($event->{duration}, "PT1H");
-    $self->assert_str_equals($event->{created}, "2015-09-28T12:52:12Z");
-    $self->assert_str_equals($event->{updated}, "2015-09-28T13:24:34Z");
-    $self->assert_num_equals($event->{sequence}, 9);
-    $self->assert_str_equals($event->{privacy}, "public");
+    $self->assert_str_equals("2016-09-28T16:00:00", $event->{start});
+    $self->assert_str_equals("Etc/UTC", $event->{timeZone});
+    $self->assert_str_equals("PT1H", $event->{duration});
+    $self->assert_str_equals("2015-09-28T12:52:12Z", $event->{created});
+    $self->assert_str_equals("2015-09-28T13:24:34Z", $event->{updated});
+    $self->assert_num_equals(9, $event->{sequence});
+    $self->assert_str_equals("public", $event->{privacy});
 }
 
 sub test_getcalendarevents_privacy
@@ -681,7 +855,7 @@ sub test_getcalendarevents_privacy
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals("private",  $event->{privacy});
+    $self->assert_str_equals( $event->{privacy}, "private");
 }
 
 sub test_getcalendarevents_properties
@@ -697,7 +871,7 @@ sub test_getcalendarevents_properties
     $self->assert_not_null($event->{uid});
     $self->assert_not_null($event->{"x-href"});
     $self->assert_not_null($event->{calendarId});
-    $self->assert_num_equals(4, scalar keys %$event);
+    $self->assert_num_equals(scalar keys %$event, 4);
 }
 
 sub test_getcalendarevents_relatedto
@@ -709,7 +883,7 @@ sub test_getcalendarevents_relatedto
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals($event->{uid}, $id);
+    $self->assert_str_equals($id, $event->{uid});
     $self->assert_deep_equals($event->{relatedTo}, {
             "first"     => "58ADE31-001",
             "next"      => "58ADE31-003",
@@ -736,7 +910,7 @@ sub test_getcalendarevents_links
     };
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($event->{links}, $links);
+    $self->assert_deep_equals($links, $event->{links});
 }
 
 
@@ -749,12 +923,12 @@ sub test_getcalendarevents_rscale
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals($event->{title}, "Adar I");
-    $self->assert_str_equals($event->{recurrenceRule}{frequency}, "yearly");
-    $self->assert_str_equals($event->{recurrenceRule}{rscale}, "hebrew");
-    $self->assert_str_equals($event->{recurrenceRule}{skip}, "forward");
-    $self->assert_num_equals($event->{recurrenceRule}{byDate}[0], 8);
-    $self->assert_str_equals($event->{recurrenceRule}{byMonth}[0], "5L");
+    $self->assert_str_equals("Adar I", $event->{title});
+    $self->assert_str_equals("yearly", $event->{recurrenceRule}{frequency});
+    $self->assert_str_equals("hebrew", $event->{recurrenceRule}{rscale});
+    $self->assert_str_equals("forward", $event->{recurrenceRule}{skip});
+    $self->assert_num_equals(8, $event->{recurrenceRule}{byDate}[0]);
+    $self->assert_str_equals("5L", $event->{recurrenceRule}{byMonth}[0]);
 }
 
 sub test_getcalendarevents_endtimezone
@@ -766,14 +940,14 @@ sub test_getcalendarevents_endtimezone
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals($event->{start}, "2016-09-28T13:00:00");
-    $self->assert_str_equals($event->{timeZone}, "Europe/London");
-    $self->assert_str_equals($event->{duration}, "PT1H");
+    $self->assert_str_equals("2016-09-28T13:00:00", $event->{start});
+    $self->assert_str_equals("Europe/London", $event->{timeZone});
+    $self->assert_str_equals("PT1H", $event->{duration});
 
     my @locations = values %{$event->{locations}};
-    $self->assert_num_equals(scalar @locations, 1);
-    $self->assert_str_equals($locations[0]{timeZone}, "Europe/Vienna");
-    $self->assert_str_equals($locations[0]{rel}, "end");
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("Europe/Vienna", $locations[0]{timeZone});
+    $self->assert_str_equals("end", $locations[0]{rel});
 }
 
 sub test_getcalendarevents_participants
@@ -786,33 +960,33 @@ sub test_getcalendarevents_participants
     my $event = $self->putandget_vevent($id, $ical);
 
     $self->assert_not_null($event->{replyTo});
-    $self->assert_str_equals($event->{replyTo}{imip}, "mailto:smithers\@example.com");
+    $self->assert_str_equals("mailto:smithers\@example.com", $event->{replyTo}{imip});
 
     $self->assert_not_null($event->{participants});
-    $self->assert_num_equals(scalar values %{$event->{participants}}, 5);
-    $self->assert_str_equals($event->{participants}{"smithers\@example.com"}{name}, "Monty Burns");
-    $self->assert_str_equals($event->{participants}{"smithers\@example.com"}{email}, "smithers\@example.com");
-    $self->assert_str_equals($event->{participants}{"smithers\@example.com"}{roles}[0], "owner");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{name}, "Homer Simpson");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{scheduleStatus}, "accepted");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{schedulePriority}, "optional");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{email}, "homer\@example.com");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{roles}[0], "attendee");
-    $self->assert_str_equals($event->{participants}{"homer\@example.com"}{locationId}, "loc1");
-    $self->assert_str_equals($event->{participants}{"carl"}{name}, "Carl Carlson");
-    $self->assert_str_equals($event->{participants}{"carl"}{scheduleStatus}, "tentative");
-    $self->assert_str_equals($event->{participants}{"carl"}{email}, "carl\@example.com");
-    $self->assert_str_equals($event->{participants}{"carl"}{roles}[0], "attendee");
-    $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{name}, "Lenny Leonard");
-    $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{scheduleStatus}, "tentative");
-    $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{email}, "lenny\@example.com");
-    $self->assert_str_equals($event->{participants}{"lenny\@example.com"}{roles}[0], "attendee");
-    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{name}, "Larry Burns");
-    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{scheduleStatus}, "declined");
-    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{email}, "larry\@example.com");
-    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{roles}[0], "attendee");
-    $self->assert_str_equals($event->{participants}{"larry\@example.com"}{memberOf}[0], "projectA\@example.com");
-    $self->assert_str_equals($event->{status}, "tentative");
+    $self->assert_num_equals(5, scalar values %{$event->{participants}});
+    $self->assert_str_equals("Monty Burns", $event->{participants}{"smithers\@example.com"}{name});
+    $self->assert_str_equals("smithers\@example.com", $event->{participants}{"smithers\@example.com"}{email});
+    $self->assert_str_equals("owner", $event->{participants}{"smithers\@example.com"}{roles}[0]);
+    $self->assert_str_equals("Homer Simpson", $event->{participants}{"homer\@example.com"}{name});
+    $self->assert_str_equals("accepted", $event->{participants}{"homer\@example.com"}{scheduleStatus});
+    $self->assert_str_equals("optional", $event->{participants}{"homer\@example.com"}{schedulePriority});
+    $self->assert_str_equals("homer\@example.com", $event->{participants}{"homer\@example.com"}{email});
+    $self->assert_str_equals("attendee", $event->{participants}{"homer\@example.com"}{roles}[0]);
+    $self->assert_str_equals("loc1", $event->{participants}{"homer\@example.com"}{locationId});
+    $self->assert_str_equals("Carl Carlson", $event->{participants}{"carl"}{name});
+    $self->assert_str_equals("tentative", $event->{participants}{"carl"}{scheduleStatus});
+    $self->assert_str_equals("carl\@example.com", $event->{participants}{"carl"}{email});
+    $self->assert_str_equals("attendee", $event->{participants}{"carl"}{roles}[0]);
+    $self->assert_str_equals("Lenny Leonard", $event->{participants}{"lenny\@example.com"}{name});
+    $self->assert_str_equals("tentative", $event->{participants}{"lenny\@example.com"}{scheduleStatus});
+    $self->assert_str_equals("lenny\@example.com", $event->{participants}{"lenny\@example.com"}{email});
+    $self->assert_str_equals("attendee", $event->{participants}{"lenny\@example.com"}{roles}[0]);
+    $self->assert_str_equals("Larry Burns", $event->{participants}{"larry\@example.com"}{name});
+    $self->assert_str_equals("declined", $event->{participants}{"larry\@example.com"}{scheduleStatus});
+    $self->assert_str_equals("larry\@example.com", $event->{participants}{"larry\@example.com"}{email});
+    $self->assert_str_equals("attendee", $event->{participants}{"larry\@example.com"}{roles}[0]);
+    $self->assert_str_equals("projectA\@example.com", $event->{participants}{"larry\@example.com"}{memberOf}[0]);
+    $self->assert_str_equals("tentative", $event->{status});
 }
 
 sub test_getcalendarevents_recurrence
@@ -824,8 +998,8 @@ sub test_getcalendarevents_recurrence
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event->{recurrenceRule});
-    $self->assert_str_equals($event->{recurrenceRule}{frequency}, "monthly");
-    $self->assert_str_equals($event->{recurrenceRule}{rscale}, "gregorian");
+    $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
+    $self->assert_str_equals("gregorian", $event->{recurrenceRule}{rscale});
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
     $self->assert_deep_equals($event->{recurrenceRule}{byDay}, [{
@@ -860,7 +1034,7 @@ sub test_getcalendarevents_rdate_period
 
    $o = $event->{recurrenceOverrides}->{"2016-03-04T15:00:00"};
     $self->assert_not_null($o);
-    $self->assert_str_equals($o->{duration}, "PT1H");
+    $self->assert_str_equals("PT1H", $o->{duration});
 }
 
 
@@ -883,14 +1057,14 @@ sub test_getcalendarevents_recurrenceoverrides
 
     $o = $event->{recurrenceOverrides}->{"2016-05-01T13:00:00"};
     $self->assert_not_null($o);
-    $self->assert_str_equals($o->{"title"}, "foobarbazbla");
-    $self->assert_str_equals($o->{"start"}, "2016-05-01T17:00:00");
-    $self->assert_str_equals($o->{"duration"}, "PT2H");
+    $self->assert_str_equals("foobarbazbla", $o->{"title"});
+    $self->assert_str_equals("2016-05-01T17:00:00", $o->{"start"});
+    $self->assert_str_equals("PT2H", $o->{"duration"});
     $self->assert_not_null($o->{alerts}{$aid});
 
     $o = $event->{recurrenceOverrides}->{"2016-09-01T13:00:00"};
     $self->assert_not_null($o);
-    $self->assert_str_equals($o->{"title"}, "foobarbazblabam");
+    $self->assert_str_equals("foobarbazblabam", $o->{"title"});
     $self->assert(not exists $o->{"start"});
 }
 
@@ -937,10 +1111,10 @@ sub test_getcalendarevents_alerts
     };
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_str_equals($event->{useDefaultAlerts}, JSON::true);
-    $self->assert_deep_equals($event->{alerts}{$aid1}, $alert1);
-    $self->assert_deep_equals($event->{alerts}{$aid2}, $alert2);
-    $self->assert_deep_equals($event->{alerts}{$aid3}, $alert3);
+    $self->assert_str_equals(JSON::true, $event->{useDefaultAlerts});
+    $self->assert_deep_equals($alert1, $event->{alerts}{$aid1});
+    $self->assert_deep_equals($alert2, $event->{alerts}{$aid2});
+    $self->assert_deep_equals($alert3, $event->{alerts}{$aid3});
 }
 
 sub test_getcalendarevents_locations
@@ -952,8 +1126,8 @@ sub test_getcalendarevents_locations
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
-    $self->assert_num_equals(scalar @locations, 1);
-    $self->assert_str_equals($locations[0]{name}, "On planet Earth");
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("On planet Earth", $locations[0]{name});
 }
 
 sub test_getcalendarevents_locations_uri
@@ -965,9 +1139,9 @@ sub test_getcalendarevents_locations_uri
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
-    $self->assert_num_equals(scalar @locations, 1);
-    $self->assert_str_equals($locations[0]{name}, "On planet Earth");
-    $self->assert_str_equals($locations[0]{uri}, "skype:foo");
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("On planet Earth", $locations[0]{name});
+    $self->assert_str_equals("skype:foo", $locations[0]{uri});
 }
 
 sub test_getcalendarevents_locations_geo
@@ -979,8 +1153,8 @@ sub test_getcalendarevents_locations_geo
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
-    $self->assert_num_equals(scalar @locations, 1);
-    $self->assert_str_equals($locations[0]{coordinates}, "geo:37.386013,-122.082930");
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("geo:37.386013,-122.082930", $locations[0]{coordinates});
 }
 
 sub test_getcalendarevents_locations_apple
@@ -992,9 +1166,9 @@ sub test_getcalendarevents_locations_apple
 
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
-    $self->assert_num_equals(scalar @locations, 1);
-    $self->assert_str_equals($locations[0]{name}, "a place in Vienna");
-    $self->assert_str_equals($locations[0]{coordinates}, "geo:48.208304,16.371602");
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("a place in Vienna", $locations[0]{name});
+    $self->assert_str_equals("geo:48.208304,16.371602", $locations[0]{coordinates});
 }
 
 sub test_getcalendarevents_localizations
@@ -1009,15 +1183,15 @@ sub test_getcalendarevents_localizations
     my $locs = $event->{localizations};
     $self->assert_not_null($locs);
 
-    $self->assert_str_equals($locs->{de}{title}, "Titel");
-    $self->assert_str_equals($locs->{de}{description}, "Beschreibung");
-    $self->assert_str_equals($locs->{fr}{description}, "legende");
-    $self->assert_str_equals($locs->{de}{"locations/loc1/name"}, "Am Planet Erde");
-    $self->assert_str_equals($locs->{de}{"links/http:~1~1jmap.io~1spec.html#calendar-events/title"}, "die Spezifikation");
-    $self->assert_str_equals($locs->{de}{"alerts/43910EF2-F4D9-43F9-AEDD-1CADC38B05FB/action/subject"}, "Ihr Alarm");
+    $self->assert_str_equals("Titel", $locs->{de}{title});
+    $self->assert_str_equals("Beschreibung", $locs->{de}{description});
+    $self->assert_str_equals("legende", $locs->{fr}{description});
+    $self->assert_str_equals("Am Planet Erde", $locs->{de}{"locations/loc1/name"});
+    $self->assert_str_equals("die Spezifikation", $locs->{de}{"links/http:~1~1jmap.io~1spec.html#calendar-events/title"});
+    $self->assert_str_equals("Ihr Alarm", $locs->{de}{"alerts/43910EF2-F4D9-43F9-AEDD-1CADC38B05FB/action/subject"});
 
     my $o = $event->{recurrenceOverrides};
-    $self->assert_str_equals($o->{"2016-09-15T11:15:00"}{"localizations/de/title"}, "eine Ausnahme");
+    $self->assert_str_equals("eine Ausnahme", $o->{"2016-09-15T11:15:00"}{"localizations/de/title"});
 }
 
 sub test_getcalendarevents_infinite_delegates
@@ -1051,17 +1225,21 @@ EOF
 
     my $event = $self->putandget_vevent($id, $ical);
     my $scheduleStatus = $event->{participants}{"lenny\@example.com"}{scheduleStatus};
-    $self->assert_str_equals($scheduleStatus, "needs-action");
+    $self->assert_str_equals("needs-action", $scheduleStatus);
 }
 
 sub createandget_event
 {
-    my ($self, $event) = @_;
+    my ($self, $event, %params) = @_;
 
     my $jmap = $self->{jmap};
+    my $accountId = $params{accountId} || 'cassandane';
 
     xlog "create event";
-    my $res = $jmap->Request([['setCalendarEvents', {create => {"1" => $event}}, "R1"]]);
+    my $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => $accountId,
+                    create => {"1" => $event}},
+    "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
 
@@ -1133,7 +1311,7 @@ sub test_setcalendarevents_simple
 
     my $ret = $self->createandget_event($event);
     $self->assert_normalized_event_equals($event, $ret);
-    $self->assert_num_equals($event->{sequence}, 42);
+    $self->assert_num_equals(42, $event->{sequence});
 }
 
 sub test_setcalendarevents_relatedto
@@ -1168,7 +1346,7 @@ sub test_setcalendarevents_relatedto
 
     my $ret = $self->createandget_event($event);
     $self->assert_normalized_event_equals($event, $ret);
-    $self->assert_num_equals($event->{sequence}, 42);
+    $self->assert_num_equals(42, $event->{sequence});
 }
 
 sub test_setcalendarevents_prodid
@@ -1199,7 +1377,7 @@ sub test_setcalendarevents_prodid
     my $prodId = "my prodId";
     $event->{prodId} = $prodId;
     $ret = $self->createandget_event($event);
-    $self->assert_str_equals($prodId, $ret->{prodId});
+    $self->assert_str_equals($ret->{prodId}, $prodId);
 }
 
 sub test_setcalendarevents_endtimezone
@@ -1733,7 +1911,7 @@ sub test_setcalendarevents_isallday
     $res = $jmap->Request([['setCalendarEvents', { create => {
         "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
 
     xlog "create event (with erroneous timeZone)";
     $event->{start} = "2015-10-06T00:00:00";
@@ -1741,7 +1919,7 @@ sub test_setcalendarevents_isallday
     $res = $jmap->Request([['setCalendarEvents', { create => {
         "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
 
     xlog "create event (with erroneous duration)";
     $event->{start} = "2015-10-06T00:00:00";
@@ -1750,7 +1928,7 @@ sub test_setcalendarevents_isallday
     $res = $jmap->Request([['setCalendarEvents', { create => {
         "1" => $event,
     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, "invalidProperties");
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
 
     xlog "create event";
     $event->{start} = "2015-10-06T00:00:00";
@@ -1801,9 +1979,9 @@ sub test_setcalendarevents_move
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     my $event = $res->[0][1]{list}[0];
-    $self->assert_str_equals($event->{id}, $id);
-    $self->assert_str_equals($event->{calendarId}, $calidA);
-    $self->assert_str_equals($res->[0][1]{state}, $state);
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_str_equals($calidA, $event->{calendarId});
+    $self->assert_str_equals($state, $res->[0][1]{state});
 
     xlog "move event to unknown calendar";
     $res = $jmap->Request([['setCalendarEvents', { update => {
@@ -1811,14 +1989,14 @@ sub test_setcalendarevents_move
                             "calendarId" => "nope",
                         }
                     }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notUpdated}{$id}{type}, "calendarNotFound");
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
 
     xlog "get calendar $id from untouched calendar $calidA";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
-    $self->assert_str_equals($event->{id}, $id);
-    $self->assert_str_equals($event->{calendarId}, $calidA);
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_str_equals($calidA, $event->{calendarId});
 
     xlog "move event to calendar $calidB";
     $res = $jmap->Request([['setCalendarEvents', { update => {
@@ -1826,15 +2004,176 @@ sub test_setcalendarevents_move
                             "calendarId" => $calidB,
                         }
                     }}, "R1"]]);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $state = $res->[0][1]{newState};
 
     xlog "get calendar $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
-    $self->assert_str_equals($event->{id}, $id);
-    $self->assert_str_equals($event->{calendarId}, $calidB);
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_str_equals($calidB, $event->{calendarId});
 }
+
+sub test_setcalendarevents_shared
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog "create calendar";
+    my $CalendarId1 = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId1);
+
+    xlog "share $CalendarId1 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
+
+    my $event =  {
+        "calendarId" => $CalendarId1,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    xlog "create event (should fail)";
+    my $res = $jmap->Request([['setCalendarEvents',{
+                    accountId => 'manifold',
+                    create => {"1" => $event}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{notCreated}{1});
+
+    xlog "share $CalendarId1 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "create event";
+    $res = $jmap->Request([['setCalendarEvents',{
+                    accountId => 'manifold',
+                    create => {"1" => $event}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "get calendar event $id";
+    $res = $jmap->Request([['getCalendarEvents', {
+                    accountId => 'manifold',
+                    ids => [$id]},
+    "R1"]]);
+    my $ret = $res->[0][1]{list}[0];
+    $self->assert_normalized_event_equals($event, $ret);
+
+    xlog "share $CalendarId1 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
+
+    xlog "update event (should fail)";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            "calendarId" => $CalendarId1,
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog "share calendar home read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "create another calendar";
+    $res = $jmap->Request([
+            ['setCalendars', {
+                    accountId => 'manifold',
+                    create => { "2" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $CalendarId2 = $res->[0][1]{created}{"2"}{id};
+    $self->assert_not_null($CalendarId2);
+
+    xlog "share $CalendarId1 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "share $CalendarId2 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog "move event (should fail)";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            "calendarId" => $CalendarId2,
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog "share $CalendarId2 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "move event";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            "calendarId" => $CalendarId2,
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog "share $CalendarId2 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog "destroy event (should fail)";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => 'manifold',
+                    destroy => [ $id ],
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{notDestroyed}{$id});
+
+    xlog "share $CalendarId2 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "destroy event";
+    $res = $jmap->Request([['setCalendarEvents', {
+                    accountId => 'manifold',
+                    destroy => [ $id ],
+    }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id);
+}
+
 
 sub test_getcalendareventupdates
     :JMAP :min_version_3_0
@@ -1883,18 +2222,18 @@ sub test_getcalendareventupdates
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 2);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "get zero calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', {sinceState => $state}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
@@ -1909,24 +2248,24 @@ sub test_getcalendareventupdates
                             "title" => "2(updated)",
                         }
                     }}, "R1"]]);
-    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 2);
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{updated}});
 
     xlog "get exactly one update";
     $res = $jmap->Request([['getCalendarEventUpdates', {
                     sinceState => $state,
                     maxChanges => 1
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
     $state = $res->[0][1]{newState};
 
     xlog "get the final update";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
@@ -1941,26 +2280,26 @@ sub test_getcalendareventupdates
                     },
                     destroy => [ $id2 ]
                 }, "R1"]]);
-    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 1);
-    $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
-    $self->assert_str_equals($res->[0][1]{removed}[0], $id2);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($id2, $res->[0][1]{removed}[0]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "get zero calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', {sinceState => $state}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
@@ -1972,15 +2311,15 @@ sub test_getcalendareventupdates
                         },
                     }
                 }, "R1"]]);
-    $self->assert_num_equals(scalar keys %{$res->[0][1]{updated}}, 1);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
-    $self->assert_str_equals($res->[0][1]{changed}[0], $id1);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 0);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 
@@ -1994,15 +2333,15 @@ sub test_getcalendareventupdates
                     },
                     destroy => [ $id1 ]
                 }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 0);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
-    $self->assert_str_equals($res->[0][1]{removed}[0], $id1);
-    $self->assert_str_equals($res->[0][1]{oldState}, $state);
-    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($id1, $res->[0][1]{removed}[0]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
     $state = $res->[0][1]{newState};
 }
@@ -2014,124 +2353,158 @@ sub test_getcalendareventlist
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "create calendars A and B";
-    my $res = $jmap->Request([
-            ['setCalendars', { create => {
-                        "1" => {
-                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
-                        },
-                        "2" => {
-                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
-                        }
-             }}, "R1"]
-    ]);
-    my $calidA = $res->[0][1]{created}{"1"}{id};
-    my $calidB = $res->[0][1]{created}{"2"}{id};
-    my $state = $res->[0][1]{newState};
+    my $service = $self->{instance}->get_service("http");
 
-    xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
-    $res = $jmap->Request([['setCalendarEvents', { create => {
-                        "1" => {
-                            "calendarId" => $calidA,
-                            "title" => "foo",
-                            "description" => "bar",
-                            "freeBusyStatus" => "busy",
-                            "isAllDay" => JSON::false,
-                            "start" => "2016-07-01T10:00:00",
-                            "timeZone" => "Etc/GMT+1",
-                            "duration" => "PT1H",
-                        },
-                        "2" => {
-                            "calendarId" => $calidB,
-                            "title" => "foo",
-                            "description" => "",
-                            "freeBusyStatus" => "busy",
-                            "isAllDay" => JSON::true,
-                            "start" => "2016-01-01T00:00:00",
-                            "duration" => "P2D",
-                        }
-                    }}, "R1"]]);
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
+    xlog "create shared account";
+    $admintalk->create("user.manifold");
 
-    xlog "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
 
-    xlog "get unfiltered calendar event list";
-    $res = $jmap->Request([ ['getCalendarEventList', { }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
+    xlog "share calendar home to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn');
 
-    xlog "get filtered calendar event list with flat filter";
-    $res = $jmap->Request([ ['getCalendarEventList', {
-                    "filter" => {
-                        "after" => "2015-12-31T00:00:00Z",
-                        "before" => "2016-12-31T23:59:59Z",
-                        "text" => "foo",
-                        "description" => "bar"
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
-    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+    # run tests for both the main and shared account
+    foreach ("cassandane", "manifold") {
+        my $account = $_;
 
-    xlog "get filtered calendar event list";
-    $res = $jmap->Request([ ['getCalendarEventList', {
-                    "filter" => {
-                        "operator" => "AND",
-                        "conditions" => [
-                            {
-                                "after" => "2015-12-31T00:00:00Z",
-                                "before" => "2016-12-31T23:59:59Z"
+        xlog "create calendars A and B";
+        my $res = $jmap->Request([
+                ['setCalendars', {
+                        accountId => $account,
+                        create => {
+                            "1" => {
+                                name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
                             },
-                            {
-                                "text" => "foo",
-                                "description" => "bar"
+                            "2" => {
+                                name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
                             }
-                        ]
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
-    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+                        }}, "R1"]
+            ]);
+        my $calidA = $res->[0][1]{created}{"1"}{id};
+        my $calidB = $res->[0][1]{created}{"2"}{id};
+        my $state = $res->[0][1]{newState};
 
-    xlog "filter by calendar $calidA";
-    $res = $jmap->Request([ ['getCalendarEventList', {
-                    "filter" => {
-                        "inCalendars" => [ $calidA ],
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-    $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+        xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+        $res = $jmap->Request([['setCalendarEvents', {
+                        accountId => $account,
+                        create => {
+                            "1" => {
+                                "calendarId" => $calidA,
+                                "title" => "foo",
+                                "description" => "bar",
+                                "freeBusyStatus" => "busy",
+                                "isAllDay" => JSON::false,
+                                "start" => "2016-07-01T10:00:00",
+                                "timeZone" => "Etc/GMT+1",
+                                "duration" => "PT1H",
+                            },
+                            "2" => {
+                                "calendarId" => $calidB,
+                                "title" => "foo",
+                                "description" => "",
+                                "freeBusyStatus" => "busy",
+                                "isAllDay" => JSON::true,
+                                "start" => "2016-01-01T00:00:00",
+                                "duration" => "P2D",
+                            }
+                        }}, "R1"]]);
+        my $id1 = $res->[0][1]{created}{"1"}{id};
+        my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "filter by calendar $calidA or $calidB";
-    $res = $jmap->Request([ ['getCalendarEventList', {
-                    "filter" => {
-                        "inCalendars" => [ $calidA, $calidB ],
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{calendarEventIds}});
+        xlog "Run squatter";
+        $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "filter by calendar NOT in $calidA and $calidB";
-    $res = $jmap->Request([['getCalendarEventList', {
-                    "filter" => {
-                        "operator" => "NOT",
-                        "conditions" => [{
+        xlog "get unfiltered calendar event list";
+        $res = $jmap->Request([ ['getCalendarEventList', { accountId => $account }, "R1"] ]);
+        $self->assert_num_equals(2, $res->[0][1]{total});
+        $self->assert_num_equals(2, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($account, $res->[0][1]{accountId});
+
+        xlog "get filtered calendar event list with flat filter";
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        accountId => $account,
+                        "filter" => {
+                            "after" => "2015-12-31T00:00:00Z",
+                            "before" => "2016-12-31T23:59:59Z",
+                            "text" => "foo",
+                            "description" => "bar"
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+
+        xlog "get filtered calendar event list";
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        accountId => $account,
+                        "filter" => {
+                            "operator" => "AND",
+                            "conditions" => [
+                                {
+                                    "after" => "2015-12-31T00:00:00Z",
+                                    "before" => "2016-12-31T23:59:59Z"
+                                },
+                                {
+                                    "text" => "foo",
+                                    "description" => "bar"
+                                }
+                            ]
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+
+        xlog "filter by calendar $calidA";
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        accountId => $account,
+                        "filter" => {
+                            "inCalendars" => [ $calidA ],
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+
+        xlog "filter by calendar $calidA or $calidB";
+        $res = $jmap->Request([ ['getCalendarEventList', {
+                        accountId => $account,
+                        "filter" => {
                             "inCalendars" => [ $calidA, $calidB ],
-                        }],
-                    }}, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{calendarEventIds}});
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
 
-    xlog "limit results";
-    $res = $jmap->Request([ ['getCalendarEventList', { limit => 1 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        xlog "filter by calendar NOT in $calidA and $calidB";
+        $res = $jmap->Request([['getCalendarEventList', {
+                        accountId => $account,
+                        "filter" => {
+                            "operator" => "NOT",
+                            "conditions" => [{
+                                    "inCalendars" => [ $calidA, $calidB ],
+                                }],
+                        }}, "R1"]]);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 0);
 
-    xlog "skip result a position 1";
-    $res = $jmap->Request([ ['getCalendarEventList', { position => 1 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        xlog "limit results";
+        $res = $jmap->Request([ ['getCalendarEventList', { accountId => $account, limit => 1 }, "R1"] ]);
+        $self->assert_num_equals($res->[0][1]{total}, 2);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+
+        xlog "skip result a position 1";
+        $res = $jmap->Request([ ['getCalendarEventList', { accountId => $account, position => 1 }, "R1"] ]);
+        $self->assert_num_equals($res->[0][1]{total}, 2);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+    }
 }
 
 sub test_getcalendareventlist_datetime
@@ -2168,7 +2541,7 @@ sub test_getcalendareventlist_datetime
                         "before" => "2016-01-01T09:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Check that boundaries are exclusive
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2176,13 +2549,13 @@ sub test_getcalendareventlist_datetime
                         "after" =>  "2016-01-01T09:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 0);
+    $self->assert_num_equals(0, $res->[0][1]{total});
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
                         "before" =>  "2016-01-01T08:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 0);
+    $self->assert_num_equals(0, $res->[0][1]{total});
 
     # Embedded subrange matches
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2191,7 +2564,7 @@ sub test_getcalendareventlist_datetime
                         "before" => "2016-01-01T08:45:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Overlapping subrange matches
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2200,14 +2573,14 @@ sub test_getcalendareventlist_datetime
                         "before" => "2016-01-01T09:15:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
                         "after" =>  "2016-01-01T07:45:00Z",
                         "before" => "2016-01-01T08:15:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Create an infinite recurring datetime event
     $res = $jmap->Request([['setCalendarEvents', { create => {
@@ -2232,14 +2605,14 @@ sub test_getcalendareventlist_datetime
                         "after" =>  "2016-01-01T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(2, $res->[0][1]{total});
     # Search close to eternity
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
                         "after" =>  "2038-01-01T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 }
 
 sub test_getcalendareventlist_date
@@ -2275,7 +2648,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-03T23:59:59Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Match after on the first second of the start day
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2284,7 +2657,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-03T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Match before on the last second of the end day
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2293,7 +2666,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-03T23:59:59Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Match on interim day
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2302,7 +2675,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-03T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Match on partially overlapping timerange
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2311,14 +2684,14 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-01T12:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
                         "after" =>  "2015-01-03T12:00:00Z",
                         "before" => "2016-01-04T12:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # Difference from the spec: 'before' is defined to be exclusive, but
     # a full-day event starting on that day still matches.
@@ -2328,7 +2701,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-01T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 
     # In DAV db the event ends at 20160104. Test that it isn't returned.
     $res = $jmap->Request([['getCalendarEventList', {
@@ -2337,7 +2710,7 @@ sub test_getcalendareventlist_date
                         "before" => "2016-01-04T23:59:59Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 0);
+    $self->assert_num_equals(0, $res->[0][1]{total});
 
     # Create an infinite recurring datetime event
     $res = $jmap->Request([['setCalendarEvents', { create => {
@@ -2361,14 +2734,14 @@ sub test_getcalendareventlist_date
                         "after" =>  "2016-01-01T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 2);
+    $self->assert_num_equals(2, $res->[0][1]{total});
     # Search close to eternity
     $res = $jmap->Request([['getCalendarEventList', {
                     "filter" => {
                         "after" =>  "2038-01-01T00:00:00Z",
                     },
                 }, "R1"]]);
-    $self->assert_num_equals($res->[0][1]{total}, 1);
+    $self->assert_num_equals(1, $res->[0][1]{total});
 }
 
 sub test_getcalendareventlist_text
@@ -2450,9 +2823,9 @@ sub test_getcalendareventlist_text
                             "text" => $propval,
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(1, $res->[0][1]{total});
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals($res->[0][1]{total}, 1);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+        $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
 
         # Sanity check catch-all text search
         $res = $jmap->Request([ ['getCalendarEventList', {
@@ -2460,7 +2833,7 @@ sub test_getcalendareventlist_text
                             "text" => "nope",
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(0, $res->[0][1]{total});
+        $self->assert_num_equals($res->[0][1]{total}, 0);
 
         # Assert that search by property name matches
         $res = $jmap->Request([ ['getCalendarEventList', {
@@ -2468,9 +2841,9 @@ sub test_getcalendareventlist_text
                             $propname => $propval,
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(1, $res->[0][1]{total});
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals($res->[0][1]{total}, 1);
+        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+        $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
 
         # Sanity check property name search
         $res = $jmap->Request([ ['getCalendarEventList', {
@@ -2478,7 +2851,7 @@ sub test_getcalendareventlist_text
                             $propname => "nope",
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(0, $res->[0][1]{total});
+        $self->assert_num_equals($res->[0][1]{total}, 0);
     }
 }
 
@@ -2530,12 +2903,12 @@ sub test_setcalendarevents_caldav
 
     xlog "get (non-existent) event $id";
     $res = $jmap->Request([['getCalendarEvents', {ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{removed}}, 1);
-    $self->assert_str_equals($res->[0][1]{removed}[0], $id);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($id, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]{newState};
 
     $id = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
@@ -2559,7 +2932,7 @@ EOF
 
     xlog "get calendar event updates";
     $res = $jmap->Request([['getCalendarEventUpdates', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{changed}}, 1);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_equals($res->[0][1]{changed}[0], $id);
     $state = $res->[0][1]{newState};
 
@@ -2589,7 +2962,7 @@ EOF
 
     xlog "destroy event $id";
     $res = $jmap->Request([['setCalendarEvents', { destroy => [$id] }, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{destroyed}}, 1);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_equals($res->[0][1]{destroyed}[0], $id);
 
     xlog "PROPFIND calendar $calid for non-existent event $id in CalDAV";
@@ -2659,7 +3032,7 @@ sub test_setcalendarevents_schedule_request
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
 }
 
@@ -2721,7 +3094,7 @@ sub test_setcalendarevents_schedule_reply
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
 }
 
@@ -2785,7 +3158,7 @@ sub test_setcalendarevents_schedule_cancel
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals($payload->{recipient}, "bugs\@example.com");
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:CANCEL");
 }
 
@@ -2816,12 +3189,12 @@ sub test_creationids
         ['getCalendars', {ids => ["#1"]}, "R4"],
     ]);
     my $event = $res->[2][1]{list}[0];
-    $self->assert_str_equals("bar", $event->{title});
+    $self->assert_str_equals($event->{title}, "bar");
 
     my $calendar = $res->[3][1]{list}[0];
-    $self->assert_str_equals("foo", $calendar->{name});
+    $self->assert_str_equals($calendar->{name}, "foo");
 
-    $self->assert_str_equals($calendar->{id}, $event->{calendarId});
+    $self->assert_str_equals($event->{calendarId}, $calendar->{id});
 }
 
 1;

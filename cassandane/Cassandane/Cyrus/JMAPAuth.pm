@@ -225,4 +225,76 @@ sub test_login_wrongpass
     $self->assert_str_equals('403', $res->{status});
 }
 
+sub test_multiple_accounts
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create users and give cassandane access to their mailboxes
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
+    $self->{instance}->create_user("bar");
+    $admintalk->setacl("user.bar", "cassandane", "lrswp") or die;
+    # Make sure that isReadOnly is false if ANY mailbox is read-writeable
+    $self->{instance}->create_user("baz");
+    $admintalk->create("user.baz.box1") or die;
+    $admintalk->create("user.baz.box2") or die;
+    $admintalk->setacl("user.baz.box1", "cassandane", "lrswp") or die;
+    $admintalk->setacl("user.baz.box2", "cassandane", "lr") or die;
+
+    # no access to qux
+    $self->{instance}->create_user("qux");
+
+    xlog "log in";
+    $jmap->Login($jmap->{user}, $jmap->{password}) || die;
+
+    # refetch account settings
+    my $Request;
+    my $Response;
+
+    xlog "get settings";
+    $Request = {
+        headers => {
+            'Authorization' => "Bearer " . $jmap->{token},
+        },
+        content => '',
+    };
+    $Response = $jmap->ua->get($jmap->authuri(), $Request);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($Request, $Response);
+    }
+    $self->assert_str_equals('201', $Response->{status});
+
+    my $settings = eval { decode_json($Response->{content}) };
+    my $accounts =  $settings->{accounts};
+    $self->assert_num_equals(4, scalar keys %{$accounts});
+
+    my $acc;
+
+    $acc = $accounts->{cassandane};
+    $self->assert_str_equals("cassandane", $acc->{name});
+    $self->assert_equals(JSON::true, $acc->{isPrimary});
+    $self->assert_equals(JSON::false, $acc->{isReadOnly});
+
+    $acc = $accounts->{foo};
+    $self->assert_str_equals("foo", $acc->{name});
+    $self->assert_equals(JSON::false, $acc->{isPrimary});
+    $self->assert_equals(JSON::true, $acc->{isReadOnly});
+
+    $acc = $accounts->{bar};
+    $self->assert_str_equals("bar", $acc->{name});
+    $self->assert_equals(JSON::false, $acc->{isPrimary});
+    $self->assert_equals(JSON::false, $acc->{isReadOnly});
+
+    $acc = $accounts->{baz};
+    $self->assert_str_equals("baz", $acc->{name});
+    $self->assert_equals(JSON::false, $acc->{isPrimary});
+    $self->assert_equals(JSON::false, $acc->{isReadOnly});
+}
+
+
 1;
