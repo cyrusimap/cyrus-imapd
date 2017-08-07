@@ -934,6 +934,9 @@ void shut_down(int code)
         prometheus_decrement(LMTP_READY_LISTENERS);
     }
 
+    prometheus_increment(code ? LMTP_SHUTDOWN_COUNT_STATUS_ERROR
+                              : LMTP_SHUTDOWN_COUNT_STATUS_OK);
+
     cyrus_done();
 
     exit(code);

@@ -1111,6 +1111,9 @@ void shut_down(int code)
         prometheus_decrement(IMAP_READY_LISTENERS);
     }
 
+    prometheus_increment(code ? IMAP_SHUTDOWN_COUNT_STATUS_ERROR
+                              : IMAP_SHUTDOWN_COUNT_STATUS_OK);
+
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
                            session_id(), bytes_in, bytes_out);
