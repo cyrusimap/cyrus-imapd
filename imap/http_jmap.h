@@ -67,6 +67,7 @@ struct jmap_idmap {
 
 typedef struct jmap_req {
     const char           *userid;
+    const char           *accountid;
     const char           *inboxname;
     struct conversations_state *cstate;
     struct auth_state    *authstate;
@@ -79,6 +80,8 @@ typedef struct jmap_req {
 
     /* Owned by JMAP HTTP handler */
     ptrarray_t *mboxes;
+    int is_shared_account;
+    hash_table *mboxrights;
 } jmap_req_t;
 
 typedef struct jmap_msg {
@@ -96,6 +99,15 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mb
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
+/* mboxlist-like mailbox tree traversal, scoped by accountid */
+extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock, int incdel);
+
+/* Request-scoped cache of mailbox rights for authenticated user */
+
+extern int  jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry);
+extern int  jmap_myrights_byname(jmap_req_t *req, const char *mboxname);
+extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
+
 /* Blob services */
 extern int jmap_upload(struct transaction_t *txn);
 extern int jmap_download(struct transaction_t *txn);
@@ -105,9 +117,10 @@ extern int jmap_findblob(jmap_req_t *req, const char *blobid,
 extern char *jmap_blobid(const struct message_guid *guid);
 
 /* JMAP states */
-extern json_t* jmap_getstate(int mbtype, struct jmap_req *req);
-extern int jmap_bumpstate(int mbtype, struct jmap_req *req);
-extern int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req);
+extern json_t* jmap_getstate(jmap_req_t *req, int mbtype);
+extern int jmap_bumpstate(jmap_req_t *req, int mbtype);
+extern int jmap_cmpstate(jmap_req_t *req, json_t *state, int mbtype);
+extern modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype);
 
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);

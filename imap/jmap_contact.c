@@ -106,6 +106,7 @@ static int JNOTNULL(json_t *item)
 }
 
 struct updates_rock {
+    jmap_req_t *req;
     json_t *changed;
     json_t *removed;
 
@@ -139,6 +140,9 @@ static void strip_spurious_deletes(struct updates_rock *urock)
 static void updates_rock_update(struct updates_rock *rock,
                                 struct dav_data dav,
                                 const char *uid) {
+
+    int rights = jmap_myrights_byname(rock->req, dav.mailbox);
+    if (!(rights & DACL_READ)) return;
 
     /* Count, but don't process items that exceed the maximum record count. */
     if (rock->max_records && ++(rock->seen_records) > rock->max_records) {
@@ -382,8 +386,12 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 {
     struct cards_rock *crock = (struct cards_rock *) rock;
     struct index_record record;
+    jmap_req_t *req = crock->req;
     char *xhref;
     int r;
+
+    int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
+    if (!(rights & DACL_READ)) return 0;
 
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
@@ -462,7 +470,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
                              int kind, const char *resname)
 {
-    struct carddav_db *db = carddav_open_userid(req->userid);
+    struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
 
     char *mboxname = NULL;
@@ -470,19 +478,14 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->userid, addressbookId);
+        mboxname = carddav_mboxname(req->accountid, addressbookId);
     }
 
-    struct cards_rock rock;
+    struct cards_rock rock = { req, json_pack("[]"), NULL, NULL, 0 };
     int r = 0;
 
-    rock.mailbox = NULL;
-
-    r = carddav_create_defaultaddressbook(req->userid);
+    r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
-
-    rock.array = json_pack("[]");
-    rock.props = NULL;
 
     json_t *properties = json_object_get(req->args, "properties");
     if (properties && json_array_size(properties)) {
@@ -534,8 +537,8 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     if (r) goto done;
 
     json_t *toplevel = json_pack("{}");
-    json_object_set_new(toplevel, "accountId", json_string(req->userid));
-    json_object_set_new(toplevel, "state", jmap_getstate(MBTYPE_ADDRESSBOOK, req));
+    json_object_set_new(toplevel, "accountId", json_string(req->accountid));
+    json_object_set_new(toplevel, "state", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
     json_object_set_new(toplevel, "list", rock.array);
     if (json_array_size(notFound)) {
         json_object_set_new(toplevel, "notFound", notFound);
@@ -590,7 +593,7 @@ static int getcontactupdates_cb(void *rock, struct carddav_data *cdata)
 
 static int getContactGroupUpdates(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(req->userid);
+    struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
     struct buf buf = BUF_INITIALIZER;
     int r = -1;
@@ -633,19 +636,14 @@ static int getContactGroupUpdates(struct jmap_req *req)
     json_t *abookid = json_object_get(req->args, "addressbookId");
     if (abookid && json_string_value(abookid)) {
         const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->userid, addressbookId);
+        mboxname = carddav_mboxname(req->accountid, addressbookId);
     }
 
-    r = carddav_create_defaultaddressbook(req->userid);
+    r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock;
-    memset(&rock, 0, sizeof(struct updates_rock));
-    rock.changed = json_array();
-    rock.removed = json_array();
-    rock.max_records = max_records;
-
+    struct updates_rock rock = { req, json_array(), json_array(), 0, max_records, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
                             &getcontactupdates_cb, &rock);
     if (r) goto done;
@@ -658,7 +656,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     if (more) {
         newstate = rock.highestmodseq;
     } else {
-        newstate = req->counters.carddavmodseq;
+        newstate = jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
     }
 
     json_t *contactGroupUpdates = json_pack("{}");
@@ -666,7 +664,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
 
-    json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(contactGroupUpdates, "accountId", json_string(req->accountid));
     json_object_set_new(contactGroupUpdates, "oldState", json_string(since));
     json_object_set_new(contactGroupUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
@@ -682,6 +680,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     if (dofetch) {
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
         json_object_set(subreq.args, "ids", rock.changed);
         if (abookid) {
             json_object_set(subreq.args, "addressbookId", abookid);
@@ -774,12 +773,12 @@ static int setContactGroups(struct jmap_req *req)
 {
     struct mailbox *mailbox = NULL;
     struct mailbox *newmailbox = NULL;
-    struct carddav_db *db = carddav_open_userid(req->userid);
+    struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
 
     int r = 0;
     json_t *jcheckState = json_object_get(req->args, "ifInState");
-    if (jcheckState && jmap_checkstate(jcheckState, MBTYPE_ADDRESSBOOK, req)) {
+    if (jcheckState && jmap_cmpstate(req, jcheckState, MBTYPE_ADDRESSBOOK)) {
         json_t *item = json_pack("[s, {s:s}, s]",
                 "error", "type", "stateMismatch", req->tag);
         json_array_append_new(req->response, item);
@@ -787,10 +786,10 @@ static int setContactGroups(struct jmap_req *req)
     }
 
     json_t *set = json_pack("{s:o,s:s}",
-                            "oldState", jmap_getstate(MBTYPE_ADDRESSBOOK, req),
-                            "accountId", req->userid);
+                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK),
+                            "accountId", req->accountid);
 
-    r = carddav_create_defaultaddressbook(req->userid);
+    r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
 
     json_t *create = json_object_get(req->args, "create");
@@ -835,7 +834,6 @@ static int setContactGroups(struct jmap_req *req)
                 free(uid);
                 continue;
             }
-            json_decref(invalid);
 
             const char *addressbookId = "Default";
             json_t *abookid = json_object_get(arg, "addressbookId");
@@ -843,9 +841,21 @@ static int setContactGroups(struct jmap_req *req)
                 /* XXX - invalid arguments */
                 addressbookId = json_string_value(abookid);
             }
-            char *mboxname = mboxname_abook(req->userid, addressbookId);
+            char *mboxname = mboxname_abook(req->accountid, addressbookId);
             json_object_del(arg, "addressbookId");
             addressbookId = NULL;
+
+            int rights = jmap_myrights_byname(req, mboxname);
+            if (!(rights & DACL_WRITE)) {
+                json_array_append_new(invalid, json_string("addressbookId"));
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "invalidProperties", "properties", invalid);
+                json_object_set_new(notCreated, key, err);
+                vparse_free_card(card);
+                free(uid);
+                continue;
+            }
+            json_decref(invalid);
 
             /* we need to create and append a record */
             if (!mailbox || strcmp(mailbox->name, mboxname)) {
@@ -854,11 +864,11 @@ static int setContactGroups(struct jmap_req *req)
             }
 
             syslog(LOG_NOTICE, "jmap: create group %s/%s/%s (%s)",
-                   req->userid, mboxname, uid, name);
+                   req->accountid, mboxname, uid, name);
             free(mboxname);
 
             if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL,
-                                      req->userid, req->authstate, ignorequota);
+                                      req->accountid, req->authstate, ignorequota);
             vparse_free_card(card);
 
             if (r) {
@@ -906,6 +916,15 @@ static int setContactGroups(struct jmap_req *req)
             olduid = cdata->dav.imap_uid;
             resource = xstrdup(cdata->dav.resource);
 
+            int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
+            if (!(rights & DACL_WRITE)) {
+                json_t *err = json_pack("{s:s}", "type",
+                        rights & ACL_READ ? "accountReadOnly" : "notFound");
+                json_object_set_new(notUpdated, uid, err);
+                free(resource);
+                continue;
+            }
+
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
                 mailbox_close(&mailbox);
                 r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
@@ -920,7 +939,7 @@ static int setContactGroups(struct jmap_req *req)
             json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 const char *mboxname =
-                    mboxname_abook(req->userid, json_string_value(abookid));
+                    mboxname_abook(req->accountid, json_string_value(abookid));
                 if (strcmp(mboxname, cdata->dav.mailbox)) {
                     /* move */
                     r = mailbox_open_iwl(mboxname, &newmailbox);
@@ -1023,12 +1042,12 @@ static int setContactGroups(struct jmap_req *req)
             json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: update group %s/%s",
-                   req->userid, resource);
+                   req->accountid, resource);
 
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
-                              NULL, NULL, req->userid, req->authstate, ignorequota);
+                              NULL, NULL, req->accountid, req->authstate, ignorequota);
             if (!r)
-                r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox, req->userid);
+                r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox, req->accountid);
             mailbox_close(&newmailbox);
 
             vparse_free_card(vcard);
@@ -1073,6 +1092,14 @@ static int setContactGroups(struct jmap_req *req)
             }
             olduid = cdata->dav.imap_uid;
 
+            int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
+            if (!(rights & DACL_WRITE)) {
+                json_t *err = json_pack("{s:s}", "type",
+                        rights & ACL_READ ? "accountReadOnly" : "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
                 mailbox_close(&mailbox);
                 r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
@@ -1081,8 +1108,8 @@ static int setContactGroups(struct jmap_req *req)
 
             /* XXX - alive check */
 
-            syslog(LOG_NOTICE, "jmap: destroy group %s (%s)", req->userid, uid);
-            r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
+            syslog(LOG_NOTICE, "jmap: destroy group %s (%s)", req->accountid, uid);
+            r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
             if (r) {
                 syslog(LOG_ERR,
                        "IOERROR: setContactGroups remove failed for %s %u",
@@ -1108,10 +1135,10 @@ static int setContactGroups(struct jmap_req *req)
         json_object_get(set, "updated") ||
         json_object_get(set, "destroyed")) {
 
-        r = jmap_bumpstate(MBTYPE_ADDRESSBOOK, req);
+        r = jmap_bumpstate(req, MBTYPE_ADDRESSBOOK);
         if (r) goto done;
     }
-    json_object_set_new(set, "newState", jmap_getstate(MBTYPE_ADDRESSBOOK, req));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroupsSet"));
@@ -1628,6 +1655,9 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     struct index_record record;
     int r = 0;
 
+    int rights = jmap_myrights_byname(crock->req, cdata->dav.mailbox);
+    if (!(rights & DACL_READ)) return 0;
+
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(cdata->dav.mailbox, &crock->mailbox);
@@ -1665,7 +1695,7 @@ static int getContacts(struct jmap_req *req)
 
 static int getContactUpdates(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(req->userid);
+    struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
     struct buf buf = BUF_INITIALIZER;
     int r = -1;
@@ -1700,19 +1730,14 @@ static int getContactUpdates(struct jmap_req *req)
     if (abookid && json_string_value(abookid)) {
         /* XXX - invalid arguments */
         const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->userid, addressbookId);
+        mboxname = carddav_mboxname(req->accountid, addressbookId);
     }
 
-    r = carddav_create_defaultaddressbook(req->userid);
+    r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock;
-    memset(&rock, 0, sizeof(struct updates_rock));
-    rock.changed = json_array();
-    rock.removed = json_array();
-    rock.max_records = max_records;
-
+    struct updates_rock rock = { req, json_array(), json_array(), 0, max_records, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
                             &getcontactupdates_cb, &rock);
     if (r) goto done;
@@ -1725,14 +1750,14 @@ static int getContactUpdates(struct jmap_req *req)
     if (more) {
         newstate = rock.highestmodseq;
     } else {
-        newstate = req->counters.carddavmodseq;
+        newstate = jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
     }
 
     json_t *contactUpdates = json_pack("{}");
     buf_printf(&buf, MODSEQ_FMT, newstate);
     json_object_set_new(contactUpdates, "newState", json_string(buf_cstring(&buf)));
     buf_reset(&buf);
-    json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(contactUpdates, "accountId", json_string(req->accountid));
     json_object_set_new(contactUpdates, "oldState", json_string(since));
     json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(contactUpdates, "changed", rock.changed);
@@ -1750,6 +1775,7 @@ static int getContactUpdates(struct jmap_req *req)
     if (dofetch && json_is_true(dofetch)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
         json_object_set(subreq.args, "ids", rock.changed);
         if (doprops) json_object_set(subreq.args, "properties", doprops);
         if (abookid) {
@@ -2029,6 +2055,7 @@ static void *contact_filter_parse(json_t *arg,
 }
 
 struct contactlist_rock {
+    jmap_req_t *req;
     jmap_filter *filter;
     size_t position;
     size_t limit;
@@ -2054,6 +2081,8 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
         return 0;
     }
 
+    int rights = jmap_myrights_byname(crock->req, cdata->dav.mailbox);
+    if (!(rights & DACL_READ)) return 0;
 
     /* Open mailbox. */
     if (!crock->mailbox || strcmp(crock->mailbox->name, cdata->dav.mailbox)) {
@@ -2112,15 +2141,12 @@ static int getContactList(struct jmap_req *req)
     int r = 0, pe;
     json_t *invalid;
     int dofetch = 0;
-    json_t *filter;
-    struct contactlist_rock rock;
     struct carddav_db *db;
+    jmap_filter *parsed_filter = NULL;
 
-    memset(&rock, 0, sizeof(struct contactlist_rock));
-
-    db = carddav_open_userid(req->userid);
+    db = carddav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR, "carddav_open_userid failed for user %s", req->userid);
+        syslog(LOG_ERR, "carddav_open_userid failed for user %s", req->accountid);
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -2129,9 +2155,9 @@ static int getContactList(struct jmap_req *req)
     invalid = json_pack("[]");
 
     /* filter */
-    filter = json_object_get(req->args, "filter");
+    json_t *filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        rock.filter = jmap_filter_parse(filter, "filter", invalid, contact_filter_parse);
+        parsed_filter = jmap_filter_parse(filter, "filter", invalid, contact_filter_parse);
     }
 
     /* position */
@@ -2142,7 +2168,6 @@ static int getContactList(struct jmap_req *req)
             json_array_append_new(invalid, json_string("position"));
         }
     }
-    rock.position = pos;
 
     /* limit */
     json_int_t limit = 0;
@@ -2152,7 +2177,6 @@ static int getContactList(struct jmap_req *req)
             json_array_append_new(invalid, json_string("limit"));
         }
     }
-    rock.limit = limit;
 
     /* fetchRecords */
     if (JNOTNULL(json_object_get(req->args, "fetchRecords"))) {
@@ -2168,16 +2192,17 @@ static int getContactList(struct jmap_req *req)
     json_decref(invalid);
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
-    rock.contacts = json_pack("[]");
-    rock.carddavdb = db;
+    struct contactlist_rock rock = {
+        req, parsed_filter, pos, limit, 0, json_array(), NULL, db
+    };
     r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) goto done;
 
     /* Prepare response. */
     json_t *contactList = json_pack("{}");
-    json_object_set_new(contactList, "accountId", json_string(req->userid));
-    json_object_set_new(contactList, "state", jmap_getstate(MBTYPE_ADDRESSBOOK, req));
+    json_object_set_new(contactList, "accountId", json_string(req->accountid));
+    json_object_set_new(contactList, "state", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
     json_object_set_new(contactList, "position", json_integer(rock.position));
     json_object_set_new(contactList, "total", json_integer(rock.total));
     json_object_set(contactList, "contactIds", rock.contacts);
@@ -2193,6 +2218,7 @@ static int getContactList(struct jmap_req *req)
     if (dofetch && json_array_size(rock.contacts)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
         json_object_set(subreq.args, "ids", rock.contacts);
         r = getContacts(&subreq);
         json_decref(subreq.args);
@@ -2791,7 +2817,7 @@ static int _json_to_card(const char *uid,
 
 static int setContacts(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(req->userid);
+    struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
 
     struct mailbox *mailbox = NULL;
@@ -2799,7 +2825,7 @@ static int setContacts(struct jmap_req *req)
 
     int r = 0;
     json_t *jcheckState = json_object_get(req->args, "ifInState");
-    if (jcheckState && jmap_checkstate(jcheckState, MBTYPE_ADDRESSBOOK, req)) {
+    if (jcheckState && jmap_cmpstate(req, jcheckState, MBTYPE_ADDRESSBOOK)) {
         json_t *item = json_pack("[s, {s:s}, s]",
                 "error", "type", "stateMismatch",
                 req->tag);
@@ -2807,10 +2833,10 @@ static int setContacts(struct jmap_req *req)
         goto done;
     }
     json_t *set = json_pack("{s:o,s:s}",
-                            "oldState", jmap_getstate(MBTYPE_ADDRESSBOOK, req),
-                            "accountId", req->userid);
+                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK),
+                            "accountId", req->accountid);
 
-    r = carddav_create_defaultaddressbook(req->userid);
+    r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
 
     json_t *create = json_object_get(req->args, "create");
@@ -2831,9 +2857,18 @@ static int setContacts(struct jmap_req *req)
                 /* XXX - invalid arguments */
                 addressbookId = json_string_value(abookid);
             }
-            char *mboxname = mboxname_abook(req->userid, addressbookId);
+            char *mboxname = mboxname_abook(req->accountid, addressbookId);
             json_object_del(arg, "addressbookId");
             addressbookId = NULL;
+
+            int rights = jmap_myrights_byname(req, mboxname);
+            if (!(rights & DACL_WRITE)) {
+                json_t *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                                        "properties", "addressbookId");
+                json_object_set_new(notCreated, key, err);
+                free(mboxname);
+                continue;
+            }
 
             struct vparse_card *card = vparse_new_card("VCARD");
             vparse_add_entry(card, NULL, "VERSION", "3.0");
@@ -2870,9 +2905,9 @@ static int setContacts(struct jmap_req *req)
             json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
-                   req->userid, mboxname, uid);
+                   req->accountid, mboxname, uid);
             r = carddav_store(mailbox, card, NULL,
-                              flags, annots, req->userid, req->authstate, ignorequota);
+                              flags, annots, req->accountid, req->authstate, ignorequota);
             vparse_free_card(card);
             free(mboxname);
             strarray_free(flags);
@@ -2918,6 +2953,14 @@ static int setContacts(struct jmap_req *req)
                 continue;
             }
 
+            int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
+            if (!(rights & DACL_WRITE)) {
+                json_t *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                                        "properties", "addressbookId");
+                json_object_set_new(notUpdated, uid, err);
+                continue;
+            }
+
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
                 mailbox_close(&mailbox);
                 r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
@@ -2931,9 +2974,17 @@ static int setContacts(struct jmap_req *req)
             json_t *abookid = json_object_get(arg, "addressbookId");
             if (abookid && json_string_value(abookid)) {
                 const char *mboxname =
-                    mboxname_abook(req->userid, json_string_value(abookid));
+                    mboxname_abook(req->accountid, json_string_value(abookid));
                 if (strcmp(mboxname, cdata->dav.mailbox)) {
                     /* move */
+                    int dstrights = jmap_myrights_byname(req, mboxname);
+                    if (!(dstrights & DACL_WRITE)) {
+                        json_t *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                                "properties", "addressbookId");
+                        json_object_set_new(notUpdated, uid, err);
+                        mailbox_close(&mailbox);
+                        continue;
+                    }
                     r = mailbox_open_iwl(mboxname, &newmailbox);
                     if (r) {
                         syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
@@ -2952,7 +3003,7 @@ static int setContacts(struct jmap_req *req)
             resource = xstrdup(cdata->dav.resource);
 
             strarray_t *flags =
-                mailbox_extract_flags(mailbox, &record, req->userid);
+                mailbox_extract_flags(mailbox, &record, req->accountid);
             struct entryattlist *annots =
                 mailbox_extract_annots(mailbox, &record);
 
@@ -2982,7 +3033,7 @@ static int setContacts(struct jmap_req *req)
                     /* just bump the modseq
                        if in the same mailbox and no data change */
                     syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
-                           req->userid, resource);
+                           req->accountid, resource);
                     if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
                         record.system_flags |= FLAG_FLAGGED;
                     else
@@ -2990,7 +3041,7 @@ static int setContacts(struct jmap_req *req)
                     annotate_state_t *state = NULL;
                     r = mailbox_get_annotate_state(mailbox, record.uid, &state);
                     annotate_state_set_auth(state, 0,
-                                            req->userid, req->authstate);
+                                            req->accountid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
                     json_decref(invalid);
@@ -3016,11 +3067,11 @@ static int setContacts(struct jmap_req *req)
             json_decref(invalid);
 
             syslog(LOG_NOTICE, "jmap: update contact %s/%s",
-                   req->userid, resource);
+                   req->accountid, resource);
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
-                              flags, annots, req->userid, req->authstate, ignorequota);
+                              flags, annots, req->accountid, req->authstate, ignorequota);
             if (!r)
-                r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox, req->userid);
+                r = carddav_remove(mailbox, olduid, /*isreplace*/!newmailbox, req->accountid);
 
          finish:
             mailbox_close(&newmailbox);
@@ -3069,14 +3120,22 @@ static int setContacts(struct jmap_req *req)
             }
             olduid = cdata->dav.imap_uid;
 
+            int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
+            if (!(rights & DACL_WRITE)) {
+                json_t *err = json_pack("{s:s}", "type",
+                        rights & ACL_READ ? "accountReadOnly" : "notFound");
+                json_object_set_new(notDestroyed, uid, err);
+                continue;
+            }
+
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
                 mailbox_close(&mailbox);
                 r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
                 if (r) goto done;
             }
 
-            syslog(LOG_NOTICE, "jmap: remove contact %s/%s", req->userid, uid);
-            r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
+            syslog(LOG_NOTICE, "jmap: remove contact %s/%s", req->accountid, uid);
+            r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: setContacts remove failed for %s %u",
                        mailbox->name, olduid);
@@ -3103,10 +3162,10 @@ static int setContacts(struct jmap_req *req)
         json_object_get(set, "updated") ||
         json_object_get(set, "destroyed")) {
 
-        r = jmap_bumpstate(MBTYPE_ADDRESSBOOK, req);
+        r = jmap_bumpstate(req, MBTYPE_ADDRESSBOOK);
         if (r) goto done;
     }
-    json_object_set_new(set, "newState", jmap_getstate(MBTYPE_ADDRESSBOOK, req));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactsSet"));
