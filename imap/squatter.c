@@ -141,7 +141,6 @@ static int usage(const char *name)
             "  -F          filter during compaction\n"
             "  -T dir      use temporary directory dir during compaction\n"
             "  -X          reindex during compaction\n"
-            "  -U          reindex tiers having deprecated stems or prefixes\n"
             "  -o          copy db rather compacting\n"
             "  -U          only compact if re-indexing\n"
             "\n"
