@@ -52,9 +52,9 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(imapidlepoll => 2);
     return $class->SUPER::new({
-	config => $config,
-	deliver => 1,
-	start_instances => 0,
+        config => $config,
+        deliver => 1,
+        start_instances => 0,
     }, @_);
 }
 
@@ -83,8 +83,8 @@ sub start_and_abort_idled
     # idled forking, which lets us predict which pid to kill.
 
     my $pid = $self->{instance}->run_command({
-	cyrus => 1,
-	background => 1
+        cyrus => 1,
+        background => 1
     }, 'idled', '-d');
     xlog "pid of idled should be $pid";
 
@@ -93,7 +93,7 @@ sub start_and_abort_idled
 
     xlog "bring idled's reign to an abrupt and brutal end";
     kill('KILL', $pid)
-	or die "Failed to kill idled $pid: $!";
+        or die "Failed to kill idled $pid: $!";
 
     # reap_command will 'die' because the process terminated
     # on SIGKILL.  We need to avoid that stopping the test.
@@ -151,7 +151,7 @@ sub common_basic
 
     xlog "Sending the IDLE command";
     $store->idle_begin()
-	or die "IDLE failed: $@";
+        or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);
@@ -174,7 +174,7 @@ sub test_basic_idled
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
+                                 argv => [ 'idled' ]);
     $self->{instance}->start();
     $self->common_basic();
 }
@@ -216,7 +216,7 @@ sub common_delivery
 
     xlog "Sending the IDLE command";
     $store->idle_begin()
-	or die "IDLE failed: $@";
+        or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);
@@ -255,7 +255,7 @@ sub test_delivery_idled
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
+                                 argv => [ 'idled' ]);
     $self->{instance}->start();
     $self->common_delivery();
 }
@@ -297,7 +297,7 @@ sub common_shutdownfile
 
     xlog "Sending the IDLE command";
     $store->idle_begin()
-	or die "IDLE failed: $@";
+        or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);
@@ -314,10 +314,10 @@ sub common_shutdownfile
 
     xlog "Write some text to the shutdown file";
     my $admin_store = $svc->create_store(folder => 'user.casssandane',
-					 username => 'admin');
+                                         username => 'admin');
     my $shut_message = "The Mayans were right";
     $admin_store->get_client()->setmetadata("",
-		"/shared/vendor/cmu/cyrus-imapd/shutdown", $shut_message);
+                     "/shared/vendor/cmu/cyrus-imapd/shutdown", $shut_message);
     $admin_store->disconnect();
     $admin_store = undef;
 
@@ -328,17 +328,17 @@ sub common_shutdownfile
     my $got_bye_alert;
     my $handlers =
     {
-	bye => sub
-	{
-	    my ($response, $rr) = @_;
-	    if (lc($rr->[0]) eq '[alert]')
-	    {
-		# Arguments to [ALERT] is the rest of the line
-		# Sadly we've already split on whitespace but lets
-		# hope the original message only had single spaces
-		$got_bye_alert = join(' ', splice(@$rr, 1));
-	    }
-	}
+        bye => sub
+        {
+            my ($response, $rr) = @_;
+            if (lc($rr->[0]) eq '[alert]')
+            {
+                # Arguments to [ALERT] is the rest of the line
+                # Sadly we've already split on whitespace but lets
+                # hope the original message only had single spaces
+                $got_bye_alert = join(' ', splice(@$rr, 1));
+            }
+        }
     };
 
     xlog "Check that we got a BYE [ALERT] response with the message";
@@ -350,12 +350,12 @@ sub common_shutdownfile
     xlog "Check that the server disconnected";
     eval
     {
-	# We use _send_cmd() and _next_atom() rather the normal path
-	# through _imap_cmd() because the latter will warn() to stderr
-	# about the exception we're about to generate, which is
-	# downright untidy.
-	$talk->_send_cmd('status', 'INBOX', '(messages unseen)');
-	$talk->_parse_response({});
+        # We use _send_cmd() and _next_atom() rather the normal path
+        # through _imap_cmd() because the latter will warn() to stderr
+        # about the exception we're about to generate, which is
+        # downright untidy.
+        $talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+        $talk->_parse_response({});
     };
     my $mm = $@;    # this doesn't survive unless we save it
     $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
@@ -369,7 +369,7 @@ sub test_shutdownfile_idled
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
+                                 argv => [ 'idled' ]);
     $self->{instance}->start();
     $self->common_shutdownfile();
 }
@@ -407,7 +407,7 @@ sub test_sigterm
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
+                                 argv => [ 'idled' ]);
     xlog "Starting up the instance";
     $self->{instance}->start();
 
@@ -419,7 +419,7 @@ sub test_sigterm
     # User logged in SESSIONID=<0604061-29539-1337148251-1>
     my $rem = $talk->get_response_code('remainder');
     my ($name, $imapd_pid, $start, $n) =
-	($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
+        ($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
     $self->assert_not_null($imapd_pid);
     $imapd_pid = 0 + $imapd_pid;
     $self->assert($imapd_pid > 1);
@@ -429,7 +429,7 @@ sub test_sigterm
 
     xlog "Sending the IDLE command";
     $store->idle_begin()
-	or die "IDLE failed: $@";
+        or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);
@@ -451,12 +451,12 @@ sub test_sigterm
     xlog "Check that the server disconnected";
     eval
     {
-	# We use _send_cmd() and _next_atom() rather the normal path
-	# through _imap_cmd() because the latter will warn() to stderr
-	# about the exception we're about to generate, which is
-	# downright untidy.
-	$talk->_send_cmd('status', 'INBOX', '(messages unseen)');
-	$talk->_parse_response({});
+        # We use _send_cmd() and _next_atom() rather the normal path
+        # through _imap_cmd() because the latter will warn() to stderr
+        # about the exception we're about to generate, which is
+        # downright untidy.
+        $talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+        $talk->_parse_response({});
     };
     my $mm = $@;    # this doesn't survive unless we save it
     $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
@@ -472,7 +472,7 @@ sub test_sigterm_many
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
+                                 argv => [ 'idled' ]);
     xlog "Starting up the instance";
     $self->{instance}->start();
 
@@ -484,19 +484,19 @@ sub test_sigterm_many
 
     for (my $i = 0 ; $i < $N ; $i++)
     {
-	my $store = $svc->create_store(folder => 'INBOX');
-	push(@stores, $store);
-	my $talk = $store->get_client();
+        my $store = $svc->create_store(folder => 'INBOX');
+        push(@stores, $store);
+        my $talk = $store->get_client();
 
-	$store->_select();
+        $store->_select();
 
-	xlog "Sending the IDLE command";
-	$store->idle_begin()
-	    or die "IDLE failed: $@";
+        xlog "Sending the IDLE command";
+        $store->idle_begin()
+            or die "IDLE failed: $@";
 
-	xlog "Poll for any unsolicited response - should be none";
-	$r = $store->idle_response({}, 0);
-	$self->assert(!$r, "No unsolicted response");
+        xlog "Poll for any unsolicited response - should be none";
+        $r = $store->idle_response({}, 0);
+        $self->assert(!$r, "No unsolicted response");
     }
 
     xlog "sleeping for 3 seconds";
@@ -504,11 +504,11 @@ sub test_sigterm_many
 
     foreach my $store (@stores)
     {
-	xlog "Poll for any unsolicited response - should be none";
-	$r = $store->idle_response({}, 0);
-	$self->assert(!$r, "No unsolicted response");
+        xlog "Poll for any unsolicited response - should be none";
+        $r = $store->idle_response({}, 0);
+        $self->assert(!$r, "No unsolicted response");
 
-	$self->assert_null($store->get_client()->get_response_code('alert'));
+        $self->assert_null($store->get_client()->get_response_code('alert'));
     }
 
     xlog "Shut down the instance";
@@ -519,21 +519,78 @@ sub test_sigterm_many
 
     foreach my $store (@stores)
     {
-	eval
-	{
-	    # We use _send_cmd() and _next_atom() rather the normal path
-	    # through _imap_cmd() because the latter will warn() to stderr
-	    # about the exception we're about to generate, which is
-	    # downright untidy.
-	    my $talk = $store->get_client();
-	    $talk->_send_cmd('status', 'INBOX', '(messages unseen)');
-	    $talk->_parse_response({});
-	};
-	my $mm = $@;    # this doesn't survive unless we save it
-	$self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
+        eval
+        {
+            # We use _send_cmd() and _next_atom() rather the normal path
+            # through _imap_cmd() because the latter will warn() to stderr
+            # about the exception we're about to generate, which is
+            # downright untidy.
+            my $talk = $store->get_client();
+            $talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+            $talk->_parse_response({});
+        };
+        my $mm = $@;    # this doesn't survive unless we save it
+        $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
     }
 }
 
+sub test_idled_default_timeout
+{
+    my ($self) = @_;
+
+    # The default timeout if `imapidlepoll` isn't set in imapd.conf
+    # is set to 60 seconds. If idled is not broken, then we should
+    # return immediately(pretty much), instead of having to wait all
+    # of 60 seconds.
+    xlog "Set idle poll timeout 60 seconds";
+    $self->{instance}->{config}->set(imapidlepoll => '60');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    xlog "Starting up the instance";
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+    $store->_select();
+
+    xlog "Sending the IDLE command";
+    $store->idle_begin()
+        or die "IDLE failed: $@";
+
+    my $date1 = DateTime->from_epoch(epoch => time());
+
+    xlog "Poll for any unsolicited response - should be none";
+    my $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    xlog "Poll for any unsolicited response - should be none";
+    $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    xlog "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    $r = $store->idle_response({}, 5);
+    $self->assert($r, "received an unsolicited response");
+    $r = $store->idle_response({}, 5);
+    $self->assert($r, "received an unsolicited response");
+    $r = $store->idle_response({}, 1);
+    $self->assert(!$r, "no more unsolicited responses");
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    xlog "Sending DONE continuation";
+    $store->idle_end({});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $date2 = DateTime->from_epoch(epoch => time());
+
+    my $dur = $date2->epoch - $date1->epoch;
+    $self->asser($dur < 5, "IDLE took longer than expected");
+}
 
 
 1;
