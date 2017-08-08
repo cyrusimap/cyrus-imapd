@@ -96,6 +96,7 @@
 #include "cyrusdb.h"
 #include "hash.h"
 #include "xstrlcpy.h"
+#include "util.h"
 
 #include "lmdb.h"
 

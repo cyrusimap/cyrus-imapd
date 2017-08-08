@@ -8,6 +8,8 @@
 #ifndef VARLIST_H_
 #define VARLIST_H_
 
+#include <config.h>
+
 #include "strarray.h"
 
 typedef struct variable_list {

@@ -71,6 +71,7 @@
 #include "xstrlcpy.h"
 #include "strarray.h"
 #include "signals.h"
+#include "util.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096

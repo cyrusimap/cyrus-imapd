@@ -55,6 +55,7 @@
 #include "interp.h"
 #include "libconfig.h"
 #include "times.h"
+#include "util.h"
 
 #define EXT_LEN 4096
 
