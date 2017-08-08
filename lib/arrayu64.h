@@ -47,7 +47,8 @@
 #define __CYRUS_ARRAYU64_H__
 
 #include <sys/types.h>
-#include "util.h"
+
+#include <stdint.h>
 
 typedef struct
 {
@@ -83,7 +84,10 @@ uint64_t arrayu64_max(const arrayu64_t *);
 #define arrayu64_pop(sa)            arrayu64_remove((sa), -1)
 #define arrayu64_push(sa, s)        arrayu64_append((sa), (s))
 
-void arrayu64_sort(arrayu64_t *, compar_t *);
+/* arrayu64_cmp_fn_t is same sig as qsort's compar argument */
+typedef int arrayu64_cmp_fn_t(const void *, const void *);
+void arrayu64_sort(arrayu64_t *, arrayu64_cmp_fn_t *);
+
 void arrayu64_uniq(arrayu64_t *);
 
 int arrayu64_size(const arrayu64_t *);

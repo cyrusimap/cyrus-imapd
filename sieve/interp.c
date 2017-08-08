@@ -55,6 +55,7 @@
 #include "interp.h"
 #include "libconfig.h"
 #include "times.h"
+#include "util.h"
 
 /* build a sieve interpreter */
 EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)

@@ -43,7 +43,10 @@
  * Start Date: 2013/02/12
  */
 
+#include <config.h>
+
 #include <string.h>
+
 #include "arrayu64.h"
 #include "xmalloc.h"
 
@@ -253,7 +256,7 @@ static int _numeric_sort(const void *a, const void *b)
     return 1;
 }
 
-EXPORTED void arrayu64_sort(arrayu64_t *au, compar_t *cmp)
+EXPORTED void arrayu64_sort(arrayu64_t *au, arrayu64_cmp_fn_t *cmp)
 {
     if (!cmp) cmp = _numeric_sort;
     qsort(au->data, au->count, sizeof(uint64_t), (__compar_fn_t)cmp);

@@ -48,7 +48,6 @@
 
 #include <string.h>
 #include <sys/types.h>
-#include "util.h"
 
 typedef struct
 {
@@ -95,7 +94,10 @@ strarray_t *strarray_splitm(char *buf, const char *sep, int flags);
 strarray_t *strarray_split(const char *buf, const char *sep, int flags);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
 
-void strarray_sort(strarray_t *, compar_t *);
+/* strarray_cmp_fn_t is same sig as qsort's compar argument */
+typedef int strarray_cmp_fn_t(const void *, const void *);
+void strarray_sort(strarray_t *, strarray_cmp_fn_t *);
+
 void strarray_uniq(strarray_t *);
 
 char **strarray_takevf(strarray_t *sa);

@@ -88,8 +88,6 @@ typedef unsigned short bit32;
 #error dont know what to use for bit32
 #endif
 
-typedef int compar_t(const void *a, const void *b);
-
 typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
