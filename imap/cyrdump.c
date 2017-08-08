@@ -153,7 +153,6 @@ static search_expr_t *systemflag_match(int flag)
 
 static int dump_me(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
     int r;
     char boundary[128];
     struct imapurl url;
@@ -161,10 +160,14 @@ static int dump_me(struct findall_data *data, void *rock)
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
     struct index_state *state;
-    unsigned *uids;
-    unsigned *uidseq;
+    unsigned *uids = NULL;
+    unsigned *uidseq = NULL;
     int i, n, numuids;
     unsigned msgno;
+
+    /* don't want partial matches */
+    if (!data || !data->mbname) return 0;
+
     const char *name = mbname_intname(data->mbname);
 
     r = index_open(name, NULL, &state);
@@ -197,28 +200,37 @@ static int dump_me(struct findall_data *data, void *rock)
     memset(&searchargs, 0, sizeof(struct searchargs));
     searchargs.root = search_expr_new(NULL, SEOP_TRUE);
     numuids = index_getuidsequence(state, &searchargs, &uids);
+    search_expr_free(searchargs.root);
     print_seq("uidlist", NULL, uids, numuids);
     printf("\n");
 
     printf("  <flags>\n");
 
     searchargs.root = systemflag_match(FLAG_ANSWERED);
+    uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
+    search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Answered\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.root = systemflag_match(FLAG_DELETED);
+    uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
+    search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Deleted\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.root = systemflag_match(FLAG_DRAFT);
+    uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
+    search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Draft\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.root = systemflag_match(FLAG_FLAGGED);
+    uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
+    search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Flagged\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
@@ -273,6 +285,7 @@ static int dump_me(struct findall_data *data, void *rock)
 
     printf("\n--%s--\n", boundary);
 
+    free(uids);
     index_close(&state);
 
     return 0;
