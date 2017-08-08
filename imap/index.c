@@ -308,11 +308,11 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     struct index_state *state = xzmalloc(sizeof(struct index_state));
 
     state->mailbox = mailbox;
+    state->mboxname = xstrdup(mailbox->name);
 
     if (init) {
         state->authstate = init->authstate;
         state->examining = init->examine_mode;
-        state->mboxname = xstrdup(mailbox->name);
         state->out = init->out;
         state->userid = xstrdupnull(init->userid);
         state->want_dav = init->want_dav;
