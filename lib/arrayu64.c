@@ -259,7 +259,7 @@ static int _numeric_sort(const void *a, const void *b)
 EXPORTED void arrayu64_sort(arrayu64_t *au, arrayu64_cmp_fn_t *cmp)
 {
     if (!cmp) cmp = _numeric_sort;
-    qsort(au->data, au->count, sizeof(uint64_t), (__compar_fn_t)cmp);
+    qsort(au->data, au->count, sizeof(uint64_t), cmp);
 }
 
 EXPORTED void arrayu64_uniq(arrayu64_t *au)

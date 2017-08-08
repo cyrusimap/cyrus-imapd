@@ -383,7 +383,7 @@ EXPORTED char **strarray_takevf(strarray_t *sa)
 
 EXPORTED void strarray_sort(strarray_t *sa, strarray_cmp_fn_t *cmp)
 {
-    qsort(sa->data, sa->count, sizeof(char *), (__compar_fn_t)cmp);
+    qsort(sa->data, sa->count, sizeof(char *), cmp);
 }
 
 
