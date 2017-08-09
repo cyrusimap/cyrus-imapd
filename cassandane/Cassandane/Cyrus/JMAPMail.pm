@@ -2423,7 +2423,6 @@ sub test_setmessages_shared
     $self->{adminstore}->set_folder('user.foo');
     $self->make_message("Message foo", store => $self->{adminstore}) or die;
 
-    # FIXME create message in shared account via JMAP
     xlog "get message";
     my $res = $jmap->Request([['getMessageList', { accountId => 'foo', fetchMessages => $JSON::true }, "R1"]]);
     my $id = $res->[0][1]->{messageIds}[0];
@@ -2437,7 +2436,6 @@ sub test_setmessages_shared
     xlog "Remove right to write annotations";
     $admintalk->setacl("user.foo", "cassandane", "lrtex") or die;
 
-    # FIXME there's a special ACL for this: S
     xlog 'Toggle \\Seen flag on message (should fail)';
     $res = $jmap->Request([['setMessages', { accountId => 'foo',
                     update => { $id => { isUnread => $JSON::true } },
@@ -2785,11 +2783,6 @@ sub test_setmessages_attachments
     $self->assert_not_null($att);
     $self->assert_num_equals($att->{size}, 4);
     $self->assert_str_equals("<foo\@local>", $att->{cid});
-    # FIXME this test is too brittle to setup. We'd need to:
-    # - add our custom annotation to both the annotations
-    #   definition file and in cassandane.ini's cyrus config
-    # - run an annotator daemon or set the annotation via IMAP
-    #$self->assert_equals(JSON::true, $att->{isInline});
     $self->assert_null($att->{width});
     $self->assert_null($att->{height});
 
@@ -3133,98 +3126,6 @@ sub test_setmessages_destroy
     xlog "Get messages";
     $res = $jmap->Request([['getMessageList', {}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
-}
-
-sub test_acl
-    :JMAP :min_version_3_0
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $res;
-    my $msgid;
-    my $mboxid;
-
-    # FIXME
-    return 0;
-
-    my $admintalk = $self->{adminstore}->get_client();
-    my $imaptalk = $self->{store}->get_client();
-
-    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
-
-    # Create another user and give cassandane to its mailboxes
-    $self->{instance}->create_user("foo");
-    $admintalk->create("user.foo.Drafts", "(USE (\\Drafts))") || die;
-    $admintalk->setacl("user.foo", "cassandane", "lrswp");
-    $admintalk->setacl("user.foo.Drafts", "cassandane", "lrswp");
-
-    $self->{adminstore}->set_folder('user.foo.Drafts');
-    $msgid = $self->make_message( "Message A", store => $self->{adminstore})->get_guid();
-    $self->assert_not_null($msgid);
-    $self->{adminstore}->_select();
-
-    $res = $admintalk->getmetadata('user.foo.Drafts', $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $mboxid = $res->{'user.foo.Drafts'}{$entry};
-    $self->assert_not_null(1);
-
-    # For now, JMAP methods may not operate on other accounts.
-    $res = $jmap->Request([['getMessages', { ids => [ $msgid ] }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
-    $self->assert_str_equals($msgid, $res->[0][1]->{notFound}[0]);
-
-    $res = $jmap->Request([['getMessages', { accountId => "foo", ids => [ $msgid ] }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
-    $self->assert_str_equals($msgid, $res->[0][1]->{notFound}[0]);
-
-    $res = $jmap->Request([['getMailboxes', { ids => [ $mboxid ] }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
-    $self->assert_str_equals($mboxid, $res->[0][1]->{notFound}[0]);
-
-    $res = $jmap->Request([['getMailboxes', { accountId => "foo", ids => [ $mboxid ] }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
-    $self->assert_str_equals($mboxid, $res->[0][1]->{notFound}[0]);
-
-    $res = $jmap->Request([['setMessages', { create => { "1" => {
-        mailboxIds => [$mboxid],
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
-        to => [
-            { name => "Bugs Bunny", email => "bugs\@acme.local" },
-        ],
-        subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        inReplyToMessageId => $msgid,
-    } }}, "R1"]]);
-    $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
-
-    $res = $jmap->Request([['setMessages', { accountId => "foo", create => { "1" => {
-        mailboxIds => [$mboxid],
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
-        to => [
-            { name => "Bugs Bunny", email => "bugs\@acme.local" },
-        ],
-        subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        inReplyToMessageId => $msgid,
-    } }}, "R1"]]);
-    $self->assert_str_equals("invalidProperties", $res->[0][1]->{notCreated}{"1"}{type});
-    $self->assert_str_equals("mailboxIds[0]", $res->[0][1]->{notCreated}{"1"}{properties}[0]);
-
-    $res = $jmap->Request([[ 'setMailboxes', { update => {
-            $mboxid => { sortOrder => 20 }
-    }}, "R1" ]]);
-    $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
-
-    $res = $jmap->Request([[ 'setMailboxes', { accountId => "foo", update => {
-            $mboxid => { sortOrder => 20 }
-    }}, "R1" ]]);
-    $self->assert_str_equals("notFound", $res->[0][1]->{notUpdated}{$mboxid}{type});
 }
 
 sub test_getmessagelist
@@ -4338,7 +4239,6 @@ sub test_getmessageupdates
     my $talk = $store->get_client();
     my $draftsmbox;
 
-    # FIXME mailbox changes also bump the state of messages
     xlog "create drafts mailbox";
     $res = $jmap->Request([
             ['setMailboxes', { create => { "1" => {
