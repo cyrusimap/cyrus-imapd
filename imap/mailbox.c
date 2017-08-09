@@ -118,6 +118,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/mailbox_header_cache.h"
 
 struct mailboxlist {
     struct mailboxlist *next;
@@ -331,87 +332,6 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
 }
 
 /*
- * Names of the headers we cache in the cyrus.cache file.
- *
- * Changes to this list probably require bumping the cache version
- * number (obviously)
- *
- * note that header names longer than MAX_CACHED_HEADER_SIZE
- * won't be cached regardless
- *
- * xxx can we get benefits by requiring this list to be sorted?
- * (see is_cached_header())
- *
- */
-const struct mailbox_header_cache mailbox_cache_headers[] = {
-    /* things we have always cached */
-    { "priority", 0 },
-    { "references", 0 },
-    { "resent-from", 0 },
-    { "newsgroups", 0 },
-    { "followup-to", 0 },
-
-    /* x headers that we may want to cache anyway */
-    { "x-mailer", 1 },
-    { "x-trace", 1 },
-
-    /* outlook express seems to want these */
-    { "x-ref", 2  },
-    { "x-priority", 2 },
-    { "x-msmail-priority", 2 },
-    { "x-msoesrec", 2 },
-
-    /* for efficient FastMail interface display */
-    { "x-spam-score", 3 },
-    { "x-resolved-to", 3 },
-    { "x-delivered-to", 3 },
-    { "x-mail-from", 3 },
-    { "x-truedomain-domain", 3 },
-
-    /* for conversations */
-    { "x-me-message-id", 4 },
-
-    /* for delivery matching */
-    { "x-cyrus-session-id", 4 },
-
-    /* things to never cache */
-    { "bcc", BIT32_MAX },
-    { "cc", BIT32_MAX },
-    { "date", BIT32_MAX },
-    { "delivery-date", BIT32_MAX },
-    { "envelope-to", BIT32_MAX },
-    { "from", BIT32_MAX },
-    { "in-reply-to", BIT32_MAX },
-    { "mime-version", BIT32_MAX },
-    { "reply-to", BIT32_MAX },
-    { "received", BIT32_MAX },
-    { "return-path", BIT32_MAX },
-    { "sender", BIT32_MAX },
-    { "subject", BIT32_MAX },
-    { "to", BIT32_MAX },
-
-    /* signatures tend to be large, and are useless without the body */
-    { "dkim-signature", BIT32_MAX },
-    { "domainkey-signature", BIT32_MAX },
-    { "domainkey-x509", BIT32_MAX },
-
-    /* older versions of PINE (before 4.56) need message-id in the cache too
-     * though technically it is a waste of space because it is in
-     * ENVELOPE.  We should probably uncomment the following at some
-     * future point [ken3 notes this may also be useful to have here for
-     * threading so we can avoid parsing the envelope] */
-    /* { "message-id", BIT32_MAX }, */
-
-    /* apple-specific headers that their clients fetch frequently */
-    { "x-universally-unique-identifier", 6 },
-    { "x-uniform-type-identifier", 6 },
-    { "x-apple-base-url", 6 },
-    { "x-apple-mail-remote-attachments", 6 },
-};
-const int MAILBOX_NUM_CACHE_HEADERS =
-  sizeof(mailbox_cache_headers)/sizeof(struct mailbox_header_cache);
-
-/*
  *  Function to test if a header is in the cache
  *
  *  Assume cache entry version 1, unless other data is found
@@ -419,16 +339,21 @@ const int MAILBOX_NUM_CACHE_HEADERS =
  */
 static inline unsigned is_cached_header(const char *hdr)
 {
-    int i;
+    size_t len;
+    struct mailbox_header_cache *thdr;
 
-    /* xxx if we can sort the header list we can do better here */
-    for (i=0; i<MAILBOX_NUM_CACHE_HEADERS; i++) {
-        if (!strcmp(mailbox_cache_headers[i].name, hdr))
-            return mailbox_cache_headers[i].min_cache_version;
-    }
+    len = strlen(hdr);
+    if (len >= MAX_CACHED_HEADER_SIZE)
+        return BIT32_MAX;
+
+    thdr = mailbox_header_cache_lookup(hdr, len);
+
+    if (thdr)
+        return thdr->min_cache_version;
 
     /* Don't Cache X- headers unless explicitly configured to*/
-    if ((hdr[0] == 'x') && (hdr[1] == '-')) return BIT32_MAX;
+    if (((hdr[0] == 'x') || (hdr[0] == 'X')) &&
+        (hdr[1] == '-')) return BIT32_MAX;
 
     /* Everything else we cache in version 1 */
     return 1;
@@ -441,19 +366,7 @@ static inline unsigned is_cached_header(const char *hdr)
  */
 EXPORTED unsigned mailbox_cached_header(const char *s)
 {
-    char hdr[MAX_CACHED_HEADER_SIZE];
-    int i;
-
-    /* Generate lower case copy of string */
-    /* xxx sometimes the caller has already generated this ..
-     * maybe we can just require callers to do it? */
-    for (i=0 ; *s && (i < (MAX_CACHED_HEADER_SIZE - 1)) ; i++)
-        hdr[i] = tolower(*s++);
-
-    if (*s) return BIT32_MAX;   /* Input too long for match */
-    hdr[i] = '\0';
-
-    return is_cached_header(hdr);
+    return is_cached_header(s);
 }
 
 /* Same as mailbox_cached_header, but for use on a header
@@ -472,7 +385,7 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
             buf[i] = '\0';
             return is_cached_header(buf);
         } else {
-            buf[i] = tolower(text[i]);
+            buf[i] = text[i];
         }
     }
 

@@ -143,7 +143,8 @@ BUILT_SOURCES += \
 	lib/htmlchar.c \
 	lib/htmlchar.h \
 	imap/rfc822_header.c \
-	imap/rfc822_header.h
+	imap/rfc822_header.h \
+	imap/mailbox_header_cache.h
 
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 
@@ -267,7 +268,8 @@ EXTRA_DIST += \
     imap/promdata.c \
     imap/promdata.h \
     imap/rfc822_header.c \
-    imap/rfc822_header.h
+    imap/rfc822_header.h \
+    imap/mailbox_header_cache.h
 
 if !HTTPD
 EXTRA_DIST += \
@@ -368,6 +370,7 @@ EXTRA_DIST += \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
 	imap/rfc822_header.st \
+	imap/mailbox_header_cache.gperf \
 	imap/tz_err.et \
 	lib/charset/aliases.txt \
 	lib/charset/UnicodeData.txt \
@@ -1018,6 +1021,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/quota_db.c \
 	imap/rfc822_header.c \
 	imap/rfc822_header.h \
+	imap/mailbox_header_cache.h \
 	imap/saslclient.c \
 	imap/saslclient.h \
 	imap/saslserver.c \
@@ -1325,6 +1329,9 @@ lib/htmlchar.c: lib/htmlchar.st
 
 lib/htmlchar.h: lib/htmlchar.st
 	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+
+imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
+	$(AM_V_GEN)gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$ $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
