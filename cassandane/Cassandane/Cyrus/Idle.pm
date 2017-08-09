@@ -589,7 +589,7 @@ sub test_idled_default_timeout
     my $date2 = DateTime->from_epoch(epoch => time());
 
     my $dur = $date2->epoch - $date1->epoch;
-    $self->asser($dur < 15, "IDLE took longer than expected");
+    $self->assert($dur < 15, "IDLE took longer than expected");
 }
 
 
