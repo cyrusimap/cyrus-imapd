@@ -1241,7 +1241,7 @@ sub test_getmailboxupdates_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
 
-    xlog "create mailbox via IMAP";
+    xlog "create mailbox box1 via IMAP";
     $admintalk->create("user.foo.box1") or die;
     $admintalk->setacl("user.foo.box1", "cassandane", "lrwkxd") or die;
 
@@ -1251,21 +1251,43 @@ sub test_getmailboxupdates_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{changed}});
     $state = $res->[0][1]->{newState};
-    my $id = $res->[0][1]->{changed}[0];
+    my $box1 = $res->[0][1]->{changed}[0];
 
-=pod FIXME doesn't work
     xlog "destroy mailbox via JMAP";
-    $res = $jmap->Request([['setMailboxes', { accountId => "foo", destroy => [ $id ] }, 'R1' ]]);
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $res = $jmap->Request([['setMailboxes', { accountId => "foo", destroy => [ $box1 ] }, 'R1' ]]);
+    $self->assert_str_equals($box1, $res->[0][1]{destroyed}[0]);
 
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{removed}});
+    $self->assert_str_equals($box1, $res->[0][1]->{removed}[0]);
     $state = $res->[0][1]->{newState};
-=cut
 
+    xlog "create mailbox box2 via IMAP";
+    $admintalk->create("user.foo.box2") or die;
+    $admintalk->setacl("user.foo.box2", "cassandane", "lrwkxd") or die;
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{changed}});
+    $state = $res->[0][1]->{newState};
+
+    my $box2 = $res->[0][1]->{changed}[0];
+
+    xlog "Remove lookup rights on box2";
+    $admintalk->setacl("user.foo.box2", "cassandane", "") or die;
+
+    xlog "get mailbox updates";
+    $res = $jmap->Request([['getMailboxUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{removed}});
+    $self->assert_str_equals($box2, $res->[0][1]->{removed}[0]);
+    $state = $res->[0][1]->{newState};
 }
 
 sub test_getmessages
