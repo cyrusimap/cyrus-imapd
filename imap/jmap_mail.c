@@ -190,7 +190,7 @@ static char *jmapmbox_find_uniqueid(jmap_req_t *req, const char *id)
 {
     char *name = NULL;
     struct findmbox_data rock = { id, &name };
-    int r = jmap_mboxlist(req, findmbox_cb, &rock, 0);
+    int r = jmap_mboxlist(req, findmbox_cb, &rock);
     if (r != IMAP_OK_COMPLETED) {
         free(name);
         name = NULL;
@@ -232,7 +232,7 @@ static char *jmapmbox_find_specialuse(jmap_req_t *req, const char *use)
         return mboxname_user_mbox(req->accountid, NULL);
 
     struct find_specialuse_data rock = { use, req->userid, NULL };
-    jmap_mboxlist(req, find_specialuse_cb, &rock, 0);
+    jmap_mboxlist(req, find_specialuse_cb, &rock);
     return rock.mboxname;
 }
 
@@ -659,7 +659,7 @@ static int getMailboxes(jmap_req_t *req)
     }
 
     /* Lookup and process the mailboxes */
-    jmap_mboxlist(req, getmailboxes_cb, &data, 0);
+    jmap_mboxlist(req, getmailboxes_cb, &data);
 
    /* Report if any requested mailbox has not been found */
     if (data.want) {
@@ -837,7 +837,7 @@ static char *jmapmbox_findxrole(jmap_req_t *req, const char *xrole)
 {
     struct jmapmbox_findxrole_data rock = { xrole, req->userid, NULL };
     /* INBOX can never have an x-role. */
-    jmap_mboxlist(req, jmapmbox_findxrole_cb, &rock, 0);
+    jmap_mboxlist(req, jmapmbox_findxrole_cb, &rock);
     return rock.mboxname;
 }
 
@@ -1636,6 +1636,7 @@ static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
     json_t *updates, *update;
     struct statusdata sdata;
     modseq_t modseq, mbmodseq;
+    jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
     if (mbentry->mbtype & ~(MBTYPE_DELETED)) {
@@ -1680,9 +1681,11 @@ static int jmapmbox_updates_cb(const mbentry_t *mbentry, void *rock)
         *(data->only_counts_changed) = 0;
     }
 
-    /* OK, report that update */
+    /* OK, report that update. Note that we even report hidden mailboxes
+     * in order to allow clients remove unshared and deleted mailboxes */
     update = json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq);
-    if (mbentry->mbtype & MBTYPE_DELETED) {
+    int rights = jmap_myrights(req, mbentry);
+    if ((mbentry->mbtype & MBTYPE_DELETED) || !(rights & ACL_LOOKUP)) {
         updates = data->removed;
     } else {
         updates = data->changed;
@@ -1730,8 +1733,7 @@ static int jmapmbox_updates(jmap_req_t *req, modseq_t frommodseq,
 
 
     /* Search for updates */
-    r = jmap_mboxlist(req, jmapmbox_updates_cb, &data,
-                      MBOXTREE_TOMBSTONES | MBOXTREE_DELETED);
+    r = jmap_allmbox(req, jmapmbox_updates_cb, &data);
     if (r) goto done;
 
     /* Sort updates by modseq */
@@ -6332,7 +6334,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         struct msgupdate_checkacl_rock rock = {
             req, newmailboxes, delmailboxes, oldmailboxes
         };
-        r = jmap_mboxlist(req, msgupdate_checkacl_cb, &rock, 0);
+        r = jmap_mboxlist(req, msgupdate_checkacl_cb, &rock);
         if (r) goto done;
     }
 
@@ -6692,7 +6694,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
         json_array_foreach(mailboxids, i, val) {
             json_object_set(rock.newmailboxes, json_string_value(val), json_true());
         }
-        r = jmap_mboxlist(req, msgupdate_checkacl_cb, &rock, 0);
+        r = jmap_mboxlist(req, msgupdate_checkacl_cb, &rock);
         json_decref(rock.newmailboxes);
         if (r) goto done;
     }

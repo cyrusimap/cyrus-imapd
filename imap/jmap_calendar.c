@@ -408,7 +408,7 @@ doneloop:
         }
     }
     else {
-        r = jmap_mboxlist(req, &getcalendars_cb, &rock, 0);
+        r = jmap_mboxlist(req, &getcalendars_cb, &rock);
         if (r) goto done;
     }
 

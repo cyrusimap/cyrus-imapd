@@ -99,8 +99,14 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mb
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
-/* mboxlist-like mailbox tree traversal, scoped by accountid */
-extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock, int incdel);
+/* usermbox-like mailbox tree traversal, scoped by accountid.
+ * Reports only active (not deleted) mailboxes. Checks presence
+ * of ACL_LOOKUP for shared accounts. */
+extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock);
+
+/* allmbox-like mailbox tree traversal, scoped by accountid.
+ * Reports all mailboxes and does not check permissions. */
+extern int  jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock);
 
 /* Request-scoped cache of mailbox rights for authenticated user */
 

@@ -157,15 +157,21 @@ struct mymblist_rock {
     void *rock;
     struct auth_state *authstate;
     hash_table *mboxrights;
+    int all;
 };
 
 static int mymblist_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mymblist_rock *myrock = rock;
 
-    int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
-    if (!(rights & ACL_LOOKUP))
-        return 0;
+    if (!myrock->all) {
+        if (mbentry->mbtype & MBTYPE_DELETED)
+            return 0;
+
+        int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
+        if (!(rights & ACL_LOOKUP))
+            return 0;
+    }
     return myrock->proc(mbentry, myrock->rock);
 }
 
@@ -175,19 +181,15 @@ static int mymblist(const char *userid,
                     hash_table *mboxrights,
                     mboxlist_cb *proc,
                     void *rock,
-                    int incdel)
+                    int all)
 {
-    /* XXX the signature of this function is a monstrosity but
-     * we can't use a jmap_req_t here: it's called outside
-     * the scope of a jmap */
-    int flags = incdel ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
-
     if (!strcmp(userid, accountid)) {
+        int flags = all ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
         return mboxlist_usermboxtree(userid, proc, rock, flags);
     }
 
     /* Open the INBOX first */
-    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights };
+    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights, all };
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, "user%c%s", jmap_namespace.hier_sep, accountid);
     mbentry_t *mbentry = NULL;
@@ -199,7 +201,7 @@ static int mymblist(const char *userid,
 
     /* Visit any mailboxes underneath the INBOX */
     buf_putc(&buf, jmap_namespace.hier_sep);
-    r = mboxlist_allmbox(buf_cstring(&buf), mymblist_cb, &myrock, incdel);
+    r = mboxlist_allmbox(buf_cstring(&buf), mymblist_cb, &myrock, all);
 
 done:
     mboxlist_entry_free(&mbentry);
@@ -207,13 +209,16 @@ done:
     return r;
 }
 
-EXPORTED int jmap_mboxlist(jmap_req_t *req,
-                           mboxlist_cb *proc,
-                           void *rock,
-                           int flags)
+EXPORTED int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
 {
     return mymblist(req->userid, req->accountid, req->authstate,
-                    req->mboxrights, proc, rock, flags);
+                    req->mboxrights, proc, rock, 0/*all*/);
+}
+
+EXPORTED int jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock)
+{
+    return mymblist(req->userid, req->accountid, req->authstate,
+                    req->mboxrights, proc, rock, 1/*all*/);
 }
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
@@ -408,7 +413,7 @@ static int jmap_post(struct transaction_t *txn,
             /* Check if any shared mailbox is accessible */
             if (!hash_lookup(accountid, &accounts)) {
                 r = mymblist(httpd_userid, accountid, httpd_authstate, &mboxrights,
-                             is_accessible, NULL, 0);
+                             is_accessible, NULL, 0/*all*/);
                 if (r != IMAP_OK_COMPLETED) {
                     json_t *err = json_pack("{s:s}", "type", "accountNotFound");
                     json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
@@ -1189,65 +1194,22 @@ EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype) {
     return 0;
 }
 
-struct highestmodseq_rock {
-    jmap_req_t *req;
-    int mbtype;
-    modseq_t highestmodseq;
-};
-
-static int highestmodseq_cb(const mbentry_t *mbentry, void *vrock)
-{
-    struct highestmodseq_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
-
-    if (!mbentry) {
-        return 0;
-    }
-
-    if (mbentry->mbtype != rock->mbtype) {
-        return 0;
-    }
-
-    /* Any "real" permission will do, but ignore USERX permissions */
-    int rights = httpd_myrights(req->authstate, mbentry);
-    if (!(rights & 0x0008ffL)) {
-        return 0;
-    }
-
-    /* XXX do we really need to open every mailbox */
-    struct mailbox *mbox = NULL;
-    int r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-    if (r) return r;
-    if (mbox->i.highestmodseq > rock->highestmodseq) {
-        rock->highestmodseq = mbox->i.highestmodseq;
-    }
-    jmap_closembox(req, &mbox);
-    return 0;
-}
-
 EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype) {
     modseq_t modseq;
 
-    if (!req->is_shared_account) {
-        /* Determine current counter by mailbox type. */
-        switch (mbtype) {
-            case MBTYPE_CALENDAR:
-                modseq = req->counters.caldavmodseq;
-                break;
-            case MBTYPE_ADDRESSBOOK:
-                modseq = req->counters.carddavmodseq;
-                break;
-            case 0:
-                modseq = req->counters.mailmodseq;
-                break;
-            default:
-                modseq = req->counters.highestmodseq;
-        }
-    } else {
-        /* Determine highest modseq that's visible to the authenticated user */
-        struct highestmodseq_rock rock = { req, mbtype, 0 };
-        jmap_mboxlist(req, highestmodseq_cb, &rock, 0);
-        modseq = rock.highestmodseq;
+    /* Determine current counter by mailbox type. */
+    switch (mbtype) {
+        case MBTYPE_CALENDAR:
+            modseq = req->counters.caldavmodseq;
+            break;
+        case MBTYPE_ADDRESSBOOK:
+            modseq = req->counters.carddavmodseq;
+            break;
+        case 0:
+            modseq = req->counters.mailmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
     }
 
     return modseq;
