@@ -238,11 +238,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
         goto error;
     }
 
-#if 0 /* XXX - not implemented in sieveshell*/
-    /* referral_host is non-null only once we are authenticated */
-    if(referral_host)
-        goto do_referral;
-#endif
     break;
 
   case CAPABILITY:
