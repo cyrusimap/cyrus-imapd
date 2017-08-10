@@ -240,20 +240,22 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
 
 static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
 {
-    flags->recurring = num & 1;
-    flags->transp = (num >> 1) & 1;
-    flags->status = (num >> 2) & 3;
-    flags->tzbyref = (num >> 4) & 1;
-    flags->mattach = (num >> 5) & 1;
+    flags->recurring =  num & 1;
+    flags->transp    = (num >> 1) & 1;
+    flags->status    = (num >> 2) & 3;
+    flags->tzbyref   = (num >> 4) & 1;
+    flags->mattach   = (num >> 5) & 1;
+    flags->shared    = (num >> 6) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
 {
    return (flags->recurring & 1)
-       + ((flags->transp & 1) << 1)
-       + ((flags->status & 3) << 2)
-       + ((flags->tzbyref & 1) << 4)
-       + ((flags->mattach & 1) << 5);
+       + ((flags->transp    & 1) << 1)
+       + ((flags->status    & 3) << 2)
+       + ((flags->tzbyref   & 1) << 4)
+       + ((flags->mattach   & 1) << 5)
+       + ((flags->shared    & 1) << 6);
 }
 
 #define CMD_READFIELDS                                                  \
@@ -520,7 +522,7 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
 
 EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
-    int comp_flags = _comp_flags_to_num(&cdata->comp_flags);
+    unsigned comp_flags = _comp_flags_to_num(&cdata->comp_flags);
     struct sqldb_bindval bval[] = {
         { ":rowid",        SQLITE_INTEGER, { .i = cdata->dav.rowid        } },
         { ":alive",        SQLITE_INTEGER, { .i = cdata->dav.alive        } },

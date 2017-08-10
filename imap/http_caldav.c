@@ -104,7 +104,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-#define TZ_STRIP (1<<9)
+#define TZ_STRIP  (1<<9)
+#define IS_SHARED (1<<10)
 
 
 #ifdef HAVE_RSCALE
@@ -2095,19 +2096,39 @@ static void add_timezone(icalparameter *param, void *data)
 #define PER_USER_CAL_DATA \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+#define STRIP_OWNER_CAL_DATA          \
+    "CALDATA %(VPATCH {186+}\r\n"     \
+    "BEGIN:VPATCH\r\n"                \
+    "VERSION:1\r\n"                   \
+    "DTSTAMP:19760401T005545Z\r\n"    \
+    "UID:strip-owner-cal-data\r\n"    \
+    "BEGIN:PATCH\r\n"                 \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n" \
+    "PATCH-DELETE:/VALARM\r\n"        \
+    "PATCH-DELETE:#TRANSP\r\n"        \
+    "END:PATCH\r\n"                   \
+    "END:VPATCH\r\n)"
 
-static int is_personalized(struct mailbox *mailbox, uint32_t uid,
+
+
+static int is_personalized(struct mailbox *mailbox, struct caldav_data *cdata,
                            const char *userid, struct buf *userdata)
 {
     struct buf buf = BUF_INITIALIZER, *value;
 
     value = userdata ? userdata : &buf;
 
-    /* Lookup per-user calendar data */
-    int r = mailbox_annotation_lookup(mailbox, uid,
-                                      PER_USER_CAL_DATA, userid, value);
-    if (!r && buf_len(value)) {
-        if (!userdata) buf_free(value);
+    if (cdata->comp_flags.shared) {
+        /* Lookup per-user calendar data */
+        int r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                          PER_USER_CAL_DATA, userid, value);
+        if (!r && buf_len(value)) {
+            if (!userdata) buf_free(value);
+            return 1;
+        }
+    }
+    else if (!mboxname_userownsmailbox(userid, mailbox->name)) {
+        if (userdata) buf_init_ro_cstr(value, STRIP_OWNER_CAL_DATA);
         return 1;
     }
 
@@ -2170,7 +2191,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         unsigned need_tz = 0;
         const char **hdr;
         icalcomponent *ical = NULL;
-        struct buf userdata = BUF_INITIALIZER;
         int ret = HTTP_CONTINUE;
 
         /* Check for optional CalDAV-Timezones header */
@@ -2243,12 +2263,15 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         }
 
         /* Personalize resource, if necessary */
-        if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            is_personalized(mailbox, record->uid, httpd_userid, &userdata)) {
-            if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+        if (namespace_calendar.allow & ALLOW_USERDATA) {
+            struct buf userdata = BUF_INITIALIZER;
 
-            add_personal_data(ical, &userdata);
-            buf_free(&userdata);
+            if (is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
+                if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+
+                add_personal_data(ical, &userdata);
+                buf_free(&userdata);
+            }
         }
 
         /* iCalendar data in response should not be transformed */
@@ -4245,7 +4268,7 @@ static int personalize_resource(struct transaction_t *txn,
         return HTTP_NO_PRIVS;
     }
 
-    if (!is_personalized(mailbox, cdata->dav.imap_uid, owner, NULL)) {
+    if (!cdata->comp_flags.shared) {
         if (is_owner) {
             /* Owner updating unshared resource - nothing to do here */
             goto done;
@@ -4292,8 +4315,8 @@ static int personalize_resource(struct transaction_t *txn,
                 struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
 
                 ret = caldav_store_resource(txn, *oldical, mailbox,
-                                            cdata->dav.resource, caldavdb, 0,
-                                            *schedule_address);
+                                            cdata->dav.resource, caldavdb,
+                                            IS_SHARED, *schedule_address);
 
                 if (ret == HTTP_NO_CONTENT) {
                     /* Fetch the new DAV and index records */
@@ -4363,6 +4386,7 @@ static int personalize_resource(struct transaction_t *txn,
     buf_reset(&txn->buf);
 
     if (!ret) {
+        cdata->comp_flags.shared = 1;
         ret = write_personal_data(mailbox, cdata, httpd_userid, vpatch);
         if (ret) ret = HTTP_SERVER_ERROR;
         else if (read_only) ret = HTTP_NO_CONTENT;
@@ -4659,6 +4683,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Store resource at target */
     if (!ret) {
+        if (cdata->comp_flags.shared) flags |= IS_SHARED;
         ret = caldav_store_resource(txn, ical, mailbox,
                                     resource, db, flags, schedule_address);
     }
@@ -5822,7 +5847,6 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
     if (propstat) {
         icalcomponent *ical = NULL;
-        struct buf userdata = BUF_INITIALIZER;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -5861,14 +5885,17 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         }
 
         /* Personalize resource, if necessary */
-        if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            is_personalized(fctx->mailbox, fctx->record->uid,
-                            httpd_userid, &userdata)) {
-            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-            ical = fctx->obj;
+        if (namespace_calendar.allow & ALLOW_USERDATA) {
+            struct buf userdata = BUF_INITIALIZER;
 
-            add_personal_data(ical, &userdata);
-            buf_free(&userdata);
+            if (is_personalized(fctx->mailbox, fctx->data,
+                                httpd_userid, &userdata)) {
+                if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
+                ical = fctx->obj;
+
+                add_personal_data(ical, &userdata);
+                buf_free(&userdata);
+            }
         }
 
         if (!icaltime_is_null_time(partial->range.start)) {
@@ -8063,6 +8090,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
+    if (flags & IS_SHARED) buf_printf(&txn->buf, ";\r\n\tper-user-data=true");
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
