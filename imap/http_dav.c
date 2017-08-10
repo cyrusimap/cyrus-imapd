@@ -3396,6 +3396,11 @@ int meth_acl(struct transaction_t *txn, void *params)
 
                         for (prin = child->children; prin &&
                              prin->type != XML_ELEMENT_NODE; prin = prin->next);
+                        if (!prin) {
+                            txn->error.desc = "Empty principal in ACE\r\n";
+                            ret = HTTP_BAD_REQUEST;
+                            goto done;
+                        }
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
                         if (privs) {
