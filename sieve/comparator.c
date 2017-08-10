@@ -148,42 +148,6 @@ static int octet_cmp(const char *text, size_t tlen, const char *pat)
     return octet_cmp_(text, tlen, pat, 0);
 }
 
-/* we implement boyer-moore for hell of it, since this is probably
- not very useful for sieve */
-#if 0
-int boyer_moore(char *text, char *pat)
-{
-    int i, j; /* indexes */
-    int M = strlen(pat); /* length of pattern */
-    int N = strlen(text); /* length of text */
-    int skip[256]; /* table of how much to skip, based on each character */
-
-    /* initialize skip table */
-    for (i = 0; i < 256; i++)
-        skip[i] = M;
-    for (i = 0; i < M; i++)
-        skip[(int) pat[i]] = M-i-1;
-
-    /* look for pat in text */
-    i = j = M-1;
-    do {
-        if (pat[j] == text[i]) {
-            i--;
-            j--;
-        } else {
-            if (M-j > skip[(int) text[i]]) {
-                i = i + M - j;
-            } else {
-                i = i + skip[(int) text[i]];
-            }
-            j = M-1;
-        }
-    } while (!((j < 0) || (i >= N)));
-    /* i+1 is the position of the match if i < N */
-    return (i < N) ? 1 : 0;
-}
-#endif
-
 /* we do a brute force attack */
 static int octet_contains_(const char *text, size_t tlen,
                            const char *pat, int casemap)
