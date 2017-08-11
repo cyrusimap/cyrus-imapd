@@ -236,7 +236,7 @@ int service_init(int argc __attribute__((unused)),
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
-    prometheus_increment(LMTP_READY_LISTENERS);
+    prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
 
     return 0;
 }
@@ -252,7 +252,7 @@ int service_main(int argc, char **argv,
     struct io_count *io_count_start = NULL;
     struct io_count *io_count_stop = NULL;
 
-    prometheus_decrement(LMTP_READY_LISTENERS);
+    prometheus_decrement(CYRUS_LMTP_READY_LISTENERS);
 
     if (config_iolog) {
         io_count_start = xmalloc (sizeof (struct io_count));
@@ -276,15 +276,15 @@ int service_main(int argc, char **argv,
         }
     }
 
-    prometheus_increment(LMTP_CONNECTIONS_TOTAL);
-    prometheus_increment(LMTP_ACTIVE_CONNECTIONS);
+    prometheus_increment(CYRUS_LMTP_CONNECTIONS_TOTAL);
+    prometheus_increment(CYRUS_LMTP_ACTIVE_CONNECTIONS);
 
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
 
-    prometheus_decrement(LMTP_ACTIVE_CONNECTIONS);
+    prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
     snmp_increment(ACTIVE_CONNECTIONS, -1);
 
     /* free session state */
@@ -309,7 +309,7 @@ int service_main(int argc, char **argv,
         free (io_count_stop);
     }
 
-    prometheus_increment(LMTP_READY_LISTENERS);
+    prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
 
     return 0;
 }
@@ -874,7 +874,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if(recurse_code) {
         /* We were called recursively. Just give up */
-        prometheus_decrement(LMTP_ACTIVE_CONNECTIONS);
+        prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
         exit(recurse_code);
     }
@@ -925,17 +925,17 @@ void shut_down(int code)
         prot_flush(deliver_out);
 
         /* one less active connection */
-        prometheus_decrement(LMTP_ACTIVE_CONNECTIONS);
+        prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
         snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
     else {
         /* one less ready listener */
 
-        prometheus_decrement(LMTP_READY_LISTENERS);
+        prometheus_decrement(CYRUS_LMTP_READY_LISTENERS);
     }
 
-    prometheus_increment(code ? LMTP_SHUTDOWN_COUNT_STATUS_ERROR
-                              : LMTP_SHUTDOWN_COUNT_STATUS_OK);
+    prometheus_increment(code ? CYRUS_LMTP_SHUTDOWN_TOTAL_STATUS_ERROR
+                              : CYRUS_LMTP_SHUTDOWN_TOTAL_STATUS_OK);
 
     cyrus_done();
 

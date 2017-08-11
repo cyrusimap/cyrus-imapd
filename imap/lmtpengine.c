@@ -1123,7 +1123,7 @@ void lmtpmode(struct lmtp_func *func,
                           syslog(LOG_ERR, "badlogin: %s %s %s",
                                  cd.clienthost, mech, sasl_errdetail(cd.conn));
 
-                          prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_NO);
+                          prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
                           snmp_increment_args(AUTHENTICATION_NO, 1,
                                               VARIABLE_AUTH, hash_simple(mech),
                                               VARIABLE_LISTEND);
@@ -1159,7 +1159,7 @@ void lmtpmode(struct lmtp_func *func,
 
               /* authenticated successfully! */
 
-              prometheus_increment(IMAP_AUTHENTICATE_COUNT_RESULT_YES);
+              prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
               snmp_increment_args(AUTHENTICATION_YES,1,
                                   VARIABLE_AUTH, hash_simple(mech),
                                   VARIABLE_LISTEND);
@@ -1201,9 +1201,9 @@ void lmtpmode(struct lmtp_func *func,
                     continue;
                 }
 
-                prometheus_increment(LMTP_RECEIVED_MESSAGES);
-                prometheus_apply_delta(LMTP_RECEIVED_BYTES, msg->size);
-                prometheus_apply_delta(LMTP_RECEIVED_RECIPIENTS, msg->rcpt_num);
+                prometheus_increment(CYRUS_LMTP_RECEIVED_MESSAGES_TOTAL);
+                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL, msg->size);
+                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL, msg->rcpt_num);
 
                 snmp_increment(mtaReceivedMessages, 1);
                 snmp_increment(mtaReceivedVolume, roundToK(msg->size));
@@ -1217,8 +1217,8 @@ void lmtpmode(struct lmtp_func *func,
                                     msg->rcpt[j]->resp);
                 }
 
-                prometheus_increment(LMTP_TRANSMITTED_MESSAGES);
-                prometheus_apply_delta(LMTP_TRANSMITTED_BYTES, delivered * msg->size);
+                prometheus_increment(CYRUS_LMTP_TRANSMITTED_MESSAGES_TOTAL);
+                prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL, delivered * msg->size);
 
                 snmp_increment(mtaTransmittedMessages, delivered);
                 snmp_increment(mtaTransmittedVolume,
