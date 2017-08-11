@@ -141,16 +141,10 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
                                         const struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
-    const char *base;
 
-    /* part can be either a configured partition name, or a path */
-    if (strchr(part, '/')) {
-        base = part;
-    }
-    else {
-        base = isarchive ? config_archivepartitiondir(part)
-                         : config_partitiondir(part);
-    }
+    /* part must be a configured partition name on this server */
+    const char *base = isarchive ? config_archivepartitiondir(part)
+                                 : config_partitiondir(part);
 
     /* we expect to have a base at this point, so let's assert that */
     assert(base != NULL);
