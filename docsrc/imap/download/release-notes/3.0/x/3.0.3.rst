@@ -34,12 +34,15 @@ An authenticated non-admin IMAP user could overwrite an arbitrary file (subject
 to cyrus user permissions) with specially crafted SYNCAPPLY, SYNCGET or
 SYNCRESTORE commands.
 
-This issue was introduced with commit 152f59c608232711f9c58821ac245617544c1b91
+This issue was introduced with commit
+`152f59c <https://github.com/cyrusimap/cyrus-imapd/commit/152f59c608232711f9c58821ac245617544c1b91>`_
 and affects all releases from the 3.0 series prior to this.  2.5 and earlier
 are not affected.
 
-It is fixed by commits 53c4137bd924b954432c6c59da7572c4c5ffa901 and
-5edadcfb83bf27107578830801817f9e6d0ad941.
+It is fixed by commits
+`53c4137 <https://github.com/cyrusimap/cyrus-imapd/commit/53c4137bd924b954432c6c59da7572c4c5ffa901>`_
+and
+`5edadcf <https://github.com/cyrusimap/cyrus-imapd/commit/5edadcfb83bf27107578830801817f9e6d0ad941>`_.
 
 Other changes
 -------------
