@@ -1,4 +1,4 @@
-:tocdepth : 3
+:tocdepth: 3
 
 ===============================
 Cyrus IMAP 3.0.3 Release Notes
@@ -30,8 +30,9 @@ Changes Since 3.0.2
 Security fixes
 --------------
 
-An authenticated non-admin IMAP user could overwrite an arbitrary file with
-specially crafted SYNCAPPLY, SYNCGET or SYNCRESTORE commands.
+An authenticated non-admin IMAP user could overwrite an arbitrary file (subject
+to cyrus user permissions) with specially crafted SYNCAPPLY, SYNCGET or
+SYNCRESTORE commands.
 
 This issue was introduced with commit 152f59c608232711f9c58821ac245617544c1b91
 and affects all releases from the 3.0 series prior to this.  2.5 and earlier
