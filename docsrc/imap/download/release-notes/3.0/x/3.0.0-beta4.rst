@@ -112,7 +112,8 @@ Updates to default configuration
 
 *   ``altnamespace`` is now ``on`` by default (was ``off``)
 
-*   ``virtdomains`` is now ``userid`` by default (was ``off``)
+*   ``virtdomains`` is actually **still** ``off`` by default. (Previously we stated it was
+    now defaulting to ``userid``: this was an error. )
 
 Significant bugfixes
 ====================
