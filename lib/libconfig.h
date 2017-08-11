@@ -64,6 +64,8 @@ extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
 
+extern const char *config_backupstagingpath(void);
+
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;
 extern const char *config_dir;

@@ -21,7 +21,7 @@ static void test_nil(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(\"NIL\" NIL {5+}\r\n\"NIL\")");
     dlist_free(&dl);
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
 
@@ -228,7 +228,7 @@ static void test_splat_start(void)
 
     buf_printf(&b, "((a b) (c d) (e f))");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -256,7 +256,7 @@ static void test_splat_middle(void)
 
     buf_printf(&b, "((a b) (c d) (e f))");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -284,7 +284,7 @@ static void test_splat_end(void)
 
     buf_printf(&b, "((a b) (c d) (e f))");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -312,7 +312,7 @@ static void test_splat_short(void)
 
     buf_printf(&b, "((a b) (c) (d e))");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -340,7 +340,7 @@ static void test_splat_empty(void)
 
     buf_printf(&b, "((a b) () (c d))");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -368,7 +368,7 @@ static void test_splat_nonlist(void)
 
     buf_printf(&b, "(a b c d e)");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -396,7 +396,7 @@ static void test_deepstructure(void)
 
     buf_setcstr(&b, "%(toplevel %(sub thing) ANOTHER (value is %(list with interesting things) (in it)) ExTrA ExTrA READ \"all about it\" EMPTYLIST () EMPTYKVLIST %() INCLUDING 123456)");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);
@@ -424,7 +424,7 @@ static void test_printiter(void)
 
     buf_setcstr(&b, "%(toplevel %(sub thing) ANOTHER (value is %(list with interesting things) (in it)) ExTrA ExTrA READ \"all about it\" EMPTYLIST () EMPTYKVLIST %() INCLUDING 123456)");
 
-    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    r = dlist_parsemap(&dl, 0, 0, b.s, b.len);
 
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(dl);

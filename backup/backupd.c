@@ -645,8 +645,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, /*parsekeys*/ 1, backupd_in,
-                                backup_get_staging_path());
+                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isbackup*/ 1, backupd_in);
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;
@@ -682,8 +681,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, /*parsekeys*/ 1, backupd_in,
-                                backup_get_staging_path());
+                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isbackup*/ 1, backupd_in);
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;

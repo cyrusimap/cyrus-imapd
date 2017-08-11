@@ -1557,7 +1557,7 @@ struct dlist *sync_parseline(struct protstream *in)
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, in, NULL);
+    c = dlist_parse(&dl, 1, 0, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
@@ -2247,7 +2247,7 @@ redo:
 
         /* Attempt to reserve this message */
         mailbox_msg_path = mailbox_record_fname(mailbox, record);
-        stage_msg_path = dlist_reserve_path(part, record->system_flags & FLAG_ARCHIVED, &record->guid);
+        stage_msg_path = dlist_reserve_path(part, record->system_flags & FLAG_ARCHIVED, 0, &record->guid);
 
         /* check that the sha1 of the file on disk is correct */
         struct index_record record2;
