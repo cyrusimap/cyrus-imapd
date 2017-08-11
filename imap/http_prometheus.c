@@ -57,7 +57,7 @@ static int prom_get(struct transaction_t *txn, void *params);
 struct namespace_t namespace_prometheus = {
     URL_NS_PROMETHEUS,
     /*enabled*/ 0,
-    "/prometheus",
+    "/metrics",
     /* XXX .well-known url*/ NULL,
     prom_need_auth,
     /* XXX auth schemes*/ 0,
@@ -133,7 +133,7 @@ static int prom_get(struct transaction_t *txn,
     const char *mimetype = NULL;
     int r;
 
-    if (strcmp(txn->req_uri->path, "/prometheus"))
+    if (strcmp(txn->req_uri->path, "/metrics"))
         return HTTP_NOT_FOUND;
 
     const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
