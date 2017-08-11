@@ -227,7 +227,7 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
                    &val, &vallen, &open->s.txn)) {
         struct dlist *dl = NULL;
         struct dlist *dp;
-        dlist_parsemap(&dl, 0, val, vallen);
+        dlist_parsemap(&dl, 0, 0, val, vallen);
         for (dp = dl->head; dp; dp = dp->next) {
             strarray_append(open->s.folder_names, dlist_cstring(dp));
         }
@@ -953,7 +953,7 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
         return IMAP_MAILBOX_BADFORMAT;
     }
 
-    r = dlist_parsemap(&dl, 0, rest, restlen);
+    r = dlist_parsemap(&dl, 0, 0, rest, restlen);
     if (r) return r;
 
     n = dl->head;
@@ -1104,7 +1104,7 @@ EXPORTED int conversation_parse(struct conversations_state *state,
 
     if (version != CONVERSATIONS_VERSION) return IMAP_MAILBOX_BADFORMAT;
 
-    r = dlist_parsemap(&dl, 0, rest, restlen);
+    r = dlist_parsemap(&dl, 0, 0, rest, restlen);
     if (r) return r;
 
     conv = conversation_new(state);
