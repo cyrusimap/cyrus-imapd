@@ -979,7 +979,7 @@ static int sieve_fileinto(void *ac,
             if (fc->specialuse) {
                 /* Attempt to add special-use flag to newly created mailbox */
                 struct buf specialuse = BUF_INITIALIZER;
-                int r = specialuse_validate(userid, fc->specialuse, &specialuse);
+                int r = specialuse_validate(NULL, userid, fc->specialuse, &specialuse);
 
                 if (!r) {
                     annotatemore_write(intname, "/specialuse",
@@ -1145,7 +1145,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
         if (!r && fcc->specialuse) {
             /* Attempt to add special-use flag to newly created mailbox */
             struct buf specialuse = BUF_INITIALIZER;
-            int r2 = specialuse_validate(userid, fcc->specialuse, &specialuse);
+            int r2 = specialuse_validate(NULL, userid, fcc->specialuse, &specialuse);
 
             if (!r2) {
                 annotatemore_write(intname, "/specialuse", userid, &specialuse);
