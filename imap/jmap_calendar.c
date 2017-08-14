@@ -1248,7 +1248,6 @@ static int utcdate_to_icaltime(const char *src,
 static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
 {
     struct calendars_rock *crock = (struct calendars_rock *)rock;
-    struct index_record record;
     int r = 0;
     icalcomponent* ical = NULL;
     json_t *obj, *jprops = NULL;
@@ -1265,16 +1264,12 @@ static int getcalendarevents_cb(void *rock, struct caldav_data *cdata)
         if (r) goto done;
     }
 
-    /* Locate calendar event ical data in mailbox. */
-    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
-
     crock->rows++;
 
-    /* Load VEVENT from record. */
-    ical = record_to_ical(crock->mailbox, &record, NULL);
+    /* Load message containing the resource and parse iCal data */
+    ical = caldav_record_to_ical(crock->mailbox, cdata, httpd_userid, NULL);
     if (!ical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+        syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, crock->mailbox->name);
         r = IMAP_INTERNAL;
         goto done;
