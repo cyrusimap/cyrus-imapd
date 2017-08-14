@@ -279,11 +279,6 @@ static char *getsievename(char *filename)
 
   strcpy(ret, ptr);
 
-  if ( strcmp( ret + strlen(ret) - 7,".script")==0)
-  {
-    ret[ strlen(ret) - 7] = '\0';
-  }
-
   return ret;
 }
 
