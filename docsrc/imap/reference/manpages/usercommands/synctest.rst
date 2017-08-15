@@ -7,3 +7,5 @@
 ============
 
 Interactive IMAP test program: tests the replication protocol. This is installed as a hard link to :cyrusman:`imtest(1)`.
+
+.. include:: /assets/man-imtest.rst
