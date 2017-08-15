@@ -45,6 +45,7 @@
 #include <sys/types.h>
 
 #include <dirent.h>
+#include <errno.h>
 #include <string.h>
 #include <syslog.h>
 #include <time.h>
@@ -164,16 +165,77 @@ error:
 
 static void prometheus_done(void *rock __attribute__((unused)))
 {
+    struct prom_stats accum = PROM_STATS_INITIALIZER;
+    struct prom_stats thisproc = PROM_STATS_INITIALIZER;
+    struct mappedfile *doneprocs = NULL;
+    char *doneprocs_fname;
+    int i, r = 0;
+    int unlinked = 0;
+
     if (!promhandle) return; /* make double-call safe */
 
-    /* n.b. we do not unlink the file on unregister, as we still want
-     * to be able to keep track of the terminated process's stats while
-     * this session is active.
-     */
+    /* load existing doneprocs stats.  we hold this write lock until we're
+     * finished, so that promstatsd won't double-count in the interim */
+    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS, NULL);
+    r = mappedfile_open(&doneprocs, doneprocs_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
+                        doneprocs_fname, error_message(r));
+        goto done;
+    }
+
+    r = mappedfile_writelock(doneprocs);
+    if (r) goto done;
+
+    memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
+    if (accum.pid == 0) accum.pid = (pid_t) -1;
+
+    /* read stats from this process */
+    r = mappedfile_readlock(promhandle->mf);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
+                        doneprocs_fname, error_message(r));
+        goto done;
+    }
+    memcpy(&thisproc, mappedfile_base(promhandle->mf), mappedfile_size(promhandle->mf));
+    mappedfile_unlock(promhandle->mf);
+
+    /* unlink per-process stats file, we don't need it anymore */
+    r = unlink(mappedfile_fname(promhandle->mf));
+    if (r && errno != ENOENT) goto done;
+    unlinked = 1;
+
+    /* accumulate the statistics */
+    for (i = 0; i < PROM_NUM_METRICS; i++) {
+        accum.metrics[i].value += thisproc.metrics[i].value;
+        accum.metrics[i].last_updated = MAX(accum.metrics[i].last_updated,
+                                            thisproc.metrics[i].last_updated);
+    }
+
+    /* and write it out */
+    r = mappedfile_pwrite(doneprocs, &accum, sizeof(accum), 0);
+    if (r != sizeof(accum)) {
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
+                        "actually wrote %d",
+                        sizeof(accum), r);
+        goto done;
+    }
+
+    mappedfile_commit(doneprocs);
+
+done:
+    free(doneprocs_fname);
+
+    if (!unlinked) {
+        syslog(LOG_NOTICE, "per-process prometheus statistics file not removed");
+    }
     mappedfile_close(&promhandle->mf);
 
     free(promhandle);
     promhandle = NULL;
+
+    mappedfile_unlock(doneprocs);
+    mappedfile_close(&doneprocs);
 }
 
 /* use the prometheus_increment() and prometheus_decrement() wrapper macros

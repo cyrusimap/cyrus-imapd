@@ -192,13 +192,33 @@ static int read_into_array(const struct prom_stats *stats, void *rock)
 static void do_collate_report(struct buf *buf)
 {
     ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
+    struct prom_stats doneprocs_stats = PROM_STATS_INITIALIZER;
+    char *doneprocs_fname;
+    struct mappedfile *doneprocs_mf = NULL;
     int i, j;
 
     buf_reset(buf);
 
+    /* load up accumulated stats of former processes.  hold this lock until
+     * we've read all the stats files, so we don't double count if a process
+     * exits while we're counting */
+    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS, NULL);
+    mappedfile_open(&doneprocs_mf, doneprocs_fname, MAPPEDFILE_CREATE);
+    free(doneprocs_fname);
+    if (doneprocs_mf && 0 == mappedfile_readlock(doneprocs_mf)) {
+        memcpy(&doneprocs_stats, mappedfile_base(doneprocs_mf), mappedfile_size(doneprocs_mf));
+        read_into_array(&doneprocs_stats, &proc_stats);
+    }
+
     /* slurp up current stats */
     promdir_foreach(&read_into_array, &proc_stats);
     syslog(LOG_DEBUG, "updating prometheus report for %d processes", proc_stats.count);
+
+    /* release the doneprocs lock */
+    if (doneprocs_mf) {
+        mappedfile_unlock(doneprocs_mf);
+        mappedfile_close(&doneprocs_mf);
+    }
 
     /* format it into buf */
     for (j = 0; j < PROM_NUM_METRICS; j++) {
