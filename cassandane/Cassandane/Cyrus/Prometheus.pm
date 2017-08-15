@@ -97,7 +97,7 @@ sub http_report
     my $url = join(q{},
                    q{http://}, $service->host(),
                    q{:}, $service->port(),
-                   q{/prometheus});
+                   q{/metrics});
 
     return HTTP::Tiny->new()->get($url);
 }
@@ -138,7 +138,7 @@ sub test_reportfile_exists
     my $report = parse_report(scalar read_file $reportfile_name);
 
     $self->assert(scalar keys %{$report});
-    $self->assert(exists $report->{imap_connections_total});
+    $self->assert(exists $report->{cyrus_imap_connections_total});
 }
 
 sub test_httpreport
@@ -154,7 +154,7 @@ sub test_httpreport
     my $report = parse_report($response->{content});
 
     $self->assert(scalar keys %{$report});
-    $self->assert(exists $report->{imap_connections_total});
+    $self->assert(exists $report->{cyrus_imap_connections_total});
 }
 
 sub test_disabled
