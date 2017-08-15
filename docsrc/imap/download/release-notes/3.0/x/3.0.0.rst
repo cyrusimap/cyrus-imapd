@@ -28,7 +28,7 @@ Major changes since the 2.5.x series
 *   Optional Xapian_ integration for faster and shinier search. Note that this requires custom
     patches to Xapian, in this release. (See the ``search_engine`` option in
     :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`, and ``doc/README.xapian`` in the
-    source distribution.)) Compiling Xapian support requires gcc 4.9 or later.
+    source distribution.) Compiling Xapian support requires gcc 4.9 or later.
 
 *   Archive support has arrived! Requires addition of an archive partition. (See ``archive_*``
     options in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`)
