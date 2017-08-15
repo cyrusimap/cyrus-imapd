@@ -1,0 +1,255 @@
+#!/usr/bin/perl
+# promdatagen - generate promdata.[ch] files
+
+# Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any legal
+#    details, please contact
+#      Carnegie Mellon University
+#      Center for Technology Transfer and Enterprise Creation
+#      4615 Forbes Avenue
+#      Suite 302
+#      Pittsburgh, PA  15213
+#      (412) 268-7393, fax: (412) 268-7395
+#      innovation@andrew.cmu.edu
+
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+use warnings;
+use strict;
+
+use Data::Dumper;
+use Getopt::Std;
+
+my %types = ( counter => 'PROM_METRIC_COUNTER', gauge => 'PROM_METRIC_GAUGE' );
+
+my %options;
+my @metrics;
+
+sub output_header;
+sub output_source;
+
+die "usage\n" if not getopts("h:c:v", \%options);
+
+my $lineno = 0;
+while (my $line = <>) {
+    $lineno ++;
+
+    chomp $line;
+    $line =~ s{#.*$}{};             # eat comments
+    $line =~ s{\s+$}{};             # eat trailing whitespace
+    next if $line =~ m{^\s*$};      # eat empty lines
+
+    if ($line =~ m{^\s*metric\s}) {
+        # parse a metric:
+        # metric counter imap_connections_total  The total number of IMAP connections
+        $line =~ s{^\s*metric\s+}{};
+        my ($type, $name, $help) = split /\s+/, $line, 3;
+    
+        if (not exists $types{$type}) {
+            die "\"$type\" is not a valid type at line $lineno\n";
+        }
+
+        if ($name !~ m{^[a-z][a-z0-9_]*$}) {
+            die "\"$name\" is not a valid metric name at line $lineno\n";
+        }
+
+        push @metrics, { type => $type, name => $name, help => $help };
+
+    }
+    elsif ($line =~ m{^\s*label\s}) {
+        # parse a label:
+        # label imap_authenticate_count result yes no
+        $line =~ s{^\s*label\s+}{};
+        my ($name, $label, @values) = split /\s+/, $line;
+
+        if (not scalar grep { $_->{name} eq $name } @metrics) {
+            die "cannot define label \"$label\" for unknown metric \"$name\" at line $lineno\n";
+        }
+
+        if ($label !~ m{^[a-z][a-z0-9_]*$}) {
+            die "\"$label\" is not a valid label at line $lineno\n";
+        }
+
+        foreach my $v (@values) {
+            if ($v !~ m{^[a-z][a-z0-9_]*$}) {
+                die "\"$v\" is not a valid value at line $lineno\n";
+            }
+        }
+
+        foreach my $metric (@metrics) {
+            if ($metric->{name} eq $name) {
+                $metric->{label} = { label => $label, values => [ @values ] };
+                last;
+            }
+        }
+    }
+    else {
+        warn "skipping unparseable line at line $lineno: $line\n";
+        next;
+    }
+}
+
+output_header($options{h}, \@metrics) if $options{h};
+output_source($options{c}, \@metrics) if $options{c};
+
+exit 0;
+
+sub output_header
+{
+    my ($fname, $metrics) = @_;
+
+    open my $header, '>', $fname or die "$fname: $!\n";
+    print $header "#ifndef INCLUDE_PROMDATA_H\n#define INCLUDE_PROMDATA_H\n";
+    print $header "/* generated from $ARGV */\n";
+
+    print $header <<OKAY;
+
+#include <sys/types.h>
+
+#include <stdint.h>
+
+enum prom_metric_type {
+    PROM_METRIC_COUNTER   = 0,
+    PROM_METRIC_GAUGE     = 1,
+    PROM_METRIC_HISTOGRAM = 2, /* unused */
+    PROM_METRIC_SUMMARY   = 3, /* unused */
+    PROM_METRIC_CONTINUED = 4, /* internal use only */
+};
+extern const char *prom_metric_type_names[];
+
+OKAY
+
+    print $header "enum prom_metric_id {\n";
+    my $first = 1;
+    foreach my $metric (@{$metrics}) {
+        if (exists $metric->{label}) {
+            foreach my $v (@{$metric->{label}->{values}}) {
+                print $header "    \U$metric->{name}_$metric->{label}->{label}_$v\E";
+                print $header q{ = 0} if $first;
+                $first = 0;
+                print $header qq{,\n};
+            }
+        }
+        else {
+            print $header q{    }, uc($metric->{name});
+            print $header q{ = 0} if $first;
+            $first = 0;
+            print $header qq{,\n};
+        }
+    }
+    print $header "\n    PROM_NUM_METRICS /* n.b. leave last! */\n";
+    print $header "};\n";
+
+    print $header <<OKAY;
+
+struct prom_metric_desc {
+    const char *name;
+    enum prom_metric_type type;
+    const char *help;
+    const char *label;
+};
+extern const struct prom_metric_desc prom_metric_descs[];
+
+struct prom_metric {
+    double value;
+    int64_t last_updated;
+};
+
+struct prom_stats {
+    pid_t pid;
+    struct prom_metric metrics[PROM_NUM_METRICS];
+};
+#define PROM_STATS_INITIALIZER {0}
+
+OKAY
+
+    print $header "#endif\n";
+    close $header;
+}
+
+sub output_source
+{
+    my ($fname, $metrics) = @_;
+
+    open my $source, '>', $fname or die "$fname: $!\n";
+
+    print $source <<OKAY;
+/* generated from $ARGV */
+
+#include <config.h>
+
+#include "imap/promdata.h" /* XXX */
+
+EXPORTED const char *prom_metric_type_names[] = {
+    "counter",
+    "gauge",
+    "histogram",
+    "summary",
+    NULL,
+};
+
+OKAY
+
+    print $source "EXPORTED const struct prom_metric_desc prom_metric_descs[] = {\n";
+    foreach my $metric (@{$metrics}) {
+        if (exists $metric->{label}) {
+            my $first = 1;
+            foreach my $v (@{$metric->{label}->{values}}) {
+                printf $source '    { "%s", %s, ',
+                            $metric->{name},
+                            ($first ? $types{$metric->{type}} : "PROM_METRIC_CONTINUED");
+                if ($first && defined $metric->{help}) {
+                    printf $source '"%s",', $metric->{help};
+                }
+                else {
+                    print $source "NULL,";
+                }
+                printf $source '"%s=\\"%s\\""', $metric->{label}->{label}, $v;
+                print $source " },\n";
+                $first = 0;
+            }
+        }
+        else {
+            printf $source '    { "%s", %s, ',
+                        $metric->{name},
+                        $types{$metric->{type}};
+            if (defined $metric->{help}) {
+                printf $source '"%s",', $metric->{help};
+            }
+            else {
+                print $source "NULL,";
+            }
+            print $source " NULL },\n";
+        }
+    }
+    print $source "    { NULL, 0, NULL, NULL },\n";
+    print $source "};\n";
+
+    close $source;
+}
