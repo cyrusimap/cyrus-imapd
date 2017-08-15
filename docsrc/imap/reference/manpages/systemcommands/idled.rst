@@ -40,13 +40,11 @@ Options
 Examples
 ========
 
-**idled** is commonly included in the START section of
+**idled** is commonly included in the DAEMON section of
 :cyrusman:`cyrus.conf(5)` like so::
 
-    START {
-        recover			cmd="/usr/lib/cyrus/bin/ctl_cyrusdb -r"
+    DAEMON {
         idled			cmd="/usr/lib/cyrus/bin/idled"
-        tlsprune		cmd="/usr/lib/cyrus/bin/tls_prune"
     }
 
 Files
