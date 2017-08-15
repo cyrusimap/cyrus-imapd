@@ -6,36 +6,6 @@
 **proxyd**
 ==========
 
-In Progress
+Proxyd is a symlink to :cyrusman:`imapd(8)` if you build with murder enabled.
 
-Synopsis
-========
-
-.. parsed-literal::
-
-    **proxyd** [ **-C** *config-file* ]  
-
-Description
-===========
-
-
-Options
-=======
-
-.. program:: proxyd
-
-.. option:: -C config-file
-
-    |cli-dash-c-text|
-
-
-
-
-/etc/imapd.conf,
-/etc/cyrus.conf
-
-See Also
-========
-
-:cyrusman:`imapd.conf(5)`,
-:cyrusman:`cyrus.conf(5)`
+.. include:: /assets/man-imapdproxyd.rst
