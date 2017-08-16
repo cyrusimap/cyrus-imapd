@@ -52,9 +52,7 @@ Options
 
     Install a file onto the server. If a script with the same name
     already exists on the server it is overwritten. Upon successfully
-    putting the script on the server the script is set active. If
-    *file* has the extension .script it is chopped when put on the
-    server since sieve names may not contain a '.'.
+    putting the script on the server the script is set active.
 
 .. option:: -a  name
 

@@ -93,6 +93,14 @@ static int jmap_settings(struct transaction_t *txn);
 static int  jmap_initreq(jmap_req_t *req);
 static void jmap_finireq(jmap_req_t *req);
 
+static int myrights(struct auth_state *authstate,
+                    const mbentry_t *mbentry,
+                    hash_table *mboxrights);
+
+static int myrights_byname(struct auth_state *authstate,
+                           const char *mboxname,
+                           hash_table *mboxrights);
+
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap",
@@ -142,6 +150,75 @@ static jmap_msg_t *find_message(const char *name)
     }
 
     return mp;
+}
+
+struct mymblist_rock {
+    mboxlist_cb *proc;
+    void *rock;
+    struct auth_state *authstate;
+    hash_table *mboxrights;
+    int all;
+};
+
+static int mymblist_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct mymblist_rock *myrock = rock;
+
+    if (!myrock->all) {
+        if (mbentry->mbtype & MBTYPE_DELETED)
+            return 0;
+
+        int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
+        if (!(rights & ACL_LOOKUP))
+            return 0;
+    }
+    return myrock->proc(mbentry, myrock->rock);
+}
+
+static int mymblist(const char *userid,
+                    const char *accountid,
+                    struct auth_state *authstate,
+                    hash_table *mboxrights,
+                    mboxlist_cb *proc,
+                    void *rock,
+                    int all)
+{
+    if (!strcmp(userid, accountid)) {
+        int flags = all ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
+        return mboxlist_usermboxtree(userid, proc, rock, flags);
+    }
+
+    /* Open the INBOX first */
+    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights, all };
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "user%c%s", jmap_namespace.hier_sep, accountid);
+    mbentry_t *mbentry = NULL;
+
+    int r = mboxlist_lookup(buf_cstring(&buf), &mbentry, NULL);
+    if (r) goto done;
+    r = mymblist_cb(mbentry, &myrock);
+    if (r) goto done;
+
+    /* Visit any mailboxes underneath the INBOX */
+    buf_putc(&buf, jmap_namespace.hier_sep);
+    r = mboxlist_allmbox(buf_cstring(&buf), mymblist_cb, &myrock, all);
+
+done:
+    mboxlist_entry_free(&mbentry);
+    buf_free(&buf);
+    return r;
+}
+
+EXPORTED int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
+{
+    return mymblist(req->userid, req->accountid, req->authstate,
+                    req->mboxrights, proc, rock, 0/*all*/);
+}
+
+EXPORTED int jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock)
+{
+    return mymblist(req->userid, req->accountid, req->authstate,
+                    req->mboxrights, proc, rock, 1/*all*/);
 }
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
@@ -201,6 +278,17 @@ static int jmap_get(struct transaction_t *txn,
     return HTTP_NOT_FOUND;
 }
 
+static int is_accessible(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+{
+    if ((mbentry->mbtype & MBTYPE_DELETED) ||
+        (mbentry->mbtype & MBTYPE_MOVING) ||
+        (mbentry->mbtype & MBTYPE_REMOTE) ||
+        (mbentry->mbtype & MBTYPE_RESERVE)) {
+        return 0;
+    }
+    return IMAP_OK_COMPLETED;
+}
+
 /* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
@@ -219,6 +307,8 @@ static int jmap_post(struct transaction_t *txn,
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf, *inboxname = NULL;
+    hash_table accounts = HASH_TABLE_INITIALIZER;
+    hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
@@ -266,6 +356,7 @@ static int jmap_post(struct transaction_t *txn,
     construct_hash_table(&idmap.contactgroups, 64, 0);
     construct_hash_table(&idmap.contacts, 64, 0);
 
+
     /* Parse the JSON request */
     req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
     if (!req || !json_is_array(req)) {
@@ -282,14 +373,15 @@ static int jmap_post(struct transaction_t *txn,
         goto done;
     }
 
-    inboxname = mboxname_user_mbox(httpd_userid, NULL);
+    construct_hash_table(&accounts, 8, 0);
+    construct_hash_table(&mboxrights, 64, 0);
 
     /* Process each message in the request */
     for (i = 0; i < json_array_size(req); i++) {
         const jmap_msg_t *mp;
         json_t *msg = json_array_get(req, i);
         const char *tag, *name = json_string_value(json_array_get(msg, 0));
-        json_t *args = json_array_get(msg, 1);
+        json_t *args = json_array_get(msg, 1), *arg;
         json_t *id = json_array_get(msg, 2);
         int r = 0;
 
@@ -308,8 +400,34 @@ static int jmap_post(struct transaction_t *txn,
             continue;
         }
 
+        /* Determine account */
+        const char *accountid = httpd_userid;
+        arg = json_object_get(json_array_get(msg, 1), "accountId");
+        if (arg && arg != json_null()) {
+            if ((accountid = json_string_value(arg)) == NULL) {
+                json_t *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidArguments", "arguments", "accountId");
+                json_array_append(resp, json_pack("[s,o,s]", "error", err, tag));
+                continue;
+            }
+            /* Check if any shared mailbox is accessible */
+            if (!hash_lookup(accountid, &accounts)) {
+                r = mymblist(httpd_userid, accountid, httpd_authstate, &mboxrights,
+                             is_accessible, NULL, 0/*all*/);
+                if (r != IMAP_OK_COMPLETED) {
+                    json_t *err = json_pack("{s:s}", "type", "accountNotFound");
+                    json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+                    continue;
+                }
+                hash_insert(accountid, (void*)1, &accounts);
+            }
+        }
+
+        free(inboxname);
+        inboxname = mboxname_user_mbox(accountid, NULL);
+
         struct conversations_state *cstate = NULL;
-        r = conversations_open_user(httpd_userid, &cstate);
+        r = conversations_open_user(accountid, &cstate);
         if (r) {
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
@@ -318,6 +436,7 @@ static int jmap_post(struct transaction_t *txn,
 
         struct jmap_req req;
         req.userid = httpd_userid;
+        req.accountid = accountid;
         req.inboxname = inboxname;
         req.cstate = cstate;
         req.authstate = httpd_authstate;
@@ -326,6 +445,8 @@ static int jmap_post(struct transaction_t *txn,
         req.tag = tag;
         req.idmap = &idmap;
         req.txn = txn;
+        req.mboxrights = &mboxrights;
+        req.is_shared_account = strcmp(accountid, httpd_userid);
 
         /* Initialize request context */
         jmap_initreq(&req);
@@ -371,6 +492,8 @@ static int jmap_post(struct transaction_t *txn,
     free_hash_table(&idmap.calendarevents, free);
     free_hash_table(&idmap.contactgroups, free);
     free_hash_table(&idmap.contacts, free);
+    free_hash_table(&accounts, NULL);
+    free_hash_table(&mboxrights, free);
     free(inboxname);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
@@ -719,14 +842,14 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     return res;
 }
 
-static int lookup_upload_collection(const char *userid, mbentry_t **mbentry)
+static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 {
     mbname_t *mbname;
     const char *uploadname;
     int r;
 
     /* Create notification mailbox name from the parsed path */
-    mbname = mbname_from_userid(userid);
+    mbname = mbname_from_userid(accountid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
@@ -745,7 +868,7 @@ static int lookup_upload_collection(const char *userid, mbentry_t **mbentry)
     r = http_mlookup(uploadname, mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
-        char *inboxname = mboxname_user_mbox(userid, NULL);
+        char *inboxname = mboxname_user_mbox(accountid, NULL);
 
         int r1 = http_mlookup(inboxname, mbentry, NULL);
         free(inboxname);
@@ -754,9 +877,22 @@ static int lookup_upload_collection(const char *userid, mbentry_t **mbentry)
             goto done;
         }
 
+        int rights = httpd_myrights(httpd_authstate, *mbentry);
+        if (!(rights & ACL_CREATE)) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+
         if (*mbentry) free((*mbentry)->name);
         else *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(uploadname);
+    }
+    else if (!r) {
+        int rights = httpd_myrights(httpd_authstate, *mbentry);
+        if (!(rights & ACL_INSERT)) {
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
     }
 
   done:
@@ -766,13 +902,16 @@ static int lookup_upload_collection(const char *userid, mbentry_t **mbentry)
 }
 
 
-static int create_upload_collection(const char *userid, struct mailbox **mailbox)
+static int create_upload_collection(const char *accountid, struct mailbox **mailbox)
 {
     /* notifications collection */
     mbentry_t *mbentry = NULL;
-    int r = lookup_upload_collection(userid, &mbentry);
+    int r = lookup_upload_collection(accountid, &mbentry);
 
     if (r == IMAP_INVALID_USER) {
+        goto done;
+    }
+    else if (r == IMAP_PERMISSION_DENIED) {
         goto done;
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -784,7 +923,7 @@ static int create_upload_collection(const char *userid, struct mailbox **mailbox
         }
 
         r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, userid, NULL,
+                                   NULL, 1 /* admin */, accountid, NULL,
                                    0, 0, 0, 0, mailbox);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
@@ -827,10 +966,6 @@ static int data_domain(const char *p, size_t n)
 
 EXPORTED int jmap_upload(struct transaction_t *txn)
 {
-    struct mailbox *mailbox = NULL;
-    int r = create_upload_collection(httpd_userid, &mailbox);
-    if (r) return HTTP_SERVER_ERROR;
-
     strarray_t flags = STRARRAY_INITIALIZER;
     strarray_append(&flags, "\\Deleted");
     strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
@@ -847,7 +982,20 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     time_t now = time(NULL);
     struct appendstate as;
 
-    json_t *resp = json_pack("{s:s}", "accountId", httpd_userid);
+    struct mailbox *mailbox = NULL;
+    int r = 0;
+    const char *accountid = httpd_userid;
+    if ((hdr = spool_getheader(hdrcache, "X-JMAP-AccountId"))) {
+        accountid = hdr[0];
+    }
+    r = create_upload_collection(accountid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "create_upload_collection: %s", error_message(r));
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    json_t *resp = json_pack("{s:s}", "accountId", accountid);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -1002,9 +1150,11 @@ done:
     }
     strarray_fini(&flags);
     append_removestage(stage);
-    if (r) mailbox_abort(mailbox);
-    else r = mailbox_commit(mailbox);
-    mailbox_close(&mailbox);
+    if (mailbox) {
+        if (r) mailbox_abort(mailbox);
+        else r = mailbox_commit(mailbox);
+        mailbox_close(&mailbox);
+    }
 
     return ret;
 }
@@ -1016,28 +1166,35 @@ static int JNOTNULL(json_t *item)
    return 1;
 }
 
-EXPORTED int jmap_checkstate(json_t *state, int mbtype, struct jmap_req *req) {
+EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype) {
     if (JNOTNULL(state)) {
         const char *s = json_string_value(state);
         if (!s) {
             return -1;
         }
-        modseq_t clientState = atomodseq_t(s);
+        modseq_t client_modseq = atomodseq_t(s);
+        modseq_t server_modseq = 0;
         switch (mbtype) {
          case MBTYPE_CALENDAR:
-             return clientState != req->counters.caldavmodseq;
+             server_modseq = req->counters.caldavmodseq;
+             break;
          case MBTYPE_ADDRESSBOOK:
-             return clientState != req->counters.carddavmodseq;
+             server_modseq = req->counters.carddavmodseq;
+             break;
          default:
-             return clientState != req->counters.mailmodseq;
+             server_modseq = req->counters.mailmodseq;
         }
+        if (client_modseq < server_modseq)
+            return -1;
+        else if (client_modseq > server_modseq)
+            return 1;
+        else
+            return 0;
     }
     return 0;
 }
 
-EXPORTED json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
-    struct buf buf = BUF_INITIALIZER;
-    json_t *state = NULL;
+EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype) {
     modseq_t modseq;
 
     /* Determine current counter by mailbox type. */
@@ -1048,9 +1205,20 @@ EXPORTED json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
         case MBTYPE_ADDRESSBOOK:
             modseq = req->counters.carddavmodseq;
             break;
+        case 0:
+            modseq = req->counters.mailmodseq;
+            break;
         default:
             modseq = req->counters.highestmodseq;
     }
+
+    return modseq;
+}
+
+EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype) {
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    modseq_t modseq = jmap_highestmodseq(req, mbtype);
 
     buf_printf(&buf, MODSEQ_FMT, modseq);
     state = json_string(buf_cstring(&buf));
@@ -1059,10 +1227,10 @@ EXPORTED json_t* jmap_getstate(int mbtype, struct jmap_req *req) {
     return state;
 }
 
-EXPORTED int jmap_bumpstate(int mbtype, struct jmap_req *req) {
+EXPORTED int jmap_bumpstate(jmap_req_t *req, int mbtype) {
     int r = 0;
     modseq_t modseq;
-    char *mboxname = mboxname_user_mbox(req->userid, NULL);
+    char *mboxname = mboxname_user_mbox(req->accountid, NULL);
 
     /* Read counters. */
     r = mboxname_read_counters(mboxname, &req->counters);
@@ -1076,8 +1244,11 @@ EXPORTED int jmap_bumpstate(int mbtype, struct jmap_req *req) {
         case MBTYPE_ADDRESSBOOK:
             modseq = req->counters.carddavmodseq;
             break;
-        default:
+        case 0:
             modseq = req->counters.mailmodseq;
+            break;
+        default:
+            modseq = req->counters.highestmodseq;
     }
 
     modseq = mboxname_nextmodseq(mboxname, modseq, mbtype, 1);
@@ -1150,12 +1321,70 @@ static int check_password(const char *username, const char *password)
     return r;
 }
 
+struct findaccounts_data {
+    json_t *accounts;
+    struct buf userid;
+    int rw;
+};
+
+static void findaccounts_add(json_t *accounts, const char *userid, int rw)
+{
+    if (!userid || !strlen(userid)) {
+        return;
+    }
+
+    json_object_set_new(accounts, userid, json_pack("{s:s s:b s:b}",
+                "name", userid,
+                "isPrimary", 0,
+                "isReadOnly", !rw));
+}
+
+static int findaccounts_cb(struct findall_data *data, void *rock)
+{
+    if (!data || !data->mbentry)
+        return 0;
+
+    mbname_t *mbname = mbname_from_intname(data->mbentry->name);
+    const char *userid = mbname_userid(mbname);
+    struct findaccounts_data *ctx = rock;
+
+    if (strcmp(buf_cstring(&ctx->userid), userid)) {
+        /* We haven't yet seen this account */
+        findaccounts_add(ctx->accounts, buf_cstring(&ctx->userid), ctx->rw);
+        buf_setcstr(&ctx->userid, userid);
+        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+    } else if (!ctx->rw) {
+        /* Already seen this account, but it's read-only so far */
+        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+    }
+
+    mbname_free(&mbname);
+    return 0;
+}
+
 static json_t *user_settings(const char *userid)
 {
     json_t *accounts = json_pack("{s:{s:s s:b s:b}}",
             userid, "name", userid,
             "isPrimary", 1,
             "isReadOnly", 0); /* FIXME hasDataFor */
+
+    /* Find all shared accounts */
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    char *userpat = xstrdup("user.*");
+    userpat[4] = jmap_namespace.hier_sep;
+    strarray_append(&patterns, userpat);
+    struct findaccounts_data ctx = { accounts, BUF_INITIALIZER, 0 };
+    int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, userid,
+                                  httpd_authstate, findaccounts_cb, &ctx);
+    free(userpat);
+    strarray_fini(&patterns);
+    if (r) {
+        syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
+                userid, error_message(r));
+    }
+    findaccounts_add(ctx.accounts, buf_cstring(&ctx.userid), ctx.rw);
+    buf_free(&ctx.userid);
 
     return json_pack("{s:s s:o s:s s:s s:s}",
             "username", userid,
@@ -1593,4 +1822,61 @@ static int jmap_settings(struct transaction_t *txn)
     free(sbuf);
     json_decref(res);
     return 0;
+}
+
+static int myrights(struct auth_state *authstate,
+                    const mbentry_t *mbentry,
+                    hash_table *mboxrights)
+{
+    int *rightsptr = hash_lookup(mbentry->name, mboxrights);
+    if (!rightsptr) {
+        rightsptr = xmalloc(sizeof(int));
+        *rightsptr = httpd_myrights(authstate, mbentry);
+        hash_insert(mbentry->name, rightsptr, mboxrights);
+    }
+    return *rightsptr;
+}
+
+static int myrights_byname(struct auth_state *authstate,
+                           const char *mboxname,
+                           hash_table *mboxrights)
+{
+    int *rightsptr = hash_lookup(mboxname, mboxrights);
+    if (!rightsptr) {
+        mbentry_t *mbentry = NULL;
+        if (mboxlist_lookup(mboxname, &mbentry, NULL)) {
+            return 0;
+        }
+        rightsptr = xmalloc(sizeof(int));
+        *rightsptr = httpd_myrights(authstate, mbentry);
+        mboxlist_entry_free(&mbentry);
+        hash_insert(mboxname, rightsptr, mboxrights);
+    }
+    return *rightsptr;
+}
+
+EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
+{
+    if (!req->is_shared_account) {
+        return -1;
+    }
+    return myrights(req->authstate, mbentry, req->mboxrights);
+}
+
+EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
+{
+    if (!req->is_shared_account) {
+        return -1;
+    }
+    return myrights_byname(req->authstate, mboxname, req->mboxrights);
+}
+
+
+EXPORTED void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
+{
+    if (!req->is_shared_account) {
+        return;
+    }
+    int *rightsptr = hash_del(mboxname, req->mboxrights);
+    free(rightsptr);
 }

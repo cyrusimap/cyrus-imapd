@@ -1,6 +1,6 @@
-/* arrayu64.h - an expanding array of 64 bit unsigned integers
+/* prometheus.h -- Aggregate statistics for prometheus
  *
- * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,58 +38,35 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * Author: Greg Banks
- * Start Date: 2011/01/11
  */
 
-#ifndef __CYRUS_ARRAYU64_H__
-#define __CYRUS_ARRAYU64_H__
+#ifndef INCLUDE_IMAP_PROMETHEUS_H
+#define INCLUDE_IMAP_PROMETHEUS_H
 
-#include <sys/types.h>
-
+#include <config.h>
+#include <stddef.h>
 #include <stdint.h>
 
-typedef struct
-{
-    int count;
-    int alloc;
-    uint64_t *data;
-} arrayu64_t;
+#include "lib/mappedfile.h"
+#include "lib/util.h"
 
-#define ARRAYU64_INITIALIZER    { 0, 0, NULL }
-#define arrayu64_init(sa)   (memset((sa), 0, sizeof(arrayu64_t)))
-void arrayu64_fini(arrayu64_t *);
+#include "imap/promdata.h"
 
-arrayu64_t *arrayu64_new(void);
-void arrayu64_free(arrayu64_t *);
+#define FNAME_PROM_REPORT "report.txt"
+#define FNAME_PROM_DONEPROCS "doneprocs"
+#define FNAME_PROM_STATS_DIR "/stats"
 
-int arrayu64_append(arrayu64_t *, uint64_t);
-int arrayu64_add(arrayu64_t *, uint64_t);
-int arrayu64_find(arrayu64_t *, uint64_t, int start);
-void arrayu64_set(arrayu64_t *, int idx, uint64_t);
-void arrayu64_insert(arrayu64_t *, int idx, uint64_t);
-uint64_t arrayu64_remove(arrayu64_t *, int idx);
-/* returns number removed */
-int arrayu64_remove_all(arrayu64_t *, uint64_t);
-uint64_t arrayu64_nth(const arrayu64_t *, int idx);
-void arrayu64_truncate(arrayu64_t *, int newlen);
-arrayu64_t *arrayu64_dup(const arrayu64_t *);
+extern const char *prometheus_stats_dir(void);
 
-uint64_t arrayu64_max(const arrayu64_t *);
+#define prometheus_increment(metric_id) \
+    prometheus_apply_delta(metric_id, 1)
 
-#define arrayu64_shift(sa)          arrayu64_remove((sa), 0)
-#define arrayu64_unshift(sa, s)     arrayu64_insert((sa), 0, (s))
+#define prometheus_decrement(metric_id) \
+    prometheus_apply_delta(metric_id, -1)
 
-#define arrayu64_pop(sa)            arrayu64_remove((sa), -1)
-#define arrayu64_push(sa, s)        arrayu64_append((sa), (s))
+extern void prometheus_apply_delta(enum prom_metric_id metric_id,
+                                   double delta);
 
-/* arrayu64_cmp_fn_t is same sig as qsort's compar argument */
-typedef int arrayu64_cmp_fn_t(const void *, const void *);
-void arrayu64_sort(arrayu64_t *, arrayu64_cmp_fn_t *);
+extern int prometheus_text_report(struct buf *buf, const char **mimetype);
 
-void arrayu64_uniq(arrayu64_t *);
-
-int arrayu64_size(const arrayu64_t *);
-
-#endif /* __CYRUS_ARRAYU64_H__ */
+#endif

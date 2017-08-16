@@ -1185,6 +1185,7 @@ struct namespace_t *namespaces[] = {
     &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,
+    &namespace_prometheus,
     &namespace_default,         /* MUST be present and be last!! */
     NULL,
 };

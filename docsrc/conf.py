@@ -149,6 +149,9 @@ html_context = {
   "github_version": "master",
   "conf_py_path": "/docsrc/",
   "source_suffix": source_suffix,
+  "githubexclude": ["imap/reference/manpages/usercommands/sieveshell",
+    "imap/reference/manpages/systemcommands/cyradm",
+    "imap/reference/manpages/configs/imapd.conf"]
 }
 
 # Theme options are theme-specific and customize the look and feel of a theme

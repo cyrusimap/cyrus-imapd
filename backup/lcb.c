@@ -71,21 +71,6 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
-static const char *staging_path = NULL;
-
-EXPORTED const char *backup_get_staging_path(void)
-{
-    if (staging_path) return staging_path;
-
-    staging_path = config_getstring(IMAPOPT_BACKUP_STAGING_PATH);
-
-    if (!staging_path)
-        staging_path = strconcat(config_getstring(IMAPOPT_TEMP_PATH),
-                                 "/backup", NULL);
-
-    return staging_path;
-}
-
 /* remove this process's staging directory.
  * will warn about and clean up files that are hanging around - these should
  * be removed by dlist_unlink_files but may be missed if we're shutdown by a
@@ -94,7 +79,7 @@ EXPORTED const char *backup_get_staging_path(void)
 EXPORTED void backup_cleanup_staging_path(void)
 {
     char name[MAX_MAILBOX_PATH];
-    const char *base = backup_get_staging_path();
+    const char *base = config_backupstagingpath();
     DIR *dirp;
     int r;
 

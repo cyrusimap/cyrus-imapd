@@ -136,6 +136,8 @@ BUILT_SOURCES += \
 	imap/lmtp_err.c \
 	imap/lmtpstats.c \
 	imap/pushstats.c \
+	imap/promdata.c \
+	imap/promdata.h \
 	lib/htmlchar.c \
 	lib/htmlchar.h \
 	imap/rfc822_header.c \
@@ -148,6 +150,7 @@ libexec_PROGRAMS += \
 	imap/imapd \
 	imap/lmtpd \
 	imap/pop3d \
+	imap/promstatsd \
 	imap/smmapd
 
 sbin_PROGRAMS += \
@@ -263,6 +266,8 @@ EXTRA_DIST += \
     imap/lmtp_err.c \
     imap/lmtpstats.c \
     imap/pushstats.c \
+    imap/promdata.c \
+    imap/promdata.h \
     imap/rfc822_header.c \
     imap/rfc822_header.h
 
@@ -314,7 +319,6 @@ endif # SIEVE
 EXTRA_DIST += \
 	COPYING \
 	README.md \
-	SMakefile \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -1007,6 +1011,10 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
+	imap/promdata.c \
+	imap/promdata.h \
+	imap/prometheus.c \
+	imap/prometheus.h \
 	imap/protocol.h \
 	imap/quota_db.c \
 	imap/rfc822_header.c \
@@ -1203,6 +1211,7 @@ imap_httpd_SOURCES = \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_prometheus.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
@@ -1252,6 +1261,17 @@ imap_pop3d_SOURCES += \
 endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+
+PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
+
+imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
+	$(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
+
+imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
+	$(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
+
+imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
+imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
 imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
@@ -1860,24 +1880,6 @@ clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples
 
 .PHONY: clean-local
 clean-local: clean-doc clean-sphinx-cache clean-docsrc
-
-dist-old:: distgit
-	@echo "creating configure"
-	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS); \
-	do \
-	(cd dist/cyrus-imapd-$(PACKAGE_VERSION)/$$d; \
-	if [ -f Makefile.dist ]; then \
-	echo "### Making" dist "in" `pwd`; \
-	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
-	COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
-	fi) || exit 1; \
-	done
-	@echo "creating tarfile"
-	@cd dist ; tar cf - cyrus-imapd-$(PACKAGE_VERSION) | \
-	gzip -9 > ../cyrus-imapd-$(PACKAGE_VERSION).tar.gz
-	rm -f distgit
-	rm -rf dist
 
 distgit:
 	$(MKDIR_P) dist

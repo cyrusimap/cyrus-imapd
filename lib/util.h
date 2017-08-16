@@ -72,10 +72,6 @@ extern const char CYRUS_VERSION[];
 # endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
-#ifndef HAVE_GLIBC_COMPAR_FN_T
-typedef int (*__compar_fn_t)(const void *, const void *);
-#endif
-
 #define BIT32_MAX 4294967295U
 
 #if UINT_MAX == BIT32_MAX
@@ -87,8 +83,6 @@ typedef unsigned short bit32;
 #else
 #error dont know what to use for bit32
 #endif
-
-typedef int compar_t(const void *a, const void *b);
 
 typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
@@ -238,6 +232,7 @@ extern double timeval_get_double(const struct timeval *tv);
 extern void timeval_set_double(struct timeval *tv, double d);
 extern void timeval_add_double(struct timeval *tv, double delta);
 extern double timesub(const struct timeval *start, const struct timeval *end);
+extern int64_t now_ms(void);
 
 extern clock_t sclock(void);
 

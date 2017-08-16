@@ -605,7 +605,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
     if (mailbox->annotations) {
         struct dlist *annots = NULL;
-        dlist_parsemap(&annots, 0, mailbox->annotations,
+        dlist_parsemap(&annots, 0, 1, mailbox->annotations,
                        strlen(mailbox->annotations));
         if (annots) {
             annots->name = xstrdup("ANNOTATIONS");
@@ -630,7 +630,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
             /* FLAGS field is mandatory */
             if (mailbox_message->flags) {
-                dlist_parsemap(&flags, 0, mailbox_message->flags,
+                dlist_parsemap(&flags, 0, 1, mailbox_message->flags,
                                strlen(mailbox_message->flags));
                 flags->name = xstrdup("FLAGS");
                 dlist_stitch(record, flags);
@@ -645,7 +645,7 @@ EXPORTED struct dlist *backup_mailbox_to_dlist(
 
             if (mailbox_message->annotations) {
                 struct dlist *annots = NULL;
-                dlist_parsemap(&annots, 0, mailbox_message->annotations,
+                dlist_parsemap(&annots, 0, 1, mailbox_message->annotations,
                                strlen(mailbox_message->annotations));
                 if (annots)  {
                     annots->name = xstrdup("ANNOTATIONS");

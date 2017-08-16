@@ -216,6 +216,21 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
     return config_getoverflowstring(buf, NULL);
 }
 
+EXPORTED const char *config_backupstagingpath(void)
+{
+    static const char *staging_path = NULL;
+
+    if (staging_path) return staging_path;
+
+    staging_path = config_getstring(IMAPOPT_BACKUP_STAGING_PATH);
+
+    if (!staging_path)
+        staging_path = strconcat(config_getstring(IMAPOPT_TEMP_PATH),
+                                 "/backup", NULL);
+
+    return staging_path;
+}
+
 static void config_ispartition(const char *key,
                                const char *val __attribute__((unused)),
                                void *rock)

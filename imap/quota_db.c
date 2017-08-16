@@ -163,7 +163,7 @@ static int quota_parseval(const char *data, size_t datalen,
 
     /* new dlist format */
     if (data[0] == '%') {
-        if (dlist_parsemap(&dl, 0, data, datalen))
+        if (dlist_parsemap(&dl, 0, 0, data, datalen))
             goto out;
 
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {

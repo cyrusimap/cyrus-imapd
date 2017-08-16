@@ -91,7 +91,7 @@ static void ensure_alloc(strarray_t *sa, int newalloc)
         return;
     newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
     sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
-    memset(sa->data+sa->alloc, 0, sizeof(char *) * (newalloc-sa->alloc));
+    memset(sa->data + sa->alloc, 0, sizeof(char *) * (newalloc - sa->alloc));
     sa->alloc = newalloc;
 }
 
@@ -381,9 +381,9 @@ EXPORTED char **strarray_takevf(strarray_t *sa)
     return d;
 }
 
-EXPORTED void strarray_sort(strarray_t *sa, compar_t *cmp)
+EXPORTED void strarray_sort(strarray_t *sa, strarray_cmp_fn_t *cmp)
 {
-    qsort(sa->data, sa->count, sizeof(char *), (__compar_fn_t)cmp);
+    qsort(sa->data, sa->count, sizeof(char *), cmp);
 }
 
 

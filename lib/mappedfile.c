@@ -323,7 +323,7 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 }
 
 EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
-                                   const char *base, size_t len,
+                                   const void *base, size_t len,
                                    off_t offset)
 {
     ssize_t written;

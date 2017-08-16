@@ -3396,6 +3396,11 @@ int meth_acl(struct transaction_t *txn, void *params)
 
                         for (prin = child->children; prin &&
                              prin->type != XML_ELEMENT_NODE; prin = prin->next);
+                        if (!prin) {
+                            txn->error.desc = "Empty principal in ACE\r\n";
+                            ret = HTTP_BAD_REQUEST;
+                            goto done;
+                        }
                     }
                     else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
                         if (privs) {
@@ -9008,7 +9013,7 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
        from application/davnotification+xml to application/xml */
 
     /* Parse dlist representing notification type, and data */
-    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    dlist_parsemap(&dl, 1, 0, wdata->filename, strlen(wdata->filename));
     dlist_getatom(dl, "T", &type_str);
     dlist_getlist(dl, "D", &al);
 
@@ -9333,7 +9338,7 @@ int notify_post(struct transaction_t *txn)
     }
 
     /* Parse dlist representing notification type, and data */
-    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    dlist_parsemap(&dl, 1, 0, wdata->filename, strlen(wdata->filename));
     dlist_getatom(dl, "T", &type_str);
     if (strcmp(type_str, SHARE_INVITE_NOTIFICATION)) {
         ret = HTTP_NOT_ALLOWED;
@@ -9985,7 +9990,7 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
                         name, ns, NULL, 0);
 
     /* Parse dlist representing notification type, namespace, and attributes */
-    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    dlist_parsemap(&dl, 1, 0, wdata->filename, strlen(wdata->filename));
     dlist_getatom(dl, "T", &type);
     dlist_getatom(dl, "NS", &ns_href);
     dlist_getlist(dl, "A", &al);

@@ -195,14 +195,7 @@ int init_sasl(isieve_t *obj,
   addrsize=sizeof(struct sockaddr_storage);
   if (getsockname(obj->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
       return -1;
-#if 0
-  /* XXX  The following line causes problems with KERBEROS_V4 decoding.
-   * We're not sure why its an issue, but this code isn't used in any of
-   * our other client code (imtest.c, backend.c), so we're removing it.
-   */
-  /* set the port manually since getsockname is stupid and doesn't */
-  ((struct sockaddr_in *)&saddr_l)->sin_port = htons(obj->port);
-#endif
+
   if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
       return -1;
 

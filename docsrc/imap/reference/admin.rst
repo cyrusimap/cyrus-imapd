@@ -28,6 +28,7 @@ Management
     admin/protlayer
     admin/sop
     admin/eventsource    
+    admin/monitoring
     admin/config-mailboxdistribution
     admin/murder/murder
     admin/nginx-proxy

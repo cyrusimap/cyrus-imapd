@@ -9,12 +9,16 @@ Cyrus can be configured to use `Xapian <http://xapian.org>`_ to power its search
 Compiling Xapian for Cyrus
 ==========================
 
-Before compiling Cyrus with the ``--enable-Xapian`` option, Xapian must first be patched and compiled.
+.. note::
 
-The cyrusimap/cyruslibs repository provides a pre-patched copy of 1.5-dev Xapian, ready for use with Cyrus.
-We are working on having the patches integrated upstream.
+    If CJK support is not required in your environment, you can use Cyrus with a
+    standard upstream Xapian 1.4 release. Skip this section and move straight on to
+    :ref:`Configuring Xapian <configuring-xapian>`. If you need CJK support, you will
+    still need to use the cyruslibs Xapian fork and compile from source.
 
-Xapian requires gcc 4.9 or later.
+The cyrusimap/cyruslibs repository provides a pre-patched copy of 1.5-dev Xapian, ready for use with Cyrus. We are working on having the patches integrated upstream.
+
+Compiling Xapian requires gcc 4.9 or later.
 
 To build Xapian, fetch the cyruslibs package which comes with pre-patched Xapian and some other
 dependencies. They are installed in ``/usr/local/cyruslibs`` by default unless overridden on the
@@ -32,6 +36,8 @@ command line.
     sh build.sh $CYRUSLIBS_DIR
 
 Then follow on with the Cyrus :ref:`compilation instructions <compiling>`, adding ``--enable-xapian`` to the flags to ``./configure``.
+
+.. _configuring-xapian:
 
 Configuring Xapian
 ==================

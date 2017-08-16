@@ -323,12 +323,13 @@ B<deactivate> deactivate all scripts.
 
 =item B<-u> I<user>, B<--user>=I<user>
 
-The authorization name to request; by default, derived from the
-authentication credentials.
+The user whose mailboxes you want to work on. If not specified, it uses the same
+as -a.
 
 =item B<-a> I<authname>, B<--authname>=I<authname>
 
-The user to use for authentication (defaults to current user).
+The user to use for authentication. If not specified, it defaults to the
+current login user.
 
 =item B<-r> I<realm>, B<--realm>=I<realm>
 

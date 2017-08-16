@@ -140,7 +140,8 @@ enum {
     URL_NS_JMAP,
 #endif
     URL_NS_ADMIN,
-    URL_NS_APPLEPUSH
+    URL_NS_APPLEPUSH,
+    URL_NS_PROMETHEUS,
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -486,6 +487,7 @@ extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
 extern struct namespace_t namespace_admin;
 extern struct namespace_t namespace_applepush;
+extern struct namespace_t namespace_prometheus;
 
 
 /* XXX  These should be included in struct transaction_t */
