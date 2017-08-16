@@ -3921,6 +3921,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
+    icaltimetype dtstart, dtend;
     icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
     char *schedule_address = NULL;
@@ -3959,6 +3960,19 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) organizer = icalproperty_get_organizer(prop);
+
+    /* Also make sure DTEND > DTSTART */
+    dtend = icalcomponent_get_dtend(comp);
+    if (!icaltime_is_null_time(dtend)) {
+        dtstart = icalcomponent_get_dtstart(comp);
+
+        if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) <= 0) {
+            txn->error.precond = CALDAV_VALID_OBJECT;
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
+    }
+
     while ((nextcomp =
             icalcomponent_get_next_component(ical, kind))) {
         const char *nextuid = icalcomponent_get_uid(nextcomp);
@@ -3980,6 +3994,17 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             txn->error.precond = CALDAV_SAME_ORGANIZER;
             ret = HTTP_FORBIDDEN;
             goto done;
+        }
+
+        dtend = icalcomponent_get_dtend(nextcomp);
+        if (!icaltime_is_null_time(dtend)) {
+            dtstart = icalcomponent_get_dtstart(nextcomp);
+
+            if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) <= 0) {
+                txn->error.precond = CALDAV_VALID_OBJECT;
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
         }
 
         if (rscale_calendars && !rrule) {
