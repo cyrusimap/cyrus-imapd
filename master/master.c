@@ -43,6 +43,7 @@
 #include <config.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -119,6 +120,7 @@
 #include "service.h"
 
 #include "cyr_lock.h"
+#include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "strarray.h"
@@ -142,6 +144,9 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 #define MAX_READY_FAILS              5
 #define MAX_READY_FAIL_INTERVAL     10  /* 10 seconds */
+
+#define FNAME_PROM_STATS_DIR        "/stats" /* keep in sync with prometheus.h */
+#define FNAME_PROM_MASTER_REPORT    "master.txt"
 
 struct service *Services = NULL;
 static int allocservices = 0;
@@ -184,6 +189,11 @@ static struct centry *ctable[child_table_size];
 static int janitor_frequency = 1;       /* Janitor sweeps per second */
 static int janitor_position;            /* Entry to begin at in next sweep */
 static struct timeval janitor_mark;     /* Last time janitor did a sweep */
+
+static int prom_enabled = 0;
+static int prom_frequency = 0;
+static struct timeval prom_prev_report = { 0, 0 };
+static char *prom_report_fname = NULL;
 
 static void limit_fds(rlim_t);
 static void schedule_event(struct event *a);
@@ -1948,6 +1958,145 @@ static void limit_fds(rlim_t x)
 }
 #endif /* HAVE_SETRLIMIT */
 
+/* minimal-dependency prometheus text report */
+static void init_prom_report(struct timeval now)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *tmp;
+
+    prom_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
+    prom_frequency = config_getint(IMAPOPT_PROMETHEUS_UPDATE_FREQ);
+
+    if (prom_frequency < 1) prom_enabled = 0;
+    if (!prom_enabled) return;
+
+    prom_prev_report.tv_sec = now.tv_sec - prom_frequency; /* next report asap */
+    prom_prev_report.tv_usec = 0;
+
+    if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
+        if (tmp[0] == '/' && tmp[1] != '\0') {
+            buf_setcstr(&buf, tmp);
+            if (buf.s[buf.len-1] != '/')
+                buf_putc(&buf, '/');
+            buf_appendcstr(&buf, FNAME_PROM_MASTER_REPORT);
+        }
+    }
+    else if ((tmp = config_getstring(IMAPOPT_CONFIGDIRECTORY))) {
+        buf_setcstr(&buf, tmp);
+        buf_appendcstr(&buf, FNAME_PROM_STATS_DIR);
+        buf_putc(&buf, '/');
+        buf_appendcstr(&buf, FNAME_PROM_MASTER_REPORT);
+    }
+
+    if (!buf_len(&buf)) {
+        syslog(LOG_NOTICE, "couldn't find somewhere to write prometheus report to"
+                           " - disabling master prometheus report until next reload");
+        prom_enabled = 0;
+    }
+    else {
+        if (prom_report_fname) free(prom_report_fname);
+        prom_report_fname = buf_release(&buf);
+        cyrus_mkdir(prom_report_fname, 0755);
+    }
+}
+
+static void do_prom_report(struct timeval now)
+{
+    struct buf report = BUF_INITIALIZER;
+    int fd, i, r;
+    int64_t last_updated;
+
+    if (!prom_enabled || prom_prev_report.tv_sec + prom_frequency >= now.tv_sec)
+        return;
+
+    /* open and grab the lock -- but if we would block, just skip this time */
+    fd = open(prom_report_fname, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd == -1) {
+        syslog(LOG_ERR, "open(%s): %m - disabling master prometheus report until next reload",
+                        prom_report_fname);
+        prom_enabled = 0;
+        return;
+    }
+    r = lock_setlock(fd, /*ex*/ 1, /*nb*/ 1, prom_report_fname);
+    if (r == -1) {
+        if (errno != EWOULDBLOCK) {
+            syslog(LOG_ERR, "lock_setlock(%s): %m - disabling master prometheus report until next reload",
+                            prom_report_fname);
+            prom_enabled = 0;
+        }
+        return;
+    }
+
+    /* okay, now prepare the report */
+//    int ready_workers;          /* num child processes ready for service */
+//    int nforks;                 /* num child processes spawned */
+//    int nactive;                /* num children servicing clients */
+//    int nconnections;           /* num connections made to children */
+//    double forkrate;            /* rate at which we're spawning children */
+//    int nreadyfails;            /* number of failures in READY state */
+
+    last_updated = now_ms();
+
+    buf_appendcstr(&report, "# HELP cyrus_master_ready_total The number of ready workers\n");
+    buf_appendcstr(&report, "# TYPE cyrus_master_ready_total gauge\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_ready_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->ready_workers, last_updated);
+    }
+
+    buf_appendcstr(&report, "# HELP cyrus_master_forks_total The number of children spawned\n");
+    buf_appendcstr(&report, "# TYPE cyrus_master_forks_total counter\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_forks_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nforks, last_updated);
+    }
+
+    buf_appendcstr(&report, "# HELP cyrus_master_active_total The number of children servicing clients\n");
+    buf_appendcstr(&report, "# TYPE cyrus_master_active_total gauge\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_active_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nactive, last_updated);
+    }
+
+    /* XXX what is nconnections? */
+
+    buf_appendcstr(&report, "# HELP cyrus_master_fork_rate The rate at which we're spawning children\n");
+    buf_appendcstr(&report, "# TYPE cyrus_master_fork_rate gauge\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_fork_rate{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %g %" PRId64 "\n",
+                            s->forkrate, last_updated);
+    }
+
+    buf_appendcstr(&report, "# HELP cyrus_master_ready_fails_total The number of failures in READY state\n");
+    buf_appendcstr(&report, "# TYPE cyrus_master_ready_fails_total counter\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_ready_fails_total{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->nreadyfails, last_updated);
+    }
+
+    /* write it out */
+    retry_write(fd, buf_cstring(&report), buf_len(&report));
+    lock_unlock(fd, prom_report_fname);
+    close(fd);
+
+    prom_prev_report = now;
+}
+
 static void reread_conf(struct timeval now)
 {
     int i,j;
@@ -2029,6 +2178,9 @@ static void reread_conf(struct timeval now)
 
     /* reinit child janitor */
     init_janitor(now);
+
+    /* reinit prom report */
+    init_prom_report(now);
 
     /* send some feedback to admin */
     syslog(LOG_NOTICE,
@@ -2388,6 +2540,9 @@ int main(int argc, char **argv)
     gettimeofday(&now, 0);
     init_janitor(now);
 
+    /* init prom report */
+    init_prom_report(now);
+
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_DEBUG, "ready for work");
 
@@ -2600,6 +2755,7 @@ int main(int argc, char **argv)
 
         gettimeofday(&now, 0);
         child_janitor(now);
+        do_prom_report(now);
 
 #ifdef HAVE_NETSNMP
         if (ready_fds == 0)

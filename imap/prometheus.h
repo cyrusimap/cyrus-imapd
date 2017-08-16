@@ -53,6 +53,7 @@
 #include "imap/promdata.h"
 
 #define FNAME_PROM_REPORT "report.txt"
+#define FNAME_PROM_MASTER_REPORT "master.txt"
 #define FNAME_PROM_DONEPROCS "doneprocs"
 #define FNAME_PROM_STATS_DIR "/stats"
 
