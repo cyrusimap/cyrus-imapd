@@ -2547,7 +2547,7 @@ int main(int argc, char **argv)
                     if (interrupted > 5) {
                         syslog(LOG_WARNING, "Repeatedly interrupted, too many signals?");
                         /* Fake a timeout */
-                        r = 0;
+                        ready_fds = 0;
                         FD_ZERO(&rfds);
                     }
                     break;
