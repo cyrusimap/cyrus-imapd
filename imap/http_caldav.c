@@ -4268,15 +4268,18 @@ static int write_personal_data(struct mailbox *mailbox,
 
 static int personalize_resource(struct transaction_t *txn,
                                 struct mailbox *mailbox,
-                                icalcomponent **ical,
+                                icalcomponent *ical,
                                 struct caldav_data *cdata,
-                                const char *userid)
+                                const char *userid,
+                                icalcomponent **store_me)
 {
     int is_owner, rights, read_only;
     mbname_t *mbname;
     const char *owner;
     icalcomponent *oldical = NULL, *vpatch = NULL;
     int ret = 0;
+
+    *store_me = ical;
 
     /* Check ownership and ACL for current user */
     mbname = mbname_from_intname(mailbox->name);
@@ -4343,11 +4346,8 @@ static int personalize_resource(struct transaction_t *txn,
         if (ret) goto done;
 
         if (read_only) {
-            /* Resource to store is the stripped existing resource */
-            cdata->comp_flags.shared = 1;
-            *ical = oldical;
-            oldical = NULL;
-            goto done;
+            /* Resource to store is the existing resource just stripped */
+            *store_me = oldical;
         }
 
         icalcomponent_free(vpatch);
@@ -4383,7 +4383,7 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
-        ret = extract_personal_data(*ical, oldical, vpatch,
+        ret = extract_personal_data(ical, oldical, vpatch,
                                     &txn->buf /* path */, read_only);
         buf_reset(&txn->buf);
 
@@ -4392,8 +4392,9 @@ static int personalize_resource(struct transaction_t *txn,
         if (ret) goto done;
             
         if (is_owner && read_only) {
-            /* No resource to store (change to per-user data only) */
+            /* No resource to store (per-user data change only) */
             ret = HTTP_NO_CONTENT;
+            *store_me = NULL;
             goto done;
         }
 
@@ -4401,9 +4402,11 @@ static int personalize_resource(struct transaction_t *txn,
     }
 
   done:
-    if (oldical) icalcomponent_free(oldical);
+    if (oldical && (*store_me != oldical)) icalcomponent_free(oldical);
     if (vpatch) icalcomponent_free(vpatch);
     mbname_free(&mbname);
+
+    *ical = store_me;
 
     return ret;
 }
@@ -4427,9 +4430,10 @@ static int process_vpatch(struct transaction_t *txn __attribute__((unused)),
 
 static int personalize_resource(struct transaction_t *txn __attribute__((unused)),
                                 struct mailbox *mailbox __attribute__((unused)),
-                                icalcomponent **ical __attribute__((unused)),
+                                icalcomponent *ical __attribute__((unused)),
                                 struct caldav_data *cdata __attribute__((unused)),
-                                const char *userid __attribute__((unused)))
+                                const char *userid __attribute__((unused)),
+                                icalcomponent **store_me __attribute__((unused)))
 {
     fatal("personalize_resource() called, but no VPATCH", EC_SOFTWARE);
 }
@@ -7946,7 +7950,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           const char *userid, const char *schedule_address)
 {
     int ret;
-    icalcomponent *comp, *store_ical = ical;
+    icalcomponent *comp, *store_ical = NULL;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
@@ -8021,7 +8025,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* If we are just stripping VTIMEZONEs from resource, flag it */
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
-        ret = personalize_resource(txn, mailbox, &store_ical, cdata, userid);
+        ret = personalize_resource(txn, mailbox, ical,
+                                   cdata, userid, &store_ical);
         if (ret) return ret;
 
         if (store_ical != ical) {
@@ -8140,7 +8145,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         break;
     }
 
-    if (store_ical != ical) icalcomponent_free(store_ical);
+    if (store_ical && (store_ical != ical)) icalcomponent_free(store_ical);
 
     return ret;
 }
