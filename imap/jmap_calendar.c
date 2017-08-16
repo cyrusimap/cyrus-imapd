@@ -1745,7 +1745,8 @@ static int jmap_write_calendarevent(json_t *event,
         memset(&txn, 0, sizeof(struct transaction_t));
         txn.req_hdrs = spool_new_hdrcache();
         /* XXX - fix userid */
-        r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, schedule_address);
+        r = caldav_store_resource(&txn, ical, mbox, resource,
+                                  db, 0, httpd_userid, schedule_address);
         spool_free_hdrcache(txn.req_hdrs);
         buf_free(&txn.buf);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {

@@ -105,7 +105,6 @@
 #include "imap/imap_err.h"
 
 #define TZ_STRIP  (1<<9)
-#define IS_SHARED (1<<10)
 
 
 #ifdef HAVE_RSCALE
@@ -1100,7 +1099,8 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
 
     /* Store source resource at destination */
     /* XXX - set calendar-user-address based on original message? */
-    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc, db, flags, NULL);
+    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc,
+                              db, flags, NULL, NULL);
 
     return r;
 }
@@ -2265,7 +2265,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
             /* Strip known VTIMEZONEs */
             struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
-            char *userid = NULL;
+            char *schedule_address = NULL;
 
             mailbox_unlock_index(mailbox, NULL);
             r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
@@ -2275,13 +2275,13 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                 goto done;
             }
 
-            *obj = ical = record_to_ical(mailbox, record, &userid);
+            *obj = ical = record_to_ical(mailbox, record, &schedule_address);
 
             caldav_store_resource(txn, ical, mailbox,
                                   cdata->dav.resource, caldavdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
-                                  userid);
-            free(userid);
+                                  NULL, schedule_address);
+            free(schedule_address);
 
             /* Fetch the new DAV and index records */
             /* NOTE: previous contents of cdata was freed by store_resource */
@@ -2827,7 +2827,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
-                                caldavdb, return_rep, schedule_address);
+                                caldavdb, return_rep, NULL, schedule_address);
 
     if (ret == HTTP_NO_CONTENT && return_rep) {
         struct buf *data;
@@ -4268,30 +4268,28 @@ static int write_personal_data(struct mailbox *mailbox,
 
 static int personalize_resource(struct transaction_t *txn,
                                 struct mailbox *mailbox,
-                                icalcomponent *ical,
+                                icalcomponent **ical,
                                 struct caldav_data *cdata,
-                                icalcomponent **oldical,
-                                char **schedule_address)
+                                const char *userid)
 {
     int is_owner, rights, read_only;
     mbname_t *mbname;
     const char *owner;
-    icalcomponent *vpatch = NULL;
+    icalcomponent *oldical = NULL, *vpatch = NULL;
     int ret = 0;
 
     /* Check ownership and ACL for current user */
     mbname = mbname_from_intname(mailbox->name);
     owner = mbname_userid(mbname);
-    is_owner = !strcmpsafe(owner, httpd_userid);
+    is_owner = !strcmpsafe(owner, userid);
 
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         read_only = 0;
     }
-    else if (is_owner) goto done;
-    else if (cdata->dav.imap_uid && (rights & DACL_PROPRSRC)) {
-        /* Sharee has read-only access to existing resource */
+    else if (cdata->dav.imap_uid) {
+        /* User has read-only access to existing resource */
         read_only = 1;
     }
     else {
@@ -4299,129 +4297,111 @@ static int personalize_resource(struct transaction_t *txn,
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
         txn->error.rights = DACL_WRITECONT;
-        return HTTP_NO_PRIVS;
+        ret = HTTP_NO_PRIVS;
+        goto done;
     }
 
-    if (!cdata->comp_flags.shared) {
-        if (is_owner) {
-            /* Owner updating unshared resource - nothing to do here */
+    if (cdata->dav.imap_uid &&
+        (!is_owner || read_only || cdata->comp_flags.shared)) {
+        syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+
+        /* Load message containing the existing resource and parse iCal data */
+        oldical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
+        if (!oldical) {
+            txn->error.desc = "Failed to read record";
+            ret = HTTP_SERVER_ERROR;
             goto done;
         }
-        else if (cdata->dav.imap_uid) {
-            /* Split owner's personal data from resource */
-            if (!*oldical) {
-                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
-
-                /* Load message containing the resource and parse iCal data */
-                *oldical = caldav_record_to_ical(mailbox, cdata,
-                                             NULL, schedule_address);
-                if (!*oldical) {
-                    txn->error.desc = "Failed to read record";
-                    return HTTP_SERVER_ERROR;
-                }
-            }
-
-
-            /* Create UID for owner VPATCH */
-            assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
-                       strhash(cdata->dav.resource), strhash(owner));
-
-            vpatch =
-                icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
-                                    icalproperty_new_version("1"),
-                                    icalproperty_new_dtstamp(
-                                        icaltime_from_timet_with_zone(time(0),
-                                                                      0,
-                                                                      utc_zone)),
-                                    icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                    0);
-            buf_reset(&txn->buf);
-
-            /* Extract personal info from owner's resource and create vpatch */
-            ret = extract_personal_data(*oldical, NULL, vpatch,
-                                        &txn->buf /* path */, 0 /* read_only */);
-            buf_reset(&txn->buf);
-
-            if (!ret) {
-                struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
-
-                ret = caldav_store_resource(txn, *oldical, mailbox,
-                                            cdata->dav.resource, caldavdb,
-                                            IS_SHARED, *schedule_address);
-
-                if (ret == HTTP_NO_CONTENT) {
-                    /* Fetch the new DAV and index records */
-                    /* NOTE: previous contents of cdata was
-                       freed by store_resource */
-                    ret = caldav_lookup_resource(caldavdb, mailbox->name,
-                                                 txn->req_tgt.resource, &cdata,
-                                                 /* tombstones */ 0);
-                    caldav_close(caldavdb);
-                }
-            }
-
-            icalcomponent_free(*oldical);
-            *oldical = NULL;
-            free(*schedule_address);
-            *schedule_address = NULL;
-
-            if (!ret) ret = write_personal_data(mailbox, cdata, owner, vpatch);
-            icalcomponent_free(vpatch);
-            vpatch = NULL;
-
-            if (ret) goto done;
-        }
     }
 
-    if (read_only && cdata->dav.imap_uid) {
-        if (!*oldical) {
-            syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+    if (cdata->dav.imap_uid && !is_owner && !cdata->comp_flags.shared) {
+        /* Split owner's personal data from resource */
 
-            /* Load message containing the resource and parse iCal data */
-            *oldical = caldav_record_to_ical(mailbox, cdata, NULL, schedule_address);
-            if (!*oldical) {
-                txn->error.desc = "Failed to read record";
-                return HTTP_SERVER_ERROR;
-            }
+        /* Create UID for owner VPATCH */
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+                   strhash(cdata->dav.resource), strhash(owner));
+
+        vpatch =
+            icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
+                                icalproperty_new_version("1"),
+                                icalproperty_new_dtstamp(
+                                    icaltime_from_timet_with_zone(time(0),
+                                                                  0,
+                                                                  utc_zone)),
+                                icalproperty_new_uid(buf_cstring(&txn->buf)),
+                                0);
+        buf_reset(&txn->buf);
+
+        /* Extract personal info from owner's resource and create vpatch */
+        ret = extract_personal_data(oldical, NULL, vpatch,
+                                    &txn->buf /* path */, 0 /* read_only */);
+        buf_reset(&txn->buf);
+
+        if (!ret) ret = write_personal_data(mailbox, cdata, owner, vpatch);
+
+        if (ret) goto done;
+
+        if (read_only) {
+            /* Resource to store is the stripped existing resource */
+            cdata->comp_flags.shared = 1;
+            *ical = oldical;
+            oldical = NULL;
+            goto done;
         }
 
-        /* Normalize existing resource for comparison */
-        icalcomponent_normalize(*oldical);
-
-        /* Normalize new resource for comparison */
-        icalcomponent_normalize(ical);
+        icalcomponent_free(vpatch);
+        vpatch = NULL;
     }
 
-    /* Create UID for sharee VPATCH */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
-               strhash(cdata->dav.resource), strhash(httpd_userid));
+    if (!is_owner || read_only ||
+        (cdata->dav.imap_uid && cdata->comp_flags.shared)) {
+        /* Extract personal info from user's resource and create vpatch */
 
-    vpatch =
-        icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
-                            icalproperty_new_version("1"),
-                            icalproperty_new_dtstamp(
-                                icaltime_from_timet_with_zone(time(0),
-                                                              0,
-                                                              utc_zone)),
-                            icalproperty_new_uid(buf_cstring(&txn->buf)),
-                            0);
-    buf_reset(&txn->buf);
+        if (oldical) {
+            /* Normalize existing resource for comparison */
+            icalcomponent_normalize(oldical);
 
-    /* Extract personal info from new resource and add to vpatch */
-    ret = extract_personal_data(ical, *oldical, vpatch,
-                                &txn->buf /* path */, read_only);
-    buf_reset(&txn->buf);
+            /* Normalize new resource for comparison */
+            icalcomponent_normalize(*ical);
+        }
 
-    if (!ret) {
+        /* Create UID for sharee VPATCH */
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
+                   strhash(cdata->dav.resource), strhash(userid));
+
+        vpatch =
+            icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
+                                icalproperty_new_version("1"),
+                                icalproperty_new_dtstamp(
+                                    icaltime_from_timet_with_zone(time(0),
+                                                                  0,
+                                                                  utc_zone)),
+                                icalproperty_new_uid(buf_cstring(&txn->buf)),
+                                0);
+        buf_reset(&txn->buf);
+
+        /* Extract personal info from new resource and add to vpatch */
+        ret = extract_personal_data(*ical, oldical, vpatch,
+                                    &txn->buf /* path */, read_only);
+        buf_reset(&txn->buf);
+
+        if (!ret) ret = write_personal_data(mailbox, cdata, userid, vpatch);
+
+        if (ret) goto done;
+            
+        if (is_owner && read_only) {
+            /* No resource to store (change to per-user data only) */
+            ret = HTTP_NO_CONTENT;
+            goto done;
+        }
+
         cdata->comp_flags.shared = 1;
-        ret = write_personal_data(mailbox, cdata, httpd_userid, vpatch);
-        if (ret) ret = HTTP_SERVER_ERROR;
-        else if (read_only) ret = HTTP_NO_CONTENT;
     }
 
   done:
+    if (oldical) icalcomponent_free(oldical);
     if (vpatch) icalcomponent_free(vpatch);
     mbname_free(&mbname);
 
@@ -4447,10 +4427,9 @@ static int process_vpatch(struct transaction_t *txn __attribute__((unused)),
 
 static int personalize_resource(struct transaction_t *txn __attribute__((unused)),
                                 struct mailbox *mailbox __attribute__((unused)),
-                                icalcomponent *ical __attribute__((unused)),
+                                icalcomponent **ical __attribute__((unused)),
                                 struct caldav_data *cdata __attribute__((unused)),
-                                icalcomponent **oldical __attribute__((unused)),
-                                char **schedule_address __attribute__((unused)))
+                                const char *userid __attribute__((unused)))
 {
     fatal("personalize_resource() called, but no VPATCH", EC_SOFTWARE);
 }
@@ -4606,12 +4585,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    if (namespace_calendar.allow & ALLOW_USERDATA) {
-        ret = personalize_resource(txn, mailbox, ical,
-                                   cdata, &oldical, &schedule_address);
-        if (ret) goto done;
-    }
-
     if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
         ret = manage_attachments(txn, mailbox, ical,
                                  cdata, &oldical, &schedule_address);
@@ -4714,9 +4687,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Store resource at target */
     if (!ret) {
-        if (cdata->comp_flags.shared) flags |= IS_SHARED;
-        ret = caldav_store_resource(txn, ical, mailbox,
-                                    resource, db, flags, schedule_address);
+        ret = caldav_store_resource(txn, ical, mailbox, resource,
+                                    db, flags, httpd_userid, schedule_address);
     }
 
   done:
@@ -5459,7 +5431,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             caldav_store_resource(&txn, ical, fctx->mailbox,
                                   cdata->dav.resource, fctx->davdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
-                                  schedule_address);
+                                  NULL, schedule_address);
             spool_free_hdrcache(txn.req_hdrs);
             buf_free(&txn.buf);
             free(schedule_address);
@@ -7971,10 +7943,10 @@ static void strip_vtimezones(icalcomponent *ical)
 int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           struct mailbox *mailbox, const char *resource,
                           struct caldav_db *caldavdb, unsigned flags,
-                          const char *schedule_address)
+                          const char *userid, const char *schedule_address)
 {
     int ret;
-    icalcomponent *comp;
+    icalcomponent *comp, *store_ical = ical;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
@@ -8048,6 +8020,16 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* If we are just stripping VTIMEZONEs from resource, flag it */
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
+    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
+        ret = personalize_resource(txn, mailbox, &store_ical, cdata, userid);
+        if (ret) return ret;
+
+        if (store_ical != ical) {
+            comp = icalcomponent_get_first_real_component(store_ical);
+            uid = icalcomponent_get_uid(comp);
+            kind = icalcomponent_isa(comp);
+        }
+    }
 
     /* Create and cache RFC 5322 header fields for resource */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -8105,7 +8087,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_setcstr(&txn->buf, ICALENDAR_CONTENT_TYPE);
-    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
+    if ((meth = icalcomponent_get_method(store_ical)) != ICAL_METHOD_NONE) {
         buf_printf(&txn->buf, "; method=%s",
                    icalproperty_method_to_string(meth));
     }
@@ -8116,20 +8098,36 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
-    if (flags & IS_SHARED) buf_printf(&txn->buf, ";\r\n\tper-user-data=true");
+    if (cdata->comp_flags.shared) {
+        buf_printf(&txn->buf, ";\r\n\tper-user-data=true");
+    }
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    ret = dav_store_resource(txn, icalcomponent_as_ical_string(ical), 0,
+    ret = dav_store_resource(txn, icalcomponent_as_ical_string(store_ical), 0,
                              mailbox, oldrecord, &imapflags);
     strarray_fini(&imapflags);
 
     switch (ret) {
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
+        if (oldrecord && cdata->comp_flags.shared) {
+            /* Ensure we have an astate connected to the mailbox,
+             * so that the annotation txn will be committed
+             * when we close the mailbox */
+            annotate_state_t *astate = NULL;
+            uint32_t newuid = mailbox->i.last_uid;
+
+            if (!mailbox_get_annotate_state(mailbox, newuid, &astate)) {
+                /* Copy across any per-message annotations */
+                annotate_msg_copy(mailbox, oldrecord->uid,
+                                  mailbox, newuid, NULL);
+            }
+        }
+
         if (cdata->organizer) {
             if (flags & NEW_STAG) txn->resp_body.stag = sched_tag;
 
@@ -8141,6 +8139,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         }
         break;
     }
+
+    if (store_ical != ical) icalcomponent_free(store_ical);
 
     return ret;
 }

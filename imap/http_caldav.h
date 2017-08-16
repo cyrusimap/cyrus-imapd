@@ -51,7 +51,7 @@ extern int caldav_create_defaultcalendars(const char *userid);
 extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                  struct mailbox *mailbox, const char *resource,
                                  struct caldav_db *caldavdb, unsigned flags,
-                                 const char *schedule_userid);
+                                 const char *userid, const char *schedule_userid);
 
 extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                             const struct caldav_data *cdata,
