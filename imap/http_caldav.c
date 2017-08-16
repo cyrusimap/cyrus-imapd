@@ -4251,6 +4251,7 @@ static int write_personal_data(struct mailbox *mailbox,
     struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
     int ret;
 
+    dlist_setdate(dl, "LASTMOD", time(0));
     dlist_setnum64(dl, "MODSEQ", mailbox_modseq_dirty(mailbox));
     message_guid_generate(&guid, icalstr, strlen(icalstr));
     dlist_setguid(dl, "GUID", &guid);
