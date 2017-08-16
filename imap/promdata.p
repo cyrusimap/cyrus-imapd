@@ -1,12 +1,22 @@
 # Prometheus metric definitions file
 #
 # metric <type> <name> <description>
-#         type is one of "counter" or "gauge"
-#                name must be [a-z0-9_] only
-#                       description is free text until EOL but don't be silly
+#   * type is one of "counter" or "gauge"
+#   * name must be [a-z0-9_] only
+#   * description is free text until EOL but don't be silly
+#
+# label <metric> <key> <values...>
+#   * metric is the name of an already defined metric
+#   * key must be [a-z0-9_] only
+#   * values must be [a-z0-9_] only and are whitespace delimited until EOL
+#
+# Each metric may have zero or one labels applied to it
 #
 # '#' begins a comment
 #
+# There is not currently a line-continuation character supported by the parser,
+# so this file will contain long lines!
+
 metric counter cyrus_imap_connections_total             The total number of IMAP connections
 metric gauge   cyrus_imap_active_connections            The number of currently active IMAP connections
 metric gauge   cyrus_imap_ready_listeners               The number of currently ready IMAP listeners
