@@ -402,49 +402,49 @@ sub test_specialuse
     my $entry = '/private/specialuse';
     my $sentry = '/shared/specialuse';
     my @testcases = (
-	# Cyrus has no virtual folders, so cannot do \All
-	{
-	    folder => 'a',
-	    specialuse => '\All',
-	    result => 'no'
-	},
-	{
-	    folder => 'b',
-	    specialuse => '\Archive',
-	    result => 'ok'
-	},
-	{
-	    folder => 'c',
-	    specialuse => '\Drafts',
-	    result => 'ok'
-	},
-	# Cyrus has no virtual folders, so cannot do \Flagged
-	{
-	    folder => 'd',
-	    specialuse => '\Flagged',
-	    result => 'no'
-	},
-	{
-	    folder => 'e',
-	    specialuse => '\Junk',
-	    result => 'ok'
-	},
-	{
-	    folder => 'f',
-	    specialuse => '\Sent',
-	    result => 'ok'
-	},
-	{
-	    folder => 'g',
-	    specialuse => '\Trash',
-	    result => 'ok'
-	},
-	# Tokens not defined in the RFC are rejected
-	{
-	    folder => 'h',
-	    specialuse => '\Nonesuch',
-	    result => 'no'
-	},
+        # Cyrus has no virtual folders, so cannot do \All
+        {
+            folder => 'a',
+            specialuse => '\All',
+            result => 'no'
+        },
+        {
+            folder => 'b',
+            specialuse => '\Archive',
+            result => 'ok'
+        },
+        {
+            folder => 'c',
+            specialuse => '\Drafts',
+            result => 'ok'
+        },
+        # Cyrus has no virtual folders, so cannot do \Flagged
+        {
+            folder => 'd',
+            specialuse => '\Flagged',
+            result => 'no'
+        },
+        {
+            folder => 'e',
+            specialuse => '\Junk',
+            result => 'ok'
+        },
+        {
+            folder => 'f',
+            specialuse => '\Sent',
+            result => 'ok'
+        },
+        {
+            folder => 'g',
+            specialuse => '\Trash',
+            result => 'ok'
+        },
+        # Tokens not defined in the RFC are rejected
+        {
+            folder => 'h',
+            specialuse => '\Nonesuch',
+            result => 'no'
+        },
     );
 
     xlog "First create all the folders";
@@ -3016,6 +3016,83 @@ sub test_getmetadata_depth
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { %entries } } , $res);
+}
+
+sub test_set_specialuse_twice
+{
+    my ($self) = @_;
+
+    xlog "testing if we could /private/specialuse twice on a folder";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $entry = '/private/specialuse';
+    my $sentry = '/shared/specialuse';
+    my $folder1 = 'INBOX.bar';
+    my $folder2 = 'INBOX.foo';
+    my $specialuse1 = '\Sent \Trash';
+    my $specialuse2 = '\Sent \Trash \Junk';
+    my $specialuse3 = '\Sent';
+    my $specialuse4 = '\Drafts';
+    my $specialuse5 = '\Junk \Archive';
+    my $specialuse6 = '\Drafts \Archive';
+    my $res;
+
+    xlog "Create a folder $folder1";
+    $imaptalk->create($folder1)
+        or die "Cannot create mailbox $folder1: $@";
+
+    xlog "Create a folder $folder2";
+    $imaptalk->create($folder2)
+        or die "Cannot create mailbox $folder2: $@";
+
+    $res = $imaptalk->getmetadata($folder1, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    delete $res->{$sentry};
+    $self->assert_deep_equals({
+        $folder1 => { $entry => undef }
+        }, $res);
+
+
+    xlog "Set $folder1 to be $specialuse1";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder2 to be $specialuse4";
+    $imaptalk->setmetadata($folder2, $entry, $specialuse4);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse2, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse2);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse1, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse3, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse2);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse1, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse4, and it should not work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse4);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder1 to $specialuse5, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse5);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Set $folder2 to be $specialuse1";
+    $imaptalk->setmetadata($folder2, $entry, $specialuse1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Now set $folder1 to $specialuse6, and it should work.";
+    $imaptalk->setmetadata($folder1, $entry, $specialuse6);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 1;
