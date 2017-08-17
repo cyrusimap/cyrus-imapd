@@ -106,6 +106,9 @@
 
 #define TZ_STRIP  (1<<9)
 
+#define PER_USER_CAL_DATA \
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
+
 
 #ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
@@ -152,6 +155,10 @@ static void my_caldav_shutdown(void);
 
 static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
+
+static int caldav_get_validators(struct mailbox *mailbox, void *data,
+                                 struct index_record *record,
+                                 const char **etag, time_t *lastmod);
 
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
@@ -493,6 +500,7 @@ static const struct prop_entry caldav_props[] = {
 static struct meth_params caldav_params = {
     caldav_mime_types,
     &caldav_parse_path,
+    &caldav_get_validators,
     &caldav_check_precond,
     { (db_open_proc_t) &caldav_open_mailbox,
       (db_close_proc_t) &caldav_close,
@@ -912,6 +920,69 @@ static int caldav_parse_path(const char *path,
     }
 
     return 0;
+}
+
+
+static int caldav_get_validators(struct mailbox *mailbox, void *data,
+                                 struct index_record *record,
+                                 const char **etag, time_t *lastmod)
+{
+
+    const struct caldav_data *cdata = (const struct caldav_data *) data;
+
+    if ((namespace_calendar.allow & ALLOW_USERDATA) &&
+        cdata->dav.imap_uid && cdata->comp_flags.shared) {
+        struct buf userdata = BUF_INITIALIZER;
+        int r;
+
+        memset(record, 0, sizeof(struct index_record));
+
+        /* Fetch index record for the resource */
+        r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
+                   mailbox->name, cdata->dav.imap_uid, error_message(r));
+            return r;
+        }
+
+        /* Lookup per-user calendar data */
+        r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                      PER_USER_CAL_DATA, httpd_userid, &userdata);
+        if (!r && buf_len(&userdata)) {
+            struct dlist *dl;
+
+            /* Parse the value and fetch the validators */
+            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+
+            if (etag) {
+                char buf[2*MESSAGE_GUID_SIZE];
+                struct message_guid *user_guid;
+
+                dlist_getguid(dl, "GUID", &user_guid);
+
+                /* Per-user ETag is GUID of concatenated GUIDs */
+                message_guid_export(&record->guid, buf);
+                message_guid_export(user_guid, buf+MESSAGE_GUID_SIZE);
+                message_guid_generate(user_guid, buf, sizeof(buf));
+                *etag = message_guid_encode(user_guid);
+            }
+            if (lastmod) {
+                time_t user_lastmod;
+
+                dlist_getdate(dl, "LASTMOD", &user_lastmod);
+
+                /* Per-user Last-Modified is latest mod time */
+                *lastmod = MAX(record->internaldate, user_lastmod);
+            }
+
+            dlist_free(&dl);
+            buf_free(&userdata);
+
+            return 0;
+        }
+    }
+
+    return dav_get_validators(mailbox, data, record, etag, lastmod);
 }
 
 
@@ -2098,9 +2169,6 @@ static void add_timezone(icalparameter *param, void *data)
     }
 }
 
-
-#define PER_USER_CAL_DATA \
-    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
 #define STRIP_OWNER_CAL_DATA          \
     "CALDATA %(VPATCH {186+}\r\n"     \
@@ -4392,7 +4460,7 @@ static int personalize_resource(struct transaction_t *txn,
 
         if (ret) goto done;
             
-        if (is_owner && read_only) {
+        if (read_only && cdata->dav.imap_uid) {
             /* No resource to store (per-user data change only) */
             ret = HTTP_NO_CONTENT;
             *store_me = NULL;
@@ -8046,12 +8114,20 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         tzbyref = 1;
     }
 
+    /* Set Schedule-Tag, if any */
+    if (flags & NEW_STAG) {
+        if (oldrecord) sched_tag = message_guid_encode(&oldrecord->guid);
+        else sched_tag = NULL_ETAG;
+    }
+    else if (organizer) sched_tag = cdata->sched_tag;
+    else sched_tag = cdata->sched_tag = NULL;
+
     /* If we are just stripping VTIMEZONEs from resource, flag it */
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         ret = personalize_resource(txn, mailbox, ical,
                                    cdata, userid, &store_ical);
-        if (ret) return ret;
+        if (ret) goto done;
 
         if (store_ical != ical) {
             comp = icalcomponent_get_first_real_component(store_ical);
@@ -8074,14 +8150,6 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             buf_reset(&txn->buf);
         }
     }
-
-    /* Set Schedule-Tag, if any */
-    if (flags & NEW_STAG) {
-        if (oldrecord) sched_tag = message_guid_encode(&oldrecord->guid);
-        else sched_tag = NULL_ETAG;
-    }
-    else if (organizer) sched_tag = cdata->sched_tag;
-    else sched_tag = cdata->sched_tag = NULL;
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     if (prop) {
@@ -8140,10 +8208,26 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                              mailbox, oldrecord, &imapflags);
     strarray_fini(&imapflags);
 
+  done:
     switch (ret) {
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
-        if (oldrecord && cdata->comp_flags.shared) {
+        if ((namespace_calendar.allow & ALLOW_USERDATA) &&
+            oldrecord && cdata->comp_flags.shared) {
+
+            if (!cdata->organizer || (flags & PREFER_REP)) {
+                /* Read index record for new message (always the last one) */
+                struct index_record newrecord;
+
+                cdata->dav.alive = 1;
+                cdata->dav.imap_uid = mailbox->i.last_uid;
+                caldav_get_validators(mailbox, cdata, &newrecord,
+                                      &txn->resp_body.etag,
+                                      &txn->resp_body.lastmod);
+            }
+
+            /* XXX  Hack until we fix annotation copying in append_fromstage() */
+
             /* Ensure we have an astate connected to the mailbox,
              * so that the annotation txn will be committed
              * when we close the mailbox */

@@ -678,6 +678,44 @@ EXPORTED int calcarddav_parse_path(const char *path,
 }
 
 
+EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
+                                struct index_record *record,
+                                const char **etag, time_t *lastmod)
+{
+    const struct dav_data *ddata = (const struct dav_data *) data;
+
+    memset(record, 0, sizeof(struct index_record));
+
+    if (!ddata->alive) {
+        /* New resource */
+        if (etag) *etag = NULL;
+        if (lastmod) *lastmod = 0;
+    }
+    else if (ddata->imap_uid) {
+        /* Mapped URL */
+        int r;
+
+        /* Fetch index record for the resource */
+        r = mailbox_find_index_record(mailbox, ddata->imap_uid, record);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
+                   mailbox->name, ddata->imap_uid, error_message(r));
+            return r;
+        }
+
+        if (etag) *etag = message_guid_encode(&record->guid);
+        if (lastmod) *lastmod = record->internaldate;
+    }
+    else {
+        /* Unmapped URL (empty resource) */
+        if (etag) *etag = NULL;
+        if (lastmod) *lastmod = ddata->creationdate;
+    }
+
+    return 0;
+}
+
+
 /* Evaluate If header.  Note that we can't short-circuit any of the tests
    because we need to check for a lock-token anywhere in the header */
 static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
@@ -1620,9 +1658,12 @@ int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
 
     if (fctx->record) {
+        const char *etag;
+
+        fctx->get_validators(fctx->mailbox, fctx->data,
+                             fctx->record, &etag, NULL);
         /* add DQUOTEs */
-        buf_printf(&fctx->buf, "\"%s\"",
-                   message_guid_encode(&fctx->record->guid));
+        buf_printf(&fctx->buf, "\"%s\"", etag);
     }
     else {
         buf_printf(&fctx->buf, "\"%u-%u-%u\"", fctx->mailbox->i.uidvalidity,
@@ -1644,13 +1685,21 @@ int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
                         struct propstat propstat[],
                         void *rock __attribute__((unused)))
 {
+    time_t lastmod;
+
     if (!fctx->mailbox ||
         (fctx->req_tgt->resource && !fctx->record)) return HTTP_NOT_FOUND;
 
+    if (fctx->record) {
+        fctx->get_validators(fctx->mailbox, fctx->data,
+                             fctx->record, NULL, &lastmod);
+    }
+    else {
+        lastmod = fctx->mailbox->index_mtime;
+    }
+
     buf_ensure(&fctx->buf, 30);
-    httpdate_gen(fctx->buf.s, fctx->buf.alloc,
-                 fctx->record ? fctx->record->internaldate :
-                 fctx->mailbox->index_mtime);
+    httpdate_gen(fctx->buf.s, fctx->buf.alloc, lastmod);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST fctx->buf.s, 0);
@@ -4152,24 +4201,13 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    if (ddata->imap_uid) {
-        /* Mapped URL - Fetch index record for the resource */
-        r = mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        etag = message_guid_encode(&src_rec.guid);
-        lastmod = src_rec.internaldate;
-    }
-    else {
-        /* Unmapped URL (empty resource) */
-        src_rec.uid = 0;
-        src_rec.recno = ddata->rowid;
-        etag = NULL;
-        lastmod = ddata->creationdate;
+    /* Fetch resource validators */
+    r = cparams->get_validators(src_mbox, (void *) ddata,
+                                &src_rec, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Check any preconditions on source */
@@ -4203,6 +4241,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         /* Unmapped URL (empty resource) */
         buf_init_ro_cstr(&body_buf, "");
         obj = &body_buf;
+        src_rec.recno = ddata->rowid; /* For deleting DAV record */
     }
 
     if (dest_mbox != src_mbox) {
@@ -4535,23 +4574,13 @@ int meth_delete(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    memset(&record, 0, sizeof(struct index_record));
-    if (ddata->imap_uid) {
-        /* Mapped URL - Fetch index record for the resource */
-        r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        etag = message_guid_encode(&record.guid);
-        lastmod = record.internaldate;
-    }
-    else {
-        /* Unmapped URL (empty resource) */
-        etag = NULL;
-        lastmod = ddata->creationdate;
+    /* Fetch resource validators */
+    r = dparams->get_validators(mailbox, (void *) ddata,
+                                &record, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Check any preconditions */
@@ -4704,22 +4733,16 @@ int meth_get_head(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    memset(&record, 0, sizeof(struct index_record));
-    if (ddata->imap_uid) {
-        /* Mapped URL - Fetch index record for the resource */
-        r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
-        if (r) goto done;
+    /* Fetch resource validators */
+    r = gparams->get_validators(mailbox, (void *) ddata,
+                                &record, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
 
-        txn->flags.ranges = 1;
-        etag = message_guid_encode(&record.guid);
-        lastmod = record.internaldate;
-    }
-    else {
-        /* Unmapped URL (empty resource) */
-        txn->flags.ranges = 0;
-        etag = NULL;
-        lastmod = ddata->creationdate;
-    }
+    txn->flags.ranges = (ddata->imap_uid != 0);
 
     /* Check any preconditions, including range request */
     precond = gparams->check_precond(txn, params, mailbox,
@@ -4887,32 +4910,17 @@ int meth_lock(struct transaction_t *txn, void *params)
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
                                    txn->req_tgt.resource, (void *) &ddata, 1);
 
-    if (ddata->alive) {
-        if (ddata->imap_uid) {
-            /* Locking existing resource */
-
-            /* Fetch index record for the resource */
-            r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
-            if (r) {
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
-            }
-
-            etag = message_guid_encode(&oldrecord.guid);
-            lastmod = oldrecord.internaldate;
-        }
-        else {
-            /* Unmapped URL (empty resource) */
-            etag = NULL;
-            lastmod = ddata->creationdate;
-        }
+    /* Fetch resource validators */
+    r = lparams->get_validators(mailbox, (void *) ddata,
+                                &oldrecord, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
-    else {
-        /* New resource */
-        etag = NULL;
-        lastmod = 0;
 
+    if (!ddata->alive) {
+        /* New resource */
         ddata->creationdate = now;
         ddata->mailbox = mailbox->name;
         ddata->resource = txn->req_tgt.resource;
@@ -5657,6 +5665,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.mbentry = NULL;
     fctx.mailbox = NULL;
     fctx.record = NULL;
+    fctx.get_validators = fparams->get_validators;
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
@@ -6707,18 +6716,14 @@ int meth_patch(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    /* Fetch index record for the resource */
-    r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+    /* Fetch resource validators */
+    r = pparams->get_validators(mailbox, (void *) ddata,
+                                &oldrecord, &etag, &lastmod);
     if (r) {
-        syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-               txn->req_tgt.mbentry->name, ddata->imap_uid, error_message(r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
-
-    etag = message_guid_encode(&oldrecord.guid);
-    lastmod = oldrecord.internaldate;
 
     /* Check any preferences */
     flags = get_preferences(txn);
@@ -6958,31 +6963,13 @@ int meth_put(struct transaction_t *txn, void *params)
                                    txn->req_tgt.resource, (void *) &ddata, 0);
     /* XXX  Check errors */
 
-    if (ddata->imap_uid) {
-        /* Overwriting existing resource */
-
-        /* Fetch index record for the resource */
-        r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-                   txn->req_tgt.mbentry->name, ddata->imap_uid, error_message(r));
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        etag = message_guid_encode(&oldrecord.guid);
-        lastmod = oldrecord.internaldate;
-    }
-    else if (ddata->rowid) {
-        /* Unmapped URL (empty resource) */
-        etag = NULL;
-        lastmod = ddata->creationdate;
-    }
-    else {
-        /* New resource */
-        etag = NULL;
-        lastmod = 0;
+    /* Fetch resource validators */
+    r = pparams->get_validators(mailbox, (void *) ddata,
+                                &oldrecord, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Check any preferences */
@@ -8064,6 +8051,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.mbentry = NULL;
     fctx.mailbox = NULL;
     fctx.record = NULL;
+    fctx.get_validators = rparams->get_validators;
     fctx.reqd_privs = report->reqd_privs;
     if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
     fctx.elist = NULL;
@@ -8230,22 +8218,13 @@ int meth_unlock(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    if (ddata->imap_uid) {
-        /* Mapped URL - Fetch index record for the resource */
-        r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        etag = message_guid_encode(&record.guid);
-        lastmod = record.internaldate;
-    }
-    else {
-        /* Unmapped URL (empty resource) */
-        etag = NULL;
-        lastmod = ddata->creationdate;
+    /* Fetch resource validators */
+    r = lparams->get_validators(mailbox, (void *) ddata,
+                                &record, &etag, &lastmod);
+    if (r) {
+        txn->error.desc = error_message(r);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Check any preconditions */
@@ -8440,11 +8419,12 @@ int dav_store_resource(struct transaction_t *txn,
             else {
                 /* Read index record for new message (always the last one) */
                 struct index_record newrecord;
-                memset(&newrecord, 0, sizeof(struct index_record));
-                newrecord.recno = mailbox->i.num_records;
-                newrecord.uid = mailbox->i.last_uid;
+                struct dav_data ddata;
 
-                mailbox_reload_index_record(mailbox, &newrecord);
+                ddata.alive = 1;
+                ddata.imap_uid = mailbox->i.last_uid;
+                dav_get_validators(mailbox, &ddata, &newrecord,
+                                   &txn->resp_body.etag, &txn->resp_body.lastmod);
 
                 if (oldrecord) {
                     /* Now that we have the replacement message in place
@@ -8466,18 +8446,6 @@ int dav_store_resource(struct transaction_t *txn,
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
-                }
-
-                if (!r) {
-                    struct resp_body_t *resp_body = &txn->resp_body;
-                    static char *newetag;
-
-                    if (newetag) free(newetag);
-                    newetag = xstrdupnull(message_guid_encode(&newrecord.guid));
-
-                    /* Tell client about the new resource */
-                    resp_body->lastmod = newrecord.internaldate;
-                    resp_body->etag = newetag;
                 }
             }
         }
@@ -8919,6 +8887,7 @@ static const struct prop_entry notify_props[] = {
 struct meth_params notify_params = {
     notify_mime_types,
     &notify_parse_path,
+    &dav_get_validators,
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,
