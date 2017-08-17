@@ -1997,6 +1997,7 @@ static void init_prom_report(struct timeval now)
         if (prom_report_fname) free(prom_report_fname);
         prom_report_fname = buf_release(&buf);
         cyrus_mkdir(prom_report_fname, 0755);
+        syslog(LOG_DEBUG, "updating %s every %d seconds", prom_report_fname, prom_frequency);
     }
 }
 
@@ -2028,6 +2029,7 @@ static void do_prom_report(struct timeval now)
     }
 
     /* okay, now prepare the report */
+    syslog(LOG_DEBUG, "updating prometheus report for master process");
     last_updated = now_ms();
 
     buf_printf(&report, "# HELP %s %s\n",
