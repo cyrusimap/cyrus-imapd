@@ -921,7 +921,7 @@ sub test_getcalendarevents_rscale
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals("Adar I", $event->{title});
+    $self->assert_str_equals("Some day in Adar I", $event->{title});
     $self->assert_str_equals("yearly", $event->{recurrenceRule}{frequency});
     $self->assert_str_equals("hebrew", $event->{recurrenceRule}{rscale});
     $self->assert_str_equals("forward", $event->{recurrenceRule}{skip});

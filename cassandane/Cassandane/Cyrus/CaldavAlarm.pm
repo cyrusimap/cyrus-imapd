@@ -1160,9 +1160,11 @@ sub test_allday_notz
     $startdt->truncate(to => 'day');
     my $start = $startdt->strftime('%Y%m%d');
 
-    my $utc = DateTime::Format::ISO8601->new->parse_datetime($start . 'T000000Z');
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(days => 1));
+    my $end = $enddt->strftime('%Y%m%d');
 
-    my $end = $start;
+    my $utc = DateTime::Format::ISO8601->new->parse_datetime($start . 'T000000Z');
 
     # set the trigger to notify us at the start of the event
     my $trigger="PT0S";
@@ -1254,7 +1256,9 @@ EOF
     $startdt->truncate(to => 'day');
     my $start = $startdt->strftime('%Y%m%d');
 
-    my $end = $start;
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(days => 1));
+    my $end = $enddt->strftime('%Y%m%d');
 
     # set the trigger to notify us at the start of the event
     my $trigger="PT0S";
