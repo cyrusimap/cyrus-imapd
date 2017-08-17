@@ -1962,6 +1962,7 @@ static void limit_fds(rlim_t x)
 static void init_prom_report(struct timeval now)
 {
     struct buf buf = BUF_INITIALIZER;
+    struct event *evt;
     const char *tmp;
 
     prom_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
@@ -1992,13 +1993,22 @@ static void init_prom_report(struct timeval now)
         syslog(LOG_NOTICE, "couldn't find somewhere to write prometheus report to"
                            " - disabling master prometheus report until next reload");
         prom_enabled = 0;
+        buf_free(&buf);
+        return;
     }
-    else {
-        if (prom_report_fname) free(prom_report_fname);
-        prom_report_fname = buf_release(&buf);
-        cyrus_mkdir(prom_report_fname, 0755);
-        syslog(LOG_DEBUG, "updating %s every %d seconds", prom_report_fname, prom_frequency);
-    }
+
+    if (prom_report_fname) free(prom_report_fname);
+    prom_report_fname = buf_release(&buf);
+    cyrus_mkdir(prom_report_fname, 0755);
+
+    evt = xzmalloc(sizeof(*evt));
+    evt->name = xstrdup("master prometheus report periodic wakeup call");
+    evt->period = prom_frequency;
+    evt->periodic = 1;
+    evt->mark = now;
+    schedule_event(evt);
+
+    syslog(LOG_DEBUG, "updating %s every %d seconds", prom_report_fname, prom_frequency);
 }
 
 static void do_prom_report(struct timeval now)
@@ -2007,22 +2017,24 @@ static void do_prom_report(struct timeval now)
     int fd, i, r;
     int64_t last_updated;
 
-    if (!prom_enabled || prom_prev_report.tv_sec + prom_frequency >= now.tv_sec)
+    if (!prom_enabled || timesub(&prom_prev_report, &now) + 0.5 < prom_frequency)
         return;
 
     /* open and grab the lock -- but if we would block, just skip this time */
     fd = open(prom_report_fname, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (fd == -1) {
-        syslog(LOG_ERR, "open(%s): %m - disabling master prometheus report until next reload",
-                        prom_report_fname);
+        syslog(LOG_ERR, "open(%s): %m - %s",
+                        prom_report_fname,
+                        "disabling master prometheus report until next reload");
         prom_enabled = 0;
         return;
     }
     r = lock_setlock(fd, /*ex*/ 1, /*nb*/ 1, prom_report_fname);
     if (r == -1) {
         if (errno != EWOULDBLOCK) {
-            syslog(LOG_ERR, "lock_setlock(%s): %m - disabling master prometheus report until next reload",
-                            prom_report_fname);
+            syslog(LOG_ERR, "lock_setlock(%s): %m - %s",
+                            prom_report_fname,
+                            "disabling master prometheus report until next reload");
             prom_enabled = 0;
         }
         return;
