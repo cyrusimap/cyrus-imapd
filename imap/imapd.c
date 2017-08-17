@@ -6655,7 +6655,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         }
         raw = strarray_join(su, " ");
         strarray_free(su);
-        r = specialuse_validate(imapd_userid, raw, &specialuse);
+        r = specialuse_validate(NULL, imapd_userid, raw, &specialuse);
         free(raw);
         if (r) {
             prot_printf(imapd_out, "%s NO [USEATTR] %s\r\n", tag, error_message(r));
