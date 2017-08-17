@@ -2028,26 +2028,23 @@ static void do_prom_report(struct timeval now)
     }
 
     /* okay, now prepare the report */
-//    int ready_workers;          /* num child processes ready for service */
-//    int nforks;                 /* num child processes spawned */
-//    int nactive;                /* num children servicing clients */
-//    int nconnections;           /* num connections made to children */
-//    double forkrate;            /* rate at which we're spawning children */
-//    int nreadyfails;            /* number of failures in READY state */
-
     last_updated = now_ms();
 
-    buf_appendcstr(&report, "# HELP cyrus_master_ready_total The number of ready workers\n");
-    buf_appendcstr(&report, "# TYPE cyrus_master_ready_total gauge\n");
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_ready_workers",
+                        "The number of ready workers");
+    buf_appendcstr(&report, "# TYPE cyrus_master_ready_workers gauge\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
-        buf_printf(&report, "cyrus_master_ready_total{service=\"%s\",family=\"%s\"}",
+        buf_printf(&report, "cyrus_master_ready_workers{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %d %" PRId64 "\n",
                             s->ready_workers, last_updated);
     }
 
-    buf_appendcstr(&report, "# HELP cyrus_master_forks_total The number of children spawned\n");
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_forks_total",
+                        "The number of children spawned");
     buf_appendcstr(&report, "# TYPE cyrus_master_forks_total counter\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
@@ -2057,11 +2054,13 @@ static void do_prom_report(struct timeval now)
                             s->nforks, last_updated);
     }
 
-    buf_appendcstr(&report, "# HELP cyrus_master_active_total The number of children servicing clients\n");
-    buf_appendcstr(&report, "# TYPE cyrus_master_active_total gauge\n");
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_active_children",
+                        "The number of children servicing clients");
+    buf_appendcstr(&report, "# TYPE cyrus_master_active_children gauge\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
-        buf_printf(&report, "cyrus_master_active_total{service=\"%s\",family=\"%s\"}",
+        buf_printf(&report, "cyrus_master_active_children{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %d %" PRId64 "\n",
                             s->nactive, last_updated);
@@ -2069,17 +2068,21 @@ static void do_prom_report(struct timeval now)
 
     /* XXX what is nconnections? */
 
-    buf_appendcstr(&report, "# HELP cyrus_master_fork_rate The rate at which we're spawning children\n");
-    buf_appendcstr(&report, "# TYPE cyrus_master_fork_rate gauge\n");
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_forks_per_second",
+                        "The rate at which we're spawning children");
+    buf_appendcstr(&report, "# TYPE cyrus_master_forks_per_second gauge\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
-        buf_printf(&report, "cyrus_master_fork_rate{service=\"%s\",family=\"%s\"}",
+        buf_printf(&report, "cyrus_master_forks_per_second{service=\"%s\",family=\"%s\"}",
                             s->name, s->familyname);
         buf_printf(&report, " %g %" PRId64 "\n",
                             s->forkrate, last_updated);
     }
 
-    buf_appendcstr(&report, "# HELP cyrus_master_ready_fails_total The number of failures in READY state\n");
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_ready_fails_total",
+                        "The number of failures in READY state");
     buf_appendcstr(&report, "# TYPE cyrus_master_ready_fails_total counter\n");
     for (i = 0; i < nservices; i++) {
         const struct service *s = &Services[i];
