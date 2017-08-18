@@ -337,3 +337,11 @@ Generally accepted wisdom when upgrading a Murder configuration is to
 upgrade all your back end servers first. This can be done one at a time.
 
 Upgrade your mupdate master and front ends last.
+
+If you are upgrading from 2.4, and wish to use XFER to transfer your
+mailboxes to your new 3.0 server, please consider first upgrading your
+2.4 setup to version 2.4.19 or later.  Earlier versions of 2.4 do not
+correctly recognise the 2.5 and 3.0 mailbox versions, and will
+downgrade mailboxes (losing metadata) in transit.  2.4.19 and later
+versions correctly recognise 2.5 and 3.0 servers, and will not
+downgrade mailbox versions in transit.
