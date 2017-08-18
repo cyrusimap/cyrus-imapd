@@ -250,7 +250,7 @@ sub test_getcontactupdates
 }
 
 sub test_getcontactupdates_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -677,7 +677,7 @@ sub test_getcontactlist
 
 
 sub test_getcontactlist_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1018,7 +1018,7 @@ sub test_getcontactgroupupdates
 }
 
 sub test_getcontactgroupupdates_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
