@@ -2378,7 +2378,7 @@ sub test_getcalendareventlist
                             "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2016-07-01T10:00:00",
-                            "timeZone" => "Etc/GMT+1",
+                            "timeZone" => "Europe/Vienna",
                             "duration" => "PT1H",
                         },
                         "2" => {
@@ -2389,6 +2389,7 @@ sub test_getcalendareventlist
                             "isAllDay" => JSON::true,
                             "start" => "2016-01-01T00:00:00",
                             "duration" => "P2D",
+                            "timeZone" => undef,
                         }
                     }}, "R1"]]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
@@ -2532,7 +2533,7 @@ sub test_getcalendareventlist_shared
                                 "freeBusyStatus" => "busy",
                                 "isAllDay" => JSON::false,
                                 "start" => "2016-07-01T10:00:00",
-                                "timeZone" => "Etc/GMT+1",
+                                "timeZone" => "Europe/Vienna",
                                 "duration" => "PT1H",
                             },
                             "2" => {
@@ -2653,7 +2654,7 @@ sub test_getcalendareventlist_datetime
                             "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2016-01-01T09:00:00",
-                            "timeZone" => "Etc/GMT-1",
+                            "timeZone" => "Europe/Vienna",
                             "duration" => "PT1H",
                         },
                     }}, "R1"]]);
@@ -2719,7 +2720,7 @@ sub test_getcalendareventlist_datetime
                             "freeBusyStatus" => "busy",
                             "isAllDay" => JSON::false,
                             "start" => "2017-01-01T09:00:00",
-                            "timeZone" => "Etc/GMT-1",
+                            "timeZone" => "Europe/Vienna",
                             "duration" => "PT1H",
                             "recurrenceRule" => {
                                 "frequency" => "yearly",
