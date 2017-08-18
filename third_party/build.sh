@@ -55,6 +55,7 @@ if [ ! $ITEM ] || [ $ITEM = libical ] ; then
   mkdir build
   cd build
   cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX \
+        -DUSE_BUILTIN_TZDATA=true \
         -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
   make $MAKEOPTS
   sudo make install
