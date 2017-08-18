@@ -4465,6 +4465,7 @@ static int getSearchSnippets(jmap_req_t *req)
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        json_decref(unsupported_filter);
         r = 0;
         goto done;
     }
@@ -4477,6 +4478,7 @@ static int getSearchSnippets(jmap_req_t *req)
         r = 0;
         goto done;
     }
+    json_decref(unsupported_filter);
 
     if (json_array_size(messageids) && filter_contains_text(filter)) {
         /* Render snippets */
@@ -6669,6 +6671,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
 done:
+    strarray_fini(&user_flagnames);
     if (mrw) msgrecord_unref(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
     if (oldmailboxes) json_decref(oldmailboxes);

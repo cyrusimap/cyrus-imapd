@@ -6882,6 +6882,9 @@ EXPORTED void freesortcrit(struct sortcrit *s)
             free(s[i].args.annot.entry);
             free(s[i].args.annot.userid);
             break;
+        case SORT_HASFLAG:
+            free(s[i].args.flag.name);
+            break;
         }
         i++;
     } while (s[i].key != SORT_SEQUENCE);
