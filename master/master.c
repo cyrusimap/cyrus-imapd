@@ -2080,6 +2080,18 @@ static void do_prom_report(struct timeval now)
                             s->nactive, last_updated);
     }
 
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_max_children",
+                        "The maximum number of child processes");
+    buf_appendcstr(&report, "# TYPE cyrus_master_max_children gauge\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_max_children{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %d %" PRId64 "\n",
+                            s->max_workers, last_updated);
+    }
+
     /* XXX what is nconnections? */
 
     buf_printf(&report, "# HELP %s %s\n",
@@ -2092,6 +2104,18 @@ static void do_prom_report(struct timeval now)
                             s->name, s->familyname);
         buf_printf(&report, " %g %" PRId64 "\n",
                             s->forkrate, last_updated);
+    }
+
+    buf_printf(&report, "# HELP %s %s\n",
+                        "cyrus_master_max_forks_per_second",
+                        "The maximum rate at which we will spawn children");
+    buf_appendcstr(&report, "# TYPE cyrus_master_max_forks_per_second gauge\n");
+    for (i = 0; i < nservices; i++) {
+        const struct service *s = &Services[i];
+        buf_printf(&report, "cyrus_master_max_forks_per_second{service=\"%s\",family=\"%s\"}",
+                            s->name, s->familyname);
+        buf_printf(&report, " %u %" PRId64 "\n",
+                            s->maxforkrate, last_updated);
     }
 
     buf_printf(&report, "# HELP %s %s\n",
