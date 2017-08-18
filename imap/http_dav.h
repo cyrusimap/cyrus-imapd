@@ -283,7 +283,7 @@ enum {
 
 /* Function to fetch resource validators */
 typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
-                                struct index_record *record,
+                                const char *userid, struct index_record *record,
                                 const char **etag, time_t *lastmod);
 
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
@@ -656,7 +656,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
                           const char *mboxprefix, const char **errstr);
 int dav_get_validators(struct mailbox *mailbox, void *data,
-                       struct index_record *record,
+                       const char *userid, struct index_record *record,
                        const char **etag, time_t *lastmod);
 int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       struct mailbox *mailbox, const void *data,

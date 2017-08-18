@@ -679,6 +679,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
 
 
 EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
+                                const char *userid __attribute__((unused)),
                                 struct index_record *record,
                                 const char **etag, time_t *lastmod)
 {
@@ -1660,7 +1661,7 @@ int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
     if (fctx->record) {
         const char *etag;
 
-        fctx->get_validators(fctx->mailbox, fctx->data,
+        fctx->get_validators(fctx->mailbox, fctx->data, fctx->userid,
                              fctx->record, &etag, NULL);
         /* add DQUOTEs */
         buf_printf(&fctx->buf, "\"%s\"", etag);
@@ -1691,7 +1692,7 @@ int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
         (fctx->req_tgt->resource && !fctx->record)) return HTTP_NOT_FOUND;
 
     if (fctx->record) {
-        fctx->get_validators(fctx->mailbox, fctx->data,
+        fctx->get_validators(fctx->mailbox, fctx->data, fctx->userid,
                              fctx->record, NULL, &lastmod);
     }
     else {
@@ -4202,7 +4203,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Fetch resource validators */
-    r = cparams->get_validators(src_mbox, (void *) ddata,
+    r = cparams->get_validators(src_mbox, (void *) ddata, httpd_userid,
                                 &src_rec, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -4575,7 +4576,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Fetch resource validators */
-    r = dparams->get_validators(mailbox, (void *) ddata,
+    r = dparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &record, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -4734,7 +4735,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     }
 
     /* Fetch resource validators */
-    r = gparams->get_validators(mailbox, (void *) ddata,
+    r = gparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &record, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -4911,7 +4912,7 @@ int meth_lock(struct transaction_t *txn, void *params)
                                    txn->req_tgt.resource, (void *) &ddata, 1);
 
     /* Fetch resource validators */
-    r = lparams->get_validators(mailbox, (void *) ddata,
+    r = lparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &oldrecord, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -6717,7 +6718,7 @@ int meth_patch(struct transaction_t *txn, void *params)
     }
 
     /* Fetch resource validators */
-    r = pparams->get_validators(mailbox, (void *) ddata,
+    r = pparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &oldrecord, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -6964,7 +6965,7 @@ int meth_put(struct transaction_t *txn, void *params)
     /* XXX  Check errors */
 
     /* Fetch resource validators */
-    r = pparams->get_validators(mailbox, (void *) ddata,
+    r = pparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &oldrecord, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -8219,7 +8220,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
 
     /* Fetch resource validators */
-    r = lparams->get_validators(mailbox, (void *) ddata,
+    r = lparams->get_validators(mailbox, (void *) ddata, httpd_userid,
                                 &record, &etag, &lastmod);
     if (r) {
         txn->error.desc = error_message(r);
@@ -8423,7 +8424,7 @@ int dav_store_resource(struct transaction_t *txn,
 
                 ddata.alive = 1;
                 ddata.imap_uid = mailbox->i.last_uid;
-                dav_get_validators(mailbox, &ddata, &newrecord,
+                dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
                                    &txn->resp_body.etag, &txn->resp_body.lastmod);
 
                 if (oldrecord) {

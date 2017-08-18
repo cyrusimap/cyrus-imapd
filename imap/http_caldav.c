@@ -157,7 +157,7 @@ static int caldav_parse_path(const char *path,
                              struct request_target_t *tgt, const char **errstr);
 
 static int caldav_get_validators(struct mailbox *mailbox, void *data,
-                                 struct index_record *record,
+                                 const char *userid, struct index_record *record,
                                  const char **etag, time_t *lastmod);
 
 static int caldav_check_precond(struct transaction_t *txn,
@@ -924,7 +924,7 @@ static int caldav_parse_path(const char *path,
 
 
 static int caldav_get_validators(struct mailbox *mailbox, void *data,
-                                 struct index_record *record,
+                                 const char *userid, struct index_record *record,
                                  const char **etag, time_t *lastmod)
 {
 
@@ -947,7 +947,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
 
         /* Lookup per-user calendar data */
         r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                      PER_USER_CAL_DATA, httpd_userid, &userdata);
+                                      PER_USER_CAL_DATA, userid, &userdata);
         if (!r && buf_len(&userdata)) {
             struct dlist *dl;
 
@@ -982,7 +982,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
         }
     }
 
-    return dav_get_validators(mailbox, data, record, etag, lastmod);
+    return dav_get_validators(mailbox, data, userid, record, etag, lastmod);
 }
 
 
@@ -8183,7 +8183,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
                 cdata->dav.alive = 1;
                 cdata->dav.imap_uid = mailbox->i.last_uid;
-                caldav_get_validators(mailbox, cdata, &newrecord,
+                caldav_get_validators(mailbox, cdata, userid, &newrecord,
                                       &txn->resp_body.etag,
                                       &txn->resp_body.lastmod);
             }
