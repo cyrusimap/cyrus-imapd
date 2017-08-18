@@ -1987,7 +1987,7 @@ sub test_setcalendarevents_move
                             "calendarId" => "nope",
                         }
                     }}, "R1"]]);
-    $self->assert_str_equals('calendarNotFound', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals($state, $res->[0][1]{newState});
 
     xlog "get calendar $id from untouched calendar $calidA";
