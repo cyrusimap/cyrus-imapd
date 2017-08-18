@@ -54,9 +54,6 @@
 
 #define MAX_SESSIONID_SIZE 256
 
-/* This is a string because we only ever use it as a string */
-#define SPHINX_MAX_MATCHES          "1000000"
-
 /* Flags for cyrus_init() */
 enum {
     CYRUSINIT_NODB =    (1<<0),

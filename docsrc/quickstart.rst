@@ -216,7 +216,6 @@ Database support
 
 Search engine
     * squat             : yes
-    * sphinx            : no
     * xapian            : yes
     * xapian_flavor     : vanilla
 
