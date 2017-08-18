@@ -1160,8 +1160,6 @@ static void sched_deliver_remote(const char *cal_ownerid, const char *sched_user
 
     syslog(LOG_DEBUG, "sched_deliver_remote(%s, %X)", recipient, sparam->flags);
 
-    icalcomponent_add_required_timezones(sched_data->itip);
-
     if (sparam->flags & SCHEDTYPE_ISCHEDULE) {
         /* Use iSchedule */
         xmlNodePtr xml;
