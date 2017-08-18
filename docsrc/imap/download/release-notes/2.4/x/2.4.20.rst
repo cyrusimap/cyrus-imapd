@@ -1,0 +1,9 @@
+===============================
+Cyrus IMAP 2.4.20 Release Notes
+===============================
+
+*   Fixed: lmtpd crash
+*   Fixed: auth_pts will now error if its configured socket path is too
+    long for its buffer
+
+:ref:`imap-release-notes-2.4`
