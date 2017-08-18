@@ -1567,10 +1567,9 @@ static int jmap_write_calendarevent(json_t *event,
             }
         }
         if (calendarId && jmap_calendar_ishidden(calendarId)) {
-            json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
-            json_object_set_new(notWritten, id, err);
-            r = 0; goto done;
-        } else if (json_array_size(invalid)) {
+            json_array_append_new(invalid, json_string("calendarId"));
+        }
+        if (json_array_size(invalid)) {
             json_t *err = json_pack("{s:s, s:o}",
                     "type", "invalidProperties", "properties", invalid);
             json_object_set_new(notWritten, id, err);
@@ -1608,7 +1607,8 @@ static int jmap_write_calendarevent(json_t *event,
     /* Open mailbox for writing */
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+        json_t *err = json_pack("{s:s, s:[s]}",
+                "type", "invalidProperties", "properties", "calendarId");
         json_object_set_new(notWritten, id, err);
         r = 0; goto done;
     } else if (r) {
@@ -1681,7 +1681,8 @@ static int jmap_write_calendarevent(json_t *event,
             /* Open destination mailbox for writing. */
             r = mailbox_open_iwl(dstmboxname, &dstmbox);
             if (r == IMAP_MAILBOX_NONEXISTENT) {
-                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_t *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidProperties", "properties", "calendarId");
                 json_object_set_new(notWritten, id, err);
                 r = 0; goto done;
             } else if (r) {
@@ -1694,7 +1695,8 @@ static int jmap_write_calendarevent(json_t *event,
             mbentry.mbtype = dstmbox->mbtype;
             rights = httpd_myrights(req->authstate, &mbentry);
             if (!(rights & (DACL_WRITE))) {
-                json_t *err = json_pack("{s:s}", "type", "calendarNotFound");
+                json_t *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidProperties", "properties", "calendarId");
                 json_object_set_new(notWritten, id, err);
                 r = 0; goto done;
             }
