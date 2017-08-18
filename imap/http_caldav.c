@@ -2140,29 +2140,10 @@ static void add_timezone(icalparameter *param, void *data)
             if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
         }
         else {
-            /* Fetch tz from our tzdist repository */
-            struct buf buf = BUF_INITIALIZER;
-            const char *path;
-            int fd;
+            /* Fetch tz from builtin repository */
+            icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
 
-            /* Open and mmap the timezone file */
-            buf_printf(&buf, "%s%s/%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
-            path = buf_cstring(&buf);
-
-            if ((fd = open(path, O_RDONLY)) != -1) {
-                struct buf data = BUF_INITIALIZER;
-                icalcomponent *ical;
-
-                buf_init_mmap(&data, 1, fd, path, MAP_UNKNOWN_LEN, NULL);
-                ical = ical_string_as_icalcomponent(&data);
-                vtz = icalcomponent_get_first_component(ical,
-                                                        ICAL_VTIMEZONE_COMPONENT);
-                icalcomponent_remove_component(ical, vtz);
-                icalcomponent_free(ical);
-                buf_free(&data);
-                close(fd);
-            }
-            buf_free(&buf);
+            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
         }
 
         if (vtz) icalcomponent_add_component(tzrock->new, vtz);
@@ -2315,19 +2296,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             }
             if (need_tz) {
                 /* Add VTIMEZONE components for known TZIDs */
-                struct timezone_rock tzrock = { NULL, NULL };
-                icalcomponent *comp, *next;
-                icalcomponent_kind kind;
-
                 *obj = ical = record_to_ical(mailbox, record, NULL);
-                tzrock.new = ical;
 
-                comp = icalcomponent_get_first_real_component(ical);
-                kind = icalcomponent_isa(comp);
-                for (; comp; comp = next) {
-                    next = icalcomponent_get_next_component(ical, kind);
-                    icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
-                }
+                icalcomponent_add_required_timezones(ical);
             }
         }
         else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
@@ -5959,20 +5930,10 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         if (cdata->comp_flags.tzbyref) {
             if (need_tz) {
                 /* Add VTIMEZONE components for known TZIDs */
-                struct timezone_rock tzrock = { NULL, NULL };
-                icalcomponent *comp, *next;
-                icalcomponent_kind kind;
-
                 if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
                 ical = fctx->obj;
-                tzrock.new = ical;
 
-                comp = icalcomponent_get_first_real_component(ical);
-                kind = icalcomponent_isa(comp);
-                for (; comp; comp = next) {
-                    next = icalcomponent_get_next_component(ical, kind);
-                    icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
-                }
+                icalcomponent_add_required_timezones(ical);
             }
         }
         else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
@@ -6587,7 +6548,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                              void *rock __attribute__((unused)))
 {
     struct buf attrib = BUF_INITIALIZER;
-    const char *data = NULL, *msg_base = NULL;
+    const char *data = NULL;
     size_t datalen = 0;
     int r = 0;
 
@@ -6616,24 +6577,26 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             if (r) r = HTTP_SERVER_ERROR;
             else if (!attrib.len) r = HTTP_NOT_FOUND;
             else {
-                const char *path;
-                int fd;
+                /* Fetch tz from builtin repository */
+                icaltimezone *tz =
+                    icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
 
-                /* Open and mmap the timezone file */
-                buf_reset(&fctx->buf);
-                buf_printf(&fctx->buf, "%s%s/%s.ics",
-                           config_dir, FNAME_ZONEINFODIR, buf_cstring(&attrib));
+                if (tz) {
+                    icalcomponent *vtz = icaltimezone_get_component(tz);
+                    icalcomponent *ical =
+                        icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                                            icalproperty_new_version("2.0"),
+                                            icalproperty_new_prodid(ical_prodid),
+                                            vtz,
+                                            0);
 
-                path = buf_cstring(&fctx->buf);
-                if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+                    data = icalcomponent_as_ical_string(ical);
+                    datalen = strlen(data);
 
-                map_refresh(fd, 1, &msg_base, &datalen,
-                            MAP_UNKNOWN_LEN, path, NULL);
-                close(fd);
-
-                if (!msg_base) r = HTTP_SERVER_ERROR;
-
-                data = msg_base;
+                    icalcomponent_remove_component(ical, vtz);
+                    icalcomponent_free(ical);
+                }
+                else r = HTTP_SERVER_ERROR;
             }
         }
         else r = HTTP_NOT_FOUND;
@@ -6643,7 +6606,6 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                                  caldav_mime_types, CALDAV_SUPP_DATA,
                                  data, datalen);
 
-    if (msg_base) map_free(&msg_base, &datalen);
     buf_free(&attrib);
 
     return r;
