@@ -318,7 +318,7 @@ sub test_getmailboxes_nocalendars
 }
 
 sub test_getmailboxes_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -901,7 +901,7 @@ sub test_setmailboxes_destroy_empty
 }
 
 sub test_setmailboxes_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1219,7 +1219,7 @@ sub test_getmailboxupdates_counts
 
 
 sub test_getmailboxupdates_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -2193,7 +2193,7 @@ sub test_getmessages_preview
 }
 
 sub test_getmessages_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2407,7 +2407,7 @@ sub test_setmessages_attachedmessages
 }
 
 sub test_setmessages_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -3134,6 +3134,330 @@ sub test_getmessagelist
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
+    my $account = undef;
+    my $store = $self->{store};
+    my $mboxprefix = "INBOX";
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { accountId => $account }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog "create mailboxes";
+    $talk->create("$mboxprefix.A") || die;
+    $talk->create("$mboxprefix.B") || die;
+    $talk->create("$mboxprefix.C") || die;
+
+    $res = $jmap->Request([['getMailboxes', { accountId => $account }, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxa = $m{"A"}->{id};
+    my $mboxb = $m{"B"}->{id};
+    my $mboxc = $m{"C"}->{id};
+    $self->assert_not_null($mboxa);
+    $self->assert_not_null($mboxb);
+    $self->assert_not_null($mboxc);
+
+    xlog "create messages";
+    my %params;
+    $store->set_folder("$mboxprefix.A");
+    my $dtfoo = DateTime->new(
+        year       => 2016,
+        month      => 11,
+        day        => 1,
+        hour       => 7,
+        time_zone  => 'Etc/UTC',
+    );
+    my $bodyfoo = "A rather short message";
+    %params = (
+        date => $dtfoo,
+        body => $bodyfoo,
+        store => $store,
+    );
+    $res = $self->make_message("foo", %params) || die;
+    $talk->copy(1, "$mboxprefix.C") || die;
+
+    $store->set_folder("$mboxprefix.B");
+    my $dtbar = DateTime->new(
+        year       => 2016,
+        month      => 3,
+        day        => 1,
+        hour       => 19,
+        time_zone  => 'Etc/UTC',
+    );
+    my $bodybar = ""
+    . "In the context of electronic mail, messages are viewed as having an\r\n"
+    . "envelope and contents.  The envelope contains whatever information is\r\n"
+    . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
+    . "discussion of the envelope.)  The contents comprise the object to be\r\n"
+    . "delivered to the recipient.  This specification applies only to the\r\n"
+    . "format and some of the semantics of message contents.  It contains no\r\n"
+    . "specification of the information in the envelope.i\r\n"
+    . "\r\n"
+    . "However, some message systems may use information from the contents\r\n"
+    . "to create the envelope.  It is intended that this specification\r\n"
+    . "facilitate the acquisition of such information by programs.\r\n"
+    . "\r\n"
+    . "This specification is intended as a definition of what message\r\n"
+    . "content format is to be passed between systems.  Though some message\r\n"
+    . "systems locally store messages in this format (which eliminates the\r\n"
+    . "need for translation between formats) and others use formats that\r\n"
+    . "differ from the one specified in this specification, local storage is\r\n"
+    . "outside of the scope of this specification.\r\n";
+
+    %params = (
+        date => $dtbar,
+        body => $bodybar,
+        extra_headers => [
+            ['x-tra', "baz"],
+        ],
+        store => $store,
+    );
+    $self->make_message("bar", %params) || die;
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "fetch messages without filter";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    fetchMessages => JSON::true }, "R1"]
+        ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]->{list}});
+
+    %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $foo = $m{"foo"}->{id};
+    my $bar = $m{"bar"}->{id};
+    $self->assert_not_null($foo);
+    $self->assert_not_null($bar);
+
+    xlog "filter text";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        text => "foo",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter NOT text";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        operator => "NOT",
+                        conditions => [ {text => "foo"} ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter mailbox A";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        inMailbox => $mboxa,
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter mailboxes";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        operator => 'OR',
+                        conditions => [
+                            {
+                                inMailbox => $mboxa,
+                            },
+                            {
+                                inMailbox => $mboxc,
+                            },
+                        ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter mailboxes with not in";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        inMailboxOtherThan => $mboxb,
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter mailboxes";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        operator => 'AND',
+                        conditions => [
+                            {
+                                inMailbox => $mboxa,
+                            },
+                            {
+                                inMailbox => $mboxb,
+                            },
+                            {
+                                inMailbox => $mboxc,
+                            },
+                        ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
+
+    xlog "filter not in mailbox A";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        operator => 'NOT',
+                        conditions => [
+                            {
+                                inMailbox => $mboxa,
+                            },
+                        ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+
+    xlog "filter by before";
+    my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter by after",
+    my $dtafter = $dtbar->clone()->add(seconds => 1);
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        after => $dtafter->strftime('%Y-%m-%dT%TZ'),
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter by after and before",
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        after => $dtafter->strftime('%Y-%m-%dT%TZ'),
+                        before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
+
+    xlog "filter by minSize";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        minSize => length($bodybar),
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter by maxSize";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        maxSize => length($bodybar),
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter by header";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        header => [ "x-tra" ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+
+    xlog "filter by header and value";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    filter => {
+                        header => [ "x-tra", "bam" ],
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{messageIds}});
+
+    xlog "sort by ascending date";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "date asc" ],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[1]);
+
+    xlog "sort by descending date";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "date desc" ],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[1]);
+
+    xlog "sort by ascending size";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "size asc" ],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[0]);
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[1]);
+
+    xlog "sort by descending size";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "size desc" ],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_str_equals($bar, $res->[0][1]->{messageIds}[0]);
+    $self->assert_str_equals($foo, $res->[0][1]->{messageIds}[1]);
+
+    xlog "sort by ascending id";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "id asc" ],
+                }, "R1"]]);
+    my @ids = sort ($foo, $bar);
+    $self->assert_deep_equals(\@ids, $res->[0][1]->{messageIds});
+
+    xlog "sort by descending id";
+    $res = $jmap->Request([['getMessageList', {
+                    accountId => $account,
+                    sort => [ "id desc" ],
+                }, "R1"]]);
+    @ids = reverse sort ($foo, $bar);
+    $self->assert_deep_equals(\@ids, $res->[0][1]->{messageIds});
+
+    xlog "delete mailboxes";
+    $talk->delete("$mboxprefix.A") or die;
+    $talk->delete("$mboxprefix.B") or die;
+    $talk->delete("$mboxprefix.C") or die;
+}
+
+sub test_getmessagelist_shared
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
     my $admintalk = $self->{adminstore}->get_client();
     $self->{instance}->create_user("test");
     $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
@@ -3646,17 +3970,14 @@ sub test_getmessagelist_window
     $self->assert_num_equals(1, $res->[0][1]->{position});
 }
 
-sub test_getmessagelist_shared
-    :JMAP :min_version_3_0
+sub test_getmessagelist_acl
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};
     my $talk = $store->get_client();
-
-    # basic tests for shared accounts. See also the main
-    # getmessagelist test which test both main and shared accounts
 
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -3816,7 +4137,7 @@ sub test_getsearchsnippets
 }
 
 sub test_getsearchsnippets_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4386,7 +4707,7 @@ sub test_getmessageupdates
 }
 
 sub test_getmessageupdates_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5076,7 +5397,7 @@ sub test_importmessages
 }
 
 sub test_importmessages_shared
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
