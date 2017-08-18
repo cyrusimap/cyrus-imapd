@@ -82,6 +82,7 @@ extern int msgrecord_get_fname(msgrecord_t *mr, const char **fname);
 extern int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok);
 extern int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item);
 extern int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mailboxptr);
+extern int msgrecord_extract_flags(msgrecord_t *mr, const char *userid, strarray_t **flags);
 
 extern int msgrecord_load_cache(msgrecord_t *mr);
 
@@ -114,10 +115,6 @@ extern int msgrecord_annot_set_auth(msgrecord_t *mr, int isadmin,
 
 extern int msgrecord_extract_annots(msgrecord_t *mr,
                                     struct entryattlist **annots);
-
-extern int msgrecord_extract_flags(msgrecord_t *mr,
-                                   const char *userid,
-                                   strarray_t **flags);
 
 /* misc */
 extern int msgrecord_should_archive(msgrecord_t *mr, void *rock);
