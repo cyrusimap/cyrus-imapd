@@ -4395,6 +4395,31 @@ static int write_personal_data(struct mailbox *mailbox,
 }
 
 
+/*
+ * Handle stripping per-user data from existing and/or new shared resource.
+ *
+ * Logic is as follows:
+ * 
+ *   Owner   R/W   Exists Shared   A   B   C   D   E
+ *   -----------------------------------------------
+ *     0      0      0             Y
+ *     0      0      1      0          Y   Y   Y
+ *     0      0      1      1                  Y
+ *     0      1      0                         Y   Y
+ *     0      1      1      0          Y       Y   ?
+ *     0      1      1      1                  Y   ?
+ *     1      0      0             Y
+ *     1      0      1                         Y
+ *     1      1      0                             Y
+ *     1      1      1      0                      Y
+ *     1      1      1      1                  Y   ?
+ *
+ *   A = Permission denied
+ *   B = Extract owner data
+ *   C = Store owner resource
+ *   D = Extract user data
+ *   E = Store user resource
+ */
 static int personalize_resource(struct transaction_t *txn,
                                 struct mailbox *mailbox,
                                 icalcomponent *ical,
