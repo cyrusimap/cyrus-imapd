@@ -7329,14 +7329,15 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Construct array of records for sorting and/or fetching cached header */
     istate.mailbox = mailbox;
-    istate.map = xzmalloc(mailbox->i.num_records *
-                          sizeof(struct index_map));
+    istate.map = xzmalloc(mailbox->i.num_records * sizeof(struct index_map));
 
     /* Find which resources we need to report */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
     const message_t *msg;
+
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+
         if ((unbind_flag >= 0) &&
             record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
             /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
@@ -7402,52 +7403,26 @@ int report_sync_col(struct transaction_t *txn,
         respmodseq = highestmodseq;
     }
 
-    /* XXX - this is crappy - re-reading the messages again */
+    /* Open the DAV DB corresponding to the mailbox */
+    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+
     /* Report the resources within the client requested limit (if any) */
-    for (msgno = 1; msgno <= nresp; msgno++) {
-        char *p, *resource = NULL;
-        struct index_record thisrecord;
+    for (msgno = 0; msgno < nresp; msgno++) {
+        struct dav_data *ddata;
 
-        if (index_reload_record(&istate, msgno, &thisrecord))
-            continue;
+        /* Find name of the resource */
+        rparams->davdb.lookup_imapuid(fctx->davdb, fctx->mailbox->name,
+                                      istate.map[msgno].uid, (void **) &ddata,
+                                      /* tombstones */ 1);
 
-        /* Get resource filename from Content-Disposition header */
-        if ((p = index_getheader(&istate, msgno, "Content-Disposition")) &&
-            (p = strstr(p, "filename="))) {
-            resource = p + 9;
-        }
-        if (!resource) continue;  /* No filename */
-
-        if (*resource == '\"') {
-            resource++;
-            if ((p = strchr(resource, '\"'))) *p = '\0';
-        }
-        else if ((p = strchr(resource, ';'))) *p = '\0';
-
-        if (thisrecord.system_flags & FLAG_EXPUNGED) {
+        if (!ddata->alive) {
             /* report as NOT FOUND
                IMAP UID of 0 will cause index record to be ignored
                propfind_by_resource() will append our resource name */
-            struct dav_data ddata;
-
-            memset(&ddata, 0, sizeof(struct dav_data));
-            ddata.resource = resource;
-            fctx->proc_by_resource(fctx, &ddata);
-        }
-        else {
-            struct dav_data *ddata;
-
-            /* Open the DAV DB corresponding to the mailbox */
-            if (!fctx->davdb)
-                fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
-
-            rparams->davdb.lookup_resource(fctx->davdb, fctx->mailbox->name,
-                                           resource, (void **) &ddata, 0);
-            ddata->resource = resource;
-            fctx->record = &thisrecord;
-            fctx->proc_by_resource(fctx, ddata);
+            ddata->imap_uid = 0;
         }
 
+        fctx->proc_by_resource(fctx, ddata);
         fctx->record = NULL;
     }
 
@@ -8896,6 +8871,7 @@ struct meth_params notify_params = {
       (db_proc_t) &webdav_commit,
       (db_proc_t) &webdav_abort,
       (db_lookup_proc_t) &webdav_lookup_resource,
+      (db_imapuid_proc_t) &webdav_lookup_imapuid,
       (db_foreach_proc_t) &webdav_foreach,
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },

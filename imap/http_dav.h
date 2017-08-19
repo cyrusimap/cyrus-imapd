@@ -289,12 +289,18 @@ typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
 typedef void (*db_close_proc_t)(void *davdb);
 
-/* Function to lookup DAV 'resource' in 'mailbox', with optional 'lock',
+/* Function to lookup DAV 'resource' in 'mailbox',
  * placing the record in 'data'
  */
 typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
                                 const char *resource, void **data,
                                 int tombstones);
+
+/* Function to lookup DAV 'imapuid' in 'mailbox',
+ * placing the record in 'data'
+ */
+typedef int (*db_imapuid_proc_t)(void *davdb, const char *mailbox,
+                                 int uid, void **data, int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
 typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
@@ -433,6 +439,7 @@ struct davdb_params {
     db_proc_t commit_transaction;
     db_proc_t abort_transaction;
     db_lookup_proc_t lookup_resource;   /* lookup a specific resource */
+    db_imapuid_proc_t lookup_imapuid;   /* lookup a specific resource */
     db_foreach_proc_t foreach_resource; /* process all resources in a mailbox */
     /* XXX - convert these to lock management only.  For everything else,
      * we need to go via mailbox.c for replication support */

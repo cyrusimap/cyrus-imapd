@@ -287,6 +287,7 @@ static struct meth_params carddav_params = {
       (db_proc_t) &carddav_commit,
       (db_proc_t) &carddav_abort,
       (db_lookup_proc_t) &carddav_lookup_resource,
+      (db_imapuid_proc_t) &carddav_lookup_imapuid,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
       (db_delete_proc_t) &carddav_delete },

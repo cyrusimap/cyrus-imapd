@@ -86,6 +86,13 @@ int webdav_lookup_resource(struct webdav_db *webdavdb,
                            struct webdav_data **result,
                            int tombstones);
 
+/* lookup an entry from 'webdavdb' by mailbox and IMAP uid
+   (optionally inside a transaction for updates) */
+int webdav_lookup_imapuid(struct webdav_db *webdavdb,
+                          const char *mailbox, int uid,
+                          struct webdav_data **result,
+                          int tombstones);
+
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */
 int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,

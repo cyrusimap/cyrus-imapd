@@ -315,6 +315,34 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 }
 
 
+#define CMD_SELIMAPUID CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
+
+EXPORTED int webdav_lookup_imapuid(struct webdav_db *webdavdb,
+                                    const char *mailbox, int imap_uid,
+                                    struct webdav_data **result,
+                                    int tombstones)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
+        { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
+        { NULL,        SQLITE_NULL,    { .s = NULL          } } };
+    static struct webdav_data wdata;
+    struct read_rock rrock = { webdavdb, &wdata, tombstones, NULL, NULL };
+    int r;
+
+    *result = memset(&wdata, 0, sizeof(struct webdav_data));
+
+    r = sqldb_exec(webdavdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
+    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    wdata.dav.mailbox = mailbox;
+    wdata.dav.imap_uid = imap_uid;
+
+    return r;
+}
+
+
 #define CMD_SELUID CMD_GETFIELDS                                        \
     " WHERE res_uid = :res_uid AND alive = 1;"
 

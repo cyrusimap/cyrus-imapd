@@ -91,6 +91,13 @@ int carddav_lookup_resource(struct carddav_db *carddavdb,
                            struct carddav_data **result,
                            int tombstones);
 
+/* lookup an entry from 'carddavdb' by mailbox and IMAP uid
+   (optionally inside a transaction for updates) */
+int carddav_lookup_imapuid(struct carddav_db *carddavdb,
+                           const char *mailbox, int uid,
+                           struct carddav_data **result,
+                           int tombstones);
+
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
