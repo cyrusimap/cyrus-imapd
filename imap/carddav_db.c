@@ -292,6 +292,34 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 }
 
 
+#define CMD_SELIMAPUID CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
+
+EXPORTED int carddav_lookup_imapuid(struct carddav_db *carddavdb,
+                                    const char *mailbox, int imap_uid,
+                                    struct carddav_data **result,
+                                    int tombstones)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
+        { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
+        { NULL,        SQLITE_NULL,    { .s = NULL          } } };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, tombstones, NULL, NULL };
+    int r;
+
+    *result = memset(&cdata, 0, sizeof(struct carddav_data));
+
+    r = sqldb_exec(carddavdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    cdata.dav.mailbox = mailbox;
+    cdata.dav.imap_uid = imap_uid;
+
+    return r;
+}
+
+
 #define CMD_SELUID CMD_GETFIELDS \
     " WHERE vcard_uid = :vcard_uid AND alive = 1;"
 
