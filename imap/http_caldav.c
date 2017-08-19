@@ -2209,17 +2209,19 @@ static void add_timezone(icalparameter *param, void *data)
 }
 
 
-#define STRIP_OWNER_CAL_DATA          \
-    "CALDATA %(VPATCH {186+}\r\n"     \
-    "BEGIN:VPATCH\r\n"                \
-    "VERSION:1\r\n"                   \
-    "DTSTAMP:19760401T005545Z\r\n"    \
-    "UID:strip-owner-cal-data\r\n"    \
-    "BEGIN:PATCH\r\n"                 \
-    "PATCH-TARGET:/VCALENDAR/ANY\r\n" \
-    "PATCH-DELETE:/VALARM\r\n"        \
-    "PATCH-DELETE:#TRANSP\r\n"        \
-    "END:PATCH\r\n"                   \
+#define STRIP_OWNER_CAL_DATA              \
+    "CALDATA %(VPATCH {248+}\r\n"         \
+    "BEGIN:VPATCH\r\n"                    \
+    "VERSION:1\r\n"                       \
+    "DTSTAMP:19760401T005545Z\r\n"        \
+    "UID:strip-owner-cal-data\r\n"        \
+    "BEGIN:PATCH\r\n"                     \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n"     \
+    "PATCH-DELETE:/VALARM\r\n"            \
+    "PATCH-DELETE:#TRANSP\r\n"            \
+    "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
+    "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "END:PATCH\r\n"                       \
     "END:VPATCH\r\n)"
 
 
@@ -4142,7 +4144,7 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
  */
 static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                                  icalcomponent *vpatch, struct buf *path,
-                                 int read_only)
+                                 int read_only, unsigned *num_changes)
 {
     icalcomponent *comp, *nextcomp, *oldcomp = NULL, *patch = NULL;
     icalproperty *prop, *nextprop, *oldprop = NULL;
@@ -4169,6 +4171,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
     for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
          prop; prop = nextprop) {
+        const char *xname, *oldxname;
         icalproperty_kind kind = icalproperty_isa(prop);
         icalproperty_kind oldkind =
             oldprop ? icalproperty_isa(oldprop) : ICAL_NO_PROPERTY;
@@ -4182,8 +4185,9 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         else if (kind == oldkind) {
             if (kind == ICAL_X_PROPERTY) {
                 /* Compare property names alphabetically */
-                r = strcmp(icalproperty_get_x_name(prop),
-                           icalproperty_get_x_name(oldprop));
+                xname = icalproperty_get_x_name(prop);
+                oldxname = icalproperty_get_x_name(oldprop);
+                r = strcmp(xname, oldxname);
             }
             else r = 0;
         }
@@ -4199,17 +4203,24 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
             case ICAL_PRODID_PROPERTY:
             case ICAL_DTSTAMP_PROPERTY:
             case ICAL_LASTMODIFIED_PROPERTY:
-                /* Ok to modify these */
+                /* Ok to modify these - ignore */
                 break;
 
+            case ICAL_X_PROPERTY:
+                if (!strcmp(xname, "X-MOZ-GENERATION")) {
+                    /* Ok to modify these - ignore */
+                    break;
+                }
+
+                GCC_FALLTHROUGH
+
             default:
-                if (read_only) {
-                    /* Compare entire properties (names, values, parameters) */
-                    if (strcmp(icalproperty_as_ical_string(prop),
-                               icalproperty_as_ical_string(oldprop))) {
-                        /* Property has been updated in ical */
-                        return HTTP_FORBIDDEN;
-                    }
+                /* Compare entire properties (names, values, parameters) */
+                if (strcmp(icalproperty_as_ical_string(prop),
+                           icalproperty_as_ical_string(oldprop))) {
+                    /* Property has been updated in ical */
+                    if (read_only) return HTTP_FORBIDDEN;
+                    if (num_changes) (*num_changes)++;
                 }
                 break;
             }
@@ -4221,10 +4232,23 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
             case ICAL_PRODID_PROPERTY:
             case ICAL_DTSTAMP_PROPERTY:
             case ICAL_LASTMODIFIED_PROPERTY:
-                /* Ok to add these */
+                /* Ok to add these - ignore */
                 break;
 
+            case ICAL_X_PROPERTY:
+                xname = icalproperty_get_x_name(prop);
+                if (strncmp(xname, "X-MOZ-", 6) ||
+                    (strcmp(xname+6, "LASTACK") &&
+                     strcmp(xname+6, "SNOOZE-TIME"))) {
+                    if (read_only) return HTTP_FORBIDDEN;
+                    if (num_changes) (*num_changes)++;
+                    break;
+                }
+
+                GCC_FALLTHROUGH
+
             case ICAL_TRANSP_PROPERTY:
+                /* Add per-user property to VPATCH */
                 if (!patch) {
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
@@ -4239,6 +4263,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
             default:
                 if (read_only) return HTTP_FORBIDDEN;
+                if (num_changes) (*num_changes)++;
                 break;
             }
 
@@ -4251,11 +4276,12 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
             case ICAL_PRODID_PROPERTY:
             case ICAL_DTSTAMP_PROPERTY:
             case ICAL_LASTMODIFIED_PROPERTY:
-                /* Ok to remove these */
+                /* Ok to remove these - ignore */
                 break;
 
             default:
                 if (read_only) return HTTP_FORBIDDEN;
+                if (num_changes) (*num_changes)++;
                 break;
             }
         }
@@ -4291,13 +4317,15 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         }
 
         if (r == 0) {
-            r = extract_personal_data(comp, oldcomp, vpatch, path, read_only);
+            r = extract_personal_data(comp, oldcomp, vpatch,
+                                      path, read_only, num_changes);
             if (r) return r;
         }
         else if (r < 0) {
             /* Component has been added to ical */
             switch (kind) {
             case ICAL_VALARM_COMPONENT:
+                /* Add per-user component to VPATCH */
                 if (!patch) {
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
@@ -4312,8 +4340,10 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
             default:
                 if (read_only) return HTTP_FORBIDDEN;
+                if (num_changes) (*num_changes)++;
 
-                r = extract_personal_data(comp, oldcomp, vpatch, path, read_only);
+                r = extract_personal_data(comp, oldcomp, vpatch,
+                                          path, read_only, num_changes);
                 if (r) return r;
                 break;
             }
@@ -4325,6 +4355,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         }
         else {
             /* Component has been removed from ical */
+            if (num_changes) (*num_changes)++;
         }
 
         oldcomp = icalcomponent_get_next_component(oldical, ICAL_ANY_COMPONENT);
@@ -4371,11 +4402,11 @@ static int personalize_resource(struct transaction_t *txn,
                                 const char *userid,
                                 icalcomponent **store_me)
 {
-    int is_owner, rights, read_only;
+    int is_owner, rights, read_only, ret = 0;
     mbname_t *mbname;
     const char *owner;
     icalcomponent *oldical = NULL, *vpatch = NULL;
-    int ret = 0;
+    unsigned num_changes = 0;
 
     *store_me = ical;
 
@@ -4435,8 +4466,8 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
-        ret = extract_personal_data(oldical, NULL, vpatch,
-                                    &txn->buf /* path */, 0 /* read_only */);
+        ret = extract_personal_data(oldical, NULL, vpatch, &txn->buf /* path */,
+                                    0 /* read_only */, &num_changes);
         buf_reset(&txn->buf);
 
         if (!ret) ret = write_personal_data(mailbox, cdata, owner, vpatch);
@@ -4455,7 +4486,6 @@ static int personalize_resource(struct transaction_t *txn,
     if (!is_owner || read_only ||
         (cdata->dav.imap_uid && cdata->comp_flags.shared)) {
         /* Extract personal info from user's resource and create vpatch */
-
         if (oldical) {
             /* Normalize existing resource for comparison */
             icalcomponent_normalize(oldical);
@@ -4481,22 +4511,20 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
-        ret = extract_personal_data(ical, oldical, vpatch,
-                                    &txn->buf /* path */, read_only);
+        ret = extract_personal_data(ical, oldical, vpatch, &txn->buf /* path */,
+                                    read_only, &num_changes);
         buf_reset(&txn->buf);
 
         if (!ret) ret = write_personal_data(mailbox, cdata, userid, vpatch);
 
         if (ret) goto done;
-            
-        if (read_only && cdata->dav.imap_uid) {
+
+        if (cdata->dav.imap_uid && !num_changes) {
             /* No resource to store (per-user data change only) */
             ret = HTTP_NO_CONTENT;
             *store_me = NULL;
             goto done;
         }
-
-        cdata->comp_flags.shared = 1;
 
         /* Write shared modseq for resource */
         buf_printf(&txn->buf, MODSEQ_FMT,
@@ -4505,6 +4533,8 @@ static int personalize_resource(struct transaction_t *txn,
         mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
                                  SHARED_MODSEQ, "", &txn->buf);
         buf_reset(&txn->buf);
+
+        cdata->comp_flags.shared = 1;
     }
 
   done:
@@ -8262,7 +8292,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             annotate_state_t *astate = NULL;
             uint32_t newuid = mailbox->i.last_uid;
 
-            if (!mailbox_get_annotate_state(mailbox, newuid, &astate)) {
+            if ((newuid != oldrecord->uid) &&
+                !mailbox_get_annotate_state(mailbox, newuid, &astate)) {
                 /* Copy across any per-message annotations */
                 annotate_msg_copy(mailbox, oldrecord->uid,
                                   mailbox, newuid, NULL);
