@@ -4400,25 +4400,24 @@ static int write_personal_data(struct mailbox *mailbox,
  *
  * Logic is as follows:
  * 
- *   Owner   R/W   Exists Shared   A   B   C   D   E
- *   -----------------------------------------------
- *     0      0      0             Y
- *     0      0      1      0          Y   Y   Y
- *     0      0      1      1                  Y
- *     0      1      0                         Y   Y
- *     0      1      1      0          Y       Y   ?
- *     0      1      1      1                  Y   ?
- *     1      0      0             Y
- *     1      0      1                         Y
- *     1      1      0                             Y
- *     1      1      1      0                      Y
- *     1      1      1      1                  Y   ?
+ *   Owner   R/W   Exists Shared   EO  SO  EU  SU  PD
+ *   ------------------------------------------------
+ *            0      0                             Y
+ *     0      0      1      0      Y   Y   Y
+ *     0      0      1      1              Y
+ *     0      1      0                     Y   Y
+ *     0      1      1      0      Y       Y   ?
+ *     0      1      1      1              Y   ?
+ *     1      0      1                     Y
+ *     1      1      0                         Y
+ *     1      1      1      0                  Y
+ *     1      1      1      1              Y   ?
  *
- *   A = Permission denied
- *   B = Extract owner data
- *   C = Store owner resource
- *   D = Extract user data
- *   E = Store user resource
+ *   EO = Extract Owner Data
+ *   SO = Store Owner Resource
+ *   EU = Extract User Data
+ *   SU = Store User Resource
+ *   PD = Permission Denied
  */
 static int personalize_resource(struct transaction_t *txn,
                                 struct mailbox *mailbox,
