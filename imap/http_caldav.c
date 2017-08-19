@@ -109,6 +109,9 @@
 #define PER_USER_CAL_DATA \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+#define SHARED_MODSEQ \
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">shared-modseq"
+
 
 #ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
@@ -159,6 +162,10 @@ static int caldav_parse_path(const char *path,
 static int caldav_get_validators(struct mailbox *mailbox, void *data,
                                  const char *userid, struct index_record *record,
                                  const char **etag, time_t *lastmod);
+
+static modseq_t caldav_get_modseq(struct mailbox *mailbox,
+                                  const struct index_record *record,
+                                  const char *userid, void *davdb);
 
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
@@ -501,6 +508,7 @@ static struct meth_params caldav_params = {
     caldav_mime_types,
     &caldav_parse_path,
     &caldav_get_validators,
+    &caldav_get_modseq,
     &caldav_check_precond,
     { (db_open_proc_t) &caldav_open_mailbox,
       (db_close_proc_t) &caldav_close,
@@ -984,6 +992,55 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
     }
 
     return dav_get_validators(mailbox, data, userid, record, etag, lastmod);
+}
+
+
+static modseq_t caldav_get_modseq(struct mailbox *mailbox,
+                                  const struct index_record *record,
+                                  const char *userid, void *davdb)
+{
+    struct caldav_db *caldavdb = (struct caldav_db *) davdb;
+    modseq_t modseq = record->modseq;
+
+    if (namespace_calendar.allow & ALLOW_USERDATA) {
+        struct caldav_data *cdata;
+        int r;
+
+        /* Lookup the CalDAV record */
+        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                                  record->uid, &cdata, /* tombstones */ 1);
+        
+        if (!r && cdata->comp_flags.shared) {
+            struct buf value = BUF_INITIALIZER;
+
+            /* Lookup per-user calendar data */
+            r = mailbox_annotation_lookup(mailbox, record->uid,
+                                          PER_USER_CAL_DATA, userid, &value);
+            if (!r && buf_len(&value)) {
+                modseq_t shared_modseq = record->modseq;
+                struct dlist *dl;
+
+                /* Parse the value and fetch the modseq */
+                dlist_parsemap(&dl, 1, 0, buf_base(&value), buf_len(&value));
+                dlist_getnum64(dl, "MODSEQ", &modseq);
+                dlist_free(&dl);
+
+                /* Lookup shared modseq */
+                buf_free(&value);
+                r = mailbox_annotation_lookup(mailbox, record->uid,
+                                              SHARED_MODSEQ, "", &value);
+                if (!r && buf_len(&value)) {
+                    sscanf(buf_cstring(&value), MODSEQ_FMT, &shared_modseq);
+                }
+
+                modseq = MAX(modseq, shared_modseq);
+            }
+
+            buf_free(&value);
+        }
+    }
+
+    return modseq;
 }
 
 
@@ -4440,6 +4497,14 @@ static int personalize_resource(struct transaction_t *txn,
         }
 
         cdata->comp_flags.shared = 1;
+
+        /* Write shared modseq for resource */
+        buf_printf(&txn->buf, MODSEQ_FMT,
+                   mailbox->modseq_dirty ? mailbox->i.highestmodseq :
+                   mailbox_modseq_dirty(mailbox));
+        mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
+                                 SHARED_MODSEQ, "", &txn->buf);
+        buf_reset(&txn->buf);
     }
 
   done:

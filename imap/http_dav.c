@@ -717,6 +717,15 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
 }
 
 
+EXPORTED modseq_t dav_get_modseq(struct mailbox *mailbox __attribute__((unused)),
+                                 const struct index_record *record,
+                                 const char *userid __attribute__((unused)),
+                                 void *davdb __attribute__((unused)))
+{
+    return record->modseq;
+}
+
+
 /* Evaluate If header.  Note that we can't short-circuit any of the tests
    because we need to check for a lock-token anywhere in the header */
 static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
@@ -7201,8 +7210,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
 
 /* DAV:sync-collection REPORT */
-int report_sync_col(struct transaction_t *txn,
-                    struct meth_params *rparams __attribute__((unused)),
+int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0, r, i, unbind_flag = -1, unchanged_flag = -1;
@@ -7331,12 +7339,16 @@ int report_sync_col(struct transaction_t *txn,
     istate.mailbox = mailbox;
     istate.map = xzmalloc(mailbox->i.num_records * sizeof(struct index_map));
 
+    /* Open the DAV DB corresponding to the mailbox */
+    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+
     /* Find which resources we need to report */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
     const message_t *msg;
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+        modseq_t modseq;
 
         if ((unbind_flag >= 0) &&
             record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
@@ -7344,7 +7356,9 @@ int report_sync_col(struct transaction_t *txn,
             continue;
         }
 
-        if ((record->modseq - syncmodseq == 1) &&
+        modseq = rparams->get_modseq(mailbox, record, httpd_userid, fctx->davdb);
+
+        if ((modseq - syncmodseq == 1) &&
             (unchanged_flag >= 0) &&
             (record->user_flags[unchanged_flag / 32] &
              (1 << (unchanged_flag & 31)))) {
@@ -7352,7 +7366,7 @@ int report_sync_col(struct transaction_t *txn,
             continue;
         }
 
-        if ((record->modseq <= basemodseq) &&
+        if ((modseq <= basemodseq) &&
             (record->system_flags & FLAG_EXPUNGED)) {
             /* Initial sync - ignore unmapped resources */
             continue;
@@ -7361,7 +7375,7 @@ int report_sync_col(struct transaction_t *txn,
         /* copy data into map (just like index.c - XXX helper fn? */
         istate.map[nresp].recno = record->recno;
         istate.map[nresp].uid = record->uid;
-        istate.map[nresp].modseq = record->modseq;
+        istate.map[nresp].modseq = modseq;
         istate.map[nresp].system_flags = record->system_flags;
         for (i = 0; i < MAX_USER_FLAGS/32; i++)
             istate.map[nresp].user_flags[i] = record->user_flags[i];
@@ -7403,9 +7417,6 @@ int report_sync_col(struct transaction_t *txn,
         respmodseq = highestmodseq;
     }
 
-    /* Open the DAV DB corresponding to the mailbox */
-    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
-
     /* Report the resources within the client requested limit (if any) */
     for (msgno = 0; msgno < nresp; msgno++) {
         struct dav_data *ddata;
@@ -7426,8 +7437,6 @@ int report_sync_col(struct transaction_t *txn,
         fctx->record = NULL;
     }
 
-    if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
-
     /* Add sync-token element */
     if (respmodseq < basemodseq) {
         /* Client limited results of initial sync - include basemodseq */
@@ -7443,6 +7452,7 @@ int report_sync_col(struct transaction_t *txn,
     xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
   done:
+    if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
     if (istate.map) free(istate.map);
     mailbox_close(&mailbox);
 
@@ -8864,6 +8874,7 @@ struct meth_params notify_params = {
     notify_mime_types,
     &notify_parse_path,
     &dav_get_validators,
+    &dav_get_modseq,
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,

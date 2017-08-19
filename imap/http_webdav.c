@@ -205,6 +205,7 @@ struct meth_params webdav_params = {
     webdav_mime_types,
     &webdav_parse_path,
     &dav_get_validators,
+    &dav_get_modseq,
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,

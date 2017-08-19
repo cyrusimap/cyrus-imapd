@@ -286,6 +286,11 @@ typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
                                 const char *userid, struct index_record *record,
                                 const char **etag, time_t *lastmod);
 
+/* Function to fetch resource modseq */
+typedef modseq_t (*get_modseq_t)(struct mailbox *mailbox,
+                                 const struct index_record *record,
+                                 const char *userid, void *davdb);
+
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
 typedef void (*db_close_proc_t)(void *davdb);
 
@@ -556,6 +561,7 @@ struct meth_params {
     struct mime_type_t *mime_types;     /* array of MIME types and conv funcs */
     parse_path_t parse_path;            /* parse URI path & generate mboxname */
     get_validators_t get_validators;    /* fetch resource validators */
+    get_modseq_t get_modseq;            /* fetch resource modseq */
     check_precond_t check_precond;      /* check headers for preconditions */
     struct davdb_params davdb;          /* DAV DB access functions */
     acl_proc_t acl_ext;                 /* special ACL handling (extensions) */
@@ -665,6 +671,9 @@ int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
 int dav_get_validators(struct mailbox *mailbox, void *data,
                        const char *userid, struct index_record *record,
                        const char **etag, time_t *lastmod);
+modseq_t dav_get_modseq(struct mailbox *mailbox,
+                        const struct index_record *record,
+                        const char *userid, void *davdb);
 int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       struct mailbox *mailbox, const void *data,
                       const char *etag, time_t lastmod);
