@@ -4424,12 +4424,13 @@ static int personalize_resource(struct transaction_t *txn,
                                 icalcomponent *ical,
                                 struct caldav_data *cdata,
                                 const char *userid,
-                                icalcomponent **store_me)
+                                icalcomponent **store_me,
+                                icalcomponent **userdata)
 {
     int is_owner, rights, read_only, ret = 0;
     mbname_t *mbname;
     const char *owner;
-    icalcomponent *oldical = NULL, *vpatch = NULL;
+    icalcomponent *oldical = NULL;
     unsigned num_changes = 0;
 
     *store_me = ical;
@@ -4478,7 +4479,7 @@ static int personalize_resource(struct transaction_t *txn,
         buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
                    strhash(cdata->dav.resource), strhash(owner));
 
-        vpatch =
+        *userdata =
             icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
                                 icalproperty_new_version("1"),
                                 icalproperty_new_dtstamp(
@@ -4490,11 +4491,12 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
-        ret = extract_personal_data(oldical, NULL, vpatch, &txn->buf /* path */,
-                                    0 /* read_only */, &num_changes);
+        ret = extract_personal_data(oldical, NULL, *userdata,
+                                    &txn->buf /* path */, 0 /* read_only */,
+                                    &num_changes);
         buf_reset(&txn->buf);
 
-        if (!ret) ret = write_personal_data(mailbox, cdata, owner, vpatch);
+        if (!ret) ret = write_personal_data(mailbox, cdata, owner, *userdata);
 
         if (ret) goto done;
 
@@ -4503,8 +4505,8 @@ static int personalize_resource(struct transaction_t *txn,
             *store_me = oldical;
         }
 
-        icalcomponent_free(vpatch);
-        vpatch = NULL;
+        icalcomponent_free(*userdata);
+        *userdata = NULL;
     }
 
     if (!is_owner || read_only ||
@@ -4523,7 +4525,7 @@ static int personalize_resource(struct transaction_t *txn,
         buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
                    strhash(cdata->dav.resource), strhash(userid));
 
-        vpatch =
+        *userdata =
             icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
                                 icalproperty_new_version("1"),
                                 icalproperty_new_dtstamp(
@@ -4535,11 +4537,12 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
-        ret = extract_personal_data(ical, oldical, vpatch, &txn->buf /* path */,
-                                    read_only, &num_changes);
+        ret = extract_personal_data(ical, oldical, *userdata,
+                                    &txn->buf /* path */, read_only,
+                                    &num_changes);
         buf_reset(&txn->buf);
 
-        if (!ret) ret = write_personal_data(mailbox, cdata, userid, vpatch);
+        if (!ret) ret = write_personal_data(mailbox, cdata, userid, *userdata);
 
         if (ret) goto done;
 
@@ -4563,7 +4566,6 @@ static int personalize_resource(struct transaction_t *txn,
 
   done:
     if (oldical && (*store_me != oldical)) icalcomponent_free(oldical);
-    if (vpatch) icalcomponent_free(vpatch);
     mbname_free(&mbname);
 
     return ret;
@@ -4591,7 +4593,8 @@ static int personalize_resource(struct transaction_t *txn __attribute__((unused)
                                 icalcomponent *ical __attribute__((unused)),
                                 struct caldav_data *cdata __attribute__((unused)),
                                 const char *userid __attribute__((unused)),
-                                icalcomponent **store_me __attribute__((unused)))
+                                icalcomponent **store_me __attribute__((unused)),
+                                icalcomponent **userdata __attribute__((unused)))
 {
     fatal("personalize_resource() called, but no VPATCH", EC_SOFTWARE);
 }
@@ -8124,7 +8127,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           const char *userid, const char *schedule_address)
 {
     int ret;
-    icalcomponent *comp, *store_ical = NULL;
+    icalcomponent *comp, *store_ical = NULL, *userdata = NULL;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
@@ -8208,7 +8211,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         ret = personalize_resource(txn, mailbox, ical,
-                                   cdata, userid, &store_ical);
+                                   cdata, userid, &store_ical, &userdata);
         if (ret) goto done;
 
         if (store_ical != ical) {
@@ -8306,6 +8309,11 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                 caldav_get_validators(mailbox, cdata, userid, &newrecord,
                                       &txn->resp_body.etag,
                                       &txn->resp_body.lastmod);
+
+                if (flags & PREFER_REP) {
+                    /* Re-insert per-user data */
+                    process_vpatch(txn, userdata, ical, NULL);
+                }
             }
 
             /* XXX  Hack until we fix annotation copying in append_fromstage() */
@@ -8336,6 +8344,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         break;
     }
 
+    if (userdata) icalcomponent_free(userdata);
     if (store_ical && (store_ical != ical)) icalcomponent_free(store_ical);
 
     return ret;
