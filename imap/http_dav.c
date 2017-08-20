@@ -7409,9 +7409,11 @@ int report_sync_col(struct transaction_t *txn,
         struct dav_data *ddata;
 
         /* Find name of the resource */
-        rparams->davdb.lookup_imapuid(fctx->davdb, fctx->mailbox->name,
-                                      istate.map[msgno].uid, (void **) &ddata,
-                                      /* tombstones */ 1);
+        r = rparams->davdb.lookup_imapuid(fctx->davdb, fctx->mailbox->name,
+                                          istate.map[msgno].uid,
+                                          (void **) &ddata,
+                                          /* tombstones */ 1);
+        if (r) continue;
 
         if (!ddata->alive) {
             /* report as NOT FOUND
