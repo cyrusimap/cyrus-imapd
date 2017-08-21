@@ -89,6 +89,8 @@ DISTCLEANFILES = \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
+	imap/promdata.c \
+	imap/promdata.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	perl/sieve/scripts/installsieve \
@@ -509,6 +511,7 @@ dist_noinst_SCRIPTS = \
 	com_err/et/config_script \
 	imap/lmtpstats.snmp \
 	imap/pushstats.snmp \
+	imap/promdatagen \
 	lib/mkchartable.pl \
 	lib/test/run \
 	perl/sieve/scripts/installsieve.pl \
@@ -935,7 +938,9 @@ imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/imap_err.c \
 	imap/mupdate_err.c \
-	imap/mupdate_err.h
+	imap/mupdate_err.h \
+	imap/promdata.c \
+	imap/promdata.h
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
@@ -1003,8 +1008,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
-	imap/promdata.c \
-	imap/promdata.h \
+	imap/promdata.p \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
