@@ -756,19 +756,14 @@ static void do_rolling(const char *channel)
 /*
  * Run a search daemon in such a way that the natural shutdown
  * mechanism for Cyrus (sending a SIGTERM to the master process)
- * will cleanly shut down the search daemon too.  For Sphinx
- * this currently means running a loop in a forked process whose
- * job it is to live in the master process' process group and thus
- * receive the SIGTERM that master re-sends.
+ * will cleanly shut down the search daemon too.
  */
 static void do_run_daemon(void)
 {
     int r;
 
     /* We start the daemon before forking.  This eliminates a
-     * race condition during slot startup by ensuring that
-     * Sphinx is fully running before the rolling squatter
-     * tries to use it. */
+     * race condition */
     r = search_start_daemon(verbose);
     if (r) exit(EC_TEMPFAIL);
 

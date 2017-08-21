@@ -918,7 +918,6 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
             return 0;
     }
 
-    xstats_inc(SPHINX_RESULT);
     return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, bb->rock);
 }
 
@@ -964,7 +963,6 @@ static int xapian_run_cb(const char *cyrusid, void *rock)
                 return 0;
         }
 
-        xstats_inc(SPHINX_RESULT);
         r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
         return r;
     }
@@ -1001,7 +999,6 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
         uint32_t uid;
         for (uid = seqset_firstnonmember(bb->indexed);
              uid <= bb->mailbox->i.last_uid ; uid++) {
-            xstats_inc(SPHINX_UNINDEXED);
             r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
             if (r) goto out;
         }
@@ -1044,8 +1041,6 @@ static void match(search_builder_t *bx, int part, const char *str)
     if (SEARCH_VERBOSE(bb->opts))
         syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
                search_part_as_string(part), str);
-
-    xstats_inc(SPHINX_MATCH);
 
     on = opnode_new(part, str);
     if (top)
@@ -1111,11 +1106,6 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->indexed = seqset_init(0, SEQ_MERGE);
     r = read_indexed(dirs, mailbox->name, mailbox->i.uidvalidity, bb->indexed, /*verbose*/0);
     if (r) goto out;
-
-    if ((opts & SEARCH_MULTIPLE))
-        xstats_inc(SPHINX_MULTIPLE);
-    else
-        xstats_inc(SPHINX_SINGLE);
 
 out:
     strarray_free(dirs);
@@ -1695,8 +1685,7 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
 
     case SEARCH_PART_ANY:
         assert(on->children == NULL);
-        if (part != SEARCH_PART_HEADERS ||
-            !config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
+        if (part != SEARCH_PART_HEADERS) {
             xapian_snipgen_add_match(snipgen, on->arg);
         }
         break;

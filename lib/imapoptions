@@ -1864,7 +1864,7 @@ If all partitions are over that limit, this feature is not used anymore.
    These can use more CPU time to optimise than they save IO time in scanning
    folders. */
 
-{ "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
+{ "search_engine", "none", ENUM("none", "squat", "xapian") }
 /* The indexing engine used to speed up searching.  */
 
 { "search_index_headers", 1, SWITCH }
@@ -2098,19 +2098,6 @@ product version in the capabilities */
 { "specialusealways", 1, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
    the XLIST "special-use" flags */
-
-{ "sphinx_text_excludes_odd_headers", 0, SWITCH }
-/* If enabled, Sphinx will perform a TEXT search as if it matches
-   FROM, TO, CC, BCC or SUBJECT but not any other headers.  This
-   is contrary to the RFC but a more useful behaviour for most
-   users.  Default: disabled. */
-
-{ "sphinx_socket", "{configdirectory}/socket/sphinx", STRING }
-/* Unix domain socket that the Sphinx searchd
-   daemons listens on. */
-
-{ "sphinx_pidfile", "/var/run/sphinx.pid", STRING }
-/* File where the Sphinx searchd daemon writes its pid. */
 
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */

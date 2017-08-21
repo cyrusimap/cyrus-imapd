@@ -185,10 +185,6 @@ noinst_PROGRAMS += \
 	imap/message_test \
 	imap/search_test
 
-if USE_SPHINX
-sbin_PROGRAMS += imap/cyr_sphinxmgr
-endif
-
 if USE_SQUAT
 noinst_PROGRAMS += imap/squat_dump
 endif
@@ -885,9 +881,6 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fake.c
-imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
-
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
@@ -1079,13 +1072,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/squat_build.c \
 	imap/squat_internal.c \
 	imap/squat_internal.h
-endif
-
-if USE_SPHINX
-imap_libcyrus_imap_la_SOURCES += \
-	imap/search_sphinx.c \
-	imap/sphinxmgr_client.c \
-	imap/sphinxmgr_client.h
 endif
 
 if HTTPD
