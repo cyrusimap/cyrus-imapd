@@ -89,6 +89,8 @@ DISTCLEANFILES = \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
+	imap/promdata.c \
+	imap/promdata.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	perl/sieve/scripts/installsieve \
@@ -184,10 +186,6 @@ sbin_PROGRAMS += \
 noinst_PROGRAMS += \
 	imap/message_test \
 	imap/search_test
-
-if USE_SPHINX
-sbin_PROGRAMS += imap/cyr_sphinxmgr
-endif
 
 if USE_SQUAT
 noinst_PROGRAMS += imap/squat_dump
@@ -513,6 +511,7 @@ dist_noinst_SCRIPTS = \
 	com_err/et/config_script \
 	imap/lmtpstats.snmp \
 	imap/pushstats.snmp \
+	imap/promdatagen \
 	lib/mkchartable.pl \
 	lib/test/run \
 	perl/sieve/scripts/installsieve.pl \
@@ -885,9 +884,6 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fake.c
-imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
-
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
@@ -942,7 +938,9 @@ imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/imap_err.c \
 	imap/mupdate_err.c \
-	imap/mupdate_err.h
+	imap/mupdate_err.h \
+	imap/promdata.c \
+	imap/promdata.h
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
@@ -1010,8 +1008,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
-	imap/promdata.c \
-	imap/promdata.h \
+	imap/promdata.p \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
@@ -1079,13 +1076,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/squat_build.c \
 	imap/squat_internal.c \
 	imap/squat_internal.h
-endif
-
-if USE_SPHINX
-imap_libcyrus_imap_la_SOURCES += \
-	imap/search_sphinx.c \
-	imap/sphinxmgr_client.c \
-	imap/sphinxmgr_client.h
 endif
 
 if HTTPD

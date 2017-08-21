@@ -62,9 +62,6 @@
 #ifdef USE_SQUAT
 extern const struct search_engine squat_search_engine;
 #endif
-#ifdef USE_SPHINX
-extern const struct search_engine sphinx_search_engine;
-#endif
 #ifdef USE_XAPIAN
 extern const struct search_engine xapian_search_engine;
 #endif
@@ -93,10 +90,6 @@ static const struct search_engine *engine(void)
 #ifdef USE_XAPIAN
     case IMAP_ENUM_SEARCH_ENGINE_XAPIAN:
         return &xapian_search_engine;
-#endif
-#ifdef USE_SPHINX
-    case IMAP_ENUM_SEARCH_ENGINE_SPHINX:
-        return &sphinx_search_engine;
 #endif
 #ifdef USE_SQUAT
     case IMAP_ENUM_SEARCH_ENGINE_SQUAT:

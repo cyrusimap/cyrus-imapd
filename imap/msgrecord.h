@@ -67,6 +67,7 @@ extern int msgrecord_get_bodystructure(msgrecord_t *mr, struct body **body);
 extern int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid);
 extern int msgrecord_get_guid(msgrecord_t *mr, struct message_guid *guid);
 extern int msgrecord_get_uid(msgrecord_t *mr, uint32_t *uid);
+extern int msgrecord_get_messageid(msgrecord_t *mr, struct buf *buf);
 extern int msgrecord_get_modseq(msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(msgrecord_t *mr, message_t **msg);
@@ -81,6 +82,7 @@ extern int msgrecord_get_fname(msgrecord_t *mr, const char **fname);
 extern int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok);
 extern int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item);
 extern int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mailboxptr);
+extern int msgrecord_extract_flags(msgrecord_t *mr, const char *userid, strarray_t **flags);
 
 extern int msgrecord_load_cache(msgrecord_t *mr);
 
@@ -113,10 +115,6 @@ extern int msgrecord_annot_set_auth(msgrecord_t *mr, int isadmin,
 
 extern int msgrecord_extract_annots(msgrecord_t *mr,
                                     struct entryattlist **annots);
-
-extern int msgrecord_extract_flags(msgrecord_t *mr,
-                                   const char *userid,
-                                   strarray_t **flags);
 
 /* misc */
 extern int msgrecord_should_archive(msgrecord_t *mr, void *rock);

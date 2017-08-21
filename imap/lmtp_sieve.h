@@ -58,6 +58,9 @@ struct sieve_interp_ctx {
 };
 
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx);
-int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *mydata);
+int run_sieve(const mbname_t *mbname,
+              sieve_interp_t *interp, deliver_data_t *mydata);
+void sieve_srs_init(void);
+void sieve_srs_free(void);
 
 #endif /* LMTP_SIEVE_H */

@@ -377,6 +377,13 @@ EXPORTED int msgrecord_get_message(msgrecord_t *mr, message_t **msg)
     return 0;
 }
 
+EXPORTED int msgrecord_get_messageid(msgrecord_t *mr, struct buf *buf)
+{
+    int r = msgrecord_need(mr, M_MESSAGE);
+    if (r) return r;
+    return message_get_messageid(mr->msg, buf);
+}
+
 EXPORTED int msgrecord_get_body(msgrecord_t *mr, struct buf *buf)
 {
     int  r;

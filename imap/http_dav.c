@@ -6579,7 +6579,8 @@ int meth_post(struct transaction_t *txn, void *params)
         const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
 
         if ((pparams->post.allowed & POST_SHARE) && hdr &&
-            is_mediatype(hdr[0], DAVSHARING_CONTENT_TYPE)) {
+            (is_mediatype(hdr[0], DAVSHARING_CONTENT_TYPE) ||
+             is_mediatype(hdr[0], "text/xml"))) {
             /* Sharing request */
             return dav_post_share(txn, pparams);
         }

@@ -260,11 +260,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(search, "squat", json_false());
 #endif
-#ifdef USE_SPHINX
-    json_object_set_new(search, "sphinx", json_true());
-#else
-    json_object_set_new(search, "sphinx", json_false());
-#endif
 #ifdef USE_XAPIAN
     json_object_set_new(search, "xapian", json_true());
 #else
