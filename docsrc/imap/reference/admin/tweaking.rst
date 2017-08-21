@@ -138,3 +138,27 @@ To gain performance, execute the following:
         CHATTRSYNC=0
 
 .. _dm-cache: http://en.wikipedia.org/wiki/Dm-cache
+
+
+Mailbox locking
+---------------
+Cyrus IMAP uses fcntl(2) based file locking for mailboxes, for example during
+SELECT commands. To mitigate race conditions it locks mailbox names even
+for non-existing mailboxes. For example, if user foo issued the following
+command
+
+    .. parsed-literal::
+
+    SELECT INBOX.x
+
+for non-existing mailbox x, it creates a a lock file
+
+    .. parsed-literal::
+
+    $CYRUS_CONFDIR/lock/user/foo/x.lock
+
+which might be left on the filesystem after completion of the command.
+
+This has in practice not shown to be an issue. If this is a concern however,
+keeping the lock file directory in a tmpfs allows for both fast locking and
+to purge stale locks during controlled Cyrus downtimes.
