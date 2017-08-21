@@ -488,6 +488,123 @@ static int send_rejection(const char *origid,
     return sm_stat;     /* sendmail exit value */
 }
 
+#ifdef USE_SRS
+#include <srs2.h>
+
+static srs_t *srs_engine = NULL;
+
+#define SRS_INIT_FAIL_UNLESS(x)                 \
+    if ((srs_status = (x)) != SRS_SUCCESS) {    \
+        goto END;                               \
+    }
+
+void sieve_srs_init(void)
+{
+    const char *srs_domain = config_getstring(IMAPOPT_SRS_DOMAIN);
+    char *saved_secrets = NULL;
+    int srs_status = SRS_SUCCESS;
+
+    if (!srs_engine && srs_domain && *srs_domain) {
+        /* SRS enabled and not yet initialized */
+        int srs_alwaysrewrite = config_getswitch(IMAPOPT_SRS_ALWAYSREWRITE);
+        int srs_hashlength = config_getint(IMAPOPT_SRS_HASHLENGTH);
+        const char *srs_separator = config_getstring(IMAPOPT_SRS_SEPARATOR);
+        const char *srs_secrets = config_getstring(IMAPOPT_SRS_SECRETS);
+
+        SRS_INIT_FAIL_UNLESS(srs_set_malloc((srs_malloc_t)xmalloc,
+                                            (srs_realloc_t)xrealloc,
+                                            (srs_free_t)free));
+
+        srs_engine = srs_new();
+        SRS_INIT_FAIL_UNLESS(srs_set_alwaysrewrite(srs_engine,
+                                                   srs_alwaysrewrite));
+
+        if (srs_hashlength > 0) {
+            SRS_INIT_FAIL_UNLESS(srs_set_hashlength(srs_engine,
+                                                    srs_hashlength));
+        }
+        if (srs_separator) {
+            SRS_INIT_FAIL_UNLESS(srs_set_separator(srs_engine,
+                                                   srs_separator[0]));
+        }
+
+        if (srs_secrets) {
+            char *secret = NULL;
+
+            saved_secrets = xstrdup(srs_secrets);
+            secret = strtok(saved_secrets, ", \t\r\n");
+            while (secret) {
+                SRS_INIT_FAIL_UNLESS(srs_add_secret(srs_engine, secret));
+                secret = strtok(NULL, ", \t\r\n");
+            }
+        }
+    }
+
+  END:
+    if (saved_secrets) free(saved_secrets);
+
+    if (srs_status != SRS_SUCCESS) {
+        sieve_srs_free();
+
+        syslog(LOG_ERR, "sieve SRS configuration error: %s",
+               srs_strerror(srs_status));
+    }
+}
+
+void sieve_srs_free(void)
+{
+    if (srs_engine) {
+        srs_free(srs_engine);
+        srs_engine = NULL;
+    }
+}
+
+/**
+ * Performs SRS forward rewriting.
+ * If rewriting failed, or SRS is disabled, NULL pointer is returned. Otherwise
+ * caller is responsible of freeing the resulting address.
+ *
+ * @param return_path   address to rewrite
+ * @return rewritten address, or NULL
+ */
+static char *sieve_srs_forward(char *return_path)
+{
+    const char *srs_domain = config_getstring(IMAPOPT_SRS_DOMAIN);
+    char *srs_return_path = NULL;
+    int srs_status;
+
+    if (!srs_engine) {
+        /* SRS not enabled */
+        return NULL;
+    }
+
+    srs_status = srs_forward_alloc(srs_engine, &srs_return_path,
+                                   return_path, srs_domain);
+
+    if (srs_status != SRS_SUCCESS) {
+        syslog(LOG_ERR, "sieve SRS forward failed (%s, %s): %s",
+               return_path, srs_domain, srs_strerror(srs_status));
+        if (srs_return_path) {
+            free(srs_return_path);
+            srs_return_path = NULL;
+        }
+    }
+
+    return srs_return_path;
+}
+
+#else /* !USE_SRS */
+
+void sieve_srs_init(void) { return; }
+void sieve_srs_free(void) { return; }
+
+static char *sieve_srs_forward(char *return_path __attribute__((unused)))
+{
+    return NULL;
+}
+
+#endif /* USE_SRS */
+
 #ifdef WITH_DAV
 #include <libxml/uri.h>
 
@@ -598,12 +715,18 @@ static int send_forward(sieve_redirect_context_t *rc,
     char buf[1024];
     pid_t sm_pid;
     int body = 0, skip;
+    char *srs_return_path = NULL;
 
     /* build argv[] for sendmail */
     strarray_append(&smbuf, "sendmail");
     strarray_append(&smbuf, "-i");            /* ignore dots */
+
     strarray_append(&smbuf, "-f");
-    strarray_append(&smbuf, return_path && *return_path ? return_path : "<>");
+    srs_return_path = sieve_srs_forward(return_path);
+    if (srs_return_path) strarray_append(&smbuf, srs_return_path);
+    else if (return_path && *return_path) strarray_append(&smbuf, return_path);
+    else strarray_append(&smbuf, "<>");
+
     strarray_append(&smbuf, "--");
     if (rc->is_ext_list) {
 #ifdef WITH_DAV
@@ -626,6 +749,8 @@ static int send_forward(sieve_redirect_context_t *rc,
 
     sm_pid = open_sendmail((const char **) smbuf.data, &sm);
     strarray_fini(&smbuf);
+
+    if (srs_return_path) free(srs_return_path);
 
     if (sm == NULL) {
         return -1;

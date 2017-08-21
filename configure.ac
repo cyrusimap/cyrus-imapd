@@ -664,6 +664,22 @@ fi
 
 AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
 
+dnl
+dnl see if we're compiling with SRS
+dnl
+AC_MSG_CHECKING([whether to use SRS])
+AC_ARG_ENABLE(srs,
+    [AS_HELP_STRING([--enable-srs], [enable SRS support])],,
+    [enable_srs=no])
+if test "x$enable_srs" != xno; then
+    AC_CHECK_HEADER([srs2.h],,
+        [AC_MSG_ERROR([cannot find SRS headers])])
+    AC_CHECK_LIB(srs2, srs_forward,,
+        [AC_MSG_ERROR([cannot find SRS lib])])
+    LIBS="$LIBS -lsrs2"
+fi
+AM_CONDITIONAL([USE_SRS], [test "${enable_srs}" != "no"])
+
 dnl look for an option to disable sign-comparison warnings (needed for
 dnl flex-generated sieve sources when building with -Werror)
 saved_CFLAGS="$CFLAGS"
@@ -2247,6 +2263,7 @@ Cyrus Server configured components
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
+   srs:                $enable_srs
    calalarmd:          $enable_calalarmd
    jmap:               $enable_jmap
    objectstore:        $enable_objectstore

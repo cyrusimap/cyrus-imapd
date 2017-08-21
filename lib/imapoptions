@@ -2117,6 +2117,23 @@ product version in the capabilities */
 { "sql_usessl", 0, SWITCH }
 /* If enabled, a secure connection will be made to the SQL server. */
 
+{ "srs_alwaysrewrite", 0,  SWITCH }
+/* If true, perform SRS rewriting for ALL forwarding, even when not required. */
+
+{ "srs_domain", NULL, STRING }
+/* The domain to use in rewritten addresses. This must point only to machines
+   which know the encoding secret used by this system. When present, SRS is
+   enabled. */
+
+{ "srs_hashlength", 0, INT }
+/* The hash length to generate in a rewritten address. */
+
+{ "srs_secrets", NULL, STRING }
+/* A list of secrets with which to generate addresses. */
+
+{ "srs_separator", NULL, STRING }
+/* The separator to appear immediately after SRS[01] in rewritten addresses. */
+
 { "srvtab", "", STRING }
 /* The pathname of \fIsrvtab\fR file containing the server's private
    key.  This option is passed to the SASL library and overrides its
