@@ -813,7 +813,7 @@ sub icalfile
     local $/ = undef;
     my $data = <FH>;
     close(FH);
-    my ($id) = ($data =~ m/^UID:(\S+)$/m);
+    my ($id) = ($data =~ m/^UID:(\S+)\r?$/m);
     $self->assert($id);
     return ($id, $data);
 }
@@ -3323,6 +3323,46 @@ sub test_creationids
     $self->assert_str_equals($calendar->{name}, "foo");
 
     $self->assert_str_equals($event->{calendarId}, $calendar->{id});
+}
+
+sub test_timezone_expansion
+    :JMAP :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Europe/Vienna",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+        "recurrenceRule" => {
+            frequency => "weekly",
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+
+    my $CalDAV = $self->{caldav};
+    $ret = $CalDAV->Request('GET', $ret->{"x-href"}, undef, 'CalDAV-Timezones' => 'T');
+
+    # Assert that we get two RRULEs, one for DST and one for leaving DST
+    $ret->{content} =~ /.*(BEGIN:VTIMEZONE\r\n.*END:VTIMEZONE).*/s;
+    my $rrulecount = () = $1 =~ /RRULE/gi;
+    $self->assert_num_equals(2, $rrulecount);
 }
 
 1;
