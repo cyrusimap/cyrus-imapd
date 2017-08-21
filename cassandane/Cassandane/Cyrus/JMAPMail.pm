@@ -94,7 +94,7 @@ sub getinbox
 }
 
 sub test_getmailboxes
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -172,7 +172,7 @@ sub test_getmailboxes
 }
 
 sub test_getmailboxes_specialuse
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -220,7 +220,7 @@ sub test_getmailboxes_specialuse
 }
 
 sub test_getmailboxes_properties
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -248,7 +248,7 @@ sub test_getmailboxes_properties
 }
 
 sub test_getmailboxes_ids
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -286,7 +286,7 @@ sub test_getmailboxes_ids
 }
 
 sub test_getmailboxes_nocalendars
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -364,7 +364,7 @@ sub test_getmailboxes_shared
 }
 
 sub test_setmailboxes
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -447,7 +447,7 @@ sub test_setmailboxes
 }
 
 sub test_setmailboxes_name_collision
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -521,7 +521,7 @@ sub test_setmailboxes_name_collision
 }
 
 sub test_setmailboxes_name_interop
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -577,7 +577,7 @@ sub test_setmailboxes_name_interop
 }
 
 sub test_setmailboxes_role
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -711,7 +711,7 @@ sub test_setmailboxes_role
 }
 
 sub test_setmailboxes_parent
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -805,7 +805,7 @@ sub test_setmailboxes_parent
 }
 
 sub test_setmailboxes_parent_acl
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -838,7 +838,7 @@ sub test_setmailboxes_parent_acl
 }
 
 sub test_setmailboxes_destroy_empty
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -968,7 +968,7 @@ sub test_setmailboxes_shared
 }
 
 sub test_getmailboxupdates
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1115,7 +1115,7 @@ sub test_getmailboxupdates
 }
 
 sub test_getmailboxupdates_counts
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
