@@ -14,7 +14,8 @@ High Level Roadmap
 Future
 ------
 
-* JMAP support
+* Improved JMAP support
+* Improved CalDAV and CardDAV support
 * Improved backup support
 * Multi-master replication
 
@@ -24,7 +25,8 @@ Future
 * Better calendaring support through jmap
 * Cross-folder conversations
 * Support for fuzzy Xapian search.
-* CardDAV support
+* CalDAV and CardDAV support
+* JMAP support
 * Better backup support - initial release
 * Basic object storage
 * Archive partition support
