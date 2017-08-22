@@ -111,7 +111,12 @@ sub parse_report
     foreach my $line (split /\n/, $content) {
         next if $line =~ /^\#/;
         my ($key, $val, $ts) = split /\s+/, $line;
-        $report->{$key} = { value => $val, timestamp => $ts };
+        if ($key =~ m/^([^{]+){([^}]+)}$/) {
+            $report->{$1}->{$2} = { value => $val, timestamp => $ts };
+        }
+        else {
+            $report->{$key} = { value => $val, timestamp => $ts };
+        }
     }
 
     return $report;
@@ -131,6 +136,12 @@ sub test_reportfile_exists
 {
     my ($self) = @_;
 
+    # do something that'll get counted
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    # and wait for a fresh report
+    sleep 3;
+
     my $reportfile_name = "$self->{instance}->{basedir}/conf/stats/report.txt";
 
     $self->assert(-f $reportfile_name);
@@ -145,6 +156,12 @@ sub test_httpreport
     :min_version_3_1
 {
     my ($self) = @_;
+
+    # do something that'll get counted
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    # and wait for a fresh report
+    sleep 3;
 
     my $response = $self->http_report();
 
