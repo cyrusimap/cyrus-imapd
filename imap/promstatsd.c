@@ -52,6 +52,7 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include "lib/cyr_lock.h"
 #include "lib/exitcodes.h"
 #include "lib/retry.h"
 #include "lib/util.h"
@@ -130,8 +131,12 @@ static int do_cleanup(void)
     return 0;
 }
 
+enum promdir_foreach_mode {
+    PROMDIR_FOREACH_PIDS,
+    PROMDIR_FOREACH_DONEPROCS,
+};
 typedef int promdir_foreach_cb(const struct prom_stats *stats, void *rock);
-static int promdir_foreach(promdir_foreach_cb *proc, void *rock)
+static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode mode, void *rock)
 {
     const char *basedir;
     DIR *dh;
@@ -151,8 +156,10 @@ static int promdir_foreach(promdir_foreach_cb *proc, void *rock)
         struct prom_stats stats;
         struct mappedfile *mf = NULL;
 
-        /* skip filenames that aren't pids */
-        if (!cyrus_isdigit(dirent->d_name[0])) continue;
+        /* skip filenames we don't care about */
+        if (dirent->d_name[0] == '.') continue;
+        if (mode == PROMDIR_FOREACH_PIDS && !cyrus_isdigit(dirent->d_name[0])) continue;
+        if (mode == PROMDIR_FOREACH_DONEPROCS && dirent->d_name[0] != 'd') continue;
 
         r = snprintf(fname, sizeof(fname), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(fname)) {
@@ -178,83 +185,109 @@ static int promdir_foreach(promdir_foreach_cb *proc, void *rock)
     return r;
 }
 
-static int read_into_array(const struct prom_stats *stats, void *rock)
+static int accum_stats(const struct prom_stats *stats, void *rock)
 {
-    ptrarray_t *p = (ptrarray_t *) rock;
+    struct prom_stats *stats_copy;
+    hash_table *h = (hash_table *) rock;
+    int i;
 
-    struct prom_stats *stats_copy = xmalloc(sizeof *stats_copy);
-    memcpy(stats_copy, stats, sizeof(*stats_copy));
-    ptrarray_append(p, stats_copy);
+    stats_copy = hash_lookup(stats->ident, h);
+    if (!stats_copy) {
+        stats_copy = xzmalloc(sizeof *stats_copy);
+        strcpy(stats_copy->ident, stats->ident);
+        hash_insert(stats->ident, stats_copy, h);
+    }
+
+    for (i = 0; i < PROM_NUM_METRICS; i++) {
+        stats_copy->metrics[i].value += stats->metrics[i].value;
+        stats_copy->metrics[i].last_updated = MAX(stats_copy->metrics[i].last_updated,
+                                                  stats->metrics[i].last_updated);
+    }
 
     return 0;
 }
 
+struct format_metric_rock {
+    struct buf *buf;
+    enum prom_metric_id metric;
+};
+
+static void format_metric(const char *key __attribute__((unused)),
+                          void *data, void *rock)
+{
+    struct prom_stats *stats = (struct prom_stats *) data;
+    struct format_metric_rock *fmrock = (struct format_metric_rock *) rock;
+
+    buf_appendcstr(fmrock->buf, prom_metric_descs[fmrock->metric].name);
+    buf_printf(fmrock->buf, "{service=\"%s\"", stats->ident);
+    if (prom_metric_descs[fmrock->metric].label)
+        buf_printf(fmrock->buf, ",%s", prom_metric_descs[fmrock->metric].label);
+    buf_printf(fmrock->buf, "} %0.f %" PRId64 "\n",
+                            stats->metrics[fmrock->metric].value,
+                            stats->metrics[fmrock->metric].last_updated);
+}
+
 static void do_collate_report(struct buf *buf)
 {
-    ptrarray_t proc_stats = PTRARRAY_INITIALIZER;
-    struct prom_stats doneprocs_stats = PROM_STATS_INITIALIZER;
-    char *doneprocs_fname;
-    struct mappedfile *doneprocs_mf = NULL;
-    int i, j;
+    hash_table all_stats = HASH_TABLE_INITIALIZER;
+    char *doneprocs_lock_fname;
+    int doneprocs_lock_fd;
+    int i;
 
     buf_reset(buf);
+    construct_hash_table(&all_stats, 128, 0);
 
-    /* load up accumulated stats of former processes.  hold this lock until
-     * we've read all the stats files, so we don't double count if a process
-     * exits while we're counting */
-    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS, NULL);
-    mappedfile_open(&doneprocs_mf, doneprocs_fname, MAPPEDFILE_CREATE);
-    free(doneprocs_fname);
-    if (doneprocs_mf && 0 == mappedfile_readlock(doneprocs_mf)) {
-        memcpy(&doneprocs_stats, mappedfile_base(doneprocs_mf), mappedfile_size(doneprocs_mf));
-        read_into_array(&doneprocs_stats, &proc_stats);
+    /* hold a lock on .doneprocs.lock while reading stats files - this ensures
+     * process cleanups won't lead to double counts while we're collating */
+    doneprocs_lock_fname = strconcat(prometheus_stats_dir(), ".",
+                                     FNAME_PROM_DONEPROCS, ".lock", NULL);
+
+    doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    if (doneprocs_lock_fd == -1) {
+        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        free_hash_table(&all_stats, NULL);
+        return;
+    }
+    if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
+        syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
+        close(doneprocs_lock_fd);
+        doneprocs_lock_fd = -1;
+        free(doneprocs_lock_fname);
+        free_hash_table(&all_stats, NULL);
+        return;
     }
 
-    /* slurp up current stats */
-    promdir_foreach(&read_into_array, &proc_stats);
-    syslog(LOG_DEBUG, "updating prometheus report for %d processes", proc_stats.count);
+    /* slurp up and accumulate doneprocs stats */
+    promdir_foreach(&accum_stats, PROMDIR_FOREACH_DONEPROCS, &all_stats);
 
-    /* release the doneprocs lock */
-    if (doneprocs_mf) {
-        mappedfile_unlock(doneprocs_mf);
-        mappedfile_close(&doneprocs_mf);
-    }
+    /* slurp up and accumulate current stats */
+    promdir_foreach(&accum_stats, PROMDIR_FOREACH_PIDS, &all_stats);
+
+    syslog(LOG_DEBUG, "updating prometheus report for %d services",
+                      hash_numrecords(&all_stats));
+
+    /* release .doneprocs.lock */
+    unlink(doneprocs_lock_fname);
+    lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
+    free(doneprocs_lock_fname);
 
     /* format it into buf */
-    for (j = 0; j < PROM_NUM_METRICS; j++) {
-        double sum = 0.0;
-        int64_t last_updated = 0;
-
-        if (prom_metric_descs[j].help) {
-            buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[j].name,
-                            prom_metric_descs[j].help);
+    for (i = 0; i < PROM_NUM_METRICS; i++) {
+        if (prom_metric_descs[i].help) {
+            buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[i].name,
+                            prom_metric_descs[i].help);
         }
-        if (prom_metric_descs[j].type != PROM_METRIC_CONTINUED) {
-            buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[j].name,
-                            prom_metric_type_names[prom_metric_descs[j].type]);
+        if (prom_metric_descs[i].type != PROM_METRIC_CONTINUED) {
+            buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[i].name,
+                            prom_metric_type_names[prom_metric_descs[i].type]);
         }
 
-        /* prevent zero timestamp when we don't have any real stats yet */
-        if (proc_stats.count == 0) last_updated = now_ms();
-
-        for (i = 0; i < proc_stats.count; i++) {
-            const struct prom_stats *p = ptrarray_nth(&proc_stats, i);
-            sum += p->metrics[j].value;
-            last_updated = MAX(last_updated, p->metrics[j].last_updated);
-        }
-
-        buf_appendcstr(buf, prom_metric_descs[j].name);
-        if (prom_metric_descs[j].label)
-            buf_printf(buf, "{%s}", prom_metric_descs[j].label);
-        buf_printf(buf, " %.0f %" PRId64 "\n", sum, last_updated);
+        struct format_metric_rock fmrock = { buf, i };
+        hash_enumerate(&all_stats, &format_metric, &fmrock);
     }
 
     /* clean up the copy */
-    void *p;
-    while ((p = ptrarray_shift(&proc_stats))) {
-        free(p);
-    }
-    ptrarray_fini(&proc_stats);
+    free_hash_table(&all_stats, free);
 }
 
 static void do_write_report(struct mappedfile *mf, const struct buf *report)

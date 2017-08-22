@@ -119,6 +119,13 @@ static void prometheus_init(void)
         stats.metrics[i].last_updated = now_ms();
     }
 
+    r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
+    if (r < 0 || (size_t) r >= sizeof(stats.ident))
+        syslog(LOG_WARNING, "service name '%s' is longer than " SIZE_T_FMT
+                            " characters - prometheus label will be truncated",
+                            config_ident,
+                            sizeof(stats.ident) - 1);
+
     r = snprintf(fname, sizeof(fname), "%s%jd",
                  prometheus_stats_dir(), (intmax_t) stats.pid);
     if (r < 0 || (size_t) r >= sizeof(fname))
@@ -169,14 +176,33 @@ static void prometheus_done(void *rock __attribute__((unused)))
     struct prom_stats thisproc = PROM_STATS_INITIALIZER;
     struct mappedfile *doneprocs = NULL;
     char *doneprocs_fname;
+    char *doneprocs_lock_fname;
+    int doneprocs_lock_fd;
     int i, r = 0;
     int unlinked = 0;
 
     if (!promhandle) return; /* make double-call safe */
 
-    /* load existing doneprocs stats.  we hold this write lock until we're
-     * finished, so that promstatsd won't double-count in the interim */
-    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS, NULL);
+    /* hold a lock on .doneprocs.lock - this keeps promstatsd from double
+     * counting while we're juggling files */
+    doneprocs_lock_fname = strconcat(prometheus_stats_dir(), ".",
+                                     FNAME_PROM_DONEPROCS, ".lock", NULL);
+
+    doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    if (doneprocs_lock_fd == -1) {
+        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        goto done;
+    }
+    if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
+        syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
+        close(doneprocs_lock_fd);
+        doneprocs_lock_fd = -1;
+        goto done;
+    }
+
+    /* load existing doneprocs stats */
+    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS,
+                                ".", config_ident, NULL);
     r = mappedfile_open(&doneprocs, doneprocs_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     if (r) {
         syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
@@ -189,6 +215,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
 
     memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
     if (accum.pid == 0) accum.pid = (pid_t) -1;
+    if (accum.ident[0] == '\0') {
+        snprintf(accum.ident, sizeof(accum.ident), "%s", config_ident);
+    }
 
     /* read stats from this process */
     r = mappedfile_readlock(promhandle->mf);
@@ -236,6 +265,14 @@ done:
 
     mappedfile_unlock(doneprocs);
     mappedfile_close(&doneprocs);
+
+    /* release .doneprocs.lock */
+    if (doneprocs_lock_fd != -1) {
+        unlink(doneprocs_lock_fname);
+        lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
+        close(doneprocs_lock_fd);
+    }
+    free(doneprocs_lock_fname);
 }
 
 /* use the prometheus_increment() and prometheus_decrement() wrapper macros
