@@ -218,6 +218,10 @@ static void format_metric(const char *key __attribute__((unused)),
     struct prom_stats *stats = (struct prom_stats *) data;
     struct format_metric_rock *fmrock = (struct format_metric_rock *) rock;
 
+    /* don't report service/metric combinations that have never been seen */
+    if (!stats->metrics[fmrock->metric].last_updated)
+        return;
+
     buf_appendcstr(fmrock->buf, prom_metric_descs[fmrock->metric].name);
     buf_printf(fmrock->buf, "{service=\"%s\"", stats->ident);
     if (prom_metric_descs[fmrock->metric].label)

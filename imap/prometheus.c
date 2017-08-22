@@ -106,7 +106,6 @@ static void prometheus_init(void)
     char fname[PATH_MAX];
     struct prometheus_handle *handle = NULL;
     struct prom_stats stats = PROM_STATS_INITIALIZER;
-    int i;
     int r;
 
     if (promhandle != NULL) return;
@@ -115,10 +114,6 @@ static void prometheus_init(void)
     if (!prometheus_enabled) return;
 
     stats.pid = getpid();
-    for (i = 0; i < PROM_NUM_METRICS; i++) {
-        stats.metrics[i].last_updated = now_ms();
-    }
-
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
     if (r < 0 || (size_t) r >= sizeof(stats.ident))
         syslog(LOG_WARNING, "service name '%s' is longer than " SIZE_T_FMT
