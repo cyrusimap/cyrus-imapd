@@ -182,11 +182,10 @@ struct prom_metric {
 };
 
 struct prom_stats {
-    pid_t pid;
     char  ident[512];   /* XXX places upper limit on service names */
     struct prom_metric metrics[PROM_NUM_METRICS];
 };
-#define PROM_STATS_INITIALIZER {0}
+#define PROM_STATS_INITIALIZER { {0}, {{0, 0}} }
 
 OKAY
 

@@ -113,7 +113,6 @@ static void prometheus_init(void)
     prometheus_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
     if (!prometheus_enabled) return;
 
-    stats.pid = getpid();
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
     if (r < 0 || (size_t) r >= sizeof(stats.ident))
         syslog(LOG_WARNING, "service name '%s' is longer than " SIZE_T_FMT
@@ -122,7 +121,7 @@ static void prometheus_init(void)
                             sizeof(stats.ident) - 1);
 
     r = snprintf(fname, sizeof(fname), "%s%jd",
-                 prometheus_stats_dir(), (intmax_t) stats.pid);
+                 prometheus_stats_dir(), (intmax_t) getpid());
     if (r < 0 || (size_t) r >= sizeof(fname))
         fatal("unable to register stats for prometheus", EC_CONFIG);
 
@@ -209,7 +208,6 @@ static void prometheus_done(void *rock __attribute__((unused)))
     if (r) goto done;
 
     memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
-    if (accum.pid == 0) accum.pid = (pid_t) -1;
     if (accum.ident[0] == '\0') {
         snprintf(accum.ident, sizeof(accum.ident), "%s", config_ident);
     }
