@@ -4933,7 +4933,7 @@ static int jmap_validate_emailer(json_t *emailer,
     return r;
 }
 
-static int jmapmsg_tomime(jmap_req_t *req, FILE *out, void *rock);
+static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock);
 
 #define JMAPMSG_HEADER_TO_MIME(k, v) \
     { \
@@ -5302,7 +5302,7 @@ done:
     return r;
 }
 
-static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
+static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
                              const char *boundary, FILE *out)
 {
     char *freeme = NULL, *myboundary = NULL;
@@ -5372,7 +5372,7 @@ static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
         }
 
         /* Write any remaining message bodies before the attachments */
-        r = jmapmsg_tomimebody(req, mymsg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
@@ -5385,7 +5385,7 @@ static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
         json_object_foreach(attached_msgs, subid, submsg) {
             fprintf(out, "\r\n--%s\r\n", myboundary);
             fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
-            r = jmapmsg_tomime(req, out, submsg);
+            r = jmapmsg_to_mime(req, out, submsg);
             if (r) goto done;
         }
 
@@ -5405,7 +5405,7 @@ static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
         json_object_del(mymsg, "attachments");
 
         /* Write the plain text body */
-        r = jmapmsg_tomimebody(req, mymsg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write the html body, including any of its related attachments */
@@ -5414,7 +5414,7 @@ static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
         if (json_array_size(cid_attachments)) {
             json_object_set(mymsg, "attachments", cid_attachments);
         }
-        r = jmapmsg_tomimebody(req, mymsg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         fprintf(out, "\r\n--%s--\r\n", myboundary);
@@ -5429,7 +5429,7 @@ static int jmapmsg_tomimebody(jmap_req_t *req, json_t *msg,
 
         /* Remove the attachments to serialise the html body */
         json_object_del(mymsg, "attachments");
-        r = jmapmsg_tomimebody(req, mymsg, myboundary, out);
+        r = jmapmsg_to_mimebody(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
@@ -5479,7 +5479,7 @@ done:
  * email address.
  *
  * Return 0 on success or non-zero if writing to the file failed */
-static int jmapmsg_tomime(jmap_req_t *req, FILE *out, void *rock)
+static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
 {
     json_t *msg = rock;
     struct jmapmsgdata {
@@ -5704,7 +5704,7 @@ static int jmapmsg_tomime(jmap_req_t *req, FILE *out, void *rock)
     }
 
     /* Write message body */
-    r = jmapmsg_tomimebody(req, mymsg, NULL, out);
+    r = jmapmsg_to_mimebody(req, mymsg, NULL, out);
     json_decref(mymsg);
 
     if (d.from) free(d.from);
@@ -6524,7 +6524,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
 
     /* Write message */
     int r = jmapmsg_append(req, mailboxids, &keywords, internaldate,
-                           has_attachment, jmapmsg_tomime, msg, msgid);
+                           has_attachment, jmapmsg_to_mime, msg, msgid);
     strarray_fini(&keywords);
     if (r) return r;
 
