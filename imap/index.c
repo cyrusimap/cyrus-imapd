@@ -1462,6 +1462,10 @@ EXPORTED int index_run_annotator(struct index_state *state,
         msgrecord_unref(&msgrec);
     }
 
+    /* Update highestmodseq if something has changed */
+    if (state->highestmodseq != state->mailbox->i.highestmodseq)
+        index_refresh_locked(state);
+
 out:
     seqset_free(seq);
 
