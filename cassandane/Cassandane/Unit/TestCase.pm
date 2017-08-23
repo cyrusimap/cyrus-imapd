@@ -67,10 +67,11 @@ sub _skip_version
 
     return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
     my $minmax = $1;
-    my ($lim_major, $lim_minor, $lim_revision) = map { 0 + $_ } split /_/, $2;
+    my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
+	= map { 0 + $_ } split /_/, $2;
     return if not defined $lim_major;
 
-    my ($major, $minor, $revision) = Cassandane::Instance->get_version();
+    my ($major, $minor, $revision, $commits) = Cassandane::Instance->get_version();
 
     if ($minmax eq 'min') {
 	return 1 if $major < $lim_major; # too old, skip!
@@ -82,6 +83,9 @@ sub _skip_version
 
 	return if not defined $lim_revision;
 	return 1 if $revision < $lim_revision;
+
+	return if not defined $lim_commits;
+	return 1 if $commits < $lim_commits;
     }
     else {
 	return 1 if $major > $lim_major; # too new, skip!
@@ -93,6 +97,9 @@ sub _skip_version
 
 	return if not defined $lim_revision;
 	return 1 if $revision > $lim_revision;
+
+	return if not defined $lim_commits;
+	return 1 if $commits > $lim_commits;
     }
 
     return;

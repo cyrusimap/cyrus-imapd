@@ -193,19 +193,37 @@ sub get_version
 
     #cyrus-imapd 3.0.0-beta3-114-g5fa1dbc-dirty
     if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
-	$cached_version{$installation} = [0 + $1, 0 + $2, 0 + $3, $4];
+	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
+	my $pluscommits;
+	if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
+	    $pluscommits = $1;
+	}
+	$cached_version{$installation} = [ 0 + $maj,
+					   0 + $min,
+					   0 + $rev,
+					   0 + $pluscommits,
+					   $extra ];
     }
     elsif ($version =~ m/^Version: (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
-	$cached_version{$installation} = [0 + $1, 0 + $2, 0 + $3, $4];
+	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
+	my $pluscommits;
+	if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
+	    $pluscommits = $1;
+	}
+	$cached_version{$installation} = [ 0 + $maj,
+					   0 + $min,
+					   0 + $rev,
+					   0 + $pluscommits,
+					   $extra ];
     }
     else {
-	$cached_version{$installation} = [0, 0, 0, q{}];
+	$cached_version{$installation} = [0, 0, 0, 0, q{}];
     }
 
     $cached_sversion{$installation} = join q{.},
 					   @{$cached_version{$installation}}[0..2];
-    $cached_sversion{$installation} .= "-$cached_version{$installation}->[3]"
-	if $cached_version{$installation}->[3];
+    $cached_sversion{$installation} .= "-$cached_version{$installation}->[4]"
+	if $cached_version{$installation}->[4];
 
     return @{$cached_version{$installation}} if wantarray;
     return $cached_sversion{$installation};
