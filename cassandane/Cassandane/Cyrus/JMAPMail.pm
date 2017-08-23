@@ -710,6 +710,24 @@ sub test_setmailboxes_role
     $self->assert_str_equals($multi->{role}, "archive");
 }
 
+sub test_setmailboxes_no_outbox_role
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Regression test to make sure the non-standard 'outbox'
+    # role is rejected for mailboxes.
+
+    my $res = $jmap->Request([
+        ['setMailboxes', { create => {
+            "1" => { name => "foo", parentId => undef, role => "outbox" },
+        }}, "R1"]
+    ]);
+    $self->assert_str_equals("role", $res->[0][1]{notCreated}{1}{properties}[0]);
+}
+
+
 sub test_setmailboxes_parent
     :JMAP :min_version_3_1
 {
@@ -3029,53 +3047,37 @@ sub test_setmessages_flagged
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Flagged'});
 }
 
+
 sub test_setmessages_invalid_mailaddr
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    # XXX Why do we have to do this? Shouldn't Cyrus provision the Outbox?
-    xlog "create outbox";
-    my $res = $jmap->Request([
-            ['setMailboxes', { create => { "1" => {
-                            name => "drafts",
-                            parentId => undef,
-                            role => "outbox"
-             }}}, "R1"]
-    ]);
-    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_not_null($res->[0][1]{created});
-    my $outbox = $res->[0][1]{created}{"1"}{id};
+    my $inboxid = $self->getinbox()->{id};
 
-    xlog "Send a message with invalid replyTo property";
-    my $draft =  {
-        mailboxIds => [$outbox],
+    my $msg = {
+        mailboxIds => [$inboxid],
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
-        replyTo => [ { name => "", email => "a\@bad\@address\@acme.local" } ],
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
-        keywords => { '$Draft' => JSON::true },
+        keywords => { },
     };
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'replyTo[0].email');
 
-    xlog "Send a message with invalid To header";
-    $draft =  {
-        mailboxIds => [$outbox],
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
-        headers => { "To" => "bugs\@acme.local, a\@bad\@address\@acme.local" },
-        subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        keywords => { '$Draft' => JSON::true },
-    };
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{type}, 'invalidProperties');
-    $self->assert_str_equals($res->[0][1]{notCreated}{"1"}{properties}[0], 'header[To]');
+    xlog 'Create a message with invalid replyTo property without $Drafts flags (should fail)';
+    $msg->{replyTo} = [ { name => "", email => "a\@bad\@address\@acme.local" } ];
+    my $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('replyTo[0].email', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    xlog 'Create a message with invalid replyTo property with $Drafts flags';
+    $msg->{keywords} = { '$Draft' => JSON::true };
+    $msg->{replyTo} = [ { name => "", email => "address\@acme.local" } ];
+    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"});
 }
+
 
 sub test_setmessages_mailboxids
     :JMAP :min_version_3_1
@@ -3088,13 +3090,10 @@ sub test_setmessages_mailboxids
 
     my $res = $jmap->Request([
         ['setMailboxes', { create => {
-            "1" => { name => "outbox", parentId => undef, role => "outbox" },
-            "2" => { name => "drafts", parentId => undef, role => "drafts" },
+            "1" => { name => "drafts", parentId => undef, role => "drafts" },
         }}, "R1"]
     ]);
-    my $outboxid = $res->[0][1]{created}{"1"}{id};
-    my $draftsid = $res->[0][1]{created}{"2"}{id};
-    $self->assert_not_null($outboxid);
+    my $draftsid = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsid);
 
     my $msg =  {
@@ -3105,7 +3104,7 @@ sub test_setmessages_mailboxids
         keywords => { '$Draft' => JSON::true },
     };
 
-    # Not: OK at least one mailbox must be specified
+    # Not OK: at least one mailbox must be specified
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
@@ -3114,31 +3113,23 @@ sub test_setmessages_mailboxids
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
 
-    # Not OK, either outbox or drafts must be in mailboxIds
+    # OK: drafts mailbox isn't required (anymore)
     $msg->{mailboxIds} = [$inboxid];
+    $msg->{subject} = "Message 1";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
-    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+    $self->assert(exists $res->[0][1]{created}{"1"});
 
-    # OK, save draft
-    $msg->{mailboxIds} = [$outboxid];
+    # OK: drafts mailbox is OK to create in
+    $msg->{mailboxIds} = [$draftsid];
+    $msg->{subject} = "Message 2";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+    $self->assert(exists $res->[0][1]{created}{"1"});
 
-    # OK, send immediately
-    $msg->{mailboxIds} = [$outboxid];
+    # OK: drafts mailbox is OK to create in, as is for multiple mailboxes
+    $msg->{mailboxIds} = [$draftsid, $inboxid];
+    $msg->{subject} = "Message 3";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
-
-    # Weird, but OK
-    $msg->{mailboxIds} = [$inboxid, $outboxid];
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
-
-    # Also weird, but OK
-    $msg->{mailboxIds} = [$draftsid, $outboxid];
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+    $self->assert(exists $res->[0][1]{created}{"1"});
 }
 
 sub test_setmessages_move
