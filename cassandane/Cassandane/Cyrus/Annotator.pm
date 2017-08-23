@@ -52,7 +52,7 @@ sub new
     my $class = shift;
     my $config = Cassandane::Config->default()->clone();
     $config->set(
-	annotation_callout => '@basedir@/conf/socket/annotator.sock',
+        annotation_callout => '@basedir@/conf/socket/annotator.sock',
     );
     return $class->SUPER::new({ config => $config, deliver => 1 }, @_);
 }
@@ -69,16 +69,16 @@ sub _create_instances
 
     $self->SUPER::_create_instances();
     $self->{instance}->add_daemon(
-	    name => 'annotator',
-	    port => $self->{instance}->{config}->get('annotation_callout'),
-	    argv => sub {
-		my ($daemon) = @_;
-		return (
-		    abs_path('utils/annotator.pl'),
-		    '--port', $daemon->port(),
-		    '--pidfile', '@basedir@/run/annotator.pid',
-		);
-	    });
+        name => 'annotator',
+        port => $self->{instance}->{config}->get('annotation_callout'),
+        argv => sub {
+            my ($daemon) = @_;
+            return (
+                abs_path('utils/annotator.pl'),
+                '--port', $daemon->port(),
+                '--pidfile', '@basedir@/run/annotator.pid',
+                );
+        });
 }
 
 sub tear_down
@@ -124,7 +124,7 @@ sub test_add_annot_deliver_tomailbox
     my $subfolder = 'target';
     my $talk = $self->{store}->get_client();
     $talk->create("INBOX.$subfolder")
-	or die "Failed to create INBOX.$subfolder";
+        or die "Failed to create INBOX.$subfolder";
 
     my %exp;
     $exp{A} = $self->{gen}->generate(subject => "Message A");
@@ -223,5 +223,71 @@ sub test_reconstruct_after_delivery
 
 # Note: remove_annotation can't really be tested with local
 # delivery, just with the APPEND command.
+
+sub test_fetch_after_annotate
+{
+    # This is a test for https://github.com/cyrusimap/cyrus-imapd/issues/2071
+    my ($self) = @_;
+
+    my $flag = '$X-ME-Annot-2';
+    my $imaptalk = $self->{store}->get_client();
+    my $modseq;
+    my %msg;
+
+    $imaptalk->select("INBOX");
+
+    xlog "Create Message A";
+    $msg{A} = $self->{gen}->generate(subject => "Message A");
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{A}->set_body("set_flag $flag\r\n");
+    $self->{instance}->deliver($msg{A});
+
+    $msg{A}->set_attributes(flags => ['\\Recent', $flag]);
+
+    $self->{store}->set_fetch_attributes('uid', 'flags', 'modseq');
+
+    xlog "Fetch message A";
+    my %handlers1;
+    {
+        $handlers1{fetch} = sub {
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 2);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+            $self->assert_str_equals($_[1]{flags}[1], "\$X-ME-Annot-2");
+        };
+    }
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers1, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Clear the $flag from the message A.";
+    my %handlers2;
+    {
+        $handlers2{fetch} = sub {
+            $modseq = $_[1]{modseq}[0];
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 1);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+        };
+    }
+    $imaptalk->store('1', '-flags', "($flag)");
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers2, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Run xrunannotator";
+    my %handlers3;
+    {
+        $handlers3{fetch} = sub {
+            $self->assert($_[1]{modseq}[0] > $modseq);
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 2);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+            $self->assert_str_equals($_[1]{flags}[1], "\$X-ME-Annot-2");
+        };
+    }
+    $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '1');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers3, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+}
 
 1;
