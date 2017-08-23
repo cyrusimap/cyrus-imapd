@@ -5728,8 +5728,7 @@ static int jmapmsg_tomime(jmap_req_t *req, FILE *out, void *rock)
 #undef JMAPMSG_EMAILER_TO_MIME
 #undef JMAPMSG_HEADER_TO_MIME
 
-static void validate_createmsg(json_t *msg, json_t *invalid,
-                               int is_draft, int is_attached)
+static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
 {
     int pe;
     json_t *prop;
@@ -5739,7 +5738,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid,
     struct tm *date = xzmalloc(sizeof(struct tm));
     char *mboxname = NULL;
     char *mboxrole = NULL;
-    int validate_addr = !is_draft;
+    int validate_addr = 1;
 
     if (json_object_get(msg, "id")) {
         json_array_append_new(invalid, json_string("id"));
@@ -5773,10 +5772,8 @@ static void validate_createmsg(json_t *msg, json_t *invalid,
                     buf_reset(&buf);
                 }
             }
-            if (is_draft && !json_object_get(prop, "$Draft")) {
-                buf_printf(&buf, "keywords[$Draft]");
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
+            if (json_object_get(prop, "$Draft")) {
+                validate_addr = 0;
             }
         }
     } else if (json_object_get(msg, "keywords")) {
@@ -5928,7 +5925,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid,
             json_t *errprop;
             size_t j;
 
-            validate_createmsg(submsg, subinvalid, 0/*is_draft*/, 1/*is_attached*/);
+            validate_createmsg(submsg, subinvalid, 1/*is_attached*/);
 
             buf_printf(&buf, "attachedMessages[%s]", subid);
             json_array_foreach(subinvalid, j, errprop) {
@@ -6466,17 +6463,12 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     const char *id = NULL;
     json_t *val;
     time_t internaldate = 0;
-    int have_mbox = 0, is_draft = 0;
     size_t i;
     json_t *mailboxids;
     strarray_t keywords = STRARRAY_INITIALIZER;
     const char *keyword;
 
-    /* XXX - this is broken for shared accounts, since we lookup
-     * annotation per authenticated user. Needless to fix this,
-     * since the JMAP spec most probably will allow messages to be
-     * created in any mailbox. */
-
+    /* Validate mailboxids here, we need them anyway */
     mailboxids = json_object_get(msg, "mailboxIds");
     json_array_foreach(mailboxids, i, val) {
         id = json_string_value(val);
@@ -6499,23 +6491,12 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
             buf_free(&buf);
             continue;
         }
-        mbname_t *mbname = mbname_from_intname(name);
-        char *role = jmapmbox_role(req, mbname);
-        mbname_free(&mbname);
-        if (role) {
-            if (!strcmp(role, "drafts") && !have_mbox) {
-                have_mbox = 1;
-                is_draft = 1;
-            }
-        }
         free(name);
-        free(role);
     }
-    if (!have_mbox && !json_array_size(invalid)) {
+    if (!json_array_size(mailboxids) && !json_array_size(invalid)) {
         json_array_append_new(invalid, json_string("mailboxIds"));
     }
-
-    validate_createmsg(msg, invalid, is_draft, 0/*is_attached*/);
+    validate_createmsg(msg, invalid, 0/*is_attached*/);
     if (json_array_size(invalid)) {
         return 0;
     }
