@@ -245,10 +245,6 @@ static char *jmapmbox_role(jmap_req_t *req, const mbname_t *mbname)
     if (!strarray_size(mbname_boxes(mbname)))
         return xstrdup("inbox");
 
-    /* Is it an outbox? */
-    if (mboxname_isoutbox(mbname_intname(mbname)))
-        return xstrdup("outbox");
-
     /* XXX How to determine the templates role? */
 
     /* Does this mailbox have an IMAP special use role? */
@@ -477,8 +473,6 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                 sortOrder = 10;
             else if (!strcmp(role, "inbox"))
                 sortOrder = 1;
-            else if (!strcmp(role, "outbox"))
-                sortOrder = 2;
             else if (!strcmp(role, "archive"))
                 sortOrder = 3;
             else if (!strcmp(role, "drafts"))
@@ -1060,37 +1054,20 @@ static int jmapmbox_create(jmap_req_t *req,
 
     /* Sanity-check arguments */
     if (args->role) {
-        if (!strcmp(args->role, "outbox")) {
-            if (strcmp(args->parentid, mbinbox->uniqueid)) {
-                /* Outbox may only be created on top-level. */
-                json_array_append_new(invalid, json_string("role"));
-            }
-            else {
-                /* Check that no outbox exists. */
-                /* XXX mboxname_isoutbox checks for top-level mailbox 'Outbox' */
-                char *outboxname = mboxname_user_mbox(req->accountid, "Outbox");
-                mbentry_t *mbentry = NULL;
-                if (mboxlist_lookup(outboxname, &mbentry, NULL) != IMAP_MAILBOX_NONEXISTENT)
-                    json_array_append_new(invalid, json_string("role"));
-                if (mbentry) mboxlist_entry_free(&mbentry);
-                free(outboxname);
-            }
-        } else {
-            /* Is it one of the known special use mailboxes? */
-            if (!strcmp(args->role, "archive")) {
-                args->specialuse = "\\Archive";
-            } else if (!strcmp(args->role, "drafts")) {
-                args->specialuse = "\\Drafts";
-            } else if (!strcmp(args->role, "spam")) {
-                args->specialuse = "\\Junk";
-            } else if (!strcmp(args->role, "sent")) {
-                args->specialuse = "\\Sent";
-            } else if (!strcmp(args->role, "trash")) {
-                args->specialuse = "\\Trash";
-            } else if (strncmp(args->role, "x-", 2)) {
-                /* Does it start with an "x-"? If not, reject it. */
-                json_array_append_new(invalid, json_string("role"));
-            }
+        /* Is it one of the known special use mailboxes? */
+        if (!strcmp(args->role, "archive")) {
+            args->specialuse = "\\Archive";
+        } else if (!strcmp(args->role, "drafts")) {
+            args->specialuse = "\\Drafts";
+        } else if (!strcmp(args->role, "spam")) {
+            args->specialuse = "\\Junk";
+        } else if (!strcmp(args->role, "sent")) {
+            args->specialuse = "\\Sent";
+        } else if (!strcmp(args->role, "trash")) {
+            args->specialuse = "\\Trash";
+        } else if (strncmp(args->role, "x-", 2)) {
+            /* Does it start with an "x-"? If not, reject it. */
+            json_array_append_new(invalid, json_string("role"));
         }
         char *exists = NULL;
         if (args->specialuse) {
@@ -1110,18 +1087,12 @@ static int jmapmbox_create(jmap_req_t *req,
         goto done;
     }
 
-    /* Determine name for the soon-to-be created mailbox. */
-    if (args->role && !strcmp(args->role, "outbox")) {
-        /* XXX mboxname_isoutbox checks for top-level mailbox 'Outbox' */
-        mboxname = mboxname_user_mbox(req->accountid, "Outbox");
-    } else {
-        /* Encode the mailbox name for IMAP. */
-        mboxname = jmapmbox_newname(args->name, parentname);
-        if (!mboxname) {
-            syslog(LOG_ERR, "could not encode mailbox name");
-            r = IMAP_INTERNAL;
-            goto done;
-        }
+    /* Encode the mailbox name for IMAP. */
+    mboxname = jmapmbox_newname(args->name, parentname);
+    if (!mboxname) {
+        syslog(LOG_ERR, "could not encode mailbox name");
+        r = IMAP_INTERNAL;
+        goto done;
     }
 
     /* Create mailbox using parent ACL */
@@ -6204,12 +6175,6 @@ static int jmapmsg_append(jmap_req_t *req,
                 }
                 mboxname = xstrdup(name);
             }
-            if (!strcmp(role, "outbox") && !mboxname) {
-                if (mboxname) {
-                    free(mboxname);
-                }
-                mboxname = xstrdup(name);
-            }
         }
 
         if (!mboxname) {
@@ -6541,10 +6506,6 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
             if (!strcmp(role, "drafts") && !have_mbox) {
                 have_mbox = 1;
                 is_draft = 1;
-            }
-            else if (!strcmp(role, "outbox")) {
-                have_mbox = 1;
-                is_draft = 0;
             }
         }
         free(name);
@@ -7268,7 +7229,6 @@ static int importMessages(jmap_req_t *req)
         prefix = buf_cstring(&buf);
 
         json_t *keywords;
-        /* FIXME The $Draft keyword MUST also be included if the message is being imported to the outbox. */
         if (readprop_full(msg, prefix, "keywords", 1, invalid, "o", &keywords) > 0) {
             json_array_foreach(keywords, i, val) {
                 const char *kw = json_string_value(val);
