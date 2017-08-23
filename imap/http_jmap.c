@@ -1386,10 +1386,10 @@ static json_t *user_settings(const char *userid)
     findaccounts_add(ctx.accounts, buf_cstring(&ctx.userid), ctx.rw);
     buf_free(&ctx.userid);
 
-    return json_pack("{s:s s:o s:s s:s s:s}",
+    return json_pack("{s:s s:o s:o s:s s:s s:s}",
             "username", userid,
             "accounts", accounts,
-            /* FIXME capabilities */
+            "capabilities", json_pack("{}"), /* TODO update with JMAP URIs */
             "apiUrl", "/jmap/",
             "downloadUrl", "/jmap/download/{accountId}/{blobId}/{name}",
             /* FIXME eventSourceUrl */
