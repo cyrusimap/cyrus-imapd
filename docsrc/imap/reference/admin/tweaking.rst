@@ -151,7 +151,7 @@ command
 
     SELECT INBOX.x
 
-for non-existing mailbox x, it creates a a lock file
+for non-existing mailbox x, it creates a lock file
 
     .. parsed-literal::
 
