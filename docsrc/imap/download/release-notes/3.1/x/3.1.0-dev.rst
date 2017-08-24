@@ -22,6 +22,11 @@ Updates to default configuration
   explicitly be disabled for interoperability with legacy clients that
   can't handle RFC 6154 attributes in extended LIST commands.
 
+* The per-user calendar and addressbook administrative web user
+  interfaces (e.g. /dav/calendars/user/<userid>) are now disabled by
+  default.  They can be enabled with the `caldav_allowcalendaradmin`
+  and `carddav_allowaddressbookadmin` options respectively.
+
 Significant bugfixes
 ====================
 

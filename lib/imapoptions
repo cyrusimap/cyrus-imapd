@@ -500,7 +500,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    than any sane message should have. */
 
 { "caldav_allowattach", 1, SWITCH }
-/* Enable managed attachments support on the caldav server. */
+/* Enable managed attachments support on the CalDAV server. */
+
+{ "caldav_allowcalendaradmin", 0, SWITCH }
+/* Enable per-user calendar administration web UI on the CalDAV server. */
 
 { "caldav_allowscheduling", "on", ENUM("off", "on", "apple") }
 /* Enable calendar scheduling operations. If set to "apple", the
@@ -508,7 +511,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    possible. */
 
 { "caldav_create_attach", 1, SWITCH }
-/* Create the 'Attachments' calendar if it doesn't already exist */
+/* Create the 'Attachments' collection if it doesn't already exist */
 
 { "caldav_create_default", 1, SWITCH }
 /* Create the 'Default' calendar if it doesn't already exist */
@@ -543,6 +546,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Space-separated list of domains corresponding to calendar user
    addresses for which the server is responsible.  If not set (the
    default), the value of the "servername" option will be used. */
+
+{ "carddav_allowaddressbookadmin", 0, SWITCH }
+/* Enable per-user addressbook administration web UI on the CardDAV server. */
 
 { "carddav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of CardDAV resources.

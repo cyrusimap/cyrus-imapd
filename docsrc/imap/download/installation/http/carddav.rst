@@ -43,12 +43,23 @@ the first time that the user authenticates to the CardDAV server. Note that the
 user MUST have an existing IMAP Inbox in order for the addressbook to be
 created.
 
+.. sidebar:: carddav_allowaddressbookadmin
+
+    |change-default-config|
+
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+      :start-after: startblob carddav_allowaddressbookadmin
+      :end-before: endblob carddav_allowaddressbookadmin
+
 There is also a Cyrus web GUI for managing addressbook resources.
 It allows you to:
 
     * Create new collections
     * Delete existing collections
     * Download existing collections via prepared URLs
+
+The Cyrus web GUI for addressbook management is disabled by default,
+but can be enabled with the "carddav_allowaddressbookadmin" option.
 
 To access the Cyrus web GUI for addressbook management, point
 a web browser at ``https://<servername>/dav/addressbooks/user/<username>``

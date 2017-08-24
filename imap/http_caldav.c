@@ -2182,7 +2182,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         /* Download an entire calendar collection */
         return export_calendar(txn);
     }
-    else if (txn->req_tgt.userid) {
+    else if (txn->req_tgt.userid &&
+             config_getswitch(IMAPOPT_CALDAV_ALLOWCALENDARADMIN)) {
         /* GET a list of calendars under calendar-home-set */
         return list_calendars(txn);
     }

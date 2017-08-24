@@ -1097,7 +1097,8 @@ static int carddav_get(struct transaction_t *txn,
         /* Download an entire addressbook collection */
         return export_addressbook(txn);
     }
-    else if (txn->req_tgt.userid) {
+    else if (txn->req_tgt.userid &&
+             config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
         /* GET a list of addressbook under addressbook-home-set */
         return list_addressbooks(txn);
     }
