@@ -1519,35 +1519,18 @@ dist_man8_MANS = \
 if USE_SQUAT
 dist_man8_MANS += \
 	man/squatter.8
-
-else
-EXTRA_DIST += \
-	man/squatter.8
-
 endif # USE_SQUAT
 
 if NNTPD
 dist_man8_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
-
-else # NNTPD
-EXTRA_DIST += \
-	man/fetchnews.8 \
-	man/nntpd.8
-
 endif # NNTPD
 
 if HTTPD
 dist_man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
-
-else # HTTPD
-EXTRA_DIST += \
-	man/ctl_zoneinfo.8 \
-	man/httpd.8
-
 endif # HTTPD
 
 if REPLICATION
@@ -1555,13 +1538,6 @@ dist_man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
-
-else
-EXTRA_DIST += \
-	man/sync_client.8 \
-	man/sync_reset.8 \
-	man/sync_server.8
-
 endif
 
 master_master_SOURCES = \
