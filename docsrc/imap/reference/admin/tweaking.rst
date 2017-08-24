@@ -149,13 +149,13 @@ command
 
     .. parsed-literal::
 
-    SELECT INBOX.x
+       SELECT INBOX.x
 
 for non-existing mailbox x, it creates a lock file
 
     .. parsed-literal::
 
-    $CYRUS_CONFDIR/lock/user/foo/x.lock
+       $CYRUS_CONFDIR/lock/user/foo/x.lock
 
 which might be left on the filesystem after completion of the command.
 
