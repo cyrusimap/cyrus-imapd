@@ -22,7 +22,6 @@ directory for Cyrus sockets. This defaults to
     idle      <rundir>/idle   # idled daemon socket
     notify    <rundir>/notify # Notification daemon socket
     ptloader  <rundir>/ptsock # PT Loader socket (alternative authorization)
-    sphinx    <rundir>/sphinx # Sphinx full-text search daemon socket
 
 .. _imap-admin-sock-end:
 
@@ -47,7 +46,3 @@ sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
 	:start-after: startblob ptloader_sock
 	:end-before: endblob ptloader_sock
-
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
-	:start-after: startblob sphinx_socket
-	:end-before: endblob sphinx_socket
