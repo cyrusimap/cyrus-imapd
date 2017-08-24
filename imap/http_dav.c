@@ -7357,7 +7357,13 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
             continue;
         }
 
+        /* Fetch modseq for record (could be per-user) */
         modseq = rparams->get_modseq(mailbox, record, httpd_userid, fctx->davdb);
+
+	if (modseq <= syncmodseq) {
+            /* Resource not added/removed since last sync */
+            continue;
+        }
 
         if ((modseq - syncmodseq == 1) &&
             (unchanged_flag >= 0) &&
