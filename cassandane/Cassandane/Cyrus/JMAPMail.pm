@@ -3078,7 +3078,6 @@ sub test_setmessages_invalid_mailaddr
     $self->assert_not_null($res->[0][1]{created}{"1"});
 }
 
-
 sub test_setmessages_mailboxids
     :JMAP :min_version_3_1
 {
@@ -3130,6 +3129,199 @@ sub test_setmessages_mailboxids
     $msg->{subject} = "Message 3";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
+}
+
+sub test_setmessagesubmissions
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Request( [ [ 'getIdentities', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a message via IMAP";
+    $self->make_message("foo", body => "a message") or die;
+
+    xlog "get message id";
+    $res = $jmap->Request( [ [ 'getMessageList', {}, "R1" ] ] );
+    my $messageid = $res->[0][1]->{messageIds}[0];
+    my $threadid = $res->[0][1]->{threadIds}[0];
+
+    xlog "create message submission";
+    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                messageId  => $messageid,
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid);
+
+    xlog "get message submission";
+    $res = $jmap->Request( [ [ 'getMessageSubmissions', {
+        ids => [ $msgsubid ],
+    }, "R1" ] ] );
+    $self->assert_str_equals($msgsubid, $res->[0][1]->{notFound}[0]);
+
+    xlog "update message submission";
+    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+        update => {
+            $msgsubid => {
+                undoStatus => 'canceled',
+            }
+       }
+    }, "R1" ] ] );
+    $self->assert_str_equals('notFound', $res->[0][1]->{notUpdated}{$msgsubid}{type});
+
+    xlog "destroy message submission";
+    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+        destroy => [ $msgsubid ],
+    }, "R1" ] ] );
+    $self->assert_str_equals("notFound", $res->[0][1]->{notDestroyed}{$msgsubid}{type});
+}
+
+sub test_setmessagesubmissions_with_envelope
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Request( [ [ 'getIdentities', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a message via IMAP";
+    $self->make_message("foo", body => "a message\r\nwithCRLF\r\n") or die;
+
+    xlog "get message id";
+    $res = $jmap->Request( [ [ 'getMessageList', {}, "R1" ] ] );
+    my $messageid = $res->[0][1]->{messageIds}[0];
+    my $threadid = $res->[0][1]->{threadIds}[0];
+
+    xlog "create message submission";
+    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                messageId  => $messageid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                        parameters => {
+                            foo => 'bar',
+                        },
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid);
+}
+
+sub test_getmessagesubmissionupdates
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Request( [ [ 'getIdentities', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "get current message submission state";
+    $res = $jmap->Request([['getMessageSubmissionList', { }, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog "get message submission updates";
+    $res = $jmap->Request( [ [ 'getMessageSubmissionUpdates', {
+        sinceState => $state,
+    }, "R1" ] ] );
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
+
+    xlog "Generate a message via IMAP";
+    $self->make_message("foo", body => "a message") or die;
+
+    xlog "get message id";
+    $res = $jmap->Request( [ [ 'getMessageList', {}, "R1" ] ] );
+    my $messageid = $res->[0][1]->{messageIds}[0];
+    my $threadid = $res->[0][1]->{threadIds}[0];
+
+    xlog "create message submission but don't update state";
+    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                messageId  => $messageid,
+            }
+       }
+    }, "R1" ] ] );
+
+    xlog "get message submission updates";
+    $res = $jmap->Request( [ [ 'getMessageSubmissionUpdates', {
+        sinceState => $state,
+    }, "R1" ] ] );
+    $self->assert(exists $res->[0][1]->{changed});
+    $self->assert(exists $res->[0][1]->{removed});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{changed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
+}
+
+sub test_getmessagesubmissionlist
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "get message submission list (no arguments)";
+    my $res = $jmap->Request([['getMessageSubmissionList', { }, "R1"]]);
+    $self->assert_null($res->[0][1]{filter});
+    $self->assert_null($res->[0][1]{sort});
+    $self->assert_not_null($res->[0][1]{state});
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateUpdates});
+    $self->assert_num_equals(0, $res->[0][1]{position});
+    $self->assert_num_equals(0, $res->[0][1]{total});
+    $self->assert_not_null($res->[0][1]{messageSubmissionIds});
+    $self->assert_not_null($res->[0][1]{threadIds});
+    $self->assert_not_null($res->[0][1]{messageIds});
+}
+
+sub test_getmessagesubmissionlistupdates
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "get current message submission state";
+    my $res = $jmap->Request([['getMessageSubmissionList', { }, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog "get message submission list updates (empty filter)";
+    $res = $jmap->Request([['getMessageSubmissionListUpdates', {
+        filter => {},
+        sinceState => $state,
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{filter});
+    $self->assert_null($res->[0][1]{sort});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(0, $res->[0][1]{total});
+    $self->assert(exists $res->[0][1]->{added});
+    $self->assert(exists $res->[0][1]->{removed});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{added}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
 }
 
 sub test_setmessages_move
