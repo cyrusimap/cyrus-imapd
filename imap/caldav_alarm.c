@@ -645,24 +645,28 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         syslog(LOG_DEBUG, "not found mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no record, no worries */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (rc) {
         syslog(LOG_DEBUG, "error reading mailbox %s uid %u (%s)",
                mailbox->name, imap_uid, error_message(rc));
         /* XXX no index record? item deleted or transient error? */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (record.system_flags & FLAG_EXPUNGED) {
         syslog(LOG_DEBUG, "already expunged mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no longer exists?  nothing to do */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
     rc = mailbox_map_record(mailbox, &record, &msg_buf);
     if (rc) {
         /* XXX no message? index is wrong? yikes */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
@@ -672,6 +676,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         /* XXX log error */
         syslog(LOG_DEBUG, "error parsing ical string mailbox %s uid %u",
                mailbox->name, imap_uid);
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
