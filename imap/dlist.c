@@ -843,7 +843,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
     struct dlist *dl = NULL;
     static struct buf kbuf;
     static struct buf vbuf;
-    int c;
+    int8_t c;
 
     /* handle the key if wanted */
     if (parsekey) {
@@ -957,7 +957,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
 		   const char *base, unsigned len)
 {
     struct protstream *stream;
-    char c;
+    int8_t c;
     struct dlist *dl = NULL;
 
     stream = prot_readmap(base, len);
