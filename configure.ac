@@ -1121,8 +1121,7 @@ fi
 if test "$with_krb" != "no"; then
 dnl Do we need DES for kerberos?
 AC_ARG_WITH(krbdes,
-        [AS_HELP_STRING([--with-krbdes], [use Kerberos DES implementation [yes]])],
-        with_krbdes="$withval", with_krbdes="yes")
+        [AS_HELP_STRING([--without-krbdes], [disable Kerberos DES implementation])],, with_krbdes="yes")
 if test "$with_krbdes" = "yes"; then
   AC_CHECK_LIB(des,des_ecb_encrypt,
       if test "$with_statickrb" = "yes"; then
