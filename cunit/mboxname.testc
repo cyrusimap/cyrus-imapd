@@ -50,6 +50,35 @@ static void test_dir_hash_c(void)
     CU_ASSERT_EQUAL(c, 'J');
 }
 
+static void test_mboxname_hash(void)
+{
+    static const char FRED[] = "fred";
+    static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
+    char s[MAX_MAILBOX_PATH];
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", FRED);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/fred");
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", JANEAT_SENT);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/domain/bloggs.com/user/jane/Sent");
+
+    config_hashimapspool = 1;
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", FRED);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/f/fred");
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", JANEAT_SENT);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/domain/b/bloggs.com/j/user/jane/Sent");
+
+    config_fulldirhash = 1;
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", FRED);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/E/fred");
+
+    mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", JANEAT_SENT);
+    CU_ASSERT_STRING_EQUAL(s, "/tmp/domain/L/bloggs.com/I/user/jane/Sent");
+}
+
 static void test_to_parts(void)
 {
     static const char FRED_DRAFTS[] = "user.fred.Drafts";
