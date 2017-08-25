@@ -188,7 +188,7 @@ int main(int argc,char **argv)
      * Lock mailbox list to prevent mailbox creation/deletion
      * during work
      */
-    mboxlist_init(0);
+    mboxlist_init();
     mboxlist_open(NULL);
 
     quota_changelock();
