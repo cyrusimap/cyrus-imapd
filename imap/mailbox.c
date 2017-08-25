@@ -6748,24 +6748,31 @@ EXPORTED int mailbox_annotation_write(struct mailbox *mailbox, uint32_t uid,
                                       const struct buf *value)
 {
     annotate_state_t *state = NULL;
-    int r;
+    int r = 0;
+    struct buf oldvalue = BUF_INITIALIZER;
+
+    annotatemore_msg_lookup(mailbox->name, uid, entry, userid, &oldvalue);
+    if (oldvalue.len == value->len && (!value->len || !memcmp(oldvalue.s, value->s, value->len)))
+        goto done;
 
     struct index_record record;
     memset(&record, 0, sizeof(struct index_record));
     r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r) return r;
+    if (r) goto done;
 
     r = mailbox_get_annotate_state(mailbox, uid, &state);
-    if (r) return r;
+    if (r) goto done;
 
     r = annotate_state_write(state, entry, userid, value);
-    if (r) return r;
+    if (r) goto done;
 
     /* need to touch the modseq */
     r = mailbox_rewrite_index_record(mailbox, &record);
-    if (r) return r;
+    if (r) goto done;
 
-    return 0;
+done:
+    buf_free(&oldvalue);
+    return r;
 }
 
 EXPORTED int mailbox_annotation_writemask(struct mailbox *mailbox, uint32_t uid,
@@ -6773,24 +6780,34 @@ EXPORTED int mailbox_annotation_writemask(struct mailbox *mailbox, uint32_t uid,
                                           const struct buf *value)
 {
     annotate_state_t *state = NULL;
-    int r;
+    int r = 0;
+    struct buf oldvalue = BUF_INITIALIZER;
+
+    /* we don't lookupmask here - because we want to still write the value as the
+     * user's own value rather than the masked value, regardless of whether they
+     * have the same content */
+    annotatemore_msg_lookup(mailbox->name, uid, entry, userid, &oldvalue);
+    if (oldvalue.len == value->len && (!value->len || !memcmp(oldvalue.s, value->s, value->len)))
+        goto done;
 
     struct index_record record;
     memset(&record, 0, sizeof(struct index_record));
     r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r) return r;
+    if (r) goto done;
 
     r = mailbox_get_annotate_state(mailbox, uid, &state);
-    if (r) return r;
+    if (r) goto done;
 
     r = annotate_state_writemask(state, entry, userid, value);
-    if (r) return r;
+    if (r) goto done;
 
     /* need to touch the modseq */
     r = mailbox_rewrite_index_record(mailbox, &record);
-    if (r) return r;
+    if (r) goto done;
 
-    return 0;
+done:
+    buf_free(&oldvalue);
+    return r;
 }
 
 EXPORTED int mailbox_annotation_lookup(struct mailbox *mailbox, uint32_t uid,
