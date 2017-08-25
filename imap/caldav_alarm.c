@@ -642,21 +642,21 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     memset(&record, 0, sizeof(struct index_record));
     rc = mailbox_find_index_record(mailbox, imap_uid, &record);
     if (rc == IMAP_NOTFOUND) {
-        syslog(LOG_DEBUG, "not found mailbox %s uid %u",
+        syslog(LOG_ERR, "not found mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no record, no worries */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (rc) {
-        syslog(LOG_DEBUG, "error reading mailbox %s uid %u (%s)",
+        syslog(LOG_ERR, "error reading mailbox %s uid %u (%s)",
                mailbox->name, imap_uid, error_message(rc));
         /* XXX no index record? item deleted or transient error? */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (record.system_flags & FLAG_EXPUNGED) {
-        syslog(LOG_DEBUG, "already expunged mailbox %s uid %u",
+        syslog(LOG_ERR, "already expunged mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no longer exists?  nothing to do */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
@@ -674,7 +674,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
 
     if (!ical) {
         /* XXX log error */
-        syslog(LOG_DEBUG, "error parsing ical string mailbox %s uid %u",
+        syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
@@ -682,7 +682,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
 
     /* check for bogus lastalarm data on record which actually shouldn't have it */
     if (!has_alarms(ical)) {
-        syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has not alarms",
+        syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
