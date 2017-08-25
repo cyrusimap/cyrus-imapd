@@ -23,7 +23,7 @@ int wrap_getint32(const char *s, int32_t *valp)
 {
     struct protstream *prot;
     char *b;
-    int c;
+    int8_t c;
 
     b = xstrdup(s);	/* work around bug in prot_ungetc */
     prot = prot_readmap(b, strlen(b));
@@ -101,7 +101,7 @@ int wrap_getsint32(const char *s, int32_t *valp)
 {
     struct protstream *prot;
     char *b;
-    int c;
+    int8_t c;
 
     b = xstrdup(s);	/* work around bug in prot_ungetc */
     prot = prot_readmap(b, strlen(b));
