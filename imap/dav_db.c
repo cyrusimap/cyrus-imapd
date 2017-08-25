@@ -224,7 +224,8 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock __attribute_
     if (mbentry->mbtype & MBTYPES_DAV) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_irl(mbentry->name, &mailbox);
+        r = mailbox_open_iwl(mbentry->name, &mailbox);
+        // needs to be writable to remove bogus lastalarm data
         if (!r) r = mailbox_add_dav(mailbox);
         mailbox_close(&mailbox);
     }

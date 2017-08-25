@@ -498,7 +498,8 @@ static int write_lastalarm(struct mailbox *mailbox, const struct index_record *r
                            struct lastalarm_data *data)
 {
     struct buf annot_buf = BUF_INITIALIZER;
-    buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
+    if (data)
+        buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     int r = mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
     buf_free(&annot_buf);
@@ -531,7 +532,10 @@ static int read_lastalarm(struct mailbox *mailbox, const struct index_record *re
 EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
                                      icalcomponent *ical)
 {
-    if (!has_alarms(ical)) return 0;
+    if (!has_alarms(ical)) {
+        write_lastalarm(mailbox, record, NULL);
+        return 0;
+    }
     // we need to skip silent records (replication) because the lastalarm annotation won't be
     // set yet, so it will all break :(  Instead, we have an explicit touch on the record which
     // is done after the annotations are written, and processes the alarms if needed then, and
@@ -675,7 +679,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (!has_alarms(ical)) {
         syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has not alarms",
                mailbox->name, imap_uid);
-        caldav_alarm_delete_record(mailbox->name, imapd_uid);
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
