@@ -98,6 +98,13 @@ int actions_init(void)
   return TIMSIEVE_OK;
 }
 
+static void _rm_dots(char *p)
+{
+    for (; *p; p++) {
+        if (*p == '.') *p = '^';
+    }
+}
+
 int actions_setuser(const char *userid)
 {
   char userbuf[1024], *user, *domain = NULL;
@@ -128,7 +135,10 @@ int actions_setuser(const char *userid)
   }
   else {
       char hash = (char) dir_hash_c(user, config_fulldirhash);
-      snprintf(sieve_dir+len, size-len, "/%c/%s", hash, user);
+      char *usercopy = xstrdup(user);
+      _rm_dots(usercopy);
+      snprintf(sieve_dir+len, size-len, "/%c/%s", hash, usercopy);
+      free(usercopy);
   }
 
   result = chdir(sieve_dir);
