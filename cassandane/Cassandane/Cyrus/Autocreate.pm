@@ -49,19 +49,22 @@ sub new
 {
     my $class = shift;
     my $config = Cassandane::Config->default()->clone();
+
     $config->set(
         autocreate_post => 'yes',
         autocreate_quota => '500000',
         autocreate_inbox_folders => 'Drafts|Sent|Trash|SPAM',
         autocreate_subscribe_folder => 'Drafts|Sent|Trash|SPAM',
+        autocreate_sieve_script => '@basedir@/conf/foo_sieve.script',
         'xlist-drafts' => 'Drafts',
         'xlist-junk' => 'SPAM',
         'xlist-sent' => 'Sent',
         'xlist-trash' => 'Trash',
     );
     return $class->SUPER::new({
-	config => $config,
-	adminstore => 1,
+        config => $config,
+        adminstore => 1,
+        deliver => 1,
     }, @_);
 }
 
@@ -111,6 +114,35 @@ sub test_autocreate_specialuse
         $self->assert_str_equals("INBOX.$name", $item->[2]);
     }
     $self->assert_num_equals(0, scalar keys %map);
+}
+
+sub test_autocreate_sieve_script_generation
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return unless $self->{test_autocreate};
+
+    my $basedir = $self->{instance}->get_basedir();
+    my $sieve_script_path = $basedir . "/conf/foo_sieve.script";
+    my $hitfolder = "INBOX.NewFolder";
+    my $testfolder = "INBOX.TestFolder";
+    my $missfolder = "INBOX";
+
+    open(FH, '>', "$sieve_script_path")
+        or die "Cannot open $sieve_script_path for writing: $!";
+    print FH "require \[\"fileinto\", \"mailbox\"\];";
+    print FH "if mailboxexists \"$testfolder\"  {";
+    print FH "fileinto \"$hitfolder\";";
+    print FH "}";
+    close(FH);
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.script");
+    $self->assert(-f "$basedir/conf/sieve/f/foo/defaultbc");
+    $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.bc");
 }
 
 1;
