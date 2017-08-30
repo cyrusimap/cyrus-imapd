@@ -613,7 +613,7 @@ AM_CONDITIONAL([SQUATTER],
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
-        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="no"])
+        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="$enableval"])
 
 if test "$enable_sieve" != "no"; then
         AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
