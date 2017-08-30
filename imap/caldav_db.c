@@ -773,7 +773,7 @@ EXPORTED int caldav_get_events(struct caldav_db *caldavdb,
     buf_free(&sqlbuf);
 
     if (r) {
-        syslog(LOG_ERR, "carddav error %s", error_message(r));
+        syslog(LOG_ERR, "caldav error %s", error_message(r));
         /* XXX - free memory */
     }
 
