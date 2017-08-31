@@ -2851,7 +2851,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         if (len) len--; // trailing separator
 
         if (!strncmp(rock->namespace->prefix[NAMESPACE_USER], commonpat, MIN(len, prefixlen))) {
-            if (prefixlen < len) {
+            if (prefixlen <= len) {
                 /* we match all users */
                 strlcpy(domainpat+domainlen, "user.", sizeof(domainpat)-domainlen);
             }
