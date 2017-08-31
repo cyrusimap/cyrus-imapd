@@ -157,8 +157,8 @@ static void decode(const char *ps, int len, struct buf *buf)
         else
             buf_putc(buf, *p);
     }
-    /* Note: buf is not NUL-terminated.  It happens that neither
-     * skiplist nor berkeley backends guarantee any such thing,
+    /* Note: buf is not NUL-terminated.  It happens that the
+     * skiplist backend does not guarantee any such thing,
      * and so code that depends on it is quite broken anyway */
 }
 
