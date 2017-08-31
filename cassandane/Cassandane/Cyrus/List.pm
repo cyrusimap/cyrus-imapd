@@ -991,6 +991,12 @@ sub test_percent_altns
         'Alt Folders/Inbox' => '\\Noselect \\HasChildren',
     });
 
+    xlog "List Other Users";
+    $data = $imaptalk->list("", "Other Users");
+    $self->_assert_list_data($data, '/', {
+        'Other Users' => '\\Noselect \\HasChildren',
+    });
+
     xlog "List Other Users/*";
     $data = $imaptalk->list("Other Users/", "*");
     $self->_assert_list_data($data, '/', {
