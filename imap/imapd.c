@@ -269,14 +269,15 @@ struct list_rock {
 
 /* Information about one mailbox name that LIST returns */
 struct list_entry {
-    const char *name;
+    char *extname;
+    mbentry_t *mbentry;
     uint32_t attributes; /* bitmap of MBOX_ATTRIBUTE_* */
 };
 
 /* structure that list_data_recursivematch passes its callbacks */
 struct list_rock_recursivematch {
     struct listargs *listargs;
-    struct hash_table table;  /* maps mailbox names to attributes (uint32_t *) */
+    struct hash_table table;  /* maps mailbox names to list_entries */
     int count;                /* # of entries in table */
     struct list_entry *array;
 };
@@ -12946,43 +12947,52 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
             mbname = mbname_from_extname(extname, &imapd_namespace, imapd_userid);
         }
 
-        intname = mbname_intname(mbname);
-        r = mboxname_iscalendarmailbox(intname, 0) ||
-            mboxname_isaddressbookmailbox(intname, 0) ||
-            mboxname_isdavdrivemailbox(intname, 0) ||
-            mboxname_isdavnotificationsmailbox(intname, 0);
+        if (mbname) {
+            intname = mbname_intname(mbname);
+            r = mboxname_iscalendarmailbox(intname, 0) ||
+                mboxname_isaddressbookmailbox(intname, 0) ||
+                mboxname_isdavdrivemailbox(intname, 0) ||
+                mboxname_isdavnotificationsmailbox(intname, 0);
 
-        if (!data->mbname) mbname_free(&mbname);
+            if (!data->mbname) mbname_free(&mbname);
 
-        if (r) return 0;
+            if (r) return 0;
+        }
     }
 
-    uint32_t *list_info = hash_lookup(extname, &rock->table);
-    if (!list_info) {
-        list_info = xzmalloc(sizeof(uint32_t));
-        hash_insert(extname, list_info, &rock->table);
+    struct list_entry *entry = hash_lookup(extname, &rock->table);
+    if (!entry) {
+        entry = xzmalloc(sizeof(struct list_entry));
+        entry->extname = xstrdupsafe(extname);
+        entry->attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
+
+        hash_insert(extname, entry, &rock->table);
         rock->count++;
     }
 
+
     if (data->mbname) { /* exact match */
-        *list_info |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        entry->attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        if (!data->mbentry) {
+            mboxlist_lookup(mbname_intname(data->mbname), &entry->mbentry, NULL);
+            if (entry->mbentry) entry->attributes &= ~MBOX_ATTRIBUTE_NONEXISTENT;
+        }
     }
     else {
-        *list_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
+        entry->attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
     }
 
     return 0;
 }
 
 /* callback for hash_enumerate */
-static void copy_to_array(const char *key, void *data, void *void_rock)
+static void copy_to_array(const char *key __attribute__((unused)), void *data, void *void_rock)
 {
-    uint32_t *attributes = (uint32_t *)data;
+    struct list_entry *entry = (struct list_entry *)data;
     struct list_rock_recursivematch *rock =
         (struct list_rock_recursivematch *)void_rock;
     assert(rock->count > 0);
-    rock->array[--rock->count].name = key;
-    rock->array[rock->count].attributes = *attributes;
+    rock->array[--rock->count] = *entry;
 }
 
 /* Comparator for sorting an array of struct list_entry by mboxname. */
@@ -12990,7 +13000,15 @@ static int list_entry_comparator(const void *p1, const void *p2) {
     const struct list_entry *e1 = (struct list_entry *)p1;
     const struct list_entry *e2 = (struct list_entry *)p2;
 
-    return bsearch_compare_mbox(e1->name, e2->name);
+    return bsearch_compare_mbox(e1->extname, e2->extname);
+}
+
+static void free_list_entry(void *rock)
+{
+    struct list_entry *entry = (struct list_entry *)rock;
+    mboxlist_entry_free(&entry->mbentry);
+    free(entry->extname);
+    free(entry);
 }
 
 static void list_data_recursivematch(struct listargs *listargs) {
@@ -13017,20 +13035,17 @@ static void list_data_recursivematch(struct listargs *listargs) {
 
         /* print */
         for (i = 0; i < entries; i++) {
-            if (!rock.array[i].name) continue;
-            mbentry_t *mbentry = NULL;
-            mboxlist_lookup(rock.array[i].name, &mbentry, NULL);
-            list_response(rock.array[i].name,
-                          mbentry,
+            if (!rock.array[i].extname) continue;
+            list_response(rock.array[i].extname,
+                          rock.array[i].mbentry,
                           rock.array[i].attributes,
                           rock.listargs);
-            mboxlist_entry_free(&mbentry);
         }
 
         free(rock.array);
     }
 
-    free_hash_table(&rock.table, free);
+    free_hash_table(&rock.table, free_list_entry);
 }
 
 /* Retrieves the data and prints the untagged responses for a LIST command. */
