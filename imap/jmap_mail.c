@@ -2133,8 +2133,8 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
              !strcmp(part->subtype, "TEXT")  ||
              !strcmp(part->subtype, "ENRICHED") ||
              !strcmp(part->subtype, "HTML")) &&
-            ((!disp || strcmp(disp, "ATTACHMENT")) && !dispfile)) {
-            /* Text that isn't an attachment or has a filename */
+             (!disp || strcmp(disp, "ATTACHMENT"))) {
+            /* Text that isn't an attachment */
             is_inline = 1;
         }
         if ((!strcmp(part->type, "APPLICATION")) &&
@@ -2142,6 +2142,10 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
             (rec->inside_enc && strstr(dispfile, "ENCRYPTED"))) {
             /* PGP octet-stream inside an pgp-encrypted part */
             is_inline = 1;
+        }
+        /* If not the first part and has filename, assume attachment */
+        if (rec->partno > 0 && dispfile) {
+            is_inline = 0;
         }
 
         if (is_inline) {
