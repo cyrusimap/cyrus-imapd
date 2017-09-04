@@ -1874,6 +1874,11 @@ sub test_getmessages_body_multi
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
+    if ($self->{instance}->{config}->get('jmap_render_multipart_bodies')) {
+        xlog "jmap_render_multipart_bodies is enabled. Skipping test.";
+        return;
+    }
+
     my $store = $self->{store};
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
@@ -2021,6 +2026,119 @@ sub test_getmessages_body_multi
     $self->assert_num_equals(9, $att->{size});
     $self->assert_equals(JSON::false, $att->{isInline});
     $self->assert_null($att->{cid});
+}
+
+sub test_getmessages_body_multi_fromlist
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    if (not $self->{instance}->{config}->get('jmap_render_multipart_bodies')) {
+        xlog "jmap_render_multipart_bodies is disabled. Skipping test.";
+        return;
+    }
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate a message in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    # As see in IMAPTalk.pm
+    my $body = "".
+    "--b\r\n".
+    "Content-Type: text/plain; charset=UTF-8\r\n".
+    "Content-Disposition: inline\r\n".
+    "\r\n".
+    "bodyA".
+    "\r\n--b\r\n".
+    "Content-Type: multipart/mixed; boundary=bb\r\n".
+        "\r\n--bb\r\n".
+        "Content-Type: multipart/alternative; boundary=bbb\r\n".
+            "\r\n--bbb\r\n".
+            "Content-Type: multipart/mixed; boundary=bbbb\r\n".
+                "\r\n--bbbb\r\n".
+                "Content-Type: text/plain\r\n".
+                "Content-Disposition: inline\r\n".
+                "\r\n" .
+                "bodyB".
+                "\r\n--bbbb\r\n".
+                "Content-Type: image/jpeg\r\n".
+                "Content-Transfer-Encoding: base64\r\n".
+                "Content-Disposition: inline\r\n".
+                "\r\n" .
+                "bodyC".
+                "\r\n--bbbb\r\n".
+                "Content-Type: text/plain\r\n".
+                "Content-Disposition: inline\r\n".
+                "\r\n".
+                "bodyD".
+                "\r\n--bbbb--\r\n".
+            "\r\n--bbb\r\n".
+            "Content-Type: multipart/related; boundary=bbbb\r\n".
+                "\r\n--bbbb\r\n".
+                "Content-Type: text/html\r\n".
+                "\r\n" .
+                "<html>bodyE</html>".
+                "\r\n--bbbb\r\n".
+                "Content-Type: image/jpg\r\n".
+                "Content-Disposition: attachment; filename=\"bodyF.jpg\"\r\n".
+                "\r\n" .
+                "bodyF".
+                "\r\n--bbbb--\r\n".
+             "\r\n--bbb--\r\n".
+        "\r\n--bb\r\n".
+        "Content-Type: image/jpeg\r\n".
+        "Content-Disposition: attachment; filename=\"bodyG.jpg\"\r\n".
+        "\r\n" .
+        "bodyG".
+        "\r\n--bb\r\n".
+        "Content-Type: application/x-excel\r\n".
+        "\r\n" .
+        "bodyH".
+        "\r\n--bb\r\n".
+        "Content-Type: message/rfc822\r\n".
+        "\r\n" .
+        "Return-Path: <Ava.Nguyen\@local>\r\n".
+        "Mime-Version: 1.0\r\n".
+        "Content-Type: text/plain\r\n".
+        "Content-Transfer-Encoding: 7bit\r\n".
+        "Subject: bar\r\n".
+        "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n".
+        "Message-ID: <fake.1475639947.6507\@local>\r\n".
+        "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n".
+        "To: Test User <test\@local>\r\n".
+        "\r\n".
+        "bodyJ".
+        "\r\n--bb--\r\n".
+    "\r\n--b\r\n".
+    "Content-Type: text/plain\r\n".
+    "\r\n".
+    "bodyK".
+    "\r\n--b--";
+
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "b",
+        body => $body
+    );
+
+    xlog "get message list";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ids = $res->[0][1]->{messageIds};
+
+    xlog "get message";
+    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_str_equals("bodyA\nbodyB\n[Inline image]\nbodyD\nbodyK", $msg->{textBody});
+    $self->assert_str_equals("<html><div>bodyA</div><div>bodyE</div><div>bodyK</div></html>", $msg->{htmlBody});
+
 }
 
 sub test_getmessages_attachment_name
