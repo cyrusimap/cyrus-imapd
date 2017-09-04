@@ -2673,12 +2673,12 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 else if (!strcmp(part->type, "IMAGE")) {
 					struct param *param;
                     const char *fname = NULL;
-					for (param = part->disposition_params; param; param = param->next) {
-						if (!strncasecmp(param->attribute, "filename", 8)) {
-							fname =param->value;
+                    for (param = part->disposition_params; param; param = param->next) {
+                        if (!strncasecmp(param->attribute, "filename", 8)) {
+                            fname =param->value;
                             break;
-						}
-					}
+                        }
+                    }
                     buf_appendcstr(&buf, "[Inline image");
                     if (fname) {
                         buf_appendcstr(&buf, ":");
