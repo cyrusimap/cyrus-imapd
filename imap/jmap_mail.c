@@ -2075,21 +2075,26 @@ struct msgbodies {
     struct body *html;
     ptrarray_t atts;
     ptrarray_t msgs;
+    ptrarray_t textlist;
+    ptrarray_t htmllist;
 };
 
-#define MSGBODIES_INITIALIZER \
-    { NULL, NULL, PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER }
+#define MSGBODIES_INITIALIZER { \
+    NULL, \
+    NULL, \
+    PTRARRAY_INITIALIZER, \
+    PTRARRAY_INITIALIZER, \
+    PTRARRAY_INITIALIZER, \
+    PTRARRAY_INITIALIZER \
+}
 
 static int find_msgbodies(struct body *root, struct buf *msg_buf,
                           struct msgbodies *bodies)
 {
     /* Dissect a message into its best text and html bodies, attachments
      * and embedded messages. Based on the IMAPTalk find_message function.
+     * See
      * https://github.com/robmueller/mail-imaptalk/blob/master/IMAPTalk.pm
-     *
-     * XXX Contrary to the IMAPTalk implementation, this function doesn't
-     * generate textlist/htmllist fields, so html-to-text body conversion
-     * is only supported marginally.
      */
 
     ptrarray_t *work = ptrarray_new();
@@ -2103,6 +2108,8 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
         struct body *part;
         struct body *parent;
     } *rec;
+
+    ptrarray_t *altlist = NULL;
 
     rec = xzmalloc(sizeof(struct partrec));
     rec->part = root;
@@ -2149,9 +2156,12 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
         }
 
         if (is_inline) {
+            /* The IMAPTalk code is a bit more sophisticated in determining
+             * if a body is text or html (see its KnownTextParts variable).
+             * But we don't care here: anything that is inlined and isn't
+             * HTML is treated as text. */
             int is_html = !strcasecmp(part->subtype, "HTML");
             struct body **bodyp = is_html ? &bodies->html : &bodies->text;
-            is_attach = 0;
 
             if (*bodyp == NULL) {
                 /* Haven't yet found a body for this type */
@@ -2179,6 +2189,25 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
                     }
                 }
             }
+
+            /* Add to textlist/htmllist */
+            if (!is_html || !rec->inside_alt) {
+                ptrarray_append(&bodies->textlist, part);
+                altlist = &bodies->textlist;
+            }
+            if (is_html || !rec->inside_alt) {
+                ptrarray_append(&bodies->htmllist, part);
+                altlist = &bodies->htmllist;
+            }
+
+            is_attach = 0;
+        }
+        else if (!strcmp(part->type, "IMAGE") &&
+                (!disp || strcmp(disp, "ATTACHMENT")) &&
+                altlist) {
+            /* Add inline images in alternative parts, but
+             * only to the alternative (text or html) we're in */
+            ptrarray_append(altlist, part);
         }
         else if (!strcmp(part->type, "MULTIPART")) {
             int prio = 0;
@@ -2212,10 +2241,11 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
                 *subrec = *rec;
                 subrec->parent = part;
 
+
                 if (prio) {
                     subrec->partno = part->numparts - i;
                     subrec->part = part->subpart + subrec->partno - 1;
-                    ptrarray_unshift(work, subrec);
+                    ptrarray_insert(work, 0, subrec);
                 } else  {
                     subrec->partno = i + 1;
                     subrec->part = part->subpart + subrec->partno - 1;
@@ -2425,6 +2455,47 @@ static json_t *jmapmsg_annot_read(const jmap_req_t *req, msgrecord_t *mr,
     return annotvalue;
 }
 
+/* Replace any <HTML> and </HTML> tags in t with <DIV> and </DIV>,
+ * writing results into buf */
+static void _extract_htmlbody(struct buf *buf, const char *t)
+{
+    const char *top = t + strlen(t);
+    const char *p = t, *q = p;
+
+    while (*q) {
+        const char *tag = NULL;
+        if (q < top - 5 && !strncasecmp(q, "<html", 5) &&
+                (*(q+5) == '>' || isspace(*(q+5)))) {
+            /* Found a <HTML> tag */
+            tag = "<div>";
+        }
+        else if (q < top - 6 && !strncasecmp(q, "</html", 6) &&
+                (*(q+6) == '>' || isspace(*(q+6)))) {
+            /* Found a </HTML> tag */
+            tag = "</div>";
+        }
+
+        /* No special tag? */
+        if (!tag) {
+            q++;
+            continue;
+        }
+
+        /* Append whatever we saw since the last HTML tag. */
+        buf_appendmap(buf, p, q - p);
+
+        /* Look for the end of the tag and replace it, even if
+         * it prematurely ends at the end of the buffer . */
+        while (*q && *q != '>') { q++; }
+        buf_appendcstr(buf, tag);
+        if (*q) q++;
+
+        /* Prepare for next loop */
+        p = q;
+    }
+    buf_appendmap(buf, p, q - p);
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              msgrecord_t *mr, MsgType type,
@@ -2437,6 +2508,9 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     struct buf buf = BUF_INITIALIZER;
     char *text = NULL, *html = NULL;
     int r;
+
+    const char *preview_annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
+    int render_multipart_bodies = config_getswitch(IMAPOPT_JMAP_RENDER_MULTIPART_BODIES);
 
     /* Dissect message into its parts */
     r = find_msgbodies(body, msg_buf, &bodies);
@@ -2576,16 +2650,91 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
     if (_wantprop(props, "textBody") ||
         _wantprop(props, "htmlBody") ||
-        (_wantprop(props, "preview") && !config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT)) ||
+        (_wantprop(props, "preview") && !preview_annot) ||
         _wantprop(props, "body")) {
 
-        if (bodies.text) {
+        if (bodies.textlist.count > 1 && render_multipart_bodies) {
+            /* Concatenate all plain text bodies and replace any
+             * inlined images with placeholders. */
+            int i;
+            for (i = 0; i < bodies.textlist.count; i++) {
+                struct body *part = ptrarray_nth(&bodies.textlist, i);
+
+                if (i) buf_appendcstr(&buf, "\n");
+
+                if (!strcmp(part->type, "TEXT")) {
+                    charset_t cs = charset_lookupname(part->charset_id);
+                    char *t = charset_to_utf8(msg_buf->s + part->content_offset,
+                                              part->content_size, cs, part->charset_enc);
+                    if (t) buf_appendcstr(&buf, t);
+                    charset_free(&cs);
+                    free(t);
+                }
+                else if (!strcmp(part->type, "IMAGE")) {
+					struct param *param;
+                    const char *fname = NULL;
+					for (param = part->disposition_params; param; param = param->next) {
+						if (!strncasecmp(param->attribute, "filename", 8)) {
+							fname =param->value;
+                            break;
+						}
+					}
+                    buf_appendcstr(&buf, "[Inline image");
+                    if (fname) {
+                        buf_appendcstr(&buf, ":");
+                        buf_appendcstr(&buf, fname);
+                    }
+                    buf_appendcstr(&buf, "]");
+                }
+            }
+            text = buf_release(&buf);
+        }
+        else if (bodies.text) {
             charset_t cs = charset_lookupname(bodies.text->charset_id);
             text = charset_to_utf8(msg_buf->s + bodies.text->content_offset,
                     bodies.text->content_size, cs, bodies.text->charset_enc);
             charset_free(&cs);
         }
-        if (bodies.html) {
+
+        if (bodies.htmllist.count > 1 && render_multipart_bodies) {
+            /* Concatenate all TEXT bodies, enclosing PLAIN text
+             * in <div> and replacing <html> tags in HTML bodies
+             * with <div>. */
+            int i;
+            for (i = 0; i < bodies.htmllist.count; i++) {
+                struct body *part = ptrarray_nth(&bodies.htmllist, i);
+
+                /* XXX htmllist might include inlined images but we
+                 * currently ignore them. After all, there should
+                 * already be an <img> tag for their Content-Id
+                 * header value. If this turns out to be not enough,
+                 * we can insert the <img> tags here. */
+                if (strcasecmp(part->type, "TEXT")) {
+                    continue;
+                }
+
+                if (!i) buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
+
+                charset_t cs = charset_lookupname(part->charset_id);
+                char *t = charset_to_utf8(msg_buf->s + part->content_offset,
+                                          part->content_size, cs, part->charset_enc);
+
+                if (!strcmp(part->subtype, "HTML")) {
+                    _extract_htmlbody(&buf, t);
+                }
+                else {
+                    buf_appendcstr(&buf, "<div>");
+                    buf_appendcstr(&buf, t);
+                    buf_appendcstr(&buf, "</div>");
+                }
+                charset_free(&cs);
+                free(t);
+
+                if (i == bodies.htmllist.count - 1) buf_appendcstr(&buf, "</html>");
+            }
+            html  = buf_release(&buf);
+        }
+        else if (bodies.html) {
             charset_t cs = charset_lookupname(bodies.html->charset_id);
             html = charset_to_utf8(msg_buf->s + bodies.html->content_offset,
                     bodies.html->content_size, cs, bodies.html->charset_enc);
@@ -2849,9 +2998,8 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
         /* preview */
         if (_wantprop(props, "preview")) {
-            const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
-            if (annot) {
-                json_t *preview = jmapmsg_annot_read(req, mr, annot, /*structured*/0);
+            if (preview_annot) {
+                json_t *preview = jmapmsg_annot_read(req, mr, preview_annot, /*structured*/0);
                 json_object_set_new(msg, "preview", preview ? preview : json_string(""));
             }
             else {
@@ -2875,6 +3023,8 @@ done:
     if (html) free(html);
     ptrarray_fini(&bodies.atts);
     ptrarray_fini(&bodies.msgs);
+    ptrarray_fini(&bodies.textlist);
+    ptrarray_fini(&bodies.htmllist);
     if (r) {
         if (msg) json_decref(msg);
         msg = NULL;

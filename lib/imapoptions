@@ -1030,6 +1030,19 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The maximum byte length of dynamically generated message previews. Previews
    stored in jmap_preview_annot take precedence. */
 
+{ "jmap_render_multipart_bodies", 0, SWITCH }
+/* Specify how the JMAP service should render MIME multipart
+   messages into the textBody and htmlBody properties of the
+   JMAP message object.
+
+   If this option is off, the JMAP service attempts to pick the
+   \"best\" parts within a MIME message for textBody and
+   htmlBody, respectively.
+
+   If this option is on, any plain text parts are concatenated
+   into textBody, including placeholders for inlined images. Any
+   text bodies (plain or HTML) are rendered into htmlBody. */
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
