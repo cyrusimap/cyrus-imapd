@@ -1,12 +1,19 @@
 :tocdepth: 3
 
-==================================
-Cyrus IMAP 3.1.1 Release Notes
-==================================
+==========================
+Cyrus IMAP 3.1.1 Tag Notes
+==========================
 
 Unavailable for download as this is a development branch only.
 
 Access is via git.
+
+.. warning::
+
+    This should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
 
 .. _relnotes-3.1.1-changes:
 
