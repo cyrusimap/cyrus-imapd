@@ -2223,7 +2223,7 @@ enum {
 #endif /* _CYRUS_IMAPD_CONFIG_H_ */
 ])
 
-dnl We need to link with stdc++ when building static cyrus libs dnl and binaries.
+dnl We need to link with stdc++ when building static cyrus libs and binaries.
 dnl libstdc++ is required because we link with libxapian, which is written in C++.
 if test "X$enable_shared" = "Xno"
 then
@@ -2308,4 +2308,7 @@ Build info:
    shared:             $enable_shared
    static:             $enable_static
    cflags:             $CFLAGS
+   cxxflags:           $CXXFLAGS
+   libs:               $LIBS
+   ldflags:            $LDFLAGS
 "
