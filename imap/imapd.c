@@ -7178,6 +7178,11 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
 
+    if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
+        mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
+                           /* add */ 0, /* force */ 0, /* notify? */ 0);
+    }
+
     oldextname =
         mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
     newextname =
@@ -7486,6 +7491,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         if (!r)
             mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
+
+        if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
+            mboxlist_changesub(oldmailboxname, imapd_userid, imapd_authstate,
+                               /* add */ 0, /* force */ 0, /* notify? */ 1);
+        }
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,
