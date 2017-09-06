@@ -111,7 +111,7 @@ sub parse_report
     foreach my $line (split /\n/, $content) {
         next if $line =~ /^\#/;
         my ($key, $val, $ts) = split /\s+/, $line;
-        if ($key =~ m/^([^{]+){([^}]+)}$/) {
+        if ($key =~ m/^([^\{]+)\{([^\}]+)}$/) {
             $report->{$1}->{$2} = { value => $val, timestamp => $ts };
         }
         else {
