@@ -194,7 +194,7 @@ sub get_version
     #cyrus-imapd 3.0.0-beta3-114-g5fa1dbc-dirty
     if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
 	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
-	my $pluscommits;
+	my $pluscommits = 0;
 	if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
 	    $pluscommits = $1;
 	}
