@@ -817,7 +817,7 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt, char multivalsep)
+static void _value_to_tgt(const char *value, struct vparse_target *tgt)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -836,15 +836,6 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt, char mul
             buf_putc(tgt->buf, 'n');
             break;
         case ';':
-            /* this doesn't need to be quoted, but , does. yay. So special case this one */
-            if (multivalsep == ';') {
-                buf_putc(tgt->buf, '\\');
-                buf_putc(tgt->buf, *value);
-            }
-            else {
-                buf_putc(tgt->buf, *value);
-            }
-            break;
         case ',':
         case '\\':
             buf_putc(tgt->buf, '\\');
@@ -943,11 +934,11 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         int i;
         for (i = 0; i < entry->v.values->count; i++) {
             if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, entry->multivaluesep);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
         }
     }
     else {
-        _value_to_tgt(entry->v.value, tgt, '\0');
+        _value_to_tgt(entry->v.value, tgt);
     }
 
     _endline(tgt);
