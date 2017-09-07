@@ -1,4 +1,4 @@
-:tocdepth : 3
+:tocdepth: 3
 
 ===============================
 Cyrus IMAP 3.0.4 Release Notes
