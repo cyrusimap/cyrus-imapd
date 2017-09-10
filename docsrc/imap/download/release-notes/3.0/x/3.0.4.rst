@@ -35,7 +35,7 @@ Bug fixes
 * Fixed :issue:`2091`: [doc] idled belongs in DAEMON not START in cyrus.conf
 * Fixed :issue:`2090`: [doc] Xapian can be used without custom patches
 
-  Other changes
+Other changes
 -------------
 
 * Fixed compiler warnings with GCC 7.
