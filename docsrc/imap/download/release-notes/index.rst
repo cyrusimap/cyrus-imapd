@@ -30,13 +30,6 @@ Latest development snapshot is |imap_development_release_notes|. Documentation a
 Supported Product Series
 ========================
 
-.. Hide the release notes for unstable series
-
-.. toctree::
-    :hidden:
-
-    3.1/index
-
 Series 3.0
 ----------
 
