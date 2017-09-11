@@ -228,7 +228,7 @@ extern int conversation_store(struct conversations_state *state,
 extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
                                        const struct index_record *old,
-                                       struct index_record *new);
+                                       struct index_record *new_);
 
 extern void conversation_update(struct conversations_state *state,
                                 conversation_t *conv,
