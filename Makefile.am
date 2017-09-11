@@ -551,7 +551,7 @@ noinst_MAN = \
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc
+pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc libcyrus_imap.pc
 
 com_err_et_libcyrus_com_err_la_SOURCES = \
 	com_err/et/com_err.c \
