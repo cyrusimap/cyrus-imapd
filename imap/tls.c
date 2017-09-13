@@ -451,36 +451,43 @@ static int tls_dump(const char *s, int len)
 static int set_cert_stuff(SSL_CTX * ctx,
                           const char *cert_file, const char *key_file)
 {
+    int err;
     if (cert_file != NULL) {
         /* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
          * To make sure there is no error from previous op, we clear it here...
          */
         ERR_clear_error();
         if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
+            err = ERR_get_error();
             syslog(LOG_ERR, "unable to get certificate from '%s'", cert_file);
-            return (0);
+            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+            return 0;
         }
         if (key_file == NULL)
             key_file = cert_file;
         if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
                                         SSL_FILETYPE_PEM) <= 0) {
+            err = ERR_get_error();
             syslog(LOG_ERR, "unable to get private key from '%s'", key_file);
-            return (0);
+            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+            return 0;
         }
         /* Now we know that a key and cert have been set against
          * the SSL context */
         if (!SSL_CTX_check_private_key(ctx)) {
+            err = ERR_get_error();
             syslog(
                     LOG_ERR,
                     "Private key '%s' does not match public key '%s'",
                     cert_file,
                     key_file
                 );
-
-            return (0);
+            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+            return 0;
         }
     }
-    return (1);
+
+    return 1;
 }
 
 /*
