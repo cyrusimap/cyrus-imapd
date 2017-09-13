@@ -321,7 +321,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     }
 
     /* Close file backend */
-    if (sm->tmpfd) {
+    if (sm->tmpfd >= 0) {
         close(sm->tmpfd);
     }
     free(sm->filename);
