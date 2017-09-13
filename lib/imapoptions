@@ -1043,6 +1043,38 @@ Blank lines and lines beginning with ``#'' are ignored.
    into textBody, including placeholders for inlined images. Any
    text bodies (plain or HTML) are rendered into htmlBody. */
 
+{ "jmap_smtp_backend", "file", STRINGLIST("host", "sendmail", "file") }
+/* The SMTP backend to use for JMAP message submissions.
+
+   The \"host\" backend sends message submissions via
+   a TCP socket to the SMTP host defined in the config
+   option jmap_smtphost.
+
+   The \"sendmail\" backend forks the Cyrus process into
+   the executable defined in the config option sendmail.
+   The executable must accept \"-bs\" as command line
+   argument, read from stdin and must implement the minimum
+   SMTP protocol as defined in section 4.5.1 of RFC 5321.
+
+   The \"file\" backend persists the complete SMTP commands
+   sent by the Cyrus SMTP client in a file created with
+   mkstemp(3). The file name template is specified in the
+   config option jmap_smtpfile. This backend is mostly
+   useful for testing.
+   */
+
+{ "jmap_smtp_host", "localhost:25", STRING }
+/* The SMTP host to use for JMAP message submissions. The
+   value of this option must the name or IP address of a
+   TCP host, followed optionally by a colon and the port
+   or service to use. The default port is 25. */
+
+{ "jmap_smtp_file", "/tmp/cyrus-imapd.msgsub.XXXXXX", STRING }
+/* The file template to use to persist JMAP message submissions
+   in files. The template must be valid according to the rules
+   specified for the mkstemp(3) function.
+ */
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
