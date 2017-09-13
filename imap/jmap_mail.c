@@ -4832,7 +4832,7 @@ static int getMessages(jmap_req_t *req)
             continue;
         }
     }
-    if (json_array_size(ids) == 0) {
+    if (!json_is_array(ids)) {
         json_array_append_new(invalid, json_string("ids"));
     }
 
