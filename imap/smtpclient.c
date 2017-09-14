@@ -286,6 +286,13 @@ EXPORTED int smtpclient_open_file(const char *template, smtpclient_t **smp)
         r = IMAP_IOERROR;
         goto done;
     }
+    /* Linux and the BSDs already set 0600 file mode, but the
+     * Solaris 11 man page for mkstemp(3C) doesn't say. */
+    if (fchmod(sm->tmpfd, 0600)) {
+        syslog(LOG_ERR, "smtpclient: fchmod failed: %m");
+        r = IMAP_IOERROR;
+        goto done;
+    }
     sm->writer = prot_new(sm->tmpfd, 1);
     *smp = sm;
 
