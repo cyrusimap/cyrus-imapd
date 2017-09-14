@@ -215,13 +215,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
 
-static struct
-{
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static int popd_canon_user(sasl_conn_t *conn, void *context,
                            const char *user, unsigned ulen,
@@ -403,19 +397,7 @@ static void popd_reset(void)
     }
     popd_starttls_done = 0;
 
-    if(saslprops.iplocalport) {
-       free(saslprops.iplocalport);
-       saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-       free(saslprops.ipremoteport);
-       saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-       free(saslprops.authid);
-       saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
+    saslprops_reset(&saslprops);
 
     popd_exists = 0;
 }
@@ -510,8 +492,15 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     popd_clienthost = get_clienthost(0, &localip, &remoteip);
 
+    if (localip && remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, remoteip);
+        buf_setcstr(&saslprops.iplocalport, localip);
+    }
+
     /* other params should be filled in */
-    if (sasl_server_new("pop", config_servername, NULL, NULL, NULL,
+    if (sasl_server_new("pop", config_servername, NULL,
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, 0, &popd_saslconn) != SASL_OK)
         fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
@@ -524,13 +513,6 @@ int service_main(int argc __attribute__((unused)),
 
     if (localip) {
         popd_haveaddr = 1;
-        sasl_setprop(popd_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
-    }
-
-    if (remoteip) {
-        sasl_setprop(popd_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
     }
 
     popd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
@@ -570,7 +552,8 @@ int service_main(int argc __attribute__((unused)),
 
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
-        mboxevent_set_access(mboxevent, saslprops.iplocalport,
+        mboxevent_set_access(mboxevent,
+                             buf_cstringnull_ifempty(&saslprops.iplocalport),
                              NULL, popd_userid, NULL, 1);
 
         mboxevent_notify(&mboxevent);
@@ -660,6 +643,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    saslprops_free(&saslprops);
 
     cyrus_done();
 
@@ -1240,12 +1225,6 @@ void uidl_msg(uint32_t msgno)
 static void cmd_starttls(int pop3s)
 {
     int result;
-    int *layerp;
-    sasl_ssf_t ssf;
-    char *auth_id;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     if (popd_starttls_done == 1)
     {
@@ -1281,8 +1260,7 @@ static void cmd_starttls(int pop3s)
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                pop3s ? 180 : popd_timeout,
-                               layerp,
-                               &auth_id,
+                               &saslprops,
                                &tls_conn);
 
     /* if error */
@@ -1298,27 +1276,15 @@ static void cmd_starttls(int pop3s)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result == SASL_OK) {
-        saslprops.ssf = ssf;
-
-        result = sasl_setprop(popd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    }
+    result = saslprops_set_tls(&saslprops, popd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (pop3s == 0) {
-            fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
         } else {
             shut_down(0);
         }
     }
-
-    if(saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    if(auth_id)
-        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(popd_in, tls_conn);
@@ -1782,8 +1748,10 @@ int openinbox(void)
 
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
-        mboxevent_set_access(mboxevent, saslprops.iplocalport,
-                             saslprops.ipremoteport, popd_userid, NULL, 0);
+        mboxevent_set_access(mboxevent,
+                             buf_cstringnull_ifempty(&saslprops.iplocalport),
+                             buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                             popd_userid, NULL, 0);
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
@@ -2058,20 +2026,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("pop", config_servername,
-                         NULL, NULL, NULL,
+    ret = sasl_server_new("pop", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
                          NULL, 0, conn);
     if(ret != SASL_OK) return ret;
 
-    if(saslprops.ipremoteport)
-       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                          saslprops.iplocalport);
-    if(ret != SASL_OK) return ret;
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
@@ -2079,17 +2039,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     } else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;
-
-    if(saslprops.authid) {
-       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-       if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;

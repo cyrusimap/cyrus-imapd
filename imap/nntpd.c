@@ -236,13 +236,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
                       struct protstream *pin, struct protstream *pout,
                       int *sasl_result, char **success_data);
 
-static struct
-{
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
@@ -411,19 +405,7 @@ static void nntp_reset(void)
     nntp_tls_comp = NULL;
     nntp_starttls_done = 0;
 
-    if(saslprops.iplocalport) {
-       free(saslprops.iplocalport);
-       saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-       free(saslprops.ipremoteport);
-       saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-       free(saslprops.authid);
-       saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
+    saslprops_reset(&saslprops);
 
     nntp_exists = 0;
     nntp_current = 0;
@@ -529,8 +511,15 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     nntp_clienthost = get_clienthost(0, &localip, &remoteip);
 
+    if (localip && remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, remoteip);
+        buf_setcstr(&saslprops.iplocalport, localip);
+    }
+
     /* other params should be filled in */
-    if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
+    if (sasl_server_new("nntp", config_servername, NULL,
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
         fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
@@ -539,16 +528,8 @@ int service_main(int argc __attribute__((unused)),
     sasl_setprop(nntp_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
 
-    if (localip) {
-        sasl_setprop(nntp_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
-    }
-
     if (remoteip) {
         char hbuf[NI_MAXHOST], *p;
-
-        sasl_setprop(nntp_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
 
         /* Create pre-authentication telemetry log based on client IP */
         strlcpy(hbuf, remoteip, NI_MAXHOST);
@@ -661,6 +642,8 @@ void shut_down(int code)
     if (newsgroups) free_wildmats(newsgroups);
     auth_freestate(newsmaster_authstate);
 
+    saslprops_free(&saslprops);
+
     cyrus_done();
 
     exit(code);
@@ -693,20 +676,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("nntp", config_servername,
-                         NULL, NULL, NULL,
-                         NULL, SASL_SUCCESS_DATA, conn);
+    ret = sasl_server_new("nntp", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                          NULL, SASL_SUCCESS_DATA, conn);
     if(ret != SASL_OK) return ret;
 
-    if(saslprops.ipremoteport)
-       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                          saslprops.iplocalport);
-    if(ret != SASL_OK) return ret;
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
@@ -714,17 +689,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     } else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;
-
-    if(saslprops.authid) {
-       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-       if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -4027,9 +3997,6 @@ static void cmd_post(char *msgid, int mode)
 static void cmd_starttls(int nntps)
 {
     int result;
-    int *layerp;
-    sasl_ssf_t ssf;
-    char *auth_id;
 
     if (nntp_starttls_done == 1) {
         prot_printf(nntp_out, "502 %s\r\n",
@@ -4041,9 +4008,6 @@ static void cmd_starttls(int nntps)
                     "Already authenticated");
         return;
     }
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     result=tls_init_serverengine("nntp",
                                  5,        /* depth to verify */
@@ -4072,8 +4036,7 @@ static void cmd_starttls(int nntps)
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                nntps ? 180 : nntp_timeout,
-                               layerp,
-                               &auth_id,
+                               &saslprops,
                                &tls_conn);
 
     /* if error */
@@ -4089,27 +4052,15 @@ static void cmd_starttls(int nntps)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result == SASL_OK) {
-        saslprops.ssf = ssf;
-        result = sasl_setprop(nntp_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    }
-
+    result = saslprops_set_tls(&saslprops, nntp_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (nntps == 0) {
-            fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
         } else {
             shut_down(0);
         }
     }
-
-    if(saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    if(auth_id)
-        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(nntp_in, tls_conn);

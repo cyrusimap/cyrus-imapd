@@ -136,15 +136,7 @@ struct conn {
 
     char clienthost[NI_MAXHOST*2+1];
 
-    struct
-    {
-        char *ipremoteport;
-        char ipremoteport_buf[60];
-        char *iplocalport;
-        char iplocalport_buf[60];
-        sasl_ssf_t ssf;
-        char *authid;
-    } saslprops;
+    struct saslprops_t saslprops;
 
     /* UPDATE command handling */
     const char *streaming; /* tag */
@@ -281,20 +273,16 @@ static struct conn *conn_new(int fd)
     strlcpy(C->clienthost, clienthost, sizeof(C->clienthost));
 
     if (localip && remoteip) {
-        strlcpy(C->saslprops.ipremoteport_buf, remoteip,
-                sizeof(C->saslprops.ipremoteport_buf));
-        C->saslprops.ipremoteport = C->saslprops.ipremoteport_buf;
-        strlcpy(C->saslprops.iplocalport_buf, remoteip,
-                sizeof(C->saslprops.iplocalport_buf));
-        C->saslprops.iplocalport = C->saslprops.iplocalport_buf;
+        buf_setcstr(&C->saslprops.ipremoteport, remoteip);
+        buf_setcstr(&C->saslprops.iplocalport, localip);
     }
     pthread_mutex_unlock(&clienthost_mutex); /* UNLOCK */
 
     /* create sasl connection */
     r = sasl_server_new("mupdate",
                         config_servername, NULL,
-                        C->saslprops.iplocalport,
-                        C->saslprops.ipremoteport,
+                        buf_cstringnull_ifempty(&C->saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&C->saslprops.ipremoteport),
                         NULL, 0,
                         &C->saslconn);
     if (r != SASL_OK) {
@@ -384,7 +372,7 @@ static void conn_free(struct conn *C)
 
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
-    if (C->saslprops.authid) free(C->saslprops.authid);
+    saslprops_free(&C->saslprops);
 
     /* free struct bufs */
     buf_free(&(C->tag));
@@ -1974,13 +1962,6 @@ static void sendupdates(struct conn *C, int flushnow)
 static void cmd_starttls(struct conn *C, const char *tag)
 {
     int result;
-    int *layerp;
-
-    char *auth_id;
-    sasl_ssf_t ssf;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     result=tls_init_serverengine("mupdate",
                                  5,        /* depth to verify */
@@ -2003,8 +1984,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
     result=tls_start_servertls(C->pin->fd, /* read */
                                C->pout->fd, /* write */
                                180, /* 3 minutes */
-                               layerp,
-                               &auth_id,
+                               &C->saslprops,
                                &C->tlsconn);
 
     /* if error */
@@ -2017,22 +1997,10 @@ static void cmd_starttls(struct conn *C, const char *tag)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(C->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    result = saslprops_set_tls(&C->saslprops, C->saslconn);
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
     }
-    C->saslprops.ssf = ssf;
-
-    result = sasl_setprop(C->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    if (C->saslprops.authid) {
-        free(C->saslprops.authid);
-        C->saslprops.authid = NULL;
-    }
-    if (auth_id)
-        C->saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(C->pin, C->tlsconn);
@@ -2116,19 +2084,10 @@ static int reset_saslconn(struct conn *c)
 
     sasl_dispose(&c->saslconn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("mupdate", config_servername,
-                         NULL, NULL, NULL,
-                         NULL, 0, &c->saslconn);
-    if (ret != SASL_OK) return ret;
-
-    if (c->saslprops.ipremoteport)
-       ret = sasl_setprop(c->saslconn, SASL_IPREMOTEPORT,
-                          c->saslprops.ipremoteport);
-    if (ret != SASL_OK) return ret;
-
-    if (c->saslprops.iplocalport)
-       ret = sasl_setprop(c->saslconn, SASL_IPLOCALPORT,
-                          c->saslprops.iplocalport);
+    ret = sasl_server_new("mupdate", config_servername, NULL,
+                          buf_cstringnull_ifempty(&c->saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&c->saslprops.ipremoteport),
+                          NULL, 0, &c->saslconn);
     if (ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
@@ -2138,14 +2097,9 @@ static int reset_saslconn(struct conn *c)
 
     /* If we have TLS/SSL info, set it */
     if (c->saslprops.ssf) {
-        ret = sasl_setprop(c->saslconn, SASL_SSF_EXTERNAL, &c->saslprops.ssf);
+        ret = saslprops_set_tls(&c->saslprops, c->saslconn);
     }
     if (ret != SASL_OK) return ret;
-
-    if (c->saslprops.authid) {
-        ret = sasl_setprop(c->saslconn, SASL_AUTH_EXTERNAL, c->saslprops.authid);
-        if (ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;

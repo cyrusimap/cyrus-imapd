@@ -129,12 +129,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
                       struct protstream *pin, struct protstream *pout,
                       int *sasl_result, char **success_data);
 
-static struct {
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 
 #ifdef USING_SNMPGEN
@@ -902,19 +897,10 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("lmtp", config_servername,
-                         NULL, NULL, NULL,
-                         NULL, 0, conn);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.ipremoteport)
-       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                          saslprops.iplocalport);
+    ret = sasl_server_new("lmtp", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                          NULL, 0, conn);
     if(ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
@@ -924,14 +910,9 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     }
     if(ret != SASL_OK) return ret;
-
-    if(saslprops.authid) {
-       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-       if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -950,9 +931,6 @@ void lmtpmode(struct lmtp_func *func,
     struct clientdata cd;
 
     const char *localip, *remoteip;
-
-    sasl_ssf_t ssf;
-    char *auth_id;
 
     sasl_security_properties_t *secprops = NULL;
 
@@ -976,20 +954,17 @@ void lmtpmode(struct lmtp_func *func,
     msg_new(&msg, func->namespace);
 
     /* don't leak old connections */
-    if(saslprops.iplocalport) {
-        free(saslprops.iplocalport);
-        saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-        free(saslprops.ipremoteport);
-        saslprops.ipremoteport = NULL;
-    }
+    saslprops_reset(&saslprops);
 
     /* determine who we're talking to */
     cd.clienthost = get_clienthost(fd, &localip, &remoteip);
     if (!strcmp(cd.clienthost, UNIX_SOCKET)) {
         /* we're not connected to a internet socket! */
         func->preauth = 1;
+    }
+    else if (localip && remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, remoteip);
+        buf_setcstr(&saslprops.iplocalport, localip);
     }
 
     syslog(LOG_DEBUG, "connection from %s%s",
@@ -998,8 +973,10 @@ void lmtpmode(struct lmtp_func *func,
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
-    if (sasl_server_new("lmtp", config_servername, NULL, NULL,
-                        NULL, (func->preauth ? localauth_override_cb : NULL),
+    if (sasl_server_new("lmtp", config_servername, NULL,
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                        (func->preauth ? localauth_override_cb : NULL),
                         0, &cd.conn) != SASL_OK) {
         fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
@@ -1010,20 +987,17 @@ void lmtpmode(struct lmtp_func *func,
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
     if (func->preauth) {
+        const char *auth_id = "postman";
+
         cd.authenticated = EXTERNAL_AUTHED;     /* we'll allow commands,
                                                    but we still accept
                                                    the AUTH command */
-        ssf = 2;
-        auth_id = "postman";
-        if (sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
-        if (sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
+        saslprops.ssf = 2;
+        buf_setcstr(&saslprops.authid, auth_id);
+        if (saslprops_set_tls(&saslprops, cd.conn) != SASL_OK)
+            fatal("saslprops_set_tls() failed: preauth",EC_TEMPFAIL);
 
         deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
-    } else {
-        if(localip) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
-        if(remoteip) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);
     }
 
     prot_printf(pout, "220 %s", config_servername);
@@ -1467,16 +1441,9 @@ void lmtpmode(struct lmtp_func *func,
 #ifdef HAVE_SSL
             if (!strcasecmp(buf, "starttls") && tls_enabled() &&
                 !func->preauth) { /* don't need TLS for preauth'd connect */
-                int *layerp;
-                sasl_ssf_t ssf;
-                char *auth_id;
 
                 /* XXX  discard any input pipelined after STARTTLS */
                 prot_flush(pin);
-
-                /* SASL and openssl have different ideas
-                   about whether ssf is signed */
-                layerp = (int *) &ssf;
 
                 if (cd.starttls_done == 1) {
                     prot_printf(pout, "454 4.3.3 %s\r\n",
@@ -1509,8 +1476,7 @@ void lmtpmode(struct lmtp_func *func,
                 r=tls_start_servertls(0, /* read */
                                       1, /* write */
                                       360, /* 6 minutes */
-                                      layerp,
-                                      &auth_id,
+                                      &saslprops,
                                       &(cd.tls_conn));
 
                 /* if error */
@@ -1521,22 +1487,11 @@ void lmtpmode(struct lmtp_func *func,
                 }
 
                 /* tell SASL about the negotiated layer */
-                r=sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf);
-                if (r != SASL_OK)
-                    fatal("sasl_setprop(SASL_SSF_EXTERNAL) failed: STARTTLS",
-                          EC_TEMPFAIL);
-                saslprops.ssf = ssf;
-
-                r=sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id);
-                if (r != SASL_OK)
-                    fatal("sasl_setprop(SASL_AUTH_EXTERNAL) failed: STARTTLS",
-                          EC_TEMPFAIL);
-                if(saslprops.authid) {
-                    free(saslprops.authid);
-                    saslprops.authid = NULL;
+                r = saslprops_set_tls(&saslprops, cd.conn);
+                if (r != SASL_OK) {
+                    fatal("saslprops_set_tls() failed: STARTTLS", EC_TEMPFAIL);
                 }
-                if(auth_id) {
-                    saslprops.authid = xstrdup(auth_id);
+                if (buf_len(&saslprops.authid)) {
                     cd.authenticated = TLSCERT_AUTHED;
                 }
 
@@ -1574,6 +1529,7 @@ void lmtpmode(struct lmtp_func *func,
 
     /* security */
     if (cd.conn) sasl_dispose(&cd.conn);
+    saslprops_reset(&saslprops);
 
     cd.starttls_done = 0;
 #ifdef HAVE_SSL
