@@ -1026,3 +1026,48 @@ EXPORTED int cmd_cancelled()
         return IMAP_SEARCH_SLOW;
     return 0;
 }
+
+EXPORTED void saslprops_reset(struct saslprops_t *saslprops)
+{
+    buf_reset(&saslprops->iplocalport);
+    buf_reset(&saslprops->ipremoteport);
+    buf_reset(&saslprops->authid);
+    saslprops->ssf = 0;
+    saslprops->cbinding.name = NULL;
+}
+
+EXPORTED void saslprops_free(struct saslprops_t *saslprops)
+{
+    buf_free(&saslprops->iplocalport);
+    buf_free(&saslprops->ipremoteport);
+    buf_free(&saslprops->authid);
+}
+
+EXPORTED int saslprops_set_tls(struct saslprops_t *saslprops,
+                               sasl_conn_t *saslconn)
+{
+    int r;
+
+    r = sasl_setprop(saslconn, SASL_SSF_EXTERNAL, &saslprops->ssf);
+    if (r != SASL_OK) {
+        syslog(LOG_NOTICE, "sasl_setprop(SSF_EXTERNAL) failed");
+        return r;
+    }
+
+    r = sasl_setprop(saslconn, SASL_AUTH_EXTERNAL,
+                     buf_cstringnull(&saslprops->authid));
+    if (r != SASL_OK) {
+        syslog(LOG_NOTICE, "sasl_setprop(AUTH_EXTERNAL) failed");
+        return r;
+    }
+
+    if (saslprops->cbinding.name) {
+        r = sasl_setprop(saslconn, SASL_CHANNEL_BINDING, &saslprops->cbinding);
+        if (r != SASL_OK) {
+            syslog(LOG_NOTICE, "sasl_setprop(CHANNEL_BINDING) failed");
+            return r;
+        }
+    }
+
+    return SASL_OK;
+}
