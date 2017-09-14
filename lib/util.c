@@ -965,6 +965,12 @@ EXPORTED const char *buf_cstringnull(const struct buf *buf)
     return buf_cstring(buf);
 }
 
+EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
+{
+    if (!buf->len) return NULL;
+    return buf_cstring(buf);
+}
+
 EXPORTED char *buf_releasenull(struct buf *buf)
 {
     char *ret = (char *)buf_cstringnull(buf);
