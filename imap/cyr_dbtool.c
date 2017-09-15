@@ -157,17 +157,24 @@ static void batch_commands(struct db *db)
     prot_setisclient(in, 1);
     prot_setisclient(out, 1);
 
-    while (c != EOF) {
+    while (1) {
         buf_reset(&cmd);
         buf_reset(&key);
         buf_reset(&val);
         line++;
         c = getword(in, &cmd);
+        if (c == EOF) break;
+
         if (c == ' ')
             c = getastring(in, NULL, &key);
         if (c == ' ')
             c = getastring(in, NULL, &val);
         if (c == '\r') c = prot_getc(in);
+        if (c != '\n') {
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+            goto done;
+        }
+
         if (cmd.len) {
             /* got a command! */
             if (!strcmp(cmd.s, "BEGIN")) {
@@ -223,7 +230,6 @@ static void batch_commands(struct db *db)
                 goto done;
             }
         }
-        if (c != '\n') break;
     }
 
 done:
