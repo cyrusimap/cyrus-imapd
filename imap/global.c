@@ -207,6 +207,17 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     initialize_imap_error_table();
     initialize_mupd_error_table();
 
+    /* various things can run our commands with only two file descriptors, e.g. old strace on FreeBSD,
+     * or IPC::Run from Perl.  Make sure we don't accidentally reuse low FD numbers */
+    while(1) {
+        int fd = open("/dev/null", 0);
+        if (fd == -1) fatal("can't open /dev/null", EC_SOFTWARE);
+        if (fd >= 3) {
+            close(fd);
+            break;
+        }
+    }
+
     if(!ident)
         fatal("service name was not specified to cyrus_init", EC_CONFIG);
 
