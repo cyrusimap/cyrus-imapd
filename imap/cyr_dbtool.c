@@ -154,6 +154,9 @@ static void batch_commands(struct db *db)
     int c = '-';
     int r = 0;
 
+    prot_setisclient(in, 1);
+    prot_setisclient(out, 1);
+
     while (c != EOF) {
         buf_reset(&cmd);
         buf_reset(&key);
