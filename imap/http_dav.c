@@ -8030,6 +8030,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
     if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
+    fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
     fctx.lprops = rparams->propfind.lprops;
     fctx.root = outroot;
@@ -8039,7 +8040,6 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
-        fctx.proc_by_resource = &propfind_by_resource;
         ret = preload_proplist(props, &fctx);
     }
 
