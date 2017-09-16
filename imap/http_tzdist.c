@@ -592,7 +592,7 @@ struct leapsec {
     long int sec;         /* leap seconds */
 };
 
-void read_leap_seconds()
+static void read_leap_seconds()
 {
     FILE *fp;
     char buf[1024];
