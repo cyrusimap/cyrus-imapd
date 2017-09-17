@@ -215,9 +215,6 @@ libexec_PROGRAMS += imap/calalarmd
 endif
 
 if HTTPD
-AM_CPPFLAGS += $(HTTP_CPPFLAGS)
-AM_LDFLAGS += $(HTTP_LIBS)
-
 BUILT_SOURCES += \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
@@ -882,8 +879,9 @@ imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fa
 imap_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
+imap_ctl_zoneinfo_CFLAGS = $(AM_CFLAGS) $(XML2_CFLAGS)
+imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD) $(XML2_LIBS)
 imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
-imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
@@ -948,8 +946,6 @@ imap_libcyrus_imap_la_LIBADD = \
     lib/libcyrus.la
 
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(JANSSON_CFLAGS)
-imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
-
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
 	imap/annotate.h \
@@ -1093,7 +1089,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/vcard_support.h \
 	imap/webdav_db.c \
 	imap/webdav_db.h
-
+imap_libcyrus_imap_la_CFLAGS += $(XML2_CFLAGS)
+imap_libcyrus_imap_la_LDFLAGS = $(XML2_LIBS) $(AM_LDFLAGS)
 endif # HTTPD
 
 if USE_XAPIAN
@@ -1102,7 +1099,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/xapian_wrap.h \
 	imap/xapian_wrap.cpp
 imap_libcyrus_imap_la_LIBADD += $(XAPIAN_LIBS)
-imap_libcyrus_imap_la_CXXFLAGS += $(XAPIAN_CXXFLAGS)
+imap_libcyrus_imap_la_CXXFLAGS = $(XAPIAN_CXXFLAGS) $(AM_CXXFLAGS)
 endif
 
 imap_lmtpd_SOURCES = \
@@ -1173,6 +1170,9 @@ imap_nntpd_SOURCES = \
 	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
+imap_httpd_CPPFLAGS = $(XML2_CFLAGS) $(SQLITE3_CFLAGS) $(ICAL_CFLAGS) $(JANSSON_CFLAGS) $(NGHTTP2_CFLAGS) $(BROTLI_CFLAGS) $(SHAPELIB_CFLAGS) $(AM_CPPFLAGS)
+imap_httpd_LDADD = $(LD_SERVER_ADD) $(XML2_LIBS) $(SQLITE3_LIBS) $(ICAL_LIBS) $(JANSSON_LIBS) $(NGHTTP2_LIBS) $(BROTLI_LIBS) $(SHAPELIB_LIBS) -lm $(AM_LDFLAGS)
+
 nodist_imap_httpd_SOURCES = \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
@@ -1222,8 +1222,6 @@ imap_httpd_SOURCES = \
 	master/masterconf.c \
 	master/service.c
 
-imap_httpd_LDADD = $(LD_SERVER_ADD)
-
 imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
@@ -1244,8 +1242,9 @@ imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
+imap_dav_reconstruct_CFLAGS = $(AM_CFLAGS) $(XML2_CFLAGS)
+imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD) $(XML2_LIBS)
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
-imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_search_test_SOURCES = imap/search_test.c imap/mutex_fake.c
 imap_search_test_LDADD = $(LD_UTILITY_ADD)
