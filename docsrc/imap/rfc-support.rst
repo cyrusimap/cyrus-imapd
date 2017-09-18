@@ -135,11 +135,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The One-Time-Password SASL Mechanism
 
-:rfc:`2445`
-
-    Internet Calendaring and Scheduling Core Object Specification
-    (iCalendar)
-
 :rfc:`2449`
 
     POP3 Extension Mechanism
@@ -550,7 +545,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP LIST Extension for Special-Use Mailboxes
 
-:rfc:`6231`
+:rfc:`6321`
 
     xCal: The XML Format for iCalendar
 
@@ -592,6 +587,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`6797`
 
     HTTP Strict Transport Security (HSTS)
+
+:rfc:`6851`
+
+    Internet Message Access Protocol (IMAP) - MOVE Extension
+
+    .. versionadded:: 2.5.0
 
 :rfc:`7230`
 
@@ -637,6 +638,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Non-Gregorian Recurrence Rules in the Internet Calendaring and Scheduling Core Object Specification (iCalendar) (obsoletes draft-ietf-calext-rscale)
 
+:rfc:`7953`
+
+    Calendar Availability
+
 IETF RFC Drafts
 ===============
 
@@ -670,10 +675,6 @@ draft-ietf-tzdist-caldav-timezone-ref
 
     CalDAV: Time Zones by Reference
 
-draft-daboo-calendar-availability
-
-    Calendar Availability
-
 draft-york-vpoll
 
     VPOLL: Consensus Scheduling Component for iCalendar
@@ -691,9 +692,6 @@ draft-murchison-webdav-prefer
     Use of the Prefer Header Field in Web Distributed Authoring and
     Versioning (WebDAV)
 
-draft-ietf-calext-availability
-
-    Calendar Availability
 
 draft-ietf-httpauth-basicauth-update
 
@@ -766,9 +764,3 @@ RFC Wishlist
 :rfc:`6785`
 
     Support for Internet Message Access Protocol (IMAP) Events in Sieve
-
-:rfc:`6851`
-
-    Internet Message Access Protocol (IMAP) - MOVE Extension
-
-    .. versionadded:: 2.5.0
