@@ -76,6 +76,7 @@
 #include "userdeny.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -772,16 +773,39 @@ EXPORTED void cyrus_done(void)
 EXPORTED int shutdown_file(char *buf, int size)
 {
     FILE *f;
-    static char shutdownfilename[1024] = "";
+    static char *shutdownfilename = NULL, *suffix;
     char *p;
     char tmpbuf[1024];
 
-    if (!shutdownfilename[0])
-        snprintf(shutdownfilename, sizeof(shutdownfilename),
-                 "%s/msg/shutdown", config_dir);
+    if (!shutdownfilename) {
+        /* Create system shutdownfile name */
+        struct buf buf = BUF_INITIALIZER;
+        size_t system_len;
 
+        buf_printf(&buf, "%s/msg/shutdown", config_dir);
+        system_len = buf_len(&buf);
+
+        /* Add per-service suffix */
+        buf_printf(&buf, ".%s", config_ident);
+        shutdownfilename = buf_release(&buf);
+        suffix = shutdownfilename + system_len;
+    }
+
+    /* Try per-service shutdown file */
     f = fopen(shutdownfilename, "r");
-    if (!f) return 0;
+    if (!f) {
+        /* Trim per-service suffix and try system shutdownfile */
+        *suffix = '\0';
+
+        f = fopen(shutdownfilename, "r");
+        if (!f) {
+            /* Restore per-service suffix */
+            *suffix = '.';
+            return 0;
+        }
+    }
+
+    free(shutdownfilename);
 
     if (!buf) {
         buf = tmpbuf;
