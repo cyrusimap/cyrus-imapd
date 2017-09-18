@@ -20,7 +20,7 @@ Synopsis
     **sync_client** [ **-v** ] [ **-l** ] [ **-L** ] [ **-z** ] [ **-C** *config-file* ] [ **-S** *server-name* ]
         [ **-f** *input-file* ] [ **-F** *shutdown_file* ] [ **-w** *wait_interval* ]
         [ **-t** *timeout* ] [ **-d** *delay* ] [ **-r** ] [ **-n** *channel* ] [ **-u** ] [ **-m** ]
-        [ **-p** *partition* ] [ **-A** ] [ **-s** ] *objects*...
+        [ **-p** *partition* ] [ **-A** ] [ **-s** ] [ **-O** ] *objects*...
 
 Description
 ===========
@@ -41,36 +41,20 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -v
+.. option:: -A
 
-    Verbose mode.  Use twice (**-v -v**) to log all protocol traffic to
-    stderr.
+    All users mode.
+    Sync every user on the server to the replica (doesn't do non-user
+    mailboxes at all... this could be considered a bug and maybe it
+    should do those mailboxes independently)
 
-.. option:: -l
+.. option:: -d delay
 
-    Verbose logging mode.
-
-.. option:: -L
-
-    Perform only local mailbox operations (do not do mupdate operations).
-    |v3-new-feature|
-
-.. option:: -o
-
-    Only attempt to connect to the backend server once rather than
-    waiting up to 1000 seconds before giving up.
-
-.. option:: -z
-
-    Require compression.
-    The replication protocol will always try to enable deflate
-    compression if both ends support it.  Set this flag when you want
-    to abort if compression is not available.
-
-.. option:: -S servername
-
-    Tells **sync_client** with which server to communicate.  Overrides
-    the ``sync_host`` configuration option.
+    Minimum delay between replication runs in rolling replication mode.
+    Larger values provide better efficiency as transactions can be
+    merged. Smaller values mean that the replica system is more up to
+    date and that you don't end up with large blocks of replication
+    transactions as a single group. Default: 3 seconds.
 
 .. option:: -f input-file
 
@@ -87,25 +71,44 @@ Options
     removed on shutdown. Overrides ``sync_shutdown_file`` option in
     :cyrusman:`imapd.conf(5)`.
 
-.. option:: -w interval
+.. option:: -l
 
-    Wait this long before starting. This option is typically used so
-    that we can attach a debugger to one end of the replication system
-    or the other.
+    Verbose logging mode.
 
-.. option:: -t timeout
+.. option:: -L
 
-    Timeout for single replication run in rolling replication.
-    **sync_client** will negotiate a restart after this many seconds.
-    Default: 600 seconds
+    Perform only local mailbox operations (do not do mupdate operations).
+    |v3-new-feature|
 
-.. option:: -d delay
+.. option:: -m
 
-    Minimum delay between replication runs in rolling replication mode.
-    Larger values provide better efficiency as transactions can be
-    merged. Smaller values mean that the replica system is more up to
-    date and that you don't end up with large blocks of replication
-    transactions as a single group. Default: 3 seconds.
+    Mailbox mode.
+    Remaining arguments are list of mailboxes which should be replicated.
+
+.. option:: -n channel
+
+    Use the named channel for rolling replication mode.  If multiple
+    channels are specified in ``sync_log_channels`` then use one of them.
+    This option is probably best combined with **-S** to connect to a
+    different server with each channel.
+
+.. option:: -o
+
+    Only attempt to connect to the backend server once rather than
+    waiting up to 1000 seconds before giving up.
+
+.. option:: -O
+
+    No copyback mode. Replication will stop if the replica reports a CRC
+    error, rather than doing a full mailbox sync. Useful if moving users to a
+    new server, where you don't want any errors to cause the source servers
+    to change the account.
+
+.. option:: -p partition
+
+    In mailbox or user replication mode: provides the name of the
+    partition on the replica to which the mailboxes/users should be
+    replicated.
 
 .. option:: -r
 
@@ -115,30 +118,6 @@ Options
     specified in ``sync_log_file``. Repeat until ``sync_shutdown_file``
     appears.
 
-.. option:: -n channel
-
-    Use the named channel for rolling replication mode.  If multiple
-    channels are specified in ``sync_log_channels`` then use one of them.
-    This option is probably best combined with **-S** to connect to a
-    different server with each channel.
-
-.. option:: -u
-
-    User mode.
-    Remaining arguments are list of users who should be replicated.
-
-.. option:: -A
-
-    All users mode.
-    Sync every user on the server to the replica (doesn't do non-user
-    mailboxes at all... this could be considered a bug and maybe it
-    should do those mailboxes independently)
-
-.. option:: -m
-
-    Mailbox mode.
-    Remaining arguments are list of mailboxes which should be replicated.
-
 .. option:: -s
 
     Sieve mode.
@@ -146,11 +125,40 @@ Options
     replicated. Principally used for debugging purposes: not exposed to
     :cyrusman:`sync_client(8)`.
 
-.. option:: -p partition
+.. option:: -S servername
 
-    In mailbox or user replication mode: provides the name of the
-    partition on the replica to which the mailboxes/users should be
-    replicated.
+    Tells **sync_client** with which server to communicate.  Overrides
+    the ``sync_host`` configuration option.
+
+.. option:: -t timeout
+
+    Timeout for single replication run in rolling replication.
+    **sync_client** will negotiate a restart after this many seconds.
+    Default: 600 seconds
+
+.. option:: -u
+
+    User mode.
+    Remaining arguments are list of users who should be replicated.
+
+.. option:: -v
+
+    Verbose mode.  Use twice (**-v -v**) to log all protocol traffic to
+    stderr.
+
+.. option:: -w interval
+
+    Wait this long before starting. This option is typically used so
+    that we can attach a debugger to one end of the replication system
+    or the other.
+
+.. option:: -z
+
+    Require compression.
+    The replication protocol will always try to enable deflate
+    compression if both ends support it.  Set this flag when you want
+    to abort if compression is not available.
+
 
 Examples
 ========
