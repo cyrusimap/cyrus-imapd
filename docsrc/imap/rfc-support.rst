@@ -647,6 +647,14 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Non-Gregorian Recurrence Rules in the Internet Calendaring and Scheduling Core Object Specification (iCalendar) (obsoletes draft-ietf-calext-rscale)
 
+:rfc:`7808`
+
+    Time Zone Data Distribution Service
+
+:rfc:`7809`
+
+    CalDAV: Time Zones by Reference
+
 :rfc:`7953`
 
     Calendar Availability
@@ -675,14 +683,6 @@ draft-ietf-sieve-regex
 draft-martin-sieve-notify
 
     Sieve -- An extension for providing instant notifications
-
-draft-ietf-tzdist-service
-
-    Time Zone Data Distribution Service
-
-draft-ietf-tzdist-caldav-timezone-ref
-
-    CalDAV: Time Zones by Reference
 
 draft-york-vpoll
 
