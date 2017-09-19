@@ -1915,6 +1915,8 @@ if PERL
 	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
 	  echo "uninstalling files from packlists: $$packlists" && \
 	  rm -f `cat $$packlists` )
+	( podfiles=`find $(DESTDIR)$(libdir) -type f -name perllocal.pod` && \
+	  rm -f `echo $$podfiles` )
 endif
 
 install-binsymlinks:
