@@ -370,7 +370,7 @@ static const struct sieve_capa_t {
     { "comparator-i;ascii-casemap", SIEVE_CAPA_BASE },
     { "comparator-i;ascii-numeric", SIEVE_CAPA_COMP_NUMERIC },
 
-    { "encoded-character", SIEVE_CAPA_ENCODE_CHAR },
+    { "encoded-character", SIEVE_CAPA_ENCODED_CHAR },
     { "envelope",          SIEVE_CAPA_ENVELOPE },
     { "fileinto",          SIEVE_CAPA_FILEINTO },
 
@@ -490,6 +490,7 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     switch (capa) {
     case SIEVE_CAPA_BASE:
     case SIEVE_CAPA_COMP_NUMERIC:
+    case SIEVE_CAPA_ENCODED_CHAR:
         /* always enabled */
         break;
 

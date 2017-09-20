@@ -72,6 +72,7 @@
 
 #define ERR_BUF_SIZE 1024
 
+int encoded_char = 0;  /* used to send encoded-character feedback to lexer */
 int getdatepart = 0;   /* used to send start state feedback to lexer */
 static comp_t *ctags;  /* used for accessing comp_t* in a test/command union */
 
@@ -1806,6 +1807,8 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
         /* mark all allowed extensions as supported */
         sscript->support |= (SIEVE_CAPA_ALL & ~SIEVE_CAPA_IHAVE_INCOMPAT);
     }
+
+    encoded_char = (sscript->support & SIEVE_CAPA_ENCODED_CHAR);
 
     return ret;
 }
