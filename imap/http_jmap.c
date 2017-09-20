@@ -1641,6 +1641,11 @@ static int jmap_authreq(struct transaction_t *txn)
             goto done;
         }
 
+        /* Initialize the global namespace. Usually, that's done by
+         * jmap_auth after a successful login, but we are out of the
+         * regular authentication codepaths here. */
+        mboxname_init_namespace(&jmap_namespace, 0/*isadmin*/);
+
         /* Create the response object */
         json_t *res = user_settings(access_tok->userid);
         if (!res) {
