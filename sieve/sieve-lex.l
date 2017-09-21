@@ -519,8 +519,8 @@ static int decode_string(struct buf *buf)
         /* eat leading whitespace */
         while (isspace(*cp)) cp++;
 
-        /* sanity check "encoded" data */
-        len = strspn(cp, "0123456789ABCDEF \t\r\n");
+        /* sanity check "encoded" data (being liberal in accepting 'a' - 'f') */
+        len = strspn(cp, "0123456789ABCDEFabcdef \t\r\n");
         if (!isxdigit(*cp) || cp[len] != '}') continue;
 
         /* decode characters */
@@ -530,7 +530,7 @@ static int decode_string(struct buf *buf)
 
             for (ndigits = 0, code = 0; isxdigit(*cp); ndigits++, cp++) {
                 unsigned int digit = 
-                    (*cp > '9') ? 10 + *cp - 'A' : *cp - '0';
+                    (*cp > '9') ? 10 + toupper(*cp) - 'A' : *cp - '0';
 
                 code = (code << 4) + digit;
             }
