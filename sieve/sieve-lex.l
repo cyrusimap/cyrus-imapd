@@ -57,7 +57,7 @@
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *sscript)
 
 static struct buf buf;   /* buffer for multi-line text and quoted strings */
-extern int encoded_char; /* used to recv encoded-character feedback from parser */
+extern int encoded_char; /* used to receive encoded-char feedback from parser */
 extern int getdatepart;  /* used to receive start state feedback from parser */
 
 static unsigned long long tonum(const char *str);
