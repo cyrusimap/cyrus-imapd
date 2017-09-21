@@ -1987,6 +1987,7 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
 
 done:
     conversations_commit(&cstate);
+    buf_free(&buf);
 
     return r;
 }
@@ -2182,6 +2183,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
     strarray_t *srcdirs = NULL;
+    strarray_t *newdirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
     strarray_t *orig = NULL;
@@ -2320,7 +2322,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         strarray_t *existing = strarray_dup(orig);
         for (i = 0; i < tochange->count; i++)
             strarray_remove_all(existing, strarray_nth(tochange, i));
-        strarray_t *newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1);
+        newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1);
         strarray_free(existing);
         /* we'll be prepending the final target directory to newdirs before compacting */
 
@@ -2471,8 +2473,10 @@ out:
     strarray_free(orig);
     strarray_free(active);
     strarray_free(srcdirs);
+    strarray_free(newdirs);
     strarray_free(toreindex);
     strarray_free(tochange);
+    strarray_free(tocompact);
     buf_free(&mytempdir);
     buf_free(&buf);
     free(newdest);
