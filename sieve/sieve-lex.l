@@ -427,7 +427,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
 %%
 
-/* convert numerical string w/units to int */
+/* convert numerical string w/units to unsigned long */
 static unsigned long long tonum(const char *str)
 {
     char *units;
@@ -449,6 +449,7 @@ static unsigned long long tonum(const char *str)
     return val;
 }
 
+/* convert unicode to sequence of UTF-8 characters */
 static size_t unicode_to_utf8(unsigned char buf[], unsigned int code)
 {
     if (code <= 0x7F) {
@@ -543,7 +544,7 @@ static int decode_string(struct buf *buf)
                     return 0;
                 }
 
-                /* append decoded unicode char to buffer */
+                /* append decoded unicode char(s) to buffer */
                 buf_appendmap(&decode_buf, (char *) utf8, len);
             }
             else if (ndigits > 2) {
