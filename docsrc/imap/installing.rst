@@ -28,6 +28,7 @@ Optional Components
     :maxdepth: 2
 
     download/installation/manage-dav
+    download/installation/virus
 
 Setting up syslog
 =================
