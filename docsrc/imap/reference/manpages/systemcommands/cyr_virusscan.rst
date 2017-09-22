@@ -8,8 +8,7 @@
 **cyr_virusscan**
 =================
 
-Scan mailbox(es) or messages for viruses using configured virus scanner
-or provided search criteria.
+Scan for viruses using configured virus scanner or manage infected messages using search criteria.
 
 Synopsis
 ========
@@ -21,29 +20,34 @@ Synopsis
 Description
 ===========
 
-**cyr_virusscan** is used to scan the specified IMAP mailbox(es) with
-the configured virus scanner (currently only ClamAV is supported).  If
-no mboxpattern is given, **cyr_virusscan** works on all mailboxes.
+**cyr_virusscan** can be used to invoke an external virus scanner (currently
+only `ClamAV <https://www.clamav.net/documents/installing-clamav>`_ is
+supported) to scan specified IMAP mailboxes. If no mboxpattern is given,
+**cyr_virusscan** works on all mailboxes.
 
-Alternately, with the **-s** option, rather than **scanning** mailboxes
-for virus, the IMAP SEARCH string will be used as a specification of
-messages which are *assumed* to be infected, and will be treated as such.
-Useful for removing messages without a distinct signature, such as
-Phish.
+Alternately, with the **-s** option, the IMAP SEARCH string will be used as a
+specification of messages which are *assumed* to be infected, and will be
+treated as such.  The virus scanner is not invoked. Useful for removing messages
+without a distinct signature, such as Phish.
 
-A table of infected messages will be output.  However, with the remove
-flag, **-r**, infected messages will be removed.
+A table of infected messages will be output.
 
-With the notify flag, **-n**, notifications with message digest
-information will be appended to the inbox of the mailbox owner.  This
-flag is only operable in combination with **-r**.
+To remove infected messages, use the **-r** flag. Infected messages will be expunged
+from the user's mailbox.
 
-**cyr_virusscan** is may be configured to run periodically by cron(8)
+With the notify flag, **-n**, notifications will be appended to the inbox of the mailbox owner,
+containing message digest information for the affected mail.  This
+flag is only works in combination with **-r**.
+
+**cyr_virusscan** can be configured to run periodically by cron(8)
 via crontab(5) or your preferred method (i.e. /etc/cron.hourly), or by
-:cyrusman:`master(8)` via the EVENTS{} stanza in
+:cyrusman:`master(8)` via the EVENTS{} section in
 :cyrusman:`cyrus.conf(5)`.
 
 **cyr_virusscan** |default-conf-text|
+
+Note that Cyrus does not ship with any virus scanners: you need to install
+one separately to make use of it with Cyrus.
 
 Options
 =======
@@ -175,4 +179,4 @@ Files
 See Also
 ========
 
-:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`master(8)`, `ClamAV <https://www.clamav.net/documents/installing-clamav>`_
