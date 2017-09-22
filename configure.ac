@@ -1837,7 +1837,7 @@ dnl compile perl stuff and perl/cyradm
 dnl Make sure perl modules are in the build directory (which isn't necessarily
 dnl the source directory)
     AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
-    AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST:perl/sieve/managesieve/MANIFEST])
+    AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST])
     AC_CONFIG_LINKS([perl/imap/Cyrus/HeaderFile.pm:perl/imap/Cyrus/HeaderFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/CacheFile.pm:perl/imap/Cyrus/CacheFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/IndexFile.pm:perl/imap/Cyrus/IndexFile.pm])
@@ -1848,11 +1848,11 @@ dnl the source directory)
     AC_CONFIG_LINKS([perl/imap/IMAP/IMSP.pm:perl/imap/IMAP/IMSP.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
-    AC_CONFIG_FILES([perl/imap/MANIFEST:perl/imap/MANIFEST])
+    AC_CONFIG_FILES([perl/imap/MANIFEST])
     AC_CONFIG_LINKS([perl/annotator/Message.pm:perl/annotator/Message.pm])
     AC_CONFIG_LINKS([perl/annotator/AnnotateInlinedCIDs.pm:perl/annotator/AnnotateInlinedCIDs.pm])
     AC_CONFIG_LINKS([perl/annotator/Daemon.pm:perl/annotator/Daemon.pm])
-    AC_CONFIG_FILES([perl/annotator/MANIFEST:perl/annotator/MANIFEST])
+    AC_CONFIG_FILES([perl/annotator/MANIFEST])
 
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
