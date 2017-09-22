@@ -41,7 +41,7 @@ EXPORTED int is_number(char *s)
 }
 
 /* TODO: implement parse_string() with a proper yacc/bison lexer/parser */
-EXPORTED char *parse_string(const char *s, variable_list_t *vars)
+HIDDEN char *parse_string(const char *s, variable_list_t *vars)
 {
     /* protect against being called with no string - this is possible in some places */
     if (!s) return NULL;
