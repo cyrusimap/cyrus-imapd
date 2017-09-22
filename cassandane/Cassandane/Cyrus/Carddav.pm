@@ -383,6 +383,79 @@ sub test_sharing_crossdomain
     $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
 }
 
+sub test_sharing_contactpaths
+    :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.user1\@example.com");
+    $admintalk->setacl("user.user1\@example.com", "user1\@example.com", 'lrswipkxtecdan');
+    $admintalk->create("user.user2\@example.org");
+    $admintalk->setacl("user.user2\@example.org", "user2\@example.org", 'lrswipkxtecdan');
+
+    my $service = $self->{instance}->get_service("http");
+    my $talk1 = Net::CardDAVTalk->new(
+	user => 'user1@example.com',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+    my $talk2 = Net::CardDAVTalk->new(
+	user => 'user2@example.org',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    $talk2->NewAddressBook("Shared", name => "Shared Address Book");
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+PHOTO;VALUE=URL;TYPE=GIF:http://www.example.com/dir_photos/my_photo.gif
+TEL;TYPE=WORK,VOICE:(111) 555-1212
+TEL;TYPE=HOME,VOICE:(404) 555-1212
+ADR;TYPE=WORK:;;100 Waters Edge;Baytown;LA;30314;United States of America
+LABEL;TYPE=WORK:100 Waters Edge\\nBaytown\\, LA 30314\\nUnited States of Ameri
+ ca
+ADR;TYPE=HOME:;;42 Plantation St.;Baytown;LA;30314;United States of America
+LABEL;TYPE=HOME:42 Plantation St.\\nBaytown\\, LA 30314\\nUnited States of Ame
+ rica
+EMAIL;TYPE=PREF,INTERNET:forrestgump\@example.com
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+    $talk2->NewContact('Shared', $VCard);
+
+    $admintalk->setacl("user.user2.#addressbooks.Shared\@example.org", "user1\@example.com", 'lrsn');
+
+    my $Addressbooks = $talk1->GetAddressBooks();
+
+    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Default', $Addressbooks->[0]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
+    $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
+
+    $self->assert_str_equals('Shared Address Book', $Addressbooks->[1]{name});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.org/Shared', $Addressbooks->[1]{path});
+    $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.org/Shared/', $Addressbooks->[1]{href});
+    $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
+
+    my $Events = $talk1->GetContacts($Addressbooks->[1]{path});
+    # is a subpath of the contact
+    $self->assert_matches(qr/^$Addressbooks->[1]{path}/, $Events->[0]{CPath});
+}
+
 sub test_control_chars
     :min_version_3_0
 {
