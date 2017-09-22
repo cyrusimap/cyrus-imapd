@@ -154,6 +154,7 @@ perl/annotator/MYMETA.json
 perl/annotator/MYMETA.yml
 perl/annotator/blib/
 perl/annotator/pm_to_blib
+perl/annotator/MANIFEST
 perl/imap/Cyrus-IMAP-*/
 perl/imap/IMAP.bs
 perl/imap/IMAP.c
@@ -161,6 +162,7 @@ perl/imap/Makefile.old
 perl/imap/Makefile.PL
 perl/imap/MYMETA.json
 perl/imap/MYMETA.yml
+perl/imap/MANIFEST
 perl/imap/blib/
 perl/imap/cyradm
 perl/imap/pm_to_blib
@@ -169,6 +171,7 @@ perl/sieve/managesieve/Makefile.old
 perl/sieve/managesieve/Makefile.PL
 perl/sieve/managesieve/MYMETA.json
 perl/sieve/managesieve/MYMETA.yml
+perl/sieve/managesieve/MANIFEST
 perl/sieve/managesieve/blib/
 perl/sieve/managesieve/managesieve.bs
 perl/sieve/managesieve/managesieve.c
