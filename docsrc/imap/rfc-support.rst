@@ -149,7 +149,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2617`
 
-    HTTP Authentication: Basic and Digest Access Authentication
+    HTTP Authentication: Basic and Digest Access Authentication,
+    updated by :rfc:`7615`, :rfc:`7616`, :rfc:`7617`.
 
 :rfc:`2817`
 
@@ -468,6 +469,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Notification Mechanism: mailto
 
+:rfc:`5463`
+
+    Sieve Email Filtering: Ihave Extension
+
 :rfc:`5464`
 
     The IMAP METADATA Extension
@@ -545,10 +550,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`6131`
 
     Sieve Vacation Extension: "Seconds" Parameter
-
-:rfc:`5463`
-
-    Sieve Email Filtering: Ihave Extension
 
 :rfc:`6154`
 
@@ -645,7 +646,29 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`7529`
 
-    Non-Gregorian Recurrence Rules in the Internet Calendaring and Scheduling Core Object Specification (iCalendar) (obsoletes draft-ietf-calext-rscale)
+    Non-Gregorian Recurrence Rules in the Internet Calendaring and
+    Scheduling Core Object Specification (iCalendar)
+
+:rfc:`7540`
+
+      Hypertext Transfer Protocol Version 2 (HTTP/2)
+
+:rfc:`7615`
+
+    HTTP Authentication-Info and Proxy-Authentication-Info Response
+    Header Fields
+
+:rfc:`7616`
+
+    HTTP Digest Access Authentication
+
+:rfc:`7617`
+
+    The 'Basic' HTTP Authentication Scheme
+
+:rfc:`7694`
+
+    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
 :rfc:`7808`
 
@@ -658,6 +681,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7953`
 
     Calendar Availability
+
+:rfc:`8144`
+
+    Use of the Prefer Header Field in Web Distributed Authoring and
+    Versioning (WebDAV)
+
 
 IETF RFC Drafts
 ===============
@@ -695,29 +724,6 @@ draft-desruisseaux-ischedule
 draft-thomson-hybi-http-timeout
 
     Hypertext Transfer Protocol (HTTP) Keep-Alive Header
-
-draft-murchison-webdav-prefer
-
-    Use of the Prefer Header Field in Web Distributed Authoring and
-    Versioning (WebDAV)
-
-
-draft-ietf-httpauth-basicauth-update
-
-    The 'Basic' HTTP Authentication Scheme
-
-draft-ietf-httpauth-digest
-
-    HTTP Digest Access Authentication
-
-draft-ietf-httpbis-auth-info
-
-    The Hypertext Transfer Protocol (HTTP) Authentication-Info and
-    Proxy- Authentication-Info Response Header Fields
-
-draft-ietf-httpbis-cice
-
-    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
 ..
 
