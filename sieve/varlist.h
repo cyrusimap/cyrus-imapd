@@ -22,15 +22,15 @@ typedef struct variable_list {
 #define VL_PARSED_STRINGS "@@STRINGS_PARSED@@"
 #define VL_MATCH_VARS "@@MATCH_VARS@@"
 
-EXPORTED variable_list_t *varlist_new(void);
+variable_list_t *varlist_new(void);
 
-EXPORTED void varlist_fini(variable_list_t *vl);
+void varlist_fini(variable_list_t *vl);
 
-EXPORTED void varlist_free(variable_list_t *vl);
+void varlist_free(variable_list_t *vl);
 
-EXPORTED variable_list_t *varlist_extend(variable_list_t *vl);
+variable_list_t *varlist_extend(variable_list_t *vl);
 
-EXPORTED variable_list_t *varlist_select(variable_list_t *vl, const char *name);
-EXPORTED variable_list_t *varlist_end(variable_list_t *vl);
+variable_list_t *varlist_select(variable_list_t *vl, const char *name);
+variable_list_t *varlist_end(variable_list_t *vl);
 
 #endif /* VARLIST_H_ */

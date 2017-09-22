@@ -32,7 +32,7 @@ static int verify_flag(char *f)
     return 1;
 }
 
-EXPORTED int verify_flaglist(strarray_t *sl)
+int verify_flaglist(strarray_t *sl)
 {
     int i;
     char *joined;
