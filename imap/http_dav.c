@@ -5349,14 +5349,18 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
     buf_printf(buf, "%s/", urlprefix);
 
     if (userid) {
+        mbname_t *usermbname = mbname_from_userid(userid);
         if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+        if (*userid && !mbname_domain(usermbname)) mbname_set_domain(usermbname, httpd_extradomain);
         const char *owner = mbname_userid(mbname);
         if (!owner) owner = "";
+        const char *thisuser = mbname_userid(usermbname);
+        if (!thisuser) thisuser = "";
 
         if (mbox_owner) *mbox_owner = xstrdup(owner);
 
         if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
-            if (strcmp(owner, userid) && strstr(urlprefix, "addressbooks"))
+            if (strcmp(owner, thisuser) && strstr(urlprefix, "addressbooks"))
                 buf_printf(buf, "%s/%s/", "zzzz", owner);
             else
                 buf_printf(buf, "%s/%s/", USER_COLLECTION_PREFIX, owner);
@@ -5365,15 +5369,16 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
             buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
 
             if (*userid) {
-                buf_printf(buf, "%s/", userid);
+                buf_printf(buf, "%s/", thisuser);
 
-                if (strcmp(owner, userid)) {
+                if (strcmp(owner, thisuser)) {
                     /* Encode shared collection as: <owner> "." <mboxname> */
                     buf_printf(buf, "%s%c", owner, SHARED_COLLECTION_DELIM);
                 }
             }
             else buf_printf(buf, "%s/", owner);
         }
+        mbname_free(&usermbname);
     }
 
     len = buf_len(buf);
@@ -5465,7 +5470,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
     if (!fctx->req_tgt->resource) {
         len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
-                                  mboxname, fctx->req_tgt->userid, NULL);
+                                  mboxname, httpd_userid, NULL);
 
         /* copy it all back into place... in theory we should check against
          * 'last' and make sure it doesn't change from the original request.
