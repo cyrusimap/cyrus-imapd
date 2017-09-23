@@ -3026,9 +3026,14 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
         if (prop->type == XML_ELEMENT_NODE) {
             struct propfind_entry_list *nentry;
             xmlChar *name, *namespace = NULL;
-            xmlNsPtr ns = prop->ns;
-            const char *ns_href = (const char *) ns->href;
+            xmlNsPtr ns;
+            const char *ns_href;
             unsigned i;
+
+            if (!prop->ns) return HTTP_BAD_REQUEST;
+
+            ns = prop->ns;
+            ns_href = (const char *) ns->href;
 
             if (fctx->mode == PROPFIND_EXPAND) {
                 /* Get name/namespace from <property> */
@@ -3359,8 +3364,9 @@ int meth_acl(struct transaction_t *txn, void *params)
     indoc = root->doc;
 
     /* Make sure its an DAV:acl element */
-    if (xmlStrcmp(root->name, BAD_CAST "acl")) {
-        txn->error.desc = "Missing acl element in ACL request\r\n";
+    if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+        xmlStrcmp(root->name, BAD_CAST "acl")) {
+        txn->error.desc = "Missing DAV:acl element in ACL request";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -4957,10 +4963,11 @@ int meth_lock(struct transaction_t *txn, void *params)
         }
         if (ret) goto done;
 
-        /* Check for correct root element */
+        /* Make sure its a DAV:lockinfo element */
         indoc = root->doc;
-        if (xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
-            txn->error.desc = "Incorrect root element in XML request\r\n";
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+            xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
+            txn->error.desc = "Missing DAV:lockinfo element in LOCK request";
             ret = HTTP_BAD_MEDIATYPE;
             goto done;
         }
@@ -5141,13 +5148,17 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (root) {
         /* Check for correct root element (lowercase method name ) */
+        const char *ns_href;
+
         indoc = root->doc;
 
         buf_setcstr(&txn->buf, http_methods[txn->meth].name);
-        r = xmlStrcmp(root->name, BAD_CAST buf_lcase(&txn->buf));
-        if (r) {
-            txn->error.desc = "Incorrect root element in XML request\r\n";
-            ret = HTTP_BAD_MEDIATYPE;
+        ns_href = buf_len(&txn->buf) > 5 ? XML_NS_CALDAV : XML_NS_DAV;
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST ns_href) ||
+            xmlStrcmp(root->name, BAD_CAST buf_lcase(&txn->buf))) {
+            txn->error.desc =
+                "Incorrect root element in MKCOL/MKCALENDAR request";
+            ret = HTTP_BAD_REQUEST;
             goto done;
         }
 
@@ -5588,9 +5599,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     else {
         indoc = root->doc;
 
-        /* Make sure its a propfind element */
-        if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-            txn->error.desc = "Missing propfind element in PROPFIND request";
+        /* Make sure its a DAV:propfind element */
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+            xmlStrcmp(root->name, BAD_CAST "propfind")) {
+            txn->error.desc = "Missing DAV:propfind element in PROPFIND request";
             ret = HTTP_BAD_REQUEST;
             goto done;
         }
@@ -5679,7 +5691,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.ret = &ret;
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(props, &fctx);
+    ret = preload_proplist(props, &fctx);
+    if (ret) goto done;
 
     /* Generate responses */
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
@@ -5903,10 +5916,11 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     indoc = root->doc;
 
-    /* Make sure its a propertyupdate element */
-    if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
+    /* Make sure its a DAV:propertyupdate element */
+    if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+        xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
         txn->error.desc =
-            "Missing propertyupdate element in PROPPATCH request\r\n";
+            "Missing DAV:propertyupdate element in PROPPATCH request";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -7925,7 +7939,10 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Check the report type against our supported list */
     for (report = rparams->reports; report && report->name; report++) {
-        if (!xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
+        if (inroot->ns &&
+            !xmlStrcmp(inroot->ns->href,
+                       BAD_CAST known_namespaces[report->ns].href) &&
+            !xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
     }
     if (!report || !report->name) {
         syslog(LOG_WARNING, "REPORT %s", inroot->name);
