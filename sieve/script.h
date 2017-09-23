@@ -50,7 +50,6 @@
 #include "interp.h"
 #include "tree.h"
 #include "util.h"
-#include "varlist.h"
 
 struct sieve_script {
     sieve_interp_t interp;

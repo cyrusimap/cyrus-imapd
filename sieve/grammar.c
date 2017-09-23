@@ -13,7 +13,7 @@
 #include "xmalloc.h"
 
 
-EXPORTED int is_identifier(char *s)
+HIDDEN int is_identifier(char *s)
 {
     /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
 
@@ -30,7 +30,7 @@ EXPORTED int is_identifier(char *s)
     return 1;
 }
 
-EXPORTED int is_number(char *s)
+static int is_number(char *s)
 {
     char *tail;
 

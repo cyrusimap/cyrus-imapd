@@ -51,7 +51,6 @@
 #include "script.h"
 #include "parseaddr.h"
 #include "flags.h"
-#include "grammar.h"
 #include "variables.h"
 #include "varlist.h"
 
