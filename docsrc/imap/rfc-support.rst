@@ -691,14 +691,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 IETF RFC Drafts
 ===============
 
-draft-hickman-netscape-ssl
-
-    The SSL Protocol Version 2.0
-
-draft-daboo-imap-annotatemore
-
-    ANNOTATEMORE Draft
-
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas
