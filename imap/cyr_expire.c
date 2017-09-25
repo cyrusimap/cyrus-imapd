@@ -1,6 +1,6 @@
 /* cyr_expire.c -- Program to expire deliver.db entries and messages
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -62,6 +62,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <libgen.h>
 
 #include <sasl/sasl.h>
 
@@ -217,18 +218,9 @@ static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
     cyrus_done();
 }
 
-static void set_progname(const char *str)
-{
-    const char *slash = strrchr(str, '/');
-    if (slash)
-        progname = slash + 1;
-    else
-        progname = str;
-}
-
 static void usage(void)
 {
-    fprintf(stderr, "Usage: %s [OPTIONS]\n", progname);
+    fprintf(stderr, "Usage: %s [OPTIONS] {mailbox|users}\n", progname);
     fprintf(stderr, "Expire messages and duplicate delivery database entries.\n");
     fprintf(stderr, "\n");
 
@@ -248,7 +240,7 @@ static void usage(void)
 
     fprintf(stderr, "\n");
 
-    exit(-1);
+    exit(EC_USAGE);
 }
 
 /*
@@ -873,7 +865,7 @@ int main(int argc, char *argv[])
     int r = 0;
     struct cyr_expire_ctx ctx = zero_ctx;
 
-    set_progname(argv[0]);
+    progname = basename(argv[0]);
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);

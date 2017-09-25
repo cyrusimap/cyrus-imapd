@@ -1,6 +1,6 @@
 /* reconstruct.c -- program to reconstruct a mailbox
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,6 +54,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <libgen.h>
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 #endif
@@ -113,6 +114,9 @@ struct reconstruct_rock {
     hash_table visited;
 };
 
+/* Program name */
+static const char *progname = NULL;
+
 /* forward declarations */
 static void do_mboxlist(void);
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
@@ -140,6 +144,8 @@ int main(int argc, char **argv)
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
+
+    progname = basename(argv[0]);
 
     construct_hash_table(&unqid_table, 2047, 1);
 
@@ -382,9 +388,30 @@ int main(int argc, char **argv)
 
 static void usage(void)
 {
-    fprintf(stderr,
-            "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfxu] mailbox...\n");
-    fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
+    fprintf(stderr, "Usage: %s [OPTIONS]\n", progname);
+    fprintf(stderr, "A tool to reconstruct mailboxes.\n");
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf");
+    fprintf(stderr, "-p <partition>     use this indicated partition for search\n");
+    fprintf(stderr, "-x                 do not import metadata, create new\n");
+    fprintf(stderr, "-r                 recursively reconstruct\n");
+    fprintf(stderr, "-f                 examine filesystem underneath the mailbox\n");
+    fprintf(stderr, "-s                 don't stat underlying files\n");
+    fprintf(stderr, "-q                 run quietly\n");
+    fprintf(stderr, "-n                 do not make changes\n");
+    fprintf(stderr, "-G                 force re-parsing(checks GUID correctness)\n");
+    fprintf(stderr, "-R                 perform UID upgrade operation on GUID mismatched files\n");
+    fprintf(stderr, "-U                 use this if there are corrupt message files in spool\n");
+    fprintf(stderr, "                   WARNING: this option deletes corrupted message files permanently\n");
+    fprintf(stderr, "-o                 ignore odd files in mailbox disk directories\n");
+    fprintf(stderr, "-O                 delete odd files(unlike -o)\n");
+    fprintf(stderr, "-M                 prefer mailboxes.db over cyrus.header\n");
+    fprintf(stderr, "-V <version>       Change the cyrus.index minor version to the version specified\n");
+    fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");
+
+    fprintf(stderr, "\n");
+
     exit(EC_USAGE);
 }
 

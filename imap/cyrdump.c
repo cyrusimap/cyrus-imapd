@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,6 +44,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <libgen.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
@@ -65,6 +66,7 @@
 #include "imap/imap_err.h"
 
 static int verbose = 0;
+static const char *progname = NULL;
 
 static int dump_me(struct findall_data *data, void *rock);
 static void print_seq(const char *tag, const char *attrib,
@@ -85,6 +87,8 @@ int main(int argc, char *argv[])
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
         fatal("must run as the Cyrus user", EC_USAGE);
     }
+
+    progname = basename(argv[0]);
 
     while ((option = getopt(argc, argv, "vC:")) != EOF) {
         switch (option) {
@@ -125,7 +129,14 @@ int main(int argc, char *argv[])
 
 static int usage(const char *name)
 {
-    fprintf(stderr, "usage: %s [-v] [mboxpattern ...]\n", name);
+    fprintf(stderr, "Usage: %s [OPTIONS] {mailboxes}\n", progname);
+    fprintf(stderr, "Dumps out a basic copy of mailbox data to stdout.\n");
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "-C <config-file>         use <config-file> instead of config from imapd.conf\n");
+    fprintf(stderr, "-v                       enable verbose output\n");
+
+    fprintf(stderr, "\n");
 
     exit(EC_USAGE);
 }
