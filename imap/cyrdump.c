@@ -71,7 +71,7 @@ static const char *progname = NULL;
 static int dump_me(struct findall_data *data, void *rock);
 static void print_seq(const char *tag, const char *attrib,
                       unsigned *seq, int n);
-static int usage(const char *name);
+static int usage(void);
 
 struct incremental_record {
     unsigned incruid;
@@ -101,13 +101,13 @@ int main(int argc, char *argv[])
             break;
 
         default:
-            usage(argv[0]);
+            usage();
             break;
         }
     }
 
     if (optind == argc) {
-        usage(argv[0]);
+        usage();
     }
 
     cyrus_init(alt_config, "dump", 0, CONFIG_NEED_PARTITION_DATA);
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-static int usage(const char *name)
+static int usage(void)
 {
     fprintf(stderr, "Usage: %s [OPTIONS] {mailboxes}\n", progname);
     fprintf(stderr, "Dumps out a basic copy of mailbox data to stdout.\n");
