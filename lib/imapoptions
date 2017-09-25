@@ -952,7 +952,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "IMIP" notifications which are based on
    the RFC 6047.  If not set, "IMIP" notifications are disabled. */
 
-{ "implicit_owner_rights", "lkxa", STRING }
+{ "implicit_owner_rights", "lkxan", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
 
 # Commented out - there's no such thing as "@include", but we need
