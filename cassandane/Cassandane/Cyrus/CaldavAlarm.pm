@@ -1384,7 +1384,6 @@ EOF
 
     $self->assert_alarms();
 
-    # add an hour for daylight savings safety
     $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 5 );
 
     $self->assert_alarms();
@@ -1393,8 +1392,7 @@ EOF
 
     $self->assert_alarms();
 
-    # add an hour for daylight savings safety
-    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + (86400*7) + 5 + 3600 );
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + (86400*7) + 5);
 
     # should be a new alarm here
     $self->assert_alarms({summary => 'Simple'});
