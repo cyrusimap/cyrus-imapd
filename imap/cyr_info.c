@@ -1,4 +1,4 @@
-/* ctl_info.c - tool to get information about cyrus
+/* cyr_info.c - tool to get information about cyrus
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
