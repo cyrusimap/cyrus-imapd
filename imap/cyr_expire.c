@@ -782,8 +782,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     args->expire_seconds = -1;
     args->expunge_seconds = -1;
     args->do_expunge = true;
-    /* do_cid_expire defaults to whatever IMAP options are set */
-    args->do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
+    args->do_cid_expire = -1;
 
     while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtch")) != EOF) {
         switch (opt) {
@@ -875,6 +874,10 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
 
     cyr_expire_init(progname, &ctx);
+
+    /* do_cid_expire defaults to whatever IMAP options are set */
+    if (ctx.args.do_cid_expire < 0)
+        ctx.args.do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {
