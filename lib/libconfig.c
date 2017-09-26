@@ -87,6 +87,8 @@ EXPORTED unsigned config_maxquoted;
 EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
 
+static int config_loaded;
+
 extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
@@ -95,6 +97,7 @@ static void config_read_file(const char *filename);
 
 EXPORTED const char *config_getstring(enum imapopt opt)
 {
+    assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert((imapopts[opt].t == OPT_STRING) ||
            (imapopts[opt].t == OPT_STRINGLIST));
@@ -104,6 +107,7 @@ EXPORTED const char *config_getstring(enum imapopt opt)
 
 EXPORTED int config_getint(enum imapopt opt)
 {
+    assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_INT);
 #if (SIZEOF_LONG != 4)
@@ -118,6 +122,7 @@ EXPORTED int config_getint(enum imapopt opt)
 
 EXPORTED int config_getswitch(enum imapopt opt)
 {
+    assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_SWITCH);
 #if (SIZEOF_LONG != 4)
@@ -132,6 +137,7 @@ EXPORTED int config_getswitch(enum imapopt opt)
 
 EXPORTED enum enum_value config_getenum(enum imapopt opt)
 {
+    assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_ENUM);
 
@@ -140,6 +146,7 @@ EXPORTED enum enum_value config_getenum(enum imapopt opt)
 
 EXPORTED unsigned long config_getbitfield(enum imapopt opt)
 {
+    assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_BITFIELD);
 
@@ -352,6 +359,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     char buf[4096];
     char *p;
     int ival;
+
+    config_loaded = 1;
 
     /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if (alt_config) config_filename = xstrdup(alt_config);
