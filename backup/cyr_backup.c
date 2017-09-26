@@ -261,10 +261,6 @@ int main(int argc, char **argv)
     mbname_t *mbname = NULL;
     int i, opt, r = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:fmuv")) != EOF) {
         switch (opt) {
         case 'C':

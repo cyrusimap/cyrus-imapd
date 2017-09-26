@@ -108,10 +108,6 @@ int main(int argc, char *argv[])
     const char *fname;
     char *alt_config = NULL, *tofree = NULL;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
 
     while ((opt = getopt(argc, argv, "C:E:")) != EOF) {

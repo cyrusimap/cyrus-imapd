@@ -808,10 +808,6 @@ int main(int argc, char **argv)
     int r = 0;
     int recursive = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*ismaster*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((c = getopt(argc, argv, "durzAbvRFC:T:")) != EOF) {
         switch (c) {
         case 'd':

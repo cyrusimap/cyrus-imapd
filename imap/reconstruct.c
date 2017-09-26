@@ -144,10 +144,6 @@ int main(int argc, char **argv)
     char *start_part = NULL;
     struct reconstruct_rock rrock = { NULL, HASH_TABLE_INITIALIZER };
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     construct_hash_table(&unqid_table, 2047, 1);
 
     while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUMIoOnV:u")) != EOF) {

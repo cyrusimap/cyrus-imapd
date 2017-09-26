@@ -83,10 +83,6 @@ int main(int argc, char *argv[])
     char cmd = '\0';
     int opt;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:uUvmMacqnsb")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
