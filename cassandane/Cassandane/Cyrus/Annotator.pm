@@ -54,7 +54,11 @@ sub new
     $config->set(
         annotation_callout => '@basedir@/conf/socket/annotator.sock',
     );
-    return $class->SUPER::new({ config => $config, deliver => 1 }, @_);
+    return $class->SUPER::new({
+        config => $config,
+        deliver => 1,
+        start_instances => 0,
+    }, @_);
 }
 
 sub set_up
@@ -63,11 +67,16 @@ sub set_up
     $self->SUPER::set_up();
 }
 
-sub _create_instances
+sub tear_down
+{
+    my ($self) = @_;
+    $self->SUPER::tear_down();
+}
+
+sub start_my_instances
 {
     my ($self) = @_;
 
-    $self->SUPER::_create_instances();
     $self->{instance}->add_daemon(
         name => 'annotator',
         port => $self->{instance}->{config}->get('annotation_callout'),
@@ -79,17 +88,15 @@ sub _create_instances
                 '--pidfile', '@basedir@/run/annotator.pid',
                 );
         });
-}
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+    $self->_start_instances();
 }
 
 sub test_add_annot_deliver
 {
     my ($self) = @_;
+
+    $self->start_my_instances();
 
     my $entry = '/comment';
     my $attrib = 'value.shared';
@@ -112,6 +119,8 @@ sub test_add_annot_deliver
 sub test_add_annot_deliver_tomailbox
 {
     my ($self) = @_;
+
+    $self->start_my_instances();
 
     xlog "Testing adding an annotation from the Annotator";
     xlog "when delivering to a non-INBOX mailbox [IRIS-955]";
@@ -144,6 +153,8 @@ sub test_set_system_flag_deliver
 {
     my ($self) = @_;
 
+    $self->start_my_instances();
+
     my $flag = '\\Flagged';
 
     my %exp;
@@ -162,6 +173,8 @@ sub test_set_system_flag_deliver
 sub test_set_user_flag_deliver
 {
     my ($self) = @_;
+
+    $self->start_my_instances();
 
     # Data thanks to http://hipsteripsum.me
     my $flag = '$Artisanal';
@@ -182,6 +195,8 @@ sub test_set_user_flag_deliver
 sub test_reconstruct_after_delivery
 {
     my ($self) = @_;
+
+    $self->start_my_instances();
 
     xlog "Testing reconstruct after delivery";
 
@@ -228,6 +243,8 @@ sub test_fetch_after_annotate
 {
     # This is a test for https://github.com/cyrusimap/cyrus-imapd/issues/2071
     my ($self) = @_;
+
+    $self->start_my_instances();
 
     my $flag = '$X-ME-Annot-2';
     my $imaptalk = $self->{store}->get_client();
@@ -286,6 +303,74 @@ sub test_fetch_after_annotate
     $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '1');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers3, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+}
+
+sub test_annotator_callout_disabled
+{
+    my ($self) = @_;
+    $self->{instance}->{config}->set(annotation_callout_disable_append => 'yes');
+
+    $self->start_my_instances();
+
+    my $flag = '$X-ME-Annot-2';
+    my $imaptalk = $self->{store}->get_client();
+    my $modseq;
+    my %msg;
+
+    $imaptalk->select("INBOX");
+
+    xlog "Create Message A";
+    $msg{A} = $self->{gen}->generate(subject => "Message A");
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{A}->set_body("set_flag $flag\r\n");
+    $self->{instance}->deliver($msg{A});
+
+    $msg{A}->set_attributes(flags => ['\\Recent', $flag]);
+
+    $self->{store}->set_fetch_attributes('uid', 'flags', 'modseq');
+
+    xlog "Fetch message A";
+    my %handlers1;
+    {
+        $handlers1{fetch} = sub {
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 2);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+            $self->assert_str_equals($_[1]{flags}[1], "\$X-ME-Annot-2");
+        };
+    }
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers1, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Clear the $flag from the message A.";
+    my %handlers2;
+    {
+        $handlers2{fetch} = sub {
+            $modseq = $_[1]{modseq}[0];
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 1);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+        };
+    }
+    $imaptalk->store('1', '-flags', "($flag)");
+    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers2, '1', '(flags modseq)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Run xrunannotator";
+    my %handlers3;
+    {
+        $handlers3{fetch} = sub {
+            $self->assert($_[1]{modseq}[0] == $modseq);
+            $self->assert_num_equals(scalar @{$_[1]{flags}}, 1);
+            $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
+        };
+    }
+    $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '1');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Nothing should have changed from the previous run of uid fetch.";
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers3, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }
