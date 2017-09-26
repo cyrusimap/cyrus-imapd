@@ -866,10 +866,6 @@ int main(int argc, char *argv[])
 
     progname = basename(argv[0]);
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     if (parse_args(argc, argv, &ctx.args) != 0)
         exit(EXIT_FAILURE);
 

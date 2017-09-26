@@ -202,10 +202,6 @@ int main(int argc, char **argv)
     struct mode_data mdata = { BUF_INITIALIZER, 0 };
     int r = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*ismaster*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((c = getopt(argc, argv, "C:dD:fFk:lt:u:vx")) != EOF) {
         switch (c) {
             case 'C': /* alt config file */

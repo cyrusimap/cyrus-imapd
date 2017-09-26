@@ -350,10 +350,6 @@ int main(int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, ":AC:DFPSVcfjmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':

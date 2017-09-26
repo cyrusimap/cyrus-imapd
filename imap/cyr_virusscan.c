@@ -250,10 +250,6 @@ int main (int argc, char *argv[]) {
     char *search_str = NULL;
     struct scan_rock srock;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((option = getopt(argc, argv, "C:s:rnv")) != EOF) {
         switch (option) {
         case 'C': /* alt config file */

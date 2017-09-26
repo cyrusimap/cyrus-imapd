@@ -231,6 +231,12 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
 
+    /* changed user if needed */
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
+
+
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     facility = config_getstring(IMAPOPT_SYSLOG_FACILITY);
 

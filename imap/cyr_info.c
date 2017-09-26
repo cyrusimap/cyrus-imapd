@@ -353,10 +353,6 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     char *srvname = "cyr_info";
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:M:n:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */

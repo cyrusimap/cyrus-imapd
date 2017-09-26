@@ -131,10 +131,6 @@ int main(int argc,char **argv)
     int do_report = 1;
     char *alt_config = NULL, *domain = NULL;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:d:fqJZu")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */

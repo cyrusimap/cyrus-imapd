@@ -149,10 +149,6 @@ int main(int argc, char **argv)
     int record_flag = 0;
     int r = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((c = getopt(argc, argv, "Rf:m:pr:stvC:")) != EOF) {
         switch (c) {
 

@@ -118,10 +118,6 @@ int main(int argc,char **argv)
 
     strcpy(pattern, "*");
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     report_end_time = now;
 
     while ((opt = getopt(argc, argv, "C:oud:D:p:l")) != EOF) {
