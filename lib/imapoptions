@@ -272,6 +272,8 @@ Blank lines and lines beginning with ``#'' are ignored.
    or flags to a message when it is appended to a mailbox.  The path can
    be either an executable (including a script), or a UNIX domain
    socket.  */
+{ "annotation_callout_disable_append", 0, SWITCH }
+/* Disables annotations on append with xrunannotator */
 
 { "aps_topic", NULL, STRING }
 /* Topic for Apple Push Service registration. */

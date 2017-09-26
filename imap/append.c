@@ -1223,6 +1223,11 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
 
+    if (config_getswitch(IMAPOPT_ANNOTATION_CALLOUT_DISABLE_APPEND)) {
+        syslog(LOG_DEBUG, "append_run_annotator: Append disabled.");
+        return 0;
+    }
+
     r = msgrecord_extract_flags(msgrec, as->userid, &flags);
     if (r) goto out;
     r = msgrecord_extract_annots(msgrec, &user_annots);
