@@ -1495,8 +1495,8 @@ static int export_calendar(struct transaction_t *txn)
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
-        response_header(HTTP_OK, txn);
-        return 0;
+        ret = HTTP_OK;
+        goto done;
     }
 
     /* iCalendar data in response should not be transformed */
