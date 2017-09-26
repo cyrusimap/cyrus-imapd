@@ -623,7 +623,7 @@ static void sighandler(int sig __attribute((unused)))
 static int do_archive(struct cyr_expire_ctx *ctx)
 {
     if (ctx->args.archive_seconds >= 0) {
-        syslog(LOG_NOTICE, ">> do_archive: archive_seconds(%d) >= 0\n",
+        syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0\n",
                ctx->args.archive_seconds);
         ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds;
 
