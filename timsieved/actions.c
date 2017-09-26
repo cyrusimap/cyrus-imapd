@@ -65,6 +65,7 @@
 #include "imap/global.h"
 #include "imap/sync_log.h"
 #include "imap/tls.h"
+#include "imap/user.h"
 #include "imap/version.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
@@ -76,62 +77,21 @@
 extern int sieved_userisadmin;
 extern sieve_interp_t *interp;
 
-static char *sieve_dir_config = NULL;
-
 static const char *sieved_userid = NULL;
-
-int actions_init(void)
-{
-  int sieve_usehomedir = 0;
-
-  sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-
-  if (!sieve_usehomedir) {
-      sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
-  } else {
-      /* can't use home directories with timsieved */
-      syslog(LOG_ERR, "can't use home directories");
-
-      return TIMSIEVE_FAIL;
-  }
-
-  return TIMSIEVE_OK;
-}
 
 int actions_setuser(const char *userid)
 {
-  char userbuf[1024], *user, *domain = NULL;
-  size_t size = 1024, len;
-  int result;
-
-  char *sieve_dir = (char *) xzmalloc(size+1);
-
-  sieved_userid = xstrdup(userid);
-  user = (char *) userid;
-  if (config_virtdomains && strchr(user, '@')) {
-      /* split the user and domain */
-      strlcpy(userbuf, userid, sizeof(userbuf));
-      user = userbuf;
-      if ((domain = strrchr(user, '@'))) *domain++ = '\0';
-  }
-
-  len = strlcpy(sieve_dir, sieve_dir_config, size);
-
-  if (domain) {
-      char dhash = (char) dir_hash_c(domain, config_fulldirhash);
-      len += snprintf(sieve_dir+len, size-len, "%s%c/%s",
-                      FNAME_DOMAINDIR, dhash, domain);
-  }
-
+  char *sieve_dir;
   if (sieved_userisadmin) {
-      strlcat(sieve_dir, "/global", size);
-  }
-  else {
-      char hash = (char) dir_hash_c(user, config_fulldirhash);
-      snprintf(sieve_dir+len, size-len, "/%c/%s", hash, user);
-  }
+      char *domain = strchr(userid, '@');
+      if (domain) {
+          char x[2048];
+          snprintf(x, sizeof(x), "@%s", domain);
+          sieve_dir = user_sieve_path(x);
+      } else sieve_dir = user_sieve_path(NULL);
+  } else sieve_dir = user_sieve_path(userid);
 
-  result = chdir(sieve_dir);
+  int result = chdir(sieve_dir);
   if (result != 0) {
       result = cyrus_mkdir(sieve_dir, 0755);
       if (!result) result = mkdir(sieve_dir, 0755);

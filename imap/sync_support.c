@@ -986,7 +986,7 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
-    const char *sieve_path = user_sieve_path(userid);
+    char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     char active[2048];
     DIR *mbdir;
@@ -1033,6 +1033,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
         free(result);
     }
     closedir(mbdir);
+    free(sieve_path);
 
     if (active[0])
         sync_sieve_list_set_active(list, active);
@@ -1042,7 +1043,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
-    const char *sieve_path = user_sieve_path(userid);
+    char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     FILE *file;
     struct stat sbuf;
@@ -1054,6 +1055,7 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
         *sizep = 0;
 
     snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
+    free(sieve_path);
 
     file = fopen(filename, "r");
     if (!file) return NULL;
@@ -1085,7 +1087,6 @@ int sync_sieve_upload(const char *userid, const char *name,
                       time_t last_update, const char *content,
                       size_t len)
 {
-    const char *sieve_path = user_sieve_path(userid);
     char tmpname[2048];
     char newname[2048];
     char *ext;
@@ -1100,10 +1101,12 @@ int sync_sieve_upload(const char *userid, const char *name,
         return 0;
     }
 
+    char *sieve_path = user_sieve_path(userid);
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
         if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
         if (mkdir(sieve_path, 0755) == -1 && errno != EEXIST) {
             syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
+            free(sieve_path);
             return IMAP_IOERROR;
         }
     }
@@ -1111,6 +1114,7 @@ int sync_sieve_upload(const char *userid, const char *name,
     snprintf(tmpname, sizeof(tmpname), "%s/sync_tmp-%lu",
              sieve_path, (unsigned long)getpid());
     snprintf(newname, sizeof(newname), "%s/%s", sieve_path, name);
+    free(sieve_path);
 
     if ((file=fopen(tmpname, "w")) == NULL) {
         return IMAP_IOERROR;
@@ -1148,7 +1152,7 @@ int sync_sieve_upload(const char *userid, const char *name,
 
 int sync_sieve_activate(const char *userid, const char *name)
 {
-    const char *sieve_path = user_sieve_path(userid);
+    char *sieve_path = user_sieve_path(userid);
     char target[2048];
     char active[2048];
     char tmp[2048];
@@ -1162,6 +1166,7 @@ int sync_sieve_activate(const char *userid, const char *name)
     sieve_rebuild(NULL, bc_fname, 0, NULL);
     free(bc_fname);
 #endif
+    free(sieve_path);
 
     /* N.B symlink() does NOT verify target for anything but string validity,
      * so activation of a nonexistent script will report success.
@@ -1184,11 +1189,12 @@ int sync_sieve_activate(const char *userid, const char *name)
 
 int sync_sieve_deactivate(const char *userid)
 {
-    const char *sieve_path = user_sieve_path(userid);
+    char *sieve_path = user_sieve_path(userid);
     char active[2048];
 
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
+    snprintf(active, sizeof(active), "%s/defaultbc", sieve_path);
     unlink(active);
+    free(sieve_path);
 
     sync_log_sieve(userid);
 
@@ -1197,7 +1203,7 @@ int sync_sieve_deactivate(const char *userid)
 
 int sync_sieve_delete(const char *userid, const char *name)
 {
-    const char *sieve_path = user_sieve_path(userid);
+    char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     char active[2048];
     DIR *mbdir;
@@ -1206,8 +1212,10 @@ int sync_sieve_delete(const char *userid, const char *name)
     int is_default = 0;
     int count;
 
-    if (!(mbdir = opendir(sieve_path)))
+    if (!(mbdir = opendir(sieve_path))) {
+        free(sieve_path);
         return(IMAP_IOERROR);
+    }
 
     while((next = readdir(mbdir)) != NULL) {
         if(!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
@@ -1241,6 +1249,7 @@ int sync_sieve_delete(const char *userid, const char *name)
 
     snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
     unlink(filename);
+    free(sieve_path);
 
     sync_log_sieve(userid);
 

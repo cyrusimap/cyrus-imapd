@@ -112,13 +112,6 @@ int listscripts(struct protstream *conn);
 int setactive(struct protstream *conn, const struct buf *name);
 
 /*
- * Initialize
- *
- */
-
-int actions_init(void);
-
-/*
  * Set user after sucessful authentication
  *
  */
