@@ -269,7 +269,8 @@ static int report_fb_query(struct transaction_t *txn,
                            struct meth_params *rparams,
                            xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static const char *begin_icalendar(struct buf *buf);
+static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
+                                   const char *prodid, const char *name);
 static void end_icalendar(struct buf *buf);
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
@@ -1401,12 +1402,17 @@ static int caldav_delete_cal(struct transaction_t *txn,
     return r;
 }
 
-static const char *begin_icalendar(struct buf *buf)
+static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
+                                   const char *prodid, const char *name)
 {
     /* Begin iCalendar stream */
     buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_printf(buf, "PRODID:%s\r\n", ical_prodid);
+    buf_printf(buf, "PRODID:%s\r\n", prodid);
     buf_appendcstr(buf, "VERSION:2.0\r\n");
+    buf_printf(buf, "UID:%x-%s-%u\r\n", strhash(config_servername),
+               mailbox->uniqueid, mailbox->i.uidvalidity);
+    buf_printf(buf, "NAME:%s\r\n", name);
+    buf_printf(buf, "X-WR-CALNAME:%s\r\n", name);
 
     return "";
 }
@@ -1500,7 +1506,7 @@ static int export_calendar(struct transaction_t *txn)
     construct_hash_table(&tzid_table, 10, 1);
 
     /* Begin (converted) iCalendar stream */
-    sep = mime->begin_stream(buf);
+    sep = mime->begin_stream(buf, mailbox, ical_prodid, buf_cstring(&attrib));
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     struct mailbox_iter *iter =
