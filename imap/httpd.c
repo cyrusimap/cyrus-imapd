@@ -2956,7 +2956,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
         }
 
-        if (code != HTTP_SWITCH_PROT) break;
+        /* Fall through as provisional response */
+        GCC_FALLTHROUGH
+
+    case HTTP_EARLY_HINTS:
+        for (i = 0; i < strarray_size(&resp_body->links); i++) {
+            simple_hdr(txn, "Link", strarray_nth(&resp_body->links, i));
+        }
+
+        if (code >= HTTP_OK) break;
 
         /* Fall through as provisional response */
         GCC_FALLTHROUGH
@@ -3055,9 +3063,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (resp_body->iserial) {
             simple_hdr(txn, "iSchedule-Capabilities", "%ld", resp_body->iserial);
         }
-    }
-    for (i = 0; i < strarray_size(&resp_body->links); i++) {
-        simple_hdr(txn, "Link", strarray_nth(&resp_body->links, i));
     }
     if (resp_body->patch) {
         accept_patch_hdr(txn, resp_body->patch);
