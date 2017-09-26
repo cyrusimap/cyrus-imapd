@@ -2340,6 +2340,7 @@ static void transaction_reset(struct transaction_t *txn)
     txn->location = NULL;
     memset(&txn->error, 0, sizeof(struct error_t));
 
+    strarray_fini(&txn->resp_body.links);
     memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
            sizeof(struct resp_body_t) - sizeof(struct buf));
     buf_reset(&txn->resp_body.payload);
@@ -2906,6 +2907,7 @@ EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
 
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
+    int i;
     time_t now;
     char datestr[30];
     const char **hdr;
@@ -3054,8 +3056,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "iSchedule-Capabilities", "%ld", resp_body->iserial);
         }
     }
-    if (resp_body->link) {
-        simple_hdr(txn, "Link", resp_body->link);
+    for (i = 0; i < strarray_size(&resp_body->links); i++) {
+        simple_hdr(txn, "Link", strarray_nth(&resp_body->links, i));
     }
     if (resp_body->patch) {
         accept_patch_hdr(txn, resp_body->patch);

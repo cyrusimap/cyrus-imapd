@@ -953,7 +953,8 @@ EXPORTED int dav_premethod(struct transaction_t *txn)
 
         if ((hdr && strcmp(hdr[0], buf_cstring(&server_info_token))) ||
             (!hdr && txn->meth == METH_OPTIONS)) {
-            txn->resp_body.link = buf_cstring(&server_info_link);
+            strarray_append(&txn->resp_body.links,
+                            buf_cstring(&server_info_link));
         }
     }
 

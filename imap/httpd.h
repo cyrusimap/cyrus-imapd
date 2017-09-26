@@ -289,7 +289,7 @@ struct resp_body_t {
     const char *type;                   /* Content-Type     */
     const struct patch_doc_t *patch;    /* Accept-Patch     */
     unsigned prefs;                     /* Prefer           */
-    const char *link;                   /* Link             */
+    strarray_t links;                   /* Link(s)          */
     const char *lock;                   /* Lock-Token       */
     const char *ctag;                   /* CTag             */
     const char *etag;                   /* ETag             */
