@@ -244,9 +244,9 @@ ec HTTP_NETWORK_AUTH,
 
 
 
-# Indicating Hints (draft-ietf-httpbis=early-hints)
+# Indicating Hints (draft-ietf-httpbis-early-hints)
 
-ce HTTP_EARLY_HINTS,
+ec HTTP_EARLY_HINTS,
     "103 Early Hints"
 
 
