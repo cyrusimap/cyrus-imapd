@@ -136,8 +136,6 @@ static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
-static void get_synctoken(struct mailbox *mailbox,
-                          struct buf *buf, const char *prefix);
 
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
@@ -714,10 +712,10 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
             else if (mailbox) {
                 struct buf buf = BUF_INITIALIZER;
 
-                get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
+                dav_get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
                 r = !strcmp(cond, buf_cstring(&buf));
                 if (!r) {
-                    get_synctoken(mailbox, &buf, XML_NS_MECOM "ctag/");
+                    dav_get_synctoken(mailbox, &buf, XML_NS_MECOM "ctag/");
                     r = !strcmp(cond, buf_cstring(&buf));
                 }
                 buf_free(&buf);
@@ -977,6 +975,7 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
         mask = PREFER_REP;
         break;
 
+    case METH_GET:
     case METH_MKCALENDAR:
     case METH_MKCOL:
     case METH_PROPPATCH:
@@ -2541,8 +2540,8 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-static void get_synctoken(struct mailbox *mailbox,
-                          struct buf *buf, const char *prefix)
+void dav_get_synctoken(struct mailbox *mailbox,
+                       struct buf *buf, const char *prefix)
 {
     buf_reset(buf);
     buf_printf(buf, "%s%u-" MODSEQ_FMT,
@@ -2565,7 +2564,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
     /* not defined on the top-level collection either (aka #calendars) */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    get_synctoken(fctx->mailbox, &fctx->buf, prefix);
+    dav_get_synctoken(fctx->mailbox, &fctx->buf, prefix);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -5221,7 +5220,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (!r) {
         assert(!buf_len(&txn->buf));
-        get_synctoken(mailbox, &txn->buf, "");
+        dav_get_synctoken(mailbox, &txn->buf, "");
         txn->resp_body.ctag = buf_cstring(&txn->buf);
         ret = HTTP_CREATED;
     }
@@ -6527,7 +6526,7 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Validators */
     assert(!buf_len(&txn->buf));
-    get_synctoken(mailbox, &txn->buf, "");
+    dav_get_synctoken(mailbox, &txn->buf, "");
     txn->resp_body.ctag = buf_cstring(&txn->buf);
     txn->resp_body.etag = NULL;
     txn->resp_body.lastmod = 0;

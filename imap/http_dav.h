@@ -636,6 +636,9 @@ struct filter_profile_t {
 #define DAV_FILTER_ISNOTDEF_ERR \
     "is-not-defined can NOT be combined with other elements"
 
+void dav_get_synctoken(struct mailbox *mailbox,
+                       struct buf *buf, const char *prefix);
+
 void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
                           struct filter_profile_t *profile,
                           struct error_t *error);
