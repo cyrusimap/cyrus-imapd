@@ -557,6 +557,9 @@ EXPORTED int calcarddav_parse_path(const char *path,
     /* zzzz is part of the FastMail sorting hack to make shared collections
      * always appear later */
     if (!strncmp(p, USER_COLLECTION_PREFIX, len) || !strncmp(p, "zzzz", len)) {
+        if (!strncmp(p, "zzzz", len))
+            tgt->flags |= TGT_USER_ZZZZ;
+
         p += len;
         if (!*p || !*++p) return 0;
 
@@ -5345,51 +5348,36 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
 }
 
 
-static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
-                                  const char *mboxname, const char *userid,
-                                  char **mbox_owner)
+static size_t make_collection_url(struct buf *buf, const char  *urlprefix, int haszzzz,
+                                  const mbname_t *mbname, const char *userid)
 {
-    mbname_t *mbname = NULL;
     const strarray_t *boxes;
     int n, size;
     size_t len;
-
-    mbname = mbname_from_intname(mboxname);
 
     buf_reset(buf);
     buf_printf(buf, "%s/", urlprefix);
 
     if (userid) {
-        mbname_t *usermbname = mbname_from_userid(userid);
-        if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
-        if (*userid && !mbname_domain(usermbname)) mbname_set_domain(usermbname, httpd_extradomain);
         const char *owner = mbname_userid(mbname);
         if (!owner) owner = "";
-        const char *thisuser = mbname_userid(usermbname);
-        if (!thisuser) thisuser = "";
-
-        if (mbox_owner) *mbox_owner = xstrdup(owner);
 
         if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
-            if (strcmp(owner, thisuser) && strstr(urlprefix, "addressbooks"))
-                buf_printf(buf, "%s/%s/", "zzzz", owner);
-            else
-                buf_printf(buf, "%s/%s/", USER_COLLECTION_PREFIX, owner);
+            buf_printf(buf, "%s/%s/", haszzzz ? "zzzz" : USER_COLLECTION_PREFIX, owner);
         }
         else {
             buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
 
             if (*userid) {
-                buf_printf(buf, "%s/", thisuser);
+                buf_printf(buf, "%s/", userid);
 
-                if (strcmp(owner, thisuser)) {
+                if (strcmp(owner, userid)) {
                     /* Encode shared collection as: <owner> "." <mboxname> */
                     buf_printf(buf, "%s%c", owner, SHARED_COLLECTION_DELIM);
                 }
             }
             else buf_printf(buf, "%s/", owner);
         }
-        mbname_free(&usermbname);
     }
 
     len = buf_len(buf);
@@ -5401,8 +5389,6 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
         buf_appendcstr(buf, strarray_nth(boxes, n));
         buf_putc(buf, '/');
     }
-
-    mbname_free(&mbname);
 
     return len;
 }
@@ -5480,8 +5466,22 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
-                                  mboxname, httpd_userid, NULL);
+        /* we always have zzzz if it's already in the URL */
+        int haszzzz = fctx->req_tgt->flags & TGT_USER_ZZZZ;
+
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        if (!mbname_domain(mbname))
+            mbname_set_domain(mbname, httpd_extradomain);
+
+        /* we also need to deal with the discovery case,
+         * where mboxname doesn't match request path */
+        if (strcmp(mbname_userid(mbname), fctx->req_tgt->userid))
+            haszzzz = 1;
+
+        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix, haszzzz,
+                                  mbname, fctx->req_tgt->userid);
+
+        mbname_free(&mbname);
 
         /* copy it all back into place... in theory we should check against
          * 'last' and make sure it doesn't change from the original request.
@@ -9211,10 +9211,11 @@ int notify_post(struct transaction_t *txn)
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
     const char *type_str, *mboxname, *url_prefix;
-    char dtstamp[RFC3339_DATETIME_MAX], *owner = NULL, *resource = NULL;
+    char dtstamp[RFC3339_DATETIME_MAX], *resource = NULL;
     xmlNodePtr notify = NULL, type, sharee;
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlChar *comment = NULL, *freeme = NULL;
+    mbname_t *mbname = NULL;
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
@@ -9396,7 +9397,11 @@ int notify_post(struct transaction_t *txn)
     /* shared-url */
     url_prefix = strstr(mboxname, config_getstring(IMAPOPT_CALENDARPREFIX)) ?
         namespace_calendar.prefix : namespace_addressbook.prefix;
-    make_collection_url(&txn->buf, url_prefix, mboxname, "", &owner);
+
+    mbname = mbname_from_intname(mboxname);
+    if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+
+    make_collection_url(&txn->buf, url_prefix, /*haszzzz*/0, mbname, "");
 
     xml_add_href(type, NULL, buf_cstring(&txn->buf));
 
@@ -9413,12 +9418,12 @@ int notify_post(struct transaction_t *txn)
                strhash(XML_NS_DAV), strhash(SHARE_REPLY_NOTIFICATION),
                strhash(mboxname), strhash(txn->req_tgt.userid));
 
-    r = send_notification(txn, notify->doc, owner, buf_cstring(&txn->buf));
+    r = send_notification(txn, notify->doc, mbname_userid(mbname), buf_cstring(&txn->buf));
 
     if (add) {
         /* Accepted - create URL of sharee's new collection */
-        make_collection_url(&txn->buf, url_prefix,
-                            mboxname, txn->req_tgt.userid, NULL);
+        make_collection_url(&txn->buf, url_prefix, /*haszzzz*/0,
+                            mbname, txn->req_tgt.userid);
 
         if (legacy) {
             /* Create CS:shared-as XML body */
@@ -9452,8 +9457,8 @@ int notify_post(struct transaction_t *txn)
     if (notify) xmlFreeDoc(notify->doc);
     webdav_close(webdavdb);
     mailbox_close(&mailbox);
+    mbname_free(&mbname);
     dlist_free(&dl);
-    free(owner);
 
     return ret;
 }

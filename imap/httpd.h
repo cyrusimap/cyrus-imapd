@@ -242,7 +242,8 @@ enum {
     TGT_SCHED_OUTBOX,
     TGT_MANAGED_ATTACH,
     TGT_DRIVE_ROOT,
-    TGT_DRIVE_USER
+    TGT_DRIVE_USER,
+    TGT_USER_ZZZZ
 };
 
 /* Function to parse URI path and generate a mailbox name */
