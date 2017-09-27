@@ -312,7 +312,7 @@ struct txn_flags_t {
     unsigned long te       : 3;         /* Transfer-Encoding for resp */
     unsigned long cc       : 7;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
-    unsigned long vary     : 4;         /* Headers on which response varied */
+    unsigned long vary     : 5;         /* Headers on which response varied */
     unsigned long trailer  : 2;         /* Headers which will be in trailer */
 };
 
@@ -422,7 +422,8 @@ enum {
     VARY_ACCEPT =       (1<<0),
     VARY_AE =           (1<<1), /* Accept-Encoding */
     VARY_BRIEF =        (1<<2),
-    VARY_PREFER =       (1<<3)
+    VARY_PREFER =       (1<<3),
+    VARY_IFNONE =       (1<<4)  /* If-None-Match */
 };
 
 /* Trailer header flags */

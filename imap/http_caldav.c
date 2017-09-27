@@ -1423,9 +1423,41 @@ static void end_icalendar(struct buf *buf)
     buf_setcstr(buf, "END:VCALENDAR\r\n");
 }
 
+
+struct timezone_rock {
+    icalcomponent *old;
+    icalcomponent *new;
+};
+
+static void add_timezone(icalparameter *param, void *data)
+{
+    struct timezone_rock *tzrock = (struct timezone_rock *) data;
+    const char *tzid = icalparameter_get_tzid(param);
+
+    /* Check if this tz is in our new object */
+    if (!icalcomponent_get_timezone(tzrock->new, tzid)) {
+        icalcomponent *vtz = NULL;
+
+        if (tzrock->old) {
+            /* Fetch tz from old object and add to new */
+            icaltimezone *tz = icalcomponent_get_timezone(tzrock->old, tzid);
+            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
+        }
+        else {
+            /* Fetch tz from builtin repository */
+            icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+
+            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
+        }
+
+        if (vtz) icalcomponent_add_component(tzrock->new, vtz);
+    }
+}
+
+
 static int export_calendar(struct transaction_t *txn)
 {
-    int ret = 0, r, precond;
+    int ret = 0, r, n, precond, need_tz = 1;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct buf *buf = &resp_body->payload;
     struct mailbox *mailbox = NULL;
@@ -1433,9 +1465,12 @@ static int export_calendar(struct transaction_t *txn)
     struct hash_table tzid_table;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf attrib = BUF_INITIALIZER;
+    struct buf attrib = BUF_INITIALIZER, link = BUF_INITIALIZER;
     const char **hdr, *sep;
     struct mime_type_t *mime = NULL;
+    modseq_t syncmodseq = 0;
+    int unbind_flag = -1, unchanged_flag = -1;
+    struct caldav_db *caldavdb = NULL;
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
@@ -1455,8 +1490,9 @@ static int export_calendar(struct transaction_t *txn)
     }
 
     /* Check any preconditions */
-    sprintf(etag, "%u-%u-%u",
-            mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    assert(!buf_len(&txn->buf));
+    dav_get_synctoken(mailbox, &txn->buf, "");
+    strlcpy(etag, buf_cstring(&txn->buf), sizeof(etag));
     precond = check_precond(txn, etag, mailbox->index_mtime);
 
     switch (precond) {
@@ -1480,7 +1516,7 @@ static int export_calendar(struct transaction_t *txn)
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
-    txn->flags.vary |= VARY_ACCEPT;
+    txn->flags.vary |= VARY_ACCEPT | VARY_PREFER | VARY_IFNONE;
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
@@ -1492,6 +1528,61 @@ static int export_calendar(struct transaction_t *txn)
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
     txn->resp_body.fname = buf_cstring(&txn->buf);
+
+    /* Add subscription upgrade links */
+    buf_printf(&link, "<%s>; rel=\"subscribe-caldav_auth\"", txn->req_tgt.path);
+    strarray_appendm(&txn->resp_body.links, buf_release(&link));
+    buf_printf(&link, "<%s>; rel=\"subscribe-webdav_sync\"", txn->req_tgt.path);
+    strarray_appendm(&txn->resp_body.links, buf_release(&link));
+
+    if (get_preferences(txn) & PREFER_MIN) {
+        /* Enhanced GET request */
+        need_tz = 0;
+
+        if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match"))) {
+            /* Report only changed resources since ETag (sync-token) */
+            uint32_t uidvalidity;
+            char dquote[2];
+
+            /* Parse sync-token */
+            n = sscanf((char *) hdr[0], "\"%u-" MODSEQ_FMT "%1s",
+                       &uidvalidity, &syncmodseq, dquote /* trailing DQUOTE */);
+
+            syslog(LOG_DEBUG, "scanned token %s to %d %u %llu",
+                   hdr[0], n, uidvalidity, syncmodseq);
+
+            /* Sanity check the token components */
+            if (n != 3 || dquote[0] != '"' ||
+                uidvalidity != mailbox->i.uidvalidity ||
+                syncmodseq > mailbox->i.highestmodseq ||
+                syncmodseq < mailbox->i.deletedmodseq) {
+                syncmodseq = 0;
+                txn->resp_body.prefs &= ~PREFER_MIN;
+            }
+            else {
+                mailbox_user_flag(mailbox, DFLAG_UNBIND, &unbind_flag, 1);
+                mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag, 1);
+
+#ifdef HAVE_TZ_BY_REF
+                if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+                    /* Add link to tzdist */
+                    buf_printf(&link, "<%s>; rel=\"timezone-service\"",
+                               namespace_tzdist.prefix);
+                    strarray_appendm(&txn->resp_body.links, buf_release(&link));
+                }
+#endif /* HAVE_TZ_BY_REF */
+            }
+
+            /* Check for optional CalDAV-Timezones header */
+            hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
+            if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
+        }
+    }
+    else {
+        buf_printf(&link,
+                   "<%s>; rel=\"subscribe-enhanced-get\"", txn->req_tgt.path);
+        strarray_appendm(&txn->resp_body.links, buf_release(&link));
+    }
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
@@ -1510,18 +1601,60 @@ static int export_calendar(struct transaction_t *txn)
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     struct mailbox_iter *iter =
-        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+        mailbox_iter_init(mailbox, syncmodseq,
+                          syncmodseq ? 0 : ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
 
+    if (!syncmodseq) caldavdb = caldav_open_mailbox(mailbox);
+
+    n = 0;
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         icalcomponent *ical;
+
+        if (syncmodseq) { 
+            if ((unbind_flag >= 0) &&
+                record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
+                /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
+                continue;
+            }
+
+            if ((record->modseq - syncmodseq == 1) &&
+                (unchanged_flag >= 0) &&
+                (record->user_flags[unchanged_flag / 32] &
+                 (1 << (unchanged_flag & 31)))) {
+                /* Resource has just had VTIMEZONEs stripped - ignore it */
+                continue;
+            }
+        }
 
         /* Map and parse existing iCalendar resource */
         ical = record_to_ical(mailbox, record, NULL);
 
         if (ical) {
             icalcomponent *comp;
+
+            if (!syncmodseq) {
+                struct caldav_data *cdata;
+
+                /* Fetch the CalDAV db record */
+                r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                                          record->uid, &cdata, 0);
+
+                if (!r && need_tz && cdata->comp_flags.tzbyref) {
+                    /* Add VTIMEZONE components for known TZIDs */
+                    struct timezone_rock tzrock = { NULL, ical };
+                    icalcomponent *next;
+                    icalcomponent_kind kind;
+
+                    comp = icalcomponent_get_first_real_component(ical);
+                    kind = icalcomponent_isa(comp);
+                    for (; comp; comp = next) {
+                        next = icalcomponent_get_next_component(ical, kind);
+                        icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
+                    }
+                }
+            }
 
             for (comp = icalcomponent_get_first_component(ical,
                                                           ICAL_ANY_COMPONENT);
@@ -1531,8 +1664,11 @@ static int export_calendar(struct transaction_t *txn)
                 struct buf *cal_str;
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
-                /* Don't duplicate any TZIDs in our iCalendar */
+                /* Don't duplicate any VTIMEZONEs in our iCalendar */
                 if (kind == ICAL_VTIMEZONE_COMPONENT) {
+                    if (syncmodseq) continue;
+                    if (record->system_flags & FLAG_EXPUNGED) continue;
+
                     icalproperty *prop =
                         icalcomponent_get_first_property(comp,
                                                          ICAL_TZID_PROPERTY);
@@ -1541,9 +1677,38 @@ static int export_calendar(struct transaction_t *txn)
                     if (hash_lookup(tzid, &tzid_table)) continue;
                     else hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
                 }
+                else if (record->system_flags & FLAG_EXPUNGED) {
+                    /* Resource was deleted - remove non-mandatory properties */
+                    icalproperty *prop, *next;
+
+                    for (prop =
+                             icalcomponent_get_first_property(comp,
+                                                              ICAL_ANY_PROPERTY);
+                         prop; prop = next) {
+                        next =
+                            icalcomponent_get_next_property(comp,
+                                                            ICAL_ANY_PROPERTY);
+
+                        switch (icalproperty_isa(prop)) {
+                        case ICAL_UID_PROPERTY:
+                        case ICAL_DTSTAMP_PROPERTY:
+                        case ICAL_DTSTART_PROPERTY:
+                            /* Mandatory - keep */
+                            break;
+
+                        default:
+                            /* Optional - strip */
+                            icalcomponent_remove_property(comp, prop);
+                            break;
+                        }
+                    }
+
+                    /* Set STATUS:DELETED */
+                    icalcomponent_set_status(comp, ICAL_STATUS_DELETED);
+                }
 
                 /* Include this component in our iCalendar */
-                if (r++ && *sep) {
+                if (n++ && *sep) {
                     /* Add separator, if necessary */
                     buf_reset(buf);
                     buf_printf_markup(buf, 0, sep);
@@ -1571,6 +1736,7 @@ static int export_calendar(struct transaction_t *txn)
 
   done:
     buf_free(&attrib);
+    caldav_close(caldavdb);
     mailbox_close(&mailbox);
 
     return ret;
@@ -2043,37 +2209,6 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 
   fail:
     return icaltime_null_time();
-}
-
-
-struct timezone_rock {
-    icalcomponent *old;
-    icalcomponent *new;
-};
-
-static void add_timezone(icalparameter *param, void *data)
-{
-    struct timezone_rock *tzrock = (struct timezone_rock *) data;
-    const char *tzid = icalparameter_get_tzid(param);
-
-    /* Check if this tz is in our new object */
-    if (!icalcomponent_get_timezone(tzrock->new, tzid)) {
-        icalcomponent *vtz = NULL;
-
-        if (tzrock->old) {
-            /* Fetch tz from old object and add to new */
-            icaltimezone *tz = icalcomponent_get_timezone(tzrock->old, tzid);
-            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
-        }
-        else {
-            /* Fetch tz from builtin repository */
-            icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
-
-            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
-        }
-
-        if (vtz) icalcomponent_add_component(tzrock->new, vtz);
-    }
 }
 
 
@@ -7777,6 +7912,20 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     if (txn->req_tgt.allow & ALLOW_PATCH) {
         /* Add Accept-Patch formats to response */
         txn->resp_body.patch = caldav_patch_docs;
+    }
+    if (txn->req_tgt.collection && !txn->req_tgt.resource) {
+        /* Add subscription upgrade links */
+        struct buf link = BUF_INITIALIZER;
+
+        buf_printf(&link, "<%s>; rel=\"subscribe-caldav_auth\"",
+                   txn->req_tgt.path);
+        strarray_appendm(&txn->resp_body.links, buf_release(&link));
+        buf_printf(&link, "<%s>; rel=\"subscribe-webdav_sync\"",
+                   txn->req_tgt.path);
+        strarray_appendm(&txn->resp_body.links, buf_release(&link));
+        buf_printf(&link, "<%s>; rel=\"subscribe-enhanced-get\"",
+                   txn->req_tgt.path);
+        strarray_appendm(&txn->resp_body.links, buf_release(&link));
     }
 
     return meth_options(txn, params);
