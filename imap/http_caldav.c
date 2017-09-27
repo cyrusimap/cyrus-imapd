@@ -3939,7 +3939,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (!icaltime_is_null_time(dtend)) {
         dtstart = icalcomponent_get_dtstart(comp);
 
-        if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) <= 0) {
+        if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) < 0) {
             txn->error.precond = CALDAV_VALID_OBJECT;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -3973,7 +3973,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (!icaltime_is_null_time(dtend)) {
             dtstart = icalcomponent_get_dtstart(nextcomp);
 
-            if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) <= 0) {
+            if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) < 0) {
                 txn->error.precond = CALDAV_VALID_OBJECT;
                 ret = HTTP_FORBIDDEN;
                 goto done;
