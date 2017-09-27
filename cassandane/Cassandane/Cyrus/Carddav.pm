@@ -435,6 +435,7 @@ EMAIL;TYPE=PREF,INTERNET:forrestgump\@example.com
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
+    $talk1->NewContact('Default', $VCard);
     $talk2->NewContact('Shared', $VCard);
 
     $admintalk->setacl("user.user2.#addressbooks.Shared\@example.org", "user1\@example.com", 'lrsn');
@@ -451,9 +452,14 @@ EOF
     $self->assert_str_equals('/dav/addressbooks/zzzz/user2@example.org/Shared/', $Addressbooks->[1]{href});
     $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
 
-    my $Events = $talk1->GetContacts($Addressbooks->[1]{path});
-    # is a subpath of the contact
-    $self->assert_matches(qr/^$Addressbooks->[1]{path}/, $Events->[0]{CPath});
+    # check Default, and Shared: both zzzz and user versions
+    my @paths = ($Addressbooks->[0]{path}, $Addressbooks->[1]{path}, $Addressbooks->[1]{path});
+    $paths[2] =~ s/zzzz/user/;
+    foreach my $path (@paths) {
+        my $Events = $talk1->GetContacts($path);
+        # is a subpath of the contact
+        $self->assert_matches(qr/^$path/, $Events->[0]{CPath});
+    }
 }
 
 sub test_control_chars
