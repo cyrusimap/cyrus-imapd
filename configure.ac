@@ -1488,7 +1488,7 @@ dnl
                 ],
                 AC_MSG_ERROR([Need libical for http]))
 
-        AC_CHECK_DECLS([icalproperty_get_parent,
+        AC_CHECK_DECLS([icalproperty_get_parent, ICAL_STATUS_DELETED,
                         icalrecur_freq_to_string, icalrecur_weekday_to_string],
                 [], [], [[#include <libical/ical.h>]])
 

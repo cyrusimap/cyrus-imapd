@@ -103,6 +103,10 @@ extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *i
 
 /* Functions not declared in in libical < v2.0 */
 
+#if !HAVE_DECL_ICAL_STATUS_DELETED
+#define ICAL_STATUS_DELETED ICAL_STATUS_CANCELLED
+#endif
+
 #if !HAVE_DECL_ICALPROPERTY_GET_PARENT
 extern icalcomponent *icalproperty_get_parent(const icalproperty *property);
 #endif
