@@ -38,6 +38,11 @@ Updates to default configuration
   documentation for more information about the changes.
 *
 
+Security fixes
+==============
+* Contains fix for CVE-2017-14230.
+  [ http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230 ]
+
 Significant bugfixes
 ====================
 
