@@ -5475,7 +5475,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
         /* we also need to deal with the discovery case,
          * where mboxname doesn't match request path */
-        if (strcmp(mbname_userid(mbname), fctx->req_tgt->userid))
+        if (fctx->req_tgt->userid && strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid))
             haszzzz = 1;
 
         len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix, haszzzz,
