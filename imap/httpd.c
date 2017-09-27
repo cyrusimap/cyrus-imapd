@@ -3351,6 +3351,18 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
             sep = "; ";
         }
+        if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+            buf_printf(&log, "%sprefer=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "Brief"))) {
+            buf_printf(&log, "%sbrief=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones"))) {
+            buf_printf(&log, "%scaldav-timezones=%s", sep, hdr[0]);
+            sep = "; ";
+        }
         if (*sep == ';') buf_appendcstr(&log, ")");
     }
     /* Add response */
