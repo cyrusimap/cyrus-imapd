@@ -1516,7 +1516,7 @@ static int export_calendar(struct transaction_t *txn)
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
-    txn->flags.vary |= VARY_ACCEPT | VARY_PREFER | VARY_IFNONE;
+    txn->flags.vary |= VARY_ACCEPT | VARY_PREFER | VARY_IFNONE | VARY_CALTZ;
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
@@ -2300,6 +2300,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
+        txn->flags.vary |= VARY_CALTZ;
 
       done:
         return ret;

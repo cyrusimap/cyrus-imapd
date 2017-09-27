@@ -3026,7 +3026,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     if (txn->flags.vary && !(txn->flags.cc & CC_NOCACHE)) {
         /* Construct Vary header */
         const char *vary_hdrs[] = { "Accept", "Accept-Encoding", "Brief",
-                                    "Prefer", "If-None-Match", NULL };
+                                    "Prefer", "If-None-Match",
+                                    "CalDAV-Timezones", NULL };
 
         comma_list_hdr(txn, "Vary", vary_hdrs, txn->flags.vary);
     }
