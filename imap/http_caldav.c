@@ -7810,10 +7810,8 @@ static int meth_get_head_fb(struct transaction_t *txn,
     }
     else {
         /* Default to start of current day */
-        start = time(0);
-        tm = localtime(&start);
-        tm->tm_hour = tm->tm_min = tm->tm_sec = 0;
-        fbfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc_zone);
+        start = (time(0) / 86400) * 86400;
+        fbfilter.start = icaltime_from_timet_with_zone(start, 0, utc_zone);
 
         /* Default to 42 day period */
         period.days = 42;
