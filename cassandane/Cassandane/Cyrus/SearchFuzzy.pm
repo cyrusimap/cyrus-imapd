@@ -908,4 +908,45 @@ sub test_search_exactmatch
     $self->assert(index($m{body}, "<b>some</b> long <b>text</b>") == -1);
 }
 
+sub test_search_subjectsnippet
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    xlog "Generate and index test messages.";
+    $self->make_message("[plumbing] Re: log server v0 live",
+        body => "Test1 body with some long text and there is even more ".
+                "and more and more and more and more and more and more ".
+                "and more and more and some text and more and more and ".
+                "and more and more and more and more and more and more ".
+                "and almost at the end some other text that is a match ",
+    ) || die;
+    $self->make_message("test2",
+        body => "Test2 body with some other text",
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    xlog 'SEARCH for FUZZY snippets';
+    my $query = 'servers';
+    $uids = $talk->search('fuzzy', 'text', $query) || die;
+    $self->assert_num_equals(1, scalar @$uids);
+
+    my %m;
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [ 'fuzzy', 'text', $query ]
+    ) || die;
+
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert_matches(qr/^\[plumbing\]/, $m{subject});
+}
+
 1;
