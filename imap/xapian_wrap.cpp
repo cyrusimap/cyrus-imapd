@@ -842,6 +842,7 @@ struct xapian_snipgen
     const char *hi_start;
     const char *hi_end;
     const char *omit;
+    int partnum;
 };
 
 class CharsetStemmer : public Xapian::StemImplementation
@@ -897,6 +898,7 @@ xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end,
     snipgen->hi_start = hi_start;
     snipgen->hi_end = hi_end;
     snipgen->omit = omit;
+    snipgen->partnum = -1;
 
     return snipgen;
 }
@@ -998,7 +1000,8 @@ int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
     return 0;
 }
 
-int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
+int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
+		            int partnum)
 {
     if (buf_len(snipgen->buf)) {
         // XXX hackish: the original snippet generator passed down
@@ -1007,6 +1010,7 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
         buf_appendcstr(snipgen->buf, snipgen->omit);
     }
     buf_append(snipgen->buf, part);
+    snipgen->partnum = partnum;
     return 0;
 }
 
@@ -1027,17 +1031,23 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         Xapian::Enquire enquire(*snipgen->db);
         enquire.set_query(xapian_snipgen_build_query(snipgen));
 
+        unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE;
+
+#ifdef USE_XAPIAN_CYRUS_EXTENSIONS
+        flags |= Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
+        if (snipgen->partnum != SEARCH_PART_BODY) {
+            flags |= Xapian::MSet::SNIPPET_START_AT_NONSPACE;
+        }
+#endif
+
         snippet = enquire.get_mset(0, 0).snippet(text,
                 config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH),
                 *snipgen->stemmer,
-#ifdef USE_XAPIAN_CJK_WORDS
-                Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH|
-#endif
-                Xapian::MSet::SNIPPET_EXHAUSTIVE,
+                flags,
                 snipgen->hi_start,
                 snipgen->hi_end,
                 snipgen->omit
-#ifdef USE_XAPIAN_CJK_WORDS
+#ifdef USE_XAPIAN_CYRUS_EXTENSIONS
                 , Xapian::TermGenerator::FLAG_CJK_WORDS
 #endif
         );
@@ -1059,6 +1069,7 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
     }
 
     buf_reset(snipgen->buf);
+    snipgen->partnum = -1;
     return r;
 }
 

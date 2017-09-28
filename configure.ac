@@ -574,25 +574,25 @@ if test "x$enable_xapian" != xno ; then
                        [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])])])
         AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
 
-        dnl check if Xapian supports CJK word breaks
+        dnl check if Xapian supports Cyruslibs extensions
         AC_LANG_PUSH([C++])
         ORIG_LDFLAGS=$LDFLAGS
         ORIG_CXXFLAGS=$CXXFLAGS
         LDFLAGS="$LDFLAGS $XAPIAN_LIBS"
         CXXFLAGS="$CXXFLAGS $XAPIAN_CXXFLAGS"
-        AC_MSG_CHECKING([for Xapian CJK_WORDS flag])
+        AC_MSG_CHECKING([for Xapian cyruslibs extensions])
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS;]])],
-            [xapian_cjkwords="yes"],
-            [xapian_cjkwords="no"])
-        AC_MSG_RESULT($xapian_cjkwords)
-        if test $xapian_cjkwords = yes; then
-            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word break?])
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; unsigned snippet_flags = Xapian::MSet::SNIPPET_START_AT_NONSPACE]])],
+            [xapian_cyrusexts="yes"],
+            [xapian_cyrusexts="no"])
+        AC_MSG_RESULT($xapian_exts)
+        if test $xapian_cyrusexts = yes; then
+            AC_DEFINE([USE_XAPIAN_CYRUS_EXTENSIONS], [], [Use Xapian cyruslibs extensions?])
             xapian_flavor=cyruslibs
         else
-            AC_MSG_NOTICE([Your Xapian does not support CJK word break. Consider installing cyruslibs Xapian])
+            AC_MSG_NOTICE([Your Xapian does not support the Cyrus extensions for Xapian. Consider installing cyruslibs Xapian])
             xapian_flavor=vanilla
         fi
         LDFLAGS=$ORIG_LDFLAGS
