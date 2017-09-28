@@ -1699,6 +1699,7 @@ static int export_calendar(struct transaction_t *txn)
                         default:
                             /* Optional - strip */
                             icalcomponent_remove_property(comp, prop);
+                            icalproperty_free(prop);
                             break;
                         }
                     }
