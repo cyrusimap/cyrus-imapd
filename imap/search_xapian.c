@@ -1756,7 +1756,7 @@ static int end_message_snippets(search_text_receiver_t *rx)
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
         }
 
-        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text);
+        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
         if (r) break;
 
         last_part = seg->part;
