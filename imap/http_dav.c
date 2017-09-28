@@ -5204,6 +5204,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
         if (ret || r) {
             /* Setting properties failed - delete mailbox */
+            mailbox_abort(mailbox);
             mailbox_close(&mailbox);
             mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    /*isadmin*/1, NULL, NULL, NULL,
@@ -5980,8 +5981,13 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Output the XML response */
     if (!ret) {
-        if (!r && (get_preferences(txn) & PREFER_MIN)) ret = HTTP_OK;
-        else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+        if (r) mailbox_abort(mailbox);
+        else if (get_preferences(txn) & PREFER_MIN) {
+            ret = HTTP_OK;
+            goto done;
+        }
+
+        xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
   done:
