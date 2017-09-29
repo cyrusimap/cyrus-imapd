@@ -2636,23 +2636,20 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         wdata = increment_refcount(uid, webdavdb);
 
         /* Create new ATTACH property */
-        if (aprop) aprop = icalproperty_new_clone(aprop);
-        else {
-            const char *proto = NULL, *host = NULL;
-            icalattach *attach;
+        const char *proto = NULL, *host = NULL;
+        icalattach *attach;
 
-            assert(!buf_len(&txn->buf));
-            http_proto_host(txn->req_hdrs, &proto, &host);
-            buf_printf(&txn->buf, "%s://%s%s/%s/%s/%s%s",
-                       proto, host, namespace_calendar.prefix,
-                       USER_COLLECTION_PREFIX,
-                       txn->req_tgt.userid, MANAGED_ATTACH, uid);
-            attach = icalattach_new_from_url(buf_cstring(&txn->buf));
-            buf_reset(&txn->buf);
+        assert(!buf_len(&txn->buf));
+        http_proto_host(txn->req_hdrs, &proto, &host);
+        buf_printf(&txn->buf, "%s://%s%s/%s/%s/%s%s",
+                   proto, host, namespace_calendar.prefix,
+                   USER_COLLECTION_PREFIX,
+                   txn->req_tgt.userid, MANAGED_ATTACH, uid);
+        attach = icalattach_new_from_url(buf_cstring(&txn->buf));
+        buf_reset(&txn->buf);
 
-            aprop = icalproperty_new_attach(attach);
-            icalattach_unref(attach);
-        }
+        aprop = icalproperty_new_attach(attach);
+        icalattach_unref(attach);
 
         /* Update ATTACH parameters - MANAGED-ID, FILENAME, SIZE, FMTTYPE */
         param = icalproperty_get_managedid_parameter(aprop);
@@ -2821,33 +2818,38 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
                                 caldavdb, return_rep, schedule_address);
 
-    if (ret == HTTP_NO_CONTENT && return_rep) {
-        struct buf *data;
+    if (ret == HTTP_NO_CONTENT) {
+        buf_setcstr(&txn->buf, icalproperty_get_value_as_string(aprop));
+        txn->location = buf_cstring(&txn->buf);
 
-        ret = (op == ATTACH_ADD) ? HTTP_CREATED : HTTP_OK;
+        if (return_rep) {
+            struct buf *data;
 
-      return_rep:
-        /* Convert into requested MIME type */
-        data = mime->from_object(ical);
+            ret = (op == ATTACH_ADD) ? HTTP_CREATED : HTTP_OK;
 
-        /* Fill in Content-Type, Content-Length */
-        resp_body->type = mime->content_type;
-        resp_body->len = buf_len(data);
+          return_rep:
+            /* Convert into requested MIME type */
+            data = mime->from_object(ical);
 
-        /* Fill in Content-Location */
-        resp_body->loc = txn->req_tgt.path;
+            /* Fill in Content-Type, Content-Length */
+            resp_body->type = mime->content_type;
+            resp_body->len = buf_len(data);
 
-        /* Fill in Expires and Cache-Control */
-        resp_body->maxage = 3600;       /* 1 hr */
-        txn->flags.cc = CC_MAXAGE
-            | CC_REVALIDATE             /* don't use stale data */
-            | CC_NOTRANSFORM;           /* don't alter iCal data */
+            /* Fill in Content-Location */
+            resp_body->loc = txn->req_tgt.path;
 
-        /* Output current representation */
-        write_body(ret, txn, buf_base(data), buf_len(data));
+            /* Fill in Expires and Cache-Control */
+            resp_body->maxage = 3600;       /* 1 hr */
+            txn->flags.cc = CC_MAXAGE
+                | CC_REVALIDATE             /* don't use stale data */
+                | CC_NOTRANSFORM;           /* don't alter iCal data */
 
-        buf_destroy(data);
-        ret = 0;
+            /* Output current representation */
+            write_body(ret, txn, buf_base(data), buf_len(data));
+
+            buf_destroy(data);
+            ret = 0;
+        }
     }
 
   done:
