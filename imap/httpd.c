@@ -3180,7 +3180,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
     if (resp_body->cmid) {
-        simple_hdr(txn, "Cal-Managed-ID", "\"%s\"", resp_body->cmid);
+        simple_hdr(txn, "Cal-Managed-ID", "%s", resp_body->cmid);
         if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
     }
     if (resp_body->type) {
