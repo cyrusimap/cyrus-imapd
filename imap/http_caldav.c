@@ -4165,6 +4165,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     /* Check for changed UID */
     caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->ical_uid, uid)) {
+        /* CALDAV:no-uid-conflict */
+        txn->error.precond = CALDAV_UID_CONFLICT;
         ret = HTTP_FORBIDDEN;
     }
     else {
@@ -4172,14 +4174,14 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         caldav_lookup_uid(db, uid, &cdata);
         if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
                                     strcmp(cdata->dav.resource, resource))) {
+            /* CALDAV:unique-scheduling-object-resource */
+            txn->error.precond = CALDAV_UNIQUE_OBJECT;
             ret = HTTP_FORBIDDEN;
         }
     }
     if (ret) {
-        /* CALDAV:no-uid-conflict */
         char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
-        txn->error.precond = CALDAV_UID_CONFLICT;
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
                    namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
