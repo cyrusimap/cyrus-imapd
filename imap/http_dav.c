@@ -640,11 +640,12 @@ EXPORTED int calcarddav_parse_path(const char *path,
         /* Just return the mboxname (MKCOL or COPY/MOVE destination) */
         tgt->mbentry->name = xstrdup(mboxname);
 
-        if (!mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
-                                         httpd_userid, httpd_authstate,
-                                         NULL, NULL, 0 /* force */)) {
-            tgt->allow |= ALLOW_MKCOL;
-        }
+        int r = mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
+                                            httpd_userid, httpd_authstate,
+                                            NULL, NULL, 0 /* force */);
+        if (r) return r;
+
+        tgt->allow |= ALLOW_MKCOL;
     }
     else if (*mboxname) {
         /* Locate the mailbox */
@@ -5110,15 +5111,35 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     /* Parse the path (use our own entry to suppress lookup) */
     txn->req_tgt.mbentry = mboxlist_entry_create();
-    if ((r = mparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) {
+    r = mparams->parse_path(txn->req_uri->path,
+                            &txn->req_tgt, &txn->error.desc);
+
+    /* Make sure method is allowed (only allowed on child of home-set) */
+    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
         txn->error.precond = mparams->mkcol.location_precond;
         return HTTP_FORBIDDEN;
     }
+    else if (r) {
+        switch (r) {
+        case IMAP_MAILBOX_EXISTS:
+            txn->error.precond = DAV_RES_EXISTS;
+            break;
 
-    /* Make sure method is allowed (only allowed on home-set) */
-    if (!(txn->req_tgt.allow & ALLOW_MKCOL)) {
-        txn->error.precond = mparams->mkcol.location_precond;
+        case IMAP_PERMISSION_DENIED:
+            txn->error.precond = DAV_NEED_PRIVS;
+            txn->error.rights = DACL_BIND;
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf, "%s/%s/%s",
+                       txn->req_tgt.namespace->prefix, USER_COLLECTION_PREFIX,
+                       txn->req_tgt.userid);
+            txn->error.resource = buf_cstring(&txn->buf);
+            break;
+
+        default:
+            txn->error.precond = mparams->mkcol.location_precond;
+            break;
+        }
+
         return HTTP_FORBIDDEN;
     }
 
