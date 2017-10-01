@@ -4079,13 +4079,15 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) organizer = icalproperty_get_organizer(prop);
 
-    /* Also make sure DTEND > DTSTART */
+    /* Also make sure DTEND > DTSTART, and both values have value same type */
     dtend = icalcomponent_get_dtend(comp);
     if (!icaltime_is_null_time(dtend)) {
         dtstart = icalcomponent_get_dtstart(comp);
 
-        if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) < 0) {
-            txn->error.precond = CALDAV_VALID_OBJECT;
+        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) ||
+            !icaltime_get_timezone(dtend) != !icaltime_get_timezone(dtstart) ||
+            icaltime_compare(dtend, dtstart) < 0) {
+            txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
             goto done;
         }
