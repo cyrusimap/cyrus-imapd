@@ -4690,6 +4690,50 @@ sub test_getmessagelist_window
     $self->assert_num_equals(1, $res->[0][1]->{position});
 }
 
+sub test_getmessagelist_long
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    for (1..100) {
+        $self->make_message("Message $_");
+    }
+
+    xlog "list first 60 messages";
+    $res = $jmap->Request([['getMessageList', {
+        limit => 60,
+        offset => 0,
+        collapseThreads => JSON::true,
+        sort => [ "id asc" ],
+    }, "R1"]]);
+    $self->assert_num_equals(60, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(100, $res->[0][1]->{total});
+    $self->assert_num_equals(0, $res->[0][1]->{position});
+
+    xlog "list 5 messages from offset 55 by anchor";
+    $res = $jmap->Request([['getMessageList', {
+        limit => 5,
+        anchorOffset => 1,
+        anchor => $res->[0][1]->{messageIds}[55],
+        collapseThreads => JSON::true,
+        sort => [ "id asc" ],
+    }, "R1"]]);
+    $self->assert_num_equals(5, scalar @{$res->[0][1]->{messageIds}});
+    $self->assert_num_equals(100, $res->[0][1]->{total});
+    $self->assert_num_equals(54, $res->[0][1]->{position});
+
+    my $ids = $res->[0][1]->{messageIds};
+    my @subids;
+}
+
 sub test_getmessagelist_acl
     :JMAP :min_version_3_1
 {
