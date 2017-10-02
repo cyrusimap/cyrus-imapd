@@ -5233,6 +5233,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
             if (!ret) {
                 /* Output the XML response */
+                if (txn->meth == METH_MKCALENDAR) {
+                    /* MKCALENDAR failure response MUST be 207 (Multi-Status) */
+                    xmlNodeSetName(root, BAD_CAST "multistatus");
+                    xmlSetNs(root, ns[NS_DAV]);
+                    r = HTTP_MULTI_STATUS;
+                }
                 xml_response(r, txn, outdoc);
             }
 
