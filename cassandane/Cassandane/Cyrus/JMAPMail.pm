@@ -5476,6 +5476,121 @@ sub test_getmessageupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 }
 
+sub test_getmessagelistupdates
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("Message A") || die;
+
+    xlog "Get message id";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_not_null($ida);
+
+    $state = $res->[0][1]->{state};
+
+    $self->make_message("Message B") || die;
+
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{messageIds}};
+
+    xlog "get message list updates";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state }, "R1"]]);
+
+    $self->assert_equals($res->[0][1]{added}[0]{messageId}, $idb);
+
+    xlog "get message list updates with threads collapsed";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+
+    $self->assert_equals($res->[0][1]{added}[0]{messageId}, $idb);
+}
+
+
+sub test_getmessagelistupdates_thread
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+    my %exp;
+    my $dt;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "generating message A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog "Get message id";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_not_null($ida);
+
+    $state = $res->[0][1]->{state};
+
+    xlog "generating message B";
+    $exp{B} = $self->make_message("Message B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog "generating message C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog "generating message D referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
+
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $state = $res->[0][1]{newState};
+
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    # assert that IDA got removed
+    $self->assert_not_null(grep { $_ eq $ida } map { $_->{messageId} } @{$res->[0][1]->{removed}});
+    # and not recreated
+    $self->assert_null(grep { $_ eq $ida } map { $_->{messageId} } @{$res->[0][1]->{created}});
+
+    $talk->select("INBOX");
+    $talk->store('3', "+flags", '\\Deleted');
+    $talk->expunge();
+
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $state = $res->[0][1]{newState};
+
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(0, scalar(@{$res->[0][1]{added}}));
+    $self->assert_num_equals(0, scalar(@{$res->[0][1]{removed}}));
+
+    $talk->store('3', "+flags", '\\Deleted');
+    $talk->expunge();
+
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{removed}}));
+
+    # same thread, back to ida
+    $self->assert_str_equals($ida, $res->[0][1]{added}[0]{messageId});
+    $self->assert_str_equals($res->[0][1]{added}[0]{threadId}, $res->[0][1]{removed}[0]{threadId});
+}
+
 sub test_getmessageupdates_shared
     :JMAP :min_version_3_1
 {
