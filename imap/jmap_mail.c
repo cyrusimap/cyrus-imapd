@@ -85,6 +85,7 @@ static int getMailboxes(jmap_req_t *req);
 static int setMailboxes(jmap_req_t *req);
 static int getMailboxUpdates(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
+static int getMessageListUpdates(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
 static int getMessageUpdates(jmap_req_t *req);
@@ -116,6 +117,7 @@ jmap_msg_t jmap_mail_messages[] = {
     { "setMailboxes",                    &setMailboxes },
     { "getMailboxUpdates",               &getMailboxUpdates },
     { "getMessageList",                  &getMessageList },
+    { "getMessageListUpdates",           &getMessageListUpdates },
     { "getMessages",                     &getMessages },
     { "setMessages",                     &setMessages },
     { "getMessageUpdates",               &getMessageUpdates },
@@ -3783,14 +3785,34 @@ struct getmsglist_window {
     const char *anchor;
     int anchor_off;
     size_t limit;
+    modseq_t updatemodseq;
+    const char *uptomsgid;
 
     /* output arguments */
     modseq_t highestmodseq;
+    int cancalcupdates;
 
     /* internal state */
     size_t mdcount;
     size_t anchor_pos;
 };
+
+static void update_added(json_t *target, const char *msgid,
+                         uint64_t cid, int index)
+{
+    char *thrid = jmap_thrid(cid);
+    json_t *item = json_pack("{s:s,s:s,s:i}", "messageId", msgid, "threadId", thrid, "index", index);
+    json_array_append_new(target, item);
+    free(thrid);
+}
+
+static void update_removed(json_t *target, const char *msgid, uint64_t cid)
+{
+    char *thrid = jmap_thrid(cid);
+    json_t *item = json_pack("{s:s,s:s}", "messageId", msgid, "threadId", thrid);
+    json_array_append_new(target, item);
+    free(thrid);
+}
 
 static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                           struct getmsglist_window *window, int want_expunged,
@@ -3805,6 +3827,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
+    int foundupto = 0;
     char *msgid = NULL;
     int i, r;
 
@@ -3835,6 +3858,17 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     query->need_ids = 1;
     query->verbose = 1;
     query->want_expunged = want_expunged;
+
+    if (search_is_mutable(sortcrit, searchargs)) {
+        if (window->updatemodseq) {
+            r = IMAP_SEARCH_MUTABLE;
+            goto done;
+        }
+    }
+    else {
+        window->cancalcupdates = 1;
+    }
+
 
     r = search_query_run(query);
     if (r) goto done;
@@ -3879,6 +3913,82 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &ids);
+
+        /* we're doing getMessageListUpdates - we use the results differently */
+        if (window->updatemodseq) {
+            /* Keep track of the highest modseq */
+            if (window->highestmodseq < md->modseq)
+                window->highestmodseq = md->modseq;
+
+            /* trivial case - not collapsing conversations */
+            if (!window->collapse) {
+                if (is_expunged) {
+                    if (foundupto) goto doneloop;
+                    if (md->modseq <= window->updatemodseq) goto doneloop;
+                    update_removed(*expungedids, msgid, md->cid);
+                }
+                else {
+                    (*total)++;
+                    if (foundupto) goto doneloop;
+                    if (md->modseq <= window->updatemodseq) goto doneloop;
+                    update_added(*messageids, msgid, md->cid, *total);
+                }
+                goto doneloop;
+            }
+
+            /* OK, we need to deal with the following possibilities */
+
+            /* cids:
+             * 1: exemplar for this CID seen
+             * 2: old exemplar for CID seen
+             * 4: deleted new item exists that might have exposed old record
+             */
+            uint64_t ciddata = (uint64_t)hashu64_lookup(md->cid, &cids);
+            if (ciddata == 3) goto doneloop; /* this message clearly can't have been seen and can't be seen */
+
+            if (!is_expunged && !(ciddata & 1)) {
+                (*total)++; /* this is the exemplar */
+                hashu64_insert(md->cid, (void*)(ciddata | 1), &cids);
+            }
+
+            if (foundupto) goto doneloop;
+
+            if (md->modseq <= window->updatemodseq) {
+                if (!is_expunged) {
+                    /* this may have been the old exemplar but is not the new exemplar */
+                    if (ciddata & 1) {
+                        update_removed(*expungedids, msgid, md->cid);
+                    }
+                    else if (ciddata & 4) {
+                        /* we need to remove and re-add this record just in case we
+                         * got unmasked by the previous */
+                        update_removed(*expungedids, msgid, md->cid);
+                        update_added(*messageids, msgid, md->cid, *total);
+                    }
+                    /* nothing later could be the old exemplar */
+                    hashu64_insert(md->cid, (void *)3, &cids);
+                }
+                goto doneloop;
+            }
+
+            /* OK, so this message has changed since last time */
+
+            /* we don't know that we weren't the old exemplar, so we always tell a removal */
+            update_removed(*expungedids, msgid, md->cid);
+
+            /* not the new exemplar because expunged */
+            if (is_expunged) {
+                hashu64_insert(md->cid, (void*)(ciddata | 4), &cids);
+                goto doneloop;
+            }
+            /* not the new exemplar because we've already seen that */
+            if (ciddata & 1) goto doneloop;
+
+            /* this is the new exemplar, so tell about it */
+            update_added(*messageids, msgid, md->cid, *total);
+
+            goto doneloop;
+        }
 
         /* Collapse threads, if requested */
         if (window->collapse && hashu64_lookup(md->cid, &cids))
@@ -3965,6 +4075,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
 
 doneloop:
+        if (!foundupto && window->uptomsgid && !strcmp(msgid, window->uptomsgid))
+            foundupto = 1;
         if (msg) json_decref(msg);
     }
 
@@ -4108,7 +4220,7 @@ static int getMessageList(jmap_req_t *req)
         json_object_set_new(res, "collapseThreads", json_null());
     }
     json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "canCalculateUpdates", json_false()); /* TODO getMessageListUpdates */
+    json_object_set_new(res, "canCalculateUpdates", window.cancalcupdates ? json_true() : json_false());
     json_object_set_new(res, "position", json_integer(window.position));
     json_object_set_new(res, "total", json_integer(total));
     json_object_set(res, "filter", filter);
@@ -4166,6 +4278,146 @@ static int getMessageList(jmap_req_t *req)
 
 done:
     if (messageids) json_decref(messageids);
+    if (threadids) json_decref(threadids);
+    return r;
+}
+
+static int getMessageListUpdates(jmap_req_t *req)
+{
+    int r;
+    json_t *filter, *sort;
+    json_t *added = NULL, *removed = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
+    int pe;
+    const char *since = NULL, *upto = NULL;
+    int max = 0;
+    struct getmsglist_window window;
+    size_t total, total_threads;
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+    json_t *unsupported_filter = json_pack("[]");
+    json_t *unsupported_sort = json_pack("[]");
+
+    /* filter */
+    filter = json_object_get(req->args, "filter");
+    if (JNOTNULL(filter)) {
+        validate_filter(filter, "filter", invalid, unsupported_filter);
+    }
+
+    /* sort */
+    sort = json_object_get(req->args, "sort");
+    if (JNOTNULL(sort)) {
+        validate_sort(sort, invalid, unsupported_sort, is_supported_msglist_sort);
+    }
+
+    /* windowing */
+    memset(&window, 0, sizeof(struct getmsglist_window));
+    if ((collapse = json_object_get(req->args, "collapseThreads"))) {
+        readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
+    }
+
+    /* sinceState */
+    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
+    if (pe > 0 && !atomodseq_t(since)) {
+        json_array_append_new(invalid, json_string("sinceState"));
+    }
+    window.updatemodseq = atomodseq_t(since);
+
+    /* uptoMessageId */
+    pe = readprop(req->args, "uptoMessageId", 0, invalid, "s", &upto);
+    if (pe > 0) {
+        json_array_append_new(invalid, json_string("uptoMessageId"));
+    }
+    window.uptomsgid = upto;
+
+    /* maxChanges */
+    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
+    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
+
+    /* Bail out for argument errors */
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        json_decref(unsupported_filter);
+        json_decref(unsupported_sort);
+        r = 0;
+        goto done;
+    }
+    json_decref(invalid);
+
+    /* Report unsupported filters and sorts */
+    if (json_array_size(unsupported_filter)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        json_decref(unsupported_sort);
+        r = 0;
+        goto done;
+    }
+    json_decref(unsupported_filter);
+    if (json_array_size(unsupported_sort)) {
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported_sort);
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    json_decref(unsupported_sort);
+
+    /* XXX - add search_is_mutable tests */
+
+    r = jmapmsg_search(req, filter, sort, &window, /*include_expunged*/1, &total, &total_threads,
+                       &added, &removed, &threadids);
+    if (r == IMAP_SEARCH_MUTABLE) {
+        json_t *err = json_pack("{s:s,s:s}", "type", "cannotCalculateChanges", "error", "Search is mutable");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    if (r == IMAP_NOTFOUND) {
+        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+    else if (r) goto done;
+
+    if (max && json_array_size(added) + json_array_size(removed) > (unsigned)max) {
+        json_t *err = json_pack("{s:s}", "type", "tooManyChanges");
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        r = 0;
+        goto done;
+    }
+
+    json_t *oldstate = json_string(since);
+    json_t *newstate = jmap_fmtstate(window.highestmodseq);
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->accountid));
+    if (JNOTNULL(collapse)) {
+        json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
+    } else {
+        json_object_set_new(res, "collapseThreads", json_null());
+    }
+    json_object_set_new(res, "oldState", oldstate);
+    json_object_set_new(res, "newState", newstate);
+    json_object_set(res, "added", added);
+    json_object_set(res, "removed", removed);
+    json_object_set(res, "filter", filter);
+    json_object_set(res, "sort", sort);
+    json_object_set_new(res, "uptoMessageId", json_string(upto));
+    json_object_set_new(res, "total", json_integer(total));
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("messageListUpdates"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    if (sort) json_decref(sort);
+    if (filter) json_decref(filter);
+    if (added) json_decref(added);
+    if (removed) json_decref(removed);
     if (threadids) json_decref(threadids);
     return r;
 }
