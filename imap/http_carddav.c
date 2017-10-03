@@ -234,7 +234,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV POST (RFC 5995) properties */
     { "add-member", NS_DAV, PROP_COLLECTION,
-      NULL /* add-member broken at FM */, NULL, NULL },
+      propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
@@ -296,7 +296,7 @@ static struct meth_params carddav_params = {
     &carddav_get,
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No PATCH handling */
-    { POST_SHARE, NULL, NULL },                 /* No special POST handling */
+    { POST_ADDMEMBER | POST_SHARE, NULL, NULL },/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
     carddav_reports

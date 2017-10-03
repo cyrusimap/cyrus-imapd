@@ -2521,7 +2521,9 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection ||
         !strcmp(fctx->req_tgt->collection, SCHED_INBOX) ||
-        !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+        !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX) ||
+        (fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK &&
+         !config_getswitch(IMAPOPT_CARDDAV_ALLOWADDMEMBER))) {
         /* Only allowed on non-scheduling collections */
         return HTTP_NOT_FOUND;
     }

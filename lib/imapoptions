@@ -549,6 +549,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    addresses for which the server is responsible.  If not set (the
    default), the value of the "servername" option will be used. */
 
+{ "carddav_allowaddmember", 0, SWITCH }
+/* Enable support for POST add-member on the CardDAV server. */
+
 { "carddav_allowaddressbookadmin", 0, SWITCH }
 /* Enable per-user addressbook administration web UI on the CardDAV server. */
 
