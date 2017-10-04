@@ -8038,29 +8038,38 @@ int meth_report(struct transaction_t *txn, void *params)
     if (report->flags & (REPORT_NEED_PROPS | REPORT_ALLOW_PROPS)) {
         /* Parse children element of report */
         for (cur = inroot->children; cur; cur = cur->next) {
+            unsigned mode = PROPFIND_NONE;
+
             if (cur->type == XML_ELEMENT_NODE) {
                 if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
-                    fctx.mode = PROPFIND_ALL;
+                    mode = PROPFIND_ALL;
                     prop = cur;
-                    break;
                 }
                 else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
-                    fctx.mode = PROPFIND_NAME;
+                    mode = PROPFIND_NAME;
                     fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
                     prop = cur;
-                    break;
                 }
                 else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
-                    fctx.mode = PROPFIND_PROP;
+                    mode = PROPFIND_PROP;
                     prop = cur;
                     props = cur->children;
-                    break;
                 }
+            }
+
+            if (mode != PROPFIND_NONE) {
+                if (fctx.mode != PROPFIND_NONE) {
+                    txn->error.desc = "Multiple <*prop*> elements in REPORT";
+                    ret = HTTP_BAD_REQUEST;
+                    goto done;
+                }
+
+                fctx.mode = mode;
             }
         }
 
         if (!prop && (report->flags & REPORT_NEED_PROPS)) {
-            txn->error.desc = "Missing <prop> element in REPORT\r\n";
+            txn->error.desc = "Missing <prop> element in REPORT";
             ret = HTTP_BAD_REQUEST;
             goto done;
         }
