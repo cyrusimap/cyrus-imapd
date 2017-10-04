@@ -3942,6 +3942,34 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              * 1: exemplar for this CID seen
              * 2: old exemplar for CID seen
              * 4: deleted new item exists that might have exposed old record
+             *
+             * The concept of "exemplar" comes from the xconv* commands in index.c.
+             * The "exemplar" is the first message that matches the current sort/search
+             * for a given conversation.  For getMessageList this is fairly simple,
+             * just show the first message you find with a given cid, but for
+             * getMessageListUpdates, you need to say "removed" for every message
+             * which MIGHT have been the previous exemplar, because it will be in the
+             * client cache, and you need to say both "removed" and "added" for the
+             * new exemplar unless you can be sure it was also the old exemplar.
+             *
+             * Of particular interest is the exposed old exemplar case.  Imagine
+             * 3 messages in the same conversation, A, C and D - delivered in that
+             * order (B was a different conversation - this is an example in the
+             * Cassandane test).  C and D are both in reply to A.  The sort is
+             * internaldate desc, so the messages are in this order D C B A.
+             * exemplars are D and B for the two conversations.
+             *
+             * Let's say the state is 1000 at this point.
+             *
+             * We then delete 'C' without changing D.  Since we know D must have been
+             * the old exemplar, there is no change to show between 1000 and 1001.
+             *
+             * We then delete 'D'.  Now, 'C' was changed at 1001, so asking for changes
+             * since 1001 we get removed: ['D', 'A'], added: ['A'] - because 'D' is now
+             * gone, and 'A' is now the exemplar - but we aren't sure if it was also the
+             * previous exemplay because we don't know if D was also deleted earlier and
+             * touched again for some unreleated reason.
+             *
              */
             uint64_t ciddata = (uint64_t)hashu64_lookup(md->cid, &cids);
             if (ciddata == 3) goto doneloop; /* this message clearly can't have been seen and can't be seen */
