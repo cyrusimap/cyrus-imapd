@@ -3913,16 +3913,15 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                     json_array_append(anchored_ids, json_array_get(*messageids, j));
                     json_array_append(anchored_cids, json_array_get(*threadids, j));
                 }
-                /* Adjust the window position for this anchor. This is
-                 * "[...] the 0-based index of the first result in the
-                 * threadIds array within the complete list". */
-                window->position = json_array_size(*threadids) -
-                                   json_array_size(anchored_cids);
-
                 json_decref(*messageids);
                 *messageids = anchored_ids;
                 json_decref(*threadids);
                 *threadids = anchored_cids;
+
+                /* Adjust the window position for this anchor. This is
+                 * "[...] the 0-based index of the first result in the
+                 * threadIds array within the complete list". */
+                window->position = *total - json_array_size(anchored_ids) - 1;
 
                 /* Reset message counter */
                 idcount = json_array_size(*messageids);
