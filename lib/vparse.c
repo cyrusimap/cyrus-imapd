@@ -1071,6 +1071,63 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
     }
 }
 
+static const struct {
+    const char *name;  /* property name */
+    struct {
+        unsigned min;  /* mandatory minimum number of occurrences */
+        unsigned max;  /* allowed maximum number of occurrences */
+    } version[3];      /* 1 min/max per vCard version */
+} restrictions[] = {
+    { "VERSION",     { { 1,  1 }, { 1,  1 }, { 1,  1 } } },
+    { "ANNIVERSARY", { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "BDAY",        { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "FN",          { { 0, -1 }, { 1, -1 }, { 1, -1 } } },
+    { "GENDER",      { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "KIND",        { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "N",           { { 1,  1 }, { 1,  1 }, { 0,  1 } } },
+    { "PRODID",      { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "REV",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "UID",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } }
+};
+
+#define NUM_CHECK_PROPS 10
+
+EXPORTED int vparse_restriction_check(struct vparse_card *card)
+{
+    enum { VER_2_1 = 0, VER_3_0, VER_4_0 };
+    struct vparse_entry *entry = NULL;
+    unsigned counts[NUM_CHECK_PROPS];
+    unsigned i, ver = VER_3_0;
+
+    /* Zero property counts */
+    memset(counts, 0, NUM_CHECK_PROPS * sizeof(unsigned));
+
+    /* Count interesting properties */
+    for (entry = card->properties; entry; entry = entry->next) {
+        for (i = 0; i < NUM_CHECK_PROPS; i++) {
+            if (!strcasecmpsafe(entry->name, restrictions[i].name)) {
+                counts[i]++;
+
+                if (i == 0) {
+                    /* VERSION */
+                    if (!strcmp(entry->v.value, "2.1")) ver = VER_2_1;
+                    else if (!strcmp(entry->v.value, "3.0")) ver = VER_3_0;
+                    else if (!strcmp(entry->v.value, "4.0")) ver = VER_4_0;
+                    else return 0;
+                }
+            }
+        }
+    }
+
+    /* Check property counts against restrictions */
+    for (i = 0; i < NUM_CHECK_PROPS; i++) {
+        if (counts[i] < restrictions[i].version[ver].min) return 0;
+        if (counts[i] > restrictions[i].version[ver].max) return 0;
+    }
+
+    return 1;
+}
+
 #if DEBUG
 static int _dump_card(struct vparse_card *card)
 {

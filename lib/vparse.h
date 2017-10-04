@@ -110,6 +110,7 @@ extern struct vparse_param *vparse_get_param(struct vparse_entry *entry, const c
 extern struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value);
 
 extern void vparse_tobuf(const struct vparse_card *card, struct buf *buf);
+extern int vparse_restriction_check(struct vparse_card *card);
 
 #endif /* VCARDFAST_H */
 
