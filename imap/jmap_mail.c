@@ -3785,7 +3785,7 @@ struct getmsglist_window {
     const char *anchor;
     int anchor_off;
     size_t limit;
-    modseq_t updatemodseq;
+    modseq_t sincemodesq;
     const char *uptomsgid;
 
     /* output arguments */
@@ -3860,7 +3860,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     query->want_expunged = want_expunged;
 
     if (search_is_mutable(sortcrit, searchargs)) {
-        if (window->updatemodseq) {
+        if (window->sincemodesq) {
             r = IMAP_SEARCH_MUTABLE;
             goto done;
         }
@@ -3915,7 +3915,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         hash_insert(msgid, (void*)1, &ids);
 
         /* we're doing getMessageListUpdates - we use the results differently */
-        if (window->updatemodseq) {
+        if (window->sincemodesq) {
             /* Keep track of the highest modseq */
             if (window->highestmodseq < md->modseq)
                 window->highestmodseq = md->modseq;
@@ -3924,13 +3924,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             if (!window->collapse) {
                 if (is_expunged) {
                     if (foundupto) goto doneloop;
-                    if (md->modseq <= window->updatemodseq) goto doneloop;
+                    if (md->modseq <= window->sincemodesq) goto doneloop;
                     update_removed(*expungedids, msgid, md->cid);
                 }
                 else {
                     (*total)++;
                     if (foundupto) goto doneloop;
-                    if (md->modseq <= window->updatemodseq) goto doneloop;
+                    if (md->modseq <= window->sincemodesq) goto doneloop;
                     update_added(*messageids, msgid, md->cid, *total);
                 }
                 goto doneloop;
@@ -3953,7 +3953,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
             if (foundupto) goto doneloop;
 
-            if (md->modseq <= window->updatemodseq) {
+            if (md->modseq <= window->sincemodesq) {
                 if (!is_expunged) {
                     /* this may have been the old exemplar but is not the new exemplar */
                     if (ciddata & 1) {
@@ -4321,7 +4321,7 @@ static int getMessageListUpdates(jmap_req_t *req)
     if (pe > 0 && !atomodseq_t(since)) {
         json_array_append_new(invalid, json_string("sinceState"));
     }
-    window.updatemodseq = atomodseq_t(since);
+    window.sincemodesq = atomodseq_t(since);
 
     /* uptoMessageId */
     pe = readprop(req->args, "uptoMessageId", 0, invalid, "s", &upto);
