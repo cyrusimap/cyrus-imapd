@@ -1114,6 +1114,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
+
+    if (!(vcard && vcard->objects &&
+          vparse_restriction_check(vcard->objects))) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        return HTTP_FORBIDDEN;
+    }
+
     return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
 }
 
