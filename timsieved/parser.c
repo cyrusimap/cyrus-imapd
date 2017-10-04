@@ -773,6 +773,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
 					     username, inboxname);
 
+      memset(&mbentry, 0, sizeof mbentry);
       r = mboxlist_lookup(inboxname, &mbentry, NULL);
       
       if(r && !sieved_userisadmin) {
