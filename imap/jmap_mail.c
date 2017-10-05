@@ -4416,7 +4416,6 @@ static int getMessageListUpdates(jmap_req_t *req)
     }
 
     json_t *oldstate = json_string(since);
-    json_t *newstate = jmap_fmtstate(window.highestmodseq);
 
     /* Prepare response. */
     res = json_pack("{}");
@@ -4427,7 +4426,7 @@ static int getMessageListUpdates(jmap_req_t *req)
         json_object_set_new(res, "collapseThreads", json_null());
     }
     json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
+    json_object_set_new(res, "newState", jmap_getstate(req, 0/*mbtype*/));
     json_object_set(res, "added", added);
     json_object_set(res, "removed", removed);
     json_object_set(res, "filter", filter);
