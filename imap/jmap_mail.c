@@ -4442,8 +4442,6 @@ static int getMessageListUpdates(jmap_req_t *req)
     json_array_append_new(req->response, item);
 
 done:
-    if (sort) json_decref(sort);
-    if (filter) json_decref(filter);
     if (added) json_decref(added);
     if (removed) json_decref(removed);
     if (threadids) json_decref(threadids);
