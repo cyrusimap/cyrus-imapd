@@ -5514,6 +5514,44 @@ sub test_getmessagelistupdates
     $self->assert_equals($res->[0][1]{added}[0]{messageId}, $idb);
 }
 
+sub test_getmessagelistupdates_zerosince
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("Message A") || die;
+
+    xlog "Get message id";
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_not_null($ida);
+
+    $state = $res->[0][1]->{state};
+
+    $self->make_message("Message B") || die;
+
+    $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+
+    my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{messageIds}};
+
+    xlog "get message list updates";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state }, "R1"]]);
+
+    $self->assert_equals($res->[0][1]{added}[0]{messageId}, $idb);
+
+    xlog "get message list updates with threads collapsed";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => "0", collapseThreads => JSON::true }, "R1"]]);
+
+    $self->assert_equals($res->[0][0], 'error');
+}
+
 
 sub test_getmessagelistupdates_thread
     :JMAP :min_version_3_1
