@@ -2681,7 +2681,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mailbox->header_dirty = 1;
         }
         else {
-            syslog(LOG_ERR, "SYNCERROR: Mailbox uniqueid changed %s (%s => %s) - retry",
+            syslog(LOG_ERR, "SYNCNOTICE: Mailbox uniqueid changed %s (%s => %s) - retry",
                    mboxname, mailbox->uniqueid, uniqueid);
             r = IMAP_MAILBOX_MOVED;
             goto done;
