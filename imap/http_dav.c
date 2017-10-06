@@ -7640,13 +7640,13 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 /* DAV:acl-principal-prop-set REPORT */
 int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
                          struct meth_params *rparams __attribute__((unused)),
-                         xmlNodePtr inroot, struct propfind_ctx *fctx)
+                         xmlNodePtr inroot __attribute__((unused)),
+                         struct propfind_ctx *fctx)
 {
     int ret = 0;
     struct request_target_t req_tgt;
     mbentry_t *mbentry = fctx->req_tgt->mbentry;
     char *userid, *nextid;
-    xmlNodePtr cur;
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
@@ -7685,7 +7685,6 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
         }
     }
 
-  done:
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
