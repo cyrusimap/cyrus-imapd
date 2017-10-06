@@ -7661,16 +7661,6 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
     fctx->lprops = principal_props;
     fctx->proc_by_resource = &propfind_by_resource;
 
-    /* Parse children element of report */
-    for (cur = inroot->children; cur; cur = cur->next) {
-        if (cur->type == XML_ELEMENT_NODE &&
-            !xmlStrcmp(cur->name, BAD_CAST "prop")) {
-
-            if ((ret = preload_proplist(cur->children, fctx))) goto done;
-            break;
-        }
-    }
-
     /* Parse the ACL string (userid/rights pairs) */
     for (userid = mbentry->acl; userid; userid = nextid) {
         char *rightstr;
