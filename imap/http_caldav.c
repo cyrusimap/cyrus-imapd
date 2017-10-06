@@ -2819,8 +2819,10 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                 caldavdb, return_rep, schedule_address);
 
     if (ret == HTTP_NO_CONTENT) {
-        buf_setcstr(&txn->buf, icalproperty_get_value_as_string(aprop));
-        txn->location = buf_cstring(&txn->buf);
+        if (aprop) {
+            buf_setcstr(&txn->buf, icalproperty_get_value_as_string(aprop));
+            txn->location = buf_cstring(&txn->buf);
+        }
 
         if (return_rep) {
             struct buf *data;
