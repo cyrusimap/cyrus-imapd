@@ -6321,7 +6321,7 @@ static int dav_post_share(struct transaction_t *txn,
             char *userid = NULL, *at;
             int r;
 
-            if (!xmlStrncmp(href, BAD_CAST "mailto:", 7)) {
+            if (!xmlStrncasecmp(href, BAD_CAST "mailto:", 7)) {
                 userid = xstrdup((char *) href + 7);
                 if ((at = strchr(userid, '@'))) {
                     if (!config_virtdomains || !strcmp(at+1, config_defdomain)){
@@ -6369,6 +6369,7 @@ static int dav_post_share(struct transaction_t *txn,
 
             if (!userid) {
                 /* XXX  set invite-invalid ? */
+                syslog(LOG_NOTICE, "could not parse userid from sharing href");
             }
             else {
                 /* Set access rights */
