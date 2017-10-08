@@ -6609,21 +6609,23 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
                                  struct propstat propstat[],
                                  void *rock __attribute__((unused)))
 {
-    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-                                   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-
     fctx->flags.cs_sharing = 1;
 
     if (fctx->req_tgt->collection && !fctx->req_tgt->flags &&
         !fctx->req_tgt->resource &&
         mboxname_userownsmailbox(fctx->req_tgt->userid, fctx->mbentry->name)) {
+        xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                       &propstat[PROPSTAT_OK],
+                                       name, ns, NULL, 0);
+
         xmlNewChild(node, NULL, BAD_CAST "can-be-shared", NULL);
 #if 0  /* XXX  this is probably iCloud specific */
         xmlNewChild(node, NULL, BAD_CAST "can-be-published", NULL);
 #endif
+        return 0;
     }
 
-    return 0;
+    return HTTP_NOT_FOUND;
 }
 
 
