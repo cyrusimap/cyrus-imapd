@@ -3172,6 +3172,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                     for (entry = pctx->lprops;
                          entry->name &&
                              (strcmp((const char *) prop->name, entry->name) ||
+                              !prop->ns ||
                               strcmp((const char *) prop->ns->href,
                                      known_namespaces[entry->ns].href));
                          entry++);
@@ -3189,6 +3190,15 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                             /* Write "live" property */
                             entry->put(prop, set, pctx, propstat, entry->rock);
                         }
+                    }
+                    else if (!prop->ns) {
+                        /* Property with no namespace */
+                        xmlNodePtr newprop =
+                            xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                                         &propstat[PROPSTAT_FORBID],
+                                         prop->name, NULL, NULL, 0);
+                        xmlSetNs(newprop, NULL);
+                        *pctx->ret = HTTP_FORBIDDEN;
                     }
                     else {
                         /* Write "dead" property */
