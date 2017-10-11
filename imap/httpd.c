@@ -3677,6 +3677,24 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     int bufsiz;
 
     switch (code) {
+    case 0: {
+        /* End of chunked XML response */
+        xmlNodePtr root = xmlDocGetRootElement(xml);
+        struct buf buf = BUF_INITIALIZER;
+
+        /* Close root element */
+        buf_setcstr(&buf, "</");
+        if (root->ns->prefix) buf_printf(&buf, "%s:", (char *) root->ns->prefix);
+        buf_printf(&buf, "%s>%s", (char *) root->name,
+                   config_httpprettytelemetry ? "\n" : "");
+        write_body(0, txn, buf_base(&buf), buf_len(&buf));
+        buf_free(&buf);
+
+        /* End of output */
+        write_body(0, txn, NULL, 0);
+        return;
+    }
+
     case HTTP_OK:
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
@@ -3694,6 +3712,16 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
                               config_httpprettytelemetry);
 
     if (buf) {
+        if (txn->flags.te & TE_CHUNKED) {
+            /* Start of XML chunked response */
+            xmlChar *cp;
+            int n;
+
+            /* Leave root element open (remove trailing '/') */
+            for (cp = buf + --bufsiz, n = 0; *cp != '/'; cp--, n++);
+            memmove(cp, cp+1, n);
+        }
+
         /* Output the XML response */
         txn->resp_body.type = "application/xml; charset=utf-8";
 
@@ -3709,7 +3737,38 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
 }
 
-EXPORTED void buf_printf_markup(struct buf *buf, unsigned level, const char *fmt, ...)
+/* Output a chunk of an XML response */
+EXPORTED void xml_partial_response(struct transaction_t *txn,
+                                   xmlDocPtr doc, xmlNodePtr node,
+                                   unsigned level, xmlBufferPtr *buf)
+{
+    const char *eol = "\n";
+    unsigned n;
+
+    if (!config_httpprettytelemetry) {
+        level = 0;
+        eol = "";
+    }
+
+    /* Start with clean buffer */
+    if (!*buf) *buf = xmlBufferCreate();
+    else xmlBufferEmpty(*buf);
+
+    /* Add leading indent to buffer */
+    for (n = 0; n < level * MARKUP_INDENT; n++) xmlBufferCCat(*buf, " ");
+
+    /* Dump XML node into buffer */
+    xmlNodeDump(*buf, doc, node, level, config_httpprettytelemetry);
+
+    /* Add trailing EOL to buffer */
+    xmlBufferCCat(*buf, eol);
+
+    /* Output the XML node */
+    write_body(0, txn, (char *) xmlBufferContent(*buf), xmlBufferLength(*buf));
+}
+
+EXPORTED void buf_printf_markup(struct buf *buf, unsigned level,
+                                const char *fmt, ...)
 {
     va_list args;
     const char *eol = "\n";
