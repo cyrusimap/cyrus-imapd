@@ -7282,6 +7282,7 @@ int report_sync_col(struct transaction_t *txn,
     xmlNodePtr node;
     struct index_state istate;
     char tokenuri[MAX_MAILBOX_PATH+1];
+    xmlBufferPtr buf = NULL;
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
 
@@ -7470,6 +7471,12 @@ int report_sync_col(struct transaction_t *txn,
     /* Open the DAV DB corresponding to the mailbox */
     fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
 
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
+
     /* Report the resources within the client requested limit (if any) */
     for (msgno = 0; msgno < nresp; msgno++) {
         struct dav_data *ddata;
@@ -7490,6 +7497,14 @@ int report_sync_col(struct transaction_t *txn,
 
         fctx->proc_by_resource(fctx, ddata);
         fctx->record = NULL;
+
+        /* Output <response> element for this resource */
+        node = xmlGetLastChild(fctx->root);
+        xml_partial_response(txn, fctx->root->doc, node, 1, &buf);
+
+        /* Remove <response> element from root (no need to keep in memory) */
+        xmlReplaceNode(node, NULL);
+        xmlFreeNode(node);
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
@@ -7506,13 +7521,21 @@ int report_sync_col(struct transaction_t *txn,
                  SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
                  mailbox->i.uidvalidity, respmodseq);
     }
-    xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+    node =
+        xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+
+    /* Output sync-token element */
+    xml_partial_response(txn, fctx->root->doc, node, 1, &buf);
+    xmlBufferFree(buf);
+
+    /* End XML response */
+    xml_response(0, txn, fctx->root->doc);
 
   done:
     if (istate.map) free(istate.map);
     mailbox_close(&mailbox);
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    return ret;
 }
 
 
