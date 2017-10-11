@@ -585,17 +585,27 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
     return r;
 }
 
+#define BYMAILBOX  " mailbox = :mailbox AND"
+
+#define BYCOMPTYPE " comp_type = :comp_type AND"
+
+#define BYMODSEQ   " modseq > :modseq ORDER BY modseq LIMIT :limit;"
 
 #define CMD_GETUPDATES CMD_READFIELDS \
-      " WHERE comp_type = :comp_type AND modseq > :modseq" \
-      " ORDER BY modseq LIMIT :limit;"
+    " WHERE" BYMODSEQ
+
+#define CMD_GETUPDATES_COMP CMD_READFIELDS \
+    " WHERE" BYCOMPTYPE BYMODSEQ
 
 #define CMD_GETUPDATES_MBOX CMD_READFIELDS \
-      " WHERE mailbox = :mailbox AND comp_type = :comp_type AND modseq > :modseq" \
-      " ORDER BY modseq LIMIT :limit;"
+    " WHERE" BYMAILBOX BYMODSEQ
+
+#define CMD_GETUPDATES_MBOX_COMP CMD_READFIELDS \
+    " WHERE" BYMAILBOX BYCOMPTYPE BYMODSEQ
 
 EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
-                                modseq_t oldmodseq, const char *mboxname, int kind, int limit,
+                                modseq_t oldmodseq, const char *mboxname,
+                                int kind, int limit,
                                 int (*cb)(void *rock, struct caldav_data *cdata),
                                 void *rock)
 {
@@ -607,15 +617,20 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
         { NULL,            SQLITE_NULL,    { .s = NULL      } }
     };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
+    struct read_rock rrock =
+        { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
+    const char *cmd;
     int r;
 
     /* SQLite interprets a negative limit as unbounded. */
     if (mboxname) {
-        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES_MBOX, bval, &read_cb, &rrock);
-    } else {
-        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
+        if (kind == CAL_COMP_REAL) cmd = CMD_GETUPDATES_MBOX;
+        else cmd = CMD_GETUPDATES_MBOX_COMP;
     }
+    else if (kind == CAL_COMP_REAL) cmd = CMD_GETUPDATES;
+    else cmd = CMD_GETUPDATES_COMP;
+
+    r = sqldb_exec(caldavdb->db, cmd, bval, &read_cb, &rrock);
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
     }
