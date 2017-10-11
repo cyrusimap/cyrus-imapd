@@ -757,14 +757,28 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     return r;
 }
 
+
+#define BYMAILBOX " mailbox = :mailbox AND"
+
+#define BYKIND    " kind = :kind AND"
+
+#define BYMODSEQ  " modseq > :modseq;"
+
 #define CMD_GETUPDATES CMD_GETFIELDS \
-  " WHERE kind = :kind AND modseq > :modseq;"
+  " WHERE" BYMODSEQ
+
+#define CMD_GETUPDATES_KIND CMD_GETFIELDS \
+  " WHERE" BYKIND BYMODSEQ
 
 #define CMD_GETUPDATES_MBOX CMD_GETFIELDS \
-  " WHERE mailbox = :mailbox AND kind = :kind AND modseq > :modseq;"
+  " WHERE" BYMAILBOX BYMODSEQ
+
+#define CMD_GETUPDATES_MBOX_KIND CMD_GETFIELDS \
+  " WHERE" BYMAILBOX BYKIND BYMODSEQ
 
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
-                                 modseq_t oldmodseq, const char *mboxname, int kind,
+                                 modseq_t oldmodseq, const char *mboxname,
+                                 int kind,
                                  int (*cb)(void *rock,
                                            struct carddav_data *cdata),
                                  void *rock)
@@ -777,12 +791,17 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     };
     static struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 1 /* tombstones */, cb, rock };
+    const char *cmd;
     int r;
 
-    if (mboxname)
-        r = sqldb_exec(carddavdb->db, CMD_GETUPDATES_MBOX, bval, &read_cb, &rrock);
-    else
-        r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
+    if (mboxname) {
+        if (kind < 0) cmd = CMD_GETUPDATES_MBOX;
+        else cmd = CMD_GETUPDATES_MBOX_KIND;
+    }
+    else if (kind < 0) cmd = CMD_GETUPDATES;
+    else cmd = CMD_GETUPDATES_KIND;
+
+    r = sqldb_exec(carddavdb->db, cmd, bval, &read_cb, &rrock);
     if (r) {
         syslog(LOG_ERR, "carddav error %s", error_message(r));
         /* XXX - free memory */
@@ -791,7 +810,8 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     return r;
 }
 
-EXPORTED int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
+EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
+                               struct carddav_data *cdata,
                                struct vparse_card *vcard)
 {
     struct vparse_entry *ventry;
