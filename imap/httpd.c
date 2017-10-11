@@ -3717,9 +3717,10 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
             xmlChar *cp;
             int n;
 
-            /* Leave root element open (remove trailing '/') */
+            /* Leave root element open */
             for (cp = buf + --bufsiz, n = 0; *cp != '/'; cp--, n++);
-            memmove(cp, cp+1, n);
+            if (*(cp+1) == '>') memmove(cp, cp+1, n);  /* <root/> */
+            else bufsiz -= n+1;  /* </root> */
         }
 
         /* Output the XML response */
