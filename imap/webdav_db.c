@@ -506,6 +506,7 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
     if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(webdavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
