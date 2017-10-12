@@ -191,6 +191,7 @@ int caldav_get_events(struct caldav_db *caldavdb,
 /* Process each entry for 'caldavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
  * If mailbox is not NULL, only process entries of this mailbox.
+ * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int caldav_get_updates(struct caldav_db *caldavdb,
                        modseq_t oldmodseq, const char *mailbox, int kind,

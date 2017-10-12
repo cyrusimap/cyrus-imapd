@@ -123,11 +123,14 @@ int carddav_get_cards(struct carddav_db *carddavdb,
                       const char *mailbox, const char *vcard_uid, int kind,
                       carddav_cb_t *cb, void *rock);
 
-/* process each entry of type 'kind' and updated since 'oldmodseq'
-   in 'carddavdb' with cb() */
+/* Process each entry for 'carddavdb' with a modseq higher than oldmodseq,
+ * in ascending order of modseq.
+ * If mailbox is not NULL, only process entries of this mailbox.
+ * If kind is non-negative, only process entries of this kind.
+ * If max_records is positive, only call cb for at most this entries. */
 int carddav_get_updates(struct carddav_db *carddavdb,
                         modseq_t oldmodseq, const char *mboxname, int kind,
-                        carddav_cb_t *cb, void *rock);
+                        int max_records, carddav_cb_t *cb, void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,

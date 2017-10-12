@@ -585,24 +585,6 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
     return r;
 }
 
-#define BYMAILBOX  " mailbox = :mailbox AND"
-
-#define BYCOMPTYPE " comp_type = :comp_type AND"
-
-#define BYMODSEQ   " modseq > :modseq ORDER BY modseq LIMIT :limit;"
-
-#define CMD_GETUPDATES CMD_READFIELDS \
-    " WHERE" BYMODSEQ
-
-#define CMD_GETUPDATES_COMP CMD_READFIELDS \
-    " WHERE" BYCOMPTYPE BYMODSEQ
-
-#define CMD_GETUPDATES_MBOX CMD_READFIELDS \
-    " WHERE" BYMAILBOX BYMODSEQ
-
-#define CMD_GETUPDATES_MBOX_COMP CMD_READFIELDS \
-    " WHERE" BYMAILBOX BYCOMPTYPE BYMODSEQ
-
 EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
                                 modseq_t oldmodseq, const char *mboxname,
                                 int kind, int limit,
@@ -613,24 +595,27 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
         { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
         { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
         { ":comp_type",    SQLITE_INTEGER, { .i = kind      } },
+        /* SQLite interprets a negative limit as unbounded. */
         { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
         { NULL,            SQLITE_NULL,    { .s = NULL      } }
     };
     static struct caldav_data cdata;
     struct read_rock rrock =
         { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
-    const char *cmd;
+    struct buf sqlbuf = BUF_INITIALIZER;
     int r;
 
-    /* SQLite interprets a negative limit as unbounded. */
-    if (mboxname) {
-        if (kind == CAL_COMP_REAL) cmd = CMD_GETUPDATES_MBOX;
-        else cmd = CMD_GETUPDATES_MBOX_COMP;
+    buf_setcstr(&sqlbuf, CMD_READFIELDS " WHERE");
+    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (kind >= 0) {
+        /* Use a negative value to signal that we accept ALL components types */
+        buf_appendcstr(&sqlbuf, " comp_type = :comp_type AND");
     }
-    else if (kind == CAL_COMP_REAL) cmd = CMD_GETUPDATES;
-    else cmd = CMD_GETUPDATES_COMP;
+    buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
-    r = sqldb_exec(caldavdb->db, cmd, bval, &read_cb, &rrock);
+    r = sqldb_exec(caldavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
+
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
     }
