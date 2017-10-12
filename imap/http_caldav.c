@@ -503,6 +503,7 @@ static struct meth_params caldav_params = {
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_imapuid_proc_t) &caldav_lookup_imapuid,
       (db_foreach_proc_t) &caldav_foreach,
+      (db_updates_proc_t) &caldav_get_updates,
       (db_write_proc_t) &caldav_write,
       (db_delete_proc_t) &caldav_delete },
     &caldav_acl,

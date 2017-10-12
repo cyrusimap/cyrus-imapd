@@ -7165,16 +7165,6 @@ int meth_put(struct transaction_t *txn, void *params)
 }
 
 
-/* Compare modseq in index maps -- used for sorting */
-static int map_modseq_cmp(const struct index_map *m1,
-                          const struct index_map *m2)
-{
-    if (m1->modseq < m2->modseq) return -1;
-    if (m1->modseq > m2->modseq) return 1;
-    return 0;
-}
-
-
 /* CALDAV:calendar-multiget/CARDDAV:addressbook-multiget REPORT */
 int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx)
@@ -7264,12 +7254,68 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 }
 
 
+struct updates_rock {
+    struct propfind_ctx *fctx;
+    uint32_t limit;
+    modseq_t basemodseq;
+    modseq_t *respmodseq;
+    uint32_t *nresp;
+    xmlBufferPtr *buf;
+};
+
+static int updates_cb(void *rock, void *data)
+{
+    struct dav_data *ddata = (struct dav_data *) data;
+    struct updates_rock *urock = (struct updates_rock *) rock;
+    struct propfind_ctx *fctx = urock->fctx;
+    xmlNodePtr node;
+
+    if (!ddata->alive) {
+        if (ddata->modseq <= urock->basemodseq) {
+            /* Initial sync - ignore unmapped resources */
+            return 0;
+        }
+
+        /* Report resource as NOT FOUND
+           IMAP UID of 0 will cause index record to be ignored
+           propfind_by_resource() will append our resource name */
+        ddata->imap_uid = 0;
+    }
+
+    if (*urock->nresp >= urock->limit) {
+        /* Number of responses has reached client-specified limit */
+        return HTTP_NO_STORAGE;
+    }
+    else {
+        /* Bump response count */
+        *urock->nresp += 1;
+    }
+
+    /* respmodseq will be highest modseq of the resources we return */
+    *(urock->respmodseq) = MAX(ddata->modseq, *(urock->respmodseq));
+
+    /* Add <response> element for this resource */
+    fctx->proc_by_resource(fctx, ddata);
+    fctx->record = NULL;
+
+    /* Output <response> element for this resource */
+    node = xmlGetLastChild(fctx->root);
+    xml_partial_response(fctx->txn, fctx->root->doc, node, 1, urock->buf);
+
+    /* Remove <response> element from root (no need to keep in memory) */
+    xmlReplaceNode(node, NULL);
+    xmlFreeNode(node);
+
+    return 0;
+}
+
+
 /* DAV:sync-collection REPORT */
 int report_sync_col(struct transaction_t *txn,
                     struct meth_params *rparams __attribute__((unused)),
                     xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = 0, r, i, unbind_flag = -1, unchanged_flag = -1;
+    int ret = 0, r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0;
@@ -7277,7 +7323,6 @@ int report_sync_col(struct transaction_t *txn,
     modseq_t highestmodseq = 0;
     modseq_t respmodseq = 0;
     uint32_t limit = -1;
-    uint32_t msgno;
     uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
@@ -7303,8 +7348,6 @@ int report_sync_col(struct transaction_t *txn,
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
-    mailbox_user_flag(mailbox, DFLAG_UNBIND, &unbind_flag, 1);
-    mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag, 1);
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -7392,82 +7435,6 @@ int report_sync_col(struct transaction_t *txn,
         basemodseq = highestmodseq;
     }
 
-    /* Construct array of records for sorting and/or fetching cached header */
-    istate.mailbox = mailbox;
-    istate.map = xzmalloc(mailbox->i.num_records * sizeof(struct index_map));
-
-    /* Find which resources we need to report */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
-    const message_t *msg;
-
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-
-        if ((unbind_flag >= 0) &&
-            record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
-            /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
-            continue;
-        }
-
-        if ((record->modseq - syncmodseq == 1) &&
-            (unchanged_flag >= 0) &&
-            (record->user_flags[unchanged_flag / 32] &
-             (1 << (unchanged_flag & 31)))) {
-            /* Resource has just had VTIMEZONEs stripped - ignore it */
-            continue;
-        }
-
-        if ((record->modseq <= basemodseq) &&
-            (record->system_flags & FLAG_EXPUNGED)) {
-            /* Initial sync - ignore unmapped resources */
-            continue;
-        }
-
-        /* copy data into map (just like index.c - XXX helper fn? */
-        istate.map[nresp].recno = record->recno;
-        istate.map[nresp].uid = record->uid;
-        istate.map[nresp].modseq = record->modseq;
-        istate.map[nresp].system_flags = record->system_flags;
-        for (i = 0; i < MAX_USER_FLAGS/32; i++)
-            istate.map[nresp].user_flags[i] = record->user_flags[i];
-        istate.map[nresp].cache_offset = record->cache_offset;
-
-        nresp++;
-    }
-    mailbox_iter_done(&iter);
-
-    if (limit < nresp) {
-        /* Need to truncate the responses */
-        struct index_map *map = istate.map;
-
-        /* Sort the response records by modseq */
-        qsort(map, nresp, sizeof(struct index_map),
-              (int (*)(const void *, const void *)) &map_modseq_cmp);
-
-        /* Our last response MUST be the last record with its modseq */
-        for (nresp = limit;
-             nresp && map[nresp-1].modseq == map[nresp].modseq;
-             nresp--);
-
-        if (!nresp) {
-            /* DAV:number-of-matches-within-limits */
-            fctx->txn->error.desc = "Unable to truncate results";
-            txn->error.precond = DAV_OVER_LIMIT;
-            ret = HTTP_NO_STORAGE;
-            goto done;
-        }
-
-        /* respmodseq will be modseq of last record we return */
-        respmodseq = map[nresp-1].modseq;
-
-        /* Tell client we truncated the responses */
-        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
-    }
-    else {
-        /* Full response - respmodseq will be highestmodseq of mailbox */
-        respmodseq = highestmodseq;
-    }
-
     /* Open the DAV DB corresponding to the mailbox */
     fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
 
@@ -7478,33 +7445,26 @@ int report_sync_col(struct transaction_t *txn,
     xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Report the resources within the client requested limit (if any) */
-    for (msgno = 0; msgno < nresp; msgno++) {
-        struct dav_data *ddata;
+    struct updates_rock rock =
+        { fctx, limit, basemodseq, &respmodseq, &nresp, &buf };
 
-        /* Find name of the resource */
-        r = rparams->davdb.lookup_imapuid(fctx->davdb, fctx->mailbox->name,
-                                          istate.map[msgno].uid,
-                                          (void **) &ddata,
-                                          /* tombstones */ 1);
-        if (r) continue;
+    r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, mailbox->name,
+                                      -1 /* ALL kinds of resources */,
+                                      (syncmodseq && basemodseq) ? 0 : limit + 1,
+                                      &updates_cb, &rock);
+    if (nresp <= limit) {
+        /* Full response - respmodseq will be highestmodseq of mailbox */
+        respmodseq = highestmodseq;
+    }
 
-        if (!ddata->alive) {
-            /* report as NOT FOUND
-               IMAP UID of 0 will cause index record to be ignored
-               propfind_by_resource() will append our resource name */
-            ddata->imap_uid = 0;
-        }
-
-        fctx->proc_by_resource(fctx, ddata);
-        fctx->record = NULL;
+    if (r) {
+        /* Tell client we truncated the responses */
+        *(fctx->req_tgt->resource) = '\0';
+        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
 
         /* Output <response> element for this resource */
         node = xmlGetLastChild(fctx->root);
         xml_partial_response(txn, fctx->root->doc, node, 1, &buf);
-
-        /* Remove <response> element from root (no need to keep in memory) */
-        xmlReplaceNode(node, NULL);
-        xmlFreeNode(node);
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
@@ -8987,6 +8947,7 @@ struct meth_params notify_params = {
       (db_lookup_proc_t) &webdav_lookup_resource,
       (db_imapuid_proc_t) &webdav_lookup_imapuid,
       (db_foreach_proc_t) &webdav_foreach,
+      (db_updates_proc_t) &webdav_get_updates,
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },
     NULL,                                       /* No ACL extensions */
