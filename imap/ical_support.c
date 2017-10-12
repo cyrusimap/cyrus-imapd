@@ -464,6 +464,9 @@ EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
                     if (!strcasecmp(propname, "COMMENT")) continue;
                     if (!strcasecmp(propname, "DESCRIPTION")) continue;
                     if (!strcasecmp(propname, "SUMMARY")) continue;
+
+                    /* For iOS 11 */
+                    if (!strcasecmp(propname, "URL")) continue;
                 }
                 else {
                     /* Ignore unknown property errors */
