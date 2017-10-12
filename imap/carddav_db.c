@@ -790,6 +790,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
         /* Use a negative value to signal that we accept ALL card types */
         buf_appendcstr(&sqlbuf, " kind = :kind AND");
     }
+    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(carddavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);

@@ -611,6 +611,7 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
         /* Use a negative value to signal that we accept ALL components types */
         buf_appendcstr(&sqlbuf, " comp_type = :comp_type AND");
     }
+    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(caldavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
