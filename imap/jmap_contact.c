@@ -645,7 +645,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     /* Lookup updates. */
     struct updates_rock rock = { req, json_array(), json_array(), 0, max_records, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
-                            &getcontactupdates_cb, &rock);
+                            -1 /*max_records*/, &getcontactupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -1739,7 +1739,7 @@ static int getContactUpdates(struct jmap_req *req)
     /* Lookup updates. */
     struct updates_rock rock = { req, json_array(), json_array(), 0, max_records, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
-                            &getcontactupdates_cb, &rock);
+                            -1 /*max_records*/, &getcontactupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);

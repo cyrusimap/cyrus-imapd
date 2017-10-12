@@ -764,21 +764,9 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 
 #define BYMODSEQ  " modseq > :modseq;"
 
-#define CMD_GETUPDATES CMD_GETFIELDS \
-  " WHERE" BYMODSEQ
-
-#define CMD_GETUPDATES_KIND CMD_GETFIELDS \
-  " WHERE" BYKIND BYMODSEQ
-
-#define CMD_GETUPDATES_MBOX CMD_GETFIELDS \
-  " WHERE" BYMAILBOX BYMODSEQ
-
-#define CMD_GETUPDATES_MBOX_KIND CMD_GETFIELDS \
-  " WHERE" BYMAILBOX BYKIND BYMODSEQ
-
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
                                  modseq_t oldmodseq, const char *mboxname,
-                                 int kind,
+                                 int kind, int limit,
                                  int (*cb)(void *rock,
                                            struct carddav_data *cdata),
                                  void *rock)
@@ -787,21 +775,26 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
         { ":mailbox", SQLITE_TEXT,    { .s = mboxname  } },
         { ":modseq",  SQLITE_INTEGER, { .i = oldmodseq } },
         { ":kind",    SQLITE_INTEGER, { .i = kind      } },
+        /* SQLite interprets a negative limit as unbounded. */
+        { ":limit",   SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
         { NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     static struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 1 /* tombstones */, cb, rock };
-    const char *cmd;
+    struct buf sqlbuf = BUF_INITIALIZER;
     int r;
 
-    if (mboxname) {
-        if (kind < 0) cmd = CMD_GETUPDATES_MBOX;
-        else cmd = CMD_GETUPDATES_MBOX_KIND;
+    buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
+    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (kind >= 0) {
+        /* Use a negative value to signal that we accept ALL card types */
+        buf_appendcstr(&sqlbuf, " kind = :kind AND");
     }
-    else if (kind < 0) cmd = CMD_GETUPDATES;
-    else cmd = CMD_GETUPDATES_KIND;
+    buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
-    r = sqldb_exec(carddavdb->db, cmd, bval, &read_cb, &rrock);
+    r = sqldb_exec(carddavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
+
     if (r) {
         syslog(LOG_ERR, "carddav error %s", error_message(r));
         /* XXX - free memory */

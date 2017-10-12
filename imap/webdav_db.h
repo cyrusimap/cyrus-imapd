@@ -70,6 +70,8 @@ struct webdav_data {
     unsigned ref_count;
 };
 
+typedef int webdav_cb_t(void *rock, struct webdav_data *wdata);
+
 /* get a database handle corresponding to userid */
 struct webdav_db *webdav_open_userid(const char *userid);
 
@@ -100,7 +102,7 @@ int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 
 /* process each entry for 'mailbox' in 'webdavdb' with cb() */
 int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
-                   int (*cb)(void *rock, void *data),
+                   int (*cb)(void *rock, struct webdav_data *data),
                    void *rock);
 
 /* write an entry to 'webdavdb' */
@@ -120,6 +122,15 @@ int webdav_commit(struct webdav_db *webdavdb);
 
 /* abort transaction */
 int webdav_abort(struct webdav_db *webdavdb);
+
+/* Process each entry for 'webdavdb' with a modseq higher than oldmodseq,
+ * in ascending order of modseq.
+ * If mailbox is not NULL, only process entries of this mailbox.
+ * If kind is non-negative, only process entries of this kind.
+ * If max_records is positive, only call cb for at most this entries. */
+int webdav_get_updates(struct webdav_db *webdavdb,
+                       modseq_t oldmodseq, const char *mboxname, int kind,
+                       int max_records, webdav_cb_t *cb, void *rock);
 
 #endif /* WITH_DAV */
 
