@@ -301,6 +301,12 @@ typedef int (*db_imapuid_proc_t)(void *davdb, const char *mailbox,
 typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
                                  int (*cb)(void *rock, void *data), void *rock);
 
+/* Function to process 'limit' DAV resources
+   updated since 'oldmodseq' in 'mailbox' with 'cb' */
+typedef int (*db_updates_proc_t)(void *davdb, modseq_t oldmodseq,
+                                 const char *mailbox, int kind, int limit,
+                                 int (*cb)(void *rock, void *data), void *rock);
+
 /* Context for fetching properties */
 struct propfind_entry_list;
 struct prop_entry;
@@ -435,6 +441,7 @@ struct davdb_params {
     db_lookup_proc_t lookup_resource;   /* lookup a specific resource */
     db_imapuid_proc_t lookup_imapuid;   /* lookup a specific resource */
     db_foreach_proc_t foreach_resource; /* process all resources in a mailbox */
+    db_updates_proc_t foreach_update;   /* process updated resources in a mbox */
     /* XXX - convert these to lock management only.  For everything else,
      * we need to go via mailbox.c for replication support */
     db_write_proc_t write_resourceLOCKONLY;     /* write a specific resource */
