@@ -2096,6 +2096,9 @@ static int examine_request(struct transaction_t *txn)
                      * to challenge the client for authentication. */
                     return HTTP_UNAVAILABLE;
                 }
+                else if (r == SASL_FAIL) {
+                    return HTTP_SERVER_ERROR;
+                }
                 else {
                     ret = HTTP_UNAUTHORIZED;
                 }
@@ -4268,12 +4271,16 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (status) return status;
     }
 
-    /* Map HTTP errors to SASL */
+    /* Post-process the successful authentication. */
     int ret = auth_success(txn, user);
     if (ret == HTTP_UNAVAILABLE) {
         status = SASL_UNAVAIL;
     }
     else if (ret) {
+        /* Any error here comes after the user already logged in,
+         * so avoid to return SASL_BADAUTH. It would trigger the
+         * HTTP handler to send UNAUTHORIZED, and might confuse
+         * users that provided their correct credentials. */
         syslog(LOG_ERR, "auth_success returned error: %s", error_message(ret));
         status = SASL_FAIL;
     }

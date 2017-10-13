@@ -842,6 +842,7 @@ static int my_caldav_auth(const char *userid)
     if (r) {
         syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
                 userid, error_message(r));
+        return HTTP_SERVER_ERROR;
     }
 
     return 0;

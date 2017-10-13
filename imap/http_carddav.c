@@ -451,6 +451,7 @@ static int my_carddav_auth(const char *userid)
     if (r) {
         syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
                 userid, error_message(r));
+        return HTTP_SERVER_ERROR;
     }
     return 0;
 }
