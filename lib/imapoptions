@@ -650,6 +650,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    resources (principals).  If not set (the default), the value of the
    "servername" option will be used.*/
 
+{ "dav_lock_timeout", 20, INT }
+/* The maximum time in seconds to wait for a write lock on the per-user
+   DAV database before timeout. For HTTP requests, the HTTP status code
+   503 is returned if the lock can not be obtained within this time. */
+
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
    is a C format string that gets 3 options: the first is the name of the

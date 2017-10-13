@@ -110,7 +110,8 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
 
 /* Open DAV DB corresponding in file */
 EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                             int version, const struct sqldb_upgrade *upgrade)
+                             int version, const struct sqldb_upgrade *upgrade,
+                             int timeout_ms)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;
@@ -145,7 +146,7 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
     sqlite3_extended_result_codes(open->db, 1);
     sqlite3_trace(open->db, _debug, open->fname);
 
-    sqlite3_busy_timeout(open->db, 20*1000); /* 20 seconds is an eternity */
+    sqlite3_busy_timeout(open->db, timeout_ms);
 
     rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
