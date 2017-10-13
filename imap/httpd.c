@@ -1088,7 +1088,7 @@ static int parse_connection(struct transaction_t *txn);
 static int parse_ranges(const char *hdr, unsigned long len,
                         struct range **ranges);
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
-static void auth_success(struct transaction_t *txn, const char *userid);
+static int auth_success(struct transaction_t *txn, const char *userid);
 static int http_auth(const char *creds, struct transaction_t *txn);
 
 static int meth_get(struct transaction_t *txn, void *params);
@@ -2088,7 +2088,17 @@ static int examine_request(struct transaction_t *txn)
                 syslog(LOG_DEBUG, "auth failed - reinit");
                 reset_saslconn(&httpd_saslconn);
                 txn->auth_chal.scheme = NULL;
-                ret = HTTP_UNAUTHORIZED;
+                if (r == SASL_UNAVAIL) {
+                    /* The namespace to authenticate to is unavailable.
+                     * There could be any reason for this, e.g. the DAV
+                     * handler could have run into a timeout for the
+                     * user's dabatase. In any case, there's no sense
+                     * to challenge the client for authentication. */
+                    return HTTP_UNAVAILABLE;
+                }
+                else {
+                    ret = HTTP_UNAUTHORIZED;
+                }
             }
             else if (r == SASL_CONTINUE) {
                 /* Continue with multi-step authentication */
@@ -2118,7 +2128,8 @@ static int examine_request(struct transaction_t *txn)
             ret = HTTP_UNAUTHORIZED;
         }
         else {
-            auth_success(txn, authzid);
+            ret = auth_success(txn, authzid);
+            if (ret) return ret;
         }
     }
 
@@ -3917,7 +3928,7 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
 }
 
 
-static void auth_success(struct transaction_t *txn, const char *userid)
+static int auth_success(struct transaction_t *txn, const char *userid)
 {
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
     int i;
@@ -3970,9 +3981,13 @@ static void auth_success(struct transaction_t *txn, const char *userid)
 
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
-        if (namespaces[i]->enabled && namespaces[i]->auth)
-            namespaces[i]->auth(httpd_userid);
+        if (namespaces[i]->enabled && namespaces[i]->auth) {
+            int ret = namespaces[i]->auth(httpd_userid);
+            if (ret) return ret;
+        }
     }
+
+    return 0;
 }
 
 /* Perform HTTP Authentication based on the given credentials ('creds').
@@ -4253,7 +4268,15 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (status) return status;
     }
 
-    auth_success(txn, user);
+    /* Map HTTP errors to SASL */
+    int ret = auth_success(txn, user);
+    if (ret == HTTP_UNAVAILABLE) {
+        status = SASL_UNAVAIL;
+    }
+    else if (ret) {
+        syslog(LOG_ERR, "auth_success returned error: %s", error_message(ret));
+        status = SASL_FAIL;
+    }
 
     return status;
 }

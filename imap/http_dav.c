@@ -131,7 +131,7 @@ static struct buf server_info_link = BUF_INITIALIZER;
 static struct webdav_db *auth_webdavdb = NULL;
 
 static void my_dav_init(struct buf *serverinfo);
-static void my_dav_auth(const char *userid);
+static int my_dav_auth(const char *userid);
 static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
@@ -8619,21 +8619,25 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     return r;
 }
 
-static void my_dav_auth(const char *userid)
+static int my_dav_auth(const char *userid)
 {
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
+        return 0;
     }
     else {
         /* Open WebDAV DB for 'userid' */
         my_dav_reset();
         auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) fatal("Unable to open WebDAV DB", EC_IOERR);
+        if (!auth_webdavdb) {
+            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision a notifications collection for 'userid' */
@@ -8667,7 +8671,7 @@ static void my_dav_auth(const char *userid)
         /* Start construction of our server-info */
         if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
             syslog(LOG_ERR, "Unable to create server-info XML");
-            return;
+            return 0;
         }
 
         /* Add token */
@@ -8742,6 +8746,8 @@ static void my_dav_auth(const char *userid)
             syslog(LOG_ERR, "Unable to dump server-info XML tree");
         }
     }
+
+    return 0;
 }
 
 

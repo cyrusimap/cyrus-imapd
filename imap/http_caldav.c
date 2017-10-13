@@ -146,7 +146,7 @@ static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
 
 static void my_caldav_init(struct buf *serverinfo);
-static void my_caldav_auth(const char *userid);
+static int my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
@@ -816,32 +816,35 @@ int caldav_create_defaultcalendars(const char *userid)
     return r;
 }
 
-static void my_caldav_auth(const char *userid)
+static int my_caldav_auth(const char *userid)
 {
-    int r;
-
     if (httpd_userisadmin ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV database */
-        return;
+        return 0;
     }
     else {
         /* Open CalDAV DB for 'userid' */
         my_caldav_reset();
         auth_caldavdb = caldav_open_userid(userid);
-        if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
+        if (!auth_caldavdb) {
+            syslog(LOG_ERR, "Unable to open CalDAV DB for userid %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision calendars for 'userid' */
-    r = caldav_create_defaultcalendars(userid);
+    int r = caldav_create_defaultcalendars(userid);
     if (r) {
         syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
                 userid, error_message(r));
     }
+
+    return 0;
 }
 
 static void my_caldav_reset(void)

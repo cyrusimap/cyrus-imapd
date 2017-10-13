@@ -91,7 +91,7 @@ static struct carddav_db *auth_carddavdb = NULL;
 static time_t compile_time;
 
 static void my_carddav_init(struct buf *serverinfo);
-static void my_carddav_auth(const char *userid);
+static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
 
@@ -425,31 +425,34 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     return r;
 }
 
-static void my_carddav_auth(const char *userid)
+static int my_carddav_auth(const char *userid)
 {
-    int r;
-
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
+        return 0;
     }
     else {
         /* Open CardDAV DB for 'userid' */
         my_carddav_reset();
         auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
+        if (!auth_carddavdb) {
+            syslog(LOG_ERR, "Unable to open CardDAV DB for userid: %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision an addressbook for 'userid' */
-    r = carddav_create_defaultaddressbook(userid);
+    int r = carddav_create_defaultaddressbook(userid);
     if (r) {
         syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
                 userid, error_message(r));
     }
+    return 0;
 }
 
 

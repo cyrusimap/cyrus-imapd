@@ -451,7 +451,7 @@ struct namespace_t {
     int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *); /* Function run during service startup */
-    void (*auth)(const char *); /* Function run after authentication */
+    int (*auth)(const char *);  /* Function run after authentication */
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
     int (*premethod)(txn_t *);  /* Function run prior to any method */

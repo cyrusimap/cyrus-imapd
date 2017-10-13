@@ -49,7 +49,7 @@
 
 static int prom_need_auth(struct transaction_t *txn);
 static void prom_init(struct buf *);
-static void prom_auth(const char *);
+static int prom_auth(const char *);
 static void prom_reset(void);
 static void prom_shutdown(void);
 static int prom_get(struct transaction_t *txn, void *params);
@@ -110,10 +110,11 @@ static void prom_init(struct buf *serverinfo __attribute__((unused)))
         && config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
 }
 
-static void prom_auth(const char *userid)
+static int prom_auth(const char *userid)
 {
     (void) userid;
     /* FIXME */
+    return 0;
 }
 
 static void prom_reset(void)
