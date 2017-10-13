@@ -110,9 +110,8 @@ static void prom_init(struct buf *serverinfo __attribute__((unused)))
         && config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
 }
 
-static int prom_auth(const char *userid)
+static int prom_auth(const char *userid __attribute__((unused)))
 {
-    (void) userid;
     /* FIXME */
     return 0;
 }
