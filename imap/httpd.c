@@ -3691,24 +3691,6 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     int bufsiz;
 
     switch (code) {
-    case 0: {
-        /* End of chunked XML response */
-        xmlNodePtr root = xmlDocGetRootElement(xml);
-        struct buf buf = BUF_INITIALIZER;
-
-        /* Close root element */
-        buf_setcstr(&buf, "</");
-        if (root->ns->prefix) buf_printf(&buf, "%s:", (char *) root->ns->prefix);
-        buf_printf(&buf, "%s>%s", (char *) root->name,
-                   config_httpprettytelemetry ? "\n" : "");
-        write_body(0, txn, buf_base(&buf), buf_len(&buf));
-        buf_free(&buf);
-
-        /* End of output */
-        write_body(0, txn, NULL, 0);
-        return;
-    }
-
     case HTTP_OK:
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
@@ -3767,19 +3749,42 @@ EXPORTED void xml_partial_response(struct transaction_t *txn,
 
     /* Start with clean buffer */
     if (!*buf) *buf = xmlBufferCreate();
-    else xmlBufferEmpty(*buf);
 
-    /* Add leading indent to buffer */
-    for (n = 0; n < level * MARKUP_INDENT; n++) xmlBufferCCat(*buf, " ");
+    if (node) {
+        /* Add leading indent to buffer */
+        for (n = 0; n < level * MARKUP_INDENT; n++) xmlBufferCCat(*buf, " ");
 
-    /* Dump XML node into buffer */
-    xmlNodeDump(*buf, doc, node, level, config_httpprettytelemetry);
+        /* Dump XML node into buffer */
+        xmlNodeDump(*buf, doc, node, level, config_httpprettytelemetry);
 
-    /* Add trailing EOL to buffer */
-    xmlBufferCCat(*buf, eol);
+        /* Add trailing EOL to buffer */
+        xmlBufferCCat(*buf, eol);
+    }
+    else {
+        /* End of chunked XML response */
+        xmlNodePtr root = xmlDocGetRootElement(doc);
 
-    /* Output the XML node */
-    write_body(0, txn, (char *) xmlBufferContent(*buf), xmlBufferLength(*buf));
+        /* Add close of root element to buffer */
+        xmlBufferCCat(*buf, "</");
+        if (root->ns->prefix) {
+            xmlBufferCat(*buf, root->ns->prefix);
+            xmlBufferCCat(*buf, ":");
+        }
+        xmlBufferCat(*buf, root->name);
+        xmlBufferCCat(*buf, ">");
+
+        /* Add trailing EOL to buffer */
+        xmlBufferCCat(*buf, eol);
+    }
+
+    if (txn) {
+        /* Output the XML buffer */
+        write_body(0, txn,
+                   (char *) xmlBufferContent(*buf), xmlBufferLength(*buf));
+
+        /* Reset the buffer for next chunk */
+        xmlBufferEmpty(*buf);
+    }
 }
 
 EXPORTED void buf_printf_markup(struct buf *buf, unsigned level,

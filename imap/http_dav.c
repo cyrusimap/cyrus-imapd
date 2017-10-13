@@ -7294,13 +7294,16 @@ static int updates_cb(void *rock, void *data)
     /* respmodseq will be highest modseq of the resources we return */
     *(urock->respmodseq) = MAX(ddata->modseq, *(urock->respmodseq));
 
-    /* Add <response> element for this resource */
+    /* Add <response> element for this resource to root */
     fctx->proc_by_resource(fctx, ddata);
     fctx->record = NULL;
 
-    /* Output <response> element for this resource */
+    /* Add <response> element for this resource to output buffer.
+       Only output the xmlBuffer every PROT_BUFSIZE bytes */
     node = xmlGetLastChild(fctx->root);
-    xml_partial_response(fctx->txn, fctx->root->doc, node, 1, urock->buf);
+    xml_partial_response((xmlBufferLength(*urock->buf) > PROT_BUFSIZE) ?
+                         fctx->txn : NULL,
+                         fctx->root->doc, node, 1, urock->buf);
 
     /* Remove <response> element from root (no need to keep in memory) */
     xmlReplaceNode(node, NULL);
@@ -7462,14 +7465,14 @@ int report_sync_col(struct transaction_t *txn,
         *(fctx->req_tgt->resource) = '\0';
         xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
 
-        /* Output <response> element for this resource */
+        /* Add <response> element to output buffer */
         node = xmlGetLastChild(fctx->root);
-        xml_partial_response(txn, fctx->root->doc, node, 1, &buf);
+        xml_partial_response(NULL /* !output */, fctx->root->doc, node, 1, &buf);
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
 
-    /* Add sync-token element */
+    /* Add sync-token element to root */
     if (respmodseq < basemodseq) {
         /* Client limited results of initial sync - include basemodseq */
         snprintf(tokenuri, MAX_MAILBOX_PATH,
@@ -7484,12 +7487,15 @@ int report_sync_col(struct transaction_t *txn,
     node =
         xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
-    /* Output sync-token element */
-    xml_partial_response(txn, fctx->root->doc, node, 1, &buf);
-    xmlBufferFree(buf);
+    /* Add sync-token element to output buffer */
+    xml_partial_response(NULL /* !output */, fctx->root->doc, node, 1, &buf);
 
     /* End XML response */
-    xml_response(0, txn, fctx->root->doc);
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &buf);
+    xmlBufferFree(buf);
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
 
   done:
     if (istate.map) free(istate.map);
