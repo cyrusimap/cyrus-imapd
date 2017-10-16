@@ -219,10 +219,6 @@ static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop, xmlNodePtr resp,
                              struct propstat propstat[], void *rock);
-static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
-                              struct propfind_ctx *fctx,
-                              xmlNodePtr prop, xmlNodePtr resp,
-                              struct propstat propstat[], void *rock);
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct proppatch_ctx *pctx,
                                struct propstat propstat[], void *rock);
@@ -345,7 +341,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_fromdb, proppatch_todb, NULL },
+      propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", NS_DAV,
@@ -449,7 +445,7 @@ static const struct prop_entry caldav_props[] = {
     { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION,
       propfind_scheddefault, NULL, NULL },
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
-      propfind_caltransp, proppatch_caltransp, NULL },
+      propfind_fromdb, proppatch_caltransp, NULL },
 
     /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
@@ -5993,38 +5989,6 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST type, 0);
-
-    return 0;
-}
-
-
-/* Callback to fetch CALDAV:schedule-calendar-transp */
-static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
-                              struct propfind_ctx *fctx,
-                              xmlNodePtr prop __attribute__((unused)),
-                              xmlNodePtr resp __attribute__((unused)),
-                              struct propstat propstat[],
-                              void *rock __attribute__((unused)))
-{
-    struct buf attrib = BUF_INITIALIZER;
-    const char *prop_annot =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
-    xmlNodePtr node;
-    int r = 0;
-
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
-
-    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                httpd_userid, &attrib);
-
-    if (r) return HTTP_SERVER_ERROR;
-    if (!attrib.len) return HTTP_NOT_FOUND;
-
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
-    xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST buf_cstring(&attrib), NULL);
-
-    buf_free(&attrib);
 
     return 0;
 }

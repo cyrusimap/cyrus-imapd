@@ -134,7 +134,7 @@ static const struct prop_entry webdav_props[] = {
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_fromdb, proppatch_todb, NULL },
+      propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", NS_DAV,

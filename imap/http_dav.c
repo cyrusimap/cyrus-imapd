@@ -139,10 +139,10 @@ static int get_server_info(struct transaction_t *txn);
 
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
-static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
-                                struct propfind_ctx *fctx,
-                                xmlNodePtr prop, xmlNodePtr resp,
-                                struct propstat propstat[], void *rock);
+static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
+                                  struct propfind_ctx *fctx,
+                                  xmlNodePtr prop, xmlNodePtr resp,
+                                  struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -199,7 +199,7 @@ static const struct prop_entry principal_props[] = {
     /* WebDAV (RFC 4918) properties */
     { "creationdate", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
     { "displayname", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
-      propfind_displayname, NULL, NULL },
+      propfind_principalname, NULL, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
     { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
       propfind_getlength, NULL, NULL },
@@ -1556,13 +1556,13 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:displayname */
-static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
-                                struct propfind_ctx *fctx,
-                                xmlNodePtr prop __attribute__((unused)),
-                                xmlNodePtr resp __attribute__((unused)),
-                                struct propstat propstat[],
-                                void *rock __attribute__((unused)))
+/* Callback to fetch DAV:displayname for principals */
+static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
+                                  struct propfind_ctx *fctx,
+                                  xmlNodePtr prop __attribute__((unused)),
+                                  xmlNodePtr resp __attribute__((unused)),
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
 {
     /* XXX  Do LDAP/SQL lookup here */
     buf_reset(&fctx->buf);
@@ -1585,6 +1585,29 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
     return 0;
+}
+
+
+/* Callback to fetch DAV:displayname for collections */
+int propfind_collectionname(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock)
+{
+    int r = propfind_fromdb(name, ns, fctx, prop, resp, propstat, rock);
+
+    if (r && fctx->mbentry && !fctx->req_tgt->resource) {
+        /* Special case empty displayname -- use last segment of path */
+        xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                       &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+        buf_setcstr(&fctx->buf, strrchr(fctx->mbentry->name, '.') + 1);
+        xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+                                           BAD_CAST buf_cstring(&fctx->buf),
+                                           buf_len(&fctx->buf)));
+        return 0;
+    }
+
+    return r;
 }
 
 
@@ -2819,15 +2842,10 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                (const char *) ns->href, name);
 
-    if (fctx->mbentry && !fctx->record &&
-        !(r = annotatemore_lookupmask(fctx->mbentry->name,
-                                      buf_cstring(&fctx->buf),
-                                      httpd_userid, &attrib))) {
-        if (!buf_len(&attrib) &&
-            !xmlStrcmp(name, BAD_CAST "displayname")) {
-            /* Special case empty displayname -- use last segment of path */
-            buf_setcstr(&attrib, strrchr(fctx->mbentry->name, '.') + 1);
-        }
+    if (fctx->mbentry && !fctx->record) {
+        r = annotatemore_lookupmask(fctx->mbentry->name,
+                                    buf_cstring(&fctx->buf),
+                                    httpd_userid, &attrib);
     }
 
     if (r) return HTTP_SERVER_ERROR;
@@ -3111,8 +3129,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
                 ret = *fctx->ret;
             }
             else {
-                /* No match, treat as a dead property.  Need to look for both collections
-                 * resources */
+                /* No match, treat as a dead property.
+                   Need to look at both collections and resources */
                 nentry->flags = PROP_COLLECTION | PROP_RESOURCE;
                 nentry->get = propfind_fromdb;
                 nentry->prop = NULL;
