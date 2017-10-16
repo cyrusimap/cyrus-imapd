@@ -2072,6 +2072,12 @@ done:
     return r;
 }
 
+/*
+ * Lookup all mailboxes where msgid is contained in.
+ *
+ * The return value is a JSON object keyed by the mailbox unique id,
+ * and its mailbox name as value.
+ */
 static json_t* jmapmsg_mailboxes(jmap_req_t *req, const char *msgid)
 {
     struct jmapmsg_mailboxes_data data = { req, json_pack("{}") };
@@ -2977,11 +2983,11 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         }
         /* mailboxIds */
         if (_wantprop(props, "mailboxIds")) {
-            json_t *mailboxes, *val, *ids = json_pack("[]");
+            json_t *mailboxes, *val, *ids = json_pack("{}");
             const char *mboxid;
             mailboxes = jmapmsg_mailboxes(req, msgid);
             json_object_foreach(mailboxes, mboxid, val) {
-                json_array_append_new(ids, json_string(mboxid));
+                json_object_set_new(ids, mboxid, json_true());
             }
             json_decref(mailboxes);
             json_object_set_new(msg, "mailboxIds", ids);
@@ -6453,23 +6459,20 @@ static int jmapmsg_append(jmap_req_t *req,
     msgrecord_t *mr = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
-    size_t len, i, msgcount = 0;
+    size_t len, msgcount = 0;
     int r = HTTP_SERVER_ERROR;
 
     if (!internaldate) internaldate = time(NULL);
 
     /* Pick the mailbox to create the message in, prefer Drafts */
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
-    json_array_foreach(mailboxids, i, val) {
-        char *name = NULL;
-
-        id = json_string_value(val);
+    json_object_foreach(mailboxids, id, val) {
         if (id && *id == '#') {
             id = hash_lookup(id + 1, &req->idmap->mailboxes);
         }
         if (!id) continue;
 
-        name = jmapmbox_find_uniqueid(req, id);
+        char *name = jmapmbox_find_uniqueid(req, id);
         if (!name) continue;
 
         mbname_t *mbname = mbname_from_intname(name);
@@ -6572,7 +6575,6 @@ static int jmapmsg_append(jmap_req_t *req,
     memset(user_flags, 0, sizeof(user_flags));
     int j;
 
-
     if (has_attachment) {
         /* Set the $HasAttachment flag. We mainly use that to support
          * the hasAttachment filter property in getMessageList */
@@ -6581,7 +6583,6 @@ static int jmapmsg_append(jmap_req_t *req,
         if (r) goto done;
         user_flags[userflag/32] |= 1<<(userflag&31);
     }
-
 
     for (j = 0; j < keywords->count; j++) {
         const char *flag = strarray_nth(keywords, j);
@@ -6773,37 +6774,34 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     const char *id = NULL;
     json_t *val;
     time_t internaldate = 0;
-    size_t i;
-    json_t *mailboxids;
+    json_t *mailboxids = NULL;
     strarray_t keywords = STRARRAY_INITIALIZER;
     const char *keyword;
 
     /* Validate mailboxids here, we need them anyway */
     mailboxids = json_object_get(msg, "mailboxIds");
-    json_array_foreach(mailboxids, i, val) {
-        id = json_string_value(val);
+    json_object_foreach(mailboxids, id, val) {
+        if (json_true() != val) {
+            struct buf buf = BUF_INITIALIZER;
+            buf_printf(&buf, "mailboxIds{%s}", id);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_free(&buf);
+            continue;
+        }
+        const char *mboxid = id;
         if (id && *id == '#') {
-            id = hash_lookup(id + 1, &req->idmap->mailboxes);
+            mboxid = hash_lookup(id + 1, &req->idmap->mailboxes);
         }
-        if (!id) {
+        char *name = NULL;
+        if (!mboxid || !(name = jmapmbox_find_uniqueid(req, mboxid))) {
             struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "mailboxIds[%zu]", i);
+            buf_printf(&buf, "mailboxIds{%s}", id);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_free(&buf);
-            continue;
-        }
-
-        char *name = jmapmbox_find_uniqueid(req, id);
-        if (!name) {
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "mailboxIds[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_free(&buf);
-            continue;
+            buf_reset(&buf);
         }
         free(name);
     }
-    if (!json_array_size(mailboxids) && !json_array_size(invalid)) {
+    if (!json_object_size(mailboxids) && !json_array_size(invalid)) {
         json_array_append_new(invalid, json_string("mailboxIds"));
     }
     validate_createmsg(msg, invalid, 0/*is_attached*/);
@@ -6965,20 +6963,29 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     prop = json_object_get(msg, "mailboxIds");
     if (JNOTNULL(prop)) {
         dstmailboxes = json_pack("{}");
-        json_array_foreach(prop, i, val) {
-            char *name = NULL;
-            id = json_string_value(val);
-            if (id && *id == '#') {
-                id = hash_lookup(id + 1, &req->idmap->mailboxes);
+        json_object_foreach(prop, id, val) {
+            if (json_true() != val) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "mailboxIds{%s}", id);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_free(&buf);
+                continue;
             }
-            if (id && (name = jmapmbox_find_uniqueid(req, id))) {
-                json_object_set_new(dstmailboxes, id, json_string(name));
-                free(name);
+            const char *mboxid = id;
+            if (id && *id == '#') {
+                mboxid = hash_lookup(id + 1, &req->idmap->mailboxes);
+            }
+            char *name = NULL;
+            if (mboxid && (name = jmapmbox_find_uniqueid(req, mboxid))) {
+                json_object_set_new(dstmailboxes, mboxid, json_string(name));
             } else {
-                buf_printf(&buf, "mailboxIds[%zu]", i);
+                buf_reset(&buf);
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "mailboxIds{%s}", id);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
+            free(name);
         }
         if (!json_object_size(dstmailboxes)) {
             json_array_append_new(invalid, json_string("mailboxIds"));
@@ -7541,19 +7548,19 @@ static int importMessages(jmap_req_t *req)
                 free(tmp);
             }
         }
-        json_array_foreach(json_object_get(msg, "mailboxIds"), i, val) {
+        json_object_foreach(json_object_get(msg, "mailboxIds"), id, val) {
             char *name = NULL;
-            const char *mboxid = json_string_value(val);
+            const char *mboxid = id;
             if (mboxid && *mboxid == '#') {
                 mboxid = hash_lookup(mboxid + 1, &req->idmap->mailboxes);
             }
             if (!mboxid || !(name = jmapmbox_find_uniqueid(req, mboxid))) {
-                buf_printf(&buf, ".mailboxIds[%zu]", i);
+                buf_printf(&buf, ".mailboxIds{%s}", id);
                 json_array_append_new(invalidmbox, json_string(buf_cstring(&buf)));
             }
             free(name);
         }
-        if (json_array_size(json_object_get(msg, "mailboxIds")) == 0) {
+        if (json_object_size(json_object_get(msg, "mailboxIds")) == 0) {
             buf_printf(&buf, ".mailboxIds");
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         }
