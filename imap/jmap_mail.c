@@ -2517,6 +2517,118 @@ static void _extract_htmlbody(struct buf *buf, const char *t)
     buf_appendmap(buf, p, q - p);
 }
 
+static json_t *attachment_from_part(struct body *part,
+                                    const struct buf *msg_buf,
+                                    json_t *inlinedcids,
+                                    json_t *imgsizes)
+{
+    struct param *param;
+    charset_t ascii = charset_lookupname("us-ascii");
+    const char *cid;
+    strarray_t headers = STRARRAY_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    char *freeme;
+
+    char *blobid = jmap_blobid(&part->content_guid);
+    json_t *att = json_pack("{s:s}", "blobId", blobid);
+    free(blobid);
+
+    /* type */
+    buf_setcstr(&buf, part->type);
+    if (part->subtype) {
+        buf_appendcstr(&buf, "/");
+        buf_appendcstr(&buf, part->subtype);
+    }
+    json_object_set_new(att, "type", json_string(buf_lcase(&buf)));
+
+    /* name */
+    const char *fname = NULL;
+    int is_extended = 0;
+    for (param = part->disposition_params; param; param = param->next) {
+        if (!strncasecmp(param->attribute, "filename", 8)) {
+            is_extended = param->attribute[8] == '*';
+            fname = param->value;
+            break;
+        }
+    }
+    if (!fname) {
+        for (param = part->params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "name", 4)) {
+                is_extended = param->attribute[4] == '*';
+                fname = param->value;
+                break;
+            }
+        }
+    }
+    if (fname && is_extended) {
+        char *s = charset_parse_mimexvalue(fname, NULL);
+        json_object_set_new(att, "name", s ? json_string(s) : json_null());
+        free(s);
+    }
+    else if (fname) {
+        int mime_flags = charset_flags & CHARSET_MIME_UTF8;
+        char *s = charset_parse_mimeheader(fname, mime_flags);
+        json_object_set_new(att, "name", s ? json_string(s) : json_null());
+        free(s);
+    }
+    else {
+        json_object_set_new(att, "name", json_null());
+    }
+
+    /* size */
+    if (part->charset_enc) {
+        buf_reset(&buf);
+        charset_decode(&buf, msg_buf->s + part->content_offset,
+                part->content_size, part->charset_enc);
+        json_object_set_new(att, "size", json_integer(buf_len(&buf)));
+    } else {
+        json_object_set_new(att, "size", json_integer(part->content_size));
+    }
+
+    /* cid */
+    strarray_add(&headers, "Content-ID");
+    freeme = xstrndup(msg_buf->s + part->header_offset, part->header_size);
+    message_pruneheader(freeme, &headers, NULL);
+    if ((cid = strchr(freeme, ':'))) {
+        char *unfolded;
+        if ((unfolded = charset_unfold(cid + 1, strlen(cid), 0))) {
+            buf_setcstr(&buf, unfolded);
+            free(unfolded);
+            buf_trim(&buf);
+            cid = buf_cstring(&buf);
+        } else {
+            cid = NULL;
+        }
+    }
+    json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
+    free(freeme);
+
+    /* isInline */
+    if (inlinedcids && cid && json_object_get(inlinedcids, cid)) {
+        json_object_set_new(att, "isInline", json_true());
+    }
+    else {
+        json_object_set_new(att, "isInline", json_false());
+    }
+
+    /* width, height */
+    json_t *width = json_null(), *height = json_null(), *dim;
+    if (imgsizes && (dim = json_object_get(imgsizes, part->part_id))) {
+        if (json_array_size(dim) >= 2) {
+            width = json_incref(json_array_get(dim, 0));
+            height = json_incref(json_array_get(dim, 1));
+        }
+    }
+    json_object_set_new(att, "width", width);
+    json_object_set_new(att, "height", height);
+
+    charset_free(&ascii);
+    strarray_fini(&headers);
+    buf_free(&buf);
+
+    return att;
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              msgrecord_t *mr, MsgType type,
@@ -2803,109 +2915,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         }
 
         for (i = 0; i < bodies.atts.count; i++) {
-            struct body *part = ptrarray_nth(&bodies.atts, i);
-            struct param *param;
-            json_t *att;
-            charset_t ascii = charset_lookupname("us-ascii");
-            const char *cid;
-            strarray_t headers = STRARRAY_INITIALIZER;
-            char *freeme;
-
-            char *blobid = jmap_blobid(&part->content_guid);
-            att = json_pack("{s:s}", "blobId", blobid);
-            free(blobid);
-
-            /* type */
-            buf_setcstr(&buf, part->type);
-            if (part->subtype) {
-                buf_appendcstr(&buf, "/");
-                buf_appendcstr(&buf, part->subtype);
-            }
-            json_object_set_new(att, "type", json_string(buf_lcase(&buf)));
-
-            /* name */
-            const char *fname = NULL;
-            int is_extended = 0;
-            for (param = part->disposition_params; param; param = param->next) {
-                if (!strncasecmp(param->attribute, "filename", 8)) {
-                    is_extended = param->attribute[8] == '*';
-                    fname = param->value;
-                    break;
-                }
-            }
-            if (!fname) {
-                for (param = part->params; param; param = param->next) {
-                    if (!strncasecmp(param->attribute, "name", 4)) {
-                        is_extended = param->attribute[4] == '*';
-                        fname = param->value;
-                        break;
-                    }
-                }
-            }
-            if (fname && is_extended) {
-                char *s = charset_parse_mimexvalue(fname, NULL);
-                json_object_set_new(att, "name", s ? json_string(s) : json_null());
-                free(s);
-            }
-            else if (fname) {
-                int mime_flags = charset_flags & CHARSET_MIME_UTF8;
-                char *s = charset_parse_mimeheader(fname, mime_flags);
-                json_object_set_new(att, "name", s ? json_string(s) : json_null());
-                free(s);
-            }
-            else {
-                json_object_set_new(att, "name", json_null());
-            }
-
-            /* size */
-            if (part->charset_enc) {
-                buf_reset(&buf);
-                charset_decode(&buf, msg_buf->s + part->content_offset,
-                               part->content_size, part->charset_enc);
-                json_object_set_new(att, "size", json_integer(buf_len(&buf)));
-            } else {
-                json_object_set_new(att, "size", json_integer(part->content_size));
-            }
-
-            /* cid */
-            strarray_add(&headers, "Content-ID");
-            freeme = xstrndup(msg_buf->s + part->header_offset, part->header_size);
-            message_pruneheader(freeme, &headers, NULL);
-            if ((cid = strchr(freeme, ':'))) {
-                char *unfolded;
-                if ((unfolded = charset_unfold(cid + 1, strlen(cid), 0))) {
-                    buf_setcstr(&buf, unfolded);
-                    free(unfolded);
-                    buf_trim(&buf);
-                    cid = buf_cstring(&buf);
-                } else {
-                    cid = NULL;
-                }
-            }
-            json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
-            free(freeme);
-
-            /* isInline */
-            if (inlinedcids && cid && json_object_get(inlinedcids, cid)) {
-                json_object_set_new(att, "isInline", json_true());
-            }
-            else {
-                json_object_set_new(att, "isInline", json_false());
-            }
-
-            /* width, height */
-            json_t *width = json_null(), *height = json_null(), *dim;
-            if (imgsizes && (dim = json_object_get(imgsizes, part->part_id))) {
-                if (json_array_size(dim) >= 2) {
-                    width = json_incref(json_array_get(dim, 0));
-                    height = json_incref(json_array_get(dim, 1));
-                }
-            }
-            json_object_set_new(att, "width", width);
-            json_object_set_new(att, "height", height);
-
-            charset_free(&ascii);
-            strarray_fini(&headers);
+            json_t *att = attachment_from_part(ptrarray_nth(&bodies.atts, i),
+                                               msg_buf, inlinedcids, imgsizes);
+            json_array_append_new(atts, att);
+        }
+        for (i = 0; i < bodies.msgs.count; i++) {
+            json_t *att = attachment_from_part(ptrarray_nth(&bodies.msgs, i),
+                                               msg_buf, inlinedcids, imgsizes);
             json_array_append_new(atts, att);
         }
         if (!json_array_size(atts)) {
