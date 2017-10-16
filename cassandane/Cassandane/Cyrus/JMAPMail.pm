@@ -895,7 +895,10 @@ sub test_setmailboxes_destroy_empty
 
     xlog "copy message to newly created mailbox";
     $res = $jmap->Request([['setMessages', {
-        update => { $msgid => { mailboxIds => [$inbox->{id}, $mboxid] }},
+        update => { $msgid => { mailboxIds => {
+            $inbox->{id} => JSON::true,
+            $mboxid => JSON::true,
+        }}},
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
@@ -907,7 +910,9 @@ sub test_setmailboxes_destroy_empty
 
     xlog "remove message from mailbox";
     $res = $jmap->Request([['setMessages', {
-        update => { $msgid => { mailboxIds => [$inbox->{id}] }},
+        update => { $msgid => { mailboxIds => {
+            $inbox->{id} => JSON::true,
+        }}},
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
@@ -1153,7 +1158,7 @@ sub test_getmailboxupdates_counts
     my $state = $res->[0][1]{newState};
 
     my $draft =  {
-        mailboxIds => [$mboxid],
+        mailboxIds => { $mboxid => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -1381,8 +1386,8 @@ sub test_getmessages
     $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
-    $self->assert_str_equals($inboxid, $msg->{mailboxIds}[0]);
-    $self->assert_num_equals(1, scalar @{$msg->{mailboxIds}});
+    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
 
     my $hdrs = $msg->{headers};
@@ -1553,8 +1558,8 @@ sub test_getmessages_fetchmessages
 
     my $msg = $res->[1][1]->{list}[0];
 
-    $self->assert_str_equals($msg->{mailboxIds}[0], $inboxid);
-    $self->assert_num_equals(scalar @{$msg->{mailboxIds}}, 1);
+    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
+    $self->assert_num_equals(scalar keys %{$msg->{mailboxIds}}, 1);
 
     my $hdrs = $msg->{headers};
     $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
@@ -1677,8 +1682,8 @@ sub test_getmessages_threads
 
     my $msg = $res->[2][1]->{list}[0];
 
-    $self->assert_str_equals($msg->{mailboxIds}[0], $inboxid);
-    $self->assert_num_equals(1, scalar @{$msg->{mailboxIds}});
+    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
     my $hdrs = $msg->{headers};
     $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
@@ -1734,7 +1739,7 @@ sub test_getmessages_multimailboxes
     $res = $jmap->Request([['getMessageList', {fetchMessages => JSON::true}, "R1"]]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{messageIds}});
-    $self->assert_num_equals(1, scalar @{$msg->{mailboxIds}});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
     xlog "Create target mailbox";
     $talk->create("INBOX.target");
@@ -1746,7 +1751,7 @@ sub test_getmessages_multimailboxes
     $res = $jmap->Request([['getMessageList', {fetchMessages => JSON::true}, "R1"]]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{messageIds}});
-    $self->assert_num_equals(2, scalar @{$msg->{mailboxIds}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
 }
 
 sub test_getmessages_body_both
@@ -2382,7 +2387,7 @@ sub test_setmessages_draft
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$draftsmbox],
+        mailboxIds => { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         sender => { name => "Marvin the Martian", email => "marvin\@acme.local" },
         to => [
@@ -2462,7 +2467,7 @@ sub test_setmessages_inreplyto
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2505,7 +2510,7 @@ sub test_setmessages_attachedmessages
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2625,7 +2630,7 @@ sub test_setmessages_userkeywords
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2698,7 +2703,7 @@ sub test_uploadzero
 
     my $msgresp = $jmap->Request([
       ['setMessages', { create => { "2" => {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2743,7 +2748,7 @@ sub test_upload
 
     my $msgresp = $jmap->Request([
       ['setMessages', { create => { "2" => {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2818,7 +2823,7 @@ sub test_uploadbin
 
     my $msgresp = $jmap->Request([
       ['setMessages', { create => { "2" => {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -2950,7 +2955,7 @@ sub test_setmessages_attachments
     my $longfname = "a_very_long_filename_thats_looking_quite_bogus_but_in_fact_is_absolutely_valid\N{GRINNING FACE}!.bin";
 
     my $draft =  {
-        mailboxIds => [$draftsmbox],
+        mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
@@ -3030,7 +3035,7 @@ sub test_setmessages_flagged
     my $drafts = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$drafts],
+        mailboxIds =>  { $drafts => JSON::true },
         keywords => { '$Draft' => JSON::true, '$Flagged' => JSON::true },
         textBody => "a flagged draft"
     };
@@ -3057,7 +3062,7 @@ sub test_setmessages_invalid_mailaddr
     my $inboxid = $self->getinbox()->{id};
 
     my $msg = {
-        mailboxIds => [$inboxid],
+        mailboxIds =>  { $inboxid => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
@@ -3107,25 +3112,25 @@ sub test_setmessages_mailboxids
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
-    $msg->{mailboxIds} = [];
+    $msg->{mailboxIds} = {};
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
 
     # OK: drafts mailbox isn't required (anymore)
-    $msg->{mailboxIds} = [$inboxid];
+    $msg->{mailboxIds} = { $inboxid => JSON::true },
     $msg->{subject} = "Message 1";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
 
     # OK: drafts mailbox is OK to create in
-    $msg->{mailboxIds} = [$draftsid];
+    $msg->{mailboxIds} = { $draftsid => JSON::true },
     $msg->{subject} = "Message 2";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
 
     # OK: drafts mailbox is OK to create in, as is for multiple mailboxes
-    $msg->{mailboxIds} = [$draftsid, $inboxid];
+    $msg->{mailboxIds} = { $draftsid => JSON::true, $inboxid => JSON::true },
     $msg->{subject} = "Message 3";
     $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
@@ -3362,8 +3367,7 @@ sub test_setmessages_move
     xlog "get message";
     $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
-    my @mboxids = $msg->{mailboxIds};
-    $self->assert_num_equals(1, scalar @mboxids);
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
     local *assert_move = sub {
         my ($moveto) = (@_);
@@ -3377,14 +3381,12 @@ sub test_setmessages_move
         $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ] );
         $msg = $res->[0][1]->{list}[0];
 
-        my @want = sort @$moveto;
-        my @got  = sort @{ $msg->{mailboxIds} };
-        $self->assert_deep_equals( \@want, \@got );
+        $self->assert_deep_equals($moveto, $msg->{mailboxIds});
     };
 
-    assert_move([$a, $b]);
-    assert_move([$a, $b, $c]);
-    assert_move([$d]);
+    assert_move({$a => JSON::true, $b => JSON::true});
+    assert_move({$a => JSON::true, $b => JSON::true, $c => JSON::true});
+    assert_move({$d => JSON::true});
 }
 
 sub test_setmessages_update
@@ -3407,7 +3409,7 @@ sub test_setmessages_update
     my $drafts = $res->[0][1]{created}{"1"}{id};
 
     my $draft =  {
-        mailboxIds => [$drafts],
+        mailboxIds => {$drafts => JSON::true},
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
         cc => [ { name => "Elmer Fudd", email => "elmer\@acme.local" } ],
@@ -3476,11 +3478,11 @@ sub test_setmessages_destroy
     $self->assert_str_equals( $res->[0][0], 'mailboxesSet' );
     $self->assert_str_equals( $res->[0][2], 'R1' );
     $self->assert_not_null( $res->[0][1]{created} );
-    my $mailboxids = [
-        $res->[0][1]{created}{"1"}{id},
-        $res->[0][1]{created}{"2"}{id},
-        $res->[0][1]{created}{"3"}{id},
-    ];
+    my $mailboxids = {
+        $res->[0][1]{created}{"1"}{id} => JSON::true,
+        $res->[0][1]{created}{"2"}{id} => JSON::true,
+        $res->[0][1]{created}{"3"}{id} => JSON::true,
+    };
 
     xlog "Create a draft";
     my $draft = {
@@ -3499,7 +3501,7 @@ sub test_setmessages_destroy
 
     xlog "Get draft $id";
     $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]->{list}[0]{mailboxIds}});
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]->{list}[0]{mailboxIds}});
 
     xlog "Destroy draft $id";
     $res = $jmap->Request(
@@ -5042,7 +5044,7 @@ sub test_getmessagelist_attachments
     $res = $jmap->Request([
       ['setMessages', { create => {
                   "1" => {
-                      mailboxIds => [$draftsmbox],
+                      mailboxIds => {$draftsmbox =>  JSON::true},
                       from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
                       to => [
                           { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -5056,7 +5058,7 @@ sub test_getmessagelist_attachments
                       keywords => { '$Draft' => JSON::true },
                   },
                   "2" => {
-                      mailboxIds => [$draftsmbox],
+                      mailboxIds => {$draftsmbox =>  JSON::true},
                       from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
                       to => [
                           { name => "Bugs Bunny", email => "bugs\@acme.local" },
@@ -5143,7 +5145,7 @@ sub test_getmessagelist_attachmentname
     $res = $jmap->Request([
       ['setMessages', { create => {
                   "1" => {
-                      mailboxIds => [$draftsmbox],
+                      mailboxIds => {$draftsmbox =>  JSON::true},
                       from => [ { name => "", email => "sam\@acme.local" } ] ,
                       to => [ { name => "", email => "bugs\@acme.local" } ],
                       subject => "msg1",
@@ -5234,7 +5236,7 @@ sub test_getthreads
     xlog "create draft replying to message A";
     $res = $jmap->Request(
         [[ 'setMessages', { create => { "1" => {
-            mailboxIds           => [$drafts],
+            mailboxIds           => {$drafts =>  JSON::true},
             headers              => { "In-Reply-To" => $msgA->{headers}{"message-id"}},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
@@ -5424,7 +5426,7 @@ sub test_getmessageupdates
     xlog "create message B";
     $res = $jmap->Request(
         [[ 'setMessages', { create => { "1" => {
-            mailboxIds           => [$draftsmbox],
+            mailboxIds           => {$draftsmbox =>  JSON::true},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Message B",
@@ -5437,7 +5439,7 @@ sub test_getmessageupdates
     xlog "create message C";
     $res = $jmap->Request(
         [[ 'setMessages', { create => { "1" => {
-            mailboxIds           => [$draftsmbox],
+            mailboxIds           => {$draftsmbox =>  JSON::true},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Message C",
@@ -5849,7 +5851,7 @@ EOF
             messages => {
                 "1" => {
                     blobId => $blobid,
-                    mailboxIds => [ $draftsmbox ],
+                    mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
                         '$Draft' => JSON::true,
                     },
@@ -5900,7 +5902,7 @@ EOF
             messages => {
                 "1" => {
                     blobId => $blobid,
-                    mailboxIds => [ $draftsmbox ],
+                    mailboxIds => {$draftsmbox =>  JSON::true},
                     keywords => {
                         '$Draft' => JSON::true,
                     },
@@ -5975,7 +5977,7 @@ EOF
         messages => {
             "1" => {
                 blobId => $blobid,
-                mailboxIds => [ $draftsmbox ],
+                mailboxIds => {$draftsmbox =>  JSON::true},
                 keywords => {
                     '$Draft' => JSON::true,
                 },
@@ -6251,7 +6253,7 @@ sub test_importmessages
         messages => {
             "1" => {
                 blobId => $blobid,
-                mailboxIds => [ $drafts ],
+                mailboxIds => {$drafts =>  JSON::true},
                 keywords => { '$Draft' => JSON::true },
             },
         },
@@ -6266,15 +6268,15 @@ sub test_importmessages
 
     xlog "load message";
     $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]->{mailboxIds}});
-    $self->assert_str_equals($drafts, $res->[0][1]{list}[0]->{mailboxIds}[0]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{list}[0]->{mailboxIds}});
+    $self->assert_not_null($res->[0][1]{list}[0]->{mailboxIds}{$drafts});
 
     xlog "import existing message (expect message exists error)";
     $res = $jmap->Request([['importMessages', {
         messages => {
             "1" => {
                 blobId => $blobid,
-                mailboxIds => [ $drafts, $inbox ],
+                mailboxIds => {$drafts =>  JSON::true, $inbox => JSON::true},
                 keywords => { '$Draft' => JSON::true },
             },
         },
@@ -6317,7 +6319,7 @@ EOF
                 messages => {
                     "1" => {
                         blobId => $blobid,
-                        mailboxIds => [ $mboxid ],
+                        mailboxIds => {$mboxid =>  JSON::true},
                         keywords => {  },
                     },
                 },
