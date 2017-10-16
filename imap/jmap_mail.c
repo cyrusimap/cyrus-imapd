@@ -7223,7 +7223,7 @@ static int setMessages(jmap_req_t *req)
                 continue;
             }
             if (id && id[0] == '#') {
-                const char *newid = hash_lookup(id + 1, &req->idmap->mailboxes);
+                const char *newid = hash_lookup(id + 1, &req->idmap->messages);
                 if (!newid) {
                     json_t *err = json_pack("{s:s}", "type", "notFound");
                     json_object_set_new(notUpdated, id, err);
@@ -7290,7 +7290,7 @@ static int setMessages(jmap_req_t *req)
                 continue;
             }
             if (msgid && msgid[0] == '#') {
-                const char *newmsgid = hash_lookup(msgid + 1, &req->idmap->mailboxes);
+                const char *newmsgid = hash_lookup(msgid + 1, &req->idmap->messages);
                 if (!newmsgid) {
                     json_t *err = json_pack("{s:s}", "type", "notFound");
                     json_object_set_new(notDestroyed, msgid, err);
