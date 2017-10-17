@@ -5631,6 +5631,65 @@ sub test_getmessagelistupdates_thread
     $self->assert_str_equals($res->[0][1]{added}[0]{threadId}, $res->[0][1]{removed}[0]{threadId});
 }
 
+sub test_getmessagelistupdates_order
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("A") || die;
+
+    # First order descending by subject. We expect getMessageListUpdates
+    # to return any items added after 'state' to show up at the start of
+    # the result list.
+    my $sort = [ "subject desc" ];
+
+    xlog "Get message id and state";
+    $res = $jmap->Request([['getMessageList', { sort => $sort }, "R1"]]);
+    my $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_not_null($ida);
+    $state = $res->[0][1]->{state};
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("B") || die;
+
+    xlog "Fetch updated list";
+    $res = $jmap->Request([['getMessageList', { sort => $sort }, "R1"]]);
+    my $idb = $res->[0][1]->{messageIds}[0];
+    $self->assert_str_not_equals($ida, $idb);
+
+    xlog "get message list updates";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
+    $self->assert_equals($idb, $res->[0][1]{added}[0]{messageId});
+    $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
+
+    # Now restart with sorting by ascending subject. We refetch the state
+    # just to be sure. Then we expect an additional item to show up at the
+    # end of the result list.
+    xlog "Fetch reverse sorted list and state";
+    $sort = [ "subject asc" ];
+    $res = $jmap->Request([['getMessageList', { sort => $sort }, "R1"]]);
+    $ida = $res->[0][1]->{messageIds}[0];
+    $self->assert_str_not_equals($ida, $idb);
+    $idb = $res->[0][1]->{messageIds}[1];
+    $state = $res->[0][1]->{state};
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("B") || die;
+
+    xlog "get message list updates";
+    $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
+    $self->assert_str_not_equals($ida, $res->[0][1]{added}[0]{messageId});
+    $self->assert_str_not_equals($idb, $res->[0][1]{added}[0]{messageId});
+    $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
+}
+
 sub test_getmessageupdates_shared
     :JMAP :min_version_3_1
 {
