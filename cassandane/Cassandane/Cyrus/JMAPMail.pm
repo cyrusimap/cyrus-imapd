@@ -5681,7 +5681,7 @@ sub test_getmessagelistupdates_order
     $state = $res->[0][1]->{state};
 
     xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("B") || die;
+    $self->make_message("C") || die;
 
     xlog "get message list updates";
     $res = $jmap->Request([['getMessageListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
