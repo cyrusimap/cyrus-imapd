@@ -551,6 +551,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
     size_t len;
     const char *mboxname;
     mbname_t *mbname = NULL;
+    int ret = 0;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -596,7 +597,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
         if (!*p || !*++p) {
             /* Make sure home-set is terminated with '/' */
             if (p[-1] != '/') *p++ = '/';
-            goto done;
+            goto mailbox;
         }
 
         len = strcspn(p, "/");
@@ -610,7 +611,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
     if (!*p || !*++p) {
         /* Make sure collection is terminated with '/' */
         if (p[-1] != '/') *p++ = '/';
-        goto done;
+        goto mailbox;
     }
 
     /* Get resource */
@@ -625,7 +626,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
         return HTTP_NOT_FOUND;
     }
 
-  done:
+  mailbox:
     /* Create mailbox name from the parsed path */
 
     owner = tgt->userid;
@@ -649,7 +650,6 @@ EXPORTED int calcarddav_parse_path(const char *path,
     mbname_push_boxes(mbname, mboxprefix);
     if (collection) {
         mbname_push_boxes(mbname, collection);
-        free(freeme);
     }
 
     /* XXX - hack to allow @domain parts for non-domain-split users */
@@ -663,31 +663,55 @@ EXPORTED int calcarddav_parse_path(const char *path,
 
     mboxname = mbname_intname(mbname);
 
+    /* Check for FastMail legacy sharing URLs and redirect */
+    if (tgt->flags != TGT_DAV_SHARED &&
+        !mboxname_userownsmailbox(httpd_userid, mboxname)) {
+        off_t collection_offset = tgt->collection - tgt->path;
+
+        /* Use request target path to return Location URI */
+        snprintf(tgt->path, sizeof(tgt->path), "%s/%s/%s/%s%c%s",
+                 tgt->namespace->prefix, USER_COLLECTION_PREFIX,
+                 httpd_userid, tgt->userid, SHARED_COLLECTION_DELIM,
+                 path + collection_offset);
+
+        ret = HTTP_MOVED;
+        goto done;
+    }
+
     if (tgt->mbentry) {
         /* Just return the mboxname (MKCOL or COPY/MOVE destination) */
         tgt->mbentry->name = xstrdup(mboxname);
 
-        int r = mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
-                                            httpd_userid, httpd_authstate,
-                                            NULL, NULL, 0 /* force */);
-        if (r) return r;
+        ret = mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
+                                          httpd_userid, httpd_authstate,
+                                          NULL, NULL, 0 /* force */);
+        if (ret) goto done;
 
         tgt->allow |= ALLOW_MKCOL;
     }
     else if (*mboxname) {
         /* Locate the mailbox */
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
             *errstr = error_message(r);
-            mbname_free(&mbname);
+            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *errstr);
 
             switch (r) {
-            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-            default: return HTTP_SERVER_ERROR;
+            case IMAP_PERMISSION_DENIED:
+                ret = HTTP_FORBIDDEN;
+                break;
+
+            case IMAP_MAILBOX_NONEXISTENT:
+                ret = HTTP_NOT_FOUND;
+                break;
+
+            default:
+                ret = HTTP_SERVER_ERROR;
+                break;
             }
+
+            goto done;
         }
     }
 
@@ -701,9 +725,11 @@ EXPORTED int calcarddav_parse_path(const char *path,
     }
     else if (tgt->userid) tgt->allow |= ALLOW_MKCOL;
 
+  done:
     mbname_free(&mbname);
+    free(freeme);
 
-    return 0;
+    return ret;
 }
 
 
@@ -3388,8 +3414,11 @@ int meth_acl(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = aparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = aparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_ACL)) {
@@ -4043,8 +4072,11 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the source path */
-    if ((r = cparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = cparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed (not allowed on collections yet) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -4085,7 +4117,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     dest_tgt.namespace = txn->req_tgt.namespace;
     r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
     if (r) {
-        ret = r;
+        ret = (r == HTTP_MOVED) ? HTTP_FORBIDDEN : r;
         goto done;
     }
 
@@ -4423,9 +4455,11 @@ int meth_delete(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = dparams->parse_path(txn->req_uri->path,
-                            &txn->req_tgt, &txn->error.desc);
-    if (r) return r;
+    r = dparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
@@ -4709,9 +4743,11 @@ int meth_get_head(struct transaction_t *txn, void *params)
     char *freeme = NULL;
 
     /* Parse the path */
-    ret = gparams->parse_path(txn->req_uri->path,
-                              &txn->req_tgt, &txn->error.desc);
-    if (ret) return ret;
+    r = gparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
         /* Special "principal" */
@@ -4915,8 +4951,11 @@ int meth_lock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = lparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = lparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -5178,8 +5217,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     /* Parse the path (use our own entry to suppress lookup) */
     txn->req_tgt.mbentry = mboxlist_entry_create();
-    r = mparams->parse_path(txn->req_uri->path,
-                            &txn->req_tgt, &txn->error.desc);
+    r = mparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
 
     /* Make sure method is allowed (only allowed on child of home-set) */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
@@ -5625,7 +5663,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     if (fparams->parse_path) {
         r = fparams->parse_path(txn->req_uri->path,
                                 &txn->req_tgt, &txn->error.desc);
-        if (r) return r;
+        if (r) {
+            if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+            return r;
+        }
     }
 
     /* Make sure method is allowed */
@@ -5963,8 +6004,11 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     if (!txn->req_tgt.collection && !txn->req_tgt.userid) {
         txn->error.desc = "PROPPATCH requires a collection";
@@ -6661,8 +6705,11 @@ int meth_post(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed (only allowed on certain collections) */
     if (!(txn->req_tgt.allow & ALLOW_POST)) return HTTP_NOT_ALLOWED;
@@ -6747,9 +6794,11 @@ int meth_patch(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) {
-        return HTTP_FORBIDDEN;
+    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        else r = HTTP_FORBIDDEN;
+        return r;
     }
 
     /* Make sure method is allowed (only allowed on resources) */
@@ -6982,9 +7031,12 @@ int meth_put(struct transaction_t *txn, void *params)
         txn->flags.cc |= CC_NOCACHE;
 
         /* Parse the path */
-        if ((r = pparams->parse_path(txn->req_uri->path,
-                                     &txn->req_tgt, &txn->error.desc))) {
-            return HTTP_FORBIDDEN;
+        r = pparams->parse_path(txn->req_uri->path,
+                                &txn->req_tgt, &txn->error.desc);
+        if (r) {
+            if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+            else r = HTTP_FORBIDDEN;
+            return r;
         }
 
         /* Make sure method is allowed (only allowed on resources) */
@@ -7264,7 +7316,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             r = rparams->parse_path(uri->path, &tgt, &fctx->txn->error.desc);
             xmlFreeURI(uri);
             if (r) {
-                ret = r;
+                ret = (r == HTTP_MOVED) ? HTTP_NOT_FOUND : r;
                 goto done;
             }
 
@@ -7999,8 +8051,11 @@ int meth_report(struct transaction_t *txn, void *params)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
     /* Parse the path */
-    if ((r = rparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = rparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
@@ -8234,8 +8289,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = lparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) return r;
+    r = lparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;

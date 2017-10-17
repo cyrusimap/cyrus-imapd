@@ -2394,8 +2394,11 @@ static int meth_get_head_cal(struct transaction_t *txn,
     int r;
 
     /* Parse the path */
-    if ((r = caldav_parse_path(txn->req_uri->path,
-                               &txn->req_tgt, &txn->error.desc))) return r;
+    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     return meth_get_head(txn, (txn->req_tgt.flags == TGT_MANAGED_ATTACH) ?
                          &webdav_params : &caldav_params);
@@ -7772,8 +7775,11 @@ static int meth_get_head_fb(struct transaction_t *txn,
     icalcomponent *cal;
 
     /* Parse the path */
-    if ((r = caldav_parse_path(txn->req_uri->path,
-                               &txn->req_tgt, &txn->error.desc))) return r;
+    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     if (txn->req_tgt.resource ||
         !(txn->req_tgt.userid)) {
@@ -7935,8 +7941,11 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     int r;
 
     /* Parse the path */
-    if ((r = caldav_parse_path(txn->req_uri->path,
-                               &txn->req_tgt, &txn->error.desc))) return r;
+    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
+        return r;
+    }
 
     if (txn->req_tgt.allow & ALLOW_PATCH) {
         /* Add Accept-Patch formats to response */
