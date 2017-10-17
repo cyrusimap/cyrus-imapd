@@ -4374,10 +4374,7 @@ static int getMessageListUpdates(jmap_req_t *req)
     window.sincemodesq = atomodseq_t(since);
 
     /* uptoMessageId */
-    pe = readprop(req->args, "uptoMessageId", 0, invalid, "s", &upto);
-    if (pe > 0) {
-        json_array_append_new(invalid, json_string("uptoMessageId"));
-    }
+    readprop(req->args, "uptoMessageId", 0, invalid, "s", &upto);
     window.uptomsgid = upto;
 
     /* maxChanges */
