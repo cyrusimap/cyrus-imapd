@@ -3953,7 +3953,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                     (*total)++;
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodesq) goto doneloop;
-                    update_added(*messageids, msgid, md->cid, *total);
+                    update_added(*messageids, msgid, md->cid, *total-1);
                 }
                 goto doneloop;
             }
