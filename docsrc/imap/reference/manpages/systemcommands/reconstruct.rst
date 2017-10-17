@@ -17,11 +17,11 @@ Synopsis
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] *mailbox*...
+        [ **-O** ] [ **-M** ] [ **-V** *version* ] *mailbox*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] [ -u ] *users*...
+        [ **-O** ] [ **-M** ] [ -u ] [ **-V**  *version* ] *users*...
 
     **reconstruct** [ **-C** *config-file* ] **-m**
 

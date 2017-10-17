@@ -272,6 +272,8 @@ Blank lines and lines beginning with ``#'' are ignored.
    or flags to a message when it is appended to a mailbox.  The path can
    be either an executable (including a script), or a UNIX domain
    socket.  */
+{ "annotation_callout_disable_append", 0, SWITCH }
+/* Disables annotations on append with xrunannotator */
 
 { "aps_topic", NULL, STRING }
 /* Topic for Apple Push Service registration. */
@@ -500,7 +502,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    than any sane message should have. */
 
 { "caldav_allowattach", 1, SWITCH }
-/* Enable managed attachments support on the caldav server. */
+/* Enable managed attachments support on the CalDAV server. */
+
+{ "caldav_allowcalendaradmin", 0, SWITCH }
+/* Enable per-user calendar administration web UI on the CalDAV server. */
 
 { "caldav_allowscheduling", "on", ENUM("off", "on", "apple") }
 /* Enable calendar scheduling operations. If set to "apple", the
@@ -508,7 +513,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    possible. */
 
 { "caldav_create_attach", 1, SWITCH }
-/* Create the 'Attachments' calendar if it doesn't already exist */
+/* Create the 'Attachments' collection if it doesn't already exist */
 
 { "caldav_create_default", 1, SWITCH }
 /* Create the 'Default' calendar if it doesn't already exist */
@@ -543,6 +548,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Space-separated list of domains corresponding to calendar user
    addresses for which the server is responsible.  If not set (the
    default), the value of the "servername" option will be used. */
+
+{ "carddav_allowaddmember", 0, SWITCH }
+/* Enable support for POST add-member on the CardDAV server. */
+
+{ "carddav_allowaddressbookadmin", 0, SWITCH }
+/* Enable per-user addressbook administration web UI on the CardDAV server. */
 
 { "carddav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of CardDAV resources.
@@ -638,6 +649,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the
    "servername" option will be used.*/
+
+{ "dav_lock_timeout", 20, INT }
+/* The maximum time in seconds to wait for a write lock on the per-user
+   DAV database before timeout. For HTTP requests, the HTTP status code
+   503 is returned if the lock can not be obtained within this time. */
 
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
@@ -944,7 +960,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "IMIP" notifications which are based on
    the RFC 6047.  If not set, "IMIP" notifications are disabled. */
 
-{ "implicit_owner_rights", "lkxa", STRING }
+{ "implicit_owner_rights", "lkxan", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
 
 # Commented out - there's no such thing as "@include", but we need
@@ -1023,6 +1039,51 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "jmap_preview_length", 64, INT }
 /* The maximum byte length of dynamically generated message previews. Previews
    stored in jmap_preview_annot take precedence. */
+
+{ "jmap_render_multipart_bodies", 0, SWITCH }
+/* Specify how the JMAP service should render MIME multipart
+   messages into the textBody and htmlBody properties of the
+   JMAP message object.
+
+   If this option is off, the JMAP service attempts to pick the
+   \"best\" parts within a MIME message for textBody and
+   htmlBody, respectively.
+
+   If this option is on, any plain text parts are concatenated
+   into textBody, including placeholders for inlined images. Any
+   text bodies (plain or HTML) are rendered into htmlBody. */
+
+{ "jmap_smtp_backend", "file", STRINGLIST("host", "sendmail", "file") }
+/* The SMTP backend to use for JMAP message submissions.
+
+   The \"host\" backend sends message submissions via
+   a TCP socket to the SMTP host defined in the config
+   option jmap_smtphost.
+
+   The \"sendmail\" backend forks the Cyrus process into
+   the executable defined in the config option sendmail.
+   The executable must accept \"-bs\" as command line
+   argument, read from stdin and must implement the minimum
+   SMTP protocol as defined in section 4.5.1 of RFC 5321.
+
+   The \"file\" backend persists the complete SMTP commands
+   sent by the Cyrus SMTP client in a file created with
+   mkstemp(3). The file name template is specified in the
+   config option jmap_smtpfile. This backend is mostly
+   useful for testing.
+   */
+
+{ "jmap_smtp_host", "localhost:25", STRING }
+/* The SMTP host to use for JMAP message submissions. The
+   value of this option must the name or IP address of a
+   TCP host, followed optionally by a colon and the port
+   or service to use. The default port is 25. */
+
+{ "jmap_smtp_file", "/tmp/cyrus-imapd.msgsub.XXXXXX", STRING }
+/* The file template to use to persist JMAP message submissions
+   in files. The template must be valid according to the rules
+   specified for the mkstemp(3) function.
+ */
 
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */

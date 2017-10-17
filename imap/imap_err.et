@@ -253,6 +253,9 @@ ec IMAP_CANCELLED,
 ec IMAP_SEARCH_SLOW,
     "Search taking too long - try reducing the set of messages searched"
 
+ec IMAP_SEARCH_MUTABLE,
+    "Search is mutable"
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

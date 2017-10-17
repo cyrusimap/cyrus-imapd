@@ -51,6 +51,7 @@
 #include "json_support.h"
 #include "jcal.h"
 #include "xcal.h"
+#include "strhash.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
@@ -847,7 +848,8 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
 }
 
 
-EXPORTED const char *begin_jcal(struct buf *buf)
+EXPORTED const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                                const char *prodid, const char *name)
 {
     /* Begin jCal stream */
     buf_reset(buf);
@@ -858,8 +860,7 @@ EXPORTED const char *begin_jcal(struct buf *buf)
     buf_printf_markup(buf, 3, "\"prodid\",");
     buf_printf_markup(buf, 3, "{},");
     buf_printf_markup(buf, 3, "\"text\",");
-    buf_printf_markup(buf, 3, "\"-//CyrusIMAP.org/Cyrus %s//EN\"",
-                      CYRUS_VERSION);
+    buf_printf_markup(buf, 3, "\"%s\"", prodid);
     buf_printf_markup(buf, 2, "],");
     buf_printf_markup(buf, 2, "[");
     buf_printf_markup(buf, 3, "\"version\",");
@@ -867,6 +868,25 @@ EXPORTED const char *begin_jcal(struct buf *buf)
     buf_printf_markup(buf, 3, "\"text\",");
     buf_printf_markup(buf, 3, "\"2.0\"");
     buf_printf_markup(buf, 2, "]");
+    buf_printf_markup(buf, 2, "[");
+    buf_printf_markup(buf, 3, "\"uid\",");
+    buf_printf_markup(buf, 3, "{},");
+    buf_printf_markup(buf, 3, "\"text\",");
+    buf_printf_markup(buf, 3, "\"%x-%s-%u\"", strhash(config_servername),
+                      mailbox->uniqueid, mailbox->i.uidvalidity);
+    buf_printf_markup(buf, 2, "],");
+    buf_printf_markup(buf, 2, "[");
+    buf_printf_markup(buf, 3, "\"name\",");
+    buf_printf_markup(buf, 3, "{},");
+    buf_printf_markup(buf, 3, "\"text\",");
+    buf_printf_markup(buf, 3, "\"%s\"", name);
+    buf_printf_markup(buf, 2, "],");
+    buf_printf_markup(buf, 2, "[");
+    buf_printf_markup(buf, 3, "\"x-wr-calname\",");
+    buf_printf_markup(buf, 3, "{},");
+    buf_printf_markup(buf, 3, "\"text\",");
+    buf_printf_markup(buf, 3, "\"%s\"", name);
+    buf_printf_markup(buf, 2, "],");
     buf_printf_markup(buf, 1, "],");
     buf_printf_markup(buf, 0, "[");
 

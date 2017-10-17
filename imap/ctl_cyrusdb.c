@@ -248,9 +248,6 @@ int main(int argc, char *argv[])
     char *msg = "";
     int i, rotated = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
     r = r2 = 0;
 
     while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {

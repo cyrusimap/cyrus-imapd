@@ -46,4 +46,14 @@
 pid_t open_sendmail(const char *argv[], FILE **sm);
 char *sendmail_errstr(int sm_stat);
 
+
+typedef struct smtpclient smtpclient_t;
+
+extern int smtpclient_open_sendmail(smtpclient_t **smp);
+extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
+extern int smtpclient_open_file(const char *template, smtpclient_t **smp);
+extern int smtpclient_expect(smtpclient_t *sm, int code, struct buf *resp);
+extern int smtpclient_writebuf(smtpclient_t *sm, struct buf *buf, int flush);
+extern int smtpclient_close(smtpclient_t **smp);
+
 #endif

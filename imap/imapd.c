@@ -270,14 +270,15 @@ struct list_rock {
 
 /* Information about one mailbox name that LIST returns */
 struct list_entry {
-    const char *name;
+    char *extname;
+    mbentry_t *mbentry;
     uint32_t attributes; /* bitmap of MBOX_ATTRIBUTE_* */
 };
 
 /* structure that list_data_recursivematch passes its callbacks */
 struct list_rock_recursivematch {
     struct listargs *listargs;
-    struct hash_table table;  /* maps mailbox names to attributes (uint32_t *) */
+    struct hash_table table;  /* maps mailbox names to list_entries */
     int count;                /* # of entries in table */
     struct list_entry *array;
 };
@@ -499,13 +500,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
 
-static struct
-{
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static int imapd_canon_user(sasl_conn_t *conn, void *context,
                             const char *user, unsigned ulen,
@@ -808,19 +803,7 @@ static void imapd_reset(void)
     imapd_starttls_done = 0;
     plaintextloginalert = NULL;
 
-    if(saslprops.iplocalport) {
-        free(saslprops.iplocalport);
-        saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-        free(saslprops.ipremoteport);
-        saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
+    saslprops_reset(&saslprops);
 
     clear_id();
 }
@@ -936,10 +919,16 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     imapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
+    if (localip && remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, remoteip);
+        buf_setcstr(&saslprops.iplocalport, localip);
+    }
+
     /* create the SASL connection */
-    if (sasl_server_new("imap", config_servername,
-                        NULL, NULL, NULL, NULL, 0,
-                        &imapd_saslconn) != SASL_OK) {
+    if (sasl_server_new("imap", config_servername, NULL,
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                        NULL, 0, &imapd_saslconn) != SASL_OK) {
         fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
@@ -948,13 +937,6 @@ int service_main(int argc __attribute__((unused)),
         fatal("Failed to set SASL property", EC_TEMPFAIL);
     if (sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EC_TEMPFAIL);
-
-    if (localip && remoteip) {
-        sasl_setprop(imapd_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
-        sasl_setprop(imapd_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
-    }
 
     imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
@@ -989,8 +971,10 @@ int service_main(int argc __attribute__((unused)),
 
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
-        mboxevent_set_access(mboxevent, saslprops.iplocalport,
-                             saslprops.ipremoteport, imapd_userid, NULL, 1);
+        mboxevent_set_access(mboxevent,
+                             buf_cstringnull_ifempty(&saslprops.iplocalport),
+                             buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                             imapd_userid, NULL, 1);
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
@@ -1128,6 +1112,8 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    saslprops_free(&saslprops);
 
     cyrus_done();
 
@@ -2569,8 +2555,10 @@ static void authentication_success(void)
 
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
-        mboxevent_set_access(mboxevent, saslprops.iplocalport,
-                             saslprops.ipremoteport, imapd_userid, NULL, 1);
+        mboxevent_set_access(mboxevent,
+                             buf_cstringnull_ifempty(&saslprops.iplocalport),
+                             buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                             imapd_userid, NULL, 1);
 
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
@@ -7177,6 +7165,11 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
 
+    if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
+        mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
+                           /* add */ 0, /* force */ 0, /* notify? */ 0);
+    }
+
     oldextname =
         mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
     newextname =
@@ -7485,6 +7478,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         if (!r)
             mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
+
+        if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
+            mboxlist_changesub(oldmailboxname, imapd_userid, imapd_authstate,
+                               /* add */ 0, /* force */ 0, /* notify? */ 1);
+        }
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,
@@ -8632,13 +8630,6 @@ out:
 static void cmd_starttls(char *tag, int imaps)
 {
     int result;
-    int *layerp;
-
-    char *auth_id;
-    sasl_ssf_t ssf;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     if (imapd_starttls_done == 1)
     {
@@ -8674,8 +8665,7 @@ static void cmd_starttls(char *tag, int imaps)
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                imaps ? 180 : imapd_timeout,
-                               layerp,
-                               &auth_id,
+                               &saslprops,
                                &tls_conn);
 
     /* if error */
@@ -8691,27 +8681,16 @@ static void cmd_starttls(char *tag, int imaps)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result == SASL_OK) {
-        saslprops.ssf = ssf;
+    result = saslprops_set_tls(&saslprops, imapd_saslconn);
 
-        result = sasl_setprop(imapd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    }
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (imaps == 0) {
-            fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
         } else {
             shut_down(0);
         }
     }
-
-    if(saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    if(auth_id)
-        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(imapd_in, tls_conn);
@@ -12836,43 +12815,52 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
             mbname = mbname_from_extname(extname, &imapd_namespace, imapd_userid);
         }
 
-        intname = mbname_intname(mbname);
-        r = mboxname_iscalendarmailbox(intname, 0) ||
-            mboxname_isaddressbookmailbox(intname, 0) ||
-            mboxname_isdavdrivemailbox(intname, 0) ||
-            mboxname_isdavnotificationsmailbox(intname, 0);
+        if (mbname) {
+            intname = mbname_intname(mbname);
+            r = mboxname_iscalendarmailbox(intname, 0) ||
+                mboxname_isaddressbookmailbox(intname, 0) ||
+                mboxname_isdavdrivemailbox(intname, 0) ||
+                mboxname_isdavnotificationsmailbox(intname, 0);
 
-        if (!data->mbname) mbname_free(&mbname);
+            if (!data->mbname) mbname_free(&mbname);
 
-        if (r) return 0;
+            if (r) return 0;
+        }
     }
 
-    uint32_t *list_info = hash_lookup(extname, &rock->table);
-    if (!list_info) {
-        list_info = xzmalloc(sizeof(uint32_t));
-        hash_insert(extname, list_info, &rock->table);
+    struct list_entry *entry = hash_lookup(extname, &rock->table);
+    if (!entry) {
+        entry = xzmalloc(sizeof(struct list_entry));
+        entry->extname = xstrdupsafe(extname);
+        entry->attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
+
+        hash_insert(extname, entry, &rock->table);
         rock->count++;
     }
 
+
     if (data->mbname) { /* exact match */
-        *list_info |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        entry->attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
+        if (!data->mbentry) {
+            mboxlist_lookup(mbname_intname(data->mbname), &entry->mbentry, NULL);
+            if (entry->mbentry) entry->attributes &= ~MBOX_ATTRIBUTE_NONEXISTENT;
+        }
     }
     else {
-        *list_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
+        entry->attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED | MBOX_ATTRIBUTE_HASCHILDREN;
     }
 
     return 0;
 }
 
 /* callback for hash_enumerate */
-static void copy_to_array(const char *key, void *data, void *void_rock)
+static void copy_to_array(const char *key __attribute__((unused)), void *data, void *void_rock)
 {
-    uint32_t *attributes = (uint32_t *)data;
+    struct list_entry *entry = (struct list_entry *)data;
     struct list_rock_recursivematch *rock =
         (struct list_rock_recursivematch *)void_rock;
     assert(rock->count > 0);
-    rock->array[--rock->count].name = key;
-    rock->array[rock->count].attributes = *attributes;
+    rock->array[--rock->count] = *entry;
 }
 
 /* Comparator for sorting an array of struct list_entry by mboxname. */
@@ -12880,7 +12868,15 @@ static int list_entry_comparator(const void *p1, const void *p2) {
     const struct list_entry *e1 = (struct list_entry *)p1;
     const struct list_entry *e2 = (struct list_entry *)p2;
 
-    return bsearch_compare_mbox(e1->name, e2->name);
+    return bsearch_compare_mbox(e1->extname, e2->extname);
+}
+
+static void free_list_entry(void *rock)
+{
+    struct list_entry *entry = (struct list_entry *)rock;
+    mboxlist_entry_free(&entry->mbentry);
+    free(entry->extname);
+    free(entry);
 }
 
 static void list_data_recursivematch(struct listargs *listargs) {
@@ -12907,20 +12903,17 @@ static void list_data_recursivematch(struct listargs *listargs) {
 
         /* print */
         for (i = 0; i < entries; i++) {
-            if (!rock.array[i].name) continue;
-            mbentry_t *mbentry = NULL;
-            mboxlist_lookup(rock.array[i].name, &mbentry, NULL);
-            list_response(rock.array[i].name,
-                          mbentry,
+            if (!rock.array[i].extname) continue;
+            list_response(rock.array[i].extname,
+                          rock.array[i].mbentry,
                           rock.array[i].attributes,
                           rock.listargs);
-            mboxlist_entry_free(&mbentry);
         }
 
         free(rock.array);
     }
 
-    free_hash_table(&rock.table, free);
+    free_hash_table(&rock.table, free_list_entry);
 }
 
 /* Retrieves the data and prints the untagged responses for a LIST command. */
@@ -13134,19 +13127,10 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("imap", config_servername,
-                          NULL, NULL, NULL,
+    ret = sasl_server_new("imap", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
                           NULL, 0, conn);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.ipremoteport)
-        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                           saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(0);
@@ -13156,16 +13140,11 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     } else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
     if(ret != SASL_OK) return ret;
-
-    if(saslprops.authid) {
-        ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-        if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;

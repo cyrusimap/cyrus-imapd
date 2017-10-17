@@ -2,6 +2,13 @@
 Release Notes
 =============
 
+Cyrus has switched to an `odd-even release cycle <http://producingoss.com/en/development-cycle.html#release-number-even-odd-strategy>`_.
+
+With our versioning system using ``major.minor.micro`` numbering, the minor number
+reveals whether a version is stable (even), or development-only (odd).
+
+A 3.0.1 release is stable, but a 3.1.4 release is developmental only.
+
 Stable Version
 ==============
 
@@ -11,14 +18,19 @@ Latest stable version is |imap_stable_release_notes|. Documentation at :cyrus-st
 Development Version
 ===================
 
-..
-    Latest development version is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
+Latest development snapshot is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
 
-There have not yet been any releases from the current development series.
-Documentation is at :cyrus-dev:`/`.
+.. warning::
+
+    These are tagged snapshots of the master branch, and should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
 
 Supported Product Series
 ========================
+
+.. Hide the release notes for unstable series
 
 .. toctree::
     :hidden:

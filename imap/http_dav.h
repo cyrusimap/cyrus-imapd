@@ -476,7 +476,8 @@ struct mime_type_t {
     struct buf* (*from_object)(void *);
     void* (*to_object)(const struct buf *);
     void (*free)(void *);
-    const char* (*begin_stream)(struct buf *);
+    const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
+                                const char *prodid, const char *name);
     void (*end_stream)(struct buf *);
 };
 
@@ -648,6 +649,9 @@ struct filter_profile_t {
 #define DAV_FILTER_ISNOTDEF_ERR \
     "is-not-defined can NOT be combined with other elements"
 
+void dav_get_synctoken(struct mailbox *mailbox,
+                       struct buf *buf, const char *prefix);
+
 void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
                           struct filter_profile_t *profile,
                           struct error_t *error);
@@ -745,6 +749,10 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
                           struct propfind_ctx *fctx,
                           xmlNodePtr prop, xmlNodePtr resp,
                           struct propstat propstat[], void *rock);
+int propfind_collectionname(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock);
 int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,

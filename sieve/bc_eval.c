@@ -52,6 +52,7 @@
 #include "parseaddr.h"
 #include "flags.h"
 #include "variables.h"
+#include "varlist.h"
 
 #include "bytecode.h"
 

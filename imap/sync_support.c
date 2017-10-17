@@ -2442,7 +2442,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* GUID mismatch is an error straight away, it only ever happens if we
              * had a split brain - and it will take a full sync to sort out the mess */
             if (!message_guid_equal(&mrecord.guid, &rrecord->guid)) {
-                syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
+                syslog(LOG_ERR, "SYNCNOTICE: guid mismatch %s %u",
                        mailbox->name, mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
@@ -2455,7 +2455,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
                            mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
                 }
                 else {
-                    syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
+                    syslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
                            mailbox->name, mrecord.uid, rrecord->modseq, mrecord.modseq);
                     r = IMAP_SYNC_CHECKSUM;
                     goto out;
@@ -2466,7 +2466,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * that's bad */
             if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
                  (rrecord->system_flags & FLAG_EXPUNGED)) {
-                syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
+                syslog(LOG_ERR, "SYNCNOTICE: expunged on replica %s %u",
                        mailbox->name, mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
@@ -2681,7 +2681,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mailbox->header_dirty = 1;
         }
         else {
-            syslog(LOG_ERR, "Mailbox uniqueid changed %s (%s => %s) - retry",
+            syslog(LOG_ERR, "SYNCERROR: Mailbox uniqueid changed %s (%s => %s) - retry",
                    mboxname, mailbox->uniqueid, uniqueid);
             r = IMAP_MAILBOX_MOVED;
             goto done;
@@ -4936,7 +4936,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
             else if (rrecord.uid > mrecord->uid) {
                 /* record only exists on the master */
                 if (!(mrecord->system_flags & FLAG_EXPUNGED)) {
-                    syslog(LOG_ERR, "SYNCERROR: only exists on master %s %u (%s)",
+                    syslog(LOG_ERR, "SYNCNOTICE: only exists on master %s %u (%s)",
                            mailbox->name, mrecord->uid,
                            message_guid_encode(&mrecord->guid));
                     r = renumber_one_record(mrecord, kaction);
@@ -4950,7 +4950,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
                 /* record only exists on the replica */
                 if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
                     if (kaction)
-                        syslog(LOG_ERR, "SYNCERROR: only exists on replica %s %u (%s)",
+                        syslog(LOG_ERR, "SYNCNOTICE: only exists on replica %s %u (%s)",
                                mailbox->name, rrecord.uid,
                                message_guid_encode(&rrecord.guid));
                     r = copyback_one_record(mailbox, &rrecord, rannots, kaction, part_list, sync_be);

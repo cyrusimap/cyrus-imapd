@@ -93,7 +93,7 @@ enum sieve_capa_flag {
     /* Sieve "base" - RFC 5228 */
     SIEVE_CAPA_BASE         = 1LL<<0,
     SIEVE_CAPA_COMP_NUMERIC = 1LL<<1,
-    SIEVE_CAPA_ENCODE_CHAR  = 0LL<<2, /* currently unsupported */
+    SIEVE_CAPA_ENCODED_CHAR = 1LL<<2,
     SIEVE_CAPA_ENVELOPE     = 1LL<<3,
     SIEVE_CAPA_FILEINTO     = 1LL<<4,
 
@@ -197,7 +197,7 @@ enum sieve_capa_flag {
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
                         | SIEVE_CAPA_COMP_NUMERIC \
-                        | SIEVE_CAPA_ENCODE_CHAR  \
+                        | SIEVE_CAPA_ENCODED_CHAR \
                         | SIEVE_CAPA_ENVELOPE     \
                         | SIEVE_CAPA_FILEINTO     \
                         | SIEVE_CAPA_REGEX        \
@@ -243,7 +243,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_FCC          \
                         )
 
-#define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODE_CHAR | SIEVE_CAPA_VARIABLES)
+#define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)
 
 unsigned long long lookup_capability(const char *str);
 unsigned long long extension_isactive(sieve_interp_t *interp, const char *str);

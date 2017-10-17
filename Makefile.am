@@ -143,7 +143,8 @@ BUILT_SOURCES += \
 	lib/htmlchar.c \
 	lib/htmlchar.h \
 	imap/rfc822_header.c \
-	imap/rfc822_header.h
+	imap/rfc822_header.h \
+	imap/mailbox_header_cache.h
 
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 
@@ -267,7 +268,8 @@ EXTRA_DIST += \
     imap/promdata.c \
     imap/promdata.h \
     imap/rfc822_header.c \
-    imap/rfc822_header.h
+    imap/rfc822_header.h \
+    imap/mailbox_header_cache.h
 
 if !HTTPD
 EXTRA_DIST += \
@@ -368,6 +370,7 @@ EXTRA_DIST += \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
 	imap/rfc822_header.st \
+	imap/mailbox_header_cache.gperf \
 	imap/tz_err.et \
 	lib/charset/aliases.txt \
 	lib/charset/UnicodeData.txt \
@@ -391,6 +394,7 @@ EXTRA_DIST += \
 	perl/annotator/Makefile.PL \
 	perl/annotator/Makefile.PL.in \
 	perl/annotator/MANIFEST \
+	perl/annotator/MANIFEST.in \
 	perl/annotator/Message.pm \
 	perl/annotator/README \
 	perl/imap/Changes \
@@ -408,6 +412,7 @@ EXTRA_DIST += \
 	perl/imap/Makefile.PL \
 	perl/imap/Makefile.PL.in \
 	perl/imap/MANIFEST \
+	perl/imap/MANIFEST.in \
 	perl/imap/README \
 	perl/imap/t/01-imclient.t \
 	perl/imap/t/02-admin.t \
@@ -419,6 +424,7 @@ EXTRA_DIST += \
 	perl/sieve/managesieve/managesieve.pm \
 	perl/sieve/managesieve/managesieve.xs \
 	perl/sieve/managesieve/MANIFEST \
+	perl/sieve/managesieve/MANIFEST.in \
 	perl/sieve/managesieve/typemap \
 	ptclient/README \
 	ptclient/test.c \
@@ -1015,6 +1021,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/quota_db.c \
 	imap/rfc822_header.c \
 	imap/rfc822_header.h \
+	imap/mailbox_header_cache.h \
 	imap/saslclient.c \
 	imap/saslclient.h \
 	imap/saslserver.c \
@@ -1322,6 +1329,9 @@ lib/htmlchar.c: lib/htmlchar.st
 
 lib/htmlchar.h: lib/htmlchar.st
 	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+
+imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
+	$(AM_V_GEN)gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$ $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
@@ -1519,35 +1529,18 @@ dist_man8_MANS = \
 if USE_SQUAT
 dist_man8_MANS += \
 	man/squatter.8
-
-else
-EXTRA_DIST += \
-	man/squatter.8
-
 endif # USE_SQUAT
 
 if NNTPD
 dist_man8_MANS += \
 	man/fetchnews.8 \
 	man/nntpd.8
-
-else # NNTPD
-EXTRA_DIST += \
-	man/fetchnews.8 \
-	man/nntpd.8
-
 endif # NNTPD
 
 if HTTPD
 dist_man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
-
-else # HTTPD
-EXTRA_DIST += \
-	man/ctl_zoneinfo.8 \
-	man/httpd.8
-
 endif # HTTPD
 
 if REPLICATION
@@ -1555,13 +1548,6 @@ dist_man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
-
-else
-EXTRA_DIST += \
-	man/sync_client.8 \
-	man/sync_reset.8 \
-	man/sync_server.8
-
 endif
 
 master_master_SOURCES = \
@@ -1939,6 +1925,8 @@ if PERL
 	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
 	  echo "uninstalling files from packlists: $$packlists" && \
 	  rm -f `cat $$packlists` )
+	( podfiles=`find $(DESTDIR)$(libdir) -type f -name perllocal.pod` && \
+	  rm -f `echo $$podfiles` )
 endif
 
 install-binsymlinks:

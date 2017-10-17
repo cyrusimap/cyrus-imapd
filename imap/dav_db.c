@@ -195,7 +195,8 @@ EXPORTED sqldb_t *dav_open_userid(const char *userid)
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
     if (in_reconstruct) buf_printf(&fname, ".NEW");
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade);
+    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
+                    config_getint(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
     buf_free(&fname);
     return db;
 }
@@ -206,7 +207,8 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
     if (in_reconstruct) buf_printf(&fname, ".NEW");
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade);
+    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
+                    config_getint(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
     buf_free(&fname);
     return db;
 }
@@ -224,7 +226,8 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock __attribute_
     if (mbentry->mbtype & MBTYPES_DAV) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_irl(mbentry->name, &mailbox);
+        r = mailbox_open_iwl(mbentry->name, &mailbox);
+        // needs to be writable to remove bogus lastalarm data
         if (!r) r = mailbox_add_dav(mailbox);
         mailbox_close(&mailbox);
     }

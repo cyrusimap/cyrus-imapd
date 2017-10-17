@@ -65,7 +65,7 @@
 static struct webdav_db *auth_webdavdb = NULL;
 
 static void my_webdav_init(struct buf *serverinfo);
-static void my_webdav_auth(const char *userid);
+static int my_webdav_auth(const char *userid);
 static void my_webdav_reset(void);
 static void my_webdav_shutdown(void);
 
@@ -116,7 +116,7 @@ static const struct report_type_t webdav_reports[] = {
 
     /* WebDAV ACL (RFC 3744) REPORTs */
     { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
-      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_NEED_PROPS | REPORT_DEPTH_ZERO },
 
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
@@ -134,7 +134,7 @@ static const struct prop_entry webdav_props[] = {
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_fromdb, proppatch_todb, NULL },
+      propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", NS_DAV,
@@ -280,29 +280,31 @@ static void my_webdav_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-static void my_webdav_auth(const char *userid)
+static int my_webdav_auth(const char *userid)
 {
-    int r;
-
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
+        return 0;
     }
     else {
         /* Open WebDAV DB for 'userid' */
         my_webdav_reset();
         auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) fatal("Unable to open WebDAV DB", EC_IOERR);
+        if (!auth_webdavdb) {
+            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
-    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+    int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
@@ -335,6 +337,7 @@ static void my_webdav_auth(const char *userid)
 
  done:
     mbname_free(&mbname);
+    return 0;
 }
 
 

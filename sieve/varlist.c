@@ -9,24 +9,28 @@
 #include "xmalloc.h"
 
 
-EXPORTED variable_list_t *varlist_new(void) {
+variable_list_t *varlist_new(void)
+{
     variable_list_t *vl;
     vl = xzmalloc(sizeof(variable_list_t));
     vl->var = strarray_new();
     return vl;
 }
 
-EXPORTED variable_list_t *varlist_select(variable_list_t *vl, const char *name) {
+variable_list_t *varlist_select(variable_list_t *vl, const char *name)
+{
     if (!vl) {
         return NULL;
     }
-    if ((!name && !vl->name) || ((name && vl->name) && !strcasecmp(name, vl->name))) {
+    if ((!name && !vl->name) ||
+        ((name && vl->name) && !strcasecmp(name, vl->name))) {
         return vl;
     }
     return varlist_select(vl->next, name);
 }
 
-EXPORTED variable_list_t *varlist_end(variable_list_t *vl) {
+variable_list_t *varlist_end(variable_list_t *vl)
+{
     if (!vl) {
         return NULL;
     }
@@ -37,14 +41,16 @@ EXPORTED variable_list_t *varlist_end(variable_list_t *vl) {
 }
 
 
-EXPORTED variable_list_t *varlist_extend(variable_list_t *vl) {
+variable_list_t *varlist_extend(variable_list_t *vl)
+{
     if (!vl) {
         return NULL;
     }
     return (varlist_end(vl))->next = varlist_new();
 }
 
-EXPORTED void varlist_fini(variable_list_t *vl) {
+void varlist_fini(variable_list_t *vl)
+{
     if (!vl) {
         return;
     }
@@ -60,7 +66,8 @@ EXPORTED void varlist_fini(variable_list_t *vl) {
     vl->next = NULL;
 }
 
-EXPORTED void varlist_free(variable_list_t *vl) {
+void varlist_free(variable_list_t *vl)
+{
     variable_list_t *next = NULL;
     if (!vl) {
         return;

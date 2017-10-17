@@ -152,7 +152,7 @@ settings in :cyrusman:`imapd.conf(5)`:
     If your configuration uses ``quota_db: quotalegacy``, then
     ``quota_db_path`` points to the base of the quota directory
     hierarchy.  If you use any other DB type, then this will be
-    the actual filename. 
+    the actual filename.
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
 	:start-after: startblob sieveusehomedir
@@ -173,10 +173,6 @@ settings in :cyrusman:`imapd.conf(5)`:
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
 	:start-after: startblob notifysocket
 	:end-before: endblob notifysocket
-
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
-	:start-after: startblob sphinx_socket
-	:end-before: endblob sphinx_socket
 
 Per-user State Directories
 ==========================

@@ -56,9 +56,12 @@
 #define YY_NO_INPUT
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *sscript)
 
-static unsigned long long tonum(const char *str);
 static struct buf buf;   /* buffer for multi-line text and quoted strings */
+extern int encoded_char; /* used to receive encoded-char feedback from parser */
 extern int getdatepart;  /* used to receive start state feedback from parser */
+
+static unsigned long long tonum(const char *str);
+static int decode_string(struct buf *buf);
 extern void sieveerror(sieve_script_t *, char *);
 extern void sieveerror_f(sieve_script_t *, char *fmt, ...);
 %}
@@ -101,19 +104,20 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 %state QDATEPART
 
 %%
-    /* end of multi-line text */
-<MULTILINE>^\.{CRLF}          {
-                                  BEGIN INITIAL;
-                                  yylval->sval = buf_release(&buf);
-                                  return STRING;
-                              }
-
     /* dot stuffing */
 <MULTILINE>^\.\.              buf_putc(&buf, yytext[1]);
+
+    /* end of multi-line text */
+<MULTILINE>^\.{CRLF}          |
 
     /* end of quoted string */
 <QSTRING>\"                   {
                                   BEGIN INITIAL;
+                                  if (encoded_char && !decode_string(&buf)) {
+                                      sieveerror_f(sscript,
+                                                   "invalid unicode encoding: %s",
+                                                   buf_cstring(&buf));
+                                  }
                                   yylval->sval = buf_release(&buf);
                                   return STRING;
                               }
@@ -423,7 +427,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
 %%
 
-/* convert numerical string w/units to int */
+/* convert numerical string w/units to unsigned long */
 static unsigned long long tonum(const char *str)
 {
     char *units;
@@ -443,4 +447,133 @@ static unsigned long long tonum(const char *str)
     }
 
     return val;
+}
+
+/* convert unicode to sequence of UTF-8 characters */
+static size_t unicode_to_utf8(unsigned char buf[], unsigned int code)
+{
+    if (code <= 0x7F) {
+        buf[0] = code;
+        return 1;
+    }
+    if (code <= 0x7FF) {
+        buf[0] = 0xC0 | (code >> 6);            /* 110xxxxx */
+        buf[1] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        return 2;
+    }
+    if (code < 0xE000 && code > 0xD7FF) return 0;
+    if (code <= 0xFFFF) {
+        buf[0] = 0xE0 | (code >> 12);           /* 1110xxxx */
+        buf[1] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+        buf[2] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        return 3;
+    }
+    if (code <= 0x10FFFF) {
+        buf[0] = 0xF0 | (code >> 18);           /* 11110xxx */
+        buf[1] = 0x80 | ((code >> 12) & 0x3F);  /* 10xxxxxx */
+        buf[2] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+        buf[3] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+        return 4;
+    }
+    return 0;
+}
+
+/*
+  Decode "encoded-character" strings having one of the following two forms:
+
+  encoded-arb-octets   =  "${hex:" hex-pair-seq "}"
+  hex-pair-seq         =  *blank hex-pair *(1*blank hex-pair) *blank
+  hex-pair             =  1*2HEXDIG
+
+  encoded-unicode-char =  "${unicode:" unicode-hex-seq "}"
+  unicode-hex-seq      =  *blank unicode-hex *(1*blank unicode-hex) *blank
+  unicode-hex          =  1*HEXDIG
+   
+  blank                =  WSP / CRLF
+  WSP                  =  SP / HTAB 
+  HEXDIG               =  DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
+*/
+static int decode_string(struct buf *buf)
+{
+    static struct buf decode_buf = BUF_INITIALIZER;
+    const char *cp, *enc_start;
+
+    for (cp = buf_cstring(buf); (enc_start = strstr(cp, "${")); ) {
+        unsigned is_unicode = 0;
+        size_t len;
+
+        cp = enc_start + 2;
+
+        if (!strncasecmp(cp, "hex:", 4)) {
+            cp += 4;
+        }
+        else if (!strncasecmp(cp, "unicode:", 8)) {
+            is_unicode = 1;
+            cp += 8;
+        }
+        else {
+            /* not coded */
+            continue;
+        }
+
+        /* eat leading whitespace */
+        while (isspace(*cp)) cp++;
+
+        /* sanity check "encoded" data (being liberal in accepting 'a' - 'f') */
+        len = strspn(cp, "0123456789ABCDEFabcdef \t\r\n");
+        if (!isxdigit(*cp) || cp[len] != '}') continue;
+
+        /* decode characters */
+        buf_reset(&decode_buf);
+        do {
+            unsigned int ndigits, code;
+
+            for (ndigits = 0, code = 0; isxdigit(*cp); ndigits++, cp++) {
+                unsigned int digit = 
+                    (*cp > '9') ? 10 + toupper(*cp) - 'A' : *cp - '0';
+
+                code = (code << 4) + digit;
+            }
+
+            if (is_unicode) {
+                unsigned char utf8[4];
+
+                len = unicode_to_utf8(utf8, code);
+                if (!len) {
+                    /* invalid UTF-8 encoding - error */
+                    return 0;
+                }
+
+                /* append decoded unicode char(s) to buffer */
+                buf_appendmap(&decode_buf, (char *) utf8, len);
+            }
+            else if (ndigits > 2) {
+                /* too many hex digits - treat as not coded */
+                buf_reset(&decode_buf);
+                cp += len + 1;
+                break;
+            }
+            else {
+                /* append decoded hex char to buffer */
+                buf_putc(&decode_buf, code);
+            }
+
+            /* eat trailing whitespace */
+            while (isspace(*cp)) cp++;
+
+        } while (*cp != '}');
+
+        if ((len = buf_len(&decode_buf))) {
+            /* replace the encoded string with its decoded value */
+            size_t offset = enc_start - buf_base(buf);
+
+            buf_remove(buf, offset, cp - enc_start + 1);
+            buf_insert(buf, offset, &decode_buf);
+
+            /* buffer may have been reallocated - reposition our pointer */
+            cp = buf_cstring(buf) + offset + len;
+        }
+    }
+
+    return 1;
 }

@@ -750,7 +750,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     int r = sqldb_exec(carddavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
     buf_free(&sqlbuf);
     if (r) {
-        syslog(LOG_ERR, "caldav error %s", error_message(r));
+        syslog(LOG_ERR, "carddav error %s", error_message(r));
         /* XXX - free memory */
     }
 
@@ -784,7 +784,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     else
         r = sqldb_exec(carddavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
     if (r) {
-        syslog(LOG_ERR, "caldav error %s", error_message(r));
+        syslog(LOG_ERR, "carddav error %s", error_message(r));
         /* XXX - free memory */
     }
 

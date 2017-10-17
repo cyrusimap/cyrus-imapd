@@ -292,6 +292,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
+char *httpd_authid = NULL;
 char *httpd_userid = NULL;
 char *httpd_extrafolder = NULL;
 char *httpd_extradomain = NULL;
@@ -676,7 +677,8 @@ static int http2_preface(struct transaction_t *txn)
 
         /* Force read of initial client input and check for HTTP/2 preface */
         prot_ungetc(prot_getc(pin), pin);
-        if (!strncmp(NGHTTP2_CLIENT_MAGIC, (const char *) pin->ptr, pin->cnt)) {
+        if (!strncmp(NGHTTP2_CLIENT_MAGIC,
+                     (const char *) pin->ptr, NGHTTP2_CLIENT_MAGIC_LEN)) {
             syslog(LOG_DEBUG, "HTTP/2 client connection preface");
             return 1;
         }
@@ -1086,19 +1088,14 @@ static int parse_connection(struct transaction_t *txn);
 static int parse_ranges(const char *hdr, unsigned long len,
                         struct range **ranges);
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
-static void auth_success(struct transaction_t *txn, const char *userid);
+static int auth_success(struct transaction_t *txn, const char *userid);
 static int http_auth(const char *creds, struct transaction_t *txn);
 
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
 
-static struct {
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
@@ -1257,6 +1254,10 @@ static void httpd_reset(void)
         close(httpd_logfd);
         httpd_logfd = -1;
     }
+    if (httpd_authid != NULL) {
+        free(httpd_authid);
+        httpd_authid = NULL;
+    }
     if (httpd_userid != NULL) {
         free(httpd_userid);
         httpd_userid = NULL;
@@ -1280,19 +1281,7 @@ static void httpd_reset(void)
     }
     httpd_tls_done = 0;
 
-    if(saslprops.iplocalport) {
-       free(saslprops.iplocalport);
-       saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-       free(saslprops.ipremoteport);
-       saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-       free(saslprops.authid);
-       saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
+    saslprops_reset(&saslprops);
 
     session_new_id();
 }
@@ -1437,9 +1426,16 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     httpd_clienthost = get_clienthost(0, &httpd_localip, &httpd_remoteip);
 
+    if (httpd_localip && httpd_remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, httpd_remoteip);
+        buf_setcstr(&saslprops.iplocalport, httpd_localip);
+    }
+
     /* other params should be filled in */
-    if (sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
-                        SASL_USAGE_FLAGS, &httpd_saslconn) != SASL_OK)
+    if (sasl_server_new("HTTP", config_servername, NULL,
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                        NULL, SASL_USAGE_FLAGS, &httpd_saslconn) != SASL_OK)
         fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
     /* will always return something valid */
@@ -1453,16 +1449,8 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-    if (httpd_localip) {
-        sasl_setprop(httpd_saslconn, SASL_IPLOCALPORT, httpd_localip);
-        saslprops.iplocalport = xstrdup(httpd_localip);
-    }
-
     if (httpd_remoteip) {
         char hbuf[NI_MAXHOST], *p;
-
-        sasl_setprop(httpd_saslconn, SASL_IPREMOTEPORT, httpd_remoteip);
-        saslprops.ipremoteport = xstrdup(httpd_remoteip);
 
         /* Create pre-authentication telemetry log based on client IP */
         strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
@@ -1635,6 +1623,8 @@ void shut_down(int code)
     tls_shutdown_serverengine();
 #endif
 
+    saslprops_free(&saslprops);
+
     http2_done();
 
     cyrus_done();
@@ -1676,13 +1666,7 @@ static int starttls(struct transaction_t *txn, int *http2)
 {
     int https = (txn == NULL);
     int result;
-    int *layerp;
-    sasl_ssf_t ssf;
-    char *auth_id;
     SSL_CTX *ctx = NULL;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     result=tls_init_serverengine("http",
                                  5,        /* depth to verify */
@@ -1712,8 +1696,7 @@ static int starttls(struct transaction_t *txn, int *http2)
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                https ? 180 : httpd_timeout,
-                               layerp,
-                               &auth_id,
+                               &saslprops,
                                &tls_conn);
 
     /* if error */
@@ -1725,20 +1708,15 @@ static int starttls(struct transaction_t *txn, int *http2)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result == SASL_OK) {
-        saslprops.ssf = ssf;
-
-        result = sasl_setprop(httpd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    }
+    result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        if (https == 0) {
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+        } else {
+            shut_down(0);
+        }
     }
-    if (saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    if (auth_id) saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(httpd_in, tls_conn);
@@ -1768,19 +1746,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
-                          SASL_USAGE_FLAGS, conn);
+    ret = sasl_server_new("HTTP", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                          NULL, SASL_USAGE_FLAGS, conn);
     if(ret != SASL_OK) return ret;
 
-    if(saslprops.ipremoteport)
-       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                          saslprops.iplocalport);
-    if(ret != SASL_OK) return ret;
     secprops = mysasl_secprops(0);
 
     /* no HTTP clients seem to use "auth-int" */
@@ -1792,17 +1763,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     } else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;
-
-    if(saslprops.authid) {
-       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-       if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -2122,7 +2088,20 @@ static int examine_request(struct transaction_t *txn)
                 syslog(LOG_DEBUG, "auth failed - reinit");
                 reset_saslconn(&httpd_saslconn);
                 txn->auth_chal.scheme = NULL;
-                ret = HTTP_UNAUTHORIZED;
+                if (r == SASL_UNAVAIL) {
+                    /* The namespace to authenticate to is unavailable.
+                     * There could be any reason for this, e.g. the DAV
+                     * handler could have run into a timeout for the
+                     * user's dabatase. In any case, there's no sense
+                     * to challenge the client for authentication. */
+                    return HTTP_UNAVAILABLE;
+                }
+                else if (r == SASL_FAIL) {
+                    return HTTP_SERVER_ERROR;
+                }
+                else {
+                    ret = HTTP_UNAUTHORIZED;
+                }
             }
             else if (r == SASL_CONTINUE) {
                 /* Continue with multi-step authentication */
@@ -2138,7 +2117,7 @@ static int examine_request(struct transaction_t *txn)
     }
 
     /* Perform proxy authorization, if necessary */
-    else if (saslprops.authid &&
+    else if (httpd_authid &&
              (hdr = spool_getheader(txn->req_hdrs, "Authorize-As")) &&
              *hdr[0]) {
         const char *authzid = hdr[0];
@@ -2152,7 +2131,8 @@ static int examine_request(struct transaction_t *txn)
             ret = HTTP_UNAUTHORIZED;
         }
         else {
-            auth_success(txn, authzid);
+            ret = auth_success(txn, authzid);
+            if (ret) return ret;
         }
     }
 
@@ -2375,6 +2355,7 @@ static void transaction_reset(struct transaction_t *txn)
     txn->location = NULL;
     memset(&txn->error, 0, sizeof(struct error_t));
 
+    strarray_fini(&txn->resp_body.links);
     memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
            sizeof(struct resp_body_t) - sizeof(struct buf));
     buf_reset(&txn->resp_body.payload);
@@ -2941,6 +2922,7 @@ EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
 
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
+    int i;
     time_t now;
     char datestr[30];
     const char **hdr;
@@ -2989,7 +2971,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
         }
 
-        if (code != HTTP_SWITCH_PROT) break;
+        /* Fall through as provisional response */
+        GCC_FALLTHROUGH
+
+    case HTTP_EARLY_HINTS:
+        for (i = 0; i < strarray_size(&resp_body->links); i++) {
+            simple_hdr(txn, "Link", strarray_nth(&resp_body->links, i));
+        }
+
+        if (code >= HTTP_OK) break;
 
         /* Fall through as provisional response */
         GCC_FALLTHROUGH
@@ -3049,8 +3039,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     if (txn->flags.vary && !(txn->flags.cc & CC_NOCACHE)) {
         /* Construct Vary header */
-        const char *vary_hdrs[] =
-            { "Accept", "Accept-Encoding", "Brief", "Prefer", NULL };
+        const char *vary_hdrs[] = { "Accept", "Accept-Encoding", "Brief",
+                                    "Prefer", "If-None-Match",
+                                    "CalDAV-Timezones", NULL };
 
         comma_list_hdr(txn, "Vary", vary_hdrs, txn->flags.vary);
     }
@@ -3088,9 +3079,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (resp_body->iserial) {
             simple_hdr(txn, "iSchedule-Capabilities", "%ld", resp_body->iserial);
         }
-    }
-    if (resp_body->link) {
-        simple_hdr(txn, "Link", resp_body->link);
     }
     if (resp_body->patch) {
         accept_patch_hdr(txn, resp_body->patch);
@@ -3206,7 +3194,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
     if (resp_body->cmid) {
-        simple_hdr(txn, "Cal-Managed-ID", "\"%s\"", resp_body->cmid);
+        simple_hdr(txn, "Cal-Managed-ID", "%s", resp_body->cmid);
         if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
     }
     if (resp_body->type) {
@@ -3377,6 +3365,18 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
             buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+            buf_printf(&log, "%sprefer=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "Brief"))) {
+            buf_printf(&log, "%sbrief=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones"))) {
+            buf_printf(&log, "%scaldav-timezones=%s", sep, hdr[0]);
             sep = "; ";
         }
         if (*sep == ';') buf_appendcstr(&log, ")");
@@ -3820,8 +3820,8 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
             host = config_servername;
         }
         if (!port) {
-            port = (saslprops.iplocalport) ?
-                strchr(saslprops.iplocalport, ';')+1 : "";
+            port = (buf_len(&saslprops.iplocalport)) ?
+                strchr(buf_cstring(&saslprops.iplocalport), ';')+1 : "";
         }
 
         buf_printf_markup(html, level, HTML_DOCTYPE);
@@ -3876,7 +3876,7 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
     if (!(config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))) {
         /* Not a backend in a Murder - proxy authz is not allowed */
         syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
-               httpd_clienthost, txn->auth_chal.scheme->name, saslprops.authid,
+               httpd_clienthost, txn->auth_chal.scheme->name, httpd_authid,
                "proxy authz attempted on non-Murder backend");
         return SASL_NOAUTHZ;
     }
@@ -3896,12 +3896,12 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
     /* See if auth'd user is allowed to proxy */
     status = mysasl_proxy_policy(httpd_saslconn, &httpd_proxyctx,
                                  authzbuf, authzlen,
-                                 saslprops.authid, strlen(saslprops.authid),
+                                 httpd_authid, strlen(httpd_authid),
                                  NULL, 0, NULL);
 
     if (status) {
         syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
-               httpd_clienthost, txn->auth_chal.scheme->name, saslprops.authid,
+               httpd_clienthost, txn->auth_chal.scheme->name, httpd_authid,
                sasl_errdetail(httpd_saslconn));
         return status;
     }
@@ -3931,7 +3931,7 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
 }
 
 
-static void auth_success(struct transaction_t *txn, const char *userid)
+static int auth_success(struct transaction_t *txn, const char *userid)
 {
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
     int i;
@@ -3984,9 +3984,13 @@ static void auth_success(struct transaction_t *txn, const char *userid)
 
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
-        if (namespaces[i]->enabled && namespaces[i]->auth)
-            namespaces[i]->auth(httpd_userid);
+        if (namespaces[i]->enabled && namespaces[i]->auth) {
+            int ret = namespaces[i]->auth(httpd_userid);
+            if (ret) return ret;
+        }
     }
+
+    return 0;
 }
 
 /* Perform HTTP Authentication based on the given credentials ('creds').
@@ -4255,8 +4259,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         user = (const char *) canon_user;
     }
 
-    if (saslprops.authid) free(saslprops.authid);
-    saslprops.authid = xstrdup(user);
+    if (httpd_authid) free(httpd_authid);
+    httpd_authid = xstrdup(user);
 
     authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
     if (authzid && *authzid[0]) {
@@ -4267,7 +4271,19 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (status) return status;
     }
 
-    auth_success(txn, user);
+    /* Post-process the successful authentication. */
+    int ret = auth_success(txn, user);
+    if (ret == HTTP_UNAVAILABLE) {
+        status = SASL_UNAVAIL;
+    }
+    else if (ret) {
+        /* Any error here comes after the user already logged in,
+         * so avoid to return SASL_BADAUTH. It would trigger the
+         * HTTP handler to send UNAUTHORIZED, and might confuse
+         * users that provided their correct credentials. */
+        syslog(LOG_ERR, "auth_success returned error: %s", error_message(ret));
+        status = SASL_FAIL;
+    }
 
     return status;
 }

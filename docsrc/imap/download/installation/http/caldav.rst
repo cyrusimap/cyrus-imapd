@@ -82,6 +82,17 @@ It allows you to:
     * Set visibility attributes such as Public or Transparent
     * Delete existing collections
 
+The Cyrus web GUI for CalDAV Collection Management is disabled by
+default, but can be enabled with the "caldav_allowcalendaradmin" option.
+
+.. sidebar:: caldav_allowcalendaradmin
+
+    |change-default-config|
+
+   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+      :start-after: startblob caldav_allowcalendaradmin
+      :end-before: endblob caldav_allowcalendaradmin
+
 To access the Cyrus web GUI for CalDAV Collection Management, point
 a web browser at ``https://<servername>/dav/calendars/user/<username>``
 

@@ -131,20 +131,18 @@ static struct buf server_info_link = BUF_INITIALIZER;
 static struct webdav_db *auth_webdavdb = NULL;
 
 static void my_dav_init(struct buf *serverinfo);
-static void my_dav_auth(const char *userid);
+static int my_dav_auth(const char *userid);
 static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
-static void get_synctoken(struct mailbox *mailbox,
-                          struct buf *buf, const char *prefix);
 
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **errstr);
-static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
-                                struct propfind_ctx *fctx,
-                                xmlNodePtr prop, xmlNodePtr resp,
-                                struct propstat propstat[], void *rock);
+static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
+                                  struct propfind_ctx *fctx,
+                                  xmlNodePtr prop, xmlNodePtr resp,
+                                  struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -201,7 +199,7 @@ static const struct prop_entry principal_props[] = {
     /* WebDAV (RFC 4918) properties */
     { "creationdate", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
     { "displayname", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
-      propfind_displayname, NULL, NULL },
+      propfind_principalname, NULL, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
     { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
       propfind_getlength, NULL, NULL },
@@ -557,6 +555,9 @@ EXPORTED int calcarddav_parse_path(const char *path,
     /* zzzz is part of the FastMail sorting hack to make shared collections
      * always appear later */
     if (!strncmp(p, USER_COLLECTION_PREFIX, len) || !strncmp(p, "zzzz", len)) {
+        if (!strncmp(p, "zzzz", len))
+            tgt->flags |= TGT_USER_ZZZZ;
+
         p += len;
         if (!*p || !*++p) return 0;
 
@@ -639,11 +640,12 @@ EXPORTED int calcarddav_parse_path(const char *path,
         /* Just return the mboxname (MKCOL or COPY/MOVE destination) */
         tgt->mbentry->name = xstrdup(mboxname);
 
-        if (!mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
-                                         httpd_userid, httpd_authstate,
-                                         NULL, NULL, 0 /* force */)) {
-            tgt->allow |= ALLOW_MKCOL;
-        }
+        int r = mboxlist_createmailboxcheck(mboxname, 0, NULL, httpd_userisadmin,
+                                            httpd_userid, httpd_authstate,
+                                            NULL, NULL, 0 /* force */);
+        if (r) return r;
+
+        tgt->allow |= ALLOW_MKCOL;
     }
     else if (*mboxname) {
         /* Locate the mailbox */
@@ -759,10 +761,10 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
             else if (mailbox) {
                 struct buf buf = BUF_INITIALIZER;
 
-                get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
+                dav_get_synctoken(mailbox, &buf, SYNC_TOKEN_URL_SCHEME);
                 r = !strcmp(cond, buf_cstring(&buf));
                 if (!r) {
-                    get_synctoken(mailbox, &buf, XML_NS_MECOM "ctag/");
+                    dav_get_synctoken(mailbox, &buf, XML_NS_MECOM "ctag/");
                     r = !strcmp(cond, buf_cstring(&buf));
                 }
                 buf_free(&buf);
@@ -998,7 +1000,8 @@ EXPORTED int dav_premethod(struct transaction_t *txn)
 
         if ((hdr && strcmp(hdr[0], buf_cstring(&server_info_token))) ||
             (!hdr && txn->meth == METH_OPTIONS)) {
-            txn->resp_body.link = buf_cstring(&server_info_link);
+            strarray_append(&txn->resp_body.links,
+                            buf_cstring(&server_info_link));
         }
     }
 
@@ -1021,6 +1024,7 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
         mask = PREFER_REP;
         break;
 
+    case METH_GET:
     case METH_MKCALENDAR:
     case METH_MKCOL:
     case METH_PROPPATCH:
@@ -1600,13 +1604,13 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:displayname */
-static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
-                                struct propfind_ctx *fctx,
-                                xmlNodePtr prop __attribute__((unused)),
-                                xmlNodePtr resp __attribute__((unused)),
-                                struct propstat propstat[],
-                                void *rock __attribute__((unused)))
+/* Callback to fetch DAV:displayname for principals */
+static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
+                                  struct propfind_ctx *fctx,
+                                  xmlNodePtr prop __attribute__((unused)),
+                                  xmlNodePtr resp __attribute__((unused)),
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
 {
     /* XXX  Do LDAP/SQL lookup here */
     buf_reset(&fctx->buf);
@@ -1629,6 +1633,29 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
     return 0;
+}
+
+
+/* Callback to fetch DAV:displayname for collections */
+int propfind_collectionname(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock)
+{
+    int r = propfind_fromdb(name, ns, fctx, prop, resp, propstat, rock);
+
+    if (r && fctx->mbentry && !fctx->req_tgt->resource) {
+        /* Special case empty displayname -- use last segment of path */
+        xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                       &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+        buf_setcstr(&fctx->buf, strrchr(fctx->mbentry->name, '.') + 1);
+        xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+                                           BAD_CAST buf_cstring(&fctx->buf),
+                                           buf_len(&fctx->buf)));
+        return 0;
+    }
+
+    return r;
 }
 
 
@@ -2576,7 +2603,9 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection ||
         !strcmp(fctx->req_tgt->collection, SCHED_INBOX) ||
-        !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+        !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX) ||
+        (fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK &&
+         !config_getswitch(IMAPOPT_CARDDAV_ALLOWADDMEMBER))) {
         /* Only allowed on non-scheduling collections */
         return HTTP_NOT_FOUND;
     }
@@ -2596,8 +2625,8 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-static void get_synctoken(struct mailbox *mailbox,
-                          struct buf *buf, const char *prefix)
+void dav_get_synctoken(struct mailbox *mailbox,
+                       struct buf *buf, const char *prefix)
 {
     buf_reset(buf);
     buf_printf(buf, "%s%u-" MODSEQ_FMT,
@@ -2620,7 +2649,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
     /* not defined on the top-level collection either (aka #calendars) */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    get_synctoken(fctx->mailbox, &fctx->buf, prefix);
+    dav_get_synctoken(fctx->mailbox, &fctx->buf, prefix);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -2872,15 +2901,10 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                (const char *) ns->href, name);
 
-    if (fctx->mbentry && !fctx->record &&
-        !(r = annotatemore_lookupmask(fctx->mbentry->name,
-                                      buf_cstring(&fctx->buf),
-                                      httpd_userid, &attrib))) {
-        if (!buf_len(&attrib) &&
-            !xmlStrcmp(name, BAD_CAST "displayname")) {
-            /* Special case empty displayname -- use last segment of path */
-            buf_setcstr(&attrib, strrchr(fctx->mbentry->name, '.') + 1);
-        }
+    if (fctx->mbentry && !fctx->record) {
+        r = annotatemore_lookupmask(fctx->mbentry->name,
+                                    buf_cstring(&fctx->buf),
+                                    httpd_userid, &attrib);
     }
 
     if (r) return HTTP_SERVER_ERROR;
@@ -3085,9 +3109,14 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
         if (prop->type == XML_ELEMENT_NODE) {
             struct propfind_entry_list *nentry;
             xmlChar *name, *namespace = NULL;
-            xmlNsPtr ns = prop->ns;
-            const char *ns_href = (const char *) ns->href;
+            xmlNsPtr ns;
+            const char *ns_href;
             unsigned i;
+
+            if (!prop->ns) return HTTP_BAD_REQUEST;
+
+            ns = prop->ns;
+            ns_href = (const char *) ns->href;
 
             if (fctx->mode == PROPFIND_EXPAND) {
                 /* Get name/namespace from <property> */
@@ -3159,8 +3188,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
                 ret = *fctx->ret;
             }
             else {
-                /* No match, treat as a dead property.  Need to look for both collections
-                 * resources */
+                /* No match, treat as a dead property.
+                   Need to look at both collections and resources */
                 nentry->flags = PROP_COLLECTION | PROP_RESOURCE;
                 nentry->get = propfind_fromdb;
                 nentry->prop = NULL;
@@ -3220,6 +3249,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                     for (entry = pctx->lprops;
                          entry->name &&
                              (strcmp((const char *) prop->name, entry->name) ||
+                              !prop->ns ||
                               strcmp((const char *) prop->ns->href,
                                      known_namespaces[entry->ns].href));
                          entry++);
@@ -3237,6 +3267,15 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                             /* Write "live" property */
                             entry->put(prop, set, pctx, propstat, entry->rock);
                         }
+                    }
+                    else if (!prop->ns) {
+                        /* Property with no namespace */
+                        xmlNodePtr newprop =
+                            xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                                         &propstat[PROPSTAT_FORBID],
+                                         prop->name, NULL, NULL, 0);
+                        xmlSetNs(newprop, NULL);
+                        *pctx->ret = HTTP_FORBIDDEN;
                     }
                     else {
                         /* Write "dead" property */
@@ -3418,8 +3457,9 @@ int meth_acl(struct transaction_t *txn, void *params)
     indoc = root->doc;
 
     /* Make sure its an DAV:acl element */
-    if (xmlStrcmp(root->name, BAD_CAST "acl")) {
-        txn->error.desc = "Missing acl element in ACL request\r\n";
+    if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+        xmlStrcmp(root->name, BAD_CAST "acl")) {
+        txn->error.desc = "Missing DAV:acl element in ACL request";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -4975,10 +5015,11 @@ int meth_lock(struct transaction_t *txn, void *params)
         }
         if (ret) goto done;
 
-        /* Check for correct root element */
+        /* Make sure its a DAV:lockinfo element */
         indoc = root->doc;
-        if (xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
-            txn->error.desc = "Incorrect root element in XML request\r\n";
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+            xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
+            txn->error.desc = "Missing DAV:lockinfo element in LOCK request";
             ret = HTTP_BAD_MEDIATYPE;
             goto done;
         }
@@ -5118,15 +5159,35 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     /* Parse the path (use our own entry to suppress lookup) */
     txn->req_tgt.mbentry = mboxlist_entry_create();
-    if ((r = mparams->parse_path(txn->req_uri->path,
-                                 &txn->req_tgt, &txn->error.desc))) {
+    r = mparams->parse_path(txn->req_uri->path,
+                            &txn->req_tgt, &txn->error.desc);
+
+    /* Make sure method is allowed (only allowed on child of home-set) */
+    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
         txn->error.precond = mparams->mkcol.location_precond;
         return HTTP_FORBIDDEN;
     }
+    else if (r) {
+        switch (r) {
+        case IMAP_MAILBOX_EXISTS:
+            txn->error.precond = DAV_RES_EXISTS;
+            break;
 
-    /* Make sure method is allowed (only allowed on home-set) */
-    if (!(txn->req_tgt.allow & ALLOW_MKCOL)) {
-        txn->error.precond = mparams->mkcol.location_precond;
+        case IMAP_PERMISSION_DENIED:
+            txn->error.precond = DAV_NEED_PRIVS;
+            txn->error.rights = DACL_BIND;
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf, "%s/%s/%s",
+                       txn->req_tgt.namespace->prefix, USER_COLLECTION_PREFIX,
+                       txn->req_tgt.userid);
+            txn->error.resource = buf_cstring(&txn->buf);
+            break;
+
+        default:
+            txn->error.precond = mparams->mkcol.location_precond;
+            break;
+        }
+
         return HTTP_FORBIDDEN;
     }
 
@@ -5159,13 +5220,17 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (root) {
         /* Check for correct root element (lowercase method name ) */
+        const char *ns_href;
+
         indoc = root->doc;
 
         buf_setcstr(&txn->buf, http_methods[txn->meth].name);
-        r = xmlStrcmp(root->name, BAD_CAST buf_lcase(&txn->buf));
-        if (r) {
-            txn->error.desc = "Incorrect root element in XML request\r\n";
-            ret = HTTP_BAD_MEDIATYPE;
+        ns_href = buf_len(&txn->buf) > 5 ? XML_NS_CALDAV : XML_NS_DAV;
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST ns_href) ||
+            xmlStrcmp(root->name, BAD_CAST buf_lcase(&txn->buf))) {
+            txn->error.desc =
+                "Incorrect root element in MKCOL/MKCALENDAR request";
+            ret = HTTP_BAD_REQUEST;
             goto done;
         }
 
@@ -5208,6 +5273,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
         if (ret || r) {
             /* Setting properties failed - delete mailbox */
+            mailbox_abort(mailbox);
             mailbox_close(&mailbox);
             mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    /*isadmin*/1, NULL, NULL, NULL,
@@ -5215,6 +5281,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
             if (!ret) {
                 /* Output the XML response */
+                if (txn->meth == METH_MKCALENDAR) {
+                    /* MKCALENDAR failure response MUST be 207 (Multi-Status) */
+                    xmlNodeSetName(root, BAD_CAST "multistatus");
+                    xmlSetNs(root, ns[NS_DAV]);
+                    r = HTTP_MULTI_STATUS;
+                }
                 xml_response(r, txn, outdoc);
             }
 
@@ -5224,7 +5296,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (!r) {
         assert(!buf_len(&txn->buf));
-        get_synctoken(mailbox, &txn->buf, "");
+        dav_get_synctoken(mailbox, &txn->buf, "");
         txn->resp_body.ctag = buf_cstring(&txn->buf);
         ret = HTTP_CREATED;
     }
@@ -5352,32 +5424,22 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
 }
 
 
-static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
-                                  const char *mboxname, const char *userid,
-                                  char **mbox_owner)
+static size_t make_collection_url(struct buf *buf, const char  *urlprefix, int haszzzz,
+                                  const mbname_t *mbname, const char *userid)
 {
-    mbname_t *mbname = NULL;
     const strarray_t *boxes;
     int n, size;
     size_t len;
-
-    mbname = mbname_from_intname(mboxname);
 
     buf_reset(buf);
     buf_printf(buf, "%s/", urlprefix);
 
     if (userid) {
-        if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
         const char *owner = mbname_userid(mbname);
         if (!owner) owner = "";
 
-        if (mbox_owner) *mbox_owner = xstrdup(owner);
-
         if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
-            if (strcmp(owner, userid) && strstr(urlprefix, "addressbooks"))
-                buf_printf(buf, "%s/%s/", "zzzz", owner);
-            else
-                buf_printf(buf, "%s/%s/", USER_COLLECTION_PREFIX, owner);
+            buf_printf(buf, "%s/%s/", haszzzz ? "zzzz" : USER_COLLECTION_PREFIX, owner);
         }
         else {
             buf_printf(buf, "%s/", USER_COLLECTION_PREFIX);
@@ -5403,8 +5465,6 @@ static size_t make_collection_url(struct buf *buf, const char  *urlprefix,
         buf_appendcstr(buf, strarray_nth(boxes, n));
         buf_putc(buf, '/');
     }
-
-    mbname_free(&mbname);
 
     return len;
 }
@@ -5482,8 +5542,22 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
-                                  mboxname, fctx->req_tgt->userid, NULL);
+        /* we always have zzzz if it's already in the URL */
+        int haszzzz = fctx->req_tgt->flags & TGT_USER_ZZZZ;
+
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        if (!mbname_domain(mbname))
+            mbname_set_domain(mbname, httpd_extradomain);
+
+        /* we also need to deal with the discovery case,
+         * where mboxname doesn't match request path */
+        if (fctx->req_tgt->userid && strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid))
+            haszzzz = 1;
+
+        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix, haszzzz,
+                                  mbname, fctx->req_tgt->userid);
+
+        mbname_free(&mbname);
 
         /* copy it all back into place... in theory we should check against
          * 'last' and make sure it doesn't change from the original request.
@@ -5601,9 +5675,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     else {
         indoc = root->doc;
 
-        /* Make sure its a propfind element */
-        if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-            txn->error.desc = "Missing propfind element in PROPFIND request";
+        /* Make sure its a DAV:propfind element */
+        if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+            xmlStrcmp(root->name, BAD_CAST "propfind")) {
+            txn->error.desc = "Missing DAV:propfind element in PROPFIND request";
             ret = HTTP_BAD_REQUEST;
             goto done;
         }
@@ -5693,7 +5768,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.ret = &ret;
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(props, &fctx);
+    ret = preload_proplist(props, &fctx);
+    if (ret) goto done;
 
     /* Generate responses */
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
@@ -5917,10 +5993,11 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     indoc = root->doc;
 
-    /* Make sure its a propertyupdate element */
-    if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
+    /* Make sure its a DAV:propertyupdate element */
+    if (!root->ns || xmlStrcmp(root->ns->href, BAD_CAST XML_NS_DAV) ||
+        xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
         txn->error.desc =
-            "Missing propertyupdate element in PROPPATCH request\r\n";
+            "Missing DAV:propertyupdate element in PROPPATCH request";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
@@ -5980,8 +6057,13 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Output the XML response */
     if (!ret) {
-        if (!r && (get_preferences(txn) & PREFER_MIN)) ret = HTTP_OK;
-        else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+        if (r) mailbox_abort(mailbox);
+        else if (get_preferences(txn) & PREFER_MIN) {
+            ret = HTTP_OK;
+            goto done;
+        }
+
+        xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
   done:
@@ -6286,7 +6368,7 @@ static int dav_post_share(struct transaction_t *txn,
             char *userid = NULL, *at;
             int r;
 
-            if (!xmlStrncmp(href, BAD_CAST "mailto:", 7)) {
+            if (!xmlStrncasecmp(href, BAD_CAST "mailto:", 7)) {
                 userid = xstrdup((char *) href + 7);
                 if ((at = strchr(userid, '@'))) {
                     if (!config_virtdomains || !strcmp(at+1, config_defdomain)){
@@ -6334,6 +6416,7 @@ static int dav_post_share(struct transaction_t *txn,
 
             if (!userid) {
                 /* XXX  set invite-invalid ? */
+                syslog(LOG_NOTICE, "could not parse userid from sharing href");
             }
             else {
                 /* Set access rights */
@@ -6526,7 +6609,7 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Validators */
     assert(!buf_len(&txn->buf));
-    get_synctoken(mailbox, &txn->buf, "");
+    dav_get_synctoken(mailbox, &txn->buf, "");
     txn->resp_body.ctag = buf_cstring(&txn->buf);
     txn->resp_body.etag = NULL;
     txn->resp_body.lastmod = 0;
@@ -7604,13 +7687,13 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 /* DAV:acl-principal-prop-set REPORT */
 int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
                          struct meth_params *rparams __attribute__((unused)),
-                         xmlNodePtr inroot, struct propfind_ctx *fctx)
+                         xmlNodePtr inroot __attribute__((unused)),
+                         struct propfind_ctx *fctx)
 {
     int ret = 0;
     struct request_target_t req_tgt;
     mbentry_t *mbentry = fctx->req_tgt->mbentry;
     char *userid, *nextid;
-    xmlNodePtr cur;
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
@@ -7624,16 +7707,6 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
     fctx->req_tgt = &req_tgt;
     fctx->lprops = principal_props;
     fctx->proc_by_resource = &propfind_by_resource;
-
-    /* Parse children element of report */
-    for (cur = inroot->children; cur; cur = cur->next) {
-        if (cur->type == XML_ELEMENT_NODE &&
-            !xmlStrcmp(cur->name, BAD_CAST "prop")) {
-
-            if ((ret = preload_proplist(cur->children, fctx))) goto done;
-            break;
-        }
-    }
 
     /* Parse the ACL string (userid/rights pairs) */
     for (userid = mbentry->acl; userid; userid = nextid) {
@@ -7659,7 +7732,6 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
         }
     }
 
-  done:
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
@@ -7938,7 +8010,10 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Check the report type against our supported list */
     for (report = rparams->reports; report && report->name; report++) {
-        if (!xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
+        if (inroot->ns &&
+            !xmlStrcmp(inroot->ns->href,
+                       BAD_CAST known_namespaces[report->ns].href) &&
+            !xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
     }
     if (!report || !report->name) {
         syslog(LOG_WARNING, "REPORT %s", inroot->name);
@@ -7999,29 +8074,38 @@ int meth_report(struct transaction_t *txn, void *params)
     if (report->flags & (REPORT_NEED_PROPS | REPORT_ALLOW_PROPS)) {
         /* Parse children element of report */
         for (cur = inroot->children; cur; cur = cur->next) {
+            unsigned mode = PROPFIND_NONE;
+
             if (cur->type == XML_ELEMENT_NODE) {
                 if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
-                    fctx.mode = PROPFIND_ALL;
+                    mode = PROPFIND_ALL;
                     prop = cur;
-                    break;
                 }
                 else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
-                    fctx.mode = PROPFIND_NAME;
+                    mode = PROPFIND_NAME;
                     fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
                     prop = cur;
-                    break;
                 }
                 else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
-                    fctx.mode = PROPFIND_PROP;
+                    mode = PROPFIND_PROP;
                     prop = cur;
                     props = cur->children;
-                    break;
                 }
+            }
+
+            if (mode != PROPFIND_NONE) {
+                if (fctx.mode != PROPFIND_NONE) {
+                    txn->error.desc = "Multiple <*prop*> elements in REPORT";
+                    ret = HTTP_BAD_REQUEST;
+                    goto done;
+                }
+
+                fctx.mode = mode;
             }
         }
 
         if (!prop && (report->flags & REPORT_NEED_PROPS)) {
-            txn->error.desc = "Missing <prop> element in REPORT\r\n";
+            txn->error.desc = "Missing <prop> element in REPORT";
             ret = HTTP_BAD_REQUEST;
             goto done;
         }
@@ -8049,6 +8133,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.get_validators = rparams->get_validators;
     fctx.reqd_privs = report->reqd_privs;
     if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
+    fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
     fctx.lprops = rparams->propfind.lprops;
     fctx.root = outroot;
@@ -8058,7 +8143,6 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
-        fctx.proc_by_resource = &propfind_by_resource;
         ret = preload_proplist(props, &fctx);
     }
 
@@ -8552,21 +8636,25 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     return r;
 }
 
-static void my_dav_auth(const char *userid)
+static int my_dav_auth(const char *userid)
 {
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
+        return 0;
     }
     else {
         /* Open WebDAV DB for 'userid' */
         my_dav_reset();
         auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) fatal("Unable to open WebDAV DB", EC_IOERR);
+        if (!auth_webdavdb) {
+            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision a notifications collection for 'userid' */
@@ -8600,7 +8688,7 @@ static void my_dav_auth(const char *userid)
         /* Start construction of our server-info */
         if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
             syslog(LOG_ERR, "Unable to create server-info XML");
-            return;
+            return 0;
         }
 
         /* Add token */
@@ -8675,6 +8763,8 @@ static void my_dav_auth(const char *userid)
             syslog(LOG_ERR, "Unable to dump server-info XML tree");
         }
     }
+
+    return 0;
 }
 
 
@@ -8800,7 +8890,7 @@ static const struct report_type_t notify_reports[] = {
 
     /* WebDAV ACL (RFC 3744) REPORTs */
     { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
-      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_NEED_PROPS | REPORT_DEPTH_ZERO },
 
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
@@ -9190,10 +9280,11 @@ int notify_post(struct transaction_t *txn)
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
     const char *type_str, *mboxname, *url_prefix;
-    char dtstamp[RFC3339_DATETIME_MAX], *owner = NULL, *resource = NULL;
+    char dtstamp[RFC3339_DATETIME_MAX], *resource = NULL;
     xmlNodePtr notify = NULL, type, sharee;
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlChar *comment = NULL, *freeme = NULL;
+    mbname_t *mbname = NULL;
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
@@ -9375,7 +9466,11 @@ int notify_post(struct transaction_t *txn)
     /* shared-url */
     url_prefix = strstr(mboxname, config_getstring(IMAPOPT_CALENDARPREFIX)) ?
         namespace_calendar.prefix : namespace_addressbook.prefix;
-    make_collection_url(&txn->buf, url_prefix, mboxname, "", &owner);
+
+    mbname = mbname_from_intname(mboxname);
+    if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+
+    make_collection_url(&txn->buf, url_prefix, /*haszzzz*/0, mbname, "");
 
     xml_add_href(type, NULL, buf_cstring(&txn->buf));
 
@@ -9392,12 +9487,12 @@ int notify_post(struct transaction_t *txn)
                strhash(XML_NS_DAV), strhash(SHARE_REPLY_NOTIFICATION),
                strhash(mboxname), strhash(txn->req_tgt.userid));
 
-    r = send_notification(txn, notify->doc, owner, buf_cstring(&txn->buf));
+    r = send_notification(txn, notify->doc, mbname_userid(mbname), buf_cstring(&txn->buf));
 
     if (add) {
         /* Accepted - create URL of sharee's new collection */
-        make_collection_url(&txn->buf, url_prefix,
-                            mboxname, txn->req_tgt.userid, NULL);
+        make_collection_url(&txn->buf, url_prefix, /*haszzzz*/0,
+                            mbname, txn->req_tgt.userid);
 
         if (legacy) {
             /* Create CS:shared-as XML body */
@@ -9431,8 +9526,8 @@ int notify_post(struct transaction_t *txn)
     if (notify) xmlFreeDoc(notify->doc);
     webdav_close(webdavdb);
     mailbox_close(&mailbox);
+    mbname_free(&mbname);
     dlist_free(&dl);
-    free(owner);
 
     return ret;
 }

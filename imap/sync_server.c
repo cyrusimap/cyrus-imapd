@@ -159,12 +159,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
                       struct protstream *pin, struct protstream *pout,
                       int *sasl_result, char **success_data);
 
-static struct {
-    char *ipremoteport;
-    char *iplocalport;
-    sasl_ssf_t ssf;
-    char *authid;
-} saslprops = {NULL,NULL,0,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 /* the sasl proxy policy context */
 static struct proxy_context sync_proxyctx = {
@@ -225,19 +220,7 @@ static void sync_reset(void)
     sync_starttls_done = 0;
     sync_compress_done = 0;
 
-    if(saslprops.iplocalport) {
-       free(saslprops.iplocalport);
-       saslprops.iplocalport = NULL;
-    }
-    if(saslprops.ipremoteport) {
-       free(saslprops.ipremoteport);
-       saslprops.ipremoteport = NULL;
-    }
-    if(saslprops.authid) {
-       free(saslprops.authid);
-       saslprops.authid = NULL;
-    }
-    saslprops.ssf = 0;
+    saslprops_reset(&saslprops);
 }
 
 /*
@@ -343,8 +326,15 @@ int service_main(int argc __attribute__((unused)),
         sync_userisadmin = 1;
     }
     else {
+        if (localip && remoteip) {
+            buf_setcstr(&saslprops.ipremoteport, remoteip);
+            buf_setcstr(&saslprops.iplocalport, localip);
+        }
+
         /* other params should be filled in */
-        if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
+        if (sasl_server_new("csync", config_servername, NULL,
+                            buf_cstringnull_ifempty(&saslprops.iplocalport),
+                            buf_cstringnull_ifempty(&saslprops.ipremoteport),
                             NULL, 0, &sync_saslconn) != SASL_OK)
             fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
@@ -355,17 +345,6 @@ int service_main(int argc __attribute__((unused)),
 
         if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
             fatal("Failed to set SASL property", EC_TEMPFAIL);
-
-        if (localip) {
-            sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
-            saslprops.iplocalport = xstrdup(localip);
-        }
-
-        if (remoteip) {
-            if (sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
-                fatal("failed to set sasl property", EC_TEMPFAIL);
-            saslprops.ipremoteport = xstrdup(remoteip);
-        }
 
         tcp_disable_nagle(1); /* XXX magic fd */
     }
@@ -436,6 +415,8 @@ void shut_down(int code)
     tls_shutdown_serverengine();
 #endif
 
+    saslprops_free(&saslprops);
+
     cyrus_done();
 
     exit(code);
@@ -467,20 +448,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("csync", config_servername,
-                         NULL, NULL, NULL,
-                         NULL, 0, conn);
+    ret = sasl_server_new("csync", config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                          NULL, 0, conn);
     if (ret != SASL_OK) return ret;
 
-    if (saslprops.ipremoteport)
-       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
-    if (ret != SASL_OK) return ret;
-
-    if (saslprops.iplocalport)
-       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                          saslprops.iplocalport);
-    if (ret != SASL_OK) return ret;
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if (ret != SASL_OK) return ret;
@@ -488,17 +461,12 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if (saslprops.ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+        ret = saslprops_set_tls(&saslprops, *conn);
     } else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if (ret != SASL_OK) return ret;
-
-    if (saslprops.authid) {
-       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
-       if(ret != SASL_OK) return ret;
-    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -815,18 +783,12 @@ static void cmd_authenticate(char *mech, char *resp)
 static void cmd_starttls(void)
 {
     int result;
-    int *layerp;
-    sasl_ssf_t ssf;
-    char *auth_id;
 
     if (sync_starttls_done == 1) {
         prot_printf(sync_out, "NO %s\r\n",
                     "Already successfully executed STARTTLS");
         return;
     }
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
 
     result=tls_init_serverengine("csync",
                                  5,        /* depth to verify */
@@ -846,8 +808,7 @@ static void cmd_starttls(void)
     result=tls_start_servertls(0, /* read */
                                1, /* write */
                                180, /* 3 minutes */
-                               layerp,
-                               &auth_id,
+                               &saslprops,
                                &tls_conn);
 
     /* if error */
@@ -858,22 +819,10 @@ static void cmd_starttls(void)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &ssf);
+    result = saslprops_set_tls(&saslprops, sync_saslconn);
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
     }
-    saslprops.ssf = ssf;
-
-    result = sasl_setprop(sync_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    if (saslprops.authid) {
-        free(saslprops.authid);
-        saslprops.authid = NULL;
-    }
-    if (auth_id)
-        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(sync_in, tls_conn);

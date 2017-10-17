@@ -57,6 +57,8 @@ int tls_enabled(void);
 
 #include <openssl/ssl.h>
 
+#include "global.h" /* for saslprops_t */
+
 /* init tls */
 int tls_init_serverengine(const char *ident,
                           int verifydepth, /* depth to verify */
@@ -69,7 +71,7 @@ int tls_init_clientengine(int verifydepth,
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
-                        int *layerbits, char **authid, SSL **ret);
+                        struct saslprops_t *saslprops, SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
                         int *layerbits, char **authid, SSL **ret,

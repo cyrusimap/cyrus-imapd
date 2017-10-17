@@ -1459,6 +1459,14 @@ EXPORTED int index_run_annotator(struct index_state *state,
         r = append_run_annotator(&as, msgrec);
         if (r) goto out;
 
+        /* msgrecord_rewrite already took care of rewriting the index_record,
+         * but we want to stay up to date of the changes in the index_map.
+         * Pass the silent flag to index_rewrite_record. */
+        r = msgrecord_get_index_record(msgrec, &record);
+        if (r) goto out;
+        r = index_rewrite_record(state, msgno, &record, /*silent*/1);
+        if (r) goto out;
+
         msgrecord_unref(&msgrec);
     }
 

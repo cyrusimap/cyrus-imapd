@@ -254,6 +254,7 @@ struct buf {
 void _buf_ensure(struct buf *buf, size_t len);
 const char *buf_cstring(const struct buf *buf);
 const char *buf_cstringnull(const struct buf *buf);
+const char *buf_cstringnull_ifempty(const struct buf *buf);
 char *buf_release(struct buf *buf);
 char *buf_newcstring(struct buf *buf);
 char *buf_releasenull(struct buf *buf);

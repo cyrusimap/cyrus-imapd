@@ -472,12 +472,18 @@ EXPORTED void spool_enum_hdrcache(hdrcache_t cache,
                          void *rock)
 {
     struct header_t *hdr;
+    struct buf buf = BUF_INITIALIZER;
 
     if (!cache) return;
 
     for (hdr = cache->head; hdr; hdr = hdr->next) {
-        proc(hdr->name, hdr->body, rock);
+        buf_setcstr(&buf, hdr->name);
+        buf_cstring(&buf);
+        lcase(buf.s);
+        proc(buf.s, hdr->body, rock);
     }
+
+    buf_free(&buf);
 }
 
 /* copies the message from fin to fout, massaging accordingly:

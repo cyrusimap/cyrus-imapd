@@ -52,6 +52,15 @@
 #include "imapparse.h"
 #include "util.h"
 
+#ifdef HAVE_SSL
+#include <openssl/evp.h>
+#define MAX_FINISHED_LEN EVP_MAX_MD_SIZE
+
+#else /* !HAVE_SSL */
+#define MAX_FINISHED_LEN 1
+#endif /* HAVE_SSL */
+
+
 #define MAX_SESSIONID_SIZE 256
 
 /* Flags for cyrus_init() */
@@ -123,12 +132,28 @@ struct proxy_context {
     int *userisproxyadmin;
 };
 
+struct saslprops_t {
+    struct buf iplocalport;
+    struct buf ipremoteport;
+    sasl_ssf_t ssf;
+    struct buf authid;
+    sasl_channel_binding_t cbinding;
+    unsigned char tls_finished[MAX_FINISHED_LEN];
+};
+#define SASLPROPS_INITIALIZER \
+    { BUF_INITIALIZER, BUF_INITIALIZER, 0, BUF_INITIALIZER, \
+      { NULL, 0, 0, NULL }, { 0 } }
+
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
 extern char *find_msgid(char *, char **);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
                                   const char **localip, const char **remoteip);
+extern void saslprops_reset(struct saslprops_t *saslprops);
+extern void saslprops_free(struct saslprops_t *saslprops);
+extern int saslprops_set_tls(struct saslprops_t *saslprops,
+                             sasl_conn_t *saslconn);
 
 /* Misc globals */
 extern int in_shutdown;

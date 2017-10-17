@@ -91,10 +91,6 @@ int main(int argc, char **argv)
     char prefix[2048];
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*ismaster*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */

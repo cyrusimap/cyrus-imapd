@@ -76,6 +76,7 @@
 #include "userdeny.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -207,6 +208,17 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     initialize_imap_error_table();
     initialize_mupd_error_table();
 
+    /* various things can run our commands with only two file descriptors, e.g. old strace on FreeBSD,
+     * or IPC::Run from Perl.  Make sure we don't accidentally reuse low FD numbers */
+    while(1) {
+        int fd = open("/dev/null", 0);
+        if (fd == -1) fatal("can't open /dev/null", EC_SOFTWARE);
+        if (fd >= 3) {
+            close(fd);
+            break;
+        }
+    }
+
     if(!ident)
         fatal("service name was not specified to cyrus_init", EC_CONFIG);
 
@@ -218,6 +230,12 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
+
+    /* changed user if needed */
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+        fatal("must run as the Cyrus user", EC_USAGE);
+    }
+
 
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     facility = config_getstring(IMAPOPT_SYSLOG_FACILITY);
@@ -761,16 +779,39 @@ EXPORTED void cyrus_done(void)
 EXPORTED int shutdown_file(char *buf, int size)
 {
     FILE *f;
-    static char shutdownfilename[1024] = "";
+    static char *shutdownfilename = NULL, *suffix;
     char *p;
     char tmpbuf[1024];
 
-    if (!shutdownfilename[0])
-        snprintf(shutdownfilename, sizeof(shutdownfilename),
-                 "%s/msg/shutdown", config_dir);
+    if (!shutdownfilename) {
+        /* Create system shutdownfile name */
+        struct buf buf = BUF_INITIALIZER;
+        size_t system_len;
 
+        buf_printf(&buf, "%s/msg/shutdown", config_dir);
+        system_len = buf_len(&buf);
+
+        /* Add per-service suffix */
+        buf_printf(&buf, ".%s", config_ident);
+        shutdownfilename = buf_release(&buf);
+        suffix = shutdownfilename + system_len;
+    }
+
+    /* Try per-service shutdown file */
     f = fopen(shutdownfilename, "r");
-    if (!f) return 0;
+    if (!f) {
+        /* Trim per-service suffix and try system shutdownfile */
+        *suffix = '\0';
+
+        f = fopen(shutdownfilename, "r");
+        if (!f) {
+            /* Restore per-service suffix */
+            *suffix = '.';
+            return 0;
+        }
+    }
+
+    free(shutdownfilename);
 
     if (!buf) {
         buf = tmpbuf;
@@ -1025,4 +1066,49 @@ EXPORTED int cmd_cancelled()
     if (cmdtime_checksearch())
         return IMAP_SEARCH_SLOW;
     return 0;
+}
+
+EXPORTED void saslprops_reset(struct saslprops_t *saslprops)
+{
+    buf_reset(&saslprops->iplocalport);
+    buf_reset(&saslprops->ipremoteport);
+    buf_reset(&saslprops->authid);
+    saslprops->ssf = 0;
+    saslprops->cbinding.name = NULL;
+}
+
+EXPORTED void saslprops_free(struct saslprops_t *saslprops)
+{
+    buf_free(&saslprops->iplocalport);
+    buf_free(&saslprops->ipremoteport);
+    buf_free(&saslprops->authid);
+}
+
+EXPORTED int saslprops_set_tls(struct saslprops_t *saslprops,
+                               sasl_conn_t *saslconn)
+{
+    int r;
+
+    r = sasl_setprop(saslconn, SASL_SSF_EXTERNAL, &saslprops->ssf);
+    if (r != SASL_OK) {
+        syslog(LOG_NOTICE, "sasl_setprop(SSF_EXTERNAL) failed");
+        return r;
+    }
+
+    r = sasl_setprop(saslconn, SASL_AUTH_EXTERNAL,
+                     buf_cstringnull(&saslprops->authid));
+    if (r != SASL_OK) {
+        syslog(LOG_NOTICE, "sasl_setprop(AUTH_EXTERNAL) failed");
+        return r;
+    }
+
+    if (saslprops->cbinding.name) {
+        r = sasl_setprop(saslconn, SASL_CHANNEL_BINDING, &saslprops->cbinding);
+        if (r != SASL_OK) {
+            syslog(LOG_NOTICE, "sasl_setprop(CHANNEL_BINDING) failed");
+            return r;
+        }
+    }
+
+    return SASL_OK;
 }

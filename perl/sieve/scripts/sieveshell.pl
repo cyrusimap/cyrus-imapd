@@ -345,8 +345,7 @@ exit when done.
 =head1 REFERENCES
 
 [MANAGESIEVE] Martin, T.; "A Protocol for Remotely Managing Sieve
-Scripts", draft-ietf-managesieve-03.txt, Mirapoint, Inc.; May 2001,
-work in progress.
+Scripts", RFC 5804; May 2001
 
 =head1 AUTHOR
 

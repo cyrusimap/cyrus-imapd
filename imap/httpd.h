@@ -243,7 +243,8 @@ enum {
     TGT_SCHED_OUTBOX,
     TGT_MANAGED_ATTACH,
     TGT_DRIVE_ROOT,
-    TGT_DRIVE_USER
+    TGT_DRIVE_USER,
+    TGT_USER_ZZZZ
 };
 
 /* Function to parse URI path and generate a mailbox name */
@@ -289,7 +290,7 @@ struct resp_body_t {
     const char *type;                   /* Content-Type     */
     const struct patch_doc_t *patch;    /* Accept-Patch     */
     unsigned prefs;                     /* Prefer           */
-    const char *link;                   /* Link             */
+    strarray_t links;                   /* Link(s)          */
     const char *lock;                   /* Lock-Token       */
     const char *ctag;                   /* CTag             */
     const char *etag;                   /* ETag             */
@@ -312,7 +313,7 @@ struct txn_flags_t {
     unsigned long te       : 3;         /* Transfer-Encoding for resp */
     unsigned long cc       : 7;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
-    unsigned long vary     : 4;         /* Headers on which response varied */
+    unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 2;         /* Headers which will be in trailer */
 };
 
@@ -422,7 +423,9 @@ enum {
     VARY_ACCEPT =       (1<<0),
     VARY_AE =           (1<<1), /* Accept-Encoding */
     VARY_BRIEF =        (1<<2),
-    VARY_PREFER =       (1<<3)
+    VARY_PREFER =       (1<<3),
+    VARY_IFNONE =       (1<<4), /* If-None-Match */
+    VARY_CALTZ =        (1<<5)  /* CalDAV-Timezones */
 };
 
 /* Trailer header flags */
@@ -449,7 +452,7 @@ struct namespace_t {
     int mboxtype;               /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *); /* Function run during service startup */
-    void (*auth)(const char *); /* Function run after authentication */
+    int (*auth)(const char *);  /* Function run after authentication */
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
     int (*premethod)(txn_t *);  /* Function run prior to any method */

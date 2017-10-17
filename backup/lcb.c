@@ -237,7 +237,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
     }
 
     backup->db = sqldb_open(backup->index_fname, backup_index_initsql,
-                            backup_index_version, backup_index_upgrade);
+                            backup_index_version, backup_index_upgrade,
+                            SQLDB_DEFAULT_TIMEOUT);
     if (!backup->db) {
         r = IMAP_INTERNAL; // FIXME what does it mean to error here?
         goto error;

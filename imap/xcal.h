@@ -74,7 +74,8 @@ icalrecur_add_rule(struct icalrecurrencetype **rt,
 
 extern struct buf *icalcomponent_as_xcal_string(icalcomponent* comp);
 extern icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf);
-extern const char *begin_xcal(struct buf *buf);
+extern const char *begin_xcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name);
 extern void end_xcal(struct buf *buf);
 
 #endif /* XCAL_H */

@@ -881,10 +881,6 @@ int main(int argc, char **argv)
     int len;
     struct sync_name_list *mboxname_list;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     setbuf(stdout, NULL);
 
     while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:")) != EOF) {

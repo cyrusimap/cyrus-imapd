@@ -1,6 +1,6 @@
 /* cyr_expire.c -- Program to expire deliver.db entries and messages
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -62,6 +62,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <libgen.h>
 
 #include <sasl/sasl.h>
 
@@ -217,18 +218,9 @@ static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
     cyrus_done();
 }
 
-static void set_progname(const char *str)
-{
-    const char *slash = strrchr(str, '/');
-    if (slash)
-        progname = slash + 1;
-    else
-        progname = str;
-}
-
 static void usage(void)
 {
-    fprintf(stderr, "Usage: %s [OPTIONS]\n", progname);
+    fprintf(stderr, "Usage: %s [OPTIONS] {mailbox|users}\n", progname);
     fprintf(stderr, "Expire messages and duplicate delivery database entries.\n");
     fprintf(stderr, "\n");
 
@@ -248,7 +240,7 @@ static void usage(void)
 
     fprintf(stderr, "\n");
 
-    exit(-1);
+    exit(EC_USAGE);
 }
 
 /*
@@ -631,7 +623,7 @@ static void sighandler(int sig __attribute((unused)))
 static int do_archive(struct cyr_expire_ctx *ctx)
 {
     if (ctx->args.archive_seconds >= 0) {
-        syslog(LOG_NOTICE, ">> do_archive: archive_seconds(%d) >= 0\n",
+        syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0\n",
                ctx->args.archive_seconds);
         ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds;
 
@@ -790,8 +782,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     args->expire_seconds = -1;
     args->expunge_seconds = -1;
     args->do_expunge = true;
-    /* do_cid_expire defaults to whatever IMAP options are set */
-    args->do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
+    args->do_cid_expire = -1;
 
     while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtch")) != EOF) {
         switch (opt) {
@@ -873,16 +864,16 @@ int main(int argc, char *argv[])
     int r = 0;
     struct cyr_expire_ctx ctx = zero_ctx;
 
-    set_progname(argv[0]);
-
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
+    progname = basename(argv[0]);
 
     if (parse_args(argc, argv, &ctx.args) != 0)
         exit(EXIT_FAILURE);
 
     cyr_expire_init(progname, &ctx);
+
+    /* do_cid_expire defaults to whatever IMAP options are set */
+    if (ctx.args.do_cid_expire < 0)
+        ctx.args.do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {

@@ -91,7 +91,7 @@ static struct carddav_db *auth_carddavdb = NULL;
 static time_t compile_time;
 
 static void my_carddav_init(struct buf *serverinfo);
-static void my_carddav_auth(const char *userid);
+static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
 
@@ -155,7 +155,7 @@ static const struct report_type_t carddav_reports[] = {
 
     /* WebDAV ACL (RFC 3744) REPORTs */
     { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
-      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_NEED_PROPS | REPORT_DEPTH_ZERO },
 
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
@@ -179,7 +179,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_fromdb, proppatch_todb, NULL },
+      propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", NS_DAV,
@@ -234,7 +234,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV POST (RFC 5995) properties */
     { "add-member", NS_DAV, PROP_COLLECTION,
-      NULL /* add-member broken at FM */, NULL, NULL },
+      propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV, PROP_COLLECTION,
@@ -298,7 +298,7 @@ static struct meth_params carddav_params = {
     &carddav_get,
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No PATCH handling */
-    { POST_SHARE, NULL, NULL },                 /* No special POST handling */
+    { POST_ADDMEMBER | POST_SHARE, NULL, NULL },/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
     carddav_reports
@@ -427,31 +427,35 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     return r;
 }
 
-static void my_carddav_auth(const char *userid)
+static int my_carddav_auth(const char *userid)
 {
-    int r;
-
     if (httpd_userisadmin || httpd_userisanonymous ||
         global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
-        return;
+        return 0;
     }
     else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
+        return 0;
     }
     else {
         /* Open CardDAV DB for 'userid' */
         my_carddav_reset();
         auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
+        if (!auth_carddavdb) {
+            syslog(LOG_ERR, "Unable to open CardDAV DB for userid: %s", userid);
+            return HTTP_UNAVAILABLE;
+        }
     }
 
     /* Auto-provision an addressbook for 'userid' */
-    r = carddav_create_defaultaddressbook(userid);
+    int r = carddav_create_defaultaddressbook(userid);
     if (r) {
         syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
                 userid, error_message(r));
+        return HTTP_SERVER_ERROR;
     }
+    return 0;
 }
 
 
@@ -637,7 +641,7 @@ static int export_addressbook(struct transaction_t *txn)
     struct mime_type_t *mime = NULL;
 
     /* Check requested MIME type:
-       1st entry in caldav_mime_types array MUST be default MIME type */
+       1st entry in carddav_mime_types array MUST be default MIME type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
         mime = get_accept_type(hdr, carddav_mime_types);
     else mime = carddav_mime_types;
@@ -702,7 +706,7 @@ static int export_addressbook(struct transaction_t *txn)
     txn->flags.cc |= CC_NOTRANSFORM;
 
     /* Begin (converted) vCard stream */
-    if (mime->begin_stream) sep = mime->begin_stream(buf);
+    if (mime->begin_stream) sep = mime->begin_stream(buf, mailbox, NULL, NULL);
     else buf_reset(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
@@ -1099,7 +1103,8 @@ static int carddav_get(struct transaction_t *txn,
         /* Download an entire addressbook collection */
         return export_addressbook(txn);
     }
-    else if (txn->req_tgt.userid) {
+    else if (txn->req_tgt.userid &&
+             config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
         /* GET a list of addressbook under addressbook-home-set */
         return list_addressbooks(txn);
     }
@@ -1115,6 +1120,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
+
+    if (!(vcard && vcard->objects &&
+          vparse_restriction_check(vcard->objects))) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        return HTTP_FORBIDDEN;
+    }
+
     return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
 }
 

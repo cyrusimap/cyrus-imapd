@@ -313,3 +313,41 @@ static void test_crlf(void)
 
 #undef TESTCASE
 }
+
+#include "imap/vcard_support.h"
+
+static void test_multiparam_type(void)
+{
+    char card[] = ""
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
+        "N:Test;John;;;\r\n"
+        "FN:John Test\r\n"
+        "EMAIL;TYPE=HOME,PREF:home@mail.com\r\n"
+        "EMAIL;TYPE=WORK:work@mail.com\r\n"
+        "TEL;TYPE=HOME,VOICE:040-xx\r\n"
+        "TEL;TYPE=CELL:06-xx\r\n"
+        "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
+        "END:VCARD\r\n";
+
+    char wantbuf[] = ""
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
+        "N:Test;John;;;\r\n"
+        "FN:John Test\r\n"
+        "EMAIL;TYPE=HOME;TYPE=PREF:home@mail.com\r\n"
+        "EMAIL;TYPE=WORK:work@mail.com\r\n"
+        "TEL;TYPE=HOME;TYPE=VOICE:040-xx\r\n"
+        "TEL;TYPE=CELL:06-xx\r\n"
+        "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
+        "END:VCARD\r\n";
+
+    struct vparse_card *vcard = vcard_parse_string(card, 0);
+    CU_ASSERT_PTR_NOT_NULL(vcard);
+    struct buf *buf = vcard_as_buf(vcard);
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
+    vparse_free_card(vcard);
+    buf_free(buf);
+}

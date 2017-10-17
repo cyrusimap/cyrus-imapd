@@ -320,7 +320,7 @@ static sqldb_t *open_db_userid (struct mailbox *mailbox) {
                       "msg_guid    CHAR (40)   PRIMARY KEY     NOT NULL," \
                       "list_info   TEXT                        NOT NULL);";
 
-    db = sqldb_open(path , sql_table , 1.0, NULL) ;
+    db = sqldb_open(path , sql_table , 1.0, NULL, SQLDB_DEFAULT_TIMEOUT) ;
 
     if (db && bkeep_db_open)
     {

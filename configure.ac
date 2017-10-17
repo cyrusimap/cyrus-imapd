@@ -574,25 +574,25 @@ if test "x$enable_xapian" != xno ; then
                        [XAPIAN_LIBS="`$XAPIAN_CONFIG --ltlibs`"])])])
         AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
 
-        dnl check if Xapian supports CJK word breaks
+        dnl check if Xapian supports Cyruslibs extensions
         AC_LANG_PUSH([C++])
         ORIG_LDFLAGS=$LDFLAGS
         ORIG_CXXFLAGS=$CXXFLAGS
         LDFLAGS="$LDFLAGS $XAPIAN_LIBS"
         CXXFLAGS="$CXXFLAGS $XAPIAN_CXXFLAGS"
-        AC_MSG_CHECKING([for Xapian CJK_WORDS flag])
+        AC_MSG_CHECKING([for Xapian cyruslibs extensions])
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS;]])],
-            [xapian_cjkwords="yes"],
-            [xapian_cjkwords="no"])
-        AC_MSG_RESULT($xapian_cjkwords)
-        if test $xapian_cjkwords = yes; then
-            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word break?])
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; unsigned snippet_flags = Xapian::MSet::SNIPPET_START_AT_NONSPACE]])],
+            [xapian_cyrusexts="yes"],
+            [xapian_cyrusexts="no"])
+        AC_MSG_RESULT($xapian_exts)
+        if test $xapian_cyrusexts = yes; then
+            AC_DEFINE([USE_XAPIAN_CYRUS_EXTENSIONS], [], [Use Xapian cyruslibs extensions?])
             xapian_flavor=cyruslibs
         else
-            AC_MSG_NOTICE([Your Xapian does not support CJK word break. Consider installing cyruslibs Xapian])
+            AC_MSG_NOTICE([Your Xapian does not support the Cyrus extensions for Xapian. Consider installing cyruslibs Xapian])
             xapian_flavor=vanilla
         fi
         LDFLAGS=$ORIG_LDFLAGS
@@ -613,7 +613,7 @@ AM_CONDITIONAL([SQUATTER],
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
-        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="no"])
+        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="$enableval"])
 
 if test "$enable_sieve" != "no"; then
         AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
@@ -1488,7 +1488,7 @@ dnl
                 ],
                 AC_MSG_ERROR([Need libical for http]))
 
-        AC_CHECK_DECLS([icalproperty_get_parent,
+        AC_CHECK_DECLS([icalproperty_get_parent, ICAL_STATUS_DELETED,
                         icalrecur_freq_to_string, icalrecur_weekday_to_string],
                 [], [], [[#include <libical/ical.h>]])
 
@@ -1837,6 +1837,7 @@ dnl compile perl stuff and perl/cyradm
 dnl Make sure perl modules are in the build directory (which isn't necessarily
 dnl the source directory)
     AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
+    AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST])
     AC_CONFIG_LINKS([perl/imap/Cyrus/HeaderFile.pm:perl/imap/Cyrus/HeaderFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/CacheFile.pm:perl/imap/Cyrus/CacheFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/IndexFile.pm:perl/imap/Cyrus/IndexFile.pm])
@@ -1847,9 +1848,11 @@ dnl the source directory)
     AC_CONFIG_LINKS([perl/imap/IMAP/IMSP.pm:perl/imap/IMAP/IMSP.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
+    AC_CONFIG_FILES([perl/imap/MANIFEST])
     AC_CONFIG_LINKS([perl/annotator/Message.pm:perl/annotator/Message.pm])
     AC_CONFIG_LINKS([perl/annotator/AnnotateInlinedCIDs.pm:perl/annotator/AnnotateInlinedCIDs.pm])
     AC_CONFIG_LINKS([perl/annotator/Daemon.pm:perl/annotator/Daemon.pm])
+    AC_CONFIG_FILES([perl/annotator/MANIFEST])
 
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
@@ -2223,7 +2226,7 @@ enum {
 #endif /* _CYRUS_IMAPD_CONFIG_H_ */
 ])
 
-dnl We need to link with stdc++ when building static cyrus libs dnl and binaries.
+dnl We need to link with stdc++ when building static cyrus libs and binaries.
 dnl libstdc++ is required because we link with libxapian, which is written in C++.
 if test "X$enable_shared" = "Xno"
 then
@@ -2308,4 +2311,7 @@ Build info:
    shared:             $enable_shared
    static:             $enable_static
    cflags:             $CFLAGS
+   cxxflags:           $CXXFLAGS
+   libs:               $LIBS
+   ldflags:            $LDFLAGS
 "

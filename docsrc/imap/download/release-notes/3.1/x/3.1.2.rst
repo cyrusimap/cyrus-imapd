@@ -1,0 +1,54 @@
+:tocdepth: 3
+
+==========================
+Cyrus IMAP 3.1.2 Tag Notes
+==========================
+
+Unavailable for download as this is a development branch only.
+
+Access is via git.
+
+.. warning::
+
+    This should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
+
+.. _relnotes-3.1.2-changes:
+
+Major changes since the 3.0.x series
+====================================
+
+* Sieve bug fixes and features.
+* Caldav and Carddav improvements.
+* JMAP improvements.
+* Xapian bug fixes.
+* Improvements to Annotations handling.
+* DRAC support has been deprecated.
+* Support for Prometheus stats.
+
+Updates to default configuration
+================================
+
+* The `specialusealways` option is now enabled by default. It must
+  explicitly be disabled for interoperability with legacy clients that
+  can't handle RFC 6154 attributes in extended LIST commands.
+* The values accepted by `expunge_mode` have changed, please see the
+  documentation for more information about the changes.
+*
+
+Security fixes
+==============
+* Contains fix for CVE-2017-14230.
+  [ http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230 ]
+
+Significant bugfixes
+====================
+
+*
+
+
+.. _Xapian: https://xapian.org
+.. _ClamAV: https://www.clamav.net
+.. _JMAP: http://jmap.io

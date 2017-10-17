@@ -725,8 +725,10 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     }
 
     /* shared folders: are in user's domain unless admin */
-    if ((config_virtdomains && !ns->isadmin) || crossdomains)
+    if ((config_virtdomains && !ns->isadmin) || crossdomains) {
+        free(mbname->domain);
         mbname->domain = xstrdupnull(mbname_domain(userparts));
+    }
 
  done:
     mbname_free(&userparts);

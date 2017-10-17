@@ -152,7 +152,8 @@ static sqldb_t *caldav_alarm_open()
 
     // XXX - config option?
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
-    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade);
+    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
+                            config_getint(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
 
     if (!my_alarmdb) {
         syslog(LOG_ERR, "DBERROR: failed to open %s", dbfilename);
@@ -498,7 +499,8 @@ static int write_lastalarm(struct mailbox *mailbox, const struct index_record *r
                            struct lastalarm_data *data)
 {
     struct buf annot_buf = BUF_INITIALIZER;
-    buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
+    if (data)
+        buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     int r = mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
     buf_free(&annot_buf);
@@ -531,7 +533,10 @@ static int read_lastalarm(struct mailbox *mailbox, const struct index_record *re
 EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
                                      icalcomponent *ical)
 {
-    if (!has_alarms(ical)) return 0;
+    if (!has_alarms(ical)) {
+        write_lastalarm(mailbox, record, NULL);
+        return 0;
+    }
     // we need to skip silent records (replication) because the lastalarm annotation won't be
     // set yet, so it will all break :(  Instead, we have an explicit touch on the record which
     // is done after the annotations are written, and processes the alarms if needed then, and
@@ -638,21 +643,31 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     memset(&record, 0, sizeof(struct index_record));
     rc = mailbox_find_index_record(mailbox, imap_uid, &record);
     if (rc == IMAP_NOTFOUND) {
+        syslog(LOG_ERR, "not found mailbox %s uid %u",
+               mailbox->name, imap_uid);
         /* no record, no worries */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (rc) {
+        syslog(LOG_ERR, "error reading mailbox %s uid %u (%s)",
+               mailbox->name, imap_uid, error_message(rc));
         /* XXX no index record? item deleted or transient error? */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
     if (record.system_flags & FLAG_EXPUNGED) {
+        syslog(LOG_ERR, "already expunged mailbox %s uid %u",
+               mailbox->name, imap_uid);
         /* no longer exists?  nothing to do */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
     rc = mailbox_map_record(mailbox, &record, &msg_buf);
     if (rc) {
         /* XXX no message? index is wrong? yikes */
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
@@ -660,6 +675,17 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
 
     if (!ical) {
         /* XXX log error */
+        syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
+               mailbox->name, imap_uid);
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
+        goto done_item;
+    }
+
+    /* check for bogus lastalarm data on record which actually shouldn't have it */
+    if (!has_alarms(ical)) {
+        syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
+               mailbox->name, imap_uid);
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 

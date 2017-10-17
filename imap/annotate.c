@@ -2214,22 +2214,22 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         /*set*/NULL,
         NULL
     },{
-    IMAP_ANNOT_NS "freespace/total",
-    ATTRIB_TYPE_STRING,
-    BACKEND_ONLY,
-    ATTRIB_VALUE_SHARED,
-    0,
-    annotation_get_freespace_total,
-    /*set*/NULL,
-    NULL
+        IMAP_ANNOT_NS "freespace/total",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_freespace_total,
+        /*set*/NULL,
+        NULL
     },{
-    IMAP_ANNOT_NS "freespace/percent/most",
-    ATTRIB_TYPE_STRING,
-    BACKEND_ONLY,
-    ATTRIB_VALUE_SHARED,
-    0,
-    annotation_get_freespace_percent_most,
-    /*set*/NULL,
+        IMAP_ANNOT_NS "freespace/percent/most",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_freespace_percent_most,
+        /*set*/NULL,
     NULL
     },{
         IMAP_ANNOT_NS "shutdown",

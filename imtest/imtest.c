@@ -774,6 +774,27 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
     if (result!=SASL_OK)
         imtest_fatal("Error setting SASL property (external auth_id)");
 
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    static unsigned char finished[EVP_MAX_MD_SIZE];
+    static struct sasl_channel_binding cbinding;
+
+    if (SSL_session_reused(tls_conn)) {
+        cbinding.len = SSL_get_peer_finished(tls_conn,
+                                             finished, sizeof(finished));
+    }
+    else {
+        cbinding.len = SSL_get_finished(tls_conn, finished, sizeof(finished));
+    }
+
+    cbinding.name = "tls-unique";
+    cbinding.critical = 0;
+    cbinding.data = finished;
+
+    result = sasl_setprop(conn, SASL_CHANNEL_BINDING, &cbinding);
+    if (result!=SASL_OK)
+        imtest_fatal("Error setting SASL property (channel binding)");
+#endif /* (OPENSSL_VERSION_NUMBER >= 0x0090800fL) */
+
     prot_settls (pin,  tls_conn);
     prot_settls (pout, tls_conn);
 }

@@ -135,11 +135,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The One-Time-Password SASL Mechanism
 
-:rfc:`2445`
-
-    Internet Calendaring and Scheduling Core Object Specification
-    (iCalendar)
-
 :rfc:`2449`
 
     POP3 Extension Mechanism
@@ -154,7 +149,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2617`
 
-    HTTP Authentication: Basic and Digest Access Authentication
+    HTTP Authentication: Basic and Digest Access Authentication,
+    updated by :rfc:`7615`, :rfc:`7616`, :rfc:`7617`.
 
 :rfc:`2817`
 
@@ -473,6 +469,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Notification Mechanism: mailto
 
+:rfc:`5463`
+
+    Sieve Email Filtering: Ihave Extension
+
 :rfc:`5464`
 
     The IMAP METADATA Extension
@@ -551,15 +551,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Vacation Extension: "Seconds" Parameter
 
-:rfc:`5463`
-
-    Sieve Email Filtering: Ihave Extension
-
 :rfc:`6154`
 
     IMAP LIST Extension for Special-Use Mailboxes
 
-:rfc:`6231`
+:rfc:`6321`
 
     xCal: The XML Format for iCalendar
 
@@ -601,6 +597,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`6797`
 
     HTTP Strict Transport Security (HSTS)
+
+:rfc:`6851`
+
+    Internet Message Access Protocol (IMAP) - MOVE Extension
+
+    .. versionadded:: 2.5.0
 
 :rfc:`7230`
 
@@ -644,18 +646,50 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`7529`
 
-    Non-Gregorian Recurrence Rules in the Internet Calendaring and Scheduling Core Object Specification (iCalendar) (obsoletes draft-ietf-calext-rscale)
+    Non-Gregorian Recurrence Rules in the Internet Calendaring and
+    Scheduling Core Object Specification (iCalendar)
+
+:rfc:`7540`
+
+      Hypertext Transfer Protocol Version 2 (HTTP/2)
+
+:rfc:`7615`
+
+    HTTP Authentication-Info and Proxy-Authentication-Info Response
+    Header Fields
+
+:rfc:`7616`
+
+    HTTP Digest Access Authentication
+
+:rfc:`7617`
+
+    The 'Basic' HTTP Authentication Scheme
+
+:rfc:`7694`
+
+    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
+
+:rfc:`7808`
+
+    Time Zone Data Distribution Service
+
+:rfc:`7809`
+
+    CalDAV: Time Zones by Reference
+
+:rfc:`7953`
+
+    Calendar Availability
+
+:rfc:`8144`
+
+    Use of the Prefer Header Field in Web Distributed Authoring and
+    Versioning (WebDAV)
+
 
 IETF RFC Drafts
 ===============
-
-draft-hickman-netscape-ssl
-
-    The SSL Protocol Version 2.0
-
-draft-daboo-imap-annotatemore
-
-    ANNOTATEMORE Draft
 
 draft-murchison-lmtp-ignorequota
 
@@ -671,18 +705,6 @@ draft-martin-sieve-notify
 
     Sieve -- An extension for providing instant notifications
 
-draft-ietf-tzdist-service
-
-    Time Zone Data Distribution Service
-
-draft-ietf-tzdist-caldav-timezone-ref
-
-    CalDAV: Time Zones by Reference
-
-draft-daboo-calendar-availability
-
-    Calendar Availability
-
 draft-york-vpoll
 
     VPOLL: Consensus Scheduling Component for iCalendar
@@ -694,32 +716,6 @@ draft-desruisseaux-ischedule
 draft-thomson-hybi-http-timeout
 
     Hypertext Transfer Protocol (HTTP) Keep-Alive Header
-
-draft-murchison-webdav-prefer
-
-    Use of the Prefer Header Field in Web Distributed Authoring and
-    Versioning (WebDAV)
-
-draft-ietf-calext-availability
-
-    Calendar Availability
-
-draft-ietf-httpauth-basicauth-update
-
-    The 'Basic' HTTP Authentication Scheme
-
-draft-ietf-httpauth-digest
-
-    HTTP Digest Access Authentication
-
-draft-ietf-httpbis-auth-info
-
-    The Hypertext Transfer Protocol (HTTP) Authentication-Info and
-    Proxy- Authentication-Info Response Header Fields
-
-draft-ietf-httpbis-cice
-
-    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
 ..
 
@@ -754,9 +750,3 @@ RFC Wishlist
 :rfc:`6785`
 
     Support for Internet Message Access Protocol (IMAP) Events in Sieve
-
-:rfc:`6851`
-
-    Internet Message Access Protocol (IMAP) - MOVE Extension
-
-    .. versionadded:: 2.5.0

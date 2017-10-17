@@ -82,7 +82,7 @@ static int jmap_delete(struct transaction_t *txn, void *params);
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
 static int  jmap_checkurl(struct transaction_t *txn);
-static void jmap_auth(const char *userid);
+static int  jmap_auth(const char *userid);
 static int  jmap_bearer(const char *bearer, char *userbuf, size_t buflen);
 
 /* Authentication handlers */
@@ -246,11 +246,12 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-static void jmap_auth(const char *userid __attribute__((unused)))
+static int jmap_auth(const char *userid __attribute__((unused)))
 {
     /* Set namespace */
     mboxname_init_namespace(&jmap_namespace,
                             httpd_userisadmin || httpd_userisproxyadmin);
+    return 0;
 }
 
 /* Perform a DELETE request */
@@ -1386,10 +1387,10 @@ static json_t *user_settings(const char *userid)
     findaccounts_add(ctx.accounts, buf_cstring(&ctx.userid), ctx.rw);
     buf_free(&ctx.userid);
 
-    return json_pack("{s:s s:o s:s s:s s:s}",
+    return json_pack("{s:s s:o s:o s:s s:s s:s}",
             "username", userid,
             "accounts", accounts,
-            /* FIXME capabilities */
+            "capabilities", json_pack("{}"), /* TODO update with JMAP URIs */
             "apiUrl", "/jmap/",
             "downloadUrl", "/jmap/download/{accountId}/{blobId}/{name}",
             /* FIXME eventSourceUrl */
@@ -1640,6 +1641,11 @@ static int jmap_authreq(struct transaction_t *txn)
             txn->error.desc = "Invalid loginId or password";
             goto done;
         }
+
+        /* Initialize the global namespace. Usually, that's done by
+         * jmap_auth after a successful login, but we are out of the
+         * regular authentication codepaths here. */
+        mboxname_init_namespace(&jmap_namespace, 0/*isadmin*/);
 
         /* Create the response object */
         json_t *res = user_settings(access_tok->userid);

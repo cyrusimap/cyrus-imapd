@@ -50,6 +50,7 @@
 #include <libxml/tree.h>
 
 #include "httpd.h"
+#include "strhash.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
@@ -1094,7 +1095,8 @@ icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
 }
 
 
-const char *begin_xcal(struct buf *buf)
+const char *begin_xcal(struct buf *buf, struct mailbox *mailbox,
+                       const char *prodid, const char *name)
 {
     /* Begin xCal stream */
     buf_reset(buf);
@@ -1103,12 +1105,22 @@ const char *begin_xcal(struct buf *buf)
     buf_printf_markup(buf, 1, "<vcalendar>");
     buf_printf_markup(buf, 2, "<properties>");
     buf_printf_markup(buf, 3, "<prodid>");
-    buf_printf_markup(buf, 4, "<text>-//CyrusIMAP.org/Cyrus %s//EN</text>",
-                      CYRUS_VERSION);
+    buf_printf_markup(buf, 4, "<text>%s</text>", prodid);
     buf_printf_markup(buf, 3, "</prodid>");
     buf_printf_markup(buf, 3, "<version>");
     buf_printf_markup(buf, 4, "<text>2.0</text>");
     buf_printf_markup(buf, 3, "</version>");
+    buf_printf_markup(buf, 3, "<uid>");
+    buf_printf_markup(buf, 4, "<text>%x-%s-%u</text>",
+                      strhash(config_servername),
+                      mailbox->uniqueid, mailbox->i.uidvalidity);
+    buf_printf_markup(buf, 3, "</uid>");
+    buf_printf_markup(buf, 3, "<name>");
+    buf_printf_markup(buf, 4, "<text>%s</text>", name);
+    buf_printf_markup(buf, 3, "</name>");
+    buf_printf_markup(buf, 3, "<x-wr-calname>");
+    buf_printf_markup(buf, 4, "<text>%s</text>", name);
+    buf_printf_markup(buf, 3, "</x-wr-calname>");
     buf_printf_markup(buf, 2, "</properties>");
     buf_printf_markup(buf, 2, "<components>");
 

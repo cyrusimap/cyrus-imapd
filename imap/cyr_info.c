@@ -1,4 +1,4 @@
-/* ctl_info.c - tool to get information about cyrus
+/* cyr_info.c - tool to get information about cyrus
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -352,10 +352,6 @@ int main(int argc, char *argv[])
     int opt;
     char *alt_config = NULL;
     char *srvname = "cyr_info";
-
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
 
     while ((opt = getopt(argc, argv, "C:M:n:")) != EOF) {
         switch (opt) {

@@ -86,11 +86,7 @@ int sieved_tls_required = 0;
 sieve_interp_t *interp = NULL;
 static int build_sieve_interp(void);
 
-static struct
-{
-    char *ipremoteport;
-    char *iplocalport;
-} saslprops = {NULL,NULL};
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
@@ -146,6 +142,8 @@ void shut_down(int code)
     tls_shutdown_serverengine();
 #endif
 
+    saslprops_free(&saslprops);
+
     cyrus_done();
 
     cyrus_reset_stdio();
@@ -178,7 +176,7 @@ static void cmdloop(void)
             return;
         }
 
-        ret = parser(sieved_out, sieved_in);
+        ret = parser(sieved_out, sieved_in, &saslprops);
     }
 
     sync_log_done();
@@ -255,20 +253,17 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     sieved_clienthost = get_clienthost(0, &localip, &remoteip);
 
+    if (localip && remoteip) {
+        buf_setcstr(&saslprops.ipremoteport, remoteip);
+        buf_setcstr(&saslprops.iplocalport, localip);
+    }
+
     /* other params should be filled in */
     if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
-                        NULL, NULL, NULL, SASL_SUCCESS_DATA,
-                        &sieved_saslconn) != SASL_OK)
+                        buf_cstringnull_ifempty(&saslprops.iplocalport),
+                        buf_cstringnull_ifempty(&saslprops.ipremoteport),
+                        NULL, SASL_SUCCESS_DATA, &sieved_saslconn) != SASL_OK)
         fatal("SASL failed initializing: sasl_server_new()", -1);
-
-    if (remoteip) {
-        sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
-        saslprops.ipremoteport = xstrdup(remoteip);
-    }
-    if (localip) {
-        sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
-        saslprops.iplocalport = xstrdup(localip);
-    }
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
@@ -286,26 +281,17 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 }
 
 /* Reset the given sasl_conn_t to a sane state */
-int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
+int reset_saslconn(sasl_conn_t **conn)
 {
     int ret = 0;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new(SIEVE_SERVICE_NAME, config_servername,
-                          NULL, NULL, NULL,
+    ret = sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
+                          buf_cstringnull_ifempty(&saslprops.iplocalport),
+                          buf_cstringnull_ifempty(&saslprops.ipremoteport),
                           NULL, SASL_SUCCESS_DATA, conn);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.ipremoteport)
-        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                           saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
-
-    if(saslprops.iplocalport)
-        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
-                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(0);
@@ -315,13 +301,8 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
-    if(ssf) {
-        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &ssf);
-        if(ret != SASL_OK) return ret;
-    }
-
-    if(authid) {
-        ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, authid);
+    if(saslprops.ssf) {
+        ret = saslprops_set_tls(&saslprops, *conn);
         if(ret != SASL_OK) return ret;
     }
     /* End TLS/SSL Info */

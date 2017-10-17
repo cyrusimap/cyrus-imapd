@@ -393,17 +393,32 @@ out:
 }
 
 /* convert an array of activefile items to an array of database paths,
- * optionally stripping records where the path doesn't exist */
+ * optionally stripping records where the path doesn't exist. If itemsptr
+ * is not NULL, it stores the unparsed items for which database paths
+ * exist in order and cardinality of the returned string array value.
+ */
 static strarray_t *activefile_resolve(const char *mboxname, const char *part,
-                                        const strarray_t *items, int dostat)
+                                      const strarray_t *items, int dostat,
+                                      strarray_t **itemsptr)
+
 {
     strarray_t *result = strarray_new();
     int i;
 
+    if (itemsptr) {
+        *itemsptr = strarray_new();
+    }
+
     for (i = 0; i < items->count; i++) {
         int statthis = (dostat == 1 || (dostat == 2 && i));
-        char *dir = activefile_path(mboxname, part, strarray_nth(items, i), statthis);
-        if (dir) strarray_appendm(result, dir);
+        const char *item = strarray_nth(items, i);
+        char *dir = activefile_path(mboxname, part, item, statthis);
+        if (dir) {
+            strarray_appendm(result, dir);
+            if (itemsptr) {
+                strarray_append(*itemsptr, item);
+            }
+        }
     }
 
     return result;
@@ -533,19 +548,183 @@ static struct seqset *parse_indexed(const char *data, size_t datalen)
     return NULL;
 }
 
+static int tierexists_cb(void *rock, const char *key, size_t keylen,
+                         const char *data __attribute__((unused)),
+                         size_t datalen __attribute__((unused)))
+{
+    const int *verbose = rock;
+    if (*verbose > 1) {
+        syslog(LOG_INFO, "tierexists_cb: found tier key %.*s", (int) keylen, key);
+    }
+    return CYRUSDB_DONE;
+}
+
+struct cachetier_rock {
+    struct buf *buf;
+    struct db *dst_db;
+    struct txn *txn;
+};
+
+static int cachetier_cb(void *rock, const char *key, size_t keylen,
+                        const char *data, size_t datalen)
+{
+    if (*key == '#') {
+        /* Ignore cache entries */
+        return 0;
+    }
+
+    struct cachetier_rock *mr = rock;
+    size_t prefix_len = buf_len(mr->buf);
+    int r = 0;
+
+    buf_appendmap(mr->buf, key, keylen);
+    r = cyrusdb_store(mr->dst_db, buf_base(mr->buf), buf_len(mr->buf),
+                      data, datalen, &mr->txn);
+    buf_truncate(mr->buf, prefix_len);
+    if (r) {
+        syslog(LOG_ERR, "cachetier_cb: could not save key %.*s for tier %s: %s",
+                (int) keylen, key, buf_cstring(mr->buf), cyrusdb_strerror(r));
+    }
+    return r;
+}
+
 /*
- * Read the most indexed UIDs sequence for the current mailbox
- * from the cyrus.indexed DB in each xapian directory and join
- * them into a single result.
- * Returns 0 on success or an IMAP error code.
+ * Merge the indexed.db of all search tiers activetiers[1..n] into the
+ * indexed.db of the top tier.
+ *
+ * Any entries in indexed.dbs located at activedirs[1..n] are cached into
+ * the indexed.db located at activedirs[0] (created if not exists), using
+ * a special prefix:
+ *
+ * The keys from merged entries are formatted as
+ *
+ *     '#c'.<tiername:tiergen>'#'<key>
+ *
+ * and any keys starting with '#' are ignored during the merge.
+ *
+ * Returns 0 on success or a cyrusdb error code.
  */
-static int read_indexed(const strarray_t *paths,
+static int cache_indexed(const strarray_t *activedirs,
+                         const strarray_t *activetiers,
+                         int verbose)
+{
+    struct db *src_db = NULL;
+    struct db *dst_db = NULL;
+    struct buf path = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    int r = 0;
+    int i;
+
+    assert(activedirs->count == activetiers->count);
+
+    if (!activedirs->count) {
+        return 0;
+    }
+
+    /* Open destination database */
+    buf_printf(&path, "%s%s", strarray_nth(activedirs, 0), INDEXEDDB_FNAME);
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+                     buf_cstring(&path), CYRUSDB_CREATE, &dst_db);
+    if (r) {
+        syslog(LOG_ERR, "cache_indexed: can't open destination db %s: %s",
+                buf_cstring(&path), cyrusdb_strerror(r));
+        goto out;
+    }
+
+    for (i = 1; i < activedirs->count; i++) {
+        /* Reset state */
+        if (src_db) {
+            cyrusdb_close(src_db);
+        }
+        src_db = NULL;
+        buf_reset(&path);
+        buf_reset(&key);
+
+        /* Check if the tier is already merged. We assume a tier is merged
+         * if at least one entry with its tier prefix exists. */
+        buf_printf(&key, "#c.%s#", strarray_nth(activetiers, i));
+        r = cyrusdb_foreach(dst_db, buf_base(&key), buf_len(&key),
+                            NULL, tierexists_cb, &verbose, NULL);
+        if (r == CYRUSDB_DONE) {
+            if (verbose) {
+                syslog(LOG_INFO, "cache_indexed: tier %s is already merged",
+                       strarray_nth(activetiers, i));
+            }
+            r = 0;
+            continue;
+        }
+        else if (r) goto out;
+
+        /* Open source database */
+        buf_printf(&path, "%s%s", strarray_nth(activedirs, i), INDEXEDDB_FNAME);
+        r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+                         buf_cstring(&path), 0, &src_db);
+        if (r == CYRUSDB_NOTFOUND) {
+            if (verbose) {
+                syslog(LOG_INFO, "cache_indexed: no db found at %s",
+                       buf_cstring(&path));
+            }
+            r = 0;
+            continue;
+        }
+        else if (r) goto out;
+
+        /* Merge the entries from source into destination. The first
+         * store in the callback will create a write transaction. */
+        struct cachetier_rock rock = { &key, dst_db, NULL };
+        r = cyrusdb_foreach(src_db, NULL, 0, NULL, cachetier_cb, &rock, NULL);
+        cyrusdb_close(src_db);
+        src_db = NULL;
+        if (r) {
+            cyrusdb_abort(dst_db, rock.txn);
+            goto out;
+        }
+        cyrusdb_commit(dst_db, rock.txn);
+    }
+
+out:
+    if (dst_db) {
+        cyrusdb_close(dst_db);
+    }
+    if (src_db) {
+        cyrusdb_close(src_db);
+    }
+    buf_free(&key);
+    buf_free(&path);
+
+    return r;
+}
+
+/*
+ * Read the indexed UIDs sequence for mailbox mboxname
+ * from the activetiers located at activedirs and join
+ * them into a single result res.
+ *
+ * If do_cache is true, any activetiers[1..n] that are not
+ * already cached in the top tier (activetiers[0]) are
+ * cached before looking up their sequence sets in the
+ * cache. Caller must guarantee an exlusive write lock on
+ * activetier[0].
+ *
+ * If do_cache is zero, the sequence sets are constructed
+ * by looking up first any already cached indexes in the
+ * top tier, followed by looking up entries in any non-
+ * cached activetiers[1..n]. Since no writes are done,
+ * this operation is safe without exclusively locking
+ * the top tier.
+ *
+ * Returns 0 on success or a cyrusdb error code.
+ */
+static int read_indexed(const strarray_t *activedirs,
+                       const strarray_t *activetiers,
                        const char *mboxname,
                        uint32_t uidvalidity,
                        struct seqset *res,
+                       int do_cache,
                        int verbose)
 {
     struct db *db = NULL;
+    struct db *srcdb = NULL;
     struct buf path = BUF_INITIALIZER;
     struct buf key = BUF_INITIALIZER;
     const char *data = NULL;
@@ -553,57 +732,101 @@ static int read_indexed(const strarray_t *paths,
     int r = 0;
     int i;
 
+    assert(activedirs->count == activetiers->count);
+
+    if (!activedirs->count) {
+        return 0;
+    }
+
+    if (do_cache) {
+        /* Merge search tiers first */
+        r = cache_indexed(activedirs, activetiers, verbose);
+        if (r) return r;
+    }
+
+    /* Open database */
+    buf_printf(&path, "%s%s", strarray_nth(activedirs, 0), INDEXEDDB_FNAME);
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+                     buf_cstring(&path), CYRUSDB_CREATE, &db);
+    if (r) {
+        syslog(LOG_ERR, "read_indexed: can't open db %s: %s",
+                buf_cstring(&path), cyrusdb_strerror(r));
+        goto out;
+    }
+
+    /* Lookup entry in top tier */
     buf_printf(&key, "%s.%u", mboxname, uidvalidity);
-
-    for (i = 0; i < paths->count; i++) {
-        struct seqset *seq;
-        buf_reset(&path);
-        buf_printf(&path, "%s%s", strarray_nth(paths, i), INDEXEDDB_FNAME);
-        if (verbose > 1)
-            syslog(LOG_INFO, "read_indexed db=%s mailbox=%s uidvalidity=%u",
-                   buf_cstring(&path), mboxname, uidvalidity);
-
-        r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
-                         buf_cstring(&path), 0, &db);
-        if (r == CYRUSDB_NOTFOUND) {
-            r = 0;
-            if (verbose > 1)
-                syslog(LOG_INFO, "read_indexed no db for %s",
-                       buf_cstring(&path));
-            continue;
-        }
-        if (r) goto out;
-
-        r = cyrusdb_fetch(db,
-                          key.s, key.len,
-                          &data, &datalen,
-                          (struct txn **)NULL);
-        if (r == CYRUSDB_NOTFOUND) {
-            r = 0;
-            cyrusdb_close(db);
-            db = NULL;
-            if (verbose > 1)
-                syslog(LOG_INFO, "read_indexed no record for %s: %.*s",
-                       buf_cstring(&path), (int)key.len, key.s);
-            continue;
-        }
-        if (r) goto out;
-
-        seq = parse_indexed(data, datalen);
+    r = cyrusdb_fetch(db, key.s, key.len, &data, &datalen, (struct txn **)NULL);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        goto out;
+    }
+    else if (!r) {
+        struct seqset *seq = parse_indexed(data, datalen);
         if (seq) {
             seqset_join(res, seq);
             seqset_free(seq);
-            if (verbose > 1)
-                syslog(LOG_INFO, "read_indexed seq=%.*s", (int)datalen, data);
+            if (verbose > 1) {
+                syslog(LOG_INFO, "read_indexed: top tier seq=%.*s", (int)datalen, data);
+            }
+        }
+    }
+    r = 0;
+
+    /* Lookup entries from lower tiers */
+    for (i = 1; i < activedirs->count; i++) {
+        buf_reset(&key);
+        if (srcdb) {
+            cyrusdb_close(srcdb);
         }
 
-        cyrusdb_close(db);
-        db = NULL;
+        /* First look in the cached tiers in the top tier database. */
+        buf_printf(&key, "#c.%s#%s.%u", strarray_nth(activetiers, i), mboxname, uidvalidity);
+        r = cyrusdb_fetch(db, key.s, key.len, &data, &datalen, (struct txn **)NULL);
+
+        /* Fall back to the lower tiers if we haven't merged all tiers. */
+        if (r == CYRUSDB_NOTFOUND && !do_cache) {
+            buf_reset(&path);
+            buf_printf(&path, "%s%s", strarray_nth(activedirs, i), INDEXEDDB_FNAME);
+            r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+                             buf_cstring(&path), 0, &srcdb);
+            if (r) {
+                syslog(LOG_ERR, "read_indexed: can't open db %s: %s",
+                        buf_cstring(&path), cyrusdb_strerror(r));
+                goto out;
+            }
+            buf_reset(&key);
+            buf_printf(&key, "%s.%u", mboxname, uidvalidity);
+            r = cyrusdb_fetch(srcdb, key.s, key.len, &data, &datalen, (struct txn **)NULL);
+        }
+        if (r && r != CYRUSDB_NOTFOUND) {
+            goto out;
+        }
+
+        /* No entry found */
+        if (r == CYRUSDB_NOTFOUND) {
+            r = 0;
+            continue;
+        }
+
+        /* Parse and join the sequence sets */
+        struct seqset *seq = parse_indexed(data, datalen);
+        if (seq) {
+            seqset_join(res, seq);
+            seqset_free(seq);
+            if (verbose > 1) {
+                syslog(LOG_INFO, "read_indexed: tier %s seq=%.*s",
+                        strarray_nth(activetiers, i), (int)datalen, data);
+            }
+        }
     }
 
 out:
-    if (db)
+    if (db) {
         cyrusdb_close(db);
+    }
+    if (srcdb) {
+        cyrusdb_close(srcdb);
+    }
     buf_free(&key);
     buf_free(&path);
 
@@ -1076,6 +1299,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
     xapian_builder_t *bb;
     strarray_t *dirs = NULL;
+    strarray_t *tiers = NULL;
     strarray_t *active = NULL;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
@@ -1094,7 +1318,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     if (!active) goto out;
 
     /* only try to open directories with databases in them */
-    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/1);
+    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/1, &tiers);
     if (!dirs || !dirs->count) goto out;
 
     /* if there are directories, open the databases */
@@ -1104,11 +1328,13 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     /* read the list of all indexed messages to allow (optional) false positives
      * for unindexed messages */
     bb->indexed = seqset_init(0, SEQ_MERGE);
-    r = read_indexed(dirs, mailbox->name, mailbox->i.uidvalidity, bb->indexed, /*verbose*/0);
+    r = read_indexed(dirs, tiers, mailbox->name, mailbox->i.uidvalidity, bb->indexed,
+                    /*do_cache*/0, /*verbose*/0);
     if (r) goto out;
 
 out:
     strarray_free(dirs);
+    strarray_free(tiers);
     strarray_free(active);
     /* XXX - error return? */
     return &bb->super;
@@ -1163,6 +1389,8 @@ struct xapian_update_receiver
     struct seqset *oldindexed;
     struct seqset *indexed;
     strarray_t *activedirs;
+    strarray_t *activetiers;
+    hash_table cached_seqs;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -1511,7 +1739,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it */
-    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2);
+    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2, &tr->activetiers);
     if (!tr->activedirs || !tr->activedirs->count) {
         goto out;
     }
@@ -1528,10 +1756,14 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
 
     if ((flags & SEARCH_UPDATE_INCREMENTAL)) {
-        r = read_indexed(tr->activedirs, mailbox->name, mailbox->i.uidvalidity,
-                         tr->oldindexed, tr->super.verbose);
+        r = read_indexed(tr->activedirs, tr->activetiers, mailbox->name, mailbox->i.uidvalidity,
+                        tr->oldindexed, /*do_cache*/1, tr->super.verbose);
         if (r) goto out;
     }
+
+    /* purge any stale cache for this mailbox index sequences */
+    struct seqset *seq = hash_del(mailbox->name, &tr->cached_seqs);
+    if (seq) seqset_free(seq);
 
     /* XXX - and of course we have to lock again! (XXX - no support for the nonblocking bit
      * on this second lock... *sigh*)  We don't have the flags to know that we wanted it */
@@ -1556,8 +1788,60 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
     return seqset_firstnonmember(tr->oldindexed);
 }
 
+static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
+{
+    xapian_update_receiver_t *tr = rock;
+
+    /* Is this GUID record in the mailbox we are currently indexing? */
+    if (!strcmp(tr->super.mailbox->name, rec->mboxname)) {
+        if (seqset_ismember(tr->indexed, rec->uid) ||
+            seqset_ismember(tr->oldindexed, rec->uid)) {
+            return CYRUSDB_DONE;
+        }
+        return 0;
+    }
+
+    /* Is this GUID record in an already cached sequence set? */
+    struct seqset *seq = hash_lookup(rec->mboxname, &tr->cached_seqs);
+    if (seq) {
+        return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
+    }
+
+    /* Read the index cache for this mailbox */
+    mbentry_t *mb = NULL;
+    seq = seqset_init(0, SEQ_MERGE);
+    int r = 0;
+
+    r = mboxlist_lookup(rec->mboxname, &mb, NULL);
+    if (r) {
+        syslog(LOG_ERR, "is_indexed_cb: mboxlist_lookup %s failed: %s",
+                rec->mboxname, error_message(r));
+        goto out;
+    }
+    r = read_indexed(tr->activedirs, tr->activetiers, mb->name, mb->uidvalidity,
+                    seq, /*do_cache*/1, tr->super.verbose);
+    if (r) {
+        syslog(LOG_ERR, "is_indexed_cb: read_indexed %s failed: %s",
+                rec->mboxname, error_message(r));
+        goto out;
+    }
+    hash_insert(rec->mboxname, seq, &tr->cached_seqs);
+
+out:
+    mboxlist_entry_free(&mb);
+    if (r) {
+        seqset_free(seq);
+        return 0;
+    }
+    return seqset_ismember(seq, rec->uid) ? CYRUSDB_DONE : 0;
+}
+
 static int is_indexed(search_text_receiver_t *rx, message_t *msg)
 {
+    /* XXX caveat: this function returns non-zero if msg already
+     * has been indexed _and marks msg as indexed in any case_.
+     * The current squatter implementation relies on this and
+     * we should probably change this. */
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
     uint32_t uid = 0;
@@ -1565,14 +1849,31 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
 
     if (seqset_ismember(tr->indexed, uid)) return 3;
     if (seqset_ismember(tr->oldindexed, uid)) return 2;
-
     if (!tr->indexed) tr->indexed = seqset_init(0, SEQ_MERGE);
-    seqset_add(tr->indexed, uid, 1);
 
     const struct message_guid *guid = NULL;
     message_get_guid(msg, &guid);
 
-    return xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)) ? 1 : 0;
+    /* Determine if msg is already indexed */
+    struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                tr->super.mailbox->name);
+        return 0;
+    }
+
+    char *guidrep = xstrdup(message_guid_encode(guid));
+    int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
+    if (r && r != CYRUSDB_DONE) {
+        syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
+                tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
+    }
+    free(guidrep);
+
+    /* Mark msg as indexed */
+    seqset_add(tr->indexed, uid, 1);
+
+    return r == CYRUSDB_DONE ? 1 : 0;
 }
 
 static int end_mailbox_update(search_text_receiver_t *rx,
@@ -1612,6 +1913,10 @@ static int end_mailbox_update(search_text_receiver_t *rx,
         strarray_free(tr->activedirs);
         tr->activedirs = NULL;
     }
+    if (tr->activetiers) {
+        strarray_free(tr->activetiers);
+        tr->activetiers = NULL;
+    }
 
     return r;
 }
@@ -1636,6 +1941,8 @@ static search_text_receiver_t *begin_update(int verbose)
 
     tr->super.verbose = verbose;
 
+    construct_hash_table(&tr->cached_seqs, 128, 0);
+
     return &tr->super.super;
 }
 
@@ -1649,6 +1956,7 @@ static void free_receiver(xapian_receiver_t *tr)
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    free_hash_table(&tr->cached_seqs, (void(*)(void*))seqset_free);
 
     free_receiver(&tr->super);
 
@@ -1744,7 +2052,7 @@ static int end_message_snippets(search_text_receiver_t *rx)
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
         }
 
-        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text);
+        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
         if (r) break;
 
         last_part = seg->part;
@@ -1838,7 +2146,7 @@ static int list_files(const char *userid, strarray_t *files)
 
     active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/0);
     if (!active) goto out;
-    dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1);
+    dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1, NULL/*resultitems*/);
 
     for (i = 0; i < dirs->count; i++) {
         const char *basedir = strarray_nth(dirs, i);
@@ -1895,6 +2203,12 @@ static int copyindexed_cb(void *rock,
                          const char *key, size_t keylen,
                          const char *data, size_t datalen)
 {
+    /* Ignore cached index entries */
+    if (*key == '#') {
+        return 0;
+    }
+
+    /* Copy the record */
     struct mbfilter *filter = (struct mbfilter *)rock;
     struct seqset *seq = parse_indexed(data, datalen);
     int r = 0;
@@ -1987,6 +2301,7 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
 
 done:
     conversations_commit(&cstate);
+    buf_free(&buf);
 
     return r;
 }
@@ -2182,6 +2497,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
     strarray_t *srcdirs = NULL;
+    strarray_t *newdirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
     strarray_t *orig = NULL;
@@ -2231,7 +2547,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     }
 
     /* find out which items actually exist from the set to be compressed - first pass */
-    srcdirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
+    srcdirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1, NULL/*resultitems*/);
     if (!srcdirs || !srcdirs->count) goto out;
     /* NOTE: it's safe to keep this list even over the unlock/relock because we
      * always write out a new first item if necessary, so these will never be
@@ -2320,7 +2636,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
         strarray_t *existing = strarray_dup(orig);
         for (i = 0; i < tochange->count; i++)
             strarray_remove_all(existing, strarray_nth(tochange, i));
-        strarray_t *newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1);
+        newdirs = activefile_resolve(mboxname, mbentry->partition, existing, /*dostat*/1, NULL);
         strarray_free(existing);
         /* we'll be prepending the final target directory to newdirs before compacting */
 
@@ -2471,8 +2787,10 @@ out:
     strarray_free(orig);
     strarray_free(active);
     strarray_free(srcdirs);
+    strarray_free(newdirs);
     strarray_free(toreindex);
     strarray_free(tochange);
+    strarray_free(tocompact);
     buf_free(&mytempdir);
     buf_free(&buf);
     free(newdest);

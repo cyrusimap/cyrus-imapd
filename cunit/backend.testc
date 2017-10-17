@@ -913,9 +913,8 @@ static void cmd_starttls(struct server_state *state)
 {
 #ifdef HAVE_SSL
     int r;
-    char *auth_id = NULL;
     SSL *tls_conn = NULL;
-    sasl_ssf_t ssf;
+    static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
     r = tls_init_serverengine("backend_test", /*verifydepth*/5,
                               /*askcert*/1, NULL);
@@ -932,7 +931,8 @@ static void cmd_starttls(struct server_state *state)
     r = tls_start_servertls(/*readfd*/state->in->fd,
                             /*writefd*/state->out->fd,
                             /*timeout_sec*/3000,
-                            (int *)&ssf, &auth_id, &tls_conn);
+                            &saslprops,
+                            &tls_conn);
     if (r < 0) {
         server_printf(state, "BAD STARTTLS negotiation failed\r\n");
         server_flush(state);
@@ -940,18 +940,10 @@ static void cmd_starttls(struct server_state *state)
     }
 
     /* tell SASL about the negotiated layer */
-    r = sasl_setprop(state->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    r = saslprops_set_tls(&saslprops, state->saslconn);
     if (r != SASL_OK) {
-        server_printf(state, "BAD sasl_setprop(SASL_SSF_EXTERNAL) "
-                              "failed: cmd_starttls()\r\n");
-        server_flush(state);
-        return;
-    }
-
-    r = sasl_setprop(state->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (r != SASL_OK) {
-        server_printf(state, "BAD sasl_setprop(SASL_AUTH_EXTERNAL) "
-                             "failed: cmd_starttls()\r\n");
+        server_printf(state,
+                      "BAD saslprops_set_tls() failed: cmd_starttls()\r\n");
         server_flush(state);
         return;
     }

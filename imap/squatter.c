@@ -811,10 +811,6 @@ int main(int argc, char **argv)
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
            START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     setbuf(stdout, NULL);
 
     while ((opt = getopt(argc, argv, "C:I:N:RUXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {

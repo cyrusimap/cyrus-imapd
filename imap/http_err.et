@@ -42,7 +42,7 @@
 
 error_table http
 
-# HTTP/1.1 Response Status Codes (RFC 7231)
+# HTTP/1.1 Response Status Codes (from RFC 7231 unless otherwise noted)
 
 # Informational 1xx (Interim connection status or request progress)
 
@@ -51,6 +51,14 @@ ec HTTP_CONTINUE,
 
 ec HTTP_SWITCH_PROT,
    "101 Switching Protocols"
+
+# WebDAV (RFC 2518)
+ec HTTP_PROCESSING,
+   "102 Processing"
+
+# draft-ietf-httpbis-early-hints
+ec HTTP_EARLY_HINTS,
+   "103 Early Hints"
 
 
 # Successful 2xx (Request successfully received, understood, and accepted)
@@ -73,6 +81,18 @@ ec HTTP_NO_CONTENT,
 ec HTTP_RESET_CONTENT,
    "205 Reset Content"
 
+# Range Requests (RFC 7233)
+ec HTTP_PARTIAL,
+   "206 Partial Content"
+
+# WebDAV (RFC 4918)
+ec HTTP_MULTI_STATUS,
+   "207 Multi-Status"
+
+# Binding Extensions to WebDAV (RFC 5842)
+ec HTTP_DUPLICATE,
+   "208 Already Reported"
+
 
 # Redirection 3xx (Further action must be taken to complete the request)
 
@@ -88,17 +108,29 @@ ec HTTP_FOUND,
 ec HTTP_SEE_OTHER,
    "303 See Other"
 
+# Conditional Requests (RFC 7232)
+ec HTTP_NOT_MODIFIED,
+   "304 Not Modified"
+
 ec HTTP_USE_PROXY,
    "305 Use Proxy"
 
 ec HTTP_TEMP_REDIRECT,
    "307 Temporary Redirect"
 
+# Permanent Redirect (RFC 7538)
+ec HTTP_PERM_REDIRECT,
+   "308 Permanent Redirect"
+
 
 # Client Error 4xx (The request contains bad syntax or cannot be fulfilled)
 
 ec HTTP_BAD_REQUEST,
    "400 Bad Request"
+
+# Authentication (RFC 7235)
+ec HTTP_UNAUTHORIZED,
+   "401 Unauthorized"
 
 ec HTTP_PAYMENT_REQUIRED,
    "402 Payment Required"
@@ -115,6 +147,10 @@ ec HTTP_NOT_ALLOWED,
 ec HTTP_NOT_ACCEPTABLE,
    "406 Not Acceptable"
 
+# Authentication (RFC 7235)
+ec HTTP_PROXY_AUTH,
+   "407 Proxy Authentication Required"
+
 ec HTTP_TIMEOUT,
    "408 Request Timeout"
 
@@ -127,6 +163,10 @@ ec HTTP_GONE,
 ec HTTP_LENGTH_REQUIRED,
    "411 Length Required"
 
+# Conditional Requests (RFC 7232)
+ec HTTP_PRECOND_FAILED,
+   "412 Precondition Failed"
+
 ec HTTP_PAYLOAD_TOO_LARGE,
    "413 Payload Too Large"
 
@@ -136,11 +176,51 @@ ec HTTP_URI_TOO_LONG,
 ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
 
+# Client-Initiated Content Encoding (RFC 7694)
+ec HTTP_BAD_CE,
+   "415 Unsupported Media Type"
+
+# Range Requests (RFC 7233)
+ec HTTP_BAD_RANGE,
+   "416 Range Not Satisfiable"
+
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
 
+# HTTP/2 (RFC 7540)
+ec HTTP_MISDIRECTED,
+   "421 Misdirected Request"
+
+# WebDAV (RFC 4918)
+ec HTTP_UNPROCESSABLE,
+   "422 Unprocessable Entity"
+
+# WebDAV (RFC 4918)
+ec HTTP_LOCKED,
+   "423 Locked"
+
+# WebDAV (RFC 4918)
+ec HTTP_FAILED_DEP,
+   "424 Failed Dependency"
+
 ec HTTP_UPGRADE,
    "426 Upgrade Required"
+
+# Additional HTTP Status Codes (RFC 6585)
+ec HTTP_PRECOND_REQUIRED,
+   "428 Precondition Required"
+
+# Additional HTTP Status Codes (RFC 6585)
+ec HTTP_TOO_MANY_REQUESTS,
+   "429 Too Many Requests"
+
+# Additional HTTP Status Codes (RFC 6585)
+ec HTTP_HEADERS_TOO_LARGE,
+   "431 Request Header Fields Too Large"
+
+# Legally Restricted (RFC 7725)
+ec HTTP_CENSORED,
+   "451 Unavailable For Legal Reasons"
 
 
 # Server Error 5xx (The server is incapable of performing the request)
@@ -167,120 +247,17 @@ ec HTTP_GATEWAY_TIMEOUT,
 ec HTTP_BAD_VERSION,
    "505 HTTP Version Not Supported"
 
-
-
-# Conditional Requests (RFC 7232)
-
-ec HTTP_NOT_MODIFIED,
-   "304 Not Modified"
-
-ec HTTP_PRECOND_FAILED,
-   "412 Precondition Failed"
-
-
-
-# Range Requests (RFC 7233)
-
-ec HTTP_PARTIAL,
-   "206 Partial Content"
-
-ec HTTP_BAD_RANGE,
-   "416 Range Not Satisfiable"
-
-
-
-# Authentication (RFC 7235)
-
-ec HTTP_UNAUTHORIZED,
-   "401 Unauthorized"
-
-ec HTTP_PROXY_AUTH,
-   "407 Proxy Authentication Required"
-
-
-
-# Permanent Redirect (RFC 7538)
-
-ec HTTP_PERM_REDIRECT,
-   "308 Permanent Redirect"
-
-
-
-# HTTP/2 (RFC 7540)
-
-ec HTTP_MISDIRECTED,
-   "421 Misdirected Request"
-
-
-
-# Client-Initiated Content-Encoding (RFC 7694)
-
-# Used to differentiate between unsupported Content-Encoding and Content-Type
-ec HTTP_BAD_CE,
-   "415 Unsupported Media Type"
-
-
-
-# Legally Restricted (RFC 7725)
-
-ec HTTP_CENSORED,
-   "451 Unavailable For Legal Reasons"
-
-
-
-# Additional HTTP Status Codes (RFC 6585)
-
-ec HTTP_PRECOND_REQUIRED,
-   "428 Precondition Required"
-
-ec HTTP_TOO_MANY_REQUESTS,
-   "429 Too Many Requests"
-
-ec HTTP_HEADERS_TOO_LARGE,
-   "431 Request Header Fields Too Large"
-
-ec HTTP_NETWORK_AUTH,
-   "511 Network Authentication Required"
-
-
-
-# Indicating Hints (draft-ietf-httpbis=early-hints)
-
-ce HTTP_EARLY_HINTS,
-    "103 Early Hints"
-
-
-
-# WebDAV (RFC 2518/4918)
-
-ec HTTP_PROCESSING,
-   "102 Processing"
-
-ec HTTP_MULTI_STATUS,
-   "207 Multi-Status"
-
-ec HTTP_UNPROCESSABLE,
-   "422 Unprocessable Entity"
-
-ec HTTP_LOCKED,
-   "423 Locked"
-
-ec HTTP_FAILED_DEP,
-   "424 Failed Dependency"
-
+# WebDAV (RFC 4918)
 ec HTTP_NO_STORAGE,
    "507 Insufficient Storage"
 
-
-
 # Binding Extensions to WebDAV (RFC 5842)
-
-ec HTTP_DUPLICATE,
-   "208 Already Reported"
-
 ec HTTP_LOOP,
    "508 Loop Detected"
 
+# Additional HTTP Status Codes (RFC 6585)
+ec HTTP_NETWORK_AUTH,
+   "511 Network Authentication Required"
 
 
 end
