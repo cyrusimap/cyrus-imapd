@@ -8249,7 +8249,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           const char *userid, const char *schedule_address)
 {
     int ret;
-    icalcomponent *comp, *store_ical = NULL, *userdata = NULL;
+    icalcomponent *comp, *userdata = NULL, *store_ical = ical;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
