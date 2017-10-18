@@ -3953,7 +3953,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                     (*total)++;
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodesq) goto doneloop;
-                    update_added(*messageids, msgid, md->cid, *total);
+                    update_added(*messageids, msgid, md->cid, *total-1);
                 }
                 goto doneloop;
             }
@@ -4013,7 +4013,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                         /* we need to remove and re-add this record just in case we
                          * got unmasked by the previous */
                         update_removed(*expungedids, msgid, md->cid);
-                        update_added(*messageids, msgid, md->cid, *total);
+                        update_added(*messageids, msgid, md->cid, *total-1);
                     }
                     /* nothing later could be the old exemplar */
                     hashu64_insert(md->cid, (void *)3, &cids);
@@ -4035,7 +4035,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             if (ciddata & 1) goto doneloop;
 
             /* this is the new exemplar, so tell about it */
-            update_added(*messageids, msgid, md->cid, *total);
+            update_added(*messageids, msgid, md->cid, *total-1);
 
             goto doneloop;
         }
