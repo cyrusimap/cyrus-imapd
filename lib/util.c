@@ -781,8 +781,9 @@ EXPORTED int parseint32(const char *p, const char **ptr, int32_t *res)
 
     /* INT_MAX == 2147483647 */
     while (cyrus_isdigit(*p)) {
-        if (result > 214748364 || (result == 214748364 && (*p > '7')))
-            fatal("num too big", EC_IOERR);
+        if (result > 214748364 || (result == 214748364 && (*p > '7'))) {
+            return -1;
+        }
         result = result * 10 + *p++ - '0';
         gotchar = 1;
     }
@@ -804,8 +805,9 @@ EXPORTED int parseuint32(const char *p, const char **ptr, uint32_t *res)
 
     /* UINT_MAX == 4294967295U */
     while (cyrus_isdigit(*p)) {
-        if (result > 429496729 || (result == 429496729 && (*p > '5')))
-            fatal("num too big", EC_IOERR);
+        if (result > 429496729 || (result == 429496729 && (*p > '5'))) {
+            return -1;
+        }
         result = result * 10 + *p++ - '0';
         gotchar = 1;
     }
@@ -830,8 +832,9 @@ EXPORTED int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
     for (n = 0; !maxlen || n < maxlen; n++) {
         if (!cyrus_isdigit(p[n]))
             break;
-        if (result > 1844674407370955161ULL)
-            fatal("num too big", EC_IOERR);
+        if (result > 1844674407370955161ULL) {
+            return -1;
+        }
         cval = p[n] - '0';
         result = result * 10 + cval;
     }
@@ -865,8 +868,9 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
      * - and I don't care about those last 5
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
-        if (result > 1844674407370955161ULL)
-            fatal("num too big", EC_IOERR);
+        if (result > 1844674407370955161ULL) {
+            return -1;
+        }
         cval = unxdigit[(int)p[n]];
         if (cval == 0xff) break;
         result = result * 16 + cval;
