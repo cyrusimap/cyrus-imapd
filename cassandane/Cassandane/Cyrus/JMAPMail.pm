@@ -2026,7 +2026,7 @@ sub test_getmessages_body_multi
     $self->assert_null($submsg->{size});
 
     # Assert attachments
-    $self->assert_num_equals(4, scalar @{$msg->{attachments}});
+    $self->assert_num_equals(5, scalar @{$msg->{attachments}});
     my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
     my $att;
 
@@ -4899,7 +4899,6 @@ sub test_getsearchsnippets
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]->{list}[0]->{subject});
     $self->assert(exists $res->[0][1]->{list}[0]->{preview});
-    $self->assert_null($res->[0][1]->{list}[0]->{preview});
 }
 
 sub test_getsearchsnippets_shared
