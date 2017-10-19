@@ -62,6 +62,7 @@ EXPORTED struct vparse_card *vcard_parse_string(const char *str, int repair)
     vparse_set_multival(&vparser, "n", ';');
     vparse_set_multival(&vparser, "nickname", ',');
     vparse_set_multival(&vparser, "categories", ',');
+    vparse_set_multiparam(&vparser, "type");
     vparser.ctrl = repair ? VPARSE_CTRL_SKIP : VPARSE_CTRL_REJECT;
     vr = vparse_parse(&vparser, 0);
     if (vr) {
