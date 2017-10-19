@@ -1407,7 +1407,8 @@ struct allprop_rock {
 
 /* Add a response tree to 'root' for the specified href and
    either error code or property list */
-int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
+int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
+                     const char *desc, const char *location)
 {
     xmlNodePtr resp;
 
@@ -1427,6 +1428,15 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
             xmlNodePtr error = xmlNewChild(resp, NULL, BAD_CAST "error", NULL);
 
             xmlNewChild(error, NULL, BAD_CAST preconds[precond].name, NULL);
+        }
+        if (desc) {
+            xmlNewTextChild(resp, NULL,
+                            BAD_CAST "errordescription", BAD_CAST desc);
+        }
+        if (location) {
+            xmlNodePtr node = xmlNewChild(resp, NULL, BAD_CAST "location", NULL);
+
+            xml_add_href(node, NULL, location);
         }
     }
     else {
@@ -5402,11 +5412,11 @@ int propfind_by_resource(void *rock, void *data)
 
     if (r || (!ddata->imap_uid && ddata->lock_expire <= time(NULL))) {
         /* Add response for missing target */
-        ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+        ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
     }
     else if (!fctx->filter || fctx->filter(fctx, data)) {
         /* Add response for target */
-        ret = xml_add_response(fctx, 0, 0);
+        ret = xml_add_response(fctx, 0, 0, NULL, NULL);
     }
 
     buf_free(&fctx->msg_buf);
@@ -5445,7 +5455,7 @@ static int propfind_by_resources(struct propfind_ctx *fctx)
                               fctx->req_tgt->resource, (void **) &ddata, 0);
         if (!ddata->rowid) {
             /* Add response for missing target */
-            xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+            xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
             return HTTP_NOT_FOUND;
         }
         r = fctx->proc_by_resource(fctx, ddata);
@@ -5610,7 +5620,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         /* If not filtering by calendar resource, and not excluding root,
            add response for collection */
         if (!fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
-            (r = xml_add_response(fctx, 0, 0))) goto done;
+            (r = xml_add_response(fctx, 0, 0, NULL, NULL))) goto done;
     }
 
     if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
@@ -5814,7 +5824,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
         if (!depth || !(fctx.prefer & PREFER_NOROOT)) {
             /* Add response for target URL */
-            xml_add_response(&fctx, 0, 0);
+            xml_add_response(&fctx, 0, 0, NULL, NULL);
         }
 
         if (depth > 0 && !txn->req_tgt.userid) {
@@ -5831,7 +5841,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 /* Add a response for 'user' collection */
                 snprintf(p, MAX_MAILBOX_PATH - len,
                          "/%s/", USER_COLLECTION_PREFIX);
-                xml_add_response(&fctx, 0, 0);
+                xml_add_response(&fctx, 0, 0, NULL, NULL);
             }
 
             if (depth >= 2) {
@@ -5867,7 +5877,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 fctx.mbentry = txn->req_tgt.mbentry;
             }
 
-            if (!fctx.req_tgt->resource) xml_add_response(&fctx, 0, 0);
+            if (!fctx.req_tgt->resource)
+                xml_add_response(&fctx, 0, 0, NULL, NULL);
 
             /* Resource(s) */
             r = propfind_by_resources(&fctx);
@@ -5904,7 +5915,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                                 buf_cstring(&fctx.buf), MAX_MAILBOX_PATH);
                         fctx.mbentry = NULL;
                         fctx.mailbox = NULL;
-                        r = xml_add_response(&fctx, 0, 0);
+                        r = xml_add_response(&fctx, 0, 0, NULL, NULL);
                     }
                     break;
 
@@ -7304,7 +7315,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
             if (!fctx->mailbox || !tgt.resource) {
                 /* Add response for missing target */
-                xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+                xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
                 continue;
             }
 
@@ -7541,7 +7552,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         respmodseq = map[nresp-1].modseq;
 
         /* Tell client we truncated the responses */
-        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
+        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
     }
     else {
         /* Full response - respmodseq will be highestmodseq of mailbox */
@@ -7641,7 +7652,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
             fctx->mailbox = mailbox;
         }
 
-        xml_add_response(fctx, 0, 0);
+        xml_add_response(fctx, 0, 0, NULL, NULL);
 
         mailbox_close(&mailbox);
     }
@@ -7767,7 +7778,7 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
             req_tgt.userid = xstrdup(userid);
 
             /* Add response for URL */
-            xml_add_response(fctx, 0, 0);
+            xml_add_response(fctx, 0, 0, NULL, NULL);
 
             free(req_tgt.userid);
         }
@@ -7831,7 +7842,7 @@ static int principal_search(const char *userid, void *rock)
     free(fctx->req_tgt->userid);
     fctx->req_tgt->userid = xstrdup(userid);
 
-    return xml_add_response(fctx, 0, 0);
+    return xml_add_response(fctx, 0, 0, NULL, NULL);
 }
 
 

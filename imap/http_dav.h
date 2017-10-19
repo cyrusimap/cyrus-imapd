@@ -709,7 +709,8 @@ void xml_add_lockdisc(xmlNodePtr node, const char *path, struct dav_data *data);
 int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
               const char *url, const char *prefix);
 
-int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond);
+int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
+                     const char *desc, const char *location);
 int propfind_by_resource(void *rock, void *data);
 int propfind_by_collection(const mbentry_t *mbentry, void *rock);
 int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
