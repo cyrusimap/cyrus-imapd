@@ -355,6 +355,12 @@ static sieve_vacation_t timsieved_vacation_cbs = {
     (sieve_callback *) &timsieved_generic_cb,   /* send_response() */
 };
 
+static sieve_duplicate_t timsieved_duplicate_cbs = {
+    0,                                          /* max expiration */
+    (sieve_callback *) &timsieved_generic_cb,   /* check() */
+    (sieve_callback *) &timsieved_generic_cb,   /* track() */
+};
+
 static int timsieved_notify_cb(void *ac __attribute__((unused)),
                                void *interp_context __attribute__((unused)),
                                void *script_context __attribute__((unused)),
@@ -402,6 +408,12 @@ static int build_sieve_interp(void)
     res = sieve_register_vacation(interp, &timsieved_vacation_cbs);
     if (res != SIEVE_OK) {
         syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        return TIMSIEVE_FAIL;
+    }
+
+    res = sieve_register_duplicate(interp, &timsieved_duplicate_cbs);
+    if (res != SIEVE_OK) {
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
         return TIMSIEVE_FAIL;
     }
 
