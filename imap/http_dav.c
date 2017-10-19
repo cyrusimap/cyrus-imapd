@@ -7272,25 +7272,29 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             xmlURIPtr uri;
             struct request_target_t tgt;
             struct dav_data *ddata;
+            const char *resultstr = NULL;
 
             /* Parse the URI */
             uri = parse_uri(METH_REPORT, (const char *) href,
-                            1 /* path required */, &fctx->txn->error.desc);
+                            1 /* path required */, &resultstr);
             xmlFree(href);
             if (!uri) {
-                ret = HTTP_FORBIDDEN;
-                goto done;
+                r = HTTP_FORBIDDEN;
             }
+            else {
+                /* Parse the path */
+                memset(&tgt, 0, sizeof(struct request_target_t));
+                tgt.namespace = txn->req_tgt.namespace;
 
-            /* Parse the path */
-            memset(&tgt, 0, sizeof(struct request_target_t));
-            tgt.namespace = txn->req_tgt.namespace;
-
-            r = rparams->parse_path(uri->path, &tgt, &fctx->txn->error.desc);
-            xmlFreeURI(uri);
+                r = rparams->parse_path(uri->path, &tgt, &resultstr);
+                xmlFreeURI(uri);
+            }
             if (r) {
-                ret = (r == HTTP_MOVED) ? HTTP_NOT_FOUND : r;
-                goto done;
+                if (r == HTTP_MOVED)
+                    xml_add_response(fctx, HTTP_MOVED, 0, NULL, resultstr);
+                else
+                    xml_add_response(fctx, r, 0, resultstr, NULL);
+                continue;
             }
 
             fctx->req_tgt = &tgt;
@@ -7305,9 +7309,9 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                 if (r && r != IMAP_MAILBOX_NONEXISTENT) {
                     syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
                            tgt.mbentry->name, error_message(r));
-                    txn->error.desc = error_message(r);
-                    ret = HTTP_SERVER_ERROR;
-                    goto done;
+                    xml_add_response(fctx, HTTP_SERVER_ERROR,
+                                     0, error_message(r), NULL);
+                    continue;
                 }
 
                 fctx->mailbox = mailbox;
