@@ -670,8 +670,10 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 
+int dav_parse_req_target(struct transaction_t *txn,
+                         struct meth_params *params);
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
-                          const char *mboxprefix, const char **errstr);
+                          const char *mboxprefix, const char **resultstr);
 int dav_get_validators(struct mailbox *mailbox, void *data,
                        const char *userid, struct index_record *record,
                        const char **etag, time_t *lastmod);

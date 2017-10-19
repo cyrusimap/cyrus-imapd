@@ -248,8 +248,8 @@ enum {
 };
 
 /* Function to parse URI path and generate a mailbox name */
-typedef int (*parse_path_t)(const char *path,
-                            struct request_target_t *tgt, const char **errstr);
+typedef int (*parse_path_t)(const char *path, struct request_target_t *tgt,
+                            const char **resultstr);
 
 /* Auth challenge context */
 struct auth_challenge_t {

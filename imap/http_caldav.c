@@ -156,8 +156,8 @@ static int my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
-static int caldav_parse_path(const char *path,
-                             struct request_target_t *tgt, const char **errstr);
+static int caldav_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **resultstr);
 
 static int caldav_get_validators(struct mailbox *mailbox, void *data,
                                  const char *userid, struct index_record *record,
@@ -883,14 +883,14 @@ static void my_caldav_shutdown(void)
 
 
 /* Parse request-target path in CalDAV namespace */
-static int caldav_parse_path(const char *path,
-                             struct request_target_t *tgt, const char **errstr)
+static int caldav_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **resultstr)
 {
     int r;
 
     r = calcarddav_parse_path(path, tgt,
                               config_getstring(IMAPOPT_CALENDARPREFIX),
-                              errstr);
+                              resultstr);
     if (r) return r;
 
     /* Set proper Allow bits based on collection */
@@ -2585,17 +2585,14 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 
 /* Perform a GET/HEAD request on a CalDAV/M-Attach resource */
-static int meth_get_head_cal(struct transaction_t *txn,
-                             void *gparams __attribute__((unused)))
+static int meth_get_head_cal(struct transaction_t *txn, void *params)
 {
+    struct meth_params *gparams = (struct meth_params *) params;
     int r;
 
     /* Parse the path */
-    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, gparams);
+    if (r) return r;
 
     return meth_get_head(txn, (txn->req_tgt.flags == TGT_MANAGED_ATTACH) ?
                          &webdav_params : &caldav_params);
@@ -8493,10 +8490,10 @@ static struct mime_type_t freebusy_mime_types[] = {
 
 /* Execute a free/busy query per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
-static int meth_get_head_fb(struct transaction_t *txn,
-                            void *params __attribute__((unused)))
+static int meth_get_head_fb(struct transaction_t *txn, void *params)
 
 {
+    struct meth_params *gparams = (struct meth_params *) params;
     int ret = 0, r, rights;
     struct tm *tm;
     struct strlist *param;
@@ -8508,11 +8505,8 @@ static int meth_get_head_fb(struct transaction_t *txn,
     icalcomponent *cal;
 
     /* Parse the path */
-    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, gparams);
+    if (r) return r;
 
     if (txn->req_tgt.resource ||
         !(txn->req_tgt.userid)) {
@@ -8671,14 +8665,12 @@ static int meth_get_head_fb(struct transaction_t *txn,
 
 static int meth_options_cal(struct transaction_t *txn, void *params)
 {
+    struct meth_params *oparams = (struct meth_params *) params;
     int r;
 
     /* Parse the path */
-    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, oparams);
+    if (r) return r;
 
     if (txn->req_tgt.allow & ALLOW_PATCH) {
         /* Add Accept-Patch formats to response */

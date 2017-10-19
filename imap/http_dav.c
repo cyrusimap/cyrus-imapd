@@ -138,7 +138,7 @@ static void my_dav_shutdown(void);
 static int get_server_info(struct transaction_t *txn);
 
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
-                                const char **errstr);
+                                const char **resultstr);
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
                                   xmlNodePtr prop, xmlNodePtr resp,
@@ -445,7 +445,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
 
 /* Parse request-target path in DAV principals namespace */
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
-                                const char **errstr)
+                                const char **resultstr)
 {
     char *p;
     size_t len;
@@ -461,7 +461,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     if (strlen(p) < len ||
         strncmp(namespace_principal.prefix, p, len) ||
         (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
@@ -506,7 +506,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     else return HTTP_NOT_FOUND;  /* need to specify a userid */
 
     if (*p) {
-//      *errstr = "Too many segments in request target path";
+//      *resultstr = "Too many segments in request target path";
         return HTTP_NOT_FOUND;
     }
 
@@ -514,17 +514,35 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 }
 
 
-/* Parse request-target path in Cal/CardDAV namespace */
+/* Parse request-target path in *DAV namespace */
+EXPORTED int dav_parse_req_target(struct transaction_t *txn,
+                                  struct meth_params *params)
+{
+    const char *resultstr = NULL;
+    int r;
+
+    r = params->parse_path(txn->req_uri->path, &txn->req_tgt, &resultstr);
+    if (r) {
+        if (r == HTTP_MOVED) txn->location = resultstr;
+        else txn->error.desc = resultstr;
+    }
+
+    return r;
+}
+
+
+/* Parse a path in Cal/CardDAV namespace */
 EXPORTED int calcarddav_parse_path(const char *path,
                                    struct request_target_t *tgt,
                                    const char *mboxprefix,
-                                   const char **errstr)
+                                   const char **resultstr)
 {
     char *p, *owner = NULL, *collection = NULL, *freeme = NULL;
     size_t len;
     const char *mboxname;
     mbname_t *mbname = NULL;
     int ret = 0;
+    static struct buf redirect_buf = BUF_INITIALIZER;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
@@ -538,7 +556,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
     len = strlen(tgt->namespace->prefix);
     if (strlen(p) < len ||
         strncmp(tgt->namespace->prefix, p, len) || (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
@@ -595,7 +613,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
     p += len;
 
     if (*p) {
-//      *errstr = "Too many segments in request target path";
+//      *resultstr = "Too many segments in request target path";
         return HTTP_NOT_FOUND;
     }
 
@@ -639,13 +657,12 @@ EXPORTED int calcarddav_parse_path(const char *path,
     /* Check for FastMail legacy sharing URLs and redirect */
     if (tgt->flags != TGT_DAV_SHARED &&
         !mboxname_userownsmailbox(httpd_userid, mboxname)) {
-        off_t collection_offset = tgt->collection - tgt->path;
-
-        /* Use request target path to return Location URI */
-        snprintf(tgt->path, sizeof(tgt->path), "%s/%s/%s/%s%c%s",
+        buf_reset(&redirect_buf);
+        buf_printf(&redirect_buf, "%s/%s/%s/%s%c%s",
                  tgt->namespace->prefix, USER_COLLECTION_PREFIX,
                  httpd_userid, tgt->userid, SHARED_COLLECTION_DELIM,
-                 path + collection_offset);
+                 tgt->collection);
+        *resultstr = buf_cstring(&redirect_buf);
 
         ret = HTTP_MOVED;
         goto done;
@@ -667,8 +684,8 @@ EXPORTED int calcarddav_parse_path(const char *path,
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
 
         if (r) {
-            *errstr = error_message(r);
-            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *errstr);
+            *resultstr = error_message(r);
+            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *resultstr);
 
             switch (r) {
             case IMAP_PERMISSION_DENIED:
@@ -3436,11 +3453,8 @@ int meth_acl(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = aparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, aparams);
+    if (r) return r;
 
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_ACL)) {
@@ -4094,11 +4108,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the source path */
-    r = cparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, cparams);
+    if (r) return r;
 
     /* Make sure method is allowed (not allowed on collections yet) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -4467,11 +4478,8 @@ int meth_delete(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = dparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, dparams);
+    if (r) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
@@ -4745,11 +4753,8 @@ int meth_get_head(struct transaction_t *txn, void *params)
     char *freeme = NULL;
 
     /* Parse the path */
-    r = gparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, gparams);
+    if (r) return r;
 
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
         /* Special "principal" */
@@ -4947,11 +4952,8 @@ int meth_lock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = lparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, lparams);
+    if (r) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -5642,12 +5644,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     /* Parse the path */
     if (fparams->parse_path) {
-        r = fparams->parse_path(txn->req_uri->path,
-                                &txn->req_tgt, &txn->error.desc);
-        if (r) {
-            if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-            return r;
-        }
+        r = dav_parse_req_target(txn, fparams);
+        if (r) return r;
     }
 
     /* Make sure method is allowed */
@@ -5985,11 +5983,8 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, pparams);
+    if (r) return r;
 
     if (!txn->req_tgt.collection && !txn->req_tgt.userid) {
         txn->error.desc = "PROPPATCH requires a collection";
@@ -6686,11 +6681,8 @@ int meth_post(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, pparams);
+    if (r) return r;
 
     /* Make sure method is allowed (only allowed on certain collections) */
     if (!(txn->req_tgt.allow & ALLOW_POST)) return HTTP_NOT_ALLOWED;
@@ -6775,12 +6767,8 @@ int meth_patch(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = pparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        else r = HTTP_FORBIDDEN;
-        return r;
-    }
+    r = dav_parse_req_target(txn, pparams);
+    if (r) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_PATCH)) return HTTP_NOT_ALLOWED;
@@ -7011,12 +6999,13 @@ int meth_put(struct transaction_t *txn, void *params)
         txn->flags.cc |= CC_NOCACHE;
 
         /* Parse the path */
-        r = pparams->parse_path(txn->req_uri->path,
-                                &txn->req_tgt, &txn->error.desc);
+        r = dav_parse_req_target(txn, pparams);
         if (r) {
-            if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-            else r = HTTP_FORBIDDEN;
-            return r;
+            switch (r){
+            case HTTP_MOVED:
+            case HTTP_SERVER_ERROR: return r;
+            default: return HTTP_FORBIDDEN;
+            }
         }
 
         /* Make sure method is allowed (only allowed on resources) */
@@ -8031,11 +8020,8 @@ int meth_report(struct transaction_t *txn, void *params)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
     /* Parse the path */
-    r = rparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, rparams);
+    if (r) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
@@ -8270,11 +8256,8 @@ int meth_unlock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    r = lparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-    if (r) {
-        if (r == HTTP_MOVED) txn->location = txn->req_tgt.path;
-        return r;
-    }
+    r = dav_parse_req_target(txn, lparams);
+    if (r) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -8888,8 +8871,8 @@ static int get_server_info(struct transaction_t *txn)
     return 0;
 }
 
-static int notify_parse_path(const char *path,
-                             struct request_target_t *tgt, const char **errstr);
+static int notify_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **resultstr);
 
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj);
@@ -10146,7 +10129,7 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
 
 /* Parse request-target path in DAV notifications namespace */
 static int notify_parse_path(const char *path, struct request_target_t *tgt,
-                             const char **errstr)
+                             const char **resultstr)
 {
     char *p;
     size_t len;
@@ -10163,7 +10146,7 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
     if (strlen(p) < len ||
         strncmp(namespace_notify.prefix, p, len) ||
         (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
@@ -10206,7 +10189,7 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
     p += len;
 
     if (*p) {
-//      *errstr = "Too many segments in request target path";
+//      *resultstr = "Too many segments in request target path";
         return HTTP_NOT_FOUND;
     }
 
@@ -10233,7 +10216,7 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
-            *errstr = error_message(r);
+            *resultstr = error_message(r);
             mbname_free(&mbname);
 
             switch (r) {
