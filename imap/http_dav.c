@@ -785,7 +785,7 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         if (lastmod) *lastmod = ddata->creationdate;
     }
 
-    return ret;
+    return 0;
 }
 
 
@@ -7369,7 +7369,6 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
         }
     }
 
-  done:
     mailbox_close(&mailbox);
 
     return (ret ? ret : HTTP_MULTI_STATUS);
