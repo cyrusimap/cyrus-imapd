@@ -330,7 +330,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     argv[5] = "failure,delay";
     argv[6] = NULL;
 
-    sm_pid = open_sendmail(httpd_userid, argv, &sm);
+    sm_pid = open_sendmail(argv, &sm);
 
     if (sm == NULL) {
         syslog(LOG_ERR,

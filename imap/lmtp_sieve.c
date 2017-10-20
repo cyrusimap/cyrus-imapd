@@ -390,8 +390,7 @@ static int getinclude(void *sc, const char *script, int isglobal,
 
 static int global_outgoing_count = 0;
 
-static int send_rejection(const char *userid,
-                          const char *origid,
+static int send_rejection(const char *origid,
                           const char *rejto,
                           const char *origreceip,
                           const char *mailreceip,
@@ -414,7 +413,7 @@ static int send_rejection(const char *userid,
     smbuf[4] = "--";
     smbuf[5] = rejto;
     smbuf[6] = NULL;
-    sm_pid = open_sendmail(userid, smbuf, &sm);
+    sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
         return -1;
     }
@@ -748,7 +747,7 @@ static int send_forward(sieve_redirect_context_t *rc,
     else strarray_append(&smbuf, rc->addr);
     strarray_appendm(&smbuf, NULL);
 
-    sm_pid = open_sendmail(ctx->userid, (const char **) smbuf.data, &sm);
+    sm_pid = open_sendmail((const char **) smbuf.data, &sm);
     strarray_fini(&smbuf);
 
     if (srs_return_path) free(srs_return_path);
@@ -866,11 +865,11 @@ static int sieve_discard(void *ac __attribute__((unused)),
     return SIEVE_OK;
 }
 
-static int sieve_reject(void *ac, void *ic,
+static int sieve_reject(void *ac,
+                        void *ic __attribute__((unused)),
                         void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
-    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
     message_data_t *md = mydata->m;
@@ -937,7 +936,7 @@ static int sieve_reject(void *ac, void *ic,
 
     body = msg_getheader(md, "original-recipient");
     origreceip = body ? body[0] : NULL;
-    if ((res = send_rejection(ctx->userid, md->id, md->return_path,
+    if ((res = send_rejection(md->id, md->return_path,
                               origreceip, mbname_userid(sd->mbname),
                               rc->msg, md->data)) == 0) {
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
@@ -1317,7 +1316,8 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     free(intname);
 }
 
-static int send_response(void *ac, void *ic,
+static int send_response(void *ac,
+                         void *ic __attribute__((unused)),
                          void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
@@ -1332,7 +1332,6 @@ static int send_response(void *ac, void *ic,
     script_data_t *sdata = (script_data_t *) sc;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     struct buf header = BUF_INITIALIZER, footer = BUF_INITIALIZER;
-    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";            /* ignore dots */
@@ -1341,7 +1340,7 @@ static int send_response(void *ac, void *ic,
     smbuf[4] = "--";
     smbuf[5] = src->addr;
     smbuf[6] = NULL;
-    sm_pid = open_sendmail(ctx->userid, smbuf, &sm);
+    sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
         *errmsg = "Could not spawn sendmail process";
         return -1;
