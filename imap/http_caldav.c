@@ -8716,11 +8716,11 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
 
 static int meth_options_cal(struct transaction_t *txn, void *params)
 {
-    struct meth_params *oparams = (struct meth_params *) params;
+    struct meth_params oparams = { .parse_path = &caldav_parse_path };
     int r;
 
     /* Parse the path */
-    r = dav_parse_req_target(txn, oparams);
+    r = dav_parse_req_target(txn, &oparams);
     if (r) return r;
 
     if (txn->req_tgt.allow & ALLOW_PATCH) {
