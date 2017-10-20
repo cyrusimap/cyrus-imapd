@@ -58,7 +58,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
+EXPORTED pid_t open_sendmail(const char *userid, const char *argv[], FILE **sm)
 {
     int fds[2];
     FILE *ret;
@@ -73,6 +73,10 @@ EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
         close(fds[1]);
         /* make the pipe be stdin */
         dup2(fds[0], 0);
+
+        if (userid && setenv(config_getstring(IMAPOPT_SENDMAIL_AUTH_ID), userid, 1)) {
+            syslog(LOG_ERR, "open_sendmail: can't set environment: %m");
+        }
         execv(config_getstring(IMAPOPT_SENDMAIL), (char **) argv);
 
         /* if we're here we suck */
@@ -219,7 +223,7 @@ done:
     return r;
 }
 
-EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
+EXPORTED int smtpclient_open_sendmail(const char *userid, smtpclient_t **smp)
 {
     int r = 0;
     smtpclient_t *sm = smtpclient_new();
@@ -251,6 +255,9 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
         dup2(sm->p_parent[1], /*FILENO_STDOUT*/1);
         close(sm->p_parent[1]);
 
+        if (userid && setenv(config_getstring(IMAPOPT_SENDMAIL_AUTH_ID), userid, 1)) {
+            syslog(LOG_ERR, "open_sendmail: can't set environment: %m");
+        }
         execl(config_getstring(IMAPOPT_SENDMAIL), "sendmail", "-bs", (char *)NULL);
         syslog(LOG_ERR, "smtpclient_open: can't exec sendmail: %m");
         exit(1);

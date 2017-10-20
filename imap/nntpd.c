@@ -3802,7 +3802,7 @@ static void news2mail(message_data_t *msg)
 
     /* send the message */
     if (smbuf.count > smbuf_basic_count) {
-        sm_pid = open_sendmail((const char **)smbuf.data, &sm);
+        sm_pid = open_sendmail(/*userid*/NULL, (const char **)smbuf.data, &sm);
 
         if (!sm)
             syslog(LOG_ERR, "news2mail: could not spawn sendmail process");

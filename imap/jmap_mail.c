@@ -7802,7 +7802,25 @@ static const char* address_to_smtp(json_t *addr, const char *cmd, struct buf *bu
     return buf_cstring(buf);
 }
 
-static int jmap_sendrecord(jmap_req_t *req __attribute__((unused)),
+/* Filter any sensitive envelope parameters from JMAP Address addr */
+static json_t *filter_address(json_t *addr)
+{
+    json_t *myaddr = json_deep_copy(addr);
+    json_t *params = json_object_get(myaddr, "parameters");
+    json_t *val;
+    void *tmp;
+    const char *name;
+    json_object_foreach_safe(params, tmp, name, val) {
+        /* Remove AUTH, we'll never take it at face alue */
+        if (!strcasecmp(name, "AUTH")) {
+            json_object_del(params, name);
+            continue;
+        }
+    }
+    return myaddr;
+}
+
+static int jmap_sendrecord(jmap_req_t *req,
                            msgrecord_t *mr, json_t *envelope,
                            char **msgsub_id)
 {
@@ -7811,6 +7829,7 @@ static int jmap_sendrecord(jmap_req_t *req __attribute__((unused)),
     uint32_t uid = 0;
     struct mailbox *mbox = NULL;
     smtpclient_t *sm = NULL;
+    int have_auth = 0;
     int r = 0;
 
     /* Open the message file */
@@ -7831,7 +7850,7 @@ static int jmap_sendrecord(jmap_req_t *req __attribute__((unused)),
     /* Open the SMTP connection */
     const char *backend = config_getstring(IMAPOPT_JMAP_SMTP_BACKEND);
     if (!strcmp(backend, "sendmail")) {
-        r = smtpclient_open_sendmail(&sm);
+        r = smtpclient_open_sendmail(req->userid, &sm);
     }
     else if (!strcmp(backend, "host")) {
         r = smtpclient_open_host(config_getstring(IMAPOPT_JMAP_SMTP_HOST), &sm);
@@ -7859,12 +7878,26 @@ static int jmap_sendrecord(jmap_req_t *req __attribute__((unused)),
     /* Expect OK */
     r = smtpclient_expect(sm, 250, &buf);
     if (r) goto done;
+    /* Check if the AUTH extension is supported */
+    const char *s = strstr(buf_cstring(&buf), "250-AUTH");
+    if (s && isspace(*(s+strlen("250-AUTH")))) {
+        have_auth = 1;
+    }
     buf_reset(&buf);
 
-    /* Write MAIL FROM */
-    json_t *addr = json_object_get(envelope, "mailFrom");
-    address_to_smtp(addr, "MAIL FROM", &buf);
+    /* Write MAIL FROM, overwriting out any sensitive parameters */
+    json_t *myaddr = filter_address(json_object_get(envelope, "mailFrom"));
+    if (have_auth) {
+        json_t *params = json_object_get(myaddr, "parameters");
+        if (!JNOTNULL(params)) {
+            params = json_pack("{}");
+            json_object_set_new(myaddr, "parameters", params);
+        }
+        json_object_set_new(params, "AUTH", json_string(req->userid));
+    }
+    address_to_smtp(myaddr, "MAIL FROM", &buf);
     r = smtpclient_writebuf(sm, &buf, 1);
+    json_decref(myaddr);
     if (r) goto done;
     buf_reset(&buf);
 
@@ -7875,9 +7908,12 @@ static int jmap_sendrecord(jmap_req_t *req __attribute__((unused)),
 
     /* Write RCPT TO */
     size_t i;
+    json_t *addr;
     json_array_foreach(json_object_get(envelope, "rcptTo"), i, addr) {
-        address_to_smtp(addr, "RCPT TO", &buf);
+        myaddr = filter_address(addr);
+        address_to_smtp(myaddr, "RCPT TO", &buf);
         r = smtpclient_writebuf(sm, &buf, 1);
+        json_decref(myaddr);
         if (r) goto done;
         buf_reset(&buf);
 
