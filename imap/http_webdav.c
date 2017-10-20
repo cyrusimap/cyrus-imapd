@@ -69,8 +69,8 @@ static int my_webdav_auth(const char *userid);
 static void my_webdav_reset(void);
 static void my_webdav_shutdown(void);
 
-static int webdav_parse_path(const char *path,
-                             struct request_target_t *tgt, const char **errstr);
+static int webdav_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **resultstr);
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj);
@@ -225,6 +225,8 @@ static const struct prop_entry webdav_props[] = {
 struct meth_params webdav_params = {
     webdav_mime_types,
     &webdav_parse_path,
+    &dav_get_validators,
+    &dav_get_modseq,
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,
@@ -380,8 +382,8 @@ static void my_webdav_shutdown(void)
  * All collections are treated as though they are at the root so both
  * contained resources and collection are listed.
  */
-static int webdav_parse_path(const char *path,
-                             struct request_target_t *tgt, const char **errstr)
+static int webdav_parse_path(const char *path, struct request_target_t *tgt,
+                             const char **resultstr)
 {
     char *p, *last = NULL;
     size_t len, lastlen = 0;
@@ -401,7 +403,7 @@ static int webdav_parse_path(const char *path,
     if (strlen(p) < len ||
         strncmp(namespace_drive.prefix, p, len) ||
         (path[len] && path[len] != '/')) {
-        *errstr = "Namespace mismatch request target path";
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
@@ -506,7 +508,7 @@ static int webdav_parse_path(const char *path,
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
-            *errstr = error_message(r);
+            *resultstr = error_message(r);
             mbname_free(&mbname);
 
             switch (r) {

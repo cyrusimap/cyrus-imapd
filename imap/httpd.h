@@ -157,6 +157,7 @@ enum {
     ALLOW_PROPPATCH  =  (1<<9), /* Modify properties */
     ALLOW_MKCOL =       (1<<10),/* Create collections */
     ALLOW_ACL =         (1<<11),/* Modify access control list */
+    ALLOW_USERDATA =    (1<<12),/* Store per-user data for resource */
 
     ALLOW_CAL =         (1<<16),/* CalDAV specific methods/features */
     ALLOW_CAL_SCHED =   (1<<17),/* CalDAV Scheduling specific features */
@@ -247,8 +248,8 @@ enum {
 };
 
 /* Function to parse URI path and generate a mailbox name */
-typedef int (*parse_path_t)(const char *path,
-                            struct request_target_t *tgt, const char **errstr);
+typedef int (*parse_path_t)(const char *path, struct request_target_t *tgt,
+                            const char **resultstr);
 
 /* Auth challenge context */
 struct auth_challenge_t {

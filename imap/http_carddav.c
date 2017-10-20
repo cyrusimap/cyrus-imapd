@@ -97,8 +97,8 @@ static void my_carddav_shutdown(void);
 
 static strarray_t partial_addrdata;
 
-static int carddav_parse_path(const char *path,
-                              struct request_target_t *tgt, const char **errstr);
+static int carddav_parse_path(const char *path, struct request_target_t *tgt,
+                              const char **resultstr);
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
@@ -311,6 +311,8 @@ static const struct prop_entry carddav_props[] = {
 static struct meth_params carddav_params = {
     carddav_mime_types,
     &carddav_parse_path,
+    &dav_get_validators,
+    &dav_get_modseq,
     &dav_check_precond,
     { (db_open_proc_t) &carddav_open_mailbox,
       (db_close_proc_t) &carddav_close,
@@ -504,12 +506,12 @@ static void my_carddav_shutdown(void)
 
 
 /* Parse request-target path in CardDAV namespace */
-static int carddav_parse_path(const char *path,
-                              struct request_target_t *tgt, const char **errstr)
+static int carddav_parse_path(const char *path, struct request_target_t *tgt,
+                              const char **resultstr)
 {
     return calcarddav_parse_path(path, tgt,
                                  config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
-                                 errstr);
+                                 resultstr);
 }
 
 /* Perform a COPY/MOVE/PUT request

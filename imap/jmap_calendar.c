@@ -1234,7 +1234,6 @@ struct getcalendarevents_rock {
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 {
     struct getcalendarevents_rock *rock = vrock;
-    struct index_record record;
     int r = 0;
     icalcomponent* ical = NULL;
     json_t *obj, *jprops = NULL;
@@ -1257,14 +1256,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         if (r) goto done;
     }
 
-    /* Locate calendar event ical data in mailbox. */
-    r = mailbox_find_index_record(rock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
-
-    /* Load VEVENT from record. */
-    ical = record_to_ical(rock->mailbox, &record, NULL);
+    /* Load message containing the resource and parse iCal data */
+    ical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
     if (!ical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+        syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, rock->mailbox->name);
         r = IMAP_INTERNAL;
         goto done;
@@ -1605,7 +1600,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
     /* XXX - fix userid */
-    r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, schedule_address);
+    r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, httpd_userid, schedule_address);
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -1798,7 +1793,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
     /* XXX - fix userid */
-    r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, schedule_address);
+    r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, httpd_userid, schedule_address);
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
