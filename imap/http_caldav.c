@@ -3983,7 +3983,7 @@ static void apply_component_updates(struct patch_data_t *patch,
 
         /* Delete components matching those being updated */
         for (comp = icalcomponent_get_first_component(parent, kind);
-             comp; comp = nextcomp) {
+             uid && comp; comp = nextcomp) {
 
             nextcomp = icalcomponent_get_next_component(parent, kind);
 
