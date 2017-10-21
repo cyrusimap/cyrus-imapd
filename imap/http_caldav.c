@@ -3984,11 +3984,13 @@ static void apply_component_updates(struct patch_data_t *patch,
         /* Delete components matching those being updated */
         for (comp = icalcomponent_get_first_component(parent, kind);
              uid && comp; comp = nextcomp) {
+            const char *thisuid = icalcomponent_get_uid(comp);
 
             nextcomp = icalcomponent_get_next_component(parent, kind);
 
-            if (strcmp(uid, icalcomponent_get_uid(comp)) ||
-                icaltime_compare(rid, icalcomponent_get_recurrenceid(comp))) {
+            if (thisuid &&  /* VALARMs make not have a UID */
+                (strcmp(uid, thisuid) ||
+                 icaltime_compare(rid, icalcomponent_get_recurrenceid(comp)))) {
                 /* skip */
                 continue;
             }
