@@ -355,7 +355,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     cp += sprintf(cp, "%s, %02u %s %04u",
                   day_of_week[icaltime_day_of_week(start)-1],
                   start.day, month_of_year[start.month-1], start.year);
-    if (!start.is_date) {
+    if (!icaltime_is_date(start)) {
         cp += sprintf(cp, " %02u:%02u", start.hour, start.minute);
         if (start.second) cp += sprintf(cp, ":%02u", start.second);
         strcpy(cp, " UTC");
@@ -370,7 +370,7 @@ static int imip_send_sendmail(icalcomponent *ical,
                           day_of_week[icaltime_day_of_week(end)-1],
                           end.day, month_of_year[end.month-1], end.year);
         }
-        if (!end.is_date) {
+        if (!icaltime_is_date(end)) {
             cp += sprintf(cp, " %02u:%02u", end.hour, end.minute);
             if (end.second) cp += sprintf(cp, ":%02u", end.second);
             strcpy(cp, " UTC");

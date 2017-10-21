@@ -737,7 +737,7 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
     } else {
         icalvalue *val = icalproperty_get_value(prop);
         icaltimetype dt = icalvalue_get_datetime(val);
-        if (icaltime_is_valid_time(dt) && dt.is_utc) {
+        if (icaltime_is_valid_time(dt) && icaltime_is_utc(dt)) {
             tzid = "Etc/UTC";
         }
     }
@@ -2615,7 +2615,7 @@ static icalproperty *dtprop_to_ical(icalcomponent *comp,
     /* Set the new property. */
     prop = icalproperty_new(kind);
     icalproperty_set_value(prop, val);
-    if (tz && !dt.is_utc) {
+    if (tz && !icaltime_is_utc(dt)) {
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
         const char *tzid = icaltimezone_get_location(tz);
         if (param) {

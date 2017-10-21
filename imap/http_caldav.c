@@ -2031,7 +2031,7 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
         goto fail;
     }
 
-    tt.is_utc = 1;
+    icaltime_set_utc(&tt, 1);
     return tt;
 
   fail:
