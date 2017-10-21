@@ -601,13 +601,13 @@ struct namespace_t namespace_calendar = {
         { NULL,                 NULL },                 /* BIND         */
         { &meth_copy_move,      &caldav_params },       /* COPY         */
         { &meth_delete,         &caldav_params },       /* DELETE       */
-        { &meth_get_head_cal,   NULL },                 /* GET          */
-        { &meth_get_head_cal,   NULL },                 /* HEAD         */
+        { &meth_get_head_cal,   &caldav_params },       /* GET          */
+        { &meth_get_head_cal,   &caldav_params },       /* HEAD         */
         { &meth_lock,           &caldav_params },       /* LOCK         */
         { &meth_mkcol,          &caldav_params },       /* MKCALENDAR   */
         { &meth_mkcol,          &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
-        { &meth_options_cal,    &caldav_parse_path },   /* OPTIONS      */
+        { &meth_options_cal,    &caldav_params },       /* OPTIONS      */
         { &meth_patch,          &caldav_params },       /* PATCH        */
         { &meth_post,           &caldav_params },       /* POST         */
         { &meth_propfind,       &caldav_params },       /* PROPFIND     */
@@ -633,8 +633,8 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
-        { &meth_get_head_fb,    NULL },                 /* GET          */
-        { &meth_get_head_fb,    NULL },                 /* HEAD         */
+        { &meth_get_head_fb,    &caldav_params },       /* GET          */
+        { &meth_get_head_fb,    &caldav_params },       /* HEAD         */
         { NULL,                 NULL },                 /* LOCK         */
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
@@ -2645,8 +2645,8 @@ static int meth_get_head_cal(struct transaction_t *txn, void *params)
     r = dav_parse_req_target(txn, gparams);
     if (r) return r;
 
-    return meth_get_head(txn, (txn->req_tgt.flags == TGT_MANAGED_ATTACH) ?
-                         &webdav_params : &caldav_params);
+    if (txn->req_tgt.flags == TGT_MANAGED_ATTACH) gparams = &webdav_params;
+    return meth_get_head(txn, gparams);
 }
 
 /* Decrement reference count on a managed attachment resource */
@@ -8716,11 +8716,11 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
 
 static int meth_options_cal(struct transaction_t *txn, void *params)
 {
-    struct meth_params oparams = { .parse_path = &caldav_parse_path };
+    struct meth_params *oparams = (struct meth_params *) params;
     int r;
 
     /* Parse the path */
-    r = dav_parse_req_target(txn, &oparams);
+    r = dav_parse_req_target(txn, oparams);
     if (r) return r;
 
     if (txn->req_tgt.allow & ALLOW_PATCH) {
@@ -8742,5 +8742,5 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
         strarray_appendm(&txn->resp_body.links, buf_release(&link));
     }
 
-    return meth_options(txn, params);
+    return meth_options(txn, &oparams->parse_path);
 }
