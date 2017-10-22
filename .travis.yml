@@ -5,7 +5,6 @@ group: edge
 addons:
   apt:
     packages:
-    - libjansson-dev
     - libxml2-dev
     - libsqlite3-dev
     - libical-dev
@@ -37,6 +36,15 @@ cache:
 os: linux
 compiler: gcc
 install:
+# libjanson
+- git clone -b cyrus --single-brnach https://github.com/cyrusimap/jansson.git janson
+- pushd janson
+- "autoreconf -v -i"
+- "./configure --enable-silent-rules --prefix=CYRUSLIBS"
+- make -j 8
+- sudo make install
+- popd #janson
+  # Xapian
 - git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
 - pushd xapian
 - "./bootstrap"
@@ -44,8 +52,8 @@ install:
 - pushd xapian-core
 - make -j 8
 - sudo make install
-- popd
-- popd
+- popd #xapian-core
+- popd #xapian
 before_script:
 - ccache --version
 - ccache --zero-stats
