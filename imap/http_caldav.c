@@ -375,7 +375,7 @@ static const struct prop_entry caldav_props[] = {
       PROP_ALLPROP | PROP_RESOURCE,
       propfind_lockdisc, NULL, NULL },
     { "resourcetype", NS_DAV,
-      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
       propfind_restype, proppatch_restype, "calendar" },
     { "supportedlock", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
@@ -383,7 +383,7 @@ static const struct prop_entry caldav_props[] = {
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PRESCREEN,
       propfind_reportset, NULL, (void *) caldav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
@@ -394,12 +394,12 @@ static const struct prop_entry caldav_props[] = {
       PROP_COLLECTION | PROP_RESOURCE,
       NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV,
-      PROP_COLLECTION | PROP_RESOURCE,
+      PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
       propfind_supprivset, NULL, NULL },
     { "current-user-privilege-set", NS_DAV,
-      PROP_COLLECTION | PROP_RESOURCE,
+      PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
       propfind_curprivset, NULL, NULL },
-    { "acl", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "acl", NS_DAV, PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
       propfind_acl, NULL, NULL },
     { "acl-restrictions", NS_DAV,
       PROP_COLLECTION | PROP_RESOURCE,
@@ -5883,6 +5883,18 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propstat propstat[],
                             void *rock)
 {
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if (fctx->req_tgt->collection ||
+            (fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+            /* Add namespaces for possible resource types */
+            ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+            ensure_ns(fctx->ns, NS_CS, fctx->root, XML_NS_CS, "CS");
+        }
+
+        return 0;
+    }
+
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
@@ -7463,6 +7475,12 @@ static int report_cal_query(struct transaction_t *txn,
         }
     }
 
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
+
     if (fctx->depth++ > 0) {
         /* Calendar collection(s) */
         if (txn->req_tgt.collection) {
@@ -7480,9 +7498,14 @@ static int report_cal_query(struct transaction_t *txn,
                               propfind_by_collection, fctx,
                               MBOXTREE_SKIP_PERSONAL);
         }
-
-        ret = *fctx->ret;
     }
+
+    /* End XML response */
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xmlBufferFree(fctx->xmlbuf);
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
 
   done:
     /* Free filter structure */
@@ -7494,7 +7517,7 @@ static int report_cal_query(struct transaction_t *txn,
         fctx->davdb = NULL;
     }
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    return ret;
 }
 
 

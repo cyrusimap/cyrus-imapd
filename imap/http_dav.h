@@ -366,6 +366,7 @@ struct propfind_ctx {
     int *ret;                           /* Return code to pass up to caller */
     struct fctx_flags_t flags;          /* Return flags for this propfind */
     struct buf buf;                     /* Working buffer */
+    xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
 };
 
 

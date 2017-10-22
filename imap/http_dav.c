@@ -1570,6 +1570,18 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
 
     fctx->record = NULL;
 
+    if (fctx->txn->flags.te & TE_CHUNKED) {
+        /* Add <response> element for this resource to output buffer.
+           Only output the xmlBuffer every PROT_BUFSIZE bytes */
+        xml_partial_response((xmlBufferLength(fctx->xmlbuf) > PROT_BUFSIZE) ?
+                             fctx->txn : NULL,
+                             fctx->root->doc, resp, 1, &fctx->xmlbuf);
+
+        /* Remove <response> element from root (no need to keep in memory) */
+        xmlReplaceNode(resp, NULL);
+        xmlFreeNode(resp);
+    }
+
     return 0;
 }
 
@@ -1605,6 +1617,8 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
             fctx->txn->error.precond = precond;
             ret = *fctx->ret = HTTP_FORBIDDEN;
         }
+
+        fctx->flags.fetcheddata = 1;
     }
     else {
         /* Add "property" */
@@ -1958,6 +1972,19 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr top, node;
     const struct report_type_t *report;
 
+    if (!propstat) {
+        /* Prescreen "property" request */
+        for (report = (const struct report_type_t *) rock;
+             report && report->name; report++) {
+            /* Add namespaces for possible reports */
+            ensure_ns(fctx->ns, report->ns, fctx->root,
+                      known_namespaces[report->ns].href,
+                      known_namespaces[report->ns].prefix);
+        }
+
+        return 0;
+    }
+
     top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                        name, ns, NULL, 0);
 
@@ -2116,6 +2143,19 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr set, all, agg, write;
     unsigned tgt_flags = 0;
+
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
+            if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
+                ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+            }
+        }
+
+        return 0;
+    }
 
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                        name, ns, NULL, 0);
@@ -2391,6 +2431,19 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     unsigned flags = 0;
     xmlNodePtr set;
 
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
+            if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
+                ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+            }
+        }
+
+        return 0;
+    }
+
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
     rights = httpd_myrights(fctx->authstate, fctx->mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
@@ -2443,6 +2496,17 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr acl;
     char *aclstr, *userid;
     unsigned flags = 0;
+
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR &&
+            ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2)) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+        }
+
+        return 0;
+    }
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
 
@@ -5559,8 +5623,10 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     int r = 0, rights = 0;
 
     /* skip deleted items */
-    if (mboxname_isdeletedmailbox(mbentry->name, 0) || mbentry->mbtype == MBTYPE_DELETED)
+    if (mboxname_isdeletedmailbox(mbentry->name, 0) ||
+        mbentry->mbtype == MBTYPE_DELETED) {
         goto done;
+    }
 
     /* Check ACL on mailbox for current user */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -5609,9 +5675,6 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
         syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                mboxname, error_message(r));
-        fctx->txn->error.desc = error_message(r);
-        *fctx->ret = HTTP_SERVER_ERROR;
-        goto done;
     }
 
     fctx->mbentry = mbentry;
@@ -5628,11 +5691,13 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
         /* we also need to deal with the discovery case,
          * where mboxname doesn't match request path */
-        if (fctx->req_tgt->userid && strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid))
+        if (fctx->req_tgt->userid &&
+            strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid)) {
             haszzzz = 1;
+        }
 
-        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix, haszzzz,
-                                  mbname, fctx->req_tgt->userid);
+        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
+                                  haszzzz, mbname, fctx->req_tgt->userid);
 
         mbname_free(&mbname);
 
@@ -5646,8 +5711,13 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
         /* If not filtering by calendar resource, and not excluding root,
            add response for collection */
-        if (!fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
+        if (!r && !fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
             (r = xml_add_response(fctx, 0, 0, NULL, NULL))) goto done;
+    }
+
+    if (r) {
+        xml_add_response(fctx, HTTP_SERVER_ERROR, 0, error_message(r), NULL);
+        goto done;
     }
 
     if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
@@ -5659,7 +5729,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     buf_free(&writebuf);
     if (mailbox) mailbox_close(&mailbox);
 
-    return r;
+    return 0;
 }
 
 
@@ -5819,6 +5889,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Populate our propfind context */
     fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
@@ -5846,6 +5917,15 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Parse the list of properties and build a list of callbacks */
     ret = preload_proplist(props, &fctx);
     if (ret) goto done;
+
+    /* iCalendar/vCard data in response should not be transformed */
+    if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx.root->doc);
 
     /* Generate responses */
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
@@ -5923,7 +6003,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             }
             else if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
                 /* Add responses for all visible collections */
-                mboxlist_usermboxtree(httpd_userid, propfind_by_collection, &fctx, MBOXTREE_PLUS_RACL);
+                mboxlist_usermboxtree(httpd_userid, propfind_by_collection,
+                                      &fctx, MBOXTREE_PLUS_RACL);
             }
             else if (txn->req_tgt.mbentry) {
                 /* Add responses for all contained collections */
@@ -5968,13 +6049,13 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     if (fctx.davdb) fctx.close_db(fctx.davdb);
 
-    /* Output the XML response */
-    if (!ret) {
-        /* iCalendar data in response should not be transformed */
-        if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+    /* End XML response */
+    xml_partial_response(txn, fctx.root->doc, NULL /* end */, 0, &fctx.xmlbuf);
+    xmlBufferFree(fctx.xmlbuf);
 
-        xml_response(HTTP_MULTI_STATUS, txn, outdoc);
-    }
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+    ret = 0;
 
   done:
     /* Free the entry list */
@@ -7281,6 +7362,12 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
     struct mailbox *mailbox = NULL;
     xmlNodePtr node;
 
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
+
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
         if ((node->type == XML_ELEMENT_NODE) &&
@@ -7359,9 +7446,16 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
         }
     }
 
+    /* End XML response */
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xmlBufferFree(fctx->xmlbuf);
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
     mailbox_close(&mailbox);
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    return ret;
 }
 
 
@@ -7371,7 +7465,6 @@ struct updates_rock {
     modseq_t basemodseq;
     modseq_t *respmodseq;
     uint32_t *nresp;
-    xmlBufferPtr *buf;
 };
 
 static int updates_cb(void *rock, void *data)
@@ -7379,7 +7472,6 @@ static int updates_cb(void *rock, void *data)
     struct dav_data *ddata = (struct dav_data *) data;
     struct updates_rock *urock = (struct updates_rock *) rock;
     struct propfind_ctx *fctx = urock->fctx;
-    xmlNodePtr node;
 
     if (!ddata->alive) {
         if (ddata->modseq <= urock->basemodseq) {
@@ -7409,17 +7501,6 @@ static int updates_cb(void *rock, void *data)
     fctx->proc_by_resource(fctx, ddata);
     fctx->record = NULL;
 
-    /* Add <response> element for this resource to output buffer.
-       Only output the xmlBuffer every PROT_BUFSIZE bytes */
-    node = xmlGetLastChild(fctx->root);
-    xml_partial_response((xmlBufferLength(*urock->buf) > PROT_BUFSIZE) ?
-                         fctx->txn : NULL,
-                         fctx->root->doc, node, 1, urock->buf);
-
-    /* Remove <response> element from root (no need to keep in memory) */
-    xmlReplaceNode(node, NULL);
-    xmlFreeNode(node);
-
     return 0;
 }
 
@@ -7440,7 +7521,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     xmlNodePtr node;
     struct index_state istate;
     char tokenuri[MAX_MAILBOX_PATH+1];
-    xmlBufferPtr buf = NULL;
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
 
@@ -7559,7 +7639,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 
     /* Report the resources within the client requested limit (if any) */
     struct updates_rock rock =
-        { fctx, limit, basemodseq, &respmodseq, &nresp, &buf };
+        { fctx, limit, basemodseq, &respmodseq, &nresp };
 
     r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, mailbox->name,
                                       -1 /* ALL kinds of resources */,
@@ -7574,10 +7654,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         /* Tell client we truncated the responses */
         *(fctx->req_tgt->resource) = '\0';
         xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
-
-        /* Add <response> element to output buffer */
-        node = xmlGetLastChild(fctx->root);
-        xml_partial_response(NULL /* !output */, fctx->root->doc, node, 1, &buf);
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
@@ -7598,11 +7674,12 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
     /* Add sync-token element to output buffer */
-    xml_partial_response(NULL /* !output */, fctx->root->doc, node, 1, &buf);
+    xml_partial_response(NULL /* !output */,
+                         fctx->root->doc, node, 1, &fctx->xmlbuf);
 
     /* End XML response */
-    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &buf);
-    xmlBufferFree(buf);
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xmlBufferFree(fctx->xmlbuf);
 
     /* End of output */
     write_body(0, txn, NULL, 0);
@@ -8207,6 +8284,9 @@ int meth_report(struct transaction_t *txn, void *params)
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
         ret = preload_proplist(props, &fctx);
+
+        /* iCalendar/vCard data in response should not be transformed */
+        if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
     }
 
     /* Process the requested report */
@@ -8217,7 +8297,7 @@ int meth_report(struct transaction_t *txn, void *params)
         switch (ret) {
         case HTTP_OK:
         case HTTP_MULTI_STATUS:
-            /* iCalendar data in response should not be transformed */
+            /* iCalendar/vCard data in response should not be transformed */
             if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
 
             xml_response(ret, txn, outroot->doc);
