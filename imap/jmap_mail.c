@@ -8044,7 +8044,6 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     if (r) {
         if (r == IMAP_NOTFOUND) {
             *err = json_pack("{s:s}", "type", "messageNotFound");
-            r = 0;
         }
         goto done;
     }
@@ -8136,8 +8135,10 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     r = jmap_sendrecord(req, mr, envelope, &msgsub_id);
     json_object_set_new(msgsub, "id", json_string(msgsub_id));
     free(msgsub_id);
-    if (r || *err) goto done;
-
+    if (r) {
+        *err = json_pack("{s:s}", "type", "smtpProtocolError");
+        goto done;
+    }
     /* All done */
 
 done:
@@ -8296,7 +8297,12 @@ static int setMessageSubmissions(jmap_req_t *req)
              * errors in order of: fatal errors, setErrors, property errors */
             json_t *err = NULL;
             r = jmap_msgsubmission_create(req, msgsub, invalid, &err);
-            if (r) {
+            if (err) {
+                json_object_set_new(notCreated, key, err);
+                r = 0;
+                continue;
+            }
+            else if (r) {
                 goto done;
             }
             else if (err) {

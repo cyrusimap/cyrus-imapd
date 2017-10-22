@@ -355,7 +355,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     cp += sprintf(cp, "%s, %02u %s %04u",
                   day_of_week[icaltime_day_of_week(start)-1],
                   start.day, month_of_year[start.month-1], start.year);
-    if (!start.is_date) {
+    if (!icaltime_is_date(start)) {
         cp += sprintf(cp, " %02u:%02u", start.hour, start.minute);
         if (start.second) cp += sprintf(cp, ":%02u", start.second);
         strcpy(cp, " UTC");
@@ -370,7 +370,7 @@ static int imip_send_sendmail(icalcomponent *ical,
                           day_of_week[icaltime_day_of_week(end)-1],
                           end.day, month_of_year[end.month-1], end.year);
         }
-        if (!end.is_date) {
+        if (!icaltime_is_date(end)) {
             cp += sprintf(cp, " %02u:%02u", end.hour, end.minute);
             if (end.second) cp += sprintf(cp, ":%02u", end.second);
             strcpy(cp, " UTC");
@@ -1846,11 +1846,8 @@ static void sched_deliver_local(const char *recipient,
     }
 
     if (cdata->dav.imap_uid) {
-        struct index_record record;
-
         /* Load message containing the resource and parse iCal data */
-        r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-        ical = record_to_ical(mailbox, &record, NULL);
+        ical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
 
         for (comp = icalcomponent_get_first_component(sched_data->itip,
                                                       ICAL_ANY_COMPONENT);
@@ -1953,7 +1950,7 @@ static void sched_deliver_local(const char *recipient,
     /* Store the (updated) object in the recipients's calendar */
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
                                       buf_cstring(&resource), caldavdb, NEW_STAG,
-                                      recipient);
+                                      recipient, recipient);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         sched_data->status =
@@ -1977,7 +1974,7 @@ static void sched_deliver_local(const char *recipient,
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), caldavdb, 0, NULL);
+                                  buf_cstring(&resource), caldavdb, 0, NULL, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 

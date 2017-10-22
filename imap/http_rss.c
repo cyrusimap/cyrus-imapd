@@ -322,7 +322,7 @@ static int meth_get(struct transaction_t *txn,
 
 /* Create a mailbox name from the request URL */
 static int rss_parse_path(const char *path, struct request_target_t *tgt,
-                          const char **errstr)
+                          const char **resultstr)
 {
     const char *start, *end;
     char mboxname[MAX_MAILBOX_BUFFER+1];
@@ -364,7 +364,7 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
-            *errstr = error_message(r);
+            *resultstr = error_message(r);
 
             switch (r) {
             case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;

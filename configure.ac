@@ -1492,6 +1492,11 @@ dnl
                         icalrecur_freq_to_string, icalrecur_weekday_to_string],
                 [], [], [[#include <libical/ical.h>]])
 
+        AC_CHECK_MEMBER(icaltimetype.is_utc,
+                AC_DEFINE(ICALTIME_HAS_IS_UTC,[],
+                        [Does icaltimetype have is_utc field?]),
+                        [], [#include <libical/ical.h>])
+
         AC_CHECK_LIB(ical, icalproperty_new_acknowledged,
                 AC_DEFINE(HAVE_VALARM_EXT_PROPS,[],
                         [Do we have built-in support for VALARM extensions props?]))

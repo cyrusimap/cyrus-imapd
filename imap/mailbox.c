@@ -3050,7 +3050,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     struct caldav_data *cdata = NULL;
     const char *resource = NULL;
     const char *sched_tag = NULL;
-    unsigned tzbyref = 0;
+    unsigned tzbyref = 0, shared = 0;
     int r = 0;
 
     /* conditions in which there's nothing to do */
@@ -3074,6 +3074,9 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
         else if (!strcmp(param->attribute, "TZ-BY-REF")) {
             tzbyref = !strcasecmp(param->value, "TRUE");
+        }
+        else if (!strcmp(param->attribute, "PER-USER-DATA")) {
+            shared = !strcasecmp(param->value, "TRUE");
         }
     }
 
@@ -3135,6 +3138,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->dav.resource = resource;
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
+        cdata->comp_flags.shared = shared;
 
         /* add new ones unless this record is expunged */
         if (cdata->dav.alive) {

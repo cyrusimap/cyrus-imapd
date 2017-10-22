@@ -100,6 +100,8 @@ extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *i
                                                                                 void*),
                                                                 void *cb_rock);
 
+extern void icaltime_set_utc(struct icaltimetype *t, int set);
+
 
 /* Functions not declared in in libical < v2.0 */
 

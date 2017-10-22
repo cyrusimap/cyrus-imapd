@@ -95,6 +95,7 @@ struct comp_flags {
     unsigned status       : 2;          /* STATUS property value (see below) */
     unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
     unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
+    unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
 };
 
 /* Status values */
