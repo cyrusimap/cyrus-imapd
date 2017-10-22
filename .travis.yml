@@ -40,7 +40,7 @@ install:
 - git clone -b cyrus --single-branch https://github.com/cyrusimap/jansson.git janson
 - pushd janson
 - "autoreconf -v -i"
-- "./configure --enable-silent-rules --prefix=CYRUSLIBS"
+- "./configure --enable-silent-rules --prefix=$CYRUSLIBS"
 - make -j 8
 - sudo make install
 - popd #janson
