@@ -7321,7 +7321,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                     xml_add_response(fctx, HTTP_MOVED, 0, NULL, resultstr);
                 else
                     xml_add_response(fctx, r, 0, resultstr, NULL);
-                continue;
+                goto next;
             }
 
             fctx->req_tgt = &tgt;
@@ -7338,7 +7338,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                            tgt.mbentry->name, error_message(r));
                     xml_add_response(fctx, HTTP_SERVER_ERROR,
                                      0, error_message(r), NULL);
-                    continue;
+                    goto next;
                 }
 
                 fctx->mailbox = mailbox;
@@ -7347,7 +7347,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             if (!fctx->mailbox || !tgt.resource) {
                 /* Add response for missing target */
                 xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
-                continue;
+                goto next;
             }
 
             /* Open the DAV DB corresponding to the mailbox */
@@ -7361,11 +7361,12 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
             fctx->proc_by_resource(fctx, ddata);
 
+            rparams->davdb.close_db(fctx->davdb);
+
+        next:
             /* XXX - split this into a req_tgt cleanup */
             free(tgt.userid);
             mboxlist_entry_free(&tgt.mbentry);
-
-            rparams->davdb.close_db(fctx->davdb);
         }
     }
 
