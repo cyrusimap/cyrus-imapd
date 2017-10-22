@@ -37,7 +37,7 @@ os: linux
 compiler: gcc
 install:
 # libjanson
-- git clone -b cyrus --single-brnach https://github.com/cyrusimap/jansson.git janson
+- git clone -b cyrus --single-branch https://github.com/cyrusimap/jansson.git janson
 - pushd janson
 - "autoreconf -v -i"
 - "./configure --enable-silent-rules --prefix=CYRUSLIBS"
