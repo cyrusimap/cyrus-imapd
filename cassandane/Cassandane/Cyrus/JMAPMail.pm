@@ -6389,6 +6389,84 @@ EOF
     $self->assert(exists $res->[0][1]->{created}{"1"});
 }
 
+sub test_refobjects_simple
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "get message state";
+    my $res = $jmap->Request([['getMessageList', {}, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog "Generate a message in INBOX via IMAP";
+    $self->make_message("Message A") || die;
+
+    xlog "get message updates and message using reference";
+    $res = $jmap->Request([
+        ['getMessageUpdates', {
+            sinceState => $state,
+        }, 'R1'],
+        ['getMessages', {
+            '#ids' => {
+                'resultOf' => 'R1',
+                'path' => '/changed',
+            },
+        }, 'R2'],
+    ]);
+
+    # assert that the changed id equals the id of the returned message
+    $self->assert_str_equals($res->[0][1]{changed}[0], $res->[1][1]{list}[0]{id});
+}
+
+sub test_refobjects_extended
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a message in INBOX via IMAP";
+    foreach my $i (1..10) {
+        $self->make_message("Message$i") || die;
+    }
+
+    xlog "get message properties using reference";
+    my $res = $jmap->Request([
+        ['getMessageList', {
+            sort => [ 'date desc' ],
+            collapseThreads => JSON::true,
+            position => 0,
+            limit => 10,
+        }, 'R1'],
+        ['getMessages', {
+            '#ids' => {
+                'resultOf' => 'R1',
+                'path' => '/messageIds', # FIXME should be 'ids'
+            },
+            properties => [ 'threadId' ],
+        }, 'R2'],
+        ['getThreads', {
+            '#ids' => {
+                resultOf => 'R2',
+                path => '/list/*/threadId',
+            },
+        }, 'R3'],
+        ['getThreads', {
+            '#ids' => {
+                resultOf => 'R2',
+                path => '/list/1/threadId',
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_str_equals($res->[2][1]{list}[1]{id}, $res->[3][1]{list}[0]{id});
+}
 
 
 1;
