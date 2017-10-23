@@ -43,13 +43,13 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
-pid_t open_sendmail(const char *argv[], FILE **sm);
+pid_t open_sendmail(const char *userid, const char *argv[], FILE **sm);
 char *sendmail_errstr(int sm_stat);
 
 
 typedef struct smtpclient smtpclient_t;
 
-extern int smtpclient_open_sendmail(smtpclient_t **smp);
+extern int smtpclient_open_sendmail(const char *userid, smtpclient_t **smp);
 extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
 extern int smtpclient_open_file(const char *template, smtpclient_t **smp);
 extern int smtpclient_expect(smtpclient_t *sm, int code, struct buf *resp);

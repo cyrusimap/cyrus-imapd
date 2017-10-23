@@ -1071,6 +1071,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    mkstemp(3). The file name template is specified in the
    config option jmap_smtpfile. This backend is mostly
    useful for testing.
+
+   If the SMTP EHLO command reports AUTH (RFC 4954) as a
+   supported extension, then the MAIL FROM command contains
+   the AUTH parameter set to the authenticated JMAP user.
    */
 
 { "jmap_smtp_host", "localhost:25", STRING }
@@ -1994,6 +1998,12 @@ If all partitions are over that limit, this feature is not used anymore.
 { "sendmail", "/usr/lib/sendmail", STRING }
 /* The pathname of the sendmail executable.  Sieve invokes sendmail
    for sending rejections, redirects and vacation responses. */
+
+{ "sendmail_auth_id", "CYRUS_SENDMAIL_AUTH_ID", STRING }
+/* The name of an environment variable to set when invoking sendmail.
+   The value of this environment variable will contain the user id
+   of the currently authenticated user. If no user is authenticated
+   the environment variable is not set. */
 
 { "serverlist", NULL, STRING }
 /* Whitespace separated list of backend server names.  Used for
