@@ -1217,6 +1217,7 @@ imap_httpd_SOURCES = \
 	imap/httpd.h \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/json_support.c \
 	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \

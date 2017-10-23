@@ -152,69 +152,6 @@ static char *hexkey(const char *val)
     return xstrdup(idbuf);
 }
 
-static int jsonpointer_needsencode(const char *src)
-{
-    return strchr(src, '/') || strchr(src, '~');
-}
-
-static char* jsonpointer_encode(const char *src)
-{
-    struct buf buf = BUF_INITIALIZER;
-    const char *base, *top;
-    buf_ensure(&buf, strlen(src));
-
-    base = src;
-    top = base;
-    while (*base) {
-        for (top = base; *top && *top != '~' && *top != '/'; top++)
-            ;
-        if (!*top) break;
-
-        buf_appendmap(&buf, base, top-base);
-        if (*top == '~') {
-            buf_appendmap(&buf, "~0", 2);
-            top++;
-        } else if (*top == '/') {
-            buf_appendmap(&buf, "~1", 2);
-            top++;
-        }
-        base = top;
-    }
-    buf_appendmap(&buf, base, top-base);
-    return buf_release(&buf);
-}
-
-static char *jsonpointer_decode(const char *src, size_t len)
-{
-    struct buf buf = BUF_INITIALIZER;
-    const char *base, *top, *end;
-
-    assert(src && len > 0);
-    buf_ensure(&buf, len);
-    end = src + len;
-
-    base = src;
-    while (base < end && (top = strchr(base, '~')) && top < end) {
-        buf_appendmap(&buf, base, top-base);
-
-        if (top < end-1 && *(top+1) == '0') {
-            buf_appendcstr(&buf, "~");
-            base = top + 2;
-        } else if (top < end-1 && *(top+1) == '1') {
-            buf_appendcstr(&buf, "/");
-            base = top + 2;
-        } else {
-            buf_appendcstr(&buf, "~");
-            base = top + 1;
-        }
-    }
-    if (base < end) {
-        buf_appendmap(&buf, base, end-base);
-    }
-
-    return buf_release(&buf);
-}
-
 static json_t* patch_object(json_t *src, json_t *patches)
 {
     const char *path;
@@ -229,7 +166,7 @@ static json_t* patch_object(json_t *src, json_t *patches)
         it = dst;
         base = path;
         while ((top = strchr(base, '/'))) {
-            name = jsonpointer_decode(base, top-base);
+            name = json_pointer_decode(base, top-base);
             it = json_object_get(it, name);
             free(name);
             base = top + 1;
@@ -245,7 +182,7 @@ static json_t* patch_object(json_t *src, json_t *patches)
             return NULL;
         }
 
-        name = jsonpointer_decode(base, strlen(base));
+        name = json_pointer_decode(base, strlen(base));
         json_object_set(it, name, patch);
         free(name);
     }
@@ -267,7 +204,7 @@ static void diff_object(json_t *diff, struct buf *buf, json_t *a, json_t *b)
     }
 
     json_object_foreach(b, id, o) {
-        char *encid = jsonpointer_encode(id);
+        char *encid = json_pointer_encode(id);
         size_t l = buf_len(buf);
         if (!l) {
             buf_setcstr(buf, encid);
@@ -322,8 +259,8 @@ static void beginprop_key(context_t *ctx, const char *name, const char *key)
     struct buf *buf = &ctx->propbuf;
     strarray_t *str = &ctx->propstr;
 
-    if (jsonpointer_needsencode(name)) {
-        char *tmp = jsonpointer_encode(name);
+    if (json_pointer_needsencode(name)) {
+        char *tmp = json_pointer_encode(name);
         buf_setcstr(buf, tmp);
         free(tmp);
     } else {
@@ -332,8 +269,8 @@ static void beginprop_key(context_t *ctx, const char *name, const char *key)
 
     buf_appendcstr(buf, "/");
 
-    if (jsonpointer_needsencode(key)) {
-        char *tmp = jsonpointer_encode(key);
+    if (json_pointer_needsencode(key)) {
+        char *tmp = json_pointer_encode(key);
         buf_appendcstr(buf, tmp);
         free(tmp);
     } else {
@@ -349,8 +286,8 @@ static void beginprop_idx(context_t *ctx, const char *name, size_t idx)
     struct buf *buf = &ctx->propbuf;
     strarray_t *str = &ctx->propstr;
 
-    if (jsonpointer_needsencode(name)) {
-        char *tmp = jsonpointer_encode(name);
+    if (json_pointer_needsencode(name)) {
+        char *tmp = json_pointer_encode(name);
         buf_setcstr(buf, tmp);
         free(tmp);
     } else {
@@ -368,8 +305,8 @@ static void beginprop(context_t *ctx, const char *name)
 {
     strarray_t *str = &ctx->propstr;
 
-    if (jsonpointer_needsencode(name)) {
-        char *tmp = jsonpointer_encode(name);
+    if (json_pointer_needsencode(name)) {
+        char *tmp = json_pointer_encode(name);
         strarray_push(str, tmp);
         free(tmp);
     } else {

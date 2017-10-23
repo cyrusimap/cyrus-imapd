@@ -1,4 +1,4 @@
-/* json_support.h -- Helper functions for jansson
+/* json_support.h -- Helper functions for jansson and JSON
  *
  * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,6 +48,11 @@
 #include <config.h>
 
 #include <jansson.h>
+
+/* Helper functions for RFC 6901 JSON pointers */
+int json_pointer_needsencode(const char *src);
+char* json_pointer_encode(const char *src);
+char *json_pointer_decode(const char *src, size_t len);
 
 /* jansson replacement functions for those missing in older versions */
 
