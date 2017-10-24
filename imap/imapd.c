@@ -6749,7 +6749,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
                     // special use needs extended support, so pass through extargs
                     if (specialuse.len) {
-                        prot_printf(s_conn->out, "(USE (%s)", buf_cstring(&specialuse));
+                        prot_printf(s_conn->out, " (USE (%s)", buf_cstring(&specialuse));
 
                         if (partition) {
                             prot_printf(s_conn->out, " PARTITION ");
