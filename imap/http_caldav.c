@@ -1060,7 +1060,7 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
 
         /* Lookup the CalDAV record */
         r = caldav_lookup_imapuid(caldavdb, mailbox->name,
-                                  record->uid, &cdata, /* tombstones */ 1);
+                                  record->uid, &cdata, /* tombstones */ 0);
         
         if (!r && cdata->comp_flags.shared) {
             struct buf value = BUF_INITIALIZER;
