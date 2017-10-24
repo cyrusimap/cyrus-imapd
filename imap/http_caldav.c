@@ -8470,7 +8470,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
         if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            oldrecord && cdata->comp_flags.shared) {
+            cdata->comp_flags.shared) {
 
             if (!cdata->organizer || (flags & PREFER_REP)) {
                 /* Read index record for new message (always the last one) */
@@ -8496,7 +8496,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             annotate_state_t *astate = NULL;
             uint32_t newuid = mailbox->i.last_uid;
 
-            if ((newuid != oldrecord->uid) &&
+            if (oldrecord && (newuid != oldrecord->uid) &&
                 !mailbox_get_annotate_state(mailbox, newuid, &astate)) {
                 /* Copy across any per-message annotations */
                 annotate_msg_copy(mailbox, oldrecord->uid,
