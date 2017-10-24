@@ -3902,8 +3902,6 @@ static int personalize_resource(struct transaction_t *txn,
                                     &num_changes);
         buf_reset(&txn->buf);
 
-        if (!ret) ret = write_personal_data(mailbox, cdata, userid, *userdata);
-
         if (ret) goto done;
 
         if (cdata->dav.imap_uid && !num_changes) {
@@ -7624,14 +7622,41 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     case HTTP_CREATED:
     case HTTP_NO_CONTENT:
         if ((namespace_calendar.allow & ALLOW_USERDATA) &&
-            oldrecord && cdata->comp_flags.shared) {
+            cdata->comp_flags.shared) {
+
+            /* Ensure we have an astate connected to the mailbox,
+             * so that the annotation txn will be committed
+             * when we close the mailbox */
+            annotate_state_t *astate = NULL;
+            uint32_t newuid = mailbox->i.last_uid;
+
+            if (oldrecord && (newuid != oldrecord->uid) &&
+                !mailbox_get_annotate_state(mailbox, newuid, &astate)) {
+                /* Copy across all per-message annotations.
+
+                   XXX  Hack until we fix annotation copying in
+                   append_fromstage() to preserve userid of private annots. */
+                annotate_msg_copy(mailbox, oldrecord->uid,
+                                  mailbox, newuid, NULL);
+            }
+
+            cdata->dav.alive = 1;
+            cdata->dav.imap_uid = newuid;
+            ret = write_personal_data(mailbox, cdata, userid, userdata);
+            if (ret) {
+                /* XXX  We have already written the stripped resource
+                   so we're pretty screwed.  All message annotations
+                   need to be handled (properly) in append_fromstage()
+                   so storing resource and annotations is atomic.
+                */
+                ret = HTTP_SERVER_ERROR;
+                goto done;
+            }
 
             if (!cdata->organizer || (flags & PREFER_REP)) {
                 /* Read index record for new message (always the last one) */
                 struct index_record newrecord;
 
-                cdata->dav.alive = 1;
-                cdata->dav.imap_uid = mailbox->i.last_uid;
                 caldav_get_validators(mailbox, cdata, userid, &newrecord,
                                       &txn->resp_body.etag,
                                       &txn->resp_body.lastmod);
@@ -7640,21 +7665,6 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                     /* Re-insert per-user data */
                     icalcomponent_apply_vpatch(ical, userdata, NULL, NULL);
                 }
-            }
-
-            /* XXX  Hack until we fix annotation copying in append_fromstage() */
-
-            /* Ensure we have an astate connected to the mailbox,
-             * so that the annotation txn will be committed
-             * when we close the mailbox */
-            annotate_state_t *astate = NULL;
-            uint32_t newuid = mailbox->i.last_uid;
-
-            if ((newuid != oldrecord->uid) &&
-                !mailbox_get_annotate_state(mailbox, newuid, &astate)) {
-                /* Copy across any per-message annotations */
-                annotate_msg_copy(mailbox, oldrecord->uid,
-                                  mailbox, newuid, NULL);
             }
         }
 
