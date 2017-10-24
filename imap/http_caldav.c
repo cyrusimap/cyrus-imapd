@@ -106,9 +106,6 @@
 
 #define TZ_STRIP  (1<<9)
 
-#define PER_USER_CAL_DATA \
-    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
-
 #define SHARED_MODSEQ \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">shared-modseq"
 
@@ -2440,10 +2437,6 @@ static int is_personalized(struct mailbox *mailbox,
     buf_free(value);
     return 0;
 }
-
-
-static int process_vpatch(struct transaction_t *txn, icalcomponent *vpatch,
-                          icalcomponent *ical, int *num_changes);
 
 
 static void add_personal_data(icalcomponent *ical, struct buf *userdata)
