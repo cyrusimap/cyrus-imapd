@@ -52,6 +52,9 @@
 
 #include "mailbox.h"
 
+#define PER_USER_CAL_DATA \
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
+
 extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
@@ -101,6 +104,10 @@ extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *i
                                                                 void *cb_rock);
 
 extern void icaltime_set_utc(struct icaltimetype *t, int set);
+
+extern int icalcomponent_apply_vpatch(icalcomponent *ical,
+                                      icalcomponent *vpatch,
+                                      int *num_changes, const char **errstr);
 
 
 /* Functions not declared in in libical < v2.0 */
