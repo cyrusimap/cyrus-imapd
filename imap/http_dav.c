@@ -10408,6 +10408,7 @@ static int propfind_csnotify_collection(struct propfind_ctx *fctx,
     my_fctx.ns = fctx->ns;
     my_fctx.ns_table = fctx->ns_table;
     my_fctx.ret = fctx->ret;
+    my_fctx.xmlbuf = fctx->xmlbuf;
 
     /* Parse the list of properties and build a list of callbacks */
     preload_proplist(props, &my_fctx);
