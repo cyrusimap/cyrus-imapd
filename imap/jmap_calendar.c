@@ -60,6 +60,7 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_jmap.h"
+#include "http_proxy.h"
 #include "ical_support.h"
 #include "json_support.h"
 #include "jmap_ical.h"
@@ -1600,7 +1601,17 @@ static int setcalendarevents_create(jmap_req_t *req,
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
     /* XXX - fix userid */
-    r = caldav_store_resource(&txn, ical, mbox, resource, db, 0, httpd_userid, schedule_address);
+
+    /* Locate the mailbox */
+    r = http_mlookup(mbox->name, &txn.req_tgt.mbentry, NULL);
+    if (r) {
+        syslog(LOG_ERR, "mlookup(%s) failed: %s", mbox->name, error_message(r));
+    }
+    else {
+        r = caldav_store_resource(&txn, ical, mbox, resource,
+                                  db, 0, httpd_userid, schedule_address);
+    }
+    mboxlist_entry_free(&txn.req_tgt.mbentry);
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
