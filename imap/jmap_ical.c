@@ -152,72 +152,6 @@ static char *hexkey(const char *val)
     return xstrdup(idbuf);
 }
 
-static json_t* patch_object(json_t *src, json_t *patches)
-{
-    const char *path;
-    json_t *patch, *dst;
-
-    dst = json_deep_copy(src);
-    json_object_foreach(patches, path, patch) {
-        const char *base, *top;
-        char *name;
-        json_t *it;
-
-        it = dst;
-        base = path;
-        while ((top = strchr(base, '/'))) {
-            name = json_pointer_decode(base, top-base);
-            it = json_object_get(it, name);
-            free(name);
-            base = top + 1;
-        }
-
-        if (!it) {
-            /*
-             * JMAP spec: "When evaluating a path, all parts prior to the
-             * last (i.e. the value after the final slash) MUST exist for
-             * the patch to be valid. If not, the patch MUST be ignored."
-             */
-            json_decref(dst);
-            return NULL;
-        }
-
-        name = json_pointer_decode(base, strlen(base));
-        json_object_set(it, name, patch);
-        free(name);
-    }
-
-    return dst;
-}
-
-static void diff_object(json_t *diff, struct buf *buf, json_t *a, json_t *b)
-{
-    const char *id;
-    json_t *o;
-
-    if (b == NULL || json_equal(a, b)) {
-        return;
-    }
-
-    if (!JNOTNULL(a) || json_typeof(b) != JSON_OBJECT) {
-        json_object_set(diff, buf_cstring(buf), b);
-    }
-
-    json_object_foreach(b, id, o) {
-        char *encid = json_pointer_encode(id);
-        size_t l = buf_len(buf);
-        if (!l) {
-            buf_setcstr(buf, encid);
-        } else {
-            buf_appendcstr(buf, "/");
-            buf_appendcstr(buf, encid);
-        }
-        diff_object(diff, buf, json_object_get(a, id), o);
-        buf_truncate(buf, l);
-        free(encid);
-    }
-}
-
 static context_t *context_new(json_t *wantprops,
                               jmapical_err_t *err,
                               int mode)
@@ -1222,7 +1156,7 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
         /* Create override patch */
         diff = json_pack("{}");
-        diff_object(diff, &buf, event, ex);
+        json_pointer_diff(diff, &buf, event, ex);
         json_decref(ex);
 
         /* Set override at recurrence id */
@@ -3990,7 +3924,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             }
 
             /* Create overridden event from patch and master event */
-            if (!(ex = patch_object(master, override))) {
+            if (!(ex = json_pointer_patch(master, override))) {
                 invalidprop(ctx, NULL);
                 endprop(ctx);
                 continue;

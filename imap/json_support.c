@@ -107,3 +107,62 @@ char *json_pointer_decode(const char *src, size_t len)
 
     return buf_release(&buf);
 }
+
+json_t* json_pointer_patch(json_t *val, json_t *patch)
+{
+    const char *path;
+    json_t *newval, *dst;
+
+    dst = json_deep_copy(val);
+    json_object_foreach(patch, path, newval) {
+        /* Start traversal at root object */
+        json_t *it = dst;
+        const char *base = path, *top;
+        /* Find path in object tree */
+        while ((top = strchr(base, '/'))) {
+            char *name = json_pointer_decode(base, top-base);
+            it = json_object_get(it, name);
+            free(name);
+            base = top + 1;
+        }
+        if (!it) {
+            /* No such path in 'val' */
+            json_decref(dst);
+            return NULL;
+        }
+        /* Replace value at path */
+        char *name = json_pointer_decode(base, strlen(base));
+        json_object_set(it, name, newval);
+        free(name);
+    }
+
+    return dst;
+}
+
+void json_pointer_diff(json_t *diff, struct buf *buf, json_t *a, json_t *b)
+{
+    const char *id;
+    json_t *o;
+
+    if (b == NULL || json_equal(a, b)) {
+        return;
+    }
+
+    if (!a || json_is_null(a) || json_typeof(b) != JSON_OBJECT) {
+        json_object_set(diff, buf_cstring(buf), b);
+    }
+
+    json_object_foreach(b, id, o) {
+        char *encid = json_pointer_encode(id);
+        size_t l = buf_len(buf);
+        if (!l) {
+            buf_setcstr(buf, encid);
+        } else {
+            buf_appendcstr(buf, "/");
+            buf_appendcstr(buf, encid);
+        }
+        json_pointer_diff(diff, buf, json_object_get(a, id), o);
+        buf_truncate(buf, l);
+        free(encid);
+    }
+}

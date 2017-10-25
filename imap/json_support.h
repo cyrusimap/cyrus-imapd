@@ -46,13 +46,16 @@
 #define JSON_SUPPORT_H
 
 #include <config.h>
-
 #include <jansson.h>
+
+#include "util.h"
 
 /* Helper functions for RFC 6901 JSON pointers */
 int json_pointer_needsencode(const char *src);
-char* json_pointer_encode(const char *src);
+char *json_pointer_encode(const char *src);
 char *json_pointer_decode(const char *src, size_t len);
+json_t* json_pointer_patch(json_t *val, json_t *patch);
+void json_pointer_diff(json_t *diff, struct buf*, json_t *a, json_t *b);
 
 /* jansson replacement functions for those missing in older versions */
 
