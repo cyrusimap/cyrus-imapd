@@ -1024,7 +1024,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
 
     xlog "create mailbox via IMAP";
     $imaptalk->create("INBOX.foo")
@@ -1044,7 +1044,7 @@ sub test_getmailboxupdates
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "create drafts mailbox";
@@ -1066,7 +1066,7 @@ sub test_getmailboxupdates
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "rename mailbox foo to bar";
@@ -1086,7 +1086,7 @@ sub test_getmailboxupdates
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "delete mailbox bar";
@@ -1113,7 +1113,7 @@ sub test_getmailboxupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
     $self->assert_str_equals($foo, $res->[0][1]{removed}[0]);
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "get mailbox updates, limit to 1";
@@ -1124,7 +1124,7 @@ sub test_getmailboxupdates
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "get mailbox updates (expect no changes)";
@@ -1134,7 +1134,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
 }
 
 sub test_getmailboxupdates_counts
@@ -1193,7 +1193,7 @@ sub test_getmailboxupdates_counts
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $self->assert_not_null($res->[0][1]{changedProperties});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
@@ -1203,7 +1203,7 @@ sub test_getmailboxupdates_counts
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
@@ -1215,7 +1215,7 @@ sub test_getmailboxupdates_counts
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $self->assert_not_null($res->[0][1]{changedProperties});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
@@ -1225,14 +1225,14 @@ sub test_getmailboxupdates_counts
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
     xlog "get mailbox updates (expect no changes)";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]{onlyCountsChanged});
+    $self->assert_null($res->[0][1]{changedProperties});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
@@ -1245,7 +1245,7 @@ sub test_getmailboxupdates_counts
     xlog "get mailbox updates";
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]{onlyCountsChanged});
+    $self->assert_not_null($res->[0][1]{changedProperties});
     $self->assert_num_not_equals(0, scalar $res->[0][1]{changed});
     $state = $res->[0][1]{newState};
 }
