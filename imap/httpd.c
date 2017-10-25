@@ -3363,6 +3363,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%stype=%s", sep, hdr[0]);
             sep = "; ";
         }
+        if ((hdr = spool_getheader(txn->req_hdrs, ":token"))) {
+            buf_printf(&log, "%stoken=%s", sep, hdr[0]);
+            sep = "; ";
+        }
         if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
             buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
             sep = "; ";

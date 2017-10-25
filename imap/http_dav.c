@@ -7551,6 +7551,10 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         if (node->type == XML_ELEMENT_NODE) {
             if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
                 (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+                /* Add sync-token to our header cache */
+                spool_cache_header(xstrdup(":token"),
+                                   xstrdup((const char *) str), txn->req_hdrs);
+
                 /* Parse sync-token */
                 r = sscanf((char *) str, SYNC_TOKEN_URL_SCHEME
                            "%u-" MODSEQ_FMT "-" MODSEQ_FMT "%1s",
