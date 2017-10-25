@@ -45,6 +45,8 @@
 
 #include <string.h>
 
+#include "lib/exitcodes.h"
+
 #include "caldav_db.h"
 #include "ical_support.h"
 #include "message.h"
