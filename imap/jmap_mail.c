@@ -1781,11 +1781,19 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
         }
     }
 
-
     if (!json_array_size(*changed) && !json_array_size(*removed)) {
         *only_counts_changed = 0;
     }
     *newstate = jmap_fmtstate(*has_more ? windowmodseq : jmap_highestmodseq(req, 0/*mbtype*/));
+
+    if (!json_array_size(*changed)) {
+        json_decref(*changed);
+        *changed = json_null();
+    }
+    if (!json_array_size(*removed)) {
+        json_decref(*removed);
+        *removed = json_null();
+    }
 
 done:
     if (data.changed) json_decref(data.changed);
@@ -4101,6 +4109,21 @@ doneloop:
         if (msg) json_decref(msg);
     }
 
+    if (!json_array_size(*messageids)) {
+        json_decref(*messageids);
+        *messageids = json_null();
+    }
+    if (!json_array_size(*threadids)) {
+        json_decref(*threadids);
+        *threadids = json_null();
+    }
+    if (want_expunged) {
+        if (!json_array_size(*expungedids)) {
+            json_decref(*expungedids);
+            *expungedids = json_null();
+        }
+    }
+
 done:
     free(msgid);
     free_hash_table(&ids, NULL);
@@ -4562,6 +4585,15 @@ static int getThreadUpdates(jmap_req_t *req)
         newstate = jmap_fmtstate(jmap_highestmodseq(req, 0/*mbtype*/));
     }
     oldstate = json_string(since);
+
+    if (!json_array_size(changed)) {
+        json_decref(changed);
+        changed = json_null();
+    }
+    if (!json_array_size(removed)) {
+        json_decref(removed);
+        removed = json_null();
+    }
 
     /* Prepare response. */
     res = json_pack("{}");
@@ -7512,6 +7544,15 @@ static int importMessages(jmap_req_t *req)
         hash_insert(id, mymsgid, &req->idmap->messages); /* idmap takes ownership */
     }
 
+    if (!json_object_size(created)) {
+        json_decref(created);
+        created = json_null();
+    }
+    if (!json_object_size(notcreated)) {
+        json_decref(notcreated);
+        notcreated = json_null();
+    }
+
     /* Prepare the response */
     res = json_pack("{}");
     json_object_set_new(res, "accountId", json_string(req->accountid));
@@ -8393,8 +8434,8 @@ static int getMessageSubmissionUpdates(jmap_req_t *req)
     json_object_set_new(res, "oldState", oldstate);
     json_object_set_new(res, "newState", newstate);
     json_object_set_new(res, "hasMoreUpdates", json_false());
-    json_object_set_new(res, "changed", json_pack("[]"));
-    json_object_set_new(res, "removed", json_pack("[]"));
+    json_object_set_new(res, "changed", json_null());
+    json_object_set_new(res, "removed", json_null());
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("messageSubmissionUpdates"));
