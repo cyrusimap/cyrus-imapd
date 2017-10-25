@@ -1797,7 +1797,7 @@ done:
 static int getMailboxUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
-    int fetch = 0, has_more = 0, only_counts_changed = 0;
+    int has_more = 0, only_counts_changed = 0;
     json_t *changed, *removed, *invalid, *item, *res;
     json_int_t max_changes = 0;
     json_t *oldstate, *newstate;
@@ -1816,8 +1816,6 @@ static int getMailboxUpdates(jmap_req_t *req)
     if (pe > 0 && max_changes < 0) {
         json_array_append_new(invalid, json_string("maxChanges"));
     }
-    /* fetch */
-    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -1850,29 +1848,6 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    if (fetch) {
-        if (json_array_size(changed)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set(subreq.args, "ids", changed);
-
-            json_t *props = json_object_get(req->args, "fetchRecordProperties");
-            if (props) {
-                json_object_set(subreq.args, "properties", props);
-            }
-            else if (only_counts_changed) {
-                json_object_set_new(subreq.args, "properties",
-                        json_pack("[s,s,s,s]",
-                            "totalMessages", "unreadMessages",
-                            "totalthreads",  "unreadThreads"));
-            }
-
-            r = getMailboxes(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
 
 done:
     return r;
@@ -3819,21 +3794,15 @@ struct getmsglist_window {
     size_t anchor_pos;
 };
 
-static void update_added(json_t *target, const char *msgid,
-                         uint64_t cid, int index)
+static void update_added(json_t *target, const char *msgid, int index)
 {
-    char *thrid = jmap_thrid(cid);
-    json_t *item = json_pack("{s:s,s:s,s:i}", "messageId", msgid, "threadId", thrid, "index", index);
+    json_t *item = json_pack("{s:s,s:i}", "id", msgid, "index", index);
     json_array_append_new(target, item);
-    free(thrid);
 }
 
-static void update_removed(json_t *target, const char *msgid, uint64_t cid)
+static void update_removed(json_t *target, const char *msgid)
 {
-    char *thrid = jmap_thrid(cid);
-    json_t *item = json_pack("{s:s,s:s}", "messageId", msgid, "threadId", thrid);
-    json_array_append_new(target, item);
-    free(thrid);
+    json_array_append_new(target, json_string(msgid));
 }
 
 static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
@@ -3947,13 +3916,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (is_expunged) {
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodesq) goto doneloop;
-                    update_removed(*expungedids, msgid, md->cid);
+                    update_removed(*expungedids, msgid);
                 }
                 else {
                     (*total)++;
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodesq) goto doneloop;
-                    update_added(*messageids, msgid, md->cid, *total-1);
+                    update_added(*messageids, msgid, *total-1);
                 }
                 goto doneloop;
             }
@@ -4007,13 +3976,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (!is_expunged) {
                     /* this may have been the old exemplar but is not the new exemplar */
                     if (ciddata & 1) {
-                        update_removed(*expungedids, msgid, md->cid);
+                        update_removed(*expungedids, msgid);
                     }
                     else if (ciddata & 4) {
                         /* we need to remove and re-add this record just in case we
                          * got unmasked by the previous */
-                        update_removed(*expungedids, msgid, md->cid);
-                        update_added(*messageids, msgid, md->cid, *total-1);
+                        update_removed(*expungedids, msgid);
+                        update_added(*messageids, msgid, *total-1);
                     }
                     /* nothing later could be the old exemplar */
                     hashu64_insert(md->cid, (void *)3, &cids);
@@ -4024,7 +3993,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             /* OK, so this message has changed since last time */
 
             /* we don't know that we weren't the old exemplar, so we always tell a removal */
-            update_removed(*expungedids, msgid, md->cid);
+            update_removed(*expungedids, msgid);
 
             /* not the new exemplar because expunged */
             if (is_expunged) {
@@ -4035,7 +4004,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             if (ciddata & 1) goto doneloop;
 
             /* this is the new exemplar, so tell about it */
-            update_added(*messageids, msgid, md->cid, *total-1);
+            update_added(*messageids, msgid, *total-1);
 
             goto doneloop;
         }
@@ -4177,7 +4146,6 @@ static int is_supported_msglist_sort(const char *field)
 static int getMessageList(jmap_req_t *req)
 {
     int r;
-    int fetchthreads = 0, fetchmsgs = 0, fetchsnippets = 0;
     json_t *filter, *sort;
     json_t *messageids = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
     struct getmsglist_window window;
@@ -4218,10 +4186,6 @@ static int getMessageList(jmap_req_t *req)
         if (i < 0) json_array_append_new(invalid, json_string("limit"));
         window.limit = i;
     }
-
-    readprop(req->args, "fetchThreads", 0, invalid, "b", &fetchthreads);
-    readprop(req->args, "fetchMessages", 0, invalid, "b", &fetchmsgs);
-    readprop(req->args, "fetchSearchSnippets", 0, invalid, "b", &fetchsnippets);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -4275,7 +4239,7 @@ static int getMessageList(jmap_req_t *req)
     json_object_set_new(res, "total", json_integer(total));
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
-    json_object_set(res, "messageIds", messageids);
+    json_object_set(res, "ids", messageids);
     json_object_set(res, "threadIds", threadids);
 
     item = json_pack("[]");
@@ -4283,48 +4247,6 @@ static int getMessageList(jmap_req_t *req)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    // fetchmsgs is implicit in fetchthreads, because we fetch them all
-    if (fetchthreads) {
-        if (json_array_size(threadids)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set(subreq.args, "ids", threadids);
-            json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-            if (fetchmsgs) json_object_set_new(subreq.args, "fetchMessages", json_true());
-            json_t *props = json_object_get(req->args, "fetchMessageProperties");
-            if (props) json_object_set(subreq.args, "fetchMessageProperties", props);
-            r = getThreads(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
-    else if (fetchmsgs) {
-        if (json_array_size(messageids)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set(subreq.args, "ids", messageids);
-            json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-            json_t *props = json_object_get(req->args, "fetchMessageProperties");
-            if (props) json_object_set(subreq.args, "properties", props);
-            r = getMessages(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
-
-    if (fetchsnippets) {
-        if (json_array_size(messageids)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-            json_object_set(subreq.args, "messageIds", messageids);
-            json_object_set(subreq.args, "filter", filter);
-            r = getSearchSnippets(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
 
 done:
     if (messageids) json_decref(messageids);
@@ -4469,7 +4391,6 @@ done:
 static int getMessageUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
-    int fetch = 0;
     json_t *filter = NULL, *sort = NULL;
     json_t *changed = NULL, *removed = NULL, *invalid = NULL, *item = NULL, *res = NULL, *threads = NULL;
     json_int_t max = 0;
@@ -4492,8 +4413,6 @@ static int getMessageUpdates(jmap_req_t *req)
     readprop(req->args, "maxChanges", 0, invalid, "I", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
-    /* fetch */
-    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -4543,18 +4462,6 @@ static int getMessageUpdates(jmap_req_t *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
-    if (fetch) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", changed);
-        json_t *props = json_object_get(req->args, "fetchRecordProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        json_object_set(subreq.args, "accountId", json_string(req->accountid));
-        r = getMessages(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
-    }
-
 done:
     if (sort) json_decref(sort);
     if (filter) json_decref(filter);
@@ -4566,7 +4473,7 @@ done:
 
 static int getThreadUpdates(jmap_req_t *req)
 {
-    int pe, fetch = 0, has_more = 0, r = 0;
+    int pe, has_more = 0, r = 0;
     json_int_t max = 0;
     json_t *invalid, *item, *res, *oldstate, *newstate;
     json_t *changed = NULL;
@@ -4591,9 +4498,6 @@ static int getThreadUpdates(jmap_req_t *req)
     readprop(req->args, "maxChanges", 0, invalid, "I", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
     window.limit = max;
-
-    /* fetch */
-    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -4671,20 +4575,6 @@ static int getThreadUpdates(jmap_req_t *req)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    if (fetch) {
-        if (json_array_size(changed)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set(subreq.args, "ids", changed);
-            json_t *props = json_object_get(req->args, "fetchRecordProperties");
-            if (props) json_object_set(subreq.args, "properties", props);
-            json_object_set(subreq.args, "fetchMessages", json_false());
-            r = getThreads(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
 
 done:
     if (conv) conversation_free(conv);
@@ -5029,7 +4919,7 @@ done:
 
 static int getThreads(jmap_req_t *req)
 {
-    int r, fetchmsgs = 0;
+    int r;
     json_t *res, *item, *val, *threadids, *threads, *notfound;
     const char *s;
     struct buf buf = BUF_INITIALIZER;
@@ -5050,8 +4940,6 @@ static int getThreads(jmap_req_t *req)
     if (JNOTNULL(threadids) && !json_is_array(threadids)) {
         json_array_append_new(invalid, json_string("ids"));
     }
-
-    readprop(req->args, "fetchMessages", 0, invalid, "b", &fetchmsgs);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -5078,28 +4966,6 @@ static int getThreads(jmap_req_t *req)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    if (fetchmsgs) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_t *messageids = json_pack("[]");
-        size_t i;
-        json_t *item;
-        json_array_foreach(threads, i, item) {
-            size_t j;
-            json_t *id;
-            json_array_foreach(json_object_get(item, "messageIds"), j, id) {
-                json_array_append(messageids, id);
-            }
-        }
-        json_object_set_new(subreq.args, "ids", messageids);
-        json_t *props = json_object_get(req->args, "fetchMessageProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        r = getMessages(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
-    }
 
 done:
     buf_free(&buf);
@@ -8490,10 +8356,9 @@ done:
 
 static int getMessageSubmissionUpdates(jmap_req_t *req)
 {
-    int pe, fetch = 0;
+    int pe;
     json_int_t max = 0;
     json_t *invalid, *res, *oldstate, *newstate;
-    json_t *fetch_props = NULL;
     const char *since;
 
     /* Parse and validate arguments. */
@@ -8507,16 +8372,6 @@ static int getMessageSubmissionUpdates(jmap_req_t *req)
     /* maxChanges */
     readprop(req->args, "maxChanges", 0, invalid, "I", &max);
     if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-
-    /* fetch */
-    readprop(req->args, "fetchRecords", 0, invalid, "b", &fetch);
-
-    /* fetchRecordProperties */
-    if (readprop(req->args, "fetchRecordProperties", 0, invalid, "o", &fetch_props) > 0) {
-        if (!json_array_size(fetch_props)) {
-            json_array_append_new(invalid, json_string("fetchRecordProperties"));
-        }
-    }
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -8610,7 +8465,6 @@ static int is_supported_msgsub_sort(const char *field)
 static int getMessageSubmissionList(jmap_req_t *req)
 {
     int r;
-    int fetchthreads = 0, fetchmsgs = 0, fetchmsgsubs = 0;
     json_t *filter, *sort;
     json_t *messageids = NULL, *threadids = NULL, *msgsubids = NULL;
     json_int_t i = 0;
@@ -8639,10 +8493,6 @@ static int getMessageSubmissionList(jmap_req_t *req)
     if (readprop(req->args, "limit", 0, invalid, "I", &i) > 0) {
         if (i < 0) json_array_append_new(invalid, json_string("limit"));
     }
-
-    readprop(req->args, "fetchThreads", 0, invalid, "b", &fetchthreads);
-    readprop(req->args, "fetchMessages", 0, invalid, "b", &fetchmsgs);
-    readprop(req->args, "fetchMessageSubmissions", 0, invalid, "b", &fetchmsgsubs);
 
     /* Bail out for argument errors */
     if (json_array_size(invalid)) {
@@ -8686,8 +8536,8 @@ static int getMessageSubmissionList(jmap_req_t *req)
     json_object_set_new(res, "total", json_integer(0));
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
+    json_object_set(res, "ids", msgsubids);
     json_object_set(res, "messageIds", messageids);
-    json_object_set(res, "messageSubmissionIds", msgsubids);
     json_object_set(res, "threadIds", threadids);
 
     json_t *item = json_pack("[]");
@@ -8695,42 +8545,6 @@ static int getMessageSubmissionList(jmap_req_t *req)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    if (fetchthreads) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", threadids);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        if (fetchmsgs) json_object_set_new(subreq.args, "fetchMessages", json_true());
-        json_t *props = json_object_get(req->args, "fetchMessageProperties");
-        if (props) json_object_set(subreq.args, "fetchMessageProperties", props);
-        r = getThreads(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
-    }
-    else if (fetchmsgs) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", messageids);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        json_t *props = json_object_get(req->args, "fetchMessageProperties");
-        if (props) json_object_set(subreq.args, "properties", props);
-        r = getMessages(&subreq);
-        json_decref(subreq.args);
-        if (r) goto done;
-    }
-    if (fetchmsgsubs) {
-        if (json_array_size(messageids)) {
-            struct jmap_req subreq = *req;
-            subreq.args = json_pack("{}");
-            json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-            json_object_set(subreq.args, "messageSubmissionIds", msgsubids);
-            json_object_set(subreq.args, "filter", filter);
-            r = getMessageSubmissions(&subreq);
-            json_decref(subreq.args);
-            if (r) goto done;
-        }
-    }
 
 done:
     if (messageids) json_decref(messageids);
