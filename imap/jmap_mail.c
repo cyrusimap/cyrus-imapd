@@ -1841,8 +1841,10 @@ static int getMailboxUpdates(jmap_req_t *req)
     json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
     json_object_set_new(res, "changed", changed);
     json_object_set_new(res, "removed", removed);
-    json_object_set_new(res, "onlyCountsChanged", json_boolean(only_counts_changed));
-
+    json_object_set_new(res, "changedProperties", only_counts_changed ?
+            json_pack("[s,s,s,s]", "totalMessages", "unreadMessages",
+                                   "totalThreads", "unreadThreads") :
+            json_null());
     item = json_pack("[]");
     json_array_append_new(item, json_string("mailboxUpdates"));
     json_array_append_new(item, res);
