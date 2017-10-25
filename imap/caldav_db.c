@@ -587,17 +587,9 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
     return r;
 }
 
-
-#define CMD_GETUPDATES CMD_READFIELDS \
-      " WHERE comp_type = :comp_type AND modseq > :modseq" \
-      " ORDER BY modseq LIMIT :limit;"
-
-#define CMD_GETUPDATES_MBOX CMD_READFIELDS \
-      " WHERE mailbox = :mailbox AND comp_type = :comp_type AND modseq > :modseq" \
-      " ORDER BY modseq LIMIT :limit;"
-
 EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
-                                modseq_t oldmodseq, const char *mboxname, int kind, int limit,
+                                modseq_t oldmodseq, const char *mboxname,
+                                int kind, int limit,
                                 int (*cb)(void *rock, struct caldav_data *cdata),
                                 void *rock)
 {
@@ -605,19 +597,28 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
         { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
         { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
         { ":comp_type",    SQLITE_INTEGER, { .i = kind      } },
+        /* SQLite interprets a negative limit as unbounded. */
         { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
         { NULL,            SQLITE_NULL,    { .s = NULL      } }
     };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
+    struct read_rock rrock =
+        { caldavdb, &cdata, RROCK_FLAG_TOMBSTONES, cb, rock };
+    struct buf sqlbuf = BUF_INITIALIZER;
     int r;
 
-    /* SQLite interprets a negative limit as unbounded. */
-    if (mboxname) {
-        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES_MBOX, bval, &read_cb, &rrock);
-    } else {
-        r = sqldb_exec(caldavdb->db, CMD_GETUPDATES, bval, &read_cb, &rrock);
+    buf_setcstr(&sqlbuf, CMD_READFIELDS " WHERE");
+    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (kind >= 0) {
+        /* Use a negative value to signal that we accept ALL components types */
+        buf_appendcstr(&sqlbuf, " comp_type = :comp_type AND");
     }
+    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
+
+    r = sqldb_exec(caldavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
+
     if (r) {
         syslog(LOG_ERR, "caldav error %s", error_message(r));
     }

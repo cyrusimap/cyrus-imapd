@@ -1570,6 +1570,18 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
 
     fctx->record = NULL;
 
+    if (fctx->txn->flags.te & TE_CHUNKED) {
+        /* Add <response> element for this resource to output buffer.
+           Only output the xmlBuffer every PROT_BUFSIZE bytes */
+        xml_partial_response((xmlBufferLength(fctx->xmlbuf) > PROT_BUFSIZE) ?
+                             fctx->txn : NULL,
+                             fctx->root->doc, resp, 1, &fctx->xmlbuf);
+
+        /* Remove <response> element from root (no need to keep in memory) */
+        xmlReplaceNode(resp, NULL);
+        xmlFreeNode(resp);
+    }
+
     return 0;
 }
 
@@ -1605,6 +1617,8 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
             fctx->txn->error.precond = precond;
             ret = *fctx->ret = HTTP_FORBIDDEN;
         }
+
+        fctx->flags.fetcheddata = 1;
     }
     else {
         /* Add "property" */
@@ -1958,6 +1972,19 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr top, node;
     const struct report_type_t *report;
 
+    if (!propstat) {
+        /* Prescreen "property" request */
+        for (report = (const struct report_type_t *) rock;
+             report && report->name; report++) {
+            /* Add namespaces for possible reports */
+            ensure_ns(fctx->ns, report->ns, fctx->root,
+                      known_namespaces[report->ns].href,
+                      known_namespaces[report->ns].prefix);
+        }
+
+        return 0;
+    }
+
     top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                        name, ns, NULL, 0);
 
@@ -2116,6 +2143,19 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr set, all, agg, write;
     unsigned tgt_flags = 0;
+
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
+            if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
+                ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+            }
+        }
+
+        return 0;
+    }
 
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                        name, ns, NULL, 0);
@@ -2391,6 +2431,19 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     unsigned flags = 0;
     xmlNodePtr set;
 
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
+            if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR) {
+                ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+            }
+        }
+
+        return 0;
+    }
+
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
     rights = httpd_myrights(fctx->authstate, fctx->mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
@@ -2443,6 +2496,17 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr acl;
     char *aclstr, *userid;
     unsigned flags = 0;
+
+    if (!propstat) {
+        /* Prescreen "property" request */
+        if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR &&
+            ((fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2)) {
+            /* Add namespaces for possible privileges */
+            ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
+        }
+
+        return 0;
+    }
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
 
@@ -5559,8 +5623,10 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     int r = 0, rights = 0;
 
     /* skip deleted items */
-    if (mboxname_isdeletedmailbox(mbentry->name, 0) || mbentry->mbtype == MBTYPE_DELETED)
+    if (mboxname_isdeletedmailbox(mbentry->name, 0) ||
+        mbentry->mbtype == MBTYPE_DELETED) {
         goto done;
+    }
 
     /* Check ACL on mailbox for current user */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -5609,9 +5675,6 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
         syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
                mboxname, error_message(r));
-        fctx->txn->error.desc = error_message(r);
-        *fctx->ret = HTTP_SERVER_ERROR;
-        goto done;
     }
 
     fctx->mbentry = mbentry;
@@ -5628,11 +5691,13 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
         /* we also need to deal with the discovery case,
          * where mboxname doesn't match request path */
-        if (fctx->req_tgt->userid && strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid))
+        if (fctx->req_tgt->userid &&
+            strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid)) {
             haszzzz = 1;
+        }
 
-        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix, haszzzz,
-                                  mbname, fctx->req_tgt->userid);
+        len = make_collection_url(&writebuf, fctx->req_tgt->namespace->prefix,
+                                  haszzzz, mbname, fctx->req_tgt->userid);
 
         mbname_free(&mbname);
 
@@ -5646,8 +5711,13 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
         /* If not filtering by calendar resource, and not excluding root,
            add response for collection */
-        if (!fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
+        if (!r && !fctx->filter_crit && !(fctx->prefer & PREFER_NOROOT) &&
             (r = xml_add_response(fctx, 0, 0, NULL, NULL))) goto done;
+    }
+
+    if (r) {
+        xml_add_response(fctx, HTTP_SERVER_ERROR, 0, error_message(r), NULL);
+        goto done;
     }
 
     if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
@@ -5659,7 +5729,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     buf_free(&writebuf);
     if (mailbox) mailbox_close(&mailbox);
 
-    return r;
+    return 0;
 }
 
 
@@ -5819,6 +5889,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Populate our propfind context */
     fctx.txn = txn;
     fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
@@ -5846,6 +5917,15 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Parse the list of properties and build a list of callbacks */
     ret = preload_proplist(props, &fctx);
     if (ret) goto done;
+
+    /* iCalendar/vCard data in response should not be transformed */
+    if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx.root->doc);
 
     /* Generate responses */
     if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
@@ -5923,7 +6003,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             }
             else if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
                 /* Add responses for all visible collections */
-                mboxlist_usermboxtree(httpd_userid, propfind_by_collection, &fctx, MBOXTREE_PLUS_RACL);
+                mboxlist_usermboxtree(httpd_userid, propfind_by_collection,
+                                      &fctx, MBOXTREE_PLUS_RACL);
             }
             else if (txn->req_tgt.mbentry) {
                 /* Add responses for all contained collections */
@@ -5968,13 +6049,13 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     if (fctx.davdb) fctx.close_db(fctx.davdb);
 
-    /* Output the XML response */
-    if (!ret) {
-        /* iCalendar data in response should not be transformed */
-        if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+    /* End XML response */
+    xml_partial_response(txn, fctx.root->doc, NULL /* end */, 0, &fctx.xmlbuf);
+    xmlBufferFree(fctx.xmlbuf);
 
-        xml_response(HTTP_MULTI_STATUS, txn, outdoc);
-    }
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+    ret = 0;
 
   done:
     /* Free the entry list */
@@ -7273,16 +7354,6 @@ int meth_put(struct transaction_t *txn, void *params)
 }
 
 
-/* Compare modseq in index maps -- used for sorting */
-static int map_modseq_cmp(const struct index_map *m1,
-                          const struct index_map *m2)
-{
-    if (m1->modseq < m2->modseq) return -1;
-    if (m1->modseq > m2->modseq) return 1;
-    return 0;
-}
-
-
 /* CALDAV:calendar-multiget/CARDDAV:addressbook-multiget REPORT */
 int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx)
@@ -7290,6 +7361,12 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
     int r, ret = 0;
     struct mailbox *mailbox = NULL;
     xmlNodePtr node;
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
@@ -7370,9 +7447,62 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
         }
     }
 
+    /* End XML response */
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xmlBufferFree(fctx->xmlbuf);
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
     mailbox_close(&mailbox);
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    return ret;
+}
+
+
+struct updates_rock {
+    struct propfind_ctx *fctx;
+    uint32_t limit;
+    modseq_t basemodseq;
+    modseq_t *respmodseq;
+    uint32_t *nresp;
+};
+
+static int updates_cb(void *rock, void *data)
+{
+    struct dav_data *ddata = (struct dav_data *) data;
+    struct updates_rock *urock = (struct updates_rock *) rock;
+    struct propfind_ctx *fctx = urock->fctx;
+
+    if (!ddata->alive) {
+        if (ddata->modseq <= urock->basemodseq) {
+            /* Initial sync - ignore unmapped resources */
+            return 0;
+        }
+
+        /* Report resource as NOT FOUND
+           IMAP UID of 0 will cause index record to be ignored
+           propfind_by_resource() will append our resource name */
+        ddata->imap_uid = 0;
+    }
+
+    if (*urock->nresp >= urock->limit) {
+        /* Number of responses has reached client-specified limit */
+        return HTTP_NO_STORAGE;
+    }
+    else {
+        /* Bump response count */
+        *urock->nresp += 1;
+    }
+
+    /* respmodseq will be highest modseq of the resources we return */
+    *(urock->respmodseq) = MAX(ddata->modseq, *(urock->respmodseq));
+
+    /* Add <response> element for this resource to root */
+    fctx->proc_by_resource(fctx, ddata);
+    fctx->record = NULL;
+
+    return 0;
 }
 
 
@@ -7380,7 +7510,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = 0, r, i, unbind_flag = -1, unchanged_flag = -1;
+    int ret = 0, r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0;
@@ -7388,7 +7518,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     modseq_t highestmodseq = 0;
     modseq_t respmodseq = 0;
     uint32_t limit = -1;
-    uint32_t msgno;
     uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
@@ -7413,8 +7542,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
-    mailbox_user_flag(mailbox, DFLAG_UNBIND, &unbind_flag, 1);
-    mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag, 1);
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -7502,117 +7629,37 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         basemodseq = highestmodseq;
     }
 
-    /* Construct array of records for sorting and/or fetching cached header */
-    istate.mailbox = mailbox;
-    istate.map = xzmalloc(mailbox->i.num_records * sizeof(struct index_map));
-
     /* Open the DAV DB corresponding to the mailbox */
     fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
 
-    /* Find which resources we need to report */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, syncmodseq, 0);
-    const message_t *msg;
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
 
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        modseq_t modseq;
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
-        if ((unbind_flag >= 0) &&
-            record->user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
-            /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
-            continue;
-        }
+    /* Report the resources within the client requested limit (if any) */
+    struct updates_rock rock =
+        { fctx, limit, basemodseq, &respmodseq, &nresp };
 
-        /* Fetch modseq for record (could be per-user) */
-        modseq = rparams->get_modseq(mailbox, record, httpd_userid, fctx->davdb);
-
-	if (modseq <= syncmodseq) {
-            /* Resource not added/removed since last sync */
-            continue;
-        }
-
-        if ((modseq - syncmodseq == 1) &&
-            (unchanged_flag >= 0) &&
-            (record->user_flags[unchanged_flag / 32] &
-             (1 << (unchanged_flag & 31)))) {
-            /* Resource has just had VTIMEZONEs stripped - ignore it */
-            continue;
-        }
-
-        if ((modseq <= basemodseq) &&
-            (record->system_flags & FLAG_EXPUNGED)) {
-            /* Initial sync - ignore unmapped resources */
-            continue;
-        }
-
-        /* copy data into map (just like index.c - XXX helper fn? */
-        istate.map[nresp].recno = record->recno;
-        istate.map[nresp].uid = record->uid;
-        istate.map[nresp].modseq = modseq;
-        istate.map[nresp].system_flags = record->system_flags;
-        for (i = 0; i < MAX_USER_FLAGS/32; i++)
-            istate.map[nresp].user_flags[i] = record->user_flags[i];
-        istate.map[nresp].cache_offset = record->cache_offset;
-
-        nresp++;
-    }
-    mailbox_iter_done(&iter);
-
-    if (limit < nresp) {
-        /* Need to truncate the responses */
-        struct index_map *map = istate.map;
-
-        /* Sort the response records by modseq */
-        qsort(map, nresp, sizeof(struct index_map),
-              (int (*)(const void *, const void *)) &map_modseq_cmp);
-
-        /* Our last response MUST be the last record with its modseq */
-        for (nresp = limit;
-             nresp && map[nresp-1].modseq == map[nresp].modseq;
-             nresp--);
-
-        if (!nresp) {
-            /* DAV:number-of-matches-within-limits */
-            fctx->txn->error.desc = "Unable to truncate results";
-            txn->error.precond = DAV_OVER_LIMIT;
-            ret = HTTP_NO_STORAGE;
-            goto done;
-        }
-
-        /* respmodseq will be modseq of last record we return */
-        respmodseq = map[nresp-1].modseq;
-
-        /* Tell client we truncated the responses */
-        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
-    }
-    else {
+    r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, mailbox->name,
+                                      -1 /* ALL kinds of resources */,
+                                      (syncmodseq && basemodseq) ? 0 : limit + 1,
+                                      &updates_cb, &rock);
+    if (nresp <= limit) {
         /* Full response - respmodseq will be highestmodseq of mailbox */
         respmodseq = highestmodseq;
     }
 
-    /* Report the resources within the client requested limit (if any) */
-    for (msgno = 0; msgno < nresp; msgno++) {
-        struct dav_data *ddata;
-
-        /* Find name of the resource */
-        r = rparams->davdb.lookup_imapuid(fctx->davdb, fctx->mailbox->name,
-                                          istate.map[msgno].uid,
-                                          (void **) &ddata,
-                                          /* tombstones */ 1);
-        if (r) continue;
-
-        if (!ddata->alive) {
-            /* report as NOT FOUND
-               IMAP UID of 0 will cause index record to be ignored
-               propfind_by_resource() will append our resource name */
-            ddata->imap_uid = 0;
-        }
-
-        fctx->proc_by_resource(fctx, ddata);
-        fctx->record = NULL;
+    if (r) {
+        /* Tell client we truncated the responses */
+        *(fctx->req_tgt->resource) = '\0';
+        xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
     }
 
-    /* Add sync-token element */
+    if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
+
+    /* Add sync-token element to root */
     if (respmodseq < basemodseq) {
         /* Client limited results of initial sync - include basemodseq */
         snprintf(tokenuri, MAX_MAILBOX_PATH,
@@ -7624,14 +7671,25 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                  SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
                  mailbox->i.uidvalidity, respmodseq);
     }
-    xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+    node =
+        xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+
+    /* Add sync-token element to output buffer */
+    xml_partial_response(NULL /* !output */,
+                         fctx->root->doc, node, 1, &fctx->xmlbuf);
+
+    /* End XML response */
+    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xmlBufferFree(fctx->xmlbuf);
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
 
   done:
-    if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
     if (istate.map) free(istate.map);
     mailbox_close(&mailbox);
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    return ret;
 }
 
 
@@ -8227,6 +8285,9 @@ int meth_report(struct transaction_t *txn, void *params)
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
         ret = preload_proplist(props, &fctx);
+
+        /* iCalendar/vCard data in response should not be transformed */
+        if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
     }
 
     /* Process the requested report */
@@ -8237,7 +8298,7 @@ int meth_report(struct transaction_t *txn, void *params)
         switch (ret) {
         case HTTP_OK:
         case HTTP_MULTI_STATUS:
-            /* iCalendar data in response should not be transformed */
+            /* iCalendar/vCard data in response should not be transformed */
             if (fctx.flags.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
 
             xml_response(ret, txn, outroot->doc);
@@ -9084,6 +9145,7 @@ struct meth_params notify_params = {
       (db_lookup_proc_t) &webdav_lookup_resource,
       (db_imapuid_proc_t) &webdav_lookup_imapuid,
       (db_foreach_proc_t) &webdav_foreach,
+      (db_updates_proc_t) &webdav_get_updates,
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },
     NULL,                                       /* No ACL extensions */

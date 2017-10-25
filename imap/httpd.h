@@ -541,6 +541,9 @@ extern void keepalive_response(struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
+extern void xml_partial_response(struct transaction_t *txn,
+                                 xmlDocPtr doc, xmlNodePtr node,
+                                 unsigned level, xmlBufferPtr *buf);
 extern void write_body(long code, struct transaction_t *txn,
                        const char *buf, unsigned len);
 extern void write_multipart_body(long code, struct transaction_t *txn,

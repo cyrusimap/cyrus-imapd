@@ -201,7 +201,7 @@ struct read_rock {
     struct webdav_db *db;
     struct webdav_data *wdata;
     int tombstones;
-    int (*cb)(void *rock, void *data);
+    webdav_cb_t *cb;
     void *rock;
 };
 
@@ -369,7 +369,7 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
     " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
-                            int (*cb)(void *rock, void *data),
+                            int (*cb)(void *rock, struct webdav_data *data),
                             void *rock)
 {
     struct sqldb_bindval bval[] = {
@@ -483,6 +483,38 @@ EXPORTED int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox)
 
     r = sqldb_exec(webdavdb->db, CMD_DELMBOX, bval, NULL, NULL);
 
+    return r;
+}
+
+EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
+                                modseq_t oldmodseq, const char *mboxname,
+                                int kind __attribute__((unused)), int limit,
+                                int (*cb)(void *rock, struct webdav_data *wdata),
+                                void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
+        { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
+        /* SQLite interprets a negative limit as unbounded. */
+        { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
+        { NULL,            SQLITE_NULL,    { .s = NULL      } }
+    };
+    static struct webdav_data wdata;
+    struct read_rock rrock = { webdavdb, &wdata, 1 /* tombstones */, cb, rock };
+    struct buf sqlbuf = BUF_INITIALIZER;
+    int r;
+
+    buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
+    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
+
+    r = sqldb_exec(webdavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
+    buf_free(&sqlbuf);
+
+    if (r) {
+        syslog(LOG_ERR, "webdav error %s", error_message(r));
+    }
     return r;
 }
 
