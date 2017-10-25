@@ -7,7 +7,6 @@ addons:
     packages:
     - libxml2-dev
     - libsqlite3-dev
-    - libical-dev
     - libsasl2-dev
     - libssl-dev
     - libopendkim-dev
@@ -44,7 +43,18 @@ install:
 - make -j 8
 - sudo make install
 - popd #janson
-  # Xapian
+
+# libical
+- git clone -b cyrus --single-branch https://github.com/cyrusimap/libical.git libical
+- pushd libical
+- mkdir build
+- cd build
+- cmake -DCMAKE_INSTALL_PREFIX=$CYRUSLIBS -DICU_BASE=$CYRUSLIBS -DUSE_BUILTIN_TZDATA=true -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
+- make
+- sudo make install
+- popd #libical
+
+# Xapian
 - git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
 - pushd xapian
 - "./bootstrap"
