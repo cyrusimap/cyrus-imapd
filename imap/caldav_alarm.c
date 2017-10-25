@@ -56,6 +56,7 @@
 #include "ical_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
+#include "mboxlist.h"
 #include "mboxname.h"
 #include "util.h"
 #include "xstrlcat.h"
@@ -78,6 +79,7 @@ void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
 }
 
 struct get_alarm_rock {
+    const char *userid;
     const char *mboxname;
     uint32_t imap_uid;  // for logging
     icaltimezone *floatingtz;
@@ -185,7 +187,7 @@ static int send_alarm(struct get_alarm_rock *rock,
                       icalcomponent *comp, icalcomponent *alarm,
                       icaltimetype start, icaltimetype end, icaltimetype alarmtime)
 {
-    char *userid = mboxname_to_userid(rock->mboxname);
+    const char *userid = rock->userid;
     struct buf calname = BUF_INITIALIZER;
 
     /* get the display name annotation */
@@ -292,7 +294,6 @@ static int send_alarm(struct get_alarm_rock *rock,
     strarray_free(attendee_status);
 
     buf_free(&calname);
-    free(userid);
 
     return 0;
 }
@@ -464,18 +465,77 @@ static icaltimezone *get_floatingtz(struct mailbox *mailbox)
     return floatingtz;
 }
 
-static int has_alarms(icalcomponent *ical)
+static icalcomponent *vpatch_from_peruserdata(const struct buf *userdata)
 {
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-    icalcomponent_kind kind = icalcomponent_isa(comp);
-    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
-            return 1;
+    struct dlist *dl;
+    const char *icalstr;
+    icalcomponent *vpatch;
+
+    /* Parse the value and fetch the patch */
+    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    dlist_getatom(dl, "VPATCH", &icalstr);
+    vpatch = icalparser_parse_string(icalstr);
+    dlist_free(&dl);
+
+    return vpatch;
+}
+
+static int has_peruser_alarms_cb(const char *mailbox,
+                                 uint32_t uid __attribute__((unused)),
+                                 const char *entry __attribute__((unused)),
+                                 const char *userid, const struct buf *value,
+                                 const struct annotate_metadata *mdata __attribute__((unused)),
+                                 void *rock)
+{
+    int *has_alarms = (int *) rock;
+    icalcomponent *vpatch, *comp;
+
+    if (!mboxname_userownsmailbox(userid, mailbox) &&
+        mboxlist_checksub(mailbox, userid) != 0) {
+        /* Sharee has unsubscribed from this calendar */
+        return 0;
     }
+        
+    /* Extract VPATCH from per-user-cal-data annotation */
+    vpatch = vpatch_from_peruserdata(value);
+
+    /* Check PATCHes for any VALARMs */
+    for (comp = icalcomponent_get_first_component(vpatch, ICAL_XPATCH_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(vpatch, ICAL_XPATCH_COMPONENT)) {
+        if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT)) {
+            *has_alarms = 1;
+            break;
+        }
+    }
+
     return 0;
 }
 
-static time_t process_alarms(const char *mboxname, uint32_t imap_uid, icaltimezone *floatingtz,
+static int has_alarms(icalcomponent *ical, const char *mboxname, uint32_t uid)
+{
+    int has_alarms = 0;
+
+    if (ical) {
+        /* Check iCalendar resource for VALARMs */
+        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+        icalcomponent_kind kind = icalcomponent_isa(comp);
+
+        for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+            if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
+                return 1;
+        }
+    }
+
+    /* Check all per-user-cal-data for VALARMs */
+    annotatemore_findall(mboxname, uid, PER_USER_CAL_DATA, /* modseq */ 0,
+                         &has_peruser_alarms_cb, &has_alarms, /* flags */ 0);
+
+    return has_alarms;
+}
+
+static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
+                             const char *userid, icaltimezone *floatingtz,
                              icalcomponent *ical, time_t lastrun, time_t runtime)
 {
     /* we don't send alarms for anything except VEVENTS */
@@ -484,7 +544,8 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid, icaltimezo
     if (kind != ICAL_VEVENT_COMPONENT)
         return 0;
 
-    struct get_alarm_rock rock = { mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
+    struct get_alarm_rock rock =
+        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
     return rock.nextcheck;
@@ -533,7 +594,7 @@ static int read_lastalarm(struct mailbox *mailbox, const struct index_record *re
 EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
                                      icalcomponent *ical)
 {
-    if (!has_alarms(ical)) {
+    if (!has_alarms(ical, mailbox->name, record->uid)) {
         write_lastalarm(mailbox, record, NULL);
         return 0;
     }
@@ -551,6 +612,8 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct ind
     struct lastalarm_data data;
     if (!read_lastalarm(mailbox, record, &data))
         return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+    else if (has_alarms(NULL, mailbox->name, record->uid))/* per-user-cal-data */
+        return update_alarmdb(mailbox->name, record->uid, record->last_updated);
     return 0;
 }
 
@@ -629,6 +692,48 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
+struct peruser_rock {
+    icalcomponent *ical;
+    icaltimezone *floatingtz;
+    struct lastalarm_data *alarm;
+    time_t runtime;
+};
+
+static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
+                                     const char *entry __attribute__((unused)),
+                                     const char *userid, const struct buf *value,
+                                     const struct annotate_metadata *mdata __attribute__((unused)),
+                                     void *rock)
+{
+    struct peruser_rock *prock = (struct peruser_rock *) rock;
+    icalcomponent *vpatch, *myical;
+    time_t check;
+
+    if (!mboxname_userownsmailbox(userid, mailbox) &&
+        mboxlist_checksub(mailbox, userid) != 0) {
+        /* Sharee has unsubscribed from this calendar */
+        return 0;
+    }
+
+    /* Extract VPATCH from per-user-cal-data annotation */
+    vpatch = vpatch_from_peruserdata(value);
+
+    /* Apply VPATCH a a clone of the iCalendar resource */
+    myical = icalcomponent_new_clone(prock->ical);
+    icalcomponent_apply_vpatch(myical, vpatch, NULL, NULL);
+
+    /* Process any VALARMs in the patched iCalendar resource */
+    check = process_alarms(mailbox, uid, userid, prock->floatingtz, myical,
+                           prock->alarm->lastrun, prock->runtime);
+    if (!prock->alarm->nextcheck || check < prock->alarm->nextcheck) {
+        prock->alarm->nextcheck = check;
+    }
+
+    icalcomponent_free(myical);
+
+    return 0;
+}
+
 static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
                                icaltimezone *floatingtz, time_t runtime)
 {
@@ -682,7 +787,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
 
     /* check for bogus lastalarm data on record which actually shouldn't have it */
-    if (!has_alarms(ical)) {
+    if (!has_alarms(ical, mailbox->name, imap_uid)) {
         syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
@@ -693,8 +798,19 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (read_lastalarm(mailbox, &record, &data))
         data.lastrun = record.internaldate;
 
-    if (runtime > data.nextcheck)
-        data.nextcheck = process_alarms(mailbox->name, record.uid, floatingtz, ical, data.lastrun, runtime);
+    if (runtime > data.nextcheck) {
+        /* Process VALARMs in iCalendar resource */
+        char *userid = mboxname_to_userid(mailbox->name);
+        data.nextcheck = process_alarms(mailbox->name, record.uid, userid,
+                                        floatingtz, ical, data.lastrun, runtime);
+        free(userid);
+
+        /* Process VALARMs in per-user-cal-data */
+        struct peruser_rock prock = { ical, floatingtz, &data, runtime };
+        annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
+                             /* modseq */ 0, &process_peruser_alarms_cb,
+                             &prock, /* flags */ 0);
+    }
 
     data.lastrun = runtime;
     write_lastalarm(mailbox, &record, &data);
@@ -835,8 +951,13 @@ EXPORTED int caldav_alarm_upgrade()
             if (rc) continue;
             icalcomponent *ical = icalparser_parse_string(buf_cstring(&msg_buf) + record->header_size);
             if (ical) {
-                if (has_alarms(ical)) {
-                    time_t nextcheck = process_alarms(mailbox->name, record->uid, floatingtz, ical, runtime, runtime);
+                if (has_alarms(ical, mailbox->name, record->uid)) {
+                    char *userid = mboxname_to_userid(mailbox->name);
+                    time_t nextcheck = process_alarms(mailbox->name, record->uid,
+                                                      userid, floatingtz, ical,
+                                                      runtime, runtime);
+                    free(userid);
+
                     struct lastalarm_data data = { runtime, nextcheck };
                     write_lastalarm(mailbox, record, &data);
                 }
