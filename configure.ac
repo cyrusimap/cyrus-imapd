@@ -1546,7 +1546,7 @@ dnl
         AC_CHECK_LIB(ical, icalcomponent_new_vpatch,
                 AC_DEFINE(HAVE_VPATCH,[],
                         [Build VPATCH support into httpd?]),
-                AC_MSG_NOTICE([Your version of libical can not support patching iCalendar objects.  Consider upgrading to libical >= 2.1]))
+                AC_MSG_NOTICE([Your version of libical can not support per-user alarms on shared resources.  Consider upgrading to libical >= 3.0]))
 
         AC_CHECK_LIB(ical, icalrecur_iterator_set_start,
                 AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
