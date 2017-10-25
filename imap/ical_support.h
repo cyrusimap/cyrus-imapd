@@ -55,6 +55,27 @@
 #define PER_USER_CAL_DATA \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+#ifndef HAVE_VAVAILABILITY
+/* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
+#define ICAL_VAVAILABILITY_COMPONENT  ICAL_X_COMPONENT
+#define ICAL_XAVAILABLE_COMPONENT     ICAL_X_COMPONENT
+#endif
+
+#ifndef HAVE_VPOLL
+/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
+#define ICAL_VPOLL_COMPONENT          ICAL_NO_COMPONENT
+#define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
+#define ICAL_METHOD_POLLSTATUS        ICAL_METHOD_NONE
+#define ICAL_VOTER_PROPERTY           ICAL_NO_PROPERTY
+#define icalproperty_get_voter        icalproperty_get_attendee
+#endif
+
+#ifndef HAVE_VPATCH
+/* Allow us to compile without #ifdef HAVE_VPATCH everywhere */
+#define ICAL_VPATCH_COMPONENT         ICAL_NO_COMPONENT
+#define ICAL_XPATCH_COMPONENT         ICAL_X_COMPONENT
+#endif
+
 extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);

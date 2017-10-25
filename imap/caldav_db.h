@@ -52,21 +52,7 @@ extern time_t caldav_eternity;
 #include <libical/ical.h>
 
 #include "dav_db.h"
-
-#ifndef HAVE_VAVAILABILITY
-/* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
-#define ICAL_VAVAILABILITY_COMPONENT  ICAL_X_COMPONENT
-#define ICAL_XAVAILABLE_COMPONENT     ICAL_X_COMPONENT
-#endif
-
-#ifndef HAVE_VPOLL
-/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_VPOLL_COMPONENT          ICAL_NO_COMPONENT
-#define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
-#define ICAL_METHOD_POLLSTATUS        ICAL_METHOD_NONE
-#define ICAL_VOTER_PROPERTY           ICAL_NO_PROPERTY
-#define icalproperty_get_voter        icalproperty_get_attendee
-#endif
+#include "ical_support.h"
 
 /* Bitmask of calendar components */
 enum {
