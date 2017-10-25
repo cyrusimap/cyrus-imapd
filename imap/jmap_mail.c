@@ -7607,15 +7607,11 @@ static int getIdentities(jmap_req_t *req)
     notfound = json_pack("[]");
     identities = json_pack("[]");
 
-    me = json_pack("{s:s s:s s:s s:s s:s s:s s:s s:b}",
+    me = json_pack("{s:s s:s s:s s:b}",
             "id", req->userid,
             "name", "",
             "email", req->userid,
-            "replyTo", "",
-            "bcc", "",
-            "textSignature", "",
-            "htmlSignature", "",
-            "mayDeleteIdentity", 0);
+            "mayDelete", 0);
     if (!strchr(req->userid, '@')) {
         json_object_set_new(me, "email", json_string(""));
     }
