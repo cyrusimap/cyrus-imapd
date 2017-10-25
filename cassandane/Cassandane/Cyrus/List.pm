@@ -290,34 +290,6 @@ sub test_recursivematch
     });
 }
 
-sub test_recursivematch
-    :UnixHierarchySep :AltNamespace
-{
-    my ($self) = @_;
-
-    $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
-    ]);
-
-    my $imaptalk = $self->{store}->get_client();
-
-    my $subdata = $imaptalk->list([qw(SUBSCRIBED RECURSIVEMATCH)], "", "*");
-
-    xlog(Dumper $subdata);
-    $self->_assert_list_data($subdata, '/', {
-        'INBOX'                 => '\\Subscribed',
-        'Fruit/Banana'          => '\\Subscribed',
-        'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed )],
-        'Vegetable'             => [qw( \\Subscribed \\HasChildren )], # HasChildren not required by spec, but cyrus tells us
-        'Vegetable/Broccoli'    => '\\Subscribed',
-    });
-}
-
 sub test_recursivematch_percent
     :UnixHierarchySep :AltNamespace
 {
