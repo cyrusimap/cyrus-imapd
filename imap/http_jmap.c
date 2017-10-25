@@ -290,6 +290,189 @@ static int is_accessible(const mbentry_t *mbentry, void *rock __attribute__((unu
     return IMAP_OK_COMPLETED;
 }
 
+static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
+
+static json_t *extract_array_value(json_t *val, const char *idx, const char *path, ptrarray_t *pool)
+{
+    if (!strcmp(idx, "*")) {
+        /* Build value from array traversal */
+        json_t *newval = json_pack("[]");
+        size_t i;
+        json_t *v;
+        json_array_foreach(val, i, v) {
+            json_t *x = extract_value(v, path, pool);
+            if (json_is_array(x)) {
+                /* JMAP spec: "If the result of applying the rest
+                 * of the pointer tokens to a value was itself an
+                 * array, its items should be included individually
+                 * in the output rather than including the array
+                 * itself." */
+                json_array_extend(newval, x);
+            } else if (x) {
+                json_array_append(newval, x);
+            } else {
+                json_decref(newval);
+                newval = NULL;
+            }
+        }
+        if (newval) {
+            ptrarray_add(pool, newval);
+        }
+        return newval;
+    }
+
+    /* Lookup array value by index */
+    const char *eot = NULL;
+    bit64 num;
+    if (parsenum(idx, &eot, 0, &num) || *eot) {
+        return NULL;
+    }
+    val = json_array_get(val, num);
+    if (!val) {
+        return NULL;
+    }
+    return extract_value(val, path, pool);
+}
+
+/* Extract the JSON value at position path from val.
+ *
+ * Return NULL, if the the value does not exist or if
+ * path is erroneous.
+ */
+static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)
+{
+    /* Return value for empty path */
+    if (*path == '\0') {
+        return val;
+    }
+
+    /* Be lenient: root path '/' is optional */
+    if (*path == '/') {
+        path++;
+    }
+
+    /* Walk over path segments */
+    while (val && *path) {
+        const char *top = NULL;
+        char *p = NULL;
+
+        /* Extract next path segment */
+        if (!(top = strchr(path, '/'))) {
+            top = strchr(path, '\0');
+        }
+        p = json_pointer_decode(path, top - path);
+        if (p == '\0') {
+            return NULL;
+        }
+
+        /* Extract array value */
+        if (json_is_array(val)) {
+            val = extract_array_value(val, p, top, pool);
+            free(p);
+            return val;
+        }
+
+        /* Value MUST be an object now */
+        if (!json_is_object(val)) {
+            free(p);
+            return NULL;
+        }
+        /* Step down into object tree */
+        val = json_object_get(val, p);
+        free(p);
+        path = *top ? top + 1 : top;
+    }
+
+    return val;
+}
+
+static int process_resultrefs(json_t *args, json_t *resp)
+{
+    json_t *ref;
+    const char *arg;
+    int ret = -1;
+
+    void *tmp;
+    json_object_foreach_safe(args, tmp, arg, ref) {
+        if (*arg != '#' || *(arg+1) == '\0') {
+            continue;
+        }
+
+        const char *of, *path;
+        json_t *res = NULL;
+
+        /* Parse result reference object */
+        of = json_string_value(json_object_get(ref, "resultOf"));
+        if (!of || *of == '\0') {
+            goto fail;
+        }
+        path = json_string_value(json_object_get(ref, "path"));
+        if (!path || *path == '\0') {
+            goto fail;
+        }
+
+        /* Lookup referenced response */
+        json_t *v;
+        size_t i;
+        json_array_foreach(resp, i, v) {
+            const char *tag = json_string_value(json_array_get(v, 2));
+            if (!tag || strcmp(tag, of)) {
+                continue;
+            }
+            const char *typ = json_string_value(json_array_get(v, 0));
+            if (!typ || !strcmp("error", typ)) {
+                goto fail;
+            }
+            res = v;
+            break;
+        }
+        if (!res) goto fail;
+
+        /* Extract the reference argument value. */
+        /* We maintain our own pool of newly created JSON objects, since
+         * tracking reference counts across newly created JSON arrays is
+         * a pain. Rule: If you incref an existing JSON value or create
+         * an entirely new one, put it into the pool for cleanup. */
+        ptrarray_t pool = PTRARRAY_INITIALIZER;
+        json_t *val = extract_value(json_array_get(res, 1), path, &pool);
+        if (!val) goto fail;
+
+        /* XXX JMAP references are defined that: "If the type of the result
+         * is X, and the expected type of the argument is an array of type X,
+         * wrap the result in an array with a single item."...
+         *
+         * ...which basically requires us to keep a schema of JMAP requests.
+         * In general, that shouldn't be too hard, but the getFooList filters
+         * are polymorph (Condition vs Operator) and recursive.
+         * For now, let's just go with a set of magic argument names that we
+         * allow to promote to arrays (if they aren't already). */
+        if (!json_is_array(val)) {
+            if (!strcmp(arg+1, "ids") ||
+                !strcmp(arg+1, "threadIds") ||
+                !strcmp(arg+1, "mailboxIds")) {
+                val = json_pack("[O]", val);
+                ptrarray_add(&pool, val);
+            }
+        }
+
+        /* Replace both key and value of the reference entry */
+        json_object_set(args, arg + 1, val);
+        json_object_del(args, arg);
+
+        /* Clean up reference counts of pooled JSON objects */
+        json_t *ref;
+        while ((ref = ptrarray_pop(&pool))) {
+            json_decref(ref);
+        }
+        ptrarray_fini(&pool);
+    }
+
+    return 0;
+
+fail:
+    return ret;
+}
+
 /* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
@@ -423,9 +606,15 @@ static int jmap_post(struct transaction_t *txn,
                 hash_insert(accountid, (void*)1, &accounts);
             }
         }
-
         free(inboxname);
         inboxname = mboxname_user_mbox(accountid, NULL);
+
+        /* Pre-process result references */
+        if (process_resultrefs(args, resp)) {
+            json_array_append_new(resp, json_pack("[s,{s:s},s]",
+                        "error", "type", "resultReference", tag));
+            continue;
+        }
 
         struct conversations_state *cstate = NULL;
         r = conversations_open_user(accountid, &cstate);
