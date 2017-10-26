@@ -1836,4 +1836,189 @@ EOF
     $self->assert_alarms();
 }
 
+sub test_override_multiuser
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_calalarmd};
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $AdminTalk = $self->{adminstore}->get_client();
+    $AdminTalk->create("user.foo");
+    $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId", "foo", "lrswipkxtecdn789");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+                        username => "foo");
+    my $footalk = $foostore->get_client();
+    $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
+
+    my $service = $self->{instance}->get_service("http");
+    my $FooDAV = Net::CalDAVTalk->new(
+	user => 'foo',
+	password => 'pass',
+	host => $service->host(),
+	port => $service->port(),
+	scheme => 'http',
+	url => '/',
+	expandurl => 1,
+    );
+
+    my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
+    $self->assert_not_null($cal);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $nextweekdt = $now->clone();
+    $nextweekdt->add(DateTime::Duration->new(days => 7));
+    my $nextweek = $nextweekdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    my $nwenddt = $nextweekdt->clone();
+    $nwenddt->add(DateTime::Duration->new(seconds => 15));
+    my $nwend = $nwenddt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $cardtmpl = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+RRULE:FREQ=WEEKLY
+SEQUENCE:0
+END:VEVENT
+
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Sydney:$start
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+TRANSP:OPAQUE
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+SUMMARY:EV1
+END:VEVENT
+
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Sydney:$nextweek
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$nwend
+TRANSP:OPAQUE
+DTSTART;TZID=Australia/Sydney:$nextweek
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+SUMMARY:EV2
+END:VEVENT
+
+END:VCALENDAR
+EOF
+
+    my $alarm = <<EOF;
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:EMAIL
+SUMMARY: My alarm cassandane
+DESCRIPTION:My alarm has triggered
+ATTENDEE:MAILTO:cassandane\@example.com
+END:VALARM
+EOF
+
+    my $latealarm = <<EOF;
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm foo
+DESCRIPTION:My alarm has triggered
+END:VALARM
+EOF
+
+    my $card = $cardtmpl;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    my $Events = $CalDAV->GetEvents("$CalendarId");
+    my $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+    $self->assert_num_equals(1, scalar @$Events);
+    $self->assert_num_equals(1, scalar @$FooEvents);
+    $self->assert_null($Events->[0]{alerts});
+    $self->assert_null($FooEvents->[0]{alerts});
+
+    my $foocard = $cardtmpl;
+    $foocard =~ s/SUMMARY:EV2/SUMMARY:EV2\n$latealarm/;
+    $FooDAV->Request('PUT', $FooEvents->[0]{href}, $foocard, 'Content-Type' => 'text/calendar');
+
+    my $cascard = $cardtmpl;
+    $cascard =~ s/SUMMARY:EV1/SUMMARY:EV1\n$alarm/;
+    $CalDAV->Request('PUT', $Events->[0]{href}, $cascard, 'Content-Type' => 'text/calendar');
+
+    $Events = $CalDAV->GetEvents("$CalendarId");
+    $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+    $self->assert_num_equals(1, scalar @$Events);
+    $self->assert_num_equals(1, scalar @$FooEvents);
+    $self->assert_null($Events->[0]{alerts});
+    $self->assert_null($FooEvents->[0]{alerts});
+
+    # XXX - assert the recurrences
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'EV1', alarmTime => $start, action => 'email', start => $start});
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $nextweekdt->epoch() - 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $nextweekdt->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'EV2', alarmTime => $nextweek, action => 'display', start => $nextweek});
+}
+
 1;
