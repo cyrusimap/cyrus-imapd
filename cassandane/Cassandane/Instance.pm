@@ -587,6 +587,7 @@ sub _build_skeleton
 	'conf/log',
 	'conf/log/admin',
 	'conf/log/cassandane',
+        'conf/log/foo',
 	'conf/log/postman',
 	'conf/log/repluser',
 	'lock',
