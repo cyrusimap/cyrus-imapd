@@ -509,6 +509,8 @@ static int has_peruser_alarms_cb(const char *mailbox,
         }
     }
 
+    icalcomponent_free(vpatch);
+
     return 0;
 }
 
@@ -718,9 +720,10 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     /* Extract VPATCH from per-user-cal-data annotation */
     vpatch = vpatch_from_peruserdata(value);
 
-    /* Apply VPATCH a a clone of the iCalendar resource */
+    /* Apply VPATCH to a clone of the iCalendar resource */
     myical = icalcomponent_new_clone(prock->ical);
     icalcomponent_apply_vpatch(myical, vpatch, NULL, NULL);
+    icalcomponent_free(vpatch);
 
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, prock->floatingtz, myical,
