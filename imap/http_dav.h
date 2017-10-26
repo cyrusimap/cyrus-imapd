@@ -288,8 +288,7 @@ typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
 
 /* Function to fetch resource modseq */
 typedef modseq_t (*get_modseq_t)(struct mailbox *mailbox,
-                                 const struct index_record *record,
-                                 const char *userid, void *davdb);
+                                 void *data, const char *userid);
 
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
 typedef void (*db_close_proc_t)(void *davdb);
@@ -686,8 +685,7 @@ int dav_get_validators(struct mailbox *mailbox, void *data,
                        const char *userid, struct index_record *record,
                        const char **etag, time_t *lastmod);
 modseq_t dav_get_modseq(struct mailbox *mailbox,
-                        const struct index_record *record,
-                        const char *userid, void *davdb);
+                        void *data, const char *userid);
 int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       struct mailbox *mailbox, const void *data,
                       const char *etag, time_t lastmod);

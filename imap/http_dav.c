@@ -791,11 +791,10 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
 
 
 EXPORTED modseq_t dav_get_modseq(struct mailbox *mailbox __attribute__((unused)),
-                                 const struct index_record *record,
-                                 const char *userid __attribute__((unused)),
-                                 void *davdb __attribute__((unused)))
+                                 void *data,
+                                 const char *userid __attribute__((unused)))
 {
-    return record->modseq;
+    return ((struct dav_data *) data)->modseq;
 }
 
 
@@ -7463,7 +7462,9 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
 struct updates_rock {
     struct propfind_ctx *fctx;
+    get_modseq_t get_modseq;
     uint32_t limit;
+    modseq_t syncmodseq;
     modseq_t basemodseq;
     modseq_t *respmodseq;
     uint32_t *nresp;
@@ -7474,9 +7475,10 @@ static int updates_cb(void *rock, void *data)
     struct dav_data *ddata = (struct dav_data *) data;
     struct updates_rock *urock = (struct updates_rock *) rock;
     struct propfind_ctx *fctx = urock->fctx;
+    modseq_t modseq = urock->get_modseq(fctx->mailbox, data, fctx->userid);
 
     if (!ddata->alive) {
-        if (ddata->modseq <= urock->basemodseq) {
+        if (modseq <= urock->basemodseq) {
             /* Initial sync - ignore unmapped resources */
             return 0;
         }
@@ -7486,6 +7488,11 @@ static int updates_cb(void *rock, void *data)
            propfind_by_resource() will append our resource name */
         ddata->imap_uid = 0;
     }
+    else if (modseq <= urock->syncmodseq) {
+        /* Per-user modseq hasn't changed */
+        return 0;
+    }
+
 
     if (*urock->nresp >= urock->limit) {
         /* Number of responses has reached client-specified limit */
@@ -7497,7 +7504,7 @@ static int updates_cb(void *rock, void *data)
     }
 
     /* respmodseq will be highest modseq of the resources we return */
-    *(urock->respmodseq) = MAX(ddata->modseq, *(urock->respmodseq));
+    *(urock->respmodseq) = MAX(modseq, *(urock->respmodseq));
 
     /* Add <response> element for this resource to root */
     fctx->proc_by_resource(fctx, ddata);
@@ -7644,8 +7651,8 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Report the resources within the client requested limit (if any) */
-    struct updates_rock rock =
-        { fctx, limit, basemodseq, &respmodseq, &nresp };
+    struct updates_rock rock = { fctx, rparams->get_modseq, limit,
+                                 syncmodseq, basemodseq, &respmodseq, &nresp };
 
     r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, mailbox->name,
                                       -1 /* ALL kinds of resources */,

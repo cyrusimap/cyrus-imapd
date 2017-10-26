@@ -161,8 +161,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
                                  const char **etag, time_t *lastmod);
 
 static modseq_t caldav_get_modseq(struct mailbox *mailbox,
-                                  const struct index_record *record,
-                                  const char *userid, void *davdb);
+                                  void *data, const char *userid);
 
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
@@ -1046,48 +1045,40 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
 
 
 static modseq_t caldav_get_modseq(struct mailbox *mailbox,
-                                  const struct index_record *record,
-                                  const char *userid, void *davdb)
+                                  void *data, const char *userid)
 {
-    struct caldav_db *caldavdb = (struct caldav_db *) davdb;
-    modseq_t modseq = record->modseq;
+    struct caldav_data *cdata = (struct caldav_data *) data;
+    modseq_t modseq = cdata->dav.modseq;
 
-    if (namespace_calendar.allow & ALLOW_USERDATA) {
-        struct caldav_data *cdata;
+    if ((namespace_calendar.allow & ALLOW_USERDATA) &&
+        cdata->comp_flags.shared) {
+        struct buf value = BUF_INITIALIZER;
         int r;
 
-        /* Lookup the CalDAV record */
-        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
-                                  record->uid, &cdata, /* tombstones */ 0);
-        
-        if (!r && cdata->comp_flags.shared) {
-            struct buf value = BUF_INITIALIZER;
+        /* Lookup per-user calendar data */
+        r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                      PER_USER_CAL_DATA, userid, &value);
+        if (!r && buf_len(&value)) {
+            modseq_t shared_modseq = cdata->dav.modseq;
+            struct dlist *dl;
 
-            /* Lookup per-user calendar data */
-            r = mailbox_annotation_lookup(mailbox, record->uid,
-                                          PER_USER_CAL_DATA, userid, &value);
+            /* Parse the value and fetch the modseq */
+            dlist_parsemap(&dl, 1, 0, buf_base(&value), buf_len(&value));
+            dlist_getnum64(dl, "MODSEQ", &modseq);
+            dlist_free(&dl);
+
+            /* Lookup shared modseq */
+            buf_free(&value);
+            r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                          SHARED_MODSEQ, "", &value);
             if (!r && buf_len(&value)) {
-                modseq_t shared_modseq = record->modseq;
-                struct dlist *dl;
-
-                /* Parse the value and fetch the modseq */
-                dlist_parsemap(&dl, 1, 0, buf_base(&value), buf_len(&value));
-                dlist_getnum64(dl, "MODSEQ", &modseq);
-                dlist_free(&dl);
-
-                /* Lookup shared modseq */
-                buf_free(&value);
-                r = mailbox_annotation_lookup(mailbox, record->uid,
-                                              SHARED_MODSEQ, "", &value);
-                if (!r && buf_len(&value)) {
-                    sscanf(buf_cstring(&value), MODSEQ_FMT, &shared_modseq);
-                }
-
-                modseq = MAX(modseq, shared_modseq);
+                sscanf(buf_cstring(&value), MODSEQ_FMT, &shared_modseq);
             }
 
-            buf_free(&value);
+            modseq = MAX(modseq, shared_modseq);
         }
+        
+        buf_free(&value);
     }
 
     return modseq;
@@ -3731,9 +3722,10 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 }
 
 
-static int write_personal_data(struct mailbox *mailbox,
-                               struct caldav_data *cdata,
-                               const char *userid,
+static int write_personal_data(const char *userid,
+                               struct mailbox *mailbox,
+                               uint32_t uid,
+                               modseq_t modseq,
                                icalcomponent *vpatch)
 {
     struct message_guid guid;
@@ -3743,14 +3735,14 @@ static int write_personal_data(struct mailbox *mailbox,
     int ret;
 
     dlist_setdate(dl, "LASTMOD", time(0));
-    dlist_setnum64(dl, "MODSEQ", mailbox_modseq_dirty(mailbox));
+    dlist_setnum64(dl, "MODSEQ", modseq);
     message_guid_generate(&guid, icalstr, strlen(icalstr));
     dlist_setguid(dl, "GUID", &guid);
     dlist_setatom(dl, "VPATCH", icalstr);
     dlist_printbuf(dl, 1, &value);
     dlist_free(&dl);
 
-    ret = mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
+    ret = mailbox_annotation_write(mailbox, uid,
                                    PER_USER_CAL_DATA, userid, &value);
     buf_free(&value);
 
@@ -3859,7 +3851,8 @@ static int personalize_resource(struct transaction_t *txn,
                                     &num_changes);
         buf_reset(&txn->buf);
 
-        if (!ret) ret = write_personal_data(mailbox, cdata, owner, *userdata);
+        if (!ret) ret = write_personal_data(owner, mailbox, cdata->dav.imap_uid,
+                                            cdata->dav.modseq, *userdata);
 
         if (ret) goto done;
 
@@ -3900,6 +3893,8 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
+        /* XXX  DO NOT reinitialize num_changes.  We need the changes
+           from rewriting owner resource to force storage of that resource */
         ret = extract_personal_data(ical, oldical, *userdata,
                                     &txn->buf /* path */, read_only,
                                     &num_changes);
@@ -3913,14 +3908,6 @@ static int personalize_resource(struct transaction_t *txn,
             *store_me = NULL;
             goto done;
         }
-
-        /* Write shared modseq for resource */
-        buf_printf(&txn->buf, MODSEQ_FMT,
-                   mailbox->modseq_dirty ? mailbox->i.highestmodseq :
-                   mailbox_modseq_dirty(mailbox));
-        mailbox_annotation_write(mailbox, cdata->dav.imap_uid,
-                                 SHARED_MODSEQ, "", &txn->buf);
-        buf_reset(&txn->buf);
 
         cdata->comp_flags.shared = 1;
     }
@@ -7674,22 +7661,33 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                   mailbox, newuid, NULL);
             }
 
-            cdata->dav.alive = 1;
-            cdata->dav.imap_uid = newuid;
-            int r = write_personal_data(mailbox, cdata, userid, userdata);
+            int r = write_personal_data(userid, mailbox, newuid,
+                                        mailbox->i.highestmodseq+1, userdata);
             if (r) {
                 /* XXX  We have already written the stripped resource
                    so we're pretty screwed.  All message annotations
                    need to be handled (properly) in append_fromstage()
                    so storing resource and annotations is atomic.
                 */
+                txn->error.desc = error_message(r);
                 ret = HTTP_SERVER_ERROR;
                 goto done;
+            }
+
+            if (store_ical) {
+                /* Write shared modseq for resource */
+                buf_printf(&txn->buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+                mailbox_annotation_write(mailbox, newuid, SHARED_MODSEQ,
+                                         /* shared */ "", &txn->buf);
+                buf_reset(&txn->buf);
             }
 
             if (!cdata->organizer || (flags & PREFER_REP)) {
                 /* Read index record for new message (always the last one) */
                 struct index_record newrecord;
+
+                cdata->dav.alive = 1;
+                cdata->dav.imap_uid = newuid;
 
                 caldav_get_validators(mailbox, cdata, userid, &newrecord,
                                       &txn->resp_body.etag,
