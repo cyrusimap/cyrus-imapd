@@ -1567,6 +1567,7 @@ static int deliver_merge_request(const char *attendee,
              icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
         prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
         tzid = icalproperty_get_tzid(prop);
+        if (!tzid) continue;
 
         hash_insert(tzid, comp, &comp_table);
     }
@@ -1580,6 +1581,7 @@ static int deliver_merge_request(const char *attendee,
         /* Lookup this TZID in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_TZID_PROPERTY);
         tzid = icalproperty_get_tzid(prop);
+        if (!tzid) continue;
 
         comp = hash_lookup(tzid, &comp_table);
         if (comp) {
