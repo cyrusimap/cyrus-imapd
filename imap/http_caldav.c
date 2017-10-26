@@ -7940,5 +7940,5 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
         strarray_appendm(&txn->resp_body.links, buf_release(&link));
     }
 
-    return meth_options(txn, &oparams->parse_path);
+    return meth_options(txn, oparams->parse_path);
 }
