@@ -1856,6 +1856,8 @@ static int export_calendar(struct transaction_t *txn)
                                                          ICAL_TZID_PROPERTY);
                     const char *tzid = icalproperty_get_tzid(prop);
 
+                    if (!tzid) continue;
+
                     if (hash_lookup(tzid, &tzid_table)) continue;
                     else hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
                 }
@@ -7454,7 +7456,7 @@ static void strip_vtimezones(icalcomponent *ical)
         const char *tzid = icalproperty_get_tzid(prop);
         struct zoneinfo zi;
 
-        if (!zoneinfo_lookup(tzid, &zi)) {
+        if (tzid && !zoneinfo_lookup(tzid, &zi)) {
             if (zi.type == ZI_LINK) {
                 /* Add this alias to our table */
                 hash_insert(tzid, xstrdup(zi.data->s), &tzid_table);

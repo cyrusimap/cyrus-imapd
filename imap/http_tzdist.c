@@ -2779,7 +2779,7 @@ EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
         prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
         if (prop) {
             const char *tzid = icalproperty_get_tzid(prop);
-            if (tz_from_tzid(tzid)) {
+            if (tzid && tz_from_tzid(tzid)) {
                 icalcomponent_remove_component(ical, tzcomp);
                 icalcomponent_free(tzcomp);
             }
