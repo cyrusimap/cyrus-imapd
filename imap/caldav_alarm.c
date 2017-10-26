@@ -443,13 +443,13 @@ static int update_alarmdb(const char *mboxname, uint32_t imap_uid, time_t nextch
     return -1;
 }
 
-static icaltimezone *get_floatingtz(struct mailbox *mailbox)
+static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
 {
     icaltimezone *floatingtz = NULL;
 
     struct buf buf = BUF_INITIALIZER;
     const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-    if (!annotatemore_lookup(mailbox->name, annotname, /*userid*/"", &buf)) {
+    if (!annotatemore_lookupmask(mailbox, annotname, userid, &buf)) {
         icalcomponent *comp = NULL;
         comp = icalparser_parse_string(buf_cstring(&buf));
         icalcomponent *subcomp = icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
@@ -696,7 +696,6 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
 struct peruser_rock {
     icalcomponent *ical;
-    icaltimezone *floatingtz;
     struct lastalarm_data *alarm;
     time_t runtime;
 };
@@ -709,6 +708,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 {
     struct peruser_rock *prock = (struct peruser_rock *) rock;
     icalcomponent *vpatch, *myical;
+    icaltimezone *floatingtz = NULL;
     time_t check;
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
@@ -725,13 +725,17 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     icalcomponent_apply_vpatch(myical, vpatch, NULL, NULL);
     icalcomponent_free(vpatch);
 
+    /* Fetch per-user timezone for floating events */
+    floatingtz = get_floatingtz(mailbox, userid);
+
     /* Process any VALARMs in the patched iCalendar resource */
-    check = process_alarms(mailbox, uid, userid, prock->floatingtz, myical,
+    check = process_alarms(mailbox, uid, userid, floatingtz, myical,
                            prock->alarm->lastrun, prock->runtime);
     if (!prock->alarm->nextcheck || check < prock->alarm->nextcheck) {
         prock->alarm->nextcheck = check;
     }
 
+    if (floatingtz) icaltimezone_free(floatingtz, 1);
     icalcomponent_free(myical);
 
     return 0;
@@ -809,7 +813,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         free(userid);
 
         /* Process VALARMs in per-user-cal-data */
-        struct peruser_rock prock = { ical, floatingtz, &data, runtime };
+        struct peruser_rock prock = { ical, &data, runtime };
         annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
                              /* modseq */ 0, &process_peruser_alarms_cb,
                              &prock, /* flags */ 0);
@@ -850,7 +854,7 @@ static void process_records(ptrarray_t *list, time_t runtime)
                 /* transient open error, don't delete this alarm */
                 continue;
             }
-            floatingtz = get_floatingtz(mailbox);
+            floatingtz = get_floatingtz(mailbox->name, "");
         }
         process_one_record(mailbox, data->imap_uid, floatingtz, runtime);
     }
@@ -942,7 +946,7 @@ EXPORTED int caldav_alarm_upgrade()
         caldav_alarm_close(alarmdb);
         if (rc) continue;
 
-        icaltimezone *floatingtz = get_floatingtz(mailbox);
+        icaltimezone *floatingtz = get_floatingtz(mailbox->name, "");
 
         /* add alarms for all records */
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
