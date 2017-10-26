@@ -7674,8 +7674,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
             cdata->dav.alive = 1;
             cdata->dav.imap_uid = newuid;
-            ret = write_personal_data(mailbox, cdata, userid, userdata);
-            if (ret) {
+            int r = write_personal_data(mailbox, cdata, userid, userdata);
+            if (r) {
                 /* XXX  We have already written the stripped resource
                    so we're pretty screwed.  All message annotations
                    need to be handled (properly) in append_fromstage()
