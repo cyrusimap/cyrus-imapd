@@ -6551,5 +6551,78 @@ sub test_refobjects_extended
     $self->assert_str_equals($res->[2][1]{list}[1]{id}, $res->[3][1]{list}[0]{id});
 }
 
+sub test_setmessages_patch
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $draft =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => "Whoa!",
+        keywords => { '$Draft' => JSON::true, foo => JSON::true },
+    };
+
+    xlog "Create draft message";
+    $res = $jmap->Request([
+        ['setMessages', { create => { "1" => $draft }}, "R1"],
+        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/created/1/id' }}, 'R2' ],
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
+    $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
+    $self->assert_equals(JSON::true, $msg->{mailboxIds}->{$inboxid});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "Patch message keywords";
+    $res = $jmap->Request([
+        ['setMessages', {
+            update => {
+                $id => {
+                    "/keywords/foo" => undef,
+                    "/keywords/bar" => JSON::true,
+                }
+            }
+        }, "R1"],
+        ['getMessages', { ids => [$id], properties => ['keywords'] }, 'R2'],
+    ]);
+    $msg = $res->[1][1]->{list}[0];
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'bar'});
+    $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
+
+    xlog "create mailbox";
+    $res = $jmap->Request([['setMailboxes', {create => { "1" => { name => "baz", }}}, "R1"]]);
+    my $mboxid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($mboxid);
+
+    xlog "Patch message mailboxes";
+    $res = $jmap->Request([
+        ['setMessages', {
+            update => {
+                $id => {
+                    "/mailboxIds/$inboxid" => undef,
+                    "/mailboxIds/$mboxid" => JSON::true,
+                }
+            }
+        }, "R1"],
+        ['getMessages', { ids => [$id], properties => ['mailboxIds'] }, 'R2'],
+    ]);
+    $msg = $res->[1][1]->{list}[0];
+    $self->assert_equals(JSON::true, $msg->{mailboxIds}->{$mboxid});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+}
 
 1;
