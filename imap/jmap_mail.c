@@ -932,23 +932,22 @@ static void setmailboxes_read_args(jmap_req_t *req,
     /* parentId */
     json_t *jparentid = json_object_get(jargs, "parentId");
     if (JNOTNULL(jparentid)) {
-        pe = readprop(jargs, "parentId", 1, invalid, "s", &args->parentid);
-        if (pe > 0 && *(args->parentid) == '#') {
-            args->parentid = hash_lookup(args->parentid + 1, &req->idmap->mailboxes);
-            if (!args->parentid) {
+        const char *parentid = NULL;
+        pe = readprop(jargs, "parentId", 1, invalid, "s", &parentid);
+        if (pe > 0 && *parentid == '#') {
+            parentid = hash_lookup(parentid + 1, &req->idmap->mailboxes);
+            if (!parentid) {
                 json_array_append_new(invalid, json_string("parentId"));
             }
         }
-        if (args->parentid) {
-            args->parentid = xstrdup(args->parentid);
+        if (parentid) {
+            args->parentid = xstrdup(parentid);
         }
-    } else if (jparentid == json_null()) {
+    } else if (jparentid == json_null() || (is_create && !jparentid)) {
         mbentry_t *inboxentry = NULL;
         mboxlist_lookup(req->inboxname, &inboxentry, NULL);
         args->parentid = xstrdup(inboxentry->uniqueid);
         mboxlist_entry_free(&inboxentry);
-    } else if (is_create && !jparentid) {
-        json_array_append_new(invalid, json_string("parentId"));
     }
     if (args->parentid) {
         char *tmp = jmapmbox_find_uniqueid(req, args->parentid);
@@ -6802,12 +6801,15 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     const char *id;
     int r;
     size_t i;
-    json_t *val, *prop;
+    const char *field;
+    json_t *val;
+    json_t *mailboxids = NULL;   /* mailboxIds argument or built from patch */
     json_t *dstmailboxes = NULL; /* destination mailboxes */
     json_t *srcmailboxes = NULL; /* current mailboxes */
     json_t *oldmailboxes = NULL; /* current mailboxes that are kept */
     json_t *newmailboxes = NULL; /* mailboxes to add the message to */
     json_t *delmailboxes = NULL; /* mailboxes to delete the message from */
+    json_t *keywords = NULL;     /* keywords argument or built from patch */
     uint32_t old_systemflags, new_systemflags;
     strarray_t user_flagnames = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -6832,12 +6834,60 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (r) goto done;
     new_systemflags = old_systemflags;
 
-    /* Validate properties */
-    if (JNOTNULL((prop = json_object_get(msg, "keywords")))) {
+    /* Are keywords overwritten or patched? */
+    keywords = json_incref(json_object_get(msg, "keywords"));
+    if (keywords == NULL) {
+        /* Check if keywords are patched */
+        int patch_keywords = 0;
+        json_object_foreach(msg, field, val) {
+            if (strncmp(field, "/keywords/", 10)) {
+                continue;
+            }
+            patch_keywords = 1;
+            break;
+        }
+        if (patch_keywords) {
+            /* Fetch current keywords from message */
+            hash_table props = HASH_TABLE_INITIALIZER;
+            json_t *tmpmsg = NULL;
+            construct_hash_table(&props, 1, 0);
+            hash_insert("keywords", (void*)1, &props);
+            r = jmapmsg_from_record(req, &props, mrw, &tmpmsg);
+            if (!r) {
+                keywords = json_incref(json_object_get(tmpmsg, "keywords"));
+            }
+            json_decref(tmpmsg);
+            free_hash_table(&props, NULL);
+            if (r) goto done;
+
+            /* Patch keywords */
+            json_object_foreach(msg, field, val) {
+                if (strncmp(field, "/keywords/", 10)) {
+                    continue;
+                }
+                if (val == json_null()) {
+                    json_object_del(keywords, field + 10);
+                }
+                else if (val == json_true()) {
+                    json_object_set(keywords, field + 10, json_true());
+                }
+                else {
+                    json_array_append_new(invalid, json_string(field));
+                }
+            }
+        }
+    }
+    if (json_array_size(invalid)) {
+        r = 0;
+        goto done;
+    }
+
+    /* Prepare keyword update */
+    if (JNOTNULL(keywords)) {
         const char *keyword;
         new_systemflags &= ~(FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED|FLAG_SEEN);
 
-        json_object_foreach(prop, keyword, val) {
+        json_object_foreach(keywords, keyword, val) {
             if (!is_valid_keyword(keyword) || val != json_true()) {
                 buf_printf(&buf, "keywords[%s]", keyword);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
@@ -6869,14 +6919,55 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
             buf_reset(&buf);
         }
     }
-    if (json_object_size(prop) > MAX_USER_FLAGS) {
-        return IMAP_USERFLAG_EXHAUSTED;
+    if (json_object_size(keywords) > MAX_USER_FLAGS) {
+        r = IMAP_USERFLAG_EXHAUSTED;
+        goto done;
     }
 
-    prop = json_object_get(msg, "mailboxIds");
-    if (JNOTNULL(prop)) {
+    /* Are mailboxes being overwritten or patched? */
+    mailboxids = json_incref(json_object_get(msg, "mailboxIds"));
+    if (mailboxids == NULL) {
+        /* Check if mailboxIds are patched */
+        int patch_mailboxids = 0;
+        json_object_foreach(msg, field, val) {
+            if (strncmp(field, "/mailboxIds/", 12)) {
+                continue;
+            }
+            patch_mailboxids = 1;
+            break;
+        }
+        if (patch_mailboxids) {
+            /* Build current mailboxIds argument */
+            mailboxids = json_object();
+            json_object_foreach(srcmailboxes, field, val) {
+                json_object_set(mailboxids, field, json_true());
+            }
+            /* Patch mailboxIds */
+            json_object_foreach(msg, field, val) {
+                if (strncmp(field, "/mailboxIds/", 12)) {
+                    continue;
+                }
+                if (val == json_true()) {
+                    json_object_set(mailboxids, field + 12, json_true());
+                }
+                else if (val == json_null()) {
+                    json_object_del(mailboxids, field + 12);
+                }
+                else {
+                    json_array_append_new(invalid, json_string(field));
+                }
+            }
+        }
+    }
+    if (json_array_size(invalid)) {
+        r = 0;
+        goto done;
+    }
+
+    /* Prepare mailbox update */
+    if (JNOTNULL(mailboxids)) {
         dstmailboxes = json_pack("{}");
-        json_object_foreach(prop, id, val) {
+        json_object_foreach(mailboxids, id, val) {
             if (json_true() != val) {
                 struct buf buf = BUF_INITIALIZER;
                 buf_printf(&buf, "mailboxIds{%s}", id);
@@ -6907,8 +6998,8 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         dstmailboxes = json_deep_copy(srcmailboxes);
     }
     if (json_array_size(invalid)) {
-        buf_free(&buf);
-        return 0;
+        r = 0;
+        goto done;
     }
 
     /* Determine mailbox differences */
@@ -7000,11 +7091,13 @@ done:
     strarray_fini(&user_flagnames);
     if (mrw) msgrecord_unref(&mrw);
     if (mbox) jmap_closembox(req, &mbox);
-    if (oldmailboxes) json_decref(oldmailboxes);
-    if (srcmailboxes) json_decref(srcmailboxes);
-    if (dstmailboxes) json_decref(dstmailboxes);
-    if (newmailboxes) json_decref(newmailboxes);
-    if (delmailboxes) json_decref(delmailboxes);
+    json_decref(oldmailboxes);
+    json_decref(srcmailboxes);
+    json_decref(dstmailboxes);
+    json_decref(newmailboxes);
+    json_decref(delmailboxes);
+    json_decref(keywords);
+    json_decref(mailboxids);
     free(mboxname);
     buf_free(&buf);
 
