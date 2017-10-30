@@ -3228,14 +3228,14 @@ EOF
   $self->assert_str_equals("Etc/UTC", $Data->[0]{timeZone});
   $self->assert_str_equals("Etc/UTC", $Data->[1]{timeZone});
   $self->assert_str_equals("Etc/UTC", $Data->[2]{timeZone});
-  # and so on
-  $self->assert_str_equals("PT3H", $Data->[0]{duration});
-  $self->assert_str_equals("PT2H", $Data->[1]{duration});
-  $self->assert_str_equals("PT3H", $Data->[2]{duration});
   # etc
   $self->assert_str_equals("2016-08-31T05:30:00", $Data->[0]{start});
   $self->assert_str_equals("2016-09-14T06:30:00", $Data->[1]{start});
   $self->assert_str_equals("2016-09-21T05:30:00", $Data->[2]{start});
+  # and so on
+  $self->assert_str_equals("PT3H", $Data->[0]{duration});
+  $self->assert_str_equals("PT2H", $Data->[1]{duration});
+  $self->assert_str_equals("PT3H", $Data->[2]{duration});
 }
 
 sub test_invite_samelocalpart
