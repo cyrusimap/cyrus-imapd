@@ -2170,12 +2170,10 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 {
     int r = 0;
 
-    /* XXX: only lock convdb if we're in read-write mode.  This is kinda
-     * bogus really, but there's no way to get a read lock on convdb */
-    if (locktype != LOCK_SHARED) {
-        r = mailbox_lock_conversations(mailbox);
-        if (r) return r;
-    }
+    /* always lock the conversations DB, since if we have the index file
+     * locked at all, we can't open it later */
+    r = mailbox_lock_conversations(mailbox);
+    if (r) return r;
 
     r = mailbox_lock_index_internal(mailbox, locktype);
     if (r) return r;
