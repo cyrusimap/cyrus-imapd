@@ -4518,7 +4518,7 @@ sub test_getmessagelist_threadkeywords
                     collapseThreads => JSON::true,
                 }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
-    $self->assert_str_equals('cannotDoFilter', $res->[0][1]->{type});
+    $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
 
     # Regression #2: test that 'allThreadKeyword' sorts fail with
     # an 'unsupportedSort' error even for supported conversation flags
@@ -4542,7 +4542,7 @@ sub test_getmessagelist_threadkeywords
         collapseThreads => JSON::true,
     }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
-    $self->assert_str_equals('cannotDoFilter', $res->[0][1]->{type});
+    $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
 }
 
 sub test_getmessagelist_collapse
