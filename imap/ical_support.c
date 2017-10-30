@@ -122,6 +122,35 @@ icalproperty_get_datetimeperiod(icalproperty *prop)
     return ret;
 }
 
+static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, icalproperty *prop)
+{
+    icalcomponent *c;
+    icalparameter *param;
+    struct icaltimetype ret;
+
+    ret = icalvalue_get_datetime(icalproperty_get_value(prop));
+
+    if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
+        const char *tzid = icalparameter_get_tzid(param);
+        icaltimezone *tz = NULL;
+
+        for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+            tz = icalcomponent_get_timezone(c, tzid);
+            if (tz != NULL)
+                break;
+        }
+
+        if (tz == NULL)
+            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
+    }
+
+    return ret;
+}
+
+
 
 static int sort_overrides(const void *ap, const void *bp)
 {
@@ -284,7 +313,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
              prop;
              prop = icalcomponent_get_next_property(mastercomp,
                                                     ICAL_EXDATE_PROPERTY)) {
-            struct icaltimetype exdate = icalproperty_get_exdate(prop);
+            struct icaltimetype exdate = icalcomponent_get_mydatetime(mastercomp, prop);
             _add_override(overrides, exdate, exdate, NULL, floatingtz);
         }
     }
