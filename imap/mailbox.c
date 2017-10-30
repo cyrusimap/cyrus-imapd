@@ -4607,6 +4607,15 @@ EXPORTED int mailbox_create(const char *name,
         goto done;
     }
 
+    /* open conversations FIRST */
+    r = mailbox_lock_conversations(mailbox);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
+               mailbox->name, error_message(r));
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
     fname = mailbox_meta_fname(mailbox, META_INDEX);
     if (!fname) {
         syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s)", mailbox->name);
@@ -4626,13 +4635,6 @@ EXPORTED int mailbox_create(const char *name,
         goto done;
     }
     mailbox->index_locktype = LOCK_EXCLUSIVE;
-    r = mailbox_lock_conversations(mailbox);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
-               mailbox->name, error_message(r));
-        r = IMAP_IOERROR;
-        goto done;
-    }
 
     if (hasquota) {
         mailbox_set_quotaroot(mailbox, quotaroot);
