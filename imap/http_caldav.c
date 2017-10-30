@@ -3939,9 +3939,10 @@ static int personalize_resource(struct transaction_t *txn __attribute__((unused)
     fatal("personalize_resource() called, but no VPATCH", EC_SOFTWARE);
 }
 
-static int write_personal_data(struct mailbox *mailbox __attribute__((unused)),
-                               struct caldav_data *cdata __attribute__((unused)),
-                               const char *userid __attribute__((unused)),
+static int write_personal_data(const char *userid __attribute__((unused)),
+                               struct mailbox *mailbox __attribute__((unused)),
+                               uint32_t uid __attribute__((unused)),
+                               modseq_t modseq __attribute__((unused)),
                                icalcomponent *vpatch __attribute__((unused)))
 {
     fatal("write_personalize_data() called, but no VPATCH", EC_SOFTWARE);
