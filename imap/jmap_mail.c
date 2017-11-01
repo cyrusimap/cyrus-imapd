@@ -1179,7 +1179,7 @@ static int getMailboxList(jmap_req_t *req)
 {
     int r = 0;
     json_t *ids = NULL, *item, *res;
-    size_t total;
+    size_t total = 0;
     struct getmboxlist_args args;
 
     /* Parse and validate arguments. */
