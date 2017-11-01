@@ -363,6 +363,137 @@ sub test_getmailboxes_shared
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
 }
 
+sub test_getmailboxlist
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "list mailboxes without filter";
+    my $res = $jmap->Request([['getMailboxList', {}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals('mailboxList', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.B") || die;
+
+    xlog "fetch mailboxes";
+    $res = $jmap->Request([['getMailboxes', { }, 'R1' ]]);
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    xlog "list mailboxes without filter and sort by name ascending";
+    $res = $jmap->Request([['getMailboxList', { sort => ["name asc"]}, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
+
+    xlog "list mailboxes without filter and sort by name descending";
+    $res = $jmap->Request([['getMailboxList', { sort => ["name desc"]}, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[2]);
+
+    xlog "filter mailboxes by role";
+    $res = $jmap->Request([['getMailboxList', {filter => {hasRole => JSON::true}}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+
+    xlog "create mailbox underneath A";
+    $imaptalk->create("INBOX.A.AA") || die;
+
+    xlog "(re)fetch mailboxes";
+    $res = $jmap->Request([['getMailboxes', { }, 'R1' ]]);
+    %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    xlog "filter mailboxes by parentId";
+    $res = $jmap->Request([['getMailboxList', {filter => {parentId => $mboxids{'A'}}}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'AA'}, $res->[0][1]{ids}[0]);
+
+    # Without windowing the name-sorted results are: A, AA, B, Inbox
+
+    xlog "list mailboxes (with limit)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            limit => 1,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_num_equals(0, $res->[0][1]->{position});
+
+    xlog "list mailboxes (with anchor and limit)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            anchor => $mboxids{'B'},
+            limit => 2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(2, $res->[0][1]->{position});
+
+    xlog "list mailboxes (with positive anchor offset)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            anchor => $mboxids{'Inbox'},
+            anchorOffset => 2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'AA'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
+    $self->assert_num_equals(1, $res->[0][1]->{position});
+
+    xlog "list mailboxes (with negative anchor offset)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            anchor => $mboxids{'A'},
+            anchorOffset => -2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(2, $res->[0][1]->{position});
+}
+
+sub test_getmailboxlistupdates
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # This just tests that getMailboxListUpdates isn't supported.
+
+    xlog "get current mailbox state";
+    my $res = $jmap->Request([['getMailboxList', { }, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+    $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateUpdates});
+
+    xlog "get mailbox list updates";
+    $res = $jmap->Request([['getMailboxListUpdates', {
+        filter => {},
+        sinceState => $state,
+    }, "R1"]]);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
+}
+
 sub test_setmailboxes
     :JMAP :min_version_3_1
 {
