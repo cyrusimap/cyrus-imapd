@@ -84,6 +84,8 @@
 static int getMailboxes(jmap_req_t *req);
 static int setMailboxes(jmap_req_t *req);
 static int getMailboxUpdates(jmap_req_t *req);
+static int getMailboxList(jmap_req_t *req);
+static int getMailboxListUpdates(jmap_req_t *req);
 static int getMessageList(jmap_req_t *req);
 static int getMessageListUpdates(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
@@ -101,8 +103,6 @@ static int getMessageSubmissionList(jmap_req_t *req);
 static int getMessageSubmissionListUpdates(jmap_req_t *req);
 
 /*
- * To be implemented:
- *
  * Possibly to be implemented:
  * - copyMessages
  * - getVacationResponse
@@ -112,10 +112,20 @@ static int getMessageSubmissionListUpdates(jmap_req_t *req);
  * - reportMessages
  */
 
+/*
+ * TODO now with JMAP methods all following the core protocol,
+ * we might want to refactor the existing codebase to make use
+ * of it. As a minimum, we should use a generic approach for
+ * validation as we are doing for example in validate_sort,
+ * but the search window handling is also a good candidate.
+ */
+
 jmap_msg_t jmap_mail_messages[] = {
     { "getMailboxes",                    &getMailboxes },
     { "setMailboxes",                    &setMailboxes },
     { "getMailboxUpdates",               &getMailboxUpdates },
+    { "getMailboxList",                  &getMailboxList },
+    { "getMailboxListUpdates",           &getMailboxListUpdates },
     { "getMessageList",                  &getMessageList },
     { "getMessageListUpdates",           &getMessageListUpdates },
     { "getMessages",                     &getMessages },
@@ -214,6 +224,56 @@ static void validate_string_array(json_t *arg, const char *prefix, json_t *inval
     buf_free(&buf);
 }
 
+static void validate_sort(json_t *sort, json_t *invalid, json_t *unsupported,
+                          int (*is_supported)(const char *field))
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct buf prop = BUF_INITIALIZER;
+    json_t *val;
+    const char *s, *p;
+    size_t i;
+
+    if (!JNOTNULL(sort)) {
+        return;
+    }
+
+    if (!json_array_size(sort)) {
+        json_array_append_new(invalid, json_string("sort"));
+        return;
+    }
+
+    json_array_foreach(sort, i, val) {
+        buf_reset(&buf);
+        buf_printf(&buf, "sort[%zu]", i);
+
+        if ((s = json_string_value(val)) == NULL) {
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            continue;
+        }
+
+        p = strchr(s, ' ');
+        if (!p || (strcmp(p + 1, "asc") && strcmp(p + 1, "desc"))) {
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            continue;
+        }
+
+        buf_setmap(&prop, s, p - s);
+        buf_cstring(&prop);
+
+        if (is_supported(prop.s)) {
+            continue;
+        }
+
+        json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
+    }
+
+    buf_free(&buf);
+    buf_free(&prop);
+}
+
+/*
+ * Mailboxes
+ */
 
 struct findmbox_data {
     const char *uniqueid;
@@ -367,6 +427,61 @@ static char *jmapmbox_name(jmap_req_t *req, const mbname_t *mbname)
     return extname;
 }
 
+static int jmapmbox_sort_order(jmap_req_t *req, const mbname_t *mbname)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    int sort_order = 0;
+    char *role = NULL;
+
+    /* Ignore lookup errors here. */
+    annotatemore_lookup(mbname_intname(mbname), IMAP_ANNOT_NS "sortOrder", req->userid, &attrib);
+    if (attrib.len) {
+        uint64_t t = str2uint64(buf_cstring(&attrib));
+        if (t < INT_MAX) {
+            sort_order = (int) t;
+        } else {
+            syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbname_intname(mbname));
+        }
+    }
+    else {
+        /* calculate based on role.  From FastMail:
+           [  1, '*Inbox',     'inbox',   0,    1, [ 'INBOX' ], { PreviewModeId => 2, MessagesPerPage => 20 } ],
+           [  2, 'Trash',      'trash',   0,    7, [ 'Trash', 'Deleted Items' ], { HasEmpty => 1 } ],
+           [  3, 'Sent',       'sent',    0,    5, [ 'Sent', 'Sent Items' ], { DefSort => 2 } ],
+           [  4, 'Drafts',     'drafts',  0,    4, [ 'Drafts' ] ],
+           [  5, '*User',      undef,     0,   10, [ ] ],
+           [  6, 'Junk',       'spam',    0,    6, [ 'Spam', 'Junk Mail', 'Junk E-Mail' ], { HasEmpty => 1 } ],
+           [  7, 'XChats',     undef,     0,    8, [ 'Chats' ] ],
+           [  8, 'Archive',    'archive', 0,    3, [ 'Archive' ] ],
+           [  9, 'XNotes',     undef,     1,   10, [ 'Notes' ] ],
+           [ 10, 'XTemplates', undef,     0,    9, [ 'Templates' ] ],
+           [ 12, '*Shared',    undef,     0, 1000, [ 'user' ] ],
+           [ 11, '*Restored',  undef,     0, 2000, [ 'RESTORED' ] ],
+           */
+        role = jmapmbox_role(req, mbname);
+        if (!role)
+            sort_order = 10;
+        else if (!strcmp(role, "inbox"))
+            sort_order = 1;
+        else if (!strcmp(role, "archive"))
+            sort_order = 3;
+        else if (!strcmp(role, "drafts"))
+            sort_order = 4;
+        else if (!strcmp(role, "sent"))
+            sort_order = 5;
+        else if (!strcmp(role, "spam"))
+            sort_order = 6;
+        else if (!strcmp(role, "trash"))
+            sort_order = 7;
+        else
+            sort_order = 8;
+    }
+
+    free(role);
+    buf_free(&attrib);
+    return sort_order;
+}
+
 static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                                      const mbentry_t *mbentry,
                                      hash_table *roles,
@@ -485,53 +600,8 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         }
     }
     if (_wantprop(props, "sortOrder")) {
-        struct buf attrib = BUF_INITIALIZER;
-        int sortOrder = 0;
-        /* Ignore lookup errors here. */
-        annotatemore_lookup(mbname_intname(mbname), IMAP_ANNOT_NS "sortOrder", req->userid, &attrib);
-        if (attrib.len) {
-            uint64_t t = str2uint64(buf_cstring(&attrib));
-            if (t < INT_MAX) {
-                sortOrder = (int) t;
-            } else {
-                syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbname_intname(mbname));
-            }
-        }
-        else {
-            /* calculate based on role.  From FastMail:
-               [  1, '*Inbox',     'inbox',   0,    1, [ 'INBOX' ], { PreviewModeId => 2, MessagesPerPage => 20 } ],
-               [  2, 'Trash',      'trash',   0,    7, [ 'Trash', 'Deleted Items' ], { HasEmpty => 1 } ],
-               [  3, 'Sent',       'sent',    0,    5, [ 'Sent', 'Sent Items' ], { DefSort => 2 } ],
-               [  4, 'Drafts',     'drafts',  0,    4, [ 'Drafts' ] ],
-               [  5, '*User',      undef,     0,   10, [ ] ],
-               [  6, 'Junk',       'spam',    0,    6, [ 'Spam', 'Junk Mail', 'Junk E-Mail' ], { HasEmpty => 1 } ],
-               [  7, 'XChats',     undef,     0,    8, [ 'Chats' ] ],
-               [  8, 'Archive',    'archive', 0,    3, [ 'Archive' ] ],
-               [  9, 'XNotes',     undef,     1,   10, [ 'Notes' ] ],
-               [ 10, 'XTemplates', undef,     0,    9, [ 'Templates' ] ],
-               [ 12, '*Shared',    undef,     0, 1000, [ 'user' ] ],
-               [ 11, '*Restored',  undef,     0, 2000, [ 'RESTORED' ] ],
-              */
-
-            if (!role)
-                sortOrder = 10;
-            else if (!strcmp(role, "inbox"))
-                sortOrder = 1;
-            else if (!strcmp(role, "archive"))
-                sortOrder = 3;
-            else if (!strcmp(role, "drafts"))
-                sortOrder = 4;
-            else if (!strcmp(role, "sent"))
-                sortOrder = 5;
-            else if (!strcmp(role, "spam"))
-                sortOrder = 6;
-            else if (!strcmp(role, "trash"))
-                sortOrder = 7;
-            else
-                sortOrder = 8;
-        }
+        int sortOrder = jmapmbox_sort_order(req, mbname);
         json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
-        buf_free(&attrib);
     }
 
 done:
@@ -729,6 +799,476 @@ done:
         free(data.want);
     }
     return 0;
+}
+
+typedef struct {
+    jmap_req_t *req;
+    ptrarray_t filter;  /* Filters (mboxsearch_filter_t) */
+    ptrarray_t sort;    /* Sort criteria (mboxsearch_sort_t) */
+    ptrarray_t result;  /* Result records (mboxsearch_record_t) */
+
+    int _need_name;
+    int _need_sort_order;
+    int _need_role;
+} mboxsearch_t;
+
+typedef struct {
+    char *id;
+    char *mboxname;
+    char *jmapname;
+    int sort_order;
+} mboxsearch_record_t;
+
+typedef struct {
+    char *field;
+    int desc;
+} mboxsearch_sort_t;
+
+typedef struct {
+    char *field;
+    union {
+        char *s;
+        short b;
+    } val;
+} mboxsearch_filter_t;
+
+static mboxsearch_t *mboxsearch_new(jmap_req_t *req)
+{
+    mboxsearch_t *q = xzmalloc(sizeof(mboxsearch_t));
+    q->req = req;
+    return q;
+}
+
+static void mboxsearch_free(mboxsearch_t **qptr)
+{
+    int i;
+    mboxsearch_t *q = *qptr;
+
+    for (i = 0; i < q->result.count; i++) {
+        mboxsearch_record_t *rec = ptrarray_nth(&q->result, i);
+        free(rec->id);
+        free(rec->mboxname);
+        free(rec->jmapname);
+        free(rec);
+    }
+    ptrarray_fini(&q->result);
+
+    for (i = 0; i < q->filter.count; i++) {
+        mboxsearch_filter_t *filter = ptrarray_nth(&q->filter, i);
+        if (!strcmp(filter->field, "parentId"))
+            free(filter->val.s);
+        free(filter->field);
+        free(filter);
+    }
+    ptrarray_fini(&q->filter);
+
+    for (i = 0; i < q->sort.count; i++) {
+        mboxsearch_sort_t *crit = ptrarray_nth(&q->sort, i);
+        free(crit->field);
+        free(crit);
+    }
+    ptrarray_fini(&q->sort);
+
+    free(q);
+    *qptr = NULL;
+}
+
+static int mboxsearch_compar(const void **a, const void **b, void *rock)
+{
+    const mboxsearch_record_t *pa = *a;
+    const mboxsearch_record_t *pb = *b;
+    ptrarray_t *criteria = rock;
+    int i;
+
+    for (i = 0; i < criteria->count; i++) {
+        mboxsearch_sort_t *crit = ptrarray_nth(criteria, i);
+        int cmp = 0;
+        int sign = crit->desc ? -1 : 1;
+
+        if (!strcmp(crit->field, "name"))
+            cmp = strcmp(pa->jmapname, pb->jmapname) * sign;
+        else if (!strcmp(crit->field, "sortOrder"))
+            cmp = (pa->sort_order - pb->sort_order) * sign;
+
+        if (cmp) return cmp;
+    }
+
+    return strcmp(pa->id, pb->id);
+}
+
+static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
+{
+    if (mbentry->mbtype & (MBTYPES_NONIMAP|MBTYPE_DELETED))
+        return 0;
+
+    mboxsearch_t *q = rock;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+    /* Apply filters */
+    int i;
+    for (i = 0; i < q->filter.count; i++) {
+        mboxsearch_filter_t *filter = ptrarray_nth(&q->filter, i);
+        if (!strcmp(filter->field, "hasRole")) {
+            char *role = jmapmbox_role(q->req, mbname);
+            int has_role = role != NULL;
+            free(role);
+            if (!has_role) goto done;
+        }
+        if (!strcmp(filter->field, "parentId")) {
+            mbentry_t *mbparent = NULL;
+            int matches_parentid = 0;
+            if (!mboxlist_findparent(mbentry->name, &mbparent)) {
+                matches_parentid = !strcmp(mbparent->uniqueid, filter->val.s);
+            }
+            mboxlist_entry_free(&mbparent);
+            if (!matches_parentid) goto done;
+        }
+    }
+
+    /* Found a matching reccord. Add it to the result list. */
+    mboxsearch_record_t *rec = xzmalloc(sizeof(mboxsearch_record_t));
+    rec->id = xstrdup(mbentry->uniqueid);
+    if (q->_need_name) {
+        rec->mboxname = xstrdup(mbentry->name);
+        rec->jmapname = jmapmbox_name(q->req, mbname);
+    }
+    if (q->_need_sort_order) {
+        rec->sort_order = jmapmbox_sort_order(q->req, mbname);
+    }
+    ptrarray_append(&q->result, rec);
+
+done:
+    mbname_free(&mbname);
+    return 0;
+}
+
+static int mboxsearch_run(mboxsearch_t *query)
+{
+    int i;
+
+    /* Prepare internal query context. */
+    for (i = 0; i < query->sort.count; i++) {
+        mboxsearch_sort_t *crit = ptrarray_nth(&query->sort, i);
+        if (!strcmp(crit->field, "name")) {
+            query->_need_name = 1;
+        }
+        else if (!strcmp(crit->field, "sortOrder")) {
+            query->_need_sort_order = 1;
+        }
+    }
+    for (i = 0; i < query->filter.count; i++) {
+        mboxsearch_filter_t *filter = ptrarray_nth(&query->filter, i);
+        if (!strcmp(filter->field, "hasRole")) {
+            query->_need_role = 1;
+        }
+    }
+
+    /* Lookup all mailboxes */
+    int r = jmap_mboxlist(query->req, mboxsearch_cb, query);
+    if (r) goto done;
+
+    /* Sort result */
+    qsort_r(query->result.data, query->result.count, sizeof(void*),
+            (int(*)(const void*, const void*, void*)) mboxsearch_compar,
+            &query->sort);
+
+done:
+    return r;
+}
+
+struct getmboxlist_window {
+    size_t position;
+    const char *anchor;
+    int anchor_off;
+    size_t limit;
+    int cancalcupdates;
+};
+
+static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
+                           struct getmboxlist_window *window,
+                           size_t *total, json_t **ids)
+{
+    int r = 0;
+    size_t j;
+    json_t *val;
+
+    /* Reject any attempt to calculcate updates for getMailboxListUpdates.
+     * All of the filter and sort criteria are mutable. That only leaves
+     * an unsorted and unfiltered mailbox list which we internally sort
+     * by mailbox ids, which isn't any better than getMailboxUpdates. */
+    window->cancalcupdates = 0;
+
+    /* Prepare query */
+    mboxsearch_t *query = mboxsearch_new(req);
+
+    /* Prepare sort */
+    json_array_foreach(sort, j, val) {
+        const char *s = json_string_value(val);
+        mboxsearch_sort_t *crit = xzmalloc(sizeof(mboxsearch_sort_t));
+        if (!strncmp(s, "name ", 5)) {
+            crit->field = xstrdup("name");
+            s += 5;
+        }
+        else if (!strncmp(s, "sortOrder ", 10)) {
+            crit->field = xstrdup("sortOrder");
+            s += 10;
+        }
+        crit->desc = !strcmp(s, "desc");
+        ptrarray_append(&query->sort, crit);
+    }
+
+    /* Prepare filter */
+    if ((val = json_object_get(filter, "parentId"))) {
+        /* XXX JMAP mailboxList filter 'null' means: no mailbox filter? */
+        mboxsearch_filter_t *filter = xzmalloc(sizeof(mboxsearch_filter_t));
+        filter->field = xstrdup("parentId");
+        filter->val.s = xstrdup(json_string_value(val));
+        ptrarray_append(&query->filter, filter);
+    }
+    if ((val = json_object_get(filter, "hasRole"))) {
+        mboxsearch_filter_t *filter = xzmalloc(sizeof(mboxsearch_filter_t));
+        filter->field = xstrdup("hasRole");
+        ptrarray_append(&query->filter, filter);
+    }
+
+    /* Run the query */
+    r = mboxsearch_run(query);
+    if (r) goto done;
+
+    *ids = json_array();
+    *total = query->result.count;
+
+    /* Apply window */
+    int i;
+    int seen_anchor = 0;
+    ssize_t skip_anchor = 0;
+    ssize_t result_pos = -1;
+
+    for (i = 0; i < query->result.count; i++) {
+        mboxsearch_record_t *rec = ptrarray_nth(&query->result, i);
+
+        /* Check anchor */
+        if (window->anchor && !seen_anchor) {
+            seen_anchor = !strcmp(rec->id, window->anchor);
+            if (!seen_anchor) {
+                continue;
+            }
+            /* Found the anchor! Now apply anchor offsets */
+            if (window->anchor_off < 0) {
+                skip_anchor = -window->anchor_off;
+                continue;
+            }
+            else if (window->anchor_off > 0) {
+                /* Prefill result list with all, but the current record */
+                size_t lo = window->anchor_off < i ? i - window->anchor_off : 0;
+                size_t hi = window->limit ? lo + window->limit : (size_t) i;
+                result_pos = lo;
+                while (lo < hi && lo < (size_t) i) {
+                    mboxsearch_record_t *p = ptrarray_nth(&query->result, lo);
+                    json_array_append_new(*ids, json_string(p->id));
+                    lo++;
+                }
+            }
+        }
+        else if (window->anchor && skip_anchor) {
+            if (--skip_anchor) continue;
+        }
+        /* Check position */
+        else if (window->position && (size_t) i < window->position) {
+            continue;
+        }
+
+        /* Check limit. */
+        if (window->limit && window->limit <= json_array_size(*ids)) {
+            break;
+        }
+
+        /* Add to result list. */
+        if (result_pos == -1) {
+            result_pos = i;
+        }
+        json_array_append_new(*ids, json_string(rec->id));
+    }
+    if (window->anchor && !seen_anchor) {
+        json_decref(*ids);
+        *ids = json_array();
+    }
+    if (result_pos >= 0) {
+        window->position = result_pos;
+    }
+
+done:
+    mboxsearch_free(&query);
+    if (r) json_decref(*ids);
+    return r;
+}
+
+static int is_supported_mboxlist_sort(const char *field)
+{
+    if (!strcmp(field, "sortOrder") ||
+        !strcmp(field, "name")) {
+        return 1;
+    }
+    return 0;
+}
+
+struct getmboxlist_args {
+    json_t *filter;
+    json_t *sort;
+    struct getmboxlist_window window;
+};
+
+static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
+                                 json_t *jargs,
+                                 struct getmboxlist_args *args,
+                                 json_t *invalid,
+                                 json_t *unsupported_filter,
+                                 json_t *unsupported_sort)
+{
+    json_t *arg;
+	json_int_t jint = 0;
+    memset(args, 0, sizeof(struct getmboxlist_args));
+
+    /* Validate filter */
+    arg = json_object_get(jargs, "filter");
+    if (JNOTNULL(arg)) {
+        json_t *val;
+        const char *field;
+        json_object_foreach(arg, field, val) {
+            if (!strcmp(field, "parentId")) {
+                if (val != json_null() && !json_is_string(val)) {
+                    json_array_append_new(invalid, json_string(field));
+                }
+            }
+            else if (!strcmp(field, "hasRole")) {
+                if (!json_is_boolean(val)) {
+                    json_array_append_new(invalid, json_string(field));
+                }
+            }
+            else {
+                json_array_append_new(unsupported_filter, json_string(field));
+            }
+        }
+        if (!json_is_object(arg)) {
+            json_array_append_new(unsupported_filter, json_string("filter"));
+        }
+        args->filter = arg;
+    }
+
+    /* sort */
+    arg = json_object_get(jargs, "sort");
+    if (JNOTNULL(arg)) {
+        validate_sort(arg, invalid, unsupported_sort, is_supported_mboxlist_sort);
+        args->sort = arg;
+    }
+
+    /* windowing */
+    readprop(jargs, "anchor", 0, invalid, "s", &args->window.anchor);
+    readprop(jargs, "anchorOffset", 0, invalid, "i", &args->window.anchor_off);
+    if (readprop(jargs, "position", 0, invalid, "I", &jint) > 0) {
+        if (jint < 0) json_array_append_new(invalid, json_string("position"));
+        args->window.position = jint;
+    }
+    if (readprop(jargs, "limit", 0, invalid, "I", &jint) > 0) {
+        if (jint < 0) json_array_append_new(invalid, json_string("limit"));
+        args->window.limit = jint;
+    }
+}
+
+static int getMailboxList(jmap_req_t *req)
+{
+    int r = 0;
+    json_t *ids = NULL, *item, *res;
+    size_t total;
+    struct getmboxlist_args args;
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+    json_t *unsupported_filter = json_pack("[]");
+    json_t *unsupported_sort = json_pack("[]");
+    getmboxlist_read_args(req, req->args, &args, invalid, unsupported_filter, unsupported_sort);
+
+    /* Bail out for argument errors */
+    json_t *err = NULL;
+    if (json_array_size(invalid)) {
+        err = json_pack("{s:s, s:O}", "type", "invalidArguments", "arguments", invalid);
+    }
+    else if (json_array_size(unsupported_filter)) {
+        err = json_pack("{s:s, s:O}", "type", "unsupportedFilter", "filters", unsupported_filter);
+    }
+    else if (json_array_size(unsupported_sort)) {
+        err = json_pack("{s:s, s:O}", "type", "unsupportedSort", "sort", unsupported_sort);
+    }
+    if (err) {
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        goto done;
+    }
+
+    /* Search for the mailboxes */
+    r = jmapmbox_search(req, args.filter, args.sort, &args.window, &total, &ids);
+    if (r) goto done;
+
+    /* Prepare response. */
+    res = json_pack("{}");
+    json_object_set_new(res, "accountId", json_string(req->accountid));
+    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
+    json_object_set_new(res, "canCalculateUpdates", json_boolean(args.window.cancalcupdates));
+    json_object_set_new(res, "position", json_integer(args.window.position));
+    json_object_set_new(res, "total", json_integer(total));
+    json_object_set(res, "filter", args.filter);
+    json_object_set(res, "sort", args.sort);
+    json_object_set(res, "ids", ids);
+
+    item = json_pack("[]");
+    json_array_append_new(item, json_string("mailboxList"));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+
+done:
+    json_decref(invalid);
+    json_decref(unsupported_filter);
+    json_decref(unsupported_sort);
+    json_decref(ids);
+    return r;
+}
+
+static int getMailboxListUpdates(jmap_req_t *req)
+{
+    int r = 0;
+    struct getmboxlist_args args;
+
+    /* Parse and validate arguments. */
+    json_t *invalid = json_pack("[]");
+    json_t *unsupported_filter = json_pack("[]");
+    json_t *unsupported_sort = json_pack("[]");
+    getmboxlist_read_args(req, req->args, &args, invalid, unsupported_filter, unsupported_sort);
+
+    /* Bail out for argument errors */
+    json_t *err = NULL;
+    if (json_array_size(invalid)) {
+        err = json_pack("{s:s, s:O}", "type", "invalidArguments", "arguments", invalid);
+    }
+    else if (json_array_size(unsupported_filter)) {
+        err = json_pack("{s:s, s:O}", "type", "unsupportedFilter", "filters", unsupported_filter);
+    }
+    else if (json_array_size(unsupported_sort)) {
+        err = json_pack("{s:s, s:O}", "type", "unsupportedSort", "sort", unsupported_sort);
+    }
+    if (err) {
+        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        goto done;
+    }
+
+    /* Refuse all attempts to calculcate list updates */
+    json_array_append_new(req->response, json_pack("[s,{s:s},s]",
+                "error", "type", "cannotCalculateChanges", req->tag));
+
+done:
+    json_decref(invalid);
+    json_decref(unsupported_filter);
+    json_decref(unsupported_sort);
+    return r;
 }
 
 struct jmapmbox_newname_data {
@@ -1861,6 +2401,10 @@ static int getMailboxUpdates(jmap_req_t *req)
 done:
     return r;
 }
+
+/*
+ * Messages
+ */
 
 static json_t *emailer_from_addr(const struct address *a)
 {
@@ -3519,7 +4063,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
     return this;
 }
 
-static void validate_filter(json_t *filter, const char *prefix, json_t *invalid, json_t *unsupported)
+static void validate_msgfilter(json_t *filter, const char *prefix, json_t *invalid, json_t *unsupported)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *arg, *val;
@@ -3547,7 +4091,7 @@ static void validate_filter(json_t *filter, const char *prefix, json_t *invalid,
         }
         json_array_foreach(arg, i, val) {
             buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            validate_filter(val, buf_cstring(&buf), invalid, unsupported);
+            validate_msgfilter(val, buf_cstring(&buf), invalid, unsupported);
             buf_reset(&buf);
         }
 
@@ -3735,53 +4279,6 @@ static struct sortcrit *buildsort(json_t *sort)
 
     buf_free(&prop);
     return sortcrit;
-}
-
-static void validate_sort(json_t *sort, json_t *invalid, json_t *unsupported,
-                          int (*is_supported)(const char *field))
-{
-    struct buf buf = BUF_INITIALIZER;
-    struct buf prop = BUF_INITIALIZER;
-    json_t *val;
-    const char *s, *p;
-    size_t i;
-
-    if (!JNOTNULL(sort)) {
-        return;
-    }
-
-    if (json_typeof(sort) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("sort"));
-        return;
-    }
-
-    json_array_foreach(sort, i, val) {
-        buf_reset(&buf);
-        buf_printf(&buf, "sort[%zu]", i);
-
-        if ((s = json_string_value(val)) == NULL) {
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            continue;
-        }
-
-        p = strchr(s, ' ');
-        if (!p || (strcmp(p + 1, "asc") && strcmp(p + 1, "desc"))) {
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            continue;
-        }
-
-        buf_setmap(&prop, s, p - s);
-        buf_cstring(&prop);
-
-        if (is_supported(prop.s)) {
-            continue;
-        }
-
-        json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
-    }
-
-    buf_free(&buf);
-    buf_free(&prop);
 }
 
 struct getmsglist_window {
@@ -4184,7 +4681,7 @@ static int getMessageList(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_filter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
     }
 
     /* sort */
@@ -4224,7 +4721,7 @@ static int getMessageList(jmap_req_t *req)
 
     /* Report unsupported filters and sorts */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         json_decref(unsupported_sort);
         r = 0;
@@ -4242,7 +4739,7 @@ static int getMessageList(jmap_req_t *req)
     r = jmapmsg_search(req, filter, sort, &window, 0, &total, &total_threads,
                        &messageids, /*expungedids*/NULL, &threadids);
     if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
@@ -4297,7 +4794,7 @@ static int getMessageListUpdates(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_filter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
     }
 
     /* sort */
@@ -4340,7 +4837,7 @@ static int getMessageListUpdates(jmap_req_t *req)
 
     /* Report unsupported filters and sorts */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         json_decref(unsupported_sort);
         r = 0;
@@ -4366,7 +4863,7 @@ static int getMessageListUpdates(jmap_req_t *req)
         goto done;
     }
     if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
@@ -4455,7 +4952,7 @@ static int getMessageUpdates(jmap_req_t *req)
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
     if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
@@ -4541,7 +5038,7 @@ static int getThreadUpdates(jmap_req_t *req)
     json_decref(filter);
     json_decref(sort);
     if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "cannotDoFilter");
+        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
@@ -4823,7 +5320,7 @@ static int getSearchSnippets(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_filter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
     }
 
     /* messageIds */
@@ -4851,7 +5348,7 @@ static int getSearchSnippets(jmap_req_t *req)
 
     /* Report unsupported filters */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
         goto done;
@@ -8639,7 +9136,7 @@ static int getMessageSubmissionList(jmap_req_t *req)
 
     /* Report unsupported filters and sorts */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         json_decref(unsupported_sort);
         r = 0;
@@ -8731,7 +9228,7 @@ static int getMessageSubmissionListUpdates(jmap_req_t *req)
 
     /* Report unsupported filters and sorts */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "cannotDoFilter", "filters", unsupported_filter);
+        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         json_decref(unsupported_sort);
         r = 0;
