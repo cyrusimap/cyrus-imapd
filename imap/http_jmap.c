@@ -361,7 +361,7 @@ static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)
             top = strchr(path, '\0');
         }
         p = json_pointer_decode(path, top - path);
-        if (p == '\0') {
+        if (*p == '\0') {
             return NULL;
         }
 
