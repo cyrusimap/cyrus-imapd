@@ -990,7 +990,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
 
     if ((namespace_calendar.allow & ALLOW_USERDATA) &&
         cdata->dav.imap_uid && cdata->comp_flags.shared) {
-        struct buf userdata = BUF_INITIALIZER;
+        struct buf value = BUF_INITIALIZER;
         int r;
 
         memset(record, 0, sizeof(struct index_record));
@@ -1004,13 +1004,14 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
         }
 
         /* Lookup per-user calendar data */
-        r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                      PER_USER_CAL_DATA, userid, &userdata);
-        if (!r && buf_len(&userdata)) {
+        r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
+        if (!r) r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                              PER_USER_CAL_DATA, userid, &value);
+        if (!r && buf_len(&value)) {
             struct dlist *dl;
 
             /* Parse the value and fetch the validators */
-            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+            dlist_parsemap(&dl, 1, 0, buf_base(&value), buf_len(&value));
 
             if (etag) {
                 char buf[2*MESSAGE_GUID_SIZE];
@@ -1034,7 +1035,7 @@ static int caldav_get_validators(struct mailbox *mailbox, void *data,
             }
 
             dlist_free(&dl);
-            buf_free(&userdata);
+            buf_free(&value);
 
             return 0;
         }
@@ -1056,8 +1057,9 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
         int r;
 
         /* Lookup per-user calendar data */
-        r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                      PER_USER_CAL_DATA, userid, &value);
+        r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
+        if (!r) r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                              PER_USER_CAL_DATA, userid, &value);
         if (!r && buf_len(&value)) {
             modseq_t shared_modseq = cdata->dav.modseq;
             struct dlist *dl;
@@ -2416,8 +2418,9 @@ static int is_personalized(struct mailbox *mailbox,
 
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
-        int r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                          PER_USER_CAL_DATA, userid, value);
+        int r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
+        if (!r) r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                              PER_USER_CAL_DATA, userid, value);
         if (!r && buf_len(value)) {
             if (!userdata) buf_free(value);
             return 1;
@@ -3733,6 +3736,9 @@ static int write_personal_data(const char *userid,
     const char *icalstr = icalcomponent_as_ical_string(vpatch);
     struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
     int ret;
+
+    ret = mailbox_get_annotate_state(mailbox, uid, NULL);
+    if (ret) return ret;
 
     dlist_setdate(dl, "LASTMOD", time(0));
     dlist_setnum64(dl, "MODSEQ", modseq);
@@ -7678,6 +7684,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             if (store_ical) {
                 /* Write shared modseq for resource */
                 buf_printf(&txn->buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+                mailbox_get_annotate_state(mailbox, newuid, NULL);
                 mailbox_annotation_write(mailbox, newuid, SHARED_MODSEQ,
                                          /* shared */ "", &txn->buf);
                 buf_reset(&txn->buf);
