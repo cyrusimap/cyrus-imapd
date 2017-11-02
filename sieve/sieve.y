@@ -1696,22 +1696,26 @@ static int verify_patternlist(sieve_script_t *sscript,
 
 static int verify_address(sieve_script_t *sscript, char *s)
 {
-    sscript->addrerr[0] = '\0';    /* paranoia */
     YY_BUFFER_STATE buffer = addr_scan_string(s);
+    int r = 1;
+
+    sscript->addrerr[0] = '\0';    /* paranoia */
     if (addrparse(sscript)) {
         sieveerror_f(sscript, "address '%s': %s", s, sscript->addrerr);
-        addr_delete_buffer(buffer);
-        return 0;
+        r = 0;
     }
     addr_delete_buffer(buffer);
-    return 1;
+
+    return r;
 }
 
 static int verify_mailbox(sieve_script_t *sscript, char *s)
 {
-    if (!verify_utf8(sscript, s)) return 0;
+    if (!verify_utf8(sscript, s)) {
+        sieveerror_f(sscript, "mailbox '%s': not a valid mailbox", s);
+        return 0;
+    }
 
-    /* xxx if not a mailbox, call yyerror */
     return 1;
 }
 
