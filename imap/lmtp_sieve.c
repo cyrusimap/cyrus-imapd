@@ -1358,7 +1358,12 @@ static int send_response(void *ac, void *ic,
     buf_printf(&header, "Date: %s\r\n", datestr);
 
     buf_printf(&header, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    buf_printf(&header, "From: <%s>\r\n", src->fromaddr);
+
+    if (strchr(src->fromaddr, '<'))
+        buf_printf(&header, "From: %s\r\n", src->fromaddr);
+    else
+        buf_printf(&header, "From: <%s>\r\n", src->fromaddr);
+
     buf_printf(&header, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
     sl = strlen(src->subj);
