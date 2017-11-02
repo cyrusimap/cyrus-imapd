@@ -452,7 +452,8 @@ static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
     if (!annotatemore_lookupmask(mailbox, annotname, userid, &buf)) {
         icalcomponent *comp = NULL;
         comp = icalparser_parse_string(buf_cstring(&buf));
-        icalcomponent *subcomp = icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
+        icalcomponent *subcomp =
+            icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
         if (subcomp) {
             floatingtz = icaltimezone_new();
             icalcomponent_remove_component(comp, subcomp);
@@ -514,7 +515,7 @@ static int has_peruser_alarms_cb(const char *mailbox,
     return 0;
 }
 
-static int has_alarms(icalcomponent *ical, const char *mboxname, uint32_t uid)
+static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid)
 {
     int has_alarms = 0;
 
@@ -530,7 +531,8 @@ static int has_alarms(icalcomponent *ical, const char *mboxname, uint32_t uid)
     }
 
     /* Check all per-user-cal-data for VALARMs */
-    annotatemore_findall(mboxname, uid, PER_USER_CAL_DATA, /* modseq */ 0,
+    mailbox_get_annotate_state(mailbox, uid, NULL);
+    annotatemore_findall(mailbox->name, uid, PER_USER_CAL_DATA, /* modseq */ 0,
                          &has_peruser_alarms_cb, &has_alarms, /* flags */ 0);
 
     return has_alarms;
@@ -570,7 +572,8 @@ static int write_lastalarm(struct mailbox *mailbox, const struct index_record *r
     return r;
 }
 
-static int read_lastalarm(struct mailbox *mailbox, const struct index_record *record,
+static int read_lastalarm(struct mailbox *mailbox,
+                          const struct index_record *record,
                           struct lastalarm_data *data)
 {
     int r = IMAP_NOTFOUND;
@@ -578,6 +581,7 @@ static int read_lastalarm(struct mailbox *mailbox, const struct index_record *re
 
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     struct buf annot_buf = BUF_INITIALIZER;
+    mailbox_get_annotate_state(mailbox, record->uid, NULL);
     annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
 
     if (annot_buf.len) {
@@ -593,10 +597,11 @@ static int read_lastalarm(struct mailbox *mailbox, const struct index_record *re
 }
 
 /* add a calendar alarm */
-EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *record,
+EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
+                                     const struct index_record *record,
                                      icalcomponent *ical)
 {
-    if (!has_alarms(ical, mailbox->name, record->uid)) {
+    if (!has_alarms(ical, mailbox, record->uid)) {
         write_lastalarm(mailbox, record, NULL);
         return 0;
     }
@@ -609,12 +614,13 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox, const struct index
     return update_alarmdb(mailbox->name, record->uid, record->internaldate);
 }
 
-EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record)
+EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
+                                       const struct index_record *record)
 {
     struct lastalarm_data data;
     if (!read_lastalarm(mailbox, record, &data))
         return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
-    else if (has_alarms(NULL, mailbox->name, record->uid))/* per-user-cal-data */
+    else if (has_alarms(NULL, mailbox, record->uid))  /* per-user-cal-data */
         return update_alarmdb(mailbox->name, record->uid, record->last_updated);
     return 0;
 }
@@ -794,7 +800,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
 
     /* check for bogus lastalarm data on record which actually shouldn't have it */
-    if (!has_alarms(ical, mailbox->name, imap_uid)) {
+    if (!has_alarms(ical, mailbox, imap_uid)) {
         syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
@@ -814,6 +820,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
 
         /* Process VALARMs in per-user-cal-data */
         struct peruser_rock prock = { ical, &data, runtime };
+        mailbox_get_annotate_state(mailbox, record.uid, NULL);
         annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
                              /* modseq */ 0, &process_peruser_alarms_cb,
                              &prock, /* flags */ 0);
@@ -958,7 +965,7 @@ EXPORTED int caldav_alarm_upgrade()
             if (rc) continue;
             icalcomponent *ical = icalparser_parse_string(buf_cstring(&msg_buf) + record->header_size);
             if (ical) {
-                if (has_alarms(ical, mailbox->name, record->uid)) {
+                if (has_alarms(ical, mailbox, record->uid)) {
                     char *userid = mboxname_to_userid(mailbox->name);
                     time_t nextcheck = process_alarms(mailbox->name, record->uid,
                                                       userid, floatingtz, ical,
