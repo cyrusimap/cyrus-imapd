@@ -858,7 +858,7 @@ static int setCalendars(struct jmap_req *req)
             } else {
                 /* Users may always create their own calendars */
                 char rights[100];
-                cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+                cyrus_acl_masktostr(DACL_ALL | DACL_READFB, rights);
                 buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
                 cyrus_acl_masktostr(DACL_READFB, rights);
                 buf_printf(&acl, "%s\t%s\t", "anyone", rights);
