@@ -481,6 +481,11 @@ static icalcomponent *vpatch_from_peruserdata(const struct buf *userdata)
     return vpatch;
 }
 
+struct has_alarms_rock {
+    uint32_t mbox_options;
+    int *has_alarms;
+};
+
 static int has_peruser_alarms_cb(const char *mailbox,
                                  uint32_t uid __attribute__((unused)),
                                  const char *entry __attribute__((unused)),
@@ -488,12 +493,13 @@ static int has_peruser_alarms_cb(const char *mailbox,
                                  const struct annotate_metadata *mdata __attribute__((unused)),
                                  void *rock)
 {
-    int *has_alarms = (int *) rock;
+    struct has_alarms_rock *hrock = (struct has_alarms_rock *) rock;
     icalcomponent *vpatch, *comp;
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
-        mboxlist_checksub(mailbox, userid) != 0) {
-        /* Sharee has unsubscribed from this calendar */
+        ((hrock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
+         mboxlist_checksub(mailbox, userid) != 0)) {
+        /* No per-user-data, or sharee has unsubscribed from this calendar */
         return 0;
     }
         
@@ -505,7 +511,7 @@ static int has_peruser_alarms_cb(const char *mailbox,
          comp;
          comp = icalcomponent_get_next_component(vpatch, ICAL_XPATCH_COMPONENT)) {
         if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT)) {
-            *has_alarms = 1;
+            *(hrock->has_alarms) = 1;
             break;
         }
     }
@@ -531,9 +537,10 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
     }
 
     /* Check all per-user-cal-data for VALARMs */
+    struct has_alarms_rock hrock = { mailbox->i.options, &has_alarms };
     mailbox_get_annotate_state(mailbox, uid, NULL);
     annotatemore_findall(mailbox->name, uid, PER_USER_CAL_DATA, /* modseq */ 0,
-                         &has_peruser_alarms_cb, &has_alarms, /* flags */ 0);
+                         &has_peruser_alarms_cb, &hrock, /* flags */ 0);
 
     return has_alarms;
 }
@@ -700,7 +707,8 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-struct peruser_rock {
+struct process_alarms_rock {
+    uint32_t mbox_options;
     icalcomponent *ical;
     struct lastalarm_data *alarm;
     time_t runtime;
@@ -712,14 +720,15 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
                                      const struct annotate_metadata *mdata __attribute__((unused)),
                                      void *rock)
 {
-    struct peruser_rock *prock = (struct peruser_rock *) rock;
+    struct process_alarms_rock *prock = (struct process_alarms_rock *) rock;
     icalcomponent *vpatch, *myical;
     icaltimezone *floatingtz = NULL;
     time_t check;
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
-        mboxlist_checksub(mailbox, userid) != 0) {
-        /* Sharee has unsubscribed from this calendar */
+        ((prock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
+         mboxlist_checksub(mailbox, userid) != 0)) {
+        /* No per-user-data, or sharee has unsubscribed from this calendar */
         return 0;
     }
 
@@ -819,7 +828,8 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         free(userid);
 
         /* Process VALARMs in per-user-cal-data */
-        struct peruser_rock prock = { ical, &data, runtime };
+        struct process_alarms_rock prock =
+            { mailbox->i.options, ical, &data, runtime };
         mailbox_get_annotate_state(mailbox, record.uid, NULL);
         annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
                              /* modseq */ 0, &process_peruser_alarms_cb,

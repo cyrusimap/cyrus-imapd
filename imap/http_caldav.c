@@ -1004,13 +1004,26 @@ static int is_personalized(struct mailbox *mailbox,
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
         int r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
-        if (!r) r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                              PER_USER_CAL_DATA, userid,
-                                              userdata);
+
+        if (!r) {
+            mbname_t *mbname = NULL;
+
+            if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
+                /* No longer using per-user-data - use owner data */
+                mbname = mbname_from_intname(mailbox->name);
+                userid = mbname_userid(mbname);
+            }
+
+            r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
+                                          PER_USER_CAL_DATA, userid, userdata);
+            mbname_free(&mbname);
+        }
+
         if (!r && buf_len(userdata)) return 1;
         buf_free(userdata);
     }
-    else if (!mboxname_userownsmailbox(userid, mailbox->name)) {
+    else if (!(mailbox->i.options & OPT_IMAP_SHAREDSEEN) &&
+             !mboxname_userownsmailbox(userid, mailbox->name)) {
         buf_init_ro_cstr(userdata, STRIP_OWNER_CAL_DATA);
         return 1;
     }
@@ -7532,6 +7545,9 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* If we are just stripping VTIMEZONEs from resource, flag it */
     if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
+    else if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
+        cdata->comp_flags.shared = 0;
+    }
     else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         ret = personalize_resource(txn, mailbox, ical,
                                    cdata, userid, &store_ical, &userdata);
