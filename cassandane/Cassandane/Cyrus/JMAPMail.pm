@@ -1153,8 +1153,8 @@ sub test_getmailboxupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
 
     xlog "create mailbox via IMAP";
@@ -1174,7 +1174,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1196,7 +1196,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1216,7 +1216,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1241,7 +1241,7 @@ sub test_getmailboxupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
     $self->assert_str_equals($foo, $res->[0][1]{removed}[0]);
     $self->assert_null($res->[0][1]{changedProperties});
@@ -1254,7 +1254,7 @@ sub test_getmailboxupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1263,8 +1263,8 @@ sub test_getmailboxupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
     $self->assert_null($res->[0][1]{changedProperties});
 }
 
@@ -1364,7 +1364,7 @@ sub test_getmailboxupdates_counts
     $res = $jmap->Request([['getMailboxUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{changedProperties});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_null($res->[0][1]{changed});
     $state = $res->[0][1]{newState};
 
     $draft->{subject} = "memo2";
@@ -3411,8 +3411,8 @@ sub test_getmessagesubmissionupdates
     $res = $jmap->Request( [ [ 'getMessageSubmissionUpdates', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
+    $self->assert_null($res->[0][1]->{changed});
+    $self->assert_null($res->[0][1]->{removed});
 
     xlog "Generate a message via IMAP";
     $self->make_message("foo", body => "a message") or die;
@@ -3438,8 +3438,8 @@ sub test_getmessagesubmissionupdates
     }, "R1" ] ] );
     $self->assert(exists $res->[0][1]->{changed});
     $self->assert(exists $res->[0][1]->{removed});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
+    $self->assert_null($res->[0][1]->{changed});
+    $self->assert_null($res->[0][1]->{removed});
 }
 
 sub test_getmessagesubmissionlist
@@ -3674,7 +3674,7 @@ sub test_setmessages_destroy
 
     xlog "Get messages";
     $res = $jmap->Request([['getMessageList', {}, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 }
 
 sub test_getmessagelist
@@ -3859,7 +3859,7 @@ sub test_getmessagelist
                         ],
                     },
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "filter not in mailbox A";
     $res = $jmap->Request([['getMessageList', {
@@ -3905,7 +3905,7 @@ sub test_getmessagelist
                         before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
                     },
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "filter by minSize";
     $res = $jmap->Request([['getMessageList', {
@@ -3944,7 +3944,7 @@ sub test_getmessagelist
                         header => [ "x-tra", "bam" ],
                     },
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "sort by ascending date";
     $res = $jmap->Request([['getMessageList', {
@@ -4192,7 +4192,7 @@ sub test_getmessagelist_shared
                             ],
                         },
                     }, "R1"]]);
-        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+        $self->assert_null($res->[0][1]->{ids});
 
         xlog "filter not in mailbox A";
         $res = $jmap->Request([['getMessageList', {
@@ -4238,7 +4238,7 @@ sub test_getmessagelist_shared
                             before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
                         },
                     }, "R1"]]);
-        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+        $self->assert_null($res->[0][1]->{ids});
 
         xlog "filter by minSize";
         $res = $jmap->Request([['getMessageList', {
@@ -4277,7 +4277,7 @@ sub test_getmessagelist_shared
                             header => [ "x-tra", "bam" ],
                         },
                     }, "R1"]]);
-        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+        $self->assert_null($res->[0][1]->{ids});
 
         xlog "sort by ascending date";
         $res = $jmap->Request([['getMessageList', {
@@ -4370,7 +4370,7 @@ sub test_getmessagelist_keywords
             hasKeyword => '$Flagged',
         }
     }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "fetch messages without \$Flagged flag";
     $res = $jmap->Request([['getMessageList', {
@@ -4404,7 +4404,7 @@ sub test_getmessagelist_keywords
             notHasKeyword => '$Flagged',
         }
     }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "create message";
     $res = $self->make_message("bar") || die;
@@ -4576,7 +4576,7 @@ sub test_getmessagelist_threadkeywords
             },
             collapseThreads => JSON::true,
         }, "R1"]]);
-        $self->assert_num_equals(0, scalar @{$res->[0][1]->{threadIds}});
+        $self->assert_null($res->[0][1]->{threadIds});
 
         xlog "set $flag flag on message message A";
         $res = $jmap->Request([['setMessages', {
@@ -4818,7 +4818,7 @@ sub test_getmessagelist_window
 
     xlog "list messages from position 4";
     $res = $jmap->Request([['getMessageList', { position => 4 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
     xlog "limit messages from position 1 to one message";
@@ -4924,7 +4924,7 @@ sub test_getmessagelist_acl
 
     xlog "get message list";
     my $res = $jmap->Request([['getMessageList', { accountId => 'foo' }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "Create message in shared account";
     $self->{adminstore}->set_folder('user.foo');
@@ -4932,7 +4932,7 @@ sub test_getmessagelist_acl
 
     xlog "get message list in main account";
     $res = $jmap->Request([['getMessageList', { }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_null($res->[0][1]->{ids});
 
     xlog "get message list in shared account";
     $res = $jmap->Request([['getMessageList', { accountId => 'foo' }, "R1"]]);
@@ -5522,7 +5522,7 @@ sub test_emptyids
     $res = $jmap->Request([['getIdentities', { ids => [] }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
-    $res = $jmap->Request([['getSearchSnippets', { ids => [], filter => { text => "foo" } }, "R1"]]);
+    $res = $jmap->Request([['getSearchSnippets', { messageIds => [], filter => { text => "foo" } }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 }
 
@@ -5564,8 +5564,8 @@ sub test_getmessageupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "Generate a message in INBOX via IMAP";
     $self->make_message("Message A") || die;
@@ -5582,7 +5582,7 @@ sub test_getmessageupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "get message updates (expect no changes)";
@@ -5590,8 +5590,8 @@ sub test_getmessageupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "update message $ida";
     $res = $jmap->Request([['setMessages', {
@@ -5606,7 +5606,7 @@ sub test_getmessageupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "delete message $ida";
@@ -5618,7 +5618,7 @@ sub test_getmessageupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
     $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]->{newState};
@@ -5628,8 +5628,8 @@ sub test_getmessageupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "create message B";
     $res = $jmap->Request(
@@ -5664,7 +5664,7 @@ sub test_getmessageupdates
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idb, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "get max 1 message updates";
@@ -5674,7 +5674,7 @@ sub test_getmessageupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idc, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "get message updates (expect no changes)";
@@ -5682,8 +5682,8 @@ sub test_getmessageupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 }
 
 sub test_getmessagelistupdates
@@ -5822,8 +5822,8 @@ sub test_getmessagelistupdates_thread
     $state = $res->[0][1]{newState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(0, scalar(@{$res->[0][1]{added}}));
-    $self->assert_num_equals(0, scalar(@{$res->[0][1]{removed}}));
+    $self->assert_null($res->[0][1]{added});
+    $self->assert_null($res->[0][1]{removed});
 
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
@@ -5927,8 +5927,8 @@ sub test_getmessageupdates_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "Generate a message in shared account INBOX via IMAP";
     $self->{adminstore}->set_folder('user.foo');
@@ -5940,7 +5940,7 @@ sub test_getmessageupdates_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
     my $ida = $res->[0][1]{changed}[0];
 
@@ -5953,8 +5953,8 @@ sub test_getmessageupdates_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "share private mailbox box1";
     $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
@@ -5965,7 +5965,7 @@ sub test_getmessageupdates_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "delete message $ida";
@@ -5977,7 +5977,7 @@ sub test_getmessageupdates_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
     $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]->{newState};
@@ -6294,8 +6294,8 @@ sub test_getthreadupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "generating message A";
     $dt = DateTime->now();
@@ -6309,7 +6309,7 @@ sub test_getthreadupdates
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
     $threadA = $res->[0][1]{changed}[0];
 
@@ -6326,7 +6326,7 @@ sub test_getthreadupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "get thread updates (expect no changes)";
@@ -6334,8 +6334,8 @@ sub test_getthreadupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B", body => "b");
@@ -6360,7 +6360,7 @@ sub test_getthreadupdates
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_not_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
     $threadB = $res->[0][1]{changed}[0];
 
@@ -6371,7 +6371,7 @@ sub test_getthreadupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     xlog "fetch messages";
@@ -6427,7 +6427,7 @@ sub test_getthreadupdates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
     $self->assert_str_equals("threads", $res->[1][0]);
@@ -6445,7 +6445,7 @@ sub test_getthreadupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
     $self->assert_str_equals($threadA, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]->{newState};
@@ -6455,8 +6455,8 @@ sub test_getthreadupdates
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_null($res->[0][1]{changed});
+    $self->assert_null($res->[0][1]{removed});
 }
 
 sub test_importmessages
