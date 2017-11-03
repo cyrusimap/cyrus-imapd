@@ -1615,6 +1615,8 @@ static int setcalendarevents_create(jmap_req_t *req,
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+        syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
+               req->accountid, error_message(r));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1808,7 +1810,13 @@ static int setcalendarevents_update(jmap_req_t *req,
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        r = IMAP_INTERNAL;
+        syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
+               req->accountid, error_message(r));
+        if (r == HTTP_FORBIDDEN)
+            r = IMAP_PERMISSION_DENIED;
+        else
+            r = IMAP_INTERNAL;
+
         goto done;
     }
     r = 0;
