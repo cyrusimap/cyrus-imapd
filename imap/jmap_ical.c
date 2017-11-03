@@ -2945,7 +2945,6 @@ alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
     }
     *is_unknown = type == ICAL_ACTION_NONE;
     if (have_invalid_props(ctx) || *is_unknown) {
-        endprop(ctx);
         return;
     }
 
