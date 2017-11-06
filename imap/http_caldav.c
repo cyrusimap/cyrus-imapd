@@ -3790,7 +3790,8 @@ static int personalize_resource(struct transaction_t *txn,
         /* User has read-write access */
         read_only = 0;
     }
-    else if (cdata->dav.imap_uid) {
+    else if (cdata->dav.imap_uid &&
+             !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
         /* User has read-only access to existing resource */
         read_only = 1;
     }

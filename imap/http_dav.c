@@ -7133,10 +7133,7 @@ int meth_put(struct transaction_t *txn, void *params)
 
         reqd_rights = DACL_WRITECONT;
 
-        if ((txn->req_tgt.allow & ALLOW_USERDATA) &&
-            !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
-            reqd_rights |= DACL_PROPRSRC;
-        }
+        if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
 
     /* Make sure mailbox type is correct */
