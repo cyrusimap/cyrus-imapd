@@ -8373,10 +8373,23 @@ static int jmap_sendrecord(jmap_req_t *req,
     /* Expect OK */
     r = smtpclient_expect(sm, 250, &buf);
     if (r) goto done;
-    /* Check if the AUTH extension is supported */
+    /* Check if the AUTH extension is supported. */
+    /* XXX This check really should go into a nicer SMTP client API */
     const char *s = strstr(buf_cstring(&buf), "250-AUTH");
     if (s && isspace(*(s+strlen("250-AUTH")))) {
-        have_auth = 1;
+        /* Check if the extension string either starts the
+         * buffer or a new line. */
+        have_auth = s == buf_base(&buf) || *(s-1) == '\n';
+    }
+    if (!have_auth) {
+        /* Check for the extension in the last line. We expect
+         * the AUTH parameter to support at least one auth
+         * mechanism, so there must be a space character after
+         * the end of the extension string. */
+        s = strstr(buf_base(&buf), "250 AUTH");
+        if (s && isspace(*(s+strlen("250 AUTH")))) {
+            have_auth = s == buf_base(&buf) || *(s-1) == '\n';
+        }
     }
     buf_reset(&buf);
 
