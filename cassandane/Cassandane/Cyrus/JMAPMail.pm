@@ -3380,9 +3380,6 @@ sub test_setmessagesubmissions_with_envelope
                         email => 'rcpt1@localhost',
                     }, {
                         email => 'rcpt2@localhost',
-                        parameters => {
-                            foo => 'bar',
-                        },
                     }],
                 },
             }
