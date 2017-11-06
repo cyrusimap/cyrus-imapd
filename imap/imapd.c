@@ -11603,7 +11603,7 @@ static int xfer_addmbox(struct findall_data *data, void *rock)
     if (!data) return 0;
     struct xfer_list *list = (struct xfer_list *) rock;
 
-    if (!data->mbentry) {
+    if (!data->mbentry || !data->mbname) {
         /* No partial matches */
         return 0;
     }
