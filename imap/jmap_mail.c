@@ -8100,34 +8100,46 @@ static int importMessages(jmap_req_t *req)
         json_t *mymsg;
 
         r = jmapmsg_import(req, msg, &mymsg);
-        if (r == IMAP_NOTFOUND) {
-            json_object_set_new(notcreated, id, json_pack("{s:s}",
-                        "type", "attachmentNotFound"));
-            r = 0;
-            continue;
-        }
-        else if (r == IMAP_PERMISSION_DENIED) {
-            json_object_set_new(notcreated, id, json_pack("{s:s}",
-                        "type", "forbidden"));
-            r = 0;
-            continue;
-        }
-        else if (r == IMAP_MAILBOX_EXISTS) {
-            json_object_set_new(notcreated, id, json_pack("{s:s}",
-                        "type", "messageExists"));
-            r = 0;
-            continue;
-        }
-        else if (r == IMAP_QUOTA_EXCEEDED) {
-            json_object_set_new(notcreated, id, json_pack("{s:s}",
-                        "type", "maxQuotaReached"));
-            r = 0;
-            continue;
-        }
-        else if (r) {
+        if (r) {
+            /* Try to handle the error gracefully */
+            const char *err = NULL;
+            switch (r) {
+                case IMAP_NOTFOUND:
+                    err = "attachmentNotFound";
+                    break;
+                case IMAP_PERMISSION_DENIED:
+                    err = "forbidden";
+                    break;
+                case IMAP_MAILBOX_EXISTS:
+                    err = "messageExists";
+                    break;
+                case IMAP_QUOTA_EXCEEDED:
+                    err = "maxQuotaReached";
+                    break;
+                case IMAP_MESSAGE_CONTAINSNULL:
+                    err = "messageContainsNulByte";
+                    break;
+                case IMAP_MESSAGE_CONTAINSNL:
+                    err = "messageContainsBareNewlines";
+                    break;
+                case IMAP_MESSAGE_CONTAINS8BIT:
+                    err = "messageContainsNonASCIIHeader";
+                    break;
+                case IMAP_MESSAGE_BADHEADER:
+                    err = "messageContainsInvalidHeader";
+                    break;
+                case IMAP_MESSAGE_NOBLANKLINE:
+                    err = "messageHasNoHeaderBodySeparator";
+                    break;
+            }
+            if (err) {
+                json_object_set_new(notcreated, id, json_pack("{s:s}", "type", err));
+                r = 0;
+                continue;
+            }
+            /* Any other error is fatal */
             goto done;
         }
-
         json_object_set_new(created, id, mymsg);
 
         char *mymsgid = xstrdupnull(json_string_value(json_object_get(mymsg, "id")));
