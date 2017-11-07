@@ -1854,7 +1854,8 @@ static int action_get(struct transaction_t *txn)
         vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
 
-        if (zi.type == ZI_LINK) {
+        if ((zi.type == ZI_LINK) &&
+            !icalcomponent_get_first_property(vtz, ICAL_TZIDALIASOF_PROPERTY)) {
             /* Add TZID-ALIAS-OF */
             const char *aliasof = icalproperty_get_tzid(prop);
             icalproperty *atzid = icalproperty_new_tzidaliasof(aliasof);

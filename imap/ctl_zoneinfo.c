@@ -398,6 +398,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
             size_t len = 0;
             icalcomponent *ical, *comp;
             icalproperty *prop;
+            char *alias = NULL;
 
             /* Parse the iCalendar file for important properties */
             if ((fd = open(path, O_RDONLY)) == -1) continue;
@@ -414,7 +415,15 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
             prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
             tzid = (char *) icalproperty_get_value_as_string(prop);
 
-            if (verbose) printf("\tZONE: %s\n", tzid);
+            prop = icalcomponent_get_first_property(comp,
+                                                    ICAL_TZIDALIASOF_PROPERTY);
+            if (prop) {
+                alias = tzid;
+                tzid = (char *) icalproperty_get_value_as_string(prop);
+
+                if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
+            }
+            else if (verbose) printf("\tZONE: %s\n", tzid);
 
             /* Create/update hash entry for tzid */
             if (!(zi = hash_lookup(tzid, tzentries))) {
@@ -430,6 +439,19 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
             /* Check overall lastmod */
             if (zi->dtstamp > info->dtstamp) info->dtstamp = zi->dtstamp;
+
+            if (alias) {
+                /* Add alias to the list for this tzid */
+                appendstrlist(&zi->data, alias);
+
+                /* Create hash entry for alias */
+                if (!(zi = hash_lookup(alias, tzentries))) {
+                    zi = xzmalloc(sizeof(struct zoneinfo));
+                    hash_insert(alias, zi, tzentries);
+                }
+                zi->type = ZI_LINK;
+                appendstrlist(&zi->data, tzid);
+            }
         }
         else {
             fprintf(stderr, "unknown path type %s\n", path);
