@@ -40,7 +40,7 @@
 /* The maximum number of fields on a line. */
 #define MAX_FIELDS      12
 
-#define CREATE_SYMLINK  1
+#define CREATE_SYMLINK  0
 
 typedef enum
 {
@@ -165,7 +165,6 @@ parse_olson_file                (char           *filename,
 
   *zone_data = g_array_new (FALSE, FALSE, sizeof (ZoneData));
   *rule_data = g_hash_table_new (g_str_hash, g_str_equal);
-  *link_data = g_hash_table_new (g_str_hash, g_str_equal);
 
   fp = fopen (filename, "r");
   if (!fp) {

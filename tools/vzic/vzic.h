@@ -36,6 +36,7 @@
    pure output, with no changes to be compatible with Outlook. */
 extern gboolean VzicPureOutput;
 
+extern gboolean VzicDumpTzDataArtifacts;
 extern gboolean VzicDumpOutput;
 extern gboolean VzicDumpChanges;
 extern gboolean VzicDumpZoneNamesAndCoords;

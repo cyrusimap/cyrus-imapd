@@ -40,6 +40,7 @@
    output pure output, with no changes to be compatible with Outlook. */
 gboolean VzicPureOutput                 = FALSE;
 
+gboolean VzicDumpTzDataArtifacts        = FALSE;
 gboolean VzicDumpOutput                 = FALSE;
 gboolean VzicDumpChanges                = FALSE;
 gboolean VzicDumpZoneNamesAndCoords     = TRUE;
@@ -53,7 +54,8 @@ char*    VzicOlsonDir                   = OLSON_DIR;
 GList*   VzicTimeZoneNames              = NULL;
 
 static void     convert_olson_file              (char           *olson_file,
-                                                 GHashTable     *zones_hash);
+                                                 GHashTable     *zones_hash,
+                                                 GHashTable     *link_data);
 
 static void     usage                           (void);
 
@@ -73,7 +75,7 @@ main                            (int             argc,
   int i;
   char directory[PATHNAME_BUFFER_SIZE];
   char filename[PATHNAME_BUFFER_SIZE];
-  GHashTable *zones_hash;
+  GHashTable *zones_hash, *link_data;
 
   /*
    * Command-Line Option Parsing.
@@ -132,6 +134,10 @@ main                            (int             argc,
     else if (!strcmp (argv[i], "--no-rdates"))
       VzicNoRDates = TRUE;
 
+    /* --artifacts: Add additional data to VTIMEZONEs to recreate tzdata. */
+    else if (!strcmp (argv[i], "--artifacts"))
+      VzicDumpTzDataArtifacts = TRUE;
+
     else
       usage ();
   }
@@ -158,40 +164,48 @@ main                            (int             argc,
   sprintf (filename, "%s/zone.tab", VzicOlsonDir);
   zones_hash = parse_zone_tab (filename);
 
+  link_data = g_hash_table_new (g_str_hash, g_str_equal);
+
+  /*
+   * These are backwards-compatibility for zones in other files.
+   * This file MUST be processed first.
+   * The links will be output when the actual zone is processed.
+   */
+  convert_olson_file ("backward", zones_hash, link_data);
+
   /*
    * Convert the Olson timezone files.
    */
-  convert_olson_file ("africa", zones_hash);
-  convert_olson_file ("antarctica", zones_hash);
-  convert_olson_file ("asia", zones_hash);
-  convert_olson_file ("australasia", zones_hash);
-  convert_olson_file ("europe", zones_hash);
-  convert_olson_file ("northamerica", zones_hash);
-  convert_olson_file ("southamerica", zones_hash);
+  convert_olson_file ("africa", zones_hash, link_data);
+  convert_olson_file ("antarctica", zones_hash, link_data);
+  convert_olson_file ("asia", zones_hash, link_data);
+  convert_olson_file ("australasia", zones_hash, link_data);
+  convert_olson_file ("europe", zones_hash, link_data);
+  convert_olson_file ("northamerica", zones_hash, link_data);
+  convert_olson_file ("southamerica", zones_hash, link_data);
 
-  /* These are backwards-compatability and weird stuff. */
-  convert_olson_file ("backward", zones_hash);
-  convert_olson_file ("etcetera", zones_hash);
+  /* These are backwards-compatibility and weird stuff. */
+  convert_olson_file ("etcetera", zones_hash, link_data);
 #if 0
-  convert_olson_file ("leapseconds", zones_hash);
-  convert_olson_file ("pacificnew", zones_hash);
-  convert_olson_file ("solar87", zones_hash);
-  convert_olson_file ("solar88", zones_hash);
-  convert_olson_file ("solar89", zones_hash);
+  convert_olson_file ("leapseconds", zones_hash, link_data);
+  convert_olson_file ("pacificnew", zones_hash, link_data);
 #endif
 
   /* This doesn't really do anything and it messes up vzic-dump.pl so we
      don't bother. */
 #if 0
-  convert_olson_file ("factory", zones_hash);
+  convert_olson_file ("factory", zones_hash, link_data);
 #endif
 
   /* This is old System V stuff, which we don't currently support since it
      uses 'min' as a Rule FROM value which messes up our algorithm, making
      it too slow and use too much memory. */
 #if 0
-  convert_olson_file ("systemv", zones_hash);
+  convert_olson_file ("systemv", zones_hash, link_data);
 #endif
+
+  g_hash_table_foreach (link_data, free_link_data, NULL);
+  g_hash_table_destroy (link_data);
 
   /* Output the timezone names and coordinates in a zone.tab file, and
      the translatable strings to feed to gettext. */
@@ -205,12 +219,13 @@ main                            (int             argc,
 
 static void
 convert_olson_file              (char           *olson_file,
-                                 GHashTable     *zones_hash)
+                                 GHashTable     *zones_hash,
+                                 GHashTable     *link_data)
 {
 
   char input_filename[PATHNAME_BUFFER_SIZE];
   GArray *zone_data;
-  GHashTable *rule_data, *link_data;
+  GHashTable *rule_data;
   char dump_filename[PATHNAME_BUFFER_SIZE];
   ZoneData *zone;
   int i, max_until_year;
@@ -234,8 +249,6 @@ convert_olson_file              (char           *olson_file,
   free_zone_data (zone_data);
   g_hash_table_foreach (rule_data, free_rule_array, NULL);
   g_hash_table_destroy (rule_data);
-  g_hash_table_foreach (link_data, free_link_data, NULL);
-  g_hash_table_destroy (link_data);
 }
 
 

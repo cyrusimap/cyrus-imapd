@@ -161,6 +161,7 @@ static int      rule_sort_func                  (const void     *arg1,
 static void     output_zone                     (char           *directory,
                                                  ZoneData       *zone,
                                                  char           *zone_name,
+                                                 char           *zone_aliasof,
                                                  ZoneDescription *zone_desc,
                                                  GHashTable     *rule_data);
 static gboolean parse_zone_name                 (char           *name,
@@ -169,6 +170,7 @@ static gboolean parse_zone_name                 (char           *name,
                                                  char          **filename);
 static void     output_zone_to_files            (ZoneData       *zone,
                                                  char           *zone_name,
+                                                 char           *zone_aliasof,
                                                  ZoneDescription *zone_desc,
                                                  GHashTable     *rule_data,
                                                  FILE           *fp,
@@ -200,6 +202,7 @@ static gboolean times_match                     (VzicTime       *time1,
                                                  int             walloff2);
 static void     output_zone_components          (FILE           *fp,
                                                  char           *name,
+                                                 char           *zone_aliasof,
                                                  ZoneDescription *zone_desc,
                                                  GArray         *changes);
 static void     set_previous_offsets            (GArray         *changes);
@@ -297,7 +300,7 @@ output_vtimezone_files          (char           *directory,
   for (i = 0; i < zone_data->len; i++) {
     zone = &g_array_index (zone_data, ZoneData, i);
     zone_desc = g_hash_table_lookup (zones_hash, zone->zone_name);
-    output_zone (directory, zone, zone->zone_name, zone_desc, rule_data);
+    output_zone (directory, zone, zone->zone_name, NULL, zone_desc, rule_data);
 
     /* Look for any links from this zone. */
     links = g_hash_table_lookup (link_data, zone->zone_name);
@@ -305,11 +308,7 @@ output_vtimezone_files          (char           *directory,
     while (links) {
       link_to = links->data;
 
-      /* We ignore Links that don't have a '/' in them (things like 'EST5EDT').
-       */
-      if (strchr (link_to, '/')) {
-        output_zone (directory, zone, link_to, NULL, rule_data);
-      }
+      output_zone (directory, zone, link_to, zone->zone_name, zone_desc, rule_data);
 
       links = links->next;
     }
@@ -479,6 +478,7 @@ static void
 output_zone                     (char           *directory,
                                  ZoneData       *zone,
                                  char           *zone_name,
+                                 char           *zone_aliasof,
                                  ZoneDescription *zone_desc,
                                  GHashTable     *rule_data)
 {
@@ -567,7 +567,7 @@ output_zone                     (char           *directory,
   fprintf (fp, "\r\nVERSION:2.0\r\n");
 
 
-  output_zone_to_files (zone, zone_name, zone_desc, rule_data, fp, changes_fp);
+  output_zone_to_files (zone, zone_name, zone_aliasof, zone_desc, rule_data, fp, changes_fp);
 
   if (ferror (fp)) {
     fprintf (stderr, "Error writing file: %s\n", filename);
@@ -657,6 +657,7 @@ parse_zone_name                 (char           *name,
 static void
 output_zone_to_files            (ZoneData       *zone,
                                  char           *zone_name,
+                                 char           *zone_aliasof,
                                  ZoneDescription *zone_desc,
                                  GHashTable     *rule_data,
                                  FILE           *fp,
@@ -769,7 +770,7 @@ output_zone_to_files            (ZoneData       *zone,
 
   set_previous_offsets (changes);
 
-  output_zone_components (fp, zone_name, zone_desc, changes);
+  output_zone_components (fp, zone_name, zone_aliasof, zone_desc, changes);
 
   if (VzicDumpChanges)
     dump_changes (changes_fp, zone_name, changes);
@@ -1138,6 +1139,7 @@ dms_to_dd                               (int dms[])
 static void
 output_zone_components                  (FILE           *fp,
                                          char           *name,
+                                         char           *aliasof,
                                          ZoneDescription *zone_desc,
                                          GArray         *changes)
 {
@@ -1149,6 +1151,8 @@ output_zone_components                  (FILE           *fp,
   struct tm *tm = gmtime(&now);
 
   fprintf (fp, "BEGIN:VTIMEZONE\r\nTZID:%s%s\r\n", TZIDPrefixExpanded, name);
+
+  if (aliasof) fprintf (fp, "TZID-ALIAS-OF:%s\r\n", aliasof);
 
   vzictime = &g_array_index (changes, VzicTime, changes->len - 1);
   if (vzictime->until) {
@@ -1202,12 +1206,14 @@ output_zone_components                  (FILE           *fp,
   /* We use an 'X-' property to place the city name in. */
   fprintf (fp, "X-LIC-LOCATION:%s\r\n", name);
 
-  /* We use an 'X-' property to place the proleptic tzname in. */
-  vzictime = &g_array_index (changes, VzicTime, 0);
-  if (vzictime->tzname) {
-    fputs("X-PROLEPTIC-TZNAME", fp);
-    if (!vzictime->is_infinite) fputs(";X-NO-BIG-BANG=TRUE", fp);
-    fprintf(fp, ":%s\r\n", vzictime->tzname);
+  if (VzicDumpTzDataArtifacts) {
+    /* We use an 'X-' property to place the proleptic tzname in. */
+    vzictime = &g_array_index (changes, VzicTime, 0);
+    if (vzictime->tzname) {
+      fputs("X-PROLEPTIC-TZNAME", fp);
+      if (!vzictime->is_infinite) fputs(";X-NO-BIG-BANG=TRUE", fp);
+      fprintf(fp, ":%s\r\n", vzictime->tzname);
+    }
   }
 
   /* We try to find any recurring components first, or they may get output
@@ -1587,7 +1593,7 @@ check_for_rdates                (FILE           *fp,
                            vzictime->prev_walloff);
 
     fputs ("RDATE", fp);
-    if (vzictime->time_code != TIME_WALL) {
+    if (VzicDumpTzDataArtifacts && (vzictime->time_code != TIME_WALL)) {
       fprintf (fp, ";X-OBSERVED-AT=%c",
                vzictime->time_code == TIME_UNIVERSAL ? 'Z' : 'S');
     }
@@ -1664,7 +1670,7 @@ output_component_start                  (char           *buffer,
                                 tmp_vzictime.day_number,
                                 tmp_vzictime.time_seconds);
   n = sprintf (line5, "DTSTART");
-  if (vzictime->time_code != TIME_WALL) {
+  if (VzicDumpTzDataArtifacts && (vzictime->time_code != TIME_WALL)) {
     n += sprintf (line5+n, ";X-OBSERVED-AT=%c",
                   vzictime->time_code == TIME_UNIVERSAL ? 'Z' : 'S');
   }
