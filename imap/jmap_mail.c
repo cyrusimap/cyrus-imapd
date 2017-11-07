@@ -4468,7 +4468,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              * touched again for some unreleated reason.
              *
              */
-            uint64_t ciddata = (uint64_t)hashu64_lookup(md->cid, &cids);
+            off_t ciddata = (off_t)hashu64_lookup(md->cid, &cids);
             if (ciddata == 3) goto doneloop; /* this message clearly can't have been seen and can't be seen */
 
             if (!is_expunged && !(ciddata & 1)) {
