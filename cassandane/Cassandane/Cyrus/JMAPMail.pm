@@ -6110,8 +6110,7 @@ EOF
     $self->assert_not_null($draftsmbox);
 
     xlog "import message from blob $blobid";
-    eval {
-        $jmap->Request([['importMessages', {
+    $res = $jmap->Request([['importMessages', {
             messages => {
                 "1" => {
                     blobId => $blobid,
@@ -6122,10 +6121,57 @@ EOF
                 },
             },
         }, "R1"]]);
-    };
     my $error = $@;
-    $self->assert_matches(qr/Message contains bare newlines/, $error);
+    $self->assert_str_equals("messageContainsBareNewlines", $res->[0][1]{notCreated}{1}{type});
 }
+
+sub test_importmessages_zerobyte
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # A bogus message with an unencoded zero byte
+    my $message = <<"EOF";
+From: \"Some Example Sender\" <example\@local>\r\n
+To: baseball\@local\r\n
+Subject: test message\r\n
+Date: Wed, 7 Dec 2016 22:11:11 +1100\r\n
+MIME-Version: 1.0\r\n
+Content-Type: text/plain; charset="UTF-8"\r\n
+\r\n
+This is a test message with a \x{0}-byte.\r\n
+EOF
+
+    my $data = $jmap->Upload($message, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->Request([
+            ['setMailboxes', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog "import message from blob $blobid";
+    $res = $jmap->Request([['importMessages', {
+            messages => {
+                "1" => {
+                    blobId => $blobid,
+                    mailboxIds => {$draftsmbox =>  JSON::true},
+                    keywords => {
+                        '$Draft' => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]]);
+    $self->assert_str_equals("messageContainsNulByte", $res->[0][1]{notCreated}{1}{type});
+}
+
 
 sub test_import_setdate
     :JMAP :min_version_3_1
