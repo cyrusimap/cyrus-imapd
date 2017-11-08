@@ -57,6 +57,13 @@
                                         is enforced. This parameter allows to
                                         avoid db-writes for every token use */
 
+/* Config options */
+extern int config_jmapauth_allowsasl;
+extern int config_jmapauth_token_ttl;
+extern int config_jmapauth_loginid_ttl;
+
+extern void jmapauth_init(void);
+
 struct jmapauth_token {
     /* Client-facing identifier */
     char version;

@@ -111,9 +111,6 @@ EXPORTED const char *config_zoneinfo_db;
 EXPORTED const char *config_conversations_db;
 EXPORTED const char *config_backup_db;
 EXPORTED const char *config_jmapauth_db;
-EXPORTED int config_jmapauth_allowsasl;
-EXPORTED int config_jmapauth_token_ttl;
-EXPORTED int config_jmapauth_loginid_ttl;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 
@@ -315,11 +312,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         /* All search engines other than Xapian require escaped HTML */
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
-
-    /* Set up JMAP authentication */
-    config_jmapauth_allowsasl = config_getswitch(IMAPOPT_JMAPAUTH_ALLOWSASL);
-    config_jmapauth_token_ttl = config_getint(IMAPOPT_JMAPAUTH_TOKEN_TTL);
-    config_jmapauth_loginid_ttl = config_getint(IMAPOPT_JMAPAUTH_LOGINID_TTL);
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */

@@ -226,6 +226,8 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
 
+    jmapauth_init();
+
     if (config_jmapauth_allowsasl)
         namespace_jmap.auth_schemes = ~0;
 

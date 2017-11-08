@@ -76,6 +76,18 @@
 #define JMAPAUTH_TOKEN_VERSION 1      /* version of token encoding scheme */
 #define JMAPAUTH_KEY_LEN (JMAPAUTH_SESSIONID_LEN + 2) /* length of db key */
 
+EXPORTED int config_jmapauth_allowsasl;
+EXPORTED int config_jmapauth_token_ttl;
+EXPORTED int config_jmapauth_loginid_ttl;
+
+EXPORTED void jmapauth_init(void)
+{
+    config_jmapauth_allowsasl = config_getswitch(IMAPOPT_JMAPAUTH_ALLOWSASL);
+    config_jmapauth_token_ttl = config_getint(IMAPOPT_JMAPAUTH_TOKEN_TTL);
+    config_jmapauth_loginid_ttl = config_getint(IMAPOPT_JMAPAUTH_LOGINID_TTL);
+}
+
+
 EXPORTED struct jmapauth_token *jmapauth_token_new(const char *userid,
                char kind, const void *data, size_t datalen)
 {
