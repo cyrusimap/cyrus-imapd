@@ -1206,14 +1206,12 @@ output_zone_components                  (FILE           *fp,
   /* We use an 'X-' property to place the city name in. */
   fprintf (fp, "X-LIC-LOCATION:%s\r\n", name);
 
-  if (VzicDumpTzDataArtifacts) {
-    /* We use an 'X-' property to place the proleptic tzname in. */
-    vzictime = &g_array_index (changes, VzicTime, 0);
-    if (vzictime->tzname) {
-      fputs("X-PROLEPTIC-TZNAME", fp);
-      if (!vzictime->is_infinite) fputs(";X-NO-BIG-BANG=TRUE", fp);
-      fprintf(fp, ":%s\r\n", vzictime->tzname);
-    }
+  /* We use an 'X-' property to place the proleptic tzname in. */
+  vzictime = &g_array_index (changes, VzicTime, 0);
+  if (vzictime->tzname) {
+    fputs("X-PROLEPTIC-TZNAME", fp);
+    if (!vzictime->is_infinite) fputs(";X-NO-BIG-BANG=TRUE", fp);
+    fprintf(fp, ":%s\r\n", vzictime->tzname);
   }
 
   /* We try to find any recurring components first, or they may get output
