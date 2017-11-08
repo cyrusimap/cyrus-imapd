@@ -777,6 +777,7 @@ static int read_indexed(const strarray_t *activedirs,
         buf_reset(&key);
         if (srcdb) {
             cyrusdb_close(srcdb);
+            srcdb = NULL;
         }
 
         /* First look in the cached tiers in the top tier database. */
