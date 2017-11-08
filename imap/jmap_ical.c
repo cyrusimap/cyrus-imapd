@@ -2104,16 +2104,10 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* prodId */
     if (wantprop(ctx, "prodId") && !is_exc) {
-        icalcomponent *ical = comp;
+        icalcomponent *ical = icalcomponent_get_parent(comp);
         const char *prodid = NULL;
-        while (ical) {
-            prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
-            if (prop) {
-                prodid = icalproperty_get_prodid(prop);
-                break;
-            }
-            ical = icalcomponent_get_parent(ical);
-        }
+        prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
+        if (prop) prodid = icalproperty_get_prodid(prop);
         json_object_set_new(event, "prodId",
                 prodid ? json_string(prodid) : json_null());
     }
@@ -4024,22 +4018,30 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event) {
     }
 
     /* prodId */
-    val = NULL;
-    if (!json_is_null(json_object_get(event, "prodId"))) {
-        pe = readprop(ctx, event, "prodId", 0, "s", &val);
-        if (pe > 0 || is_create) {
-            struct buf buf = BUF_INITIALIZER;
-            if (!val) {
-                /* Use same product id like jcal.c */
-                buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
-                buf_appendcstr(&buf, CYRUS_VERSION);
-                buf_appendcstr(&buf, "//EN");
-                val = buf_cstring(&buf);
+    if (!is_exc) {
+        val = NULL;
+        if (!json_is_null(json_object_get(event, "prodId"))) {
+            pe = readprop(ctx, event, "prodId", 0, "s", &val);
+            if (pe > 0 || is_create) {
+                struct buf buf = BUF_INITIALIZER;
+                if (!val) {
+                    /* Use same product id like jcal.c */
+                    buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
+                    buf_appendcstr(&buf, CYRUS_VERSION);
+                    buf_appendcstr(&buf, "//EN");
+                    val = buf_cstring(&buf);
+                }
+                /* Purge any PRODID from the component. It should
+                 * go into the enclosing VCALENDAR instead. */
+                remove_icalprop(comp, ICAL_PRODID_PROPERTY);
+
+                /* Set PRODID in the VCALENDAR */
+                icalcomponent *ical = icalcomponent_get_parent(comp);
+                remove_icalprop(ical, ICAL_PRODID_PROPERTY);
+                prop = icalproperty_new_prodid(val);
+                icalcomponent_add_property(ical, prop);
+                buf_free(&buf);
             }
-            remove_icalprop(comp, ICAL_PRODID_PROPERTY);
-            prop = icalproperty_new_prodid(val);
-            icalcomponent_add_property(comp, prop);
-            buf_free(&buf);
         }
     }
 
