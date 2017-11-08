@@ -3180,7 +3180,7 @@ static int prescreen_prop(const struct prop_entry *entry,
 
     if (fctx->req_tgt->resource && !(entry->flags & PROP_RESOURCE)) allowed = 0;
     else if (entry->flags & PROP_PRESCREEN) {
-        allowed = !entry->get(prop->name, NULL, fctx,
+        allowed = !entry->get(BAD_CAST entry->name, NULL, fctx,
                               prop, NULL, NULL, entry->rock);
     }
 
