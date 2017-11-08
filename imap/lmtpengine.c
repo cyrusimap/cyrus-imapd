@@ -830,6 +830,7 @@ static int process_recipient(char *addr,
     }
 
     mbname_t *mbname = NULL;
+    int r = 0;
 
     size_t sl = strlen(addr);
     if (addr[sl-1] == '>') sl--;
@@ -849,9 +850,9 @@ static int process_recipient(char *addr,
                 mbname_set_domain(mbname, NULL);
         }
 
-        if (verify_user(mbname,
+        if ((r = verify_user(mbname,
                         (quota_t) (ignorequota ? -1 : msg->size),
-                        ignorequota ? -1 : 1, msg->authstate)) {
+                        ignorequota ? -1 : 1, msg->authstate))) {
             mbname_free(&mbname);
         }
     }
@@ -860,9 +861,9 @@ static int process_recipient(char *addr,
         const char *catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
         if (catchall) {
             mbname = mbname_from_userid(catchall);
-            if (verify_user(mbname,
+            if ((r = verify_user(mbname,
                             ignorequota ? -1 : msg->size,
-                            ignorequota ? -1 : 1, msg->authstate)) {
+                            ignorequota ? -1 : 1, msg->authstate))) {
                 mbname_free(&mbname);
             }
         }
@@ -870,6 +871,9 @@ static int process_recipient(char *addr,
 
     if (!mbname) {
         /* we lost */
+        if (r) {
+            return r;
+        }
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
