@@ -393,7 +393,15 @@ static int jmap_initreq(jmap_req_t *req)
 
 static void jmap_finireq(jmap_req_t *req)
 {
-    assert(req->mboxes->count == 0);
+    int i;
+
+    for (i = 0; i < req->mboxes->count; i++) {
+        struct _mboxcache_rec *rec = ptrarray_nth(req->mboxes, i);
+        syslog(LOG_ERR, "jmap: force-closing mailbox %s (refcount=%d)",
+                        rec->mbox->name, rec->refcount);
+        mailbox_close(&rec->mbox);
+        free(rec);
+    }
     ptrarray_free(req->mboxes);
     req->mboxes = NULL;
 }
@@ -457,7 +465,10 @@ EXPORTED void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
         if (rec->mbox == *mboxp)
             break;
     }
-    assert(i < req->mboxes->count);
+    if (i >= req->mboxes->count) {
+        syslog(LOG_ERR, "jmap: ignore non-cached mailbox %s", (*mboxp)->name);
+        return;
+    }
 
     if (!(--rec->refcount)) {
         ptrarray_remove(req->mboxes, i);
