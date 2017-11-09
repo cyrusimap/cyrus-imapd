@@ -7382,6 +7382,8 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             struct dav_data *ddata;
             const char *resultstr = NULL;
 
+            memset(&tgt, 0, sizeof(struct request_target_t));
+
             /* Parse the URI */
             uri = parse_uri(METH_REPORT, (const char *) href,
                             1 /* path required */, &resultstr);
@@ -7391,7 +7393,6 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             }
             else {
                 /* Parse the path */
-                memset(&tgt, 0, sizeof(struct request_target_t));
                 tgt.namespace = txn->req_tgt.namespace;
 
                 r = rparams->parse_path(uri->path, &tgt, &resultstr);
