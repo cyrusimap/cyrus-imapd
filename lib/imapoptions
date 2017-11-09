@@ -2427,6 +2427,10 @@ product version in the capabilities */
 { "tls_server_cert", NULL, STRING }
 /* File containing the certificate presented to clients. */
 
+{ "tls_server_dhparam", NULL, STRING }
+/* File containing the DH parameters belonging to the certificate in
+   tls_server_cert. */
+
 { "tls_server_key", NULL, STRING }
 /* File containing the private key belonging to the certificate in
    tls_server_cert. */
