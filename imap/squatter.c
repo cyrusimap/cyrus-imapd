@@ -552,7 +552,8 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 
         return 1;
     }
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
+    if ((mbentry->mbtype & MBTYPE_REMOTE) ||
+        (mbentry->mbtype & MBTYPES_NONIMAP )) {
 	mboxlist_entry_free(&mbentry);
 	return 0;
     }
