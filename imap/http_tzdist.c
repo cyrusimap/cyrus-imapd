@@ -1456,7 +1456,8 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
                 if (trunc_dtstart) {
                     /* Bump RRULE start to 1 year prior to our window open */
-                    dtstart.year = start.year - 1;
+                    dtstart = start;
+                    dtstart.year--;
                 }
 
                 ritr = icalrecur_iterator_new(rrule, dtstart);
