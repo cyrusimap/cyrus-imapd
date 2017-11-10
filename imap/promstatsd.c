@@ -58,6 +58,8 @@
 #include "lib/util.h"
 
 #include "imap/global.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
 #include "imap/prometheus.h"
 
 /* globals so that shut_down() can clean up */
@@ -294,6 +296,58 @@ static void do_collate_report(struct buf *buf)
     free_hash_table(&all_stats, free);
 }
 
+struct users_mailboxes_counts {
+    int64_t users;
+    int64_t mailboxes;
+    /* XXX deleted? shared? */
+};
+
+static int count_users_mailboxes(struct findall_data *data, void *rock)
+{
+    struct users_mailboxes_counts *umcounts = (struct users_mailboxes_counts *) rock;
+
+    /* don't want partial matches */
+    if (!data || !data->mbname) return 0;
+
+    if (mbname_userid(data->mbname) &&
+        !strarray_size(mbname_boxes(data->mbname))) {
+        syslog(LOG_DEBUG, "counting user: %s", mbname_intname(data->mbname));
+        umcounts->users ++;
+    }
+
+    syslog(LOG_DEBUG, "counting mailbox: %s", mbname_intname(data->mbname));
+    umcounts->mailboxes ++;
+
+    return 0;
+}
+
+static void do_collate_usage(struct buf *buf)
+{
+    struct users_mailboxes_counts umcounts = { 0, 0 };
+    int64_t now;
+    int r;
+
+    r = mboxlist_findall(NULL /* admin namespace */, "*", 1, NULL, NULL,
+                         count_users_mailboxes, &umcounts);
+    if (!r) {
+        now = now_ms();
+
+        buf_printf(buf, "# HELP %s %s\n",
+                        "cyrus_usage_users",
+                        "The number of Cyrus user accounts");
+        buf_appendcstr(buf, "# TYPE cyrus_usage_users gauge\n");
+        buf_printf(buf, "cyrus_usage_users %" PRId64 " %" PRId64 "\n",
+                        umcounts.users, now);
+
+        buf_printf(buf, "# HELP %s %s\n",
+                        "cyrus_usage_mailboxes",
+                        "The number of Cyrus mailboxes");
+        buf_appendcstr(buf, "# TYPE cyrus_usage_mailboxes gauge\n");
+        buf_printf(buf, "cyrus_usage_mailboxes %" PRId64 " %" PRId64 "\n",
+                        umcounts.mailboxes, now);
+    }
+}
+
 static void do_write_report(struct mappedfile *mf, const struct buf *report)
 {
     int r;
@@ -408,6 +462,7 @@ int main(int argc, char **argv)
         }
 
         do_collate_report(&report_buf);
+        do_collate_usage(&report_buf);
         do_write_report(report_file, &report_buf);
 
         /* then wait around a bit */
