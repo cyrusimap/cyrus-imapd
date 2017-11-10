@@ -61,6 +61,7 @@
 #include "imap/mboxlist.h"
 #include "imap/mboxname.h"
 #include "imap/prometheus.h"
+#include "imap/quota.h"
 
 /* globals so that shut_down() can clean up */
 static struct buf report_buf = BUF_INITIALIZER;
@@ -321,9 +322,40 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     return 0;
 }
 
+struct quota_bufs {
+    struct buf used;
+    struct buf limit;
+};
+
+static int format_quota(struct quota *quota, void *rock)
+{
+    struct quota_bufs *bufs = (struct quota_bufs *) rock;
+    int64_t now = now_ms();
+    int res;
+
+    /* XXX how should "unlimited" be represented to prometheus? */
+
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+        buf_printf(&bufs->used, "cyrus_usage_quota_used{quotaroot=\"%s\",resource=\"%s\"}",
+                                quota->root,
+                                quota_names[res]);
+        buf_printf(&bufs->used, " " QUOTA_T_FMT " %" PRId64 "\n",
+                                quota->useds[res], now);
+
+        buf_printf(&bufs->limit, "cyrus_usage_quota_limit{quotaroot=\"%s\",resource=\"%s\"}",
+                                 quota->root,
+                                 quota_names[res]);
+        buf_printf(&bufs->limit, " " QUOTA_T_FMT " %" PRId64 "\n",
+                                 quota->limits[res], now);
+    }
+
+    return 0;
+}
+
 static void do_collate_usage(struct buf *buf)
 {
     struct users_mailboxes_counts umcounts = { 0, 0 };
+    struct quota_bufs quota_bufs = { BUF_INITIALIZER, BUF_INITIALIZER };
     int64_t now;
     int r;
 
@@ -346,6 +378,25 @@ static void do_collate_usage(struct buf *buf)
         buf_printf(buf, "cyrus_usage_mailboxes %" PRId64 " %" PRId64 "\n",
                         umcounts.mailboxes, now);
     }
+
+    r = quota_foreach(NULL, format_quota, &quota_bufs, NULL);
+
+    if (!r) {
+        buf_printf(buf, "# HELP %s %s\n",
+                        "cyrus_usage_quota_used",
+                        "The amount of used quota");
+        buf_appendcstr(buf, "# TYPE cyrus_usage_quota_used gauge\n");
+        buf_append(buf, &quota_bufs.used);
+
+        buf_printf(buf, "# HELP %s %s\n",
+                        "cyrus_usage_quota_limit",
+                        "The quota limit");
+        buf_appendcstr(buf, "# TYPE cyrus_usage_quota_limit gauge\n");
+        buf_append(buf, &quota_bufs.limit);
+    }
+
+    buf_free(&quota_bufs.used);
+    buf_free(&quota_bufs.limit);
 }
 
 static void do_write_report(struct mappedfile *mf, const struct buf *report)
