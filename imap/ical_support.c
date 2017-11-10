@@ -48,11 +48,22 @@
 #include "lib/exitcodes.h"
 
 #include "caldav_db.h"
+#include "global.h"
 #include "ical_support.h"
 #include "message.h"
 #include "util.h"
 
 #ifdef HAVE_ICAL
+
+EXPORTED void ical_support_init(void)
+{
+    /* Initialize timezones */
+    const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
+    if (!tzpath) tzpath = ICAL_ZONEINFO_DIR;
+    icaltimezone_set_zone_directory(tzpath);
+    icaltimezone_set_tzid_prefix("");
+    icaltimezone_set_builtin_tzdata(1);
+}
 
 #if (SIZEOF_TIME_T > 4)
 static time_t epoch    = (time_t) LONG_MIN;

@@ -216,7 +216,11 @@ libexec_PROGRAMS += imap/calalarmd
 endif
 
 if HTTPD
-AM_CPPFLAGS += $(HTTP_CPPFLAGS)
+# Set up zoneinfo for libical timezones
+ICAL_ZONEINFO_DIR=$(pkgdatadir)/zoneinfo
+SUBDIRS += vzic
+
+AM_CPPFLAGS += $(HTTP_CPPFLAGS) -DICAL_ZONEINFO_DIR=\"$(ICAL_ZONEINFO_DIR)\"
 AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
@@ -1949,3 +1953,5 @@ libtool: $(LIBTOOL_DEPS)
 # Install for Cassandane
 cassandane:
 	$(MAKE) DESTDIR=`cd ../inst ; /bin/pwd` install
+
+export

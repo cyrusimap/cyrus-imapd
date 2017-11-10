@@ -255,7 +255,7 @@ convert_olson_file              (char           *olson_file,
 static void
 usage                           (void)
 {
-  fprintf (stderr, "Usage: vzic [--dump] [--dump-changes] [--no-rrules] [--no-rdates] [--pure] [--output-dir <directory>] [--url-prefix <url>] [--olson-dir <directory>]\n");
+  fprintf (stderr, "Usage: cyr_vzic [--dump] [--dump-changes] [--no-rrules] [--no-rdates] [--pure] [--output-dir <directory>] [--url-prefix <url>] [--olson-dir <directory>]\n");
 
   exit (1);
 }

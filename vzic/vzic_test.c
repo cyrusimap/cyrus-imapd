@@ -42,12 +42,15 @@
  * other timezones incorrect sometimes (e.g. if they change).
  */
 
+#include <string.h>
+#include <stdlib.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
 
-#include <ical.h>
+#include <libical/ical.h>
 /*#include <evolution/ical.h>*/
 
 #define CHANGES_MAX_YEAR 2030
@@ -266,6 +269,8 @@ parse_zone_name                 (char           *name,
       *filename = icalmemory_strdup (first_slash_pos + 1);
     }
   }
+
+  return invalid;
 }
 
 
@@ -317,7 +322,7 @@ dump_local_times (icaltimezone *zone, FILE *fp)
   tt.second = 0;
   tt.is_utc = 0;
   tt.is_date = 0;
-  tt.zone = "";
+  tt.zone = NULL;
 
   tm.tm_year = tt.year - 1900;
   tm.tm_mon = tt.month - 1;

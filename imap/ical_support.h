@@ -76,6 +76,8 @@
 #define ICAL_XPATCH_COMPONENT         ICAL_X_COMPONENT
 #endif
 
+extern void ical_support_init(void);
+
 extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
@@ -129,6 +131,9 @@ extern void icaltime_set_utc(struct icaltimetype *t, int set);
 extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
+
+/* Functions that should be declared in libical */
+#define icaltimezone_set_zone_directory set_zone_directory
 
 
 /* Functions not declared in in libical < v2.0 */

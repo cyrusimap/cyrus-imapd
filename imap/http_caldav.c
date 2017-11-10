@@ -712,16 +712,6 @@ static void my_caldav_init(struct buf *serverinfo)
 
 #ifdef HAVE_TZ_BY_REF
     if (namespace_tzdist.enabled) {
-        /* Tell libical to use our builtin TZ */
-        /* XXX  MUST be done before any use of libical, e.g caldav_init() */
-        char zonedir[MAX_MAILBOX_PATH+1];
-
-        snprintf(zonedir, MAX_MAILBOX_PATH, "%s%s",
-                 config_dir, FNAME_ZONEINFODIR);
-        set_zone_directory(zonedir);
-        icaltimezone_set_tzid_prefix("");
-        icaltimezone_set_builtin_tzdata(1);
-
         namespace_calendar.allow |= ALLOW_CAL_NOTZ;
     }
 #endif

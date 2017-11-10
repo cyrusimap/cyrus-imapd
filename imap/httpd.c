@@ -1380,6 +1380,9 @@ int service_init(int argc __attribute__((unused)),
                (version >> 24) & 0xfff, (version >> 12) & 0xfff, version & 0xfff);
 #endif
 
+    /* Initialize libical */
+    ical_support_init();
+
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
     for (i = 0; namespaces[i]; i++) {
