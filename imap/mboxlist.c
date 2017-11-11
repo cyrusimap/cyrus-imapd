@@ -3604,6 +3604,8 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
         mboxname_userownsmailbox(mbrock->userid, mboxname)) return 0;
 
     r = mboxlist_lookup(mboxname, &mbrock->mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
+
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
                mboxname, error_message(r));
