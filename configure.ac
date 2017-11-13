@@ -1488,15 +1488,6 @@ dnl
                 ],
                 AC_MSG_ERROR([Need libical for http]))
 
-	if test "$with_ical" = "yes"; then
-		PKG_CHECK_MODULES([GLIB], [glib-2.0], [
-		    AC_DEFINE(HAVE_GLIB,[],[Build Glib support into httpd?])
-		    LIBS="$LIBS ${GLIB_LIBS}"
-		    with_glib=yes
-                ],
-		AC_MSG_ERROR([Need glib for http]))
-	fi
-
         AC_CHECK_DECLS([icalproperty_get_parent, ICAL_STATUS_DELETED,
                         icalrecur_freq_to_string, icalrecur_weekday_to_string],
                 [], [], [[#include <libical/ical.h>]])
@@ -1561,6 +1552,14 @@ dnl
                 AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
                         [Do we have support for setting start point of recurrences?]))
 
+        PKG_CHECK_VAR(CYRUS_TIMEZONES_ZONEINFO_DIR, cyrus-timezones, zoneinfo_dir, [
+                 AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR),
+                 with_cyrus_timezones=yes,
+                 CYRUS_TIMEZONES_CFLAGS=-DCYRUS_TIMEZONES_ZONEINFO_DIR="\\\"$CYRUS_TIMEZONES_ZONEINFO_DIR\\\""
+                 ],
+                AC_MSG_NOTICE([Cyrus timezones could not be found. Consider installing the cyrus-timezones package for httpd]))
+
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
@@ -1597,7 +1596,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
         HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
@@ -2253,7 +2252,6 @@ AC_CONFIG_FILES([
     libcyrus_min.pc
     libcyrus.pc
     libcyrus_sieve.pc
-    vzic/Makefile
     Makefile
 ])
 

@@ -76,6 +76,7 @@
 #define ICAL_XPATCH_COMPONENT         ICAL_X_COMPONENT
 #endif
 
+/* Initialize libical timezones. */
 extern void ical_support_init(void);
 
 extern const char *icalparameter_get_value_as_string(icalparameter *param);

@@ -57,12 +57,19 @@
 
 EXPORTED void ical_support_init(void)
 {
-    /* Initialize timezones */
+    /* Initialize timezones path */
     const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
-    if (!tzpath) tzpath = ICAL_ZONEINFO_DIR;
-    icaltimezone_set_zone_directory(tzpath);
-    icaltimezone_set_tzid_prefix("");
-    icaltimezone_set_builtin_tzdata(1);
+#ifdef CYRUS_TIMEZONES_ZONEINFO_DIR
+    if (!tzpath) {
+        tzpath = CYRUS_TIMEZONES_ZONEINFO_DIR;
+    }
+#endif
+
+    if (tzpath) {
+        icaltimezone_set_zone_directory(tzpath);
+        icaltimezone_set_tzid_prefix("");
+        icaltimezone_set_builtin_tzdata(1);
+    }
 }
 
 #if (SIZEOF_TIME_T > 4)

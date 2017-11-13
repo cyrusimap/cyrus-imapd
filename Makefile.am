@@ -120,7 +120,6 @@ noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
 EXTRA_DIST = \
-	$(wildcard tools/vzic/*) \
 	VERSION
 
 if COM_ERR
@@ -216,11 +215,9 @@ libexec_PROGRAMS += imap/calalarmd
 endif
 
 if HTTPD
-# Set up zoneinfo for libical timezones
-ICAL_ZONEINFO_DIR=$(pkgdatadir)/zoneinfo
-SUBDIRS += vzic
 
-AM_CPPFLAGS += $(HTTP_CPPFLAGS) -DICAL_ZONEINFO_DIR=\"$(ICAL_ZONEINFO_DIR)\"
+AM_CPPFLAGS += $(HTTP_CPPFLAGS)
+
 AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
