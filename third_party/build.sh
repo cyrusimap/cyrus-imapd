@@ -62,6 +62,17 @@ if [ ! $ITEM ] || [ $ITEM = libical ] ; then
 )
 fi
 
+if [ ! $ITEM ] || [ "$ITEM" = "cyrus-timezones" ] ; then
+(
+  cd cyrus-timezones
+  git clean -f -x -d
+  autoreconf -i
+  PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$PREFIX/lib/pkgconfig ./configure --prefix=$PREFIX
+  make $MAKEOPTS
+  sudo make install
+)
+fi
+
 if [ ! $ITEM ] || [ $ITEM = xapian ] ; then
 (
   cd xapian
