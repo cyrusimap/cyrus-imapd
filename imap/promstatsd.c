@@ -47,6 +47,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <syslog.h>
@@ -333,20 +334,21 @@ static int format_quota(struct quota *quota, void *rock)
     int64_t now = now_ms();
     int res;
 
-    /* XXX how should "unlimited" be represented to prometheus? */
-
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+        double dv;
+
         buf_printf(&bufs->used, "cyrus_usage_quota_used{quotaroot=\"%s\",resource=\"%s\"}",
                                 quota->root,
                                 quota_names[res]);
         buf_printf(&bufs->used, " " QUOTA_T_FMT " %" PRId64 "\n",
                                 quota->useds[res], now);
 
+        dv = quota->limits[res] == QUOTA_UNLIMITED ? INFINITY : quota->limits[res];
         buf_printf(&bufs->limit, "cyrus_usage_quota_limit{quotaroot=\"%s\",resource=\"%s\"}",
                                  quota->root,
                                  quota_names[res]);
-        buf_printf(&bufs->limit, " " QUOTA_T_FMT " %" PRId64 "\n",
-                                 quota->limits[res], now);
+        buf_printf(&bufs->limit, " %.0f %" PRId64 "\n",
+                                 dv, now);
     }
 
     return 0;
