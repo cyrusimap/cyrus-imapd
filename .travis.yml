@@ -21,6 +21,7 @@ addons:
     - help2man
     - python-docutils
     - libmagic-dev
+    - pkg-config
 env:
   global:
   - CYRUSLIBS="/usr/local/cyruslibs"
