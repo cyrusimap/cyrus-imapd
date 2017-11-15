@@ -90,6 +90,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+#include <errno.h>
 #include <libxml/uri.h>
 
 static const struct dav_namespace_t {
@@ -7530,7 +7531,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     modseq_t basemodseq = 0;
     modseq_t highestmodseq = 0;
     modseq_t respmodseq = 0;
-    uint32_t limit = -1;
+    uint32_t limit = UINT32_MAX - 1;
     uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
@@ -7617,12 +7618,15 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                 }
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
+                errno = 0;
+
                 for (node2 = node->children; node2; node2 = node2->next) {
                     if ((node2->type == XML_ELEMENT_NODE) &&
                         !xmlStrcmp(node2->name, BAD_CAST "nresults") &&
                         (!(str = xmlNodeListGetString(inroot->doc,
                                                       node2->children, 1)) ||
-                         (sscanf((char *) str, "%u", &limit) != 1))) {
+                         (sscanf((char *) str, "%u", &limit) != 1) ||
+                         (errno != 0) || (limit >= UINT32_MAX))) {
                         txn->error.precond = DAV_OVER_LIMIT;
                         ret = HTTP_FORBIDDEN;
                     }
@@ -7663,15 +7667,14 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                                       -1 /* ALL kinds of resources */,
                                       (syncmodseq && basemodseq) ? 0 : limit + 1,
                                       &updates_cb, &rock);
-    if (nresp <= limit) {
-        /* Full response - respmodseq will be highestmodseq of mailbox */
-        respmodseq = highestmodseq;
-    }
-
     if (r) {
         /* Tell client we truncated the responses */
         *(fctx->req_tgt->resource) = '\0';
         xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
+    }
+    else {
+        /* Full response - respmodseq will be highestmodseq of mailbox */
+        respmodseq = highestmodseq;
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
