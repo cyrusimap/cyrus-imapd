@@ -9885,6 +9885,12 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
     /* Only on home sets */
     if (fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
+    if (!propstat) {
+        /* Prescreen "property" request - add namespace for environment */
+        ensure_ns(fctx->ns, NS_MOBME, fctx->root, XML_NS_MOBME, "MM");
+        return 0;
+    }
+
     const char *aps_topic =
         config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
                          IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);

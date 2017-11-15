@@ -538,7 +538,7 @@ static const struct prop_entry caldav_props[] = {
 
     /* Apple Push Notifications Service properties */
     { "push-transports", NS_CS,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PRESCREEN,
       propfind_push_transports, NULL, (void *) MBTYPE_CALENDAR },
     { "pushkey", NS_CS,
       PROP_COLLECTION,
