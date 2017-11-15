@@ -7534,13 +7534,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     uint32_t limit = UINT32_MAX - 1;
     uint32_t nresp = 0;
     xmlNodePtr node;
-    struct index_state istate;
     char tokenuri[MAX_MAILBOX_PATH+1];
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
-
-    memset(&istate, 0, sizeof(struct index_state));
-    istate.map = NULL;
 
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
@@ -7706,7 +7702,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     write_body(0, txn, NULL, 0);
 
   done:
-    if (istate.map) free(istate.map);
     mailbox_close(&mailbox);
 
     return ret;
