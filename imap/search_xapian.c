@@ -1774,13 +1774,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
-    /* XXX - there's an annoying lock inversion going on here.  We have to release
-     * the mailbox lock and then re-establish it after we have the xapianactive file
-     * open.  We should really just get an mboxname passed down to this layer, but
-     * that's a much bigger rewrite due to disparate actions being squeezed into an
-     * identical API */
-    mailbox_unlock_index(mailbox, NULL);
-
     /* Get a shared namelock */
     namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
 
@@ -1844,11 +1837,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* purge any stale cache for this mailbox index sequences */
     struct seqset *seq = hash_del(mailbox->name, &tr->cached_seqs);
     if (seq) seqset_free(seq);
-
-    /* XXX - and of course we have to lock again! (XXX - no support for the nonblocking bit
-     * on this second lock... *sigh*)  We don't have the flags to know that we wanted it */
-    r = mailbox_lock_index(mailbox, LOCK_SHARED);
-    if (r) goto out;
 
     tr->super.mailbox = mailbox;
 
