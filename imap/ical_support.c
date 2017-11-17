@@ -66,7 +66,7 @@ EXPORTED void ical_support_init(void)
 #endif
 
     if (tzpath) {
-        icaltimezone_set_zone_directory(tzpath);
+	icaltimezone_set_zone_directory((char *) tzpath);
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
     }
