@@ -1081,7 +1081,7 @@ EOF
 
   $self->assert_deep_equals([], $adds);
   $self->assert_equals(1, scalar @$removes);
-  $self->assert_str_equals($href, $removes->[0]);
+  $self->assert_str_equals("/dav/calendars/user/cassandane/" . $href, $removes->[0]);
   $self->assert_deep_equals([], $errors);
 }
 
