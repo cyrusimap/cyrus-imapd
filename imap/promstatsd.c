@@ -307,7 +307,7 @@ struct partition_data {
     int64_t n_deleted;
     int64_t n_shared; /* XXX ??? */
 
-    double quota_commitment;
+    double quota_commitment[QUOTA_NUMRESOURCES];
 
     int64_t timestamp;
 };
@@ -348,35 +348,69 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     return 0;
 }
 
-struct quota_bufs {
-    struct buf used;
-    struct buf limit;
+struct quota_cb_rock {
+    struct quota *quota;
+    hash_table *h;
 };
 
-static int format_quota(struct quota *quota, void *rock)
+static int quota_cb(struct findall_data *data, void *rock)
 {
-    struct quota_bufs *bufs = (struct quota_bufs *) rock;
-    int64_t now = now_ms();
+    static char *seen_partition = NULL;
+
+    struct quota_cb_rock *cbrock = (struct quota_cb_rock *) rock;
+    struct partition_data *pdata;
+    const char *partition;
     int res;
 
-    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-        double dv;
-
-        buf_printf(&bufs->used, "cyrus_usage_quota_used{quotaroot=\"%s\",resource=\"%s\"}",
-                                quota->root,
-                                quota_names[res]);
-        buf_printf(&bufs->used, " " QUOTA_T_FMT " %" PRId64 "\n",
-                                quota->useds[res], now);
-
-        dv = quota->limits[res] == QUOTA_UNLIMITED ? INFINITY : quota->limits[res];
-        buf_printf(&bufs->limit, "cyrus_usage_quota_limit{quotaroot=\"%s\",resource=\"%s\"}",
-                                 quota->root,
-                                 quota_names[res]);
-        buf_printf(&bufs->limit, " %.0f %" PRId64 "\n",
-                                 dv, now);
+    if (!data) {
+        /* just reset the seen_partition buffer */
+        if (seen_partition) free(seen_partition);
+        seen_partition = NULL;
+        return 0;
     }
 
+    /* don't want partial matches */
+    if (!data->mbname || !data->mbentry) return 0;
+
+    partition = data->mbentry->partition;
+    if (seen_partition && !strcmp(seen_partition, partition)) {
+        /* seen this one already, don't double count it */
+        return 0;
+    }
+
+    pdata = hash_lookup(partition, cbrock->h);
+
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+        struct quota *q = cbrock->quota;
+        double dv = q->limits[res] < 0 ? INFINITY : q->limits[res];
+
+        pdata->quota_commitment[res] += dv;
+    }
+    pdata->timestamp = now_ms();
+
+    if (seen_partition) free(seen_partition);
+    seen_partition = xstrdup(partition);
+
     return 0;
+}
+
+static int count_quota_commitments(struct quota *quota, void *rock)
+{
+    hash_table *h = (hash_table *) rock;
+    struct quota_cb_rock cbrock = { quota, h };
+    char tmp[MAX_MAILBOX_PATH];
+    strarray_t *patterns = strarray_new();
+    int r;
+
+    strarray_append(patterns, quota->root);
+    snprintf(tmp, sizeof(tmp), "%s.*", quota->root);
+    strarray_append(patterns, tmp);
+
+    r = mboxlist_findallmulti(NULL /* admin namespace */, patterns, 1, NULL, NULL,
+                              quota_cb, &cbrock);
+
+    strarray_free(patterns);
+    return r;
 }
 
 static void pname_cb(const char *key,
@@ -419,10 +453,34 @@ do {                                                                         \
     }                                                                        \
 } while(0)
 
+static void format_usage_quota_commitment(struct buf *buf,
+                                          const strarray_t *pnames,
+                                          hash_table *h)
+{
+    int i, res;
+    buf_printf(buf, "# HELP %s %s\n",
+                    "cyrus_usage_quota_commitment",
+                    "The amount of quota committed");
+    buf_appendcstr(buf, "# TYPE cyrus_usage_quota_commitment gauge\n");
+
+    for (i = 0; i < strarray_size(pnames); i++) {
+        struct partition_data *pdata = hash_lookup(strarray_nth(pnames, i), h);
+
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            buf_printf(buf, "%s{partition=\"%s\",resource=\"%s\"}",
+                            "cyrus_usage_quota_commitment",
+                            strarray_nth(pnames, i),
+                            quota_names[res]);
+            buf_printf(buf, " %.0f %" PRId64 "\n",
+                            pdata->quota_commitment[res],
+                            pdata->timestamp);
+        }
+    }
+}
+
 static void do_collate_usage(struct buf *buf)
 {
     hash_table h = HASH_TABLE_INITIALIZER;
-    struct quota_bufs quota_bufs = { BUF_INITIALIZER, BUF_INITIALIZER };
     strarray_t *partition_names = NULL;
     int r;
 
@@ -430,6 +488,10 @@ static void do_collate_usage(struct buf *buf)
 
     r = mboxlist_findall(NULL /* admin namespace */, "*", 1, NULL, NULL,
                          count_users_mailboxes, &h);
+    if (!r)
+        r = quota_foreach(NULL, count_quota_commitments, &h, NULL);
+
+    /* need to invert the hash table on output, so build a list of its keys */
     partition_names = get_partition_names(&h);
 
     FORMAT_USAGE_INT64("cyrus_usage_deleted_mailboxes", "gauge",
@@ -448,27 +510,10 @@ static void do_collate_usage(struct buf *buf)
                        buf, partition_names, &h);
     /* XXX shared ??? */
 
+    format_usage_quota_commitment(buf, partition_names, &h);
+
     strarray_free(partition_names);
     free_hash_table(&h, free);
-
-    r = quota_foreach(NULL, format_quota, &quota_bufs, NULL);
-
-    if (!r) {
-        buf_printf(buf, "# HELP %s %s\n",
-                        "cyrus_usage_quota_used",
-                        "The amount of used quota");
-        buf_appendcstr(buf, "# TYPE cyrus_usage_quota_used gauge\n");
-        buf_append(buf, &quota_bufs.used);
-
-        buf_printf(buf, "# HELP %s %s\n",
-                        "cyrus_usage_quota_limit",
-                        "The quota limit");
-        buf_appendcstr(buf, "# TYPE cyrus_usage_quota_limit gauge\n");
-        buf_append(buf, &quota_bufs.limit);
-    }
-
-    buf_free(&quota_bufs.used);
-    buf_free(&quota_bufs.limit);
 }
 
 static void do_write_report(struct mappedfile *mf, const struct buf *report)
