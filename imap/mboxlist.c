@@ -1847,13 +1847,13 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         if (mupdatecommiterror) {
             r = 0;
 
-            /* recreate an old entry */
-            if (!isusermbox)
-                r = mboxlist_update_entry(oldname, newmbentry, &tid);
-
             /* delete the new entry */
-            if (!r)
+            if (!isusermbox)
                 r = mboxlist_update_entry(newname, NULL, &tid);
+
+            /* recreate an old entry */
+            if (!r)
+                r = mboxlist_update_entry(oldname, newmbentry, &tid);
 
             /* Commit transaction */
             if (!r)
