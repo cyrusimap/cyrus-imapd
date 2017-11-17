@@ -53,9 +53,12 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include "lib/bsearch.h"
 #include "lib/cyr_lock.h"
 #include "lib/exitcodes.h"
+#include "lib/hash.h"
 #include "lib/retry.h"
+#include "lib/strarray.h"
 #include "lib/util.h"
 
 #include "imap/global.h"
@@ -298,27 +301,49 @@ static void do_collate_report(struct buf *buf)
     free_hash_table(&all_stats, free);
 }
 
-struct users_mailboxes_counts {
-    int64_t users;
-    int64_t mailboxes;
-    /* XXX deleted? shared? */
+struct partition_data {
+    int64_t n_users;
+    int64_t n_mailboxes;
+    int64_t n_deleted;
+    int64_t n_shared; /* XXX ??? */
+
+    double quota_commitment;
+
+    int64_t timestamp;
 };
 
 static int count_users_mailboxes(struct findall_data *data, void *rock)
 {
-    struct users_mailboxes_counts *umcounts = (struct users_mailboxes_counts *) rock;
+    hash_table *h = (hash_table *) rock;
+    struct partition_data *pdata;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data || !data->mbname || !data->mbentry) return 0;
 
-    if (mbname_userid(data->mbname) &&
-        !strarray_size(mbname_boxes(data->mbname))) {
-        syslog(LOG_DEBUG, "counting user: %s", mbname_intname(data->mbname));
-        umcounts->users ++;
+    pdata = hash_lookup(data->mbentry->partition, h);
+    if (!pdata) {
+        pdata = malloc(sizeof *pdata);
+        memset(pdata, 0, sizeof *pdata);
+        hash_insert(data->mbentry->partition, pdata, h);
     }
 
-    syslog(LOG_DEBUG, "counting mailbox: %s", mbname_intname(data->mbname));
-    umcounts->mailboxes ++;
+    if (mbname_isdeleted(data->mbname)) {
+        syslog(LOG_DEBUG, "counting deleted: %s", mbname_intname(data->mbname));
+        pdata->n_deleted ++;
+        pdata->timestamp = now_ms();
+    }
+    else if (mbname_userid(data->mbname) &&
+        !strarray_size(mbname_boxes(data->mbname))) {
+        syslog(LOG_DEBUG, "counting user: %s", mbname_intname(data->mbname));
+        pdata->n_users ++;
+        pdata->timestamp = now_ms();
+    }
+    /* XXX shared ? */
+    else {
+        syslog(LOG_DEBUG, "counting mailbox: %s", mbname_intname(data->mbname));
+        pdata->n_mailboxes ++;
+        pdata->timestamp = now_ms();
+    }
 
     return 0;
 }
@@ -354,32 +379,77 @@ static int format_quota(struct quota *quota, void *rock)
     return 0;
 }
 
+static void pname_cb(const char *key,
+                     void *data __attribute__((unused)),
+                     void *rock)
+{
+    strarray_append((strarray_t *) rock, key);
+}
+
+static strarray_t *get_partition_names(hash_table *h)
+{
+    strarray_t *names = strarray_new();
+    hash_enumerate(h, pname_cb, names);
+    strarray_sort(names, cmpstringp_raw);
+    return names;
+}
+
+#define FORMAT_USAGE_INT64(metric, type, help, member, buf, pnames, h) \
+do {                                                                         \
+    const char *___metric = (metric);                                        \
+    const char *___type = (type);                                            \
+    const char *___help = (help);                                            \
+    struct buf *___buf = (buf);                                              \
+    const strarray_t *___pnames = (pnames);                                  \
+    hash_table *___h = (h);                                                  \
+    int i;                                                                   \
+                                                                             \
+    buf_printf(___buf, "# HELP %s %s\n", ___metric, ___help);                \
+    buf_printf(___buf, "# TYPE %s %s\n", ___metric, ___type);                \
+                                                                             \
+    for (i = 0; i < strarray_size(___pnames); i++) {                         \
+        struct partition_data *pdata =                                       \
+            hash_lookup(strarray_nth(___pnames, i), ___h);                   \
+                                                                             \
+        buf_printf(___buf, "%s{partition=\"%s\"} %" PRId64 " %" PRId64 "\n", \
+                        ___metric,                                           \
+                        strarray_nth(___pnames, i),                          \
+                        pdata->member,                                       \
+                        pdata->timestamp);                                   \
+    }                                                                        \
+} while(0)
+
 static void do_collate_usage(struct buf *buf)
 {
-    struct users_mailboxes_counts umcounts = { 0, 0 };
+    hash_table h = HASH_TABLE_INITIALIZER;
     struct quota_bufs quota_bufs = { BUF_INITIALIZER, BUF_INITIALIZER };
-    int64_t now;
+    strarray_t *partition_names = NULL;
     int r;
 
+    construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
+
     r = mboxlist_findall(NULL /* admin namespace */, "*", 1, NULL, NULL,
-                         count_users_mailboxes, &umcounts);
-    if (!r) {
-        now = now_ms();
+                         count_users_mailboxes, &h);
+    partition_names = get_partition_names(&h);
 
-        buf_printf(buf, "# HELP %s %s\n",
-                        "cyrus_usage_users",
-                        "The number of Cyrus user accounts");
-        buf_appendcstr(buf, "# TYPE cyrus_usage_users gauge\n");
-        buf_printf(buf, "cyrus_usage_users %" PRId64 " %" PRId64 "\n",
-                        umcounts.users, now);
+    FORMAT_USAGE_INT64("cyrus_usage_deleted_mailboxes", "gauge",
+                       "The number of deleted Cyrus mailboxes",
+                       n_deleted,
+                       buf, partition_names, &h);
 
-        buf_printf(buf, "# HELP %s %s\n",
-                        "cyrus_usage_mailboxes",
-                        "The number of Cyrus mailboxes");
-        buf_appendcstr(buf, "# TYPE cyrus_usage_mailboxes gauge\n");
-        buf_printf(buf, "cyrus_usage_mailboxes %" PRId64 " %" PRId64 "\n",
-                        umcounts.mailboxes, now);
-    }
+    FORMAT_USAGE_INT64("cyrus_usage_users", "gauge",
+                       "The number of Cyrus user Inboxes",
+                       n_users,
+                       buf, partition_names, &h);
+
+    FORMAT_USAGE_INT64("cyrus_usage_mailboxes", "gauge",
+                       "The number of Cyrus mailboxes",
+                       n_mailboxes,
+                       buf, partition_names, &h);
+    /* XXX shared ??? */
+
+    strarray_free(partition_names);
+    free_hash_table(&h, free);
 
     r = quota_foreach(NULL, format_quota, &quota_bufs, NULL);
 
