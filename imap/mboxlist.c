@@ -1186,14 +1186,14 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
         if (mupdatecommiterror) {
             r = 0;
 
-            /* recreate an old entry */
+            /* delete the new entry */
             if (!isusermbox)
+                r = DB->delete(mbdb, newname, strlen(newname), &tid, 0);
+
+            /* recreate an old entry */
+            if (!r)
                 r = DB->store(mbdb, oldname, strlen(oldname),
                               mboxent, strlen(mboxent), &tid);
-
-            /* delete the new entry */
-            if (!r)
-                r = DB->delete(mbdb, newname, strlen(newname), &tid, 0);
 
             /* Commit transaction */
             if (!r)
