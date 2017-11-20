@@ -1,9 +1,0 @@
-In an ideal world, our locking order is:
-
-cyrus.header
-cyrus.index
-quota
-seen
-mailboxes file
-
-
