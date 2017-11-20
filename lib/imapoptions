@@ -2063,12 +2063,13 @@ If all backends are over that limit, this feature is not used anymore.
    "min" = \fIservername\fR in the greeting; no server information in the capabilities
 .br
    "on" = \fIservername\fR and product version in the greeting;
-product version in the capabilities */
+product version in the capabilities
+.PP
+*/
 
 { "sharedprefix", "Shared Folders", STRING }
 /* If using the alternate IMAP namespace, the prefix for the shared
    namespace.  The hierarchy delimiter will be automatically appended.
-.PP
 */
 
 { "sieve_allowreferrals", 1, SWITCH }
