@@ -336,6 +336,7 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
         !strarray_size(mbname_boxes(data->mbname))) {
         syslog(LOG_DEBUG, "counting user: %s", mbname_intname(data->mbname));
         pdata->n_users ++;
+        pdata->n_mailboxes ++; /* an inbox is also a mailbox */
         pdata->timestamp = now_ms();
     }
     /* XXX shared ? */
