@@ -131,6 +131,7 @@ struct statusdata {
     uint32_t uidnext;
     uint32_t uidvalidity;
     uint32_t unseen;
+    uint32_t size;
     modseq_t highestmodseq;
     conv_status_t xconv;
 };

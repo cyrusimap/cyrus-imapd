@@ -341,6 +341,7 @@ static struct capa_struct base_capabilities[] = {
     { "CREATE-SPECIAL-USE",    2 },
     { "DIGEST=SHA1",           2 }, /* not standard */
     { "X-REPLICATION",         2 }, /* not standard */
+    { "STATUS=SIZE",           2 }, /* draft-bosch-imap-status-size */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -8741,6 +8742,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "unseen")) {
             statusitems |= STATUS_UNSEEN;
         }
+        else if (!strcmp(arg.s, "size")) {
+            statusitems |= STATUS_SIZE;
+        }
         else if (!strcmp(arg.s, "highestmodseq")) {
             statusitems |= STATUS_HIGHESTMODSEQ;
         }
@@ -8803,6 +8807,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_UNSEEN) {
         prot_printf(imapd_out, "%cUNSEEN %u", sepchar, sd->unseen);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_SIZE) {
+        prot_printf(imapd_out, "%cSIZE %u", sepchar, sd->size);
         sepchar = ' ';
     }
     if (statusitems & STATUS_HIGHESTMODSEQ) {

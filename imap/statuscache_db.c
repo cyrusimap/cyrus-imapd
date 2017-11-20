@@ -150,6 +150,7 @@ HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
     sdata->uidnext = mailbox->i.last_uid+1;
     sdata->uidvalidity = mailbox->i.uidvalidity;
     sdata->unseen = numunseen;
+    sdata->size = mailbox->i.quota_mailbox_used;
     sdata->highestmodseq = mailbox->i.highestmodseq;
 }
 
