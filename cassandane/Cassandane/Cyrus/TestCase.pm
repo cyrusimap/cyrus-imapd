@@ -230,6 +230,9 @@ magic(MagicPlus => sub {
 magic(FastMailSharing => sub {
     shift->config_set('fastmailsharing' => 'true');
 });
+magic(Partition2 => sub {
+    shift->config_set('partition-p2' => '@basedir@/data-p2');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
