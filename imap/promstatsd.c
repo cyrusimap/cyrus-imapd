@@ -360,6 +360,7 @@ static int quota_cb(struct findall_data *data, void *rock)
     struct quota_cb_rock *cbrock = (struct quota_cb_rock *) rock;
     struct partition_data *pdata;
     const char *partition;
+    char qroot[MAX_MAILBOX_NAME];
     int res;
 
     if (!data) {
@@ -371,6 +372,14 @@ static int quota_cb(struct findall_data *data, void *rock)
 
     /* don't want partial matches */
     if (!data->mbname || !data->mbentry) return 0;
+
+    /* stop if we reach a new quotaroot */
+    if (quota_findroot(qroot, sizeof(qroot), mbname_intname(data->mbname))
+        && strcmp(qroot, cbrock->quota->root) != 0) {
+        if (seen_partition) free(seen_partition);
+        seen_partition = NULL;
+        return 1;
+    }
 
     partition = data->mbentry->partition;
     if (seen_partition && !strcmp(seen_partition, partition)) {
@@ -384,6 +393,8 @@ static int quota_cb(struct findall_data *data, void *rock)
         struct quota *q = cbrock->quota;
         double dv = q->limits[res] < 0 ? INFINITY : q->limits[res];
 
+        syslog(LOG_DEBUG, "found quota commitment: quotaroot=%s res=%s partition=%s limit=%.0f",
+                          q->root, quota_names[res], partition, dv);
         pdata->quota_commitment[res] += dv;
     }
     pdata->timestamp = now_ms();
@@ -402,6 +413,7 @@ static int count_quota_commitments(struct quota *quota, void *rock)
     strarray_t *patterns = strarray_new();
     int r;
 
+    syslog(LOG_DEBUG, "counting quota commitments for quotaroot=%s", quota->root);
     strarray_append(patterns, quota->root);
     snprintf(tmp, sizeof(tmp), "%s.*", quota->root);
     strarray_append(patterns, tmp);
