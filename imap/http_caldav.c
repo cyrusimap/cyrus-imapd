@@ -7467,6 +7467,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     struct index_record *oldrecord = NULL, record;
     char datestr[80], *mimehdr;
     const char *sched_tag;
+    uint32_t newuid = 0;
     strarray_t imapflags = STRARRAY_INITIALIZER;
 
     /* Check for supported component type */
@@ -7505,6 +7506,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* does it already exist? */
     if (cdata->dav.imap_uid) {
+        newuid = cdata->dav.imap_uid;
         /* Check for change of iCalendar UID */
         if (strcmp(cdata->ical_uid, uid)) {
             /* CALDAV:no-uid-conflict */
@@ -7622,6 +7624,8 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                              mailbox, oldrecord, &imapflags);
     strarray_fini(&imapflags);
 
+    newuid = mailbox->i.last_uid;
+
   done:
     switch (ret) {
     case HTTP_CREATED:
@@ -7629,11 +7633,14 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         if ((namespace_calendar.allow & ALLOW_USERDATA) &&
             cdata->comp_flags.shared) {
 
+            /* either the UID created by dav_store_resource, or if nothing but per-user data
+             * was changed, the UID of the existing record */
+            assert(newuid);
+
             /* Ensure we have an astate connected to the mailbox,
              * so that the annotation txn will be committed
              * when we close the mailbox */
             annotate_state_t *astate = NULL;
-            uint32_t newuid = mailbox->i.last_uid;
 
             if (oldrecord && (newuid != oldrecord->uid) &&
                 !mailbox_get_annotate_state(mailbox, newuid, &astate)) {
