@@ -1312,10 +1312,9 @@ static void free_internalised(void *internalised)
 static char *xapiandb_namelock_fname_from_userid(const char *userid)
 {
     const char *p;
-    static struct buf buf = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
 
-    buf_reset(&buf);
-    buf_appendcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
+    buf_setcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
 
     for (p = userid; *p; p++) {
         switch(*p) {
@@ -1328,7 +1327,11 @@ static char *xapiandb_namelock_fname_from_userid(const char *userid)
         }
     }
 
-    return buf_release(&buf);
+    char *ret = buf_release(&buf);
+
+    buf_free(&buf);
+
+    return ret;
 }
 
 /*
