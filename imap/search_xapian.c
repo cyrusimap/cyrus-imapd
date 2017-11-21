@@ -1339,8 +1339,13 @@ static char *xapiandb_namelock_fname_from_mailbox(struct mailbox *mailbox)
 {
     mbname_t *mbname = mbname_from_intname(mailbox->name);
     const char *userid = mbname_userid(mbname);
+    char *ret;
 
-    return xapiandb_namelock_fname_from_userid(userid);
+    ret = xapiandb_namelock_fname_from_userid(userid);
+
+    mbname_free(&mbname);
+
+    return ret;
 }
 
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
