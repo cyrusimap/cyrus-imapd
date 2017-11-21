@@ -65,6 +65,7 @@
 #include "xstrlcat.h"
 #include "mappedfile.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 #include "xstats.h"
 #include "search_engines.h"
 #include "sequence.h"
@@ -79,6 +80,7 @@
 #define INDEXEDDB_FNAME         "/cyrus.indexed.db"
 #define XAPIAN_DIRNAME          "/xapian"
 #define ACTIVEFILE_METANAME     "xapianactive"
+#define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
 /* Name of columns */
 #define COL_CYRUSID     "cyrusid"
@@ -90,7 +92,6 @@ struct segment
     int is_finished;
     struct buf text;
 };
-
 
 static const char *xapian_rootdir(const char *tier, const char *partition);
 static int xapian_basedir(const char *tier, const char *mboxname, const char *part,
@@ -129,6 +130,11 @@ static int check_config(void)
 struct activeitem {
     char *tier;
     int generation;
+};
+
+enum LockType {
+    AF_LOCK_READ = 0,
+    AF_LOCK_WRITE = 1,
 };
 
 static struct activeitem *activeitem_parse(const char *input)
@@ -300,7 +306,7 @@ static void _activefile_init(const char *mboxname, const char *partition,
 }
 
 static strarray_t *activefile_open(const char *mboxname, const char *partition,
-                                   struct mappedfile **activefile, int write)
+                                   struct mappedfile **activefile, enum LockType type)
 {
     char *fname = activefile_fname(mboxname);
     int r;
@@ -317,7 +323,7 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
 
     /* take the requested lock (a better helper API would allow this to be
      * specified as part of the open call, but here's where we are */
-    if (write) r = mappedfile_writelock(*activefile);
+    if (type == AF_LOCK_WRITE) r = mappedfile_writelock(*activefile);
     else r = mappedfile_readlock(*activefile);
     if (r) return NULL;
 
@@ -989,6 +995,7 @@ typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
     struct mappedfile *activefile;
+    struct mboxlock *xapiandb_namelock;
     struct seqset *indexed;
     struct mailbox *mailbox;
     xapian_db_t *db;
@@ -1293,6 +1300,49 @@ static void free_internalised(void *internalised)
     if (on) opnode_delete(on);
 }
 
+/*
+ * This function builds a lockfilename of the format:
+ *  $XAPIAN$<userid>
+ * example:
+ *  If the userid is `foo@bar.com` then the lockfilename is
+ *  $XAPIAN$foo@bar^com
+ *
+ * It replaces '.' in a string with a '^' into a struct buf
+ */
+static char *xapiandb_namelock_fname_from_userid(const char *userid)
+{
+    const char *p;
+    static struct buf buf = BUF_INITIALIZER;
+
+    buf_reset(&buf);
+    buf_appendcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
+
+    for (p = userid; *p; p++) {
+        switch(*p) {
+        case '.':
+            buf_putc(&buf, '^');
+            break;
+        default:
+            buf_putc(&buf, *p);
+            break;
+        }
+    }
+
+    return buf_release(&buf);
+}
+
+/*
+ * same as xapiandb_namelock_fname_from_userid() but takes a `struct mailbox`
+ * instead of a userid
+ */
+static char *xapiandb_namelock_fname_from_mailbox(struct mailbox *mailbox)
+{
+    mbname_t *mbname = mbname_from_intname(mailbox->name);
+    const char *userid = mbname_userid(mbname);
+
+    return xapiandb_namelock_fname_from_userid(userid);
+}
+
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     int r = check_config();
@@ -1302,6 +1352,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     strarray_t *dirs = NULL;
     strarray_t *tiers = NULL;
     strarray_t *active = NULL;
+    char *namelock_fname = NULL;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -1313,9 +1364,19 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
+    namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
+
+    /* Get a shared lock */
+    r = mboxname_lock(namelock_fname, &bb->xapiandb_namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
+
     /* need to hold a read-only lock on the activefile file until the search
      * has completed to ensure no databases are deleted out from under us */
-    active = activefile_open(mailbox->name, mailbox->part, &bb->activefile, /*write*/0);
+    active = activefile_open(mailbox->name, mailbox->part, &bb->activefile, AF_LOCK_READ);
     if (!active) goto out;
 
     /* only try to open directories with databases in them */
@@ -1337,6 +1398,7 @@ out:
     strarray_free(dirs);
     strarray_free(tiers);
     strarray_free(active);
+    free(namelock_fname);
     /* XXX - error return? */
     return &bb->super;
 }
@@ -1356,6 +1418,11 @@ static void end_search(search_builder_t *bx)
     if (bb->activefile) {
         mappedfile_unlock(bb->activefile);
         mappedfile_close(&bb->activefile);
+    }
+
+    if (bb->xapiandb_namelock) {
+        mboxname_release(&bb->xapiandb_namelock);
+        bb->xapiandb_namelock = NULL;
     }
 
     free(bx);
@@ -1385,6 +1452,7 @@ struct xapian_update_receiver
     xapian_receiver_t super;
     xapian_dbw_t *dbw;
     struct mappedfile *activefile;
+    struct mboxlock *xapiandb_namelock;
     unsigned int uncommitted;
     unsigned int commits;
     struct seqset *oldindexed;
@@ -1697,6 +1765,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     char *fname = activefile_fname(mailbox->name);
     strarray_t *active = NULL;
     int r = IMAP_IOERROR;
+    char *namelock_fname = NULL;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -1711,6 +1780,16 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * that's a much bigger rewrite due to disparate actions being squeezed into an
      * identical API */
     mailbox_unlock_index(mailbox, NULL);
+
+    /* Get a shared namelock */
+    namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
+
+    r = mboxname_lock(namelock_fname, &tr->xapiandb_namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
 
     /* we're using "not incremental" to mean "check that the GUID of every message
      * in the mailbox is present in an index rather than trusting the UID ranges */
@@ -1734,7 +1813,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  and will be going away in the future, but it's not too hard to design
      *  to avoid it happening at least."
      */
-    active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
+    active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
     if (!active || !active->count) {
         goto out;
     }
@@ -1775,6 +1854,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
 out:
     free(fname);
+    free(namelock_fname);
     strarray_free(active);
     return r;
 }
@@ -1908,6 +1988,12 @@ static int end_mailbox_update(search_text_receiver_t *rx,
         mappedfile_unlock(tr->activefile);
         mappedfile_close(&tr->activefile);
         tr->activefile = NULL;
+    }
+
+    /* Release xapian db named lock */
+    if (tr->xapiandb_namelock) {
+        mboxname_release(&tr->xapiandb_namelock);
+        tr->xapiandb_namelock = NULL;
     }
 
     if (tr->activedirs) {
@@ -2131,6 +2217,8 @@ static int list_files(const char *userid, strarray_t *files)
     strarray_t *active = NULL;
     strarray_t *dirs = NULL;
     struct mappedfile *activefile = NULL;
+    struct mboxlock *xapiandb_namelock = NULL;
+    char *namelock_fname = NULL;
     int r;
     int i;
 
@@ -2145,7 +2233,18 @@ static int list_files(const char *userid, strarray_t *files)
         goto out;
     }
 
-    active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/0);
+    /* Get a shared namelock */
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
+
+    /* Get a readlock on the activefile */
+    active = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_READ);
     if (!active) goto out;
     dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1, NULL/*resultitems*/);
 
@@ -2175,9 +2274,16 @@ out:
         mappedfile_unlock(activefile);
         mappedfile_close(&activefile);
     }
+
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
+
     strarray_free(active);
     strarray_free(dirs);
     free(fname);
+    free(namelock_fname);
     mboxlist_entry_free(&mbentry);
     free(mboxname);
 
@@ -2492,11 +2598,13 @@ done:
 }
 
 static int compact_dbs(const char *userid, const char *tempdir,
-                       const strarray_t *srctiers, const char *desttier, int flags)
+                       const strarray_t *srctiers, const char *desttier,
+                       int flags)
 {
     char *mboxname = mboxname_user_mbox(userid, NULL);
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
+    struct mboxlock *xapiandb_namelock = NULL;
     strarray_t *srcdirs = NULL;
     strarray_t *newdirs = NULL;
     strarray_t *active = NULL;
@@ -2509,7 +2617,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     char *tempdestdir = NULL;
     char *tempreindexdir = NULL;
     struct buf mytempdir = BUF_INITIALIZER;
-    struct buf buf = BUF_INITIALIZER;
+    char *namelock_fname = NULL;
     int verbose = SEARCH_VERBOSE(flags);
     int r = 0;
     int i;
@@ -2528,8 +2636,19 @@ static int compact_dbs(const char *userid, const char *tempdir,
     r = check_config();
     if (r) goto out;
 
+    /* Generated the namelock filename */
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+
+    /* Get an exclusive namelock */
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
+
     /* take an exclusive lock on the activefile file */
-    active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);
+    active = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_WRITE);
     if (!active || !active->count) goto out;
 
     orig = strarray_dup(active);
@@ -2586,6 +2705,20 @@ static int compact_dbs(const char *userid, const char *tempdir,
     activefile_write(activefile, active);
     mappedfile_unlock(activefile);
 
+    /* Release the exclusive named lock */
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
+
+    /* Get a shared name lock */
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
+
     /* take a shared lock */
     mappedfile_readlock(activefile);
 
@@ -2602,6 +2735,11 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
         strarray_free(newactive);
     }
+
+    /* release the sharedlock on the active file, compcating is safe
+     * without locking activefile.
+     */
+    mappedfile_unlock(activefile);
 
     if (tempdir) {
         /* run the compress to tmpfs */
@@ -2716,9 +2854,19 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
     }
 
-    /* release and take an exclusive lock on activefile */
-    mappedfile_unlock(activefile);
-    mappedfile_writelock(activefile);
+    /* Release the shared named lock */
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
+
+    /* Get an exclusive namelock */
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
 
     /* check that we still have 'directory zero'.  If not, delete all
      * temporary files and abort */
@@ -2759,10 +2907,19 @@ static int compact_dbs(const char *userid, const char *tempdir,
     for (i = 0; i < tochange->count; i++)
         strarray_remove_all(active, strarray_nth(tochange, i));
 
+    /* Get an exclusive lock on the activefile */
+    mappedfile_writelock(activefile);
+
     activefile_write(activefile, active);
 
     /* release the lock */
     mappedfile_unlock(activefile);
+
+    /* Release the exclusive named lock */
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
 
     if (verbose) {
         char *alist = strarray_join(active, ",");
@@ -2770,11 +2927,25 @@ static int compact_dbs(const char *userid, const char *tempdir,
         free(alist);
     }
 
-    /* finally remove all directories on disk of the source dbs */
+    /* Get a shared name lock */
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
+
+    /* And finally remove all directories on disk of the source dbs */
     for (i = 0; i < srcdirs->count; i++)
         remove_dir(strarray_nth(srcdirs, i));
 
     /* XXX - readdir and remove other directories as well */
+
+    /* Release the shared named lock */
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
 
 out:
     // cleanup all our work locations
@@ -2793,13 +2964,19 @@ out:
     strarray_free(tochange);
     strarray_free(tocompact);
     buf_free(&mytempdir);
-    buf_free(&buf);
+    free(namelock_fname);
     free(newdest);
     free(destdir);
     free(tempdestdir);
     free(tempreindexdir);
     mappedfile_unlock(activefile);
     mappedfile_close(&activefile);
+
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
+    }
+
     mboxlist_entry_free(&mbentry);
     free(mboxname);
 
@@ -2832,7 +3009,19 @@ static int delete_user(const char *userid)
     char *mboxname = mboxname_user_mbox(userid, /*subfolder*/NULL);
     char *activename = activefile_fname(mboxname);
     struct mappedfile *activefile = NULL;
+    struct mboxlock *xapiandb_namelock = NULL;
+    char *namelock_fname = NULL;
     int r = 0;
+
+
+    /* Get an exclusive namelock */
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+               namelock_fname);
+        goto out;
+    }
 
     /* grab an exclusive lock on activefile: that way we won't delete
      * it out from under something else (such as squatter)
@@ -2849,6 +3038,11 @@ out:
     if (activefile) {
         mappedfile_unlock(activefile);
         mappedfile_close(&activefile);
+    }
+
+    if (xapiandb_namelock) {
+        mboxname_release(&xapiandb_namelock);
+        xapiandb_namelock = NULL;
     }
 
     free(activename);
