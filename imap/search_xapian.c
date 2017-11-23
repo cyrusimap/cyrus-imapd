@@ -1338,23 +1338,6 @@ static char *xapiandb_namelock_fname_from_userid(const char *userid)
     return ret;
 }
 
-/*
- * same as xapiandb_namelock_fname_from_userid() but takes a `struct mailbox`
- * instead of a userid
- */
-static char *xapiandb_namelock_fname_from_mailbox(struct mailbox *mailbox)
-{
-    mbname_t *mbname = mbname_from_intname(mailbox->name);
-    const char *userid = mbname_userid(mbname);
-    char *ret;
-
-    ret = xapiandb_namelock_fname_from_userid(userid);
-
-    mbname_free(&mbname);
-
-    return ret;
-}
-
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     int r = check_config();
@@ -1365,6 +1348,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     strarray_t *tiers = NULL;
     strarray_t *active = NULL;
     char *namelock_fname = NULL;
+    char *userid = NULL;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -1377,10 +1361,10 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->opts = opts;
 
     /* Do nothing if there is no userid */
-    if (!mboxname_to_userid(mailbox->name))
-        goto out;
+    userid = mboxname_to_userid(mailbox->name);
+    if (!userid) goto out;
 
-    namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
 
     /* Get a shared lock */
     r = mboxname_lock(namelock_fname, &bb->xapiandb_namelock, LOCK_SHARED);
@@ -1415,6 +1399,7 @@ out:
     strarray_free(tiers);
     strarray_free(active);
     free(namelock_fname);
+    free(userid);
     /* XXX - error return? */
     return &bb->super;
 }
@@ -1782,6 +1767,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     strarray_t *active = NULL;
     int r = IMAP_IOERROR;
     char *namelock_fname = NULL;
+    char *userid = NULL;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -1791,11 +1777,11 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     /* Do nothing if there is no userid */
-    if (!mboxname_to_userid(mailbox->name))
-        goto out;
+    userid = mboxname_to_userid(mailbox->name);
+    if (!userid) goto out;
 
     /* Get a shared namelock */
-    namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
 
     r = mboxname_lock(namelock_fname, &tr->xapiandb_namelock, LOCK_SHARED);
     if (r) {
@@ -1862,6 +1848,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
 out:
     free(fname);
+    free(userid);
     free(namelock_fname);
     strarray_free(active);
     return r;
