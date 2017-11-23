@@ -5337,14 +5337,6 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         return HTTP_FORBIDDEN;
     }
 
-    /* XXX  Make sure collection name doesn't contain '.',
-       otherwise we can't tell if a URL is for a shared collection */
-    if (strchr(txn->req_tgt.mbentry->name, '.')) {
-        txn->error.precond = mparams->mkcol.location_precond;
-        ret = HTTP_FORBIDDEN;
-        goto done;
-    }
-
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* Remote mailbox - find the parent */
         mbentry_t *parent = NULL;
