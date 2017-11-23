@@ -1376,6 +1376,10 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
+    /* Do nothing if there is no userid */
+    if (!mboxname_to_userid(mailbox->name))
+        goto out;
+
     namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
 
     /* Get a shared lock */
@@ -1785,6 +1789,10 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         r = IMAP_MAILBOX_NONEXISTENT;
         goto out;
     }
+
+    /* Do nothing if there is no userid */
+    if (!mboxname_to_userid(mailbox->name))
+        goto out;
 
     /* Get a shared namelock */
     namelock_fname = xapiandb_namelock_fname_from_mailbox(mailbox);
