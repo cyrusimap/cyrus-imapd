@@ -56,7 +56,9 @@ extern int xapian_compact_dbs(const char *dest, const char **sources);
 extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex);
 
 /* write-side interface */
-extern int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp);
+#define XAPIAN_DBW_CONVINDEXED 0
+#define XAPIAN_DBW_XAPINDEXED 1
+extern int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);

@@ -97,6 +97,7 @@ const int SKIP_FUZZ = 60;
 static int verbose = 0;
 static int incremental_mode = 0;
 static int batch_mode = 0;
+static int xapindexed_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int running_daemon = 0;
@@ -196,6 +197,8 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_INCREMENTAL;
     if (batch_mode)
         flags |= SEARCH_UPDATE_BATCH;
+    if (xapindexed_mode)
+        flags |= SEARCH_UPDATE_XAPINDEXED;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -813,7 +816,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RUXT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RUXZT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
@@ -825,6 +828,13 @@ int main(int argc, char **argv)
 
         case 'X':
             compact_flags |= SEARCH_COMPACT_REINDEX;
+            break;
+
+        case 'Z':
+            /* we have two different flag types for the two different modes,
+             * set both of them even though only one will be used */
+            xapindexed_mode = 1;
+            compact_flags |= SEARCH_COMPACT_XAPINDEXED;
             break;
 
         case 'N':

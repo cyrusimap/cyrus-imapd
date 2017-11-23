@@ -308,7 +308,7 @@ struct xapian_dbw
     char *cyrusid;
 };
 
-int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
+int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
@@ -366,15 +366,17 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp)
     }
 
     /* open the read-only databases */
-    while (*paths) {
-        try {
-            thispath = *paths;
-            Xapian::Database *database = new Xapian::Database(*paths++);
-            ptrarray_append(&dbw->otherdbs, database);
-        }
-        catch (const Xapian::Error &err) {
-            syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open read: %s: %s (%s)",
-                        err.get_context().c_str(), err.get_description().c_str(), thispath);
+    if (mode == XAPIAN_DBW_XAPINDEXED) {
+        while (*paths) {
+            try {
+                thispath = *paths;
+                Xapian::Database *database = new Xapian::Database(*paths++);
+                ptrarray_append(&dbw->otherdbs, database);
+            }
+            catch (const Xapian::Error &err) {
+                syslog(LOG_ERR, "IOERROR: Xapian: caught exception dbw_open read: %s: %s (%s)",
+                            err.get_context().c_str(), err.get_description().c_str(), thispath);
+            }
         }
     }
 

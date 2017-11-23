@@ -1461,6 +1461,7 @@ struct xapian_update_receiver
     strarray_t *activedirs;
     strarray_t *activetiers;
     hash_table cached_seqs;
+    int mode;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -1827,8 +1828,11 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
     if (r) goto out;
 
+    tr->mode = (flags & SEARCH_UPDATE_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
+                                                  : XAPIAN_DBW_CONVINDEXED;
+
     /* open the DB */
-    r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw);
+    r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
     if (r) goto out;
 
     /* read the indexed data from every directory so know what still needs indexing */
@@ -1917,6 +1921,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
      * we should probably change this. */
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
+    int r = 0;
     uint32_t uid = 0;
     message_get_uid(msg, &uid);
 
@@ -1933,21 +1938,26 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     const struct message_guid *guid = NULL;
     message_get_guid(msg, &guid);
 
-    /* Determine if msg is already indexed */
-    struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
-    if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                tr->super.mailbox->name);
-        return 0;
-    }
+    if (tr->mode == XAPIAN_DBW_CONVINDEXED) {
+        /* Determine if msg is already indexed */
+        struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
+        if (!cstate) {
+            syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                    tr->super.mailbox->name);
+            return 0;
+        }
 
-    char *guidrep = xstrdup(message_guid_encode(guid));
-    int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
-    if (r && r != CYRUSDB_DONE) {
-        syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
-                tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
+        char *guidrep = xstrdup(message_guid_encode(guid));
+        r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
+        if (r && r != CYRUSDB_DONE) {
+            syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
+                   tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
+        }
+        free(guidrep);
     }
-    free(guidrep);
+    else if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
+        r = xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)) ? CYRUSDB_DONE : 0;
+    }
 
     /* Mark msg as indexed */
     seqset_add(tr->indexed, uid, 1);
@@ -2469,7 +2479,9 @@ static int reindex_mb(void *rock,
 
     /* open the DB */
     tr = (xapian_update_receiver_t *)begin_update(verbose);
-    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw);
+    tr->mode = (filter->flags & SEARCH_COMPACT_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
+                                                           : XAPIAN_DBW_CONVINDEXED;
+    r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
     if (r) goto done;
     tr->super.mailbox = mailbox;
 

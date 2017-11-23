@@ -126,6 +126,7 @@ struct search_engine {
                                          * expunged records */
 #define SEARCH_COMPACT_REINDEX  (1<<7)  /* re-index all matching messages */
 #define SEARCH_COMPACT_ONLYUPGRADE (1<<8) /* only compact if reindexing */
+#define SEARCH_COMPACT_XAPINDEXED (1<<9) /* use XAPIAN index */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
@@ -160,6 +161,7 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_INCREMENTAL (1<<0)
 #define SEARCH_UPDATE_NONBLOCKING (1<<1)
 #define SEARCH_UPDATE_BATCH (1<<2)
+#define SEARCH_UPDATE_XAPINDEXED (1<<3)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
