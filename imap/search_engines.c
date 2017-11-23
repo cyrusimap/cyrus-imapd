@@ -204,7 +204,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     r = rx->begin_mailbox(rx, mailbox, flags);
     if (r) goto done;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    /* we want to index EXPUNGED messages too, because otherwise when we check the
+     * ranges matching the GUID in conversations DB later, we might think we've
+     * indexed it when we actually haven't */
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     if (flags & SEARCH_UPDATE_INCREMENTAL) mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
 
     while ((msg = mailbox_iter_step(iter))) {
