@@ -652,15 +652,22 @@ EXPORTED int calcarddav_parse_path(const char *path,
     if (tgt->collen) {
         collection = freeme = xstrndup(tgt->collection, tgt->collen);
 
-        /* Shared collection encoded as: <owner> "." <mboxname> */
-        if (!tgt->mbentry &&  /* Not MKCOL or COPY/MOVE destination */
-            (p = strrchr(collection, SHARED_COLLECTION_DELIM))) {
-            owner = collection;
-            *p++ = '\0';
-            collection = p;
+        p = strrchr(collection, SHARED_COLLECTION_DELIM);
+        if (p) {
+            if (tgt->mbentry) { /* MKCOL or COPY/MOVE destination */
+                *resultstr = "Invalid characters in collection name";
+                ret = HTTP_FORBIDDEN;
+                goto done;
+            }
+            else {
+                /* Shared collection encoded as: <owner> "." <mboxname> */
+                owner = collection;
+                *p++ = '\0';
+                collection = p;
 
-            tgt->flags = TGT_DAV_SHARED;
-            tgt->allow |= ALLOW_DELETE;
+                tgt->flags = TGT_DAV_SHARED;
+                tgt->allow |= ALLOW_DELETE;
+            }
         }
     }
 
@@ -675,8 +682,10 @@ EXPORTED int calcarddav_parse_path(const char *path,
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
-            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
-            return HTTP_NOT_FOUND;
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            ret = HTTP_NOT_FOUND;
+            goto done;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
