@@ -2475,7 +2475,7 @@ static int reindex_mb(void *rock,
     if (r) goto done;
     tr->super.mailbox = mailbox;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
 
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
