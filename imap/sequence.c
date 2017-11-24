@@ -165,46 +165,43 @@ EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
 
 /* Comparator function that sorts ranges by the low value,
    and coalesces intersecting ranges to have the same high value */
-static int comp_coalesce(const void *v1, const void *v2)
+static int comp_rangesort(const void *v1, const void *v2)
 {
     struct seq_range *r1 = (struct seq_range *) v1;
     struct seq_range *r2 = (struct seq_range *) v2;
 
-    /* If ranges don't intersect, we're done */
-    if (r1->high < r2->low) return -1;
-    if (r1->low > r2->high) return 1;
-
-    /* Ranges intersect, coalesce them */
-    r1->high = r2->high = MAX(r1->high, r2->high);
-
-    return r1->low - r2->low;;
+    int ret = r1->low - r2->low;
+    if (ret) return ret;
+    return r1->high - r2->high;
 }
 
-static void seqset_simplify(struct seqset *set)
+static void seqset_simplify(struct seqset *seq)
 {
-    int out = 0;
+    unsigned out = 0;
     unsigned i;
 
     /* nothing to simplify */
-    if (!set->len)
+    if (!seq->len)
         return;
 
     /* Sort the ranges using our special comparator */
-    qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
+    qsort(seq->set, seq->len, sizeof(struct seq_range), comp_rangesort);
 
     /* Merge intersecting/adjacent ranges */
-    for (i = 1; i < set->len; i++) {
-        if ((int)(set->set[i].low - set->set[out].high) <= 1) {
-            set->set[out].high = set->set[i].high;
-        } else {
+    for (i = 1; i < seq->len; i++) {
+        if (seq->set[out].high + 1 < seq->set[i].low) {
+            /* these are disjoint */
             out++;
-            set->set[out].low = set->set[i].low;
-            set->set[out].high = set->set[i].high;
+            if (out != i)
+                seq->set[out] = seq->set[i];
+        }
+        else if (seq->set[out].high < seq->set[i].high) {
+            seq->set[out].high = seq->set[i].high;
         }
     }
 
     /* final length */
-    set->len = out+1;
+    seq->len = out+1;
 }
 
 static int read_num(const char **input, unsigned maxval, unsigned *res)
