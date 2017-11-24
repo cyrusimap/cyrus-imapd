@@ -527,7 +527,21 @@ static void test_join(void)
     free(s);
 
     seqset_free(res);
+}
 
+static void test_simplify(void)
+{
+    struct seqset *seq;
+    char *s;
+
+    seq = seqset_parse("1:3,4,5:8,10,12:12,13:14,16:20", NULL, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
+
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "1:8,10,12:14,16:20");
+    free(s);
+
+    seqset_free(seq);
 }
 
 /* vim: set ft=c: */
