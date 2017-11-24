@@ -1818,8 +1818,13 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
-    /* doesn't matter if the first one doesn't exist yet, we'll create it */
-    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/2, &tr->activetiers);
+    tr->mode = (flags & SEARCH_UPDATE_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
+                                                  : XAPIAN_DBW_CONVINDEXED;
+
+    /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
+     * to be opening them */
+    int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
+    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, dostat, &tr->activetiers);
     if (!tr->activedirs || !tr->activedirs->count) {
         goto out;
     }
@@ -1827,9 +1832,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* create the directory if needed */
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
     if (r) goto out;
-
-    tr->mode = (flags & SEARCH_UPDATE_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
-                                                  : XAPIAN_DBW_CONVINDEXED;
 
     /* open the DB */
     r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
