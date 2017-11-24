@@ -1731,7 +1731,10 @@ static int end_message_update(search_text_receiver_t *rx)
     struct segment *seg;
     int r = 0;
 
-    if (!tr->dbw) return IMAP_INTERNAL;
+    if (!tr->dbw) {
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        if (r) goto out;
+    }
 
     r = xapian_dbw_begin_doc(tr->dbw, make_cyrusid(&tr->super.guid));
     if (r) goto out;
@@ -1833,9 +1836,11 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
     if (r) goto out;
 
-    /* open the DB */
-    r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
-    if (r) goto out;
+    if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
+        /* open the DB now, we need it to check if messages are indexed */
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        if (r) goto out;
+    }
 
     /* read the indexed data from every directory so know what still needs indexing */
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
