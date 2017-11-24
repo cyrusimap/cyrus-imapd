@@ -502,4 +502,32 @@ static void XXX_test_star(void)
 }
 #endif
 
+static void test_join(void)
+{
+    struct seqset *res = seqset_init(0, SEQ_MERGE);
+    struct seqset *seq;
+    char *s;
+
+    seq = seqset_parse("1:100", NULL, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
+    seqset_join(res, seq);
+    seqset_free(seq);
+
+    s = seqset_cstring(res);
+    CU_ASSERT_STRING_EQUAL(s, "1:100");
+    free(s);
+
+    seq = seqset_parse("1:5,7:30,40:99", NULL, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
+    seqset_join(res, seq);
+    seqset_free(seq);
+
+    s = seqset_cstring(res);
+    CU_ASSERT_STRING_EQUAL(s, "1:100");
+    free(s);
+
+    seqset_free(res);
+
+}
+
 /* vim: set ft=c: */
