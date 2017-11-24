@@ -92,6 +92,12 @@ EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
 {
     if (!seq) return;
 
+    /* there are some cases where we want to make sure something is added
+     * as an initial value and then re-add it again later, so if we get
+     * the same number multiple times, that's OK */
+    if (ismember && num == seq->prev && seq->len && seq->set[seq->len-1].high == num)
+        return;
+
     if (num <= seq->prev)
         fatal("numbers out of order", EC_SOFTWARE);
 
