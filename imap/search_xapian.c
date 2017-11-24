@@ -2488,6 +2488,10 @@ static int reindex_mb(void *rock,
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     mailbox_iter_startuid(iter, seqset_first(seq));
 
+    /* initialise here so it doesn't add firstunindexed
+     * from oldindexed in is_indexed */
+    tr->indexed = seqset_init(0, SEQ_MERGE);
+
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
