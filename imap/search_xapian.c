@@ -2486,6 +2486,7 @@ static int reindex_mb(void *rock,
     tr->super.mailbox = mailbox;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    mailbox_iter_startuid(iter, seqset_first(seq));
 
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
@@ -2501,6 +2502,9 @@ static int reindex_mb(void *rock,
             ptrarray_append(&batch, msg);
         else
             message_unref(&msg);
+
+        if (record->uid > seqset_last(seq))
+            break;
     }
 
     mailbox_iter_done(&iter);
