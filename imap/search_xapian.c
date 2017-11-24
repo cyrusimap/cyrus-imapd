@@ -1924,6 +1924,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     int r = 0;
     uint32_t uid = 0;
     message_get_uid(msg, &uid);
+    uint32_t toadd = 0;
 
     if (seqset_ismember(tr->indexed, uid)) return 3;
     if (seqset_ismember(tr->oldindexed, uid)) return 2;
@@ -1932,7 +1933,7 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
         /* we want to say that we indexed the entire gap from last time
          * up until this first message as well, so our indexed range
          * isn't gappy */
-        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
+        toadd = seqset_firstnonmember(tr->oldindexed);
     }
 
     const struct message_guid *guid = NULL;
@@ -1959,7 +1960,8 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
         r = xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)) ? CYRUSDB_DONE : 0;
     }
 
-    /* Mark msg as indexed */
+    /* start the range back at the first unindexed if necessary */
+    if (toadd && toadd < uid) seqset_add(tr->indexed, toadd, 1);
     seqset_add(tr->indexed, uid, 1);
 
     return r == CYRUSDB_DONE ? 1 : 0;
