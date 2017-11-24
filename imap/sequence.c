@@ -350,6 +350,7 @@ EXPORTED unsigned seqset_last(const struct seqset *seq)
  * the first element */
 EXPORTED unsigned seqset_firstnonmember(const struct seqset *seq)
 {
+    if (!seq) return 1;
     if (!seq->len) return 1;
     if (seq->set[0].low != 1) return 1;
     return seq->set[0].high + 1;
