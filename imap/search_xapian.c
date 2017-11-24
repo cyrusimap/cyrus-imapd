@@ -2356,7 +2356,8 @@ static int bloomadd_cb(void *rock,
 }
 
 static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths,
-                         const char *userid, int flags, struct mbfilter *filter, int bloom)
+                         const char *userid, int flags, struct mbfilter *filter,
+                         int bloom, int newindexdb)
 {
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
@@ -2372,6 +2373,9 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
 
     buf_reset(&buf);
     buf_printf(&buf, "%s%s", strarray_nth(destpaths, 0), INDEXEDDB_FNAME);
+    if (newindexdb)
+        buf_appendcstr(&buf, ".NEW");
+
     r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
                      buf_cstring(&buf), CYRUSDB_CREATE, &filter->indexeddb);
     if (r) {
@@ -2428,7 +2432,7 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 1);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 1, 0);
     if (r) goto done;
 
     if (verbose)
@@ -2565,7 +2569,7 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0, 1);
     if (r) goto done;
 
     if (verbose)
@@ -2594,7 +2598,7 @@ static int search_compress(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0);
+    r = create_filter(srcpaths, destpaths, userid, flags, &filter, 0, 0);
     if (r) goto done;
 
     if (verbose)
