@@ -1928,20 +1928,14 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
      * we should probably change this. */
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    int r = 0;
     uint32_t uid = 0;
     message_get_uid(msg, &uid);
-    uint32_t toadd = 0;
 
-    if (seqset_ismember(tr->indexed, uid)) return 3;
-    if (seqset_ismember(tr->oldindexed, uid)) return 2;
-    if (!tr->indexed) {
-        tr->indexed = seqset_init(0, SEQ_MERGE);
-        /* we want to say that we indexed the entire gap from last time
-         * up until this first message as well, so our indexed range
-         * isn't gappy */
-        toadd = seqset_firstnonmember(tr->oldindexed);
-    }
+    /* bail early if we've already indexed this message in THIS run */
+    if (seqset_ismember(tr->indexed, uid))
+        return 1;
+
+    int ret = 0;
 
     const struct message_guid *guid = NULL;
     message_get_guid(msg, &guid);
@@ -1956,22 +1950,30 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
         }
 
         char *guidrep = xstrdup(message_guid_encode(guid));
-        r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
-        if (r && r != CYRUSDB_DONE) {
+        int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, tr);
+        if (r == CYRUSDB_DONE) ret = 1;
+        else if (r) {
             syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
                    tr->super.mailbox->name, uid, r, cyrusdb_strerror(r));
         }
         free(guidrep);
     }
     else if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
-        r = xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)) ? CYRUSDB_DONE : 0;
+        if (xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)))
+            ret = 1;
     }
 
     /* start the range back at the first unindexed if necessary */
-    if (toadd && toadd < uid) seqset_add(tr->indexed, toadd, 1);
+    if (!tr->indexed) {
+        tr->indexed = seqset_init(0, SEQ_MERGE);
+        /* we want to say that we indexed the entire gap from last time
+         * up until this first message as well, so our indexed range
+         * isn't gappy */
+        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
+    }
     seqset_add(tr->indexed, uid, 1);
 
-    return r == CYRUSDB_DONE ? 1 : 0;
+    return ret;
 }
 
 static int end_mailbox_update(search_text_receiver_t *rx,
