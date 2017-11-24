@@ -1924,8 +1924,10 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
     if (seqset_ismember(tr->oldindexed, uid)) return 2;
     if (!tr->indexed) {
         tr->indexed = seqset_init(0, SEQ_MERGE);
-        uint32_t first = seqset_firstnonmember(tr->oldindexed);
-        if (first < uid) seqset_add(tr->indexed, first);
+        /* we want to say that we indexed the entire gap from last time
+         * up until this first message as well, so our indexed range
+         * isn't gappy */
+        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
     }
 
     const struct message_guid *guid = NULL;
