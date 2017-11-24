@@ -1858,10 +1858,7 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    if (!tr->oldindexed)
-        return 1;
-
-    return seqset_firstnonmember(tr->oldindexed);
+   return seqset_firstnonmember(tr->oldindexed);
 }
 
 static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
