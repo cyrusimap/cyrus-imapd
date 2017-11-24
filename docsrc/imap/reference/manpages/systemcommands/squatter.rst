@@ -221,10 +221,24 @@ Options
 
     Increase the verbosity of progress/status messages.
 
+.. option:: -X
+
+    Reindex all the messages before compacting.  This mode reads all the
+    lists of messages indexed by the listed tiers, and re-indexes them into
+    a temporary database before compacting that into place.
+
 .. option:: -z desttier
 
     In compact mode, the destination tier for the compacted indices.
     This must be specified in compact mode.
+    |v3-new-feature|
+
+.. option:: -Z
+
+    When indexing messages, use the Xapian internal cyrusid rather than
+    referencing the ranges of already indexed messages to know if a
+    particular message is indexed.  Useful if the ranges get out of sync
+    with the actual messages (e.g. if files on a tier are lost)
     |v3-new-feature|
 
 Examples
