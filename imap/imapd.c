@@ -8141,6 +8141,7 @@ static void cmd_myrights(const char *tag, const char *name)
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
     r = mlookup(tag, name, intname, &mbentry);
+    free(intname);
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if (!r) r = printmyrights(name, mbentry);
@@ -8156,7 +8157,6 @@ static void cmd_myrights(const char *tag, const char *name)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
-    free(intname);
 }
 
 /*
