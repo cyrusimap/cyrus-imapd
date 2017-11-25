@@ -245,7 +245,7 @@ struct meth_params webdav_params = {
     &webdav_get,
     { 0, MBTYPE_COLLECTION },                   /* Allow any location */
     NULL,                                       /* No PATCH handling */
-    { POST_ADDMEMBER, NULL, NULL },             /* No special POST handling */
+    { POST_ADDMEMBER, NULL, { 0, NULL, NULL } },/* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */
     { DAV_FINITE_DEPTH, webdav_props},
     webdav_reports

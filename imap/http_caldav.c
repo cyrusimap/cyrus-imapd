@@ -571,7 +571,8 @@ static struct meth_params caldav_params = {
     &caldav_get,
     { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
     caldav_patch_docs,
-    { POST_ADDMEMBER | POST_SHARE | POST_BULK, &caldav_post, &caldav_import },
+    { POST_ADDMEMBER | POST_SHARE, &caldav_post,
+      { NS_CALDAV, "calendar-data", &caldav_import } },
     { CALDAV_SUPP_DATA, &caldav_put },
     { 0, caldav_props },                        /* Allow infinite depth */
     caldav_reports
@@ -3236,19 +3237,143 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 }
 
 
+struct import_rock {
+    struct transaction_t *txn;
+    icalcomponent *ical;
+    struct mailbox *mailbox;
+    struct caldav_db *caldavdb;
+    xmlNodePtr root;
+    xmlNsPtr *ns;
+    unsigned flags;
+
+    ptrarray_t *props;
+    size_t baselen;
+    unsigned count;
+    xmlBufferPtr xmlbuf;
+};
+
+
+static void import_resource(const char *uid, void *data, void *rock)
+{
+    ptrarray_t *comps = (ptrarray_t *) data;
+    struct import_rock *irock = (struct import_rock *) rock;
+    struct transaction_t *txn = irock->txn;
+    xmlNodePtr root = irock->root, resp, node;
+    xmlNsPtr *ns = irock->ns;
+    xmlBufferPtr *xmlbuf = &irock->xmlbuf;
+    icalcomponent *newical;
+    int i, r;
+
+    /* Create DAV:response element */
+    resp = xmlNewChild(root, ns[NS_DAV], BAD_CAST "response", NULL);
+    if (!resp) {
+        syslog(LOG_ERR,
+               "import_resource()): Unable to add response XML element");
+        fatal("import_resource()): Unable to add response XML element",
+              EC_SOFTWARE);
+    }
+
+    /* Create new object, making copies of PRODID, VERSION, CALSCALE */
+    newical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
+
+    for (i = 0; i < ptrarray_size(irock->props); i++) {
+        icalproperty *newprop =
+            icalproperty_new_clone(ptrarray_nth(irock->props, i));
+
+        icalcomponent_add_property(newical, newprop);
+    }
+
+    /* Add component in recurrence set */
+    for (i = 0; i < ptrarray_size(comps); i++) {
+        struct timezone_rock tzrock = { irock->ical, newical };
+        icalcomponent *comp = ptrarray_nth(comps, i);
+
+        icalcomponent_add_component(newical, comp);
+
+        /* Add required timezone components */
+        icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
+    }
+
+    /* Append a unique resource name to URL and perform a PUT */
+    txn->req_tgt.reslen =
+        snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - irock->baselen,
+                 "%x-%d-%ld-%u.ics",
+                 strhash(uid), getpid(), time(0), irock->count++);
+
+    r = caldav_put(txn, newical, irock->mailbox,
+                   txn->req_tgt.resource, irock->caldavdb, irock->flags);
+
+    switch (r) {
+    case HTTP_OK:
+    case HTTP_CREATED:
+    case HTTP_NO_CONTENT:
+        /* Success: Add DAV:href and DAV:propstat elements */
+        xml_add_href(resp, NULL, txn->req_tgt.path);
+
+        node = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
+        xmlNewChild(node, ns[NS_DAV], BAD_CAST "status",
+                    BAD_CAST http_statusline(HTTP_OK));
+
+        node = xmlNewChild(node, ns[NS_DAV], BAD_CAST "prop", NULL);
+
+        if (txn->resp_body.etag) {
+            /* Add DAV:getetag property */
+            xmlNewTextChild(node, ns[NS_DAV], BAD_CAST "getetag",
+                            BAD_CAST txn->resp_body.etag);
+        }
+        if ((irock->flags & PREFER_REP) &&
+            icalcomponent_get_first_property(ptrarray_nth(comps, 0),
+                                             ICAL_ORGANIZER_PROPERTY)) {
+            /* Add CALDAV:calendar-data property */
+            const char *icalstr = icalcomponent_as_ical_string(newical);
+            xmlNodePtr cdata = xmlNewChild(node, ns[NS_CALDAV],
+                                           BAD_CAST "calendar-data", NULL);
+
+            xmlAddChild(cdata, xmlNewCDataBlock(root->doc, BAD_CAST icalstr,
+                                                strlen(icalstr)));
+        }
+        break;
+
+    default:
+        /* Failure: Add DAV:href, DAV:status, and DAV:error elements */
+        xml_add_href(resp, NULL, NULL);
+
+        xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
+                    BAD_CAST http_statusline(r));
+
+        node = xml_add_error(resp, &txn->error, ns);
+        break;
+    }
+
+    /* Add CS:uid property */
+    xmlNewTextChild(node, ns[NS_CS], BAD_CAST "uid", BAD_CAST uid);
+
+    /* Add DAV:response element for this resource to output buffer.
+       Only output the xmlBuffer every PROT_BUFSIZE bytes */
+    xml_partial_response((xmlBufferLength(*xmlbuf) > PROT_BUFSIZE) ? txn : NULL,
+                         root->doc, resp, 1, xmlbuf);
+
+    /* Remove DAV:response element from root (no need to keep in memory) */
+    xmlReplaceNode(resp, NULL);
+    xmlFreeNode(resp);
+
+    icalcomponent_free(newical);
+    ptrarray_free(comps);
+}
+
+
 /* Perform a bulk import */
 static int caldav_import(struct transaction_t *txn, void *obj,
                          struct mailbox *mailbox, void *destdb,
                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags)
 {
-    int ret = 0;
+    struct hash_table comp_table = HASH_TABLE_INITIALIZER;
     icalcomponent *ical = obj, *comp, *next;
-    icalcomponent_kind kind;
-    icalproperty *prodid, *version, *calscale;
+    icalproperty *prop;
     const char *uid;
-    struct caldav_db *caldavdb = destdb;
-    xmlNodePtr resp, propstat, prop, error;
-    unsigned post_count = 0;
+    ptrarray_t *comps;
+    struct import_rock irock = { txn, ical, mailbox, destdb, root, ns, flags,
+                                 ptrarray_new(), 0, 0, NULL };
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
@@ -3263,96 +3388,66 @@ static int caldav_import(struct transaction_t *txn, void *obj,
         return HTTP_FORBIDDEN;
     }
 
-    ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+    /* Fetch important properties from VCALENDAR */
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop; prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
 
-    size_t len = strlen(txn->req_tgt.path);
-    txn->req_tgt.resource = txn->req_tgt.path + len;
-
-    prodid = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
-    version = icalcomponent_get_first_property(ical, ICAL_VERSION_PROPERTY);
-    calscale = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
-
-    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
-         comp; comp = next) {
-        icalcomponent *newical;
-        struct timezone_rock tzrock;
-
-        next = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT);
-        kind = icalcomponent_isa(comp);
-        if (kind == ICAL_VTIMEZONE_COMPONENT) continue;
-
-        /* Create new object, making copies of PRODID, VERSION, CALSCALE */
-        newical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
-        if (prodid)
-            icalcomponent_add_property(newical, icalproperty_new_clone(prodid));
-        if (version)
-            icalcomponent_add_property(newical, icalproperty_new_clone(version));
-        if (calscale)
-            icalcomponent_add_property(newical, icalproperty_new_clone(calscale));
-
-        /* Add our component */
-        icalcomponent_remove_component(ical, comp);
-        icalcomponent_add_component(newical, comp);
-
-        /* Look for matching UIDs (recurrence set) */
-
-        /* Add required timezone components */
-        tzrock.old = ical;
-        tzrock.new = newical;
-        icalcomponent_foreach_tzid(comp, &add_timezone, &tzrock);
-
-        /* Append a unique resource name to URL and perform a PUT */
-        uid = icalcomponent_get_uid(comp);
-        txn->req_tgt.reslen =
-            snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - len,
-                     "%x-%d-%ld-%u.ics",
-                     strhash(uid), getpid(), time(0), post_count++);
-
-        ret = caldav_put(txn, newical, mailbox,
-                         txn->req_tgt.resource, caldavdb, flags);
-
-        resp = xmlNewChild(root, ns[NS_DAV], BAD_CAST "response", NULL);
-        if (!resp) {
-            txn->error.desc = "Unable to add response XML element";
-            return HTTP_SERVER_ERROR;
-        }
-
-        switch (ret) {
-        case HTTP_OK:
-        case HTTP_CREATED:
-        case HTTP_NO_CONTENT:
-            xml_add_href(resp, NULL, txn->req_tgt.path);
-            propstat = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
-            prop = xmlNewChild(propstat, ns[NS_DAV], BAD_CAST "prop", NULL);
-
-            if (txn->resp_body.etag) {
-                xmlNewTextChild(prop, ns[NS_DAV], BAD_CAST "getetag",
-                                BAD_CAST txn->resp_body.etag);
-            }
-            if (flags & PREFER_REP) {
-                xmlNodePtr data = xmlNewChild(prop, ns[NS_CALDAV],
-                                              BAD_CAST "calendar-data", NULL);
-                const char *icalstr = icalcomponent_as_ical_string(newical);
-                xmlAddChild(data, xmlNewCDataBlock(root->doc, BAD_CAST icalstr,
-                                                   strlen(icalstr)));
-            }
-            else xmlNewTextChild(prop, ns[NS_CS], BAD_CAST "uid", BAD_CAST uid);
-
-            xmlNewChild(propstat, ns[NS_DAV], BAD_CAST "status",
-                        BAD_CAST http_statusline(HTTP_OK));
+        switch (icalproperty_isa(prop)) {
+        case ICAL_CALSCALE_PROPERTY:
+        case ICAL_PRODID_PROPERTY:
+        case ICAL_VERSION_PROPERTY:
+            ptrarray_append(irock.props, prop);
             break;
 
         default:
-            xml_add_href(resp, NULL, NULL);
-            xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
-                        BAD_CAST http_statusline(ret));
-            error = xml_add_error(resp, &txn->error, ns);
-            xmlNewTextChild(error, ns[NS_CS], BAD_CAST "uid", BAD_CAST uid);
             break;
         }
-
-        icalcomponent_free(newical);
     }
+
+    /* Setup for appending resource name to request path */
+    irock.baselen = strlen(txn->req_tgt.path);
+    txn->req_tgt.resource = txn->req_tgt.path + irock.baselen;
+
+    /* Create hash table of components */
+    construct_hash_table(&comp_table, 100, 1);
+
+    /* Group components by UID (recurrence sets) */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp; comp = next) {
+
+        next = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT);
+
+        if (icalcomponent_isa(comp) == ICAL_VTIMEZONE_COMPONENT) continue;
+
+        icalcomponent_remove_component(ical, comp);
+
+        uid = icalcomponent_get_uid(comp);
+        comps = hash_lookup(uid, &comp_table);
+
+        if (!comps) {
+            /* Haven't seen this UID yet - create new recurrence set */
+            comps = ptrarray_new();
+            hash_insert(uid, comps, &comp_table);
+        }
+
+        /* Add component to recurrence set */
+        if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            ptrarray_append(comps, comp);
+        }
+        else {
+            /* Master component - always place first */
+            ptrarray_insert(comps, 0, comp);
+        }
+    }
+
+    /* Process the recurrence sets */
+    hash_enumerate(&comp_table, &import_resource, &irock);
+    free_hash_table(&comp_table, NULL);
+    ptrarray_free(irock.props);
+
+    /* End XML response */
+    xml_partial_response(txn, root->doc, NULL /* end */, 0, &irock.xmlbuf);
+    xmlBufferFree(irock.xmlbuf);
 
     return 0;
 }

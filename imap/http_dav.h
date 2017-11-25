@@ -507,8 +507,7 @@ typedef int (*import_proc_t)(struct transaction_t *txn, void *obj,
 /* POST "mode" bits */
 enum {
     POST_ADDMEMBER = (1<<0),
-    POST_SHARE     = (1<<1),
-    POST_BULK      = (1<<2)
+    POST_SHARE     = (1<<1)
 };
 
 /* meth_put() parameters */
@@ -524,7 +523,11 @@ struct copy_params {
 struct post_params {
     unsigned allowed;                   /* allowed generic POST "modes" */
     post_proc_t proc;                   /* special POST handling (optional) */
-    import_proc_t import;               /* func to import multiple rsrcs (opt) */
+    struct {
+        unsigned data_ns;               /* namespace of "data" property */
+        const char *data_prop;          /* name of "data" prop for CRUD (opt) */
+        import_proc_t import;           /* func to import multiple rsrcs (opt) */
+    } bulk;
 };
 
 struct put_params {

@@ -6668,6 +6668,7 @@ static int dav_post_import(struct transaction_t *txn,
     xmlDocPtr outdoc = NULL;
     xmlNodePtr root;
     xmlNsPtr ns[NUM_NAMESPACE];
+    unsigned data_ns = pparams->post.bulk.data_ns;
 
     /* Check Content-Type */
     mime = pparams->mime_types;
@@ -6771,23 +6772,32 @@ static int dav_post_import(struct transaction_t *txn,
         goto done;
     }
     ensure_ns(ns, NS_CS, root, XML_NS_CS, "CS");
+    ensure_ns(ns, data_ns, root, known_namespaces[data_ns].href,
+              known_namespaces[data_ns].prefix);
 
     outdoc = root->doc;
 
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+
+    /* Include CTag in trailer */
+    txn->flags.trailer |= TRAILER_CTAG;
+
+    /* Begin XML response */
+    xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+
     /* Parse, validate, and store the resource */
     obj = mime->to_object(&txn->req_body.payload);
-    ret = pparams->post.import(txn, obj, mailbox, davdb,
-                               root, ns, get_preferences(txn));
+    ret = pparams->post.bulk.import(txn, obj, mailbox, davdb,
+                                    root, ns, get_preferences(txn));
 
     /* Validators */
-    assert(!buf_len(&txn->buf));
     dav_get_synctoken(mailbox, &txn->buf, "");
     txn->resp_body.ctag = buf_cstring(&txn->buf);
-    txn->resp_body.etag = NULL;
-    txn->resp_body.lastmod = 0;
 
-    /* Output the XML response */
-    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+    ret = 0;
 
   done:
     if (outdoc) xmlFreeDoc(outdoc);
@@ -6839,15 +6849,14 @@ int meth_post(struct transaction_t *txn, void *params)
             /* Sharing request */
             return dav_post_share(txn, pparams);
         }
-        else if ((pparams->post.allowed & POST_BULK) && hdr) {
-            if (is_mediatype(hdr[0], "application/xml")) {
-                /* Bulk CRUD */
-                return HTTP_FORBIDDEN;
-            }
-            else {
-                /* Bulk import */
-                return dav_post_import(txn, pparams);
-            }
+        else if (pparams->post.bulk.data_prop && hdr &&
+                 is_mediatype(hdr[0], "application/xml")) {
+            /* Bulk CRUD */
+            return HTTP_FORBIDDEN;
+        }
+        else if (pparams->post.bulk.import && hdr) {
+            /* Bulk import */
+            return dav_post_import(txn, pparams);
         }
         else return HTTP_BAD_REQUEST;
     }
@@ -9179,7 +9188,7 @@ struct meth_params notify_params = {
     &notify_get,
     { 0, 0 },                                   /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
-    { 0, &notify_post, NULL },                  /* No generic POST handling */
+    { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
     { 0, &notify_put },
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports

@@ -965,9 +965,12 @@ static void http2_data_chunk(struct transaction_t *txn,
     else {
         http2_output(txn);
 
-        if (last_chunk && (txn->flags.trailer & TRAILER_CMD5)) {
+        if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
             begin_resp_headers(txn, 0);
-            content_md5_hdr(txn, md5);
+            if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
+            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
+                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
+            }
             end_resp_headers(txn, 0);
         }
     }
@@ -3269,7 +3272,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->flags.trailer & ~TRAILER_PROXY) {
                 /* Construct Trailer header */
-                const char *trailer_hdrs[] = { "Content-MD5", NULL };
+                const char *trailer_hdrs[] = { "Content-MD5", "CTag", NULL };
 
                 comma_list_hdr(txn, "Trailer", trailer_hdrs, txn->flags.trailer);
             }
@@ -3633,7 +3636,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
             /* HTTP/1.0 doesn't support chunked - close-delimit the body */
             txn->flags.conn = CONN_CLOSE;
         }
-        else if (do_md5) txn->flags.trailer = TRAILER_CMD5;
+        else if (do_md5) txn->flags.trailer |= TRAILER_CMD5;
 
         response_header(code, txn);
 
@@ -3673,9 +3676,13 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
             /* Trailer */
             if (txn->flags.trailer & TRAILER_CMD5) {
-                syslog(LOG_DEBUG, "write_body: trailer");
+                syslog(LOG_DEBUG, "write_body: trailer Content-MD5");
                 MD5Final(md5, &ctx);
                 content_md5_hdr(txn, md5);
+            }
+            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
+                syslog(LOG_DEBUG, "write_body: trailer CTag");
+                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
 
             if (txn->flags.trailer != TRAILER_PROXY) {

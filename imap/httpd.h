@@ -314,7 +314,7 @@ struct txn_flags_t {
     unsigned long cc       : 7;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
-    unsigned long trailer  : 2;         /* Headers which will be in trailer */
+    unsigned long trailer  : 3;         /* Headers which will be in trailer */
 };
 
 /* HTTP connection context */
@@ -431,7 +431,8 @@ enum {
 /* Trailer header flags */
 enum {
     TRAILER_CMD5 =      (1<<0), /* Content-MD5 will be generated */
-    TRAILER_PROXY =     (1<<1)  /* Trailer(s) will be proxied from origin */
+    TRAILER_CTAG =      (1<<1), /* CTag will be returned */
+    TRAILER_PROXY =     (1<<2)  /* Trailer(s) will be proxied from origin */
 };
 
 typedef int (*premethod_proc_t)(struct transaction_t *txn);
