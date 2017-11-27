@@ -182,9 +182,6 @@ struct auth_scheme_t {
     const char *saslmech;       /* Corresponding SASL mech name */
     unsigned flags;             /* Bitmask of requirements/features */
                                 /* Optional function to send success data */
-    void (*send_success)(txn_t *txn, const char *name, const char *data);
-                                /* Optional function to recv success data */
-    const char *(*recv_success)(hdrcache_t hdrs);
 };
 
 /* Auth scheme identifiers */
@@ -201,16 +198,16 @@ enum {
     AUTH_NEED_PERSIST = (1<<0), /* Persistent connection required */
     AUTH_NEED_REQUEST = (1<<1), /* Request-line required */
     AUTH_SERVER_FIRST = (1<<2), /* SASL mech is server-first */
-    AUTH_BASE64 =       (1<<3)  /* Base64 encode/decode auth data */
+    AUTH_BASE64       = (1<<3), /* Base64 encode/decode challenge/response */
+    AUTH_REALM_PARAM  = (1<<4), /* Need "realm" parameter in initial challenge */
+    AUTH_SUCCESS_WWW  = (1<<5)  /* Success data uses WWW-Authenticate header */
 };
 
 #define AUTH_SCHEME_BASIC { AUTH_BASIC, "Basic", NULL, \
-                            AUTH_SERVER_FIRST | AUTH_BASE64, NULL, NULL }
+                            AUTH_SERVER_FIRST | AUTH_REALM_PARAM | AUTH_BASE64 }
 
 /* List of HTTP auth schemes that we support */
 extern struct auth_scheme_t auth_schemes[];
-
-extern const char *digest_recv_success(hdrcache_t hdrs);
 
 
 /* Request-line context */

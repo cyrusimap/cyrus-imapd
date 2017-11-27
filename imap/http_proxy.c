@@ -85,14 +85,6 @@ HIDDEN struct protocol_t http_protocol =
 };
 
 
-EXPORTED const char *digest_recv_success(hdrcache_t hdrs)
-{
-    const char **hdr = spool_getheader(hdrs, "Authentication-Info");
-
-    return (hdr ? hdr[0]: NULL);
-}
-
-
 static const char *callback_getdata(sasl_conn_t *conn,
                                     sasl_callback_t *callbacks,
                                     unsigned long callbackid)
@@ -284,8 +276,17 @@ static int login(struct backend *s, const char *userid,
             break;
 
         case 200: /* OK */
-            if (scheme->recv_success &&
-                (serverin = scheme->recv_success(hdrs))) {
+            if ((hdr = spool_getheader(hdrs, "Authentication-Info"))) { 
+                /* Default handling of success data */
+                serverin = hdr[0];
+            }
+            else if ((scheme->flags & AUTH_SUCCESS_WWW) &&
+                     (hdr = spool_getheader(hdrs, "WWW-Authenticate"))) {
+                /* Special handling of success data for this scheme */
+                serverin = strchr(hdr[0], ' ');
+                if (serverin) serverin++;
+            }
+            if (serverin) {
                 /* Process success data */
                 serverinlen = strlen(serverin);
                 goto challenge;

@@ -1036,22 +1036,18 @@ static void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
 #endif /* HAVE_NGHTTP2 */
 
 
-static void digest_send_success(struct transaction_t *txn,
-                                const char *name __attribute__((unused)),
-                                const char *data)
-{
-    simple_hdr(txn, "Authentication-Info", data);
-}
-
 /* List of HTTP auth schemes that we support */
 struct auth_scheme_t auth_schemes[] = {
       AUTH_SCHEME_BASIC,
-    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST,
-      &digest_send_success, digest_recv_success },
-    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", AUTH_BASE64, NULL, NULL },
-    { AUTH_NTLM, "NTLM", "NTLM", AUTH_NEED_PERSIST | AUTH_BASE64, NULL, NULL },
-    { AUTH_BEARER, "Bearer", NULL, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST, NULL, NULL },
-    { 0, NULL, NULL, 0, NULL, NULL }
+    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH,
+      AUTH_NEED_REQUEST | AUTH_SERVER_FIRST },
+    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO",
+      AUTH_BASE64 | AUTH_SUCCESS_WWW },
+    { AUTH_NTLM, "NTLM", "NTLM",
+      AUTH_NEED_PERSIST | AUTH_BASE64 },
+    { AUTH_BEARER, "Bearer", NULL,
+      AUTH_SERVER_FIRST | AUTH_REALM_PARAM },
+    { 0, NULL, NULL, 0 }
 };
 
 
@@ -3066,14 +3062,13 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     else if (auth_chal->param) {
         /* Authentication completed with success data */
-        if (auth_chal->scheme->send_success) {
+        if (auth_chal->scheme->flags & AUTH_SUCCESS_WWW) {
             /* Special handling of success data for this scheme */
-            auth_chal->scheme->send_success(txn, auth_chal->scheme->name,
-                                            auth_chal->param);
+            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
         }
         else {
             /* Default handling of success data */
-            WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+            simple_hdr(txn, "Authentication-Info", auth_chal->param);
         }
     }
 
@@ -4083,12 +4078,12 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 {
     struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
-    int slen;
+    int slen, r;
     const char *clientin = NULL, *realm = NULL, *user, **authzid;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
-    const void *canon_user;
+    const void *canon_user = NULL;
 
     /* Split credentials into auth scheme and response */
     slen = strcspn(creds, " \0");
@@ -4150,12 +4145,41 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         syslog(LOG_DEBUG, "http_auth: found matching scheme: %s", scheme->name);
         chal->scheme = scheme;
         status = SASL_OK;
+
+        if (!clientin && (scheme->flags & AUTH_REALM_PARAM)) {
+            /* Get realm - based on namespace of URL */
+            switch (txn->req_tgt.namespace->id) {
+            case URL_NS_DEFAULT:
+            case URL_NS_PRINCIPAL:
+                realm = config_getstring(IMAPOPT_DAV_REALM);
+                break;
+
+            case URL_NS_CALENDAR:
+                realm = config_getstring(IMAPOPT_CALDAV_REALM);
+                break;
+
+            case URL_NS_ADDRESSBOOK:
+                realm = config_getstring(IMAPOPT_CARDDAV_REALM);
+                break;
+
+            case URL_NS_RSS:
+                realm = config_getstring(IMAPOPT_RSS_REALM);
+                break;
+            }
+            if (!realm) realm = config_servername;
+
+            /* Create initial challenge (base64 buffer is static) */
+            snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
+            chal->param = base64;
+            chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
+            return status;
+        }
     }
 
     /* Base64 decode any client response, if necessary */
     if (clientin && (scheme->flags & AUTH_BASE64)) {
-        int r = sasl_decode64(clientin, clientinlen,
-                              base64, BASE64_BUF_SIZE, &clientinlen);
+        r = sasl_decode64(clientin, clientinlen,
+                          base64, BASE64_BUF_SIZE, &clientinlen);
         if (r != SASL_OK) {
             syslog(LOG_ERR, "Base64 decode failed: %s",
                    sasl_errstring(r, NULL, NULL));
@@ -4164,41 +4188,12 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         clientin = base64;
     }
 
-    /* Get realm - based on namespace of URL */
-    switch (txn->req_tgt.namespace->id) {
-    case URL_NS_DEFAULT:
-    case URL_NS_PRINCIPAL:
-        realm = config_getstring(IMAPOPT_DAV_REALM);
-        break;
-
-    case URL_NS_CALENDAR:
-        realm = config_getstring(IMAPOPT_CALDAV_REALM);
-        break;
-
-    case URL_NS_ADDRESSBOOK:
-        realm = config_getstring(IMAPOPT_CARDDAV_REALM);
-        break;
-
-    case URL_NS_RSS:
-        realm = config_getstring(IMAPOPT_RSS_REALM);
-        break;
-    }
-    if (!realm) realm = config_servername;
-
     if (scheme->id == AUTH_BASIC) {
         /* Basic (plaintext) authentication */
         char *pass;
         char *extra;
         char *plus;
         char *domain;
-
-        if (!clientin) {
-            /* Create initial challenge (base64 buffer is static) */
-            snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
-            chal->param = base64;
-            chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
-            return status;
-        }
 
         /* Split credentials into <user> ':' <pass>.
          * We are working with base64 buffer, so we can modify it.
@@ -4216,8 +4211,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (extra) *extra++ = '\0';
         plus = strchr(user, '+');
         if (plus) *plus++ = '\0';
+
         /* Verify the password */
-        char *realuser = domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
+        char *realuser =
+            domain ? strconcat(user, "@", domain, (char *) NULL) : xstrdup(user);
+
         status = sasl_checkpass(httpd_saslconn, realuser, strlen(realuser),
                                 pass, strlen(pass));
         memset(pass, 0, strlen(pass));          /* erase plaintext password */
@@ -4241,21 +4239,14 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Bearer authentication */
         assert(txn->req_tgt.namespace->bearer);
 
-        if (!clientin) {
-            /* Create initial challenge (base64 buffer is static) */
-            snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
-            chal->param = base64;
-            chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
-            return status;
-        }
-
         /* Call namespace bearer authentication.
          * We are working with base64 buffer, so the namespace can
          * write the canonicalized userid into the buffer */
         base64[0] = 0;
-        status = txn->req_tgt.namespace->bearer(clientin, base64, BASE64_BUF_SIZE);
+        status = txn->req_tgt.namespace->bearer(clientin,
+                                                base64, BASE64_BUF_SIZE);
         if (status) return status;
-        user = base64;
+        canon_user = user = base64;
 
         /* Successful authentication - fall through */
         httpd_extrafolder = NULL;
@@ -4304,8 +4295,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         /* Base64 encode any server challenge, if necessary */
         if (serverout && (scheme->flags & AUTH_BASE64)) {
-            int r = sasl_encode64(serverout, serveroutlen,
-                                   base64, BASE64_BUF_SIZE, NULL);
+            r = sasl_encode64(serverout, serveroutlen,
+                              base64, BASE64_BUF_SIZE, NULL);
             if (r != SASL_OK) {
                 syslog(LOG_ERR, "Base64 encode failed: %s",
                        sasl_errstring(r, NULL, NULL));
@@ -4328,7 +4319,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          */
     }
 
-    if (scheme->id != AUTH_BEARER) {
+    if (!canon_user) {
         /* Get the userid from SASL - already canonicalized */
         status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
         if (status != SASL_OK) {
@@ -4351,16 +4342,16 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     }
 
     /* Post-process the successful authentication. */
-    int ret = auth_success(txn, user);
-    if (ret == HTTP_UNAVAILABLE) {
+    r = auth_success(txn, user);
+    if (r == HTTP_UNAVAILABLE) {
         status = SASL_UNAVAIL;
     }
-    else if (ret) {
+    else if (r) {
         /* Any error here comes after the user already logged in,
          * so avoid to return SASL_BADAUTH. It would trigger the
          * HTTP handler to send UNAUTHORIZED, and might confuse
          * users that provided their correct credentials. */
-        syslog(LOG_ERR, "auth_success returned error: %s", error_message(ret));
+        syslog(LOG_ERR, "auth_success returned error: %s", error_message(r));
         status = SASL_FAIL;
     }
 
