@@ -1045,13 +1045,13 @@ static void digest_send_success(struct transaction_t *txn,
 
 /* List of HTTP auth schemes that we support */
 struct auth_scheme_t auth_schemes[] = {
-    { AUTH_BASIC, "Basic", NULL, AUTH_SERVER_FIRST | AUTH_BASE64, NULL, NULL },
+      AUTH_SCHEME_BASIC,
     { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST,
       &digest_send_success, digest_recv_success },
     { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", AUTH_BASE64, NULL, NULL },
     { AUTH_NTLM, "NTLM", "NTLM", AUTH_NEED_PERSIST | AUTH_BASE64, NULL, NULL },
     { AUTH_BEARER, "Bearer", NULL, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST, NULL, NULL },
-    { -1, NULL, NULL, 0, NULL, NULL }
+    { 0, NULL, NULL, 0, NULL, NULL }
 };
 
 
@@ -1467,7 +1467,7 @@ int service_main(int argc __attribute__((unused)),
     /* See which auth schemes are available to us */
     avail_auth_schemes = 0; /* Reset auth schemes for each connection */
     if ((extprops_ssf >= 2) || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-        avail_auth_schemes |= (1 << AUTH_BASIC);
+        avail_auth_schemes |=  AUTH_BASIC;
     }
     sasl_listmech(httpd_saslconn, NULL, NULL, " ", NULL,
                   &mechlist, NULL, &mechcount);
@@ -1475,7 +1475,7 @@ int service_main(int argc __attribute__((unused)),
         mechlen = strcspn(mech, " \0");
         for (scheme = auth_schemes; scheme->name; scheme++) {
             if (scheme->saslmech && !strncmp(mech, scheme->saslmech, mechlen)) {
-                avail_auth_schemes |= (1 << scheme->idx);
+                avail_auth_schemes |= scheme->id;
                 break;
             }
         }
@@ -1731,7 +1731,7 @@ static int starttls(struct transaction_t *txn, int *http2)
     httpd_tls_done = 1;
     httpd_tls_required = 0;
 
-    avail_auth_schemes |= (1 << AUTH_BASIC);
+    avail_auth_schemes |= AUTH_BASIC;
 
     return 0;
 }
@@ -2068,8 +2068,8 @@ static int examine_request(struct transaction_t *txn)
         avail_auth_schemes = (namespace->auth_schemes & avail_auth_schemes);
 
         /* Bearer auth must be advertised and supported by the namespace */
-        if ((namespace->auth_schemes & (1<<AUTH_BEARER)) && namespace->bearer) {
-            avail_auth_schemes |= (1<<AUTH_BEARER);
+        if ((namespace->auth_schemes & AUTH_BEARER) && namespace->bearer) {
+            avail_auth_schemes |= AUTH_BEARER;
         }
     }
 
@@ -2339,7 +2339,7 @@ static void transaction_reset(struct transaction_t *txn)
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
 
     /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~(1 << AUTH_BEARER);
+    avail_auth_schemes &= ~AUTH_BEARER;
 
     if (txn->req_uri) xmlFreeURI(txn->req_uri);
     txn->req_uri = NULL;
@@ -2836,7 +2836,7 @@ EXPORTED void list_auth_schemes(struct transaction_t *txn)
 
     /* Advertise available schemes that can work with the type of connection */
     for (scheme = auth_schemes; scheme->name; scheme++) {
-        if ((avail_auth_schemes & (1 << scheme->idx)) &&
+        if ((avail_auth_schemes & scheme->id) &&
             !(conn_close && (scheme->flags & AUTH_NEED_PERSIST))) {
             auth_chal->param = NULL;
 
@@ -4137,7 +4137,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         for (scheme = auth_schemes; scheme->name; scheme++) {
             if (slen && !strncasecmp(scheme->name, creds, slen)) {
                 /* Found a supported scheme, see if its available */
-                if (!(avail_auth_schemes & (1 << scheme->idx))) scheme = NULL;
+                if (!(avail_auth_schemes & scheme->id)) scheme = NULL;
                 break;
             }
         }
@@ -4185,7 +4185,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     }
     if (!realm) realm = config_servername;
 
-    if (scheme->idx == AUTH_BASIC) {
+    if (scheme->id == AUTH_BASIC) {
         /* Basic (plaintext) authentication */
         char *pass;
         char *extra;
@@ -4237,7 +4237,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_extrafolder = xstrdupnull(plus);
         httpd_extradomain = xstrdupnull(extra);
     }
-    else if (scheme->idx == AUTH_BEARER) {
+    else if (scheme->id == AUTH_BEARER) {
         /* Bearer authentication */
         assert(txn->req_tgt.namespace->bearer);
 
@@ -4328,7 +4328,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          */
     }
 
-    if (scheme->idx != AUTH_BEARER) {
+    if (scheme->id != AUTH_BEARER) {
         /* Get the userid from SASL - already canonicalized */
         status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
         if (status != SASL_OK) {

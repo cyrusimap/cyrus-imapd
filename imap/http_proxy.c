@@ -195,6 +195,7 @@ static int login(struct backend *s, const char *userid,
         char base64[BASE64_BUF_SIZE+1];
         unsigned int serverinlen;
         struct body_t resp_body;
+        struct auth_scheme_t auth_scheme_basic = AUTH_SCHEME_BASIC;
 #ifdef SASL_HTTP_REQUEST
         sasl_http_request_t httpreq = { "OPTIONS",      /* Method */
                                         "*",            /* URI */
@@ -318,7 +319,7 @@ static int login(struct backend *s, const char *userid,
                                 !((scheme->flags & AUTH_NEED_PERSIST) &&
                                   (resp_body.flags & BODY_CLOSE))) {
                                 /* Tag the scheme as available */
-                                avail_auth_schemes |= (1 << scheme->idx);
+                                avail_auth_schemes |= scheme->id;
 
                                 /* Add SASL-based schemes to SASL mech list */
                                 if (scheme->saslmech) {
@@ -370,11 +371,11 @@ static int login(struct backend *s, const char *userid,
                     }
                     else {
                         /* No matching SASL mechs - try Basic */
-                        scheme = &auth_schemes[AUTH_BASIC];
-                        if (!(avail_auth_schemes & (1 << scheme->idx))) {
+                        if (!(avail_auth_schemes & AUTH_BASIC)) {
                             need_tls = !tls_done;
                             break;  /* case 401 */
                         }
+                        scheme = &auth_scheme_basic;
                     }
 
                     /* Find the associated WWW-Authenticate header */
@@ -396,7 +397,7 @@ static int login(struct backend *s, const char *userid,
             if (serverin) {
                 /* Perform the next step in the auth exchange */
 
-                if (scheme->idx == AUTH_BASIC) {
+                if (scheme->id == AUTH_BASIC) {
                     /* Don't care about "realm" in server challenge */
                     const char *authid =
                         callback_getdata(s->saslconn, cb, SASL_CB_AUTHNAME);

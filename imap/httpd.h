@@ -177,7 +177,7 @@ enum {
 typedef struct transaction_t txn_t;
 
 struct auth_scheme_t {
-    unsigned idx;               /* Index value of the scheme */
+    unsigned id;                /* Identifier of the scheme */
     const char *name;           /* HTTP auth scheme name */
     const char *saslmech;       /* Corresponding SASL mech name */
     unsigned flags;             /* Bitmask of requirements/features */
@@ -187,13 +187,13 @@ struct auth_scheme_t {
     const char *(*recv_success)(hdrcache_t hdrs);
 };
 
-/* Index into available schemes */
+/* Auth scheme identifiers */
 enum {
-    AUTH_BASIC = 0,
-    AUTH_DIGEST,
-    AUTH_SPNEGO,
-    AUTH_NTLM,
-    AUTH_BEARER
+    AUTH_BASIC  = (1<<0),
+    AUTH_DIGEST = (1<<1),
+    AUTH_SPNEGO = (1<<2),
+    AUTH_NTLM   = (1<<3),
+    AUTH_BEARER = (1<<4)
 };
 
 /* Auth scheme flags */
@@ -203,6 +203,9 @@ enum {
     AUTH_SERVER_FIRST = (1<<2), /* SASL mech is server-first */
     AUTH_BASE64 =       (1<<3)  /* Base64 encode/decode auth data */
 };
+
+#define AUTH_SCHEME_BASIC { AUTH_BASIC, "Basic", NULL, \
+                            AUTH_SERVER_FIRST | AUTH_BASE64, NULL, NULL }
 
 /* List of HTTP auth schemes that we support */
 extern struct auth_scheme_t auth_schemes[];
