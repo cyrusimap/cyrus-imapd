@@ -104,7 +104,7 @@ static int myrights_byname(struct auth_state *authstate,
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap",
-    jmap_checkurl, 1 << AUTH_BEARER,
+    jmap_checkurl, AUTH_BEARER,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
     &jmap_init, &jmap_auth, NULL, NULL, NULL, &jmap_bearer,
