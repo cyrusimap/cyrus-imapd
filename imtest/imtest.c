@@ -2550,18 +2550,23 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
     int result = IMTEST_OK;
 
     if (mech) {
-        if (!strcasecmp(mech, "basic")) {
+        if (!strcasecmp(mech, "basic") || !strcasecmp(mech, "plain")) {
             if (!basic_enabled) {
                 printf("[Server did not advertise HTTP Basic]\n");
                 result = IMTEST_FAIL;
             } else {
                 result = auth_http_basic(servername);
             }
-        } else if (!mechlist || !stristr(mechlist, mech)) {
-            printf("[Server did not advertise HTTP %s]\n", ucase(mech));
-            result = IMTEST_FAIL;
         } else {
-            result = auth_http_sasl(servername, mech);
+            if (!strcasecmp(mech, "digest")) mech = "DIGEST-MD5";
+            else if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
+
+            if (!mechlist || !stristr(mechlist, mech)) {
+                printf("[Server did not advertise HTTP %s]\n", ucase(mech));
+                result = IMTEST_FAIL;
+            } else {
+                result = auth_http_sasl(servername, mech);
+            }
         }
     } else {
         if (mechlist) {
@@ -2597,7 +2602,7 @@ static void usage(char *prog, char *prot)
     else if (!strcasecmp(prot, "nntp"))
         printf("             (\"user\" for AUTHINFO USER/PASS\n");
     else if (!strcasecmp(prot, "http"))
-        printf("             (\"basic\" for HTTP Basic\n");
+        printf("             (\"basic\", \"digest\", \"negotiate\", \"ntlm\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
