@@ -2511,8 +2511,9 @@ EXPORTED int index_snippets(struct index_state *state,
             mailbox = state->mailbox;
         }
         else {
-            r = mailbox_open_iwl(snippetargs->mboxname, &mailbox);
+            r = mailbox_open_irl(snippetargs->mboxname, &mailbox);
             if (r) goto out;
+            mailbox_unlock_index(mailbox, NULL);
         }
 
         if (snippetargs->uidvalidity &&
@@ -2528,8 +2529,10 @@ EXPORTED int index_snippets(struct index_state *state,
             struct index_record record;
             message_t *msg;
 
-            /* This UID didn't appear in the old index file */
+            /* It's OK to do a dirty read, because we only care about
+             * the UID of the message */
             r = mailbox_find_index_record(mailbox, uid, &record);
+            if (r == IMAP_MAILBOX_CHECKSUM) r = 0;
             if (r) continue;
 
             msg = message_new_from_record(mailbox, &record);
