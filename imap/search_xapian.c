@@ -3496,14 +3496,13 @@ static int reindex_mb(void *rock,
     if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    mailbox_iter_startuid(iter, seqset_first(seq));
+
+    /* only index messages in the previous indexed set */
+    mailbox_iter_uidset(iter, seq);
 
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        /* it wasn't in the previous index, skip it */
-        if (!seqset_ismember(seq, record->uid))
-            continue;
 
         /* we need to create a new message, because the iterator reuses its one */
         ptrarray_append(&batch, (void *)message_new_from_record(mailbox, record));
