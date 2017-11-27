@@ -2339,7 +2339,7 @@ static void transaction_reset(struct transaction_t *txn)
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
 
     /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
+    avail_auth_schemes &= ~(1 << AUTH_BEARER);
 
     if (txn->req_uri) xmlFreeURI(txn->req_uri);
     txn->req_uri = NULL;
