@@ -2136,6 +2136,8 @@ static void do_prom_report(struct timeval now)
     close(fd);
 
     prom_prev_report = now;
+
+    buf_free(&report);
 }
 
 static void reread_conf(struct timeval now)
