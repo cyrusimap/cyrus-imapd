@@ -1315,6 +1315,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    on proxy hosts when a backend server becomes unresponsive during a
    lmtp transaction.  The default is 300 - change to zero for infinite. */
 
+{ "lock_debugtime", NULL, STRING }
+/* A floating point number of seconds.  If set, time how long we wait for
+   any lock, and syslog the filename and time if it's longer than this
+   value.  The default of NULL means not to time locks. */
+
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING }
 /* The list of remote realms whose users may authenticate using cross-realm

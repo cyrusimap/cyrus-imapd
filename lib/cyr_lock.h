@@ -55,6 +55,8 @@
 
 extern const char *lock_method_desc;
 
+extern double debug_locks_longer_than;
+
 extern int lock_reopen_ex(int fd, const char *filename,
                           struct stat *sbuf, const char **failaction,
                           int *changed);

@@ -49,7 +49,12 @@
 
 #include "cyr_lock.h"
 
+#include <syslog.h>
+#include <time.h>
+
 EXPORTED const char *lock_method_desc = "fcntl";
+
+EXPORTED double debug_locks_longer_than = 0.0;
 
 /*
  * Block until we obtain an exclusive lock on the file descriptor 'fd',
@@ -73,6 +78,10 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
     struct flock fl;
     struct stat sbuffile, sbufspare;
     int newfd;
+    struct timeval starttime;
+    if (debug_locks_longer_than)
+        gettimeofday(&starttime, 0);
+
 
     if (!sbuf) sbuf = &sbufspare;
 
@@ -96,7 +105,17 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
             return -1;
         }
 
-        if (sbuf->st_ino == sbuffile.st_ino) return 0;
+        if (sbuf->st_ino == sbuffile.st_ino) {
+            if (debug_locks_longer_than) {
+                struct timeval endtime;
+                gettimeofday(&endtime, 0);
+                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
+                                  (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
+                if (locktime > debug_locks_longer_than) /* 10ms */
+                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+            }
+            return 0;
+        }
 
         if (changed) *changed = 1;
 
@@ -121,12 +140,15 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
  * appropriate error code.
  */
 EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
-                          const char *filename  __attribute__((unused)))
+                          const char *filename)
 {
     int r;
     struct flock fl;
     int type = (exclusive ? F_WRLCK : F_RDLCK);
     int cmd = (nonblock ? F_SETLK : F_SETLKW);
+    struct timeval starttime;
+    if (debug_locks_longer_than)
+        gettimeofday(&starttime, 0);
 
     for (;;) {
         fl.l_type= type;
@@ -134,7 +156,17 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
         fl.l_start = 0;
         fl.l_len = 0;
         r = fcntl(fd, cmd, &fl);
-        if (r != -1) return 0;
+        if (r != -1) {
+            if (debug_locks_longer_than) {
+                struct timeval endtime;
+                gettimeofday(&endtime, 0);
+                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
+                                  (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
+                if (locktime > debug_locks_longer_than)
+                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+            }
+            return 0;
+        }
         if (errno == EINTR) continue;
         return -1;
     }

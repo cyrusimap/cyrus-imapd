@@ -63,6 +63,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "charset.h"
+#include "cyr_lock.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
 #include "iptostring.h"
@@ -374,6 +375,12 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
         /* Not until all configuration parameters are set! */
         libcyrus_init();
+    }
+
+    /* debug lock timing */
+    const char *locktime = config_getstring(IMAPOPT_LOCK_DEBUGTIME);
+    if (locktime) {
+        debug_locks_longer_than = atof(locktime);
     }
 
     return 0;
