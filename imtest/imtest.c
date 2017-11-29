@@ -2382,11 +2382,11 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     int saslresult;
     const char *out = NULL;
     unsigned int outlen = 0;
-    char *in;
+    char *in, *sid = NULL;
     int inlen;
     const char *mechusing;
     char buf[BASE64_BUF_SIZE+1], *base64 = buf;
-    int initial_response = 1, do_base64 = 1;
+    int initial_response = 1, do_base64 = 1, use_params = 0;;
     imt_stat status;
     char *username;
     unsigned int userlen;
@@ -2422,6 +2422,9 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     else if (!strcmp(mechusing, "GSS-SPNEGO")) {
         mechusing = "Negotiate";
     }
+    else if (!strncmp(mechusing, "SCRAM-", 6)) {
+        use_params = 1;
+    }
 
     do {
         /* build the auth command */
@@ -2455,6 +2458,14 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
                 }
 
                 /* send response to server */
+                if (use_params) {
+                    if (sid) {
+                        printf("sid=%s,", sid);
+                        prot_printf(pout, "sid=%s,", sid);
+                    }
+                    printf("data=");
+                    prot_puts(pout, "data=");
+                }
                 printf("%.*s", outlen, out);
                 prot_write(pout, out, outlen);
             }
@@ -2500,7 +2511,60 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
                     !strncmp(scheme, mechusing, len)) {
                     in = scheme + len;
                     while (strchr(" \t", *++in)); /* trim optional whitespace */
-                    inlen = strcspn(in, "\r\n");  /* end of challenge */
+
+                    if (use_params) {
+                        /* Parse parameters */
+                        const char *token = in;
+
+                        in = NULL;
+                        while (token && *token) {
+                            size_t tok_len, val_len;
+                            char *value;
+
+                            /* Trim leading and trailing BWS */
+                            while (strchr(", \t", *token)) token++;
+                            tok_len = strcspn(token, "= \t");
+
+                            /* Find value */
+                            value = strchr(token + tok_len, '=');
+                            if (!value) {
+                                printf("Missing value for '%.*s'"
+                                       " parameter in challenge\n",
+                                       (int) tok_len, token);
+                                return IMTEST_FAIL;
+                            }
+
+                            /* Trim leading and trailing BWS */
+                            while (strchr(" \t", *++value));
+                            val_len = strcspn(value, ", \t");
+
+                            /* Check known parameters */
+                            if (!strncmp("sid", token, tok_len)) {
+                                if (!sid) sid = xstrndup(value, val_len);
+                                else if (val_len != strlen(sid) ||
+                                         strncmp(sid, value, val_len)) {
+                                    printf("Incorrect session ID parameter\n");
+                                    return IMTEST_FAIL;
+                                }
+                            }
+                            else if (!strncmp("data", token, tok_len)) {
+                                in = value;
+                                inlen = val_len;
+                            }
+
+                            /* Find next token */
+                            token = strchr(value + val_len, ',');
+                        }
+                        if (!in) {
+                            printf("Missing 'data' parameter in challenge\n");
+                            return IMTEST_FAIL;
+                        }
+                    }
+                    else {
+                        /* token68 */
+                        inlen = strcspn(in, " \t\r\n");  /* end of challenge */
+                    }
+
                     in = xstrndup(in, inlen);
                 }
             }
@@ -2539,6 +2603,8 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
             return IMTEST_FAIL;
         }
     } while (out);
+
+    free(sid);
 
     return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
 }

@@ -495,3 +495,66 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
 
     return 0;
 }
+
+
+EXPORTED int http_parse_auth_params(const char *params,
+                                    const char **realm, unsigned int *realm_len,
+                                    const char **sid, unsigned int *sid_len,
+                                    const char **data, unsigned int *data_len)
+{
+    const char *param = params;
+
+    if (realm) {
+        *realm = NULL;
+        *realm_len = 0;
+    }
+    if (sid) {
+        *sid = NULL;
+        *sid_len = 0;
+    }
+    if (data) {
+        *data = NULL;
+        *data_len = 0;
+    }
+
+    while (param && *param) {
+        size_t tok_len, val_len;
+        const char *value;
+
+        /* Trim leading and trailing BWS */
+        while (strchr(", \t", *param)) param++;
+        tok_len = strcspn(param, "= \t");
+
+        /* Find value */
+        value = strchr(param + tok_len, '=');
+        if (!value) {
+            syslog(LOG_ERR,
+                   "Missing value for '%.*s' parameter in credentials",
+                   (int) tok_len, param);
+            return SASL_BADAUTH;
+        }
+
+        /* Trim leading and trailing BWS */
+        while (strchr(" \t", *++value));
+        val_len = strcspn(value, ", \t");
+
+        /* Check known parameters */
+        if (realm && !strncmp("realm", param, tok_len)) {
+            *realm = value;
+            *realm_len = val_len;
+        }
+        else if (sid && !strncmp("sid", param, tok_len)) {
+            *sid = value;
+            *sid_len = val_len;
+        }
+        else if (data && !strncmp("data", param, tok_len)) {
+            *data = value;
+            *data_len = val_len;
+        }
+
+        /* Find next param */
+        param = strchr(value + val_len, ',');
+    }
+
+    return SASL_OK;
+}

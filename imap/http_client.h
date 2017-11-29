@@ -128,5 +128,9 @@ extern int http_read_body(struct protstream *pin, struct protstream *pout,
 extern int http_read_response(struct backend *be, unsigned meth, unsigned *code,
                               hdrcache_t *hdrs, struct body_t *body,
                               const char **errstr);
+extern int http_parse_auth_params(const char *params,
+                                  const char **realm, unsigned int *realm_len,
+                                  const char **sid, unsigned int *sid_len,
+                                  const char **data, unsigned int *data_len);
 
 #endif /* _HTTP_CLIENT_H */

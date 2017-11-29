@@ -134,6 +134,7 @@ static int login(struct backend *s, const char *userid,
     struct auth_scheme_t *scheme = NULL;
     unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen;
     hdrcache_t hdrs = NULL;
+    char *sid = NULL;
 
     if (status) *status = NULL;
 
@@ -210,8 +211,18 @@ static int login(struct backend *s, const char *userid,
         prot_printf(s->out, "Host: %s\r\n", s->hostname);
         prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
         if (scheme) {
-            prot_printf(s->out, "Authorization: %s %s\r\n",
-                        scheme->name, clientout ? clientout : "");
+            prot_printf(s->out, "Authorization: %s", scheme->name);
+
+            if (clientout) {
+                prot_putc(' ', s->out);
+                if (scheme->flags & AUTH_DATA_PARAM) {
+                    if (sid) prot_printf(s->out, "sid=%s,", sid);
+                    prot_puts(s->out, "data=");
+                }
+                prot_write(s->out, clientout, clientoutlen);
+            }
+            prot_puts(s->out, "\r\n");
+
             prot_printf(s->out, "Authorize-As: %s\r\n",
                         userid ? userid : "anonymous");
         }
@@ -411,6 +422,29 @@ static int login(struct backend *s, const char *userid,
                     auth_done = 1;
                 }
                 else {
+                    if (scheme->flags & AUTH_DATA_PARAM) {
+                        /* Parse parameters */
+                        const char *this_sid;
+                        unsigned int sid_len;
+
+                        r = http_parse_auth_params(serverin,
+                                                   NULL /* realm */, NULL,
+                                                   &this_sid, &sid_len,
+                                                   &serverin, &serverinlen);
+                        if ((r == SASL_OK) && this_sid) {
+                            if (!sid) sid = xstrndup(this_sid, sid_len);
+                            else if (sid_len != strlen(sid) ||
+                                     strncmp(this_sid, sid, sid_len)) {
+                                syslog(LOG_ERR,
+                                       "%s: Incorrect 'sid' parameter in challenge",
+                                       scheme->name);
+                                r = SASL_BADAUTH;
+                            }
+                        }
+
+                        if (r != SASL_OK) break;  /* case 401 */
+                    }
+
                     /* Base64 decode any server challenge, if necessary */
                     if (serverin && (scheme->flags & AUTH_BASE64)) {
                         r = sasl_decode64(serverin, serverinlen,
@@ -420,7 +454,7 @@ static int login(struct backend *s, const char *userid,
                         serverin = base64;
                     }
 
-                    /* SASL mech (Digest, Negotiate, NTLM) */
+                    /* SASL mech (SCRAM-*, Digest, Negotiate, NTLM) */
                     r = sasl_client_step(s->saslconn, serverin, serverinlen,
                                          NULL,          /* no prompts */
                                          &clientout, &clientoutlen);
@@ -433,6 +467,7 @@ static int login(struct backend *s, const char *userid,
     } while (need_tls || clientout);
 
   done:
+    free(sid);
     if (hdrs) spool_free_hdrcache(hdrs);
 
     if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);

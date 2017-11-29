@@ -1039,6 +1039,12 @@ static void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
 /* List of HTTP auth schemes that we support */
 struct auth_scheme_t auth_schemes[] = {
       AUTH_SCHEME_BASIC,
+    { AUTH_SCRAM_SHA256, "SCRAM-SHA-256", "SCRAM-SHA-256",
+      AUTH_NEED_PERSIST | AUTH_SERVER_FIRST | AUTH_BASE64 |
+      AUTH_REALM_PARAM | AUTH_DATA_PARAM },
+    { AUTH_SCRAM_SHA1, "SCRAM-SHA-1", "SCRAM-SHA-1",
+      AUTH_NEED_PERSIST | AUTH_SERVER_FIRST | AUTH_BASE64 |
+      AUTH_REALM_PARAM | AUTH_DATA_PARAM },
     { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH,
       AUTH_NEED_REQUEST | AUTH_SERVER_FIRST },
     { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO",
@@ -4072,7 +4078,9 @@ static int auth_success(struct transaction_t *txn, const char *userid)
  * May be called multiple times if auth scheme requires multiple steps.
  * SASL status between steps is maintained in 'status'.
  */
-#define BASE64_BUF_SIZE 21848   /* per RFC 4422: ((16K / 3) + 1) * 4  */
+#define MAX_AUTHPARAM_SIZE 10   /* "sid=,data=" */
+#define MAX_BASE64_SIZE 21848   /* per RFC 4422: ((16K / 3) + 1) * 4  */
+#define BASE64_BUF_SIZE (MAX_AUTHPARAM_SIZE +MAX_SESSIONID_SIZE +MAX_BASE64_SIZE)
 
 static int http_auth(const char *creds, struct transaction_t *txn)
 {
@@ -4086,8 +4094,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     const void *canon_user = NULL;
 
     /* Split credentials into auth scheme and response */
-    slen = strcspn(creds, " \0");
-    if ((clientin = strchr(creds, ' '))) clientinlen = strlen(++clientin);
+    slen = strcspn(creds, " ");
+    if ((clientin = strchr(creds + slen, ' '))) {
+        while (strchr(" ", *++clientin));  /* Trim leading 1*SP */
+        clientinlen = strlen(clientin);
+    }
 
     syslog(LOG_DEBUG,
            "http_auth: status=%d   scheme='%s'   creds='%.*s%s'",
@@ -4176,6 +4187,27 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         }
     }
 
+    /* Parse any auth parameters, if necessary */
+    if (clientin && (scheme->flags & AUTH_DATA_PARAM)) {
+        const char *sid = NULL;
+        unsigned int sid_len;
+
+        r = http_parse_auth_params(clientin, NULL /* realm */, NULL,
+                                   &sid, &sid_len, &clientin, &clientinlen);
+        if (r != SASL_OK) return r;
+
+        if (sid) {
+            const char *mysid = session_id();
+
+            if (sid_len != strlen(mysid) ||
+                strncmp(mysid, sid, sid_len)) {
+                syslog(LOG_ERR, "%s: Incorrect 'sid' parameter in credentials",
+                       scheme->name);
+                return SASL_BADAUTH;
+            }
+        }
+    }
+
     /* Base64 decode any client response, if necessary */
     if (clientin && (scheme->flags & AUTH_BASE64)) {
         r = sasl_decode64(clientin, clientinlen,
@@ -4254,9 +4286,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_authstate = auth_newstate(user);
     }
     else {
-        /* SASL-based authentication (Digest, Negotiate, NTLM) */
+        /* SASL-based authentication (SCRAM_*, Digest, Negotiate, NTLM) */
         const char *serverout = NULL;
         unsigned int serveroutlen = 0;
+        unsigned int auth_params_len = 0;
 
 #ifdef SASL_HTTP_REQUEST
         /* Setup SASL HTTP request, if necessary */
@@ -4293,10 +4326,18 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             return status;
         }
 
+        /* Prepend any auth parameters, if necessary */
+        if (scheme->flags & AUTH_DATA_PARAM) {
+            auth_params_len = snprintf(base64,
+                                       MAX_AUTHPARAM_SIZE + MAX_SESSIONID_SIZE,
+                                       "sid=%s%s", session_id(),
+                                       serverout ? ",data=" : "");
+        }
+
         /* Base64 encode any server challenge, if necessary */
         if (serverout && (scheme->flags & AUTH_BASE64)) {
             r = sasl_encode64(serverout, serveroutlen,
-                              base64, BASE64_BUF_SIZE, NULL);
+                              base64 + auth_params_len, MAX_BASE64_SIZE, NULL);
             if (r != SASL_OK) {
                 syslog(LOG_ERR, "Base64 encode failed: %s",
                        sasl_errstring(r, NULL, NULL));

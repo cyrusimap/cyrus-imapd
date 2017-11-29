@@ -186,11 +186,13 @@ struct auth_scheme_t {
 
 /* Auth scheme identifiers */
 enum {
-    AUTH_BASIC  = (1<<0),
-    AUTH_DIGEST = (1<<1),
-    AUTH_SPNEGO = (1<<2),
-    AUTH_NTLM   = (1<<3),
-    AUTH_BEARER = (1<<4)
+    AUTH_BASIC        = (1<<0),
+    AUTH_DIGEST       = (1<<1),
+    AUTH_SPNEGO       = (1<<2),
+    AUTH_NTLM         = (1<<3),
+    AUTH_BEARER       = (1<<4),
+    AUTH_SCRAM_SHA1   = (1<<5),
+    AUTH_SCRAM_SHA256 = (1<<6)
 };
 
 /* Auth scheme flags */
@@ -200,7 +202,8 @@ enum {
     AUTH_SERVER_FIRST = (1<<2), /* SASL mech is server-first */
     AUTH_BASE64       = (1<<3), /* Base64 encode/decode challenge/response */
     AUTH_REALM_PARAM  = (1<<4), /* Need "realm" parameter in initial challenge */
-    AUTH_SUCCESS_WWW  = (1<<5)  /* Success data uses WWW-Authenticate header */
+    AUTH_DATA_PARAM   = (1<<5), /* Challenge/credentials use auth-params */
+    AUTH_SUCCESS_WWW  = (1<<6)  /* Success data uses WWW-Authenticate header */
 };
 
 #define AUTH_SCHEME_BASIC { AUTH_BASIC, "Basic", NULL, \

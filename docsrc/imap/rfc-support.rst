@@ -670,6 +670,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
+:rfc:`7804`
+
+    Salted Challenge Response HTTP Authentication Mechanism
+
 :rfc:`7808`
 
     Time Zone Data Distribution Service
