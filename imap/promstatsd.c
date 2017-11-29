@@ -305,7 +305,7 @@ struct partition_data {
     int64_t n_users;
     int64_t n_mailboxes;
     int64_t n_deleted;
-    int64_t n_shared; /* XXX ??? */
+    hash_table shared;
 
     double quota_commitment[QUOTA_NUMRESOURCES];
 
@@ -324,12 +324,27 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     if (!pdata) {
         pdata = malloc(sizeof *pdata);
         memset(pdata, 0, sizeof *pdata);
+        construct_hash_table(&pdata->shared, 10, 0); /* 10 shared namespaces probably enough */
         hash_insert(data->mbentry->partition, pdata, h);
     }
 
     if (mbname_isdeleted(data->mbname)) {
         syslog(LOG_DEBUG, "counting deleted: %s", mbname_intname(data->mbname));
         pdata->n_deleted ++;
+        pdata->timestamp = now_ms();
+    }
+    else if (mbname_category(data->mbname, mboxname_get_adminnamespace(), NULL)
+             == MBNAME_SHARED) {
+        const char *namespace = strarray_nth(mbname_boxes(data->mbname), 0);
+        syslog(LOG_DEBUG, "counting shared (namespace = %s)", namespace);
+        int64_t *n_shared = hash_lookup(namespace, &pdata->shared);
+        if (!n_shared) {
+            n_shared = malloc(sizeof *n_shared);
+            *n_shared = 0;
+            hash_insert(namespace, n_shared, &pdata->shared);
+        }
+
+        (*n_shared)++;
         pdata->timestamp = now_ms();
     }
     else if (mbname_userid(data->mbname) &&
@@ -339,7 +354,6 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
         pdata->n_mailboxes ++; /* an inbox is also a mailbox */
         pdata->timestamp = now_ms();
     }
-    /* XXX shared ? */
     else {
         syslog(LOG_DEBUG, "counting mailbox: %s", mbname_intname(data->mbname));
         pdata->n_mailboxes ++;
@@ -466,6 +480,51 @@ do {                                                                         \
     }                                                                        \
 } while(0)
 
+struct shared_mailbox_rock {
+    struct buf *buf;
+    char *partition;
+    int64_t timestamp;
+};
+
+static void format_usage_shared_mailbox(const char *key, void *data, void *rock)
+{
+    struct shared_mailbox_rock *smrock = (struct shared_mailbox_rock *) rock;
+    int64_t n_shared = *(int64_t *) data;
+
+    buf_printf(smrock->buf, "%s{partition=\"%s\",namespace=\"%s\"}",
+                            "cyrus_usage_shared_mailboxes",
+                            smrock->partition,
+                            key);
+    buf_printf(smrock->buf, " %" PRId64 " %" PRId64 "\n",
+                            n_shared,
+                            smrock->timestamp);
+}
+
+static void format_usage_shared_mailboxes(struct buf *buf,
+                                          const strarray_t *pnames,
+                                          hash_table *h)
+{
+    int i;
+
+    buf_printf(buf, "# HELP %s %s\n",
+                    "cyrus_usage_shared_mailboxes",
+                    "The number of shared Cyrus mailboxes");
+    buf_appendcstr(buf, "# TYPE cyrus_usage_shared_mailboxes gauge\n");
+
+    for (i = 0; i < strarray_size(pnames); i++) {
+        struct shared_mailbox_rock smrock;
+        struct partition_data *pdata;
+
+        smrock.buf = buf;
+        smrock.partition = (char *) strarray_nth(pnames, i); /* n.b. casting away const */
+
+        pdata = hash_lookup(smrock.partition, h);
+        smrock.timestamp = pdata->timestamp;
+
+        hash_enumerate(&pdata->shared, format_usage_shared_mailbox, &smrock);
+    }
+}
+
 static void format_usage_quota_commitment(struct buf *buf,
                                           const strarray_t *pnames,
                                           hash_table *h)
@@ -521,7 +580,8 @@ static void do_collate_usage(struct buf *buf)
                        "The number of Cyrus mailboxes",
                        n_mailboxes,
                        buf, partition_names, &h);
-    /* XXX shared ??? */
+
+    format_usage_shared_mailboxes(buf, partition_names, &h);
 
     format_usage_quota_commitment(buf, partition_names, &h);
 
