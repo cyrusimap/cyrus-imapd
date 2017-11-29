@@ -393,14 +393,21 @@ int buildquotalist(char *domain, char **roots, int nroots)
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-        strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-        /* XXX - namespace fixes here */
+
+        /* namespace fix */
+        mbname_t *mbname = mbname_from_extname(roots[i], &quota_namespace, NULL);
+        const char *intname = mbname_intname(mbname);
+
+        strlcpy(tail, intname, sizeof(buf) - domainlen);
+
+        mbname_free(&mbname);
 
         r = quota_foreach(buf, fixquota_addroot, buf, NULL);
         if (r) {
             errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
             break;
         }
+        
     }
 
     return r;
@@ -638,8 +645,15 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-        strlcpy(tail, roots[i], sizeof(buf) - domainlen);
 
+        /* namespace fix */
+        mbname_t *mbname = mbname_from_extname(roots[i], &quota_namespace, NULL);
+        const char *intname = mbname_intname(mbname);
+
+        strlcpy(tail, intname, sizeof(buf) - domainlen);
+
+	    mbname_free(&mbname);
+	
         r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
         if (r) {
             errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
