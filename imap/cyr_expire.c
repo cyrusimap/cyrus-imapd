@@ -593,6 +593,17 @@ int main(int argc, char *argv[])
 
     mboxevent_setnamespace(&expire_namespace);
 
+    mbname_t *prefix_mbname = mbname_from_extname(find_prefix, &expire_namespace, NULL);
+
+    /* convert find_prefix to internal namespace */
+    if (find_prefix) {
+	const char *intname = mbname_intname(prefix_mbname);
+
+	find_prefix = intname;
+
+    }
+
+
     if (duplicate_init(NULL) != 0) {
         fprintf(stderr,
                 "cyr_expire: unable to init duplicate delivery database\n");
@@ -737,6 +748,8 @@ int main(int argc, char *argv[])
         r = duplicate_prune(expire_seconds, &erock.table);
 
 finish:
+    mbname_free(&prefix_mbname);
+
     free_hash_table(&erock.table, free);
     free_hash_table(&crock.seen, NULL);
     strarray_fini(&drock.to_delete);
