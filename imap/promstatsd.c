@@ -312,6 +312,15 @@ struct partition_data {
     int64_t timestamp;
 };
 
+static void free_partition_data(void *ptr)
+{
+    struct partition_data *pdata = (struct partition_data *) ptr;
+
+    free_hash_table(&pdata->shared, free);
+    memset(pdata, 0, sizeof *pdata);
+    free(pdata);
+}
+
 static int count_users_mailboxes(struct findall_data *data, void *rock)
 {
     hash_table *h = (hash_table *) rock;
@@ -586,7 +595,7 @@ static void do_collate_usage(struct buf *buf)
     format_usage_quota_commitment(buf, partition_names, &h);
 
     strarray_free(partition_names);
-    free_hash_table(&h, free);
+    free_hash_table(&h, free_partition_data);
 }
 
 static void do_write_report(struct mappedfile *mf, const struct buf *report)
