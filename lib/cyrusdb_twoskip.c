@@ -356,12 +356,6 @@ struct skiploc {
     size_t end;
 };
 
-enum {
-    UNLOCKED = 0,
-    READLOCKED = 1,
-    WRITELOCKED = 2,
-};
-
 #define DIRTY (1<<0)
 
 struct txn {
