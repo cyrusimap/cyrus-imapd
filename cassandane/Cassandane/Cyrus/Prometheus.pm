@@ -247,4 +247,35 @@ sub test_quota_commitments
     # and p2 partition to have 8000 + 2000 committed
     $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment{partition="p2",resource="STORAGE"}'}->{value});
 }
+
+sub test_shared_mailbox_namespaces
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $ns1 = 'foo';
+    my $ns2 = 'bar';
+    my @folders = map { ("$ns1.$_", "$ns2.$_" ) } qw(cat sheep dog);
+
+    foreach my $f (@folders) {
+        $admintalk->create($f);
+        $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    }
+
+    sleep 3;
+
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+
+    # expect to find 3 folders on each of 'foo' and 'bar' namespaces
+    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes{partition="default",namespace="bar"}'}->{value});
+
+    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes{partition="default",namespace="foo"}'}->{value});
+}
+
 1;
