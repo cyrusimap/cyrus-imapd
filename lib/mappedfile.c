@@ -98,6 +98,8 @@ struct mappedfile {
     int dirty;
     int was_resized;
     int is_rw;
+
+    struct timeval starttime;
 };
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
@@ -240,6 +242,7 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
     }
 
     mf->lock_status = MF_READLOCKED;
+    gettimeofday(&mf->starttime, 0);
 
     _ensure_mapped(mf, sbuf.st_size, /*update*/0);
 
@@ -264,6 +267,7 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
         return r;
     }
     mf->lock_status = MF_WRITELOCKED;
+    gettimeofday(&mf->starttime, 0);
 
     if (changed) buf_free(&mf->map_buf);
 
@@ -274,6 +278,9 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
 
 EXPORTED int mappedfile_unlock(struct mappedfile *mf)
 {
+    struct timeval endtime;
+    double timediff;
+
     int r;
 
     /* make this safe to call multiple times */
@@ -290,6 +297,12 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
     }
 
     mf->lock_status = MF_UNLOCKED;
+    gettimeofday(&endtime, 0);
+    timediff = timesub(&mf->starttime, &endtime);
+    if (timediff > 1.0) {
+        syslog(LOG_NOTICE, "mappedfile: longlock %s for %0.1f seconds",
+               mf->fname, timediff);
+    }
 
     return 0;
 }
