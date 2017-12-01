@@ -1291,7 +1291,7 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
     /* Store source resource at destination */
     /* XXX - set calendar-user-address based on original message? */
     r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc,
-                              db, flags, NULL, NULL);
+                              db, flags, httpd_userid, NULL);
 
     return r;
 }
