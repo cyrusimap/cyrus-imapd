@@ -942,8 +942,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
                 unsigned len;
 
                 /* Read body from client */
-                r = http_read_body(httpd_in, httpd_out, txn->req_hdrs,
-                                   &txn->req_body, &txn->error.desc);
+                r = http_read_req_body(txn);
                 if (r) {
                     /* Couldn't get the body and can't finish request */
                     txn->flags.conn = CONN_CLOSE;
@@ -972,8 +971,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
         /* Don't pipe a 401 response (discard body).
            Frontend should send its own 401 since it will process auth */
         resp_body.flags |= BODY_DISCARD;
-        http_read_body(be->in, httpd_out,
-                       resp_hdrs, &resp_body, &txn->error.desc);
+        http_read_body(be->in, resp_hdrs, &resp_body, &txn->error.desc);
 
         r = HTTP_UNAUTHORIZED;
     }

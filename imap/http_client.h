@@ -122,9 +122,8 @@ extern int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
                               const char **errstr);
 extern int http_read_headers(struct protstream *pin, int read_sep,
                              hdrcache_t *hdrs, const char **errstr);
-extern int http_read_body(struct protstream *pin, struct protstream *pout,
-                          hdrcache_t hdrs, struct body_t *body,
-                          const char **errstr);
+extern int http_read_body(struct protstream *pin, hdrcache_t hdrs,
+                          struct body_t *body, const char **errstr);
 extern int http_read_response(struct backend *be, unsigned meth, unsigned *code,
                               hdrcache_t *hdrs, struct body_t *body,
                               const char **errstr);

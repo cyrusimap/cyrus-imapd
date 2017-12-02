@@ -188,8 +188,7 @@ static int meth_post_applepush(struct transaction_t *txn, void *params)
         /* Read body */
         txn->req_body.flags |= BODY_DECODE;
 
-        int r = http_read_body(httpd_in, httpd_out,
-                               txn->req_hdrs, &txn->req_body, &txn->error.desc);
+        int r = http_read_req_body(txn);
         if (r) {
             txn->flags.conn = CONN_CLOSE;
             return r;

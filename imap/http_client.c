@@ -238,35 +238,20 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
  * Handles close-delimited response bodies (no Content-Length specified)
  * Handles gzip and deflate CE only.
  */
-EXPORTED int http_read_body(struct protstream *pin, struct protstream *pout,
-                            hdrcache_t hdrs, struct body_t *body,
-                            const char **errstr)
+EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
+                            struct body_t *body, const char **errstr)
 {
     char buf[PROT_BUFSIZE];
     unsigned n;
     int r = 0;
 
-    syslog(LOG_DEBUG, "read_body(flags=%#x, framing=%d)", body->flags, body->framing);
-
-    if (body->flags & BODY_DONE) return 0;
-    body->flags |= BODY_DONE;
-
-    if ((body->flags & BODY_DISCARD) && (body->flags & BODY_CONTINUE)) {
-        /* Don't care about the body and client hasn't sent it, we're done */
-        return 0;
-    }
+    syslog(LOG_DEBUG, "http_read_body(flags=%#x, framing=%d)",
+           body->flags, body->framing);
 
     if (body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
         r = http_parse_framing(0, hdrs, body, errstr);
         if (r) return r;
-    }
-
-    if (body->flags & BODY_CONTINUE) {
-        /* Tell client to send the body */
-        prot_printf(pout, "%s %s\r\n\r\n",
-                    HTTP_VERSION, error_message(HTTP_CONTINUE));
-        prot_flush(pout);
     }
 
     /* Read and buffer the body */
@@ -487,7 +472,7 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
             body->flags |= BODY_RESPONSE;
             body->framing = FRAMING_UNKNOWN;
 
-            if (http_read_body(be->in, be->out, *hdrs, body, errstr)) {
+            if (http_read_body(be->in, *hdrs, body, errstr)) {
                 return HTTP_BAD_GATEWAY;
             }
         }

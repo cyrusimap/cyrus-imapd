@@ -498,8 +498,7 @@ static int jmap_post(struct transaction_t *txn,
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_body(httpd_in, httpd_out,
-                       txn->req_hdrs, &txn->req_body, &txn->error.desc);
+    ret = http_read_req_body(txn);
     if (ret) {
         txn->flags.conn = CONN_CLOSE;
         return ret;

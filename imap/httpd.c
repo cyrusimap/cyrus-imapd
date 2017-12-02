@@ -1973,8 +1973,7 @@ static int examine_request(struct transaction_t *txn)
     if (txn->flags.conn & CONN_UPGRADE) {
         /* Read any request body (can't upgrade in middle of request) */
         txn->req_body.flags |= BODY_DECODE;
-        ret = http_read_body(httpd_in, httpd_out,
-                             txn->req_hdrs, &txn->req_body, &txn->error.desc);
+        ret = http_read_req_body(txn);
         if (ret) {
             txn->flags.conn = CONN_CLOSE;
             return ret;
@@ -2320,8 +2319,7 @@ static int http1_input(struct transaction_t *txn)
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
         txn->req_body.flags |= BODY_DISCARD;
-        if (http_read_body(httpd_in, httpd_out, txn->req_hdrs,
-                           &txn->req_body, &txn->error.desc)) {
+        if (http_read_req_body(txn)) {
             txn->flags.conn = CONN_CLOSE;
         }
     }
@@ -5109,4 +5107,31 @@ EXPORTED int http_allow_noauth_get(struct transaction_t *txn)
 EXPORTED int http_allow_noauth(struct transaction_t *txn __attribute__((unused)))
 {
     return 0;
+}
+
+
+/* Read the body of a request */
+EXPORTED int http_read_req_body(struct transaction_t *txn)
+{
+    struct body_t *body = &txn->req_body;
+
+    syslog(LOG_DEBUG, "http_read_req_body(flags=%#x, framing=%d)",
+           body->flags, body->framing);
+
+    if (body->flags & BODY_DONE) return 0;
+    body->flags |= BODY_DONE;
+
+    if (body->flags & BODY_CONTINUE) {
+        if (body->flags & BODY_DISCARD) {
+            /* Don't care about the body and client hasn't sent it, we're done */
+            body->flags |= BODY_DONE;
+            return 0;
+        }
+
+        /* Tell client to send the body */
+        response_header(HTTP_CONTINUE, txn);
+    }
+
+    /* Read body from client */
+    return http_read_body(txn->conn->pin, txn->req_hdrs, body, &txn->error.desc);
 }

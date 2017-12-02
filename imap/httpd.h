@@ -561,5 +561,6 @@ extern int check_precond(struct transaction_t *txn,
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
 extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
+extern int http_read_req_body(struct transaction_t *txn);
 
 #endif /* HTTPD_H */

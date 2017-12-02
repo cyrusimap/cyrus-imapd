@@ -2854,8 +2854,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         /* Read body */
         txn->req_body.flags |= BODY_DECODE;
-        r = http_read_body(httpd_in, httpd_out,
-                           txn->req_hdrs, &txn->req_body, &txn->error.desc);
+        r = http_read_req_body(txn);
         if (r) {
             txn->flags.conn = CONN_CLOSE;
             return r;
@@ -3151,8 +3150,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
-    r = http_read_body(httpd_in, httpd_out,
-                       txn->req_hdrs, &txn->req_body, &txn->error.desc);
+    r = http_read_req_body(txn);
     if (r) {
         txn->flags.conn = CONN_CLOSE;
         return r;
