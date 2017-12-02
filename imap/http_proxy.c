@@ -209,7 +209,7 @@ static int login(struct backend *s, const char *userid,
         /* Send Authorization and/or Upgrade request to server */
         prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
         prot_printf(s->out, "Host: %s\r\n", s->hostname);
-        prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
+        prot_printf(s->out, "User-Agent: Cyrus/%s\r\n", CYRUS_VERSION);
         if (scheme) {
             prot_printf(s->out, "Authorization: %s", scheme->name);
 
@@ -486,7 +486,7 @@ static int ping(struct backend *s, const char *userid)
     /* Send Authorization request to server */
     prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
     prot_printf(s->out, "Host: %s\r\n", s->hostname);
-    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
+    prot_printf(s->out, "User-Agent: Cyrus/%s\r\n", CYRUS_VERSION);
     prot_printf(s->out, "Authorize-As: %s\r\n", userid ? userid : "anonymous");
     prot_puts(s->out, "\r\n");
     prot_flush(s->out);
@@ -591,7 +591,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
     /* Create our own Via header */
     simple_hdr(txn, "Via", (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) ?
                "%s %s (Cyrus/%s)" : "%s %s",
-               version+5, config_servername,CYRUS_VERSION);
+               version+5, config_servername, CYRUS_VERSION);
 
     /* Add any existing Forwarded headers */
     for (; fwd && *fwd; fwd++) simple_hdr(txn, "Forwarded", *fwd);
@@ -1041,9 +1041,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
          */
         prot_printf(src_be->out, "LOCK %s %s\r\n"
                                  "Host: %s\r\n"
-                                 "User-Agent: %s\r\n",
+                                 "User-Agent: Cyrus/%s\r\n",
                     txn->req_tgt.path, HTTP_VERSION,
-                    src_be->hostname, buf_cstring(&serverinfo));
+                    src_be->hostname, CYRUS_VERSION);
         write_hdr(src_be->out, "If", txn->req_hdrs);
         write_hdr(src_be->out, "If-Match", txn->req_hdrs);
         write_hdr(src_be->out, "If-Unmodified-Since", txn->req_hdrs);
@@ -1116,9 +1116,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
      */
     prot_printf(src_be->out, "GET %s %s\r\n"
                              "Host: %s\r\n"
-                             "User-Agent: %s\r\n",
+                             "User-Agent: Cyrus/%s\r\n",
                 txn->req_tgt.path, HTTP_VERSION,
-                src_be->hostname, buf_cstring(&serverinfo));
+                src_be->hostname, CYRUS_VERSION);
     if (txn->meth != METH_MOVE) {
         write_hdr(src_be->out, "If", txn->req_hdrs);
         write_hdr(src_be->out, "If-Match", txn->req_hdrs);
@@ -1159,10 +1159,10 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
      */
     prot_printf(dest_be->out, "PUT %s %s\r\n"
                               "Host: %s\r\n"
-                              "User-Agent: %s\r\n"
+                              "User-Agent: Cyrus/%s\r\n"
                               "Expect: 100-continue\r\n",
                 *spool_getheader(txn->req_hdrs, "Destination"), HTTP_VERSION,
-                dest_be->hostname, buf_cstring(&serverinfo));
+                dest_be->hostname, CYRUS_VERSION);
     hdr = spool_getheader(txn->req_hdrs, "Overwrite");
     if (hdr && !strcmp(*hdr, "F"))
         prot_puts(dest_be->out, "If-None-Match: *\r\n");
@@ -1220,9 +1220,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
          */
         prot_printf(src_be->out, "DELETE %s %s\r\n"
                                  "Host: %s\r\n"
-                                 "User-Agent: %s\r\n",
+                                 "User-Agent: Cyrus/%s\r\n",
                     txn->req_tgt.path, HTTP_VERSION,
-                    src_be->hostname, buf_cstring(&serverinfo));
+                    src_be->hostname, CYRUS_VERSION);
         if (lock) prot_printf(src_be->out, "If: (%s)\r\n", lock);
         prot_puts(src_be->out, "\r\n");
         prot_flush(src_be->out);
@@ -1253,10 +1253,10 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
          */
         prot_printf(src_be->out, "UNLOCK %s %s\r\n"
                                  "Host: %s\r\n"
-                                 "User-Agent: %s\r\n"
+                                 "User-Agent: Cyrus/%s\r\n"
                                  "Lock-Token: %s\r\n\r\n",
                     txn->req_tgt.path, HTTP_VERSION,
-                    src_be->hostname, buf_cstring(&serverinfo), lock);
+                    src_be->hostname, CYRUS_VERSION, lock);
         prot_flush(src_be->out);
 
         /* Read response(s) from source backend until final resp or error */
