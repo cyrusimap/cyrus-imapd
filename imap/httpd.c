@@ -3334,9 +3334,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%sreferer=%s", sep, hdr[0]);
             sep = "; ";
         }
-        if (code == HTTP_SWITCH_PROT) {
-            hdr = spool_getheader(txn->req_hdrs, "Upgrade");
+        if (txn->flags.upgrade &&
+            (hdr = spool_getheader(txn->req_hdrs, "Upgrade"))) {
             buf_printf(&log, "%supgrade=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if (code == HTTP_CONTINUE || code == HTTP_EXPECT_FAILED) {
+            hdr = spool_getheader(txn->req_hdrs, "Expect");
+            buf_printf(&log, "%sexpect=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Transfer-Encoding"))) {
@@ -3418,7 +3423,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
-    if (code == HTTP_UPGRADE) {
+    if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
         buf_printf(&log, "%supgrade=", sep);
         comma_list_body(&log, upgrd_tokens, txn->flags.upgrade, NULL);
         sep = "; ";
