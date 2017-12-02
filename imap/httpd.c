@@ -2606,9 +2606,6 @@ static int parse_connection(struct transaction_t *txn)
                         spool_getheader(txn->req_hdrs, "Upgrade");
 
                     if (upgrade && upgrade[0]) {
-                        syslog(LOG_NOTICE,
-                               "client requested upgrade to %s", upgrade[0]);
-
                         if (!httpd_tls_done && tls_enabled() &&
                             !strncmp(upgrade[0], TLS_VERSION,
                                      strcspn(upgrade[0], " ,"))) {
@@ -2801,27 +2798,35 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
 #define Access_Control_Expose(hdr)                              \
     simple_hdr(txn, "Access-Control-Expose-Headers", hdr)
 
-EXPORTED void comma_list_hdr(struct transaction_t *txn, const char *name,
-                             const char *vals[], unsigned flags, ...)
+static void comma_list_body(struct buf *buf,
+                            const char *vals[], unsigned flags, va_list args)
 {
-    struct buf buf = BUF_INITIALIZER;
     const char *sep = "";
-    va_list args;
     int i;
-
-    va_start(args, flags);
 
     for (i = 0; vals[i]; i++) {
         if (flags & (1 << i)) {
-            buf_appendcstr(&buf, sep);
-            buf_vprintf(&buf, vals[i], args);
+            buf_appendcstr(buf, sep);
+            if (args) buf_vprintf(buf, vals[i], args);
+            else buf_printf(buf, vals[i]);
             sep = ", ";
         }
-        else {
+        else if (args) {
             /* discard any unused args */
             vsnprintf(NULL, 0, vals[i], args);
         }
     }
+}
+
+EXPORTED void comma_list_hdr(struct transaction_t *txn, const char *name,
+                             const char *vals[], unsigned flags, ...)
+{
+    struct buf buf = BUF_INITIALIZER;
+    va_list args;
+
+    va_start(args, flags);
+
+    comma_list_body(&buf, vals, flags, args);
 
     va_end(args);
 
@@ -2933,10 +2938,14 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     int i;
     time_t now;
     char datestr[30];
-    const char **hdr;
+    const char **hdr, *sep;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
+    const char *upgrd_tokens[] =
+        { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, NULL };
+    const char *te[] = { "deflate", "gzip", "chunked", NULL };
+    const char *ce[] = { "deflate", "gzip", "br", NULL };
 
     /* Stop method processing alarm */
     alarm(0);
@@ -2969,9 +2978,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->flags.upgrade) {
                 /* Construct Upgrade header */
-                const char *upgrd_tokens[] =
-                    { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, NULL };
-
                 comma_list_hdr(txn, "Upgrade", upgrd_tokens, txn->flags.upgrade);
             }
             if (txn->flags.conn & CONN_KEEPALIVE) {
@@ -3000,7 +3006,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
 
-        return;
+        goto log;
     }
 
 
@@ -3156,9 +3162,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     case HTTP_BAD_CE:
         /* Construct Accept-Encoding header for 415 response */
         if (accept_encodings) {
-            const char *encodings[] = { "deflate", "gzip", "br", NULL };
-
-            comma_list_hdr(txn, "Accept-Encoding", encodings, accept_encodings);
+            comma_list_hdr(txn, "Accept-Encoding", ce, accept_encodings);
         }
         else simple_hdr(txn, "Accept-Encoding", "identity");
         break;
@@ -3213,9 +3217,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         if (txn->resp_body.enc) {
             /* Construct Content-Encoding header */
-            const char *ce[] =
-                { "deflate", "gzip", "br", NULL };
-
             comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc);
         }
         if (resp_body->lang) {
@@ -3265,9 +3266,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             /* HTTP/1.1 only - we use close-delimiting for HTTP/1.0 */
             if (txn->flags.ver == VER_1_1) {
                 /* Construct Transfer-Encoding header */
-                const char *te[] =
-                    { "deflate", "gzip", "chunked", NULL };
-
                 comma_list_hdr(txn, "Transfer-Encoding", te, txn->flags.te);
             }
 
@@ -3288,8 +3286,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     end_resp_headers(txn, code);
 
 
+  log:
     /* Log the client request and our response */
     buf_reset(&log);
+
     /* Add client data */
     buf_printf(&log, "%s", httpd_clienthost);
     if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
@@ -3301,6 +3301,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
             buf_printf(&log, " by \"%s\"", hdr[0]);
     }
+
     /* Add request-line */
     buf_appendcstr(&log, "; \"");
     if (txn->req_line.meth) {
@@ -3318,9 +3319,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
     }
     buf_appendcstr(&log, "\"");
+
     if (txn->req_hdrs) {
         /* Add any request modifying headers */
-        const char *sep = " (";
+        sep = " (";
 
         if (txn->flags.override) {
             buf_printf(&log, "%smethod-override=%s", sep, txn->req_line.meth);
@@ -3332,6 +3334,23 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Referer"))) {
             buf_printf(&log, "%sreferer=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if (code == HTTP_SWITCH_PROT) {
+            hdr = spool_getheader(txn->req_hdrs, "Upgrade");
+            buf_printf(&log, "%supgrade=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "Transfer-Encoding"))) {
+            buf_printf(&log, "%stx-encoding=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, "Content-Encoding"))) {
+            buf_printf(&log, "%scnt-encoding=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if (txn->auth_chal.scheme) {
+            buf_printf(&log, "%sauth=%s", sep, txn->auth_chal.scheme->name);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
@@ -3390,22 +3409,46 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%scaldav-timezones=%s", sep, hdr[0]);
             sep = "; ";
         }
+
         if (*sep == ';') buf_appendcstr(&log, ")");
     }
+
     /* Add response */
     buf_printf(&log, " => \"%s %s\"",
                txn->flags.ver == VER_2 ? HTTP2_VERSION : HTTP_VERSION,
                error_message(code));
+
     /* Add any auxiliary response data */
+    sep = " (";
+    if (code == HTTP_UPGRADE) {
+        buf_printf(&log, "%supgrade=", sep);
+        comma_list_body(&log, upgrd_tokens, txn->flags.upgrade, NULL);
+        sep = "; ";
+    }
+    if (txn->flags.te) {
+        buf_printf(&log, "%stx-encoding=", sep);
+        comma_list_body(&log, te, txn->flags.te, NULL);
+        sep = "; ";
+    }
+    if (txn->resp_body.enc) {
+        buf_printf(&log, "%scnt-encoding=", sep);
+        comma_list_body(&log, ce, txn->resp_body.enc, NULL);
+        sep = "; ";
+    }
     if (txn->location) {
-        buf_printf(&log, " (location=%s)", txn->location);
+        buf_printf(&log, "%slocation=%s", sep, txn->location);
+        sep = "; ";
     }
     else if (txn->flags.cors) {
-        buf_appendcstr(&log, " (allow-origin)");
+        buf_printf(&log, "%sallow-origin", sep);
+        sep = "; ";
     }
     else if (txn->error.desc) {
-        buf_printf(&log, " (error=%s)", txn->error.desc);
+        buf_printf(&log, "%serror=%s", sep, txn->error.desc);
+        sep = "; ";
     }
+    if (*sep == ';') buf_appendcstr(&log, ")");
+
     syslog(LOG_INFO, "%s", buf_cstring(&log));
 }
 
