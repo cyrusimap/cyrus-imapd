@@ -2092,7 +2092,7 @@ static void comma_list_body(struct buf *buf,
         if (flags & (1 << i)) {
             buf_appendcstr(buf, sep);
             if (args) buf_vprintf(buf, vals[i], args);
-            else buf_printf(buf, vals[i]);
+            else buf_appendcstr(buf, vals[i]);
             sep = ", ";
         }
         else if (args) {
