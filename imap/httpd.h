@@ -56,8 +56,6 @@
 #else /* !HAVE_NGHTTP2 */
 
 #define HTTP2_MAX_HEADERS  1
-#define nghttp2_session void
-#define nghttp2_option void
 typedef struct { void *value; } nghttp2_nv;
 #endif /* HAVE_NGHTTP2 */
 
@@ -330,8 +328,8 @@ struct http_connection {
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
 
-    nghttp2_session *http2_session;     /* HTTP/2 session context */
-    nghttp2_option *http2_options;      /* Config options for HTTP/2 session */
+    void *http2_session;                /* HTTP/2 session context */
+    void *http2_options;                /* Config options for HTTP/2 session */
 };
 
 /* HTTP/2 stream context */
@@ -557,6 +555,10 @@ extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn,
                          const char *etag, time_t lastmod);
+
+extern int examine_request(struct transaction_t *txn);
+extern int client_need_auth(struct transaction_t *txn, int sasl_result);
+extern void transaction_free(struct transaction_t *txn);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
 extern int http_allow_noauth(struct transaction_t *txn);

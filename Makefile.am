@@ -1207,6 +1207,8 @@ imap_httpd_SOURCES = \
 	imap/http_dav.c \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
+	imap/http_h2.c \
+	imap/http_h2.h \
 	imap/http_ischedule.c \
 	imap/http_prometheus.c \
 	imap/http_proxy.c \
