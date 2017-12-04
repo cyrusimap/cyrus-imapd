@@ -478,7 +478,8 @@ done:
     return r;
 }
 
-EXPORTED int jmapauth_delete(struct db *db, const char *tokenid, struct txn **tidptr)
+EXPORTED int jmapauth_delete(struct db *db,
+                             const char *tokenid, struct txn **tidptr)
 {
     struct txn *mytid = NULL;
     struct jmapauth_token *tok = NULL;

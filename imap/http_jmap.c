@@ -337,7 +337,8 @@ static int jmap_get(struct transaction_t *txn,
     return HTTP_NOT_FOUND;
 }
 
-static int is_accessible(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int is_accessible(const mbentry_t *mbentry,
+                         void *rock __attribute__((unused)))
 {
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
         (mbentry->mbtype & MBTYPE_MOVING) ||
@@ -350,7 +351,8 @@ static int is_accessible(const mbentry_t *mbentry, void *rock __attribute__((unu
 
 static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
 
-static json_t *extract_array_value(json_t *val, const char *idx, const char *path, ptrarray_t *pool)
+static json_t *extract_array_value(json_t *val, const char *idx,
+                                   const char *path, ptrarray_t *pool)
 {
     if (!strcmp(idx, "*")) {
         /* Build value from array traversal */
@@ -650,11 +652,12 @@ static int jmap_post(struct transaction_t *txn,
             }
             /* Check if any shared mailbox is accessible */
             if (!hash_lookup(accountid, &accounts)) {
-                r = mymblist(httpd_userid, accountid, httpd_authstate, &mboxrights,
-                             is_accessible, NULL, 0/*all*/);
+                r = mymblist(httpd_userid, accountid, httpd_authstate,
+                             &mboxrights, is_accessible, NULL, 0/*all*/);
                 if (r != IMAP_OK_COMPLETED) {
                     json_t *err = json_pack("{s:s}", "type", "accountNotFound");
-                    json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+                    json_array_append_new(resp,
+                                          json_pack("[s,o,s]", "error", err, tag));
                     continue;
                 }
                 hash_insert(accountid, (void*)1, &accounts);
@@ -772,7 +775,8 @@ static void jmap_finireq(jmap_req_t *req)
     req->mboxes = NULL;
 }
 
-EXPORTED int jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw)
+EXPORTED int jmap_openmbox(jmap_req_t *req, const char *name,
+                           struct mailbox **mboxp, int rw)
 {
     int i, r;
     struct _mboxcache_rec *rec;
@@ -945,10 +949,7 @@ done:
 
 EXPORTED int jmap_download(struct transaction_t *txn)
 {
-    if (strncmp(txn->req_uri->path, "/jmap/download/", 15))
-        return HTTP_NOT_FOUND;
-
-    const char *userid = txn->req_uri->path + 15;
+    const char *userid = txn->req_tgt.resource;
     const char *slash = strchr(userid, '/');
     if (!slash) {
         /* XXX - error, needs AccountId */
@@ -1157,7 +1158,8 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 }
 
 
-static int create_upload_collection(const char *accountid, struct mailbox **mailbox)
+static int create_upload_collection(const char *accountid,
+                                    struct mailbox **mailbox)
 {
     /* notifications collection */
     mbentry_t *mbentry = NULL;
@@ -1421,7 +1423,8 @@ static int JNOTNULL(json_t *item)
    return 1;
 }
 
-EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype) {
+EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
+{
     if (JNOTNULL(state)) {
         const char *s = json_string_value(state);
         if (!s) {
@@ -1449,7 +1452,8 @@ EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype) {
     return 0;
 }
 
-EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype) {
+EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
+{
     modseq_t modseq;
 
     /* Determine current counter by mailbox type. */
@@ -1470,7 +1474,8 @@ EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype) {
     return modseq;
 }
 
-EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype) {
+EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype)
+{
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
     modseq_t modseq = jmap_highestmodseq(req, mbtype);
@@ -1482,7 +1487,8 @@ EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype) {
     return state;
 }
 
-EXPORTED int jmap_bumpstate(jmap_req_t *req, int mbtype) {
+EXPORTED int jmap_bumpstate(jmap_req_t *req, int mbtype)
+{
     int r = 0;
     modseq_t modseq;
     char *mboxname = mboxname_user_mbox(req->accountid, NULL);
@@ -1568,7 +1574,8 @@ static int check_password(const char *username, const char *password)
     plus = strchr(user, '+');
     if (plus) *plus++ = '\0';
     /* Verify the password */
-    realuser = domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
+    realuser =
+        domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
     r = sasl_checkpass(httpd_saslconn, realuser, strlen(realuser),
                        password, strlen(password));
     free(realuser);
@@ -1607,10 +1614,12 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
         /* We haven't yet seen this account */
         findaccounts_add(ctx->accounts, buf_cstring(&ctx->userid), ctx->rw);
         buf_setcstr(&ctx->userid, userid);
-        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+        ctx->rw =
+            httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
     } else if (!ctx->rw) {
         /* Already seen this account, but it's read-only so far */
-        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+        ctx->rw =
+            httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
     }
 
     mbname_free(&mbname);
@@ -2010,7 +2019,8 @@ static int jmap_bearer(const char *bearer, char *userbuf, size_t userbuf_size)
     /* Cry loud for flagged tokens */
     if (access_tok->flags)  {
         /* FIXME httpd_remoteip might not be the one we're interested in */
-        syslog(LOG_ERR, "JMAP auth: flagged token received from %s", httpd_remoteip);
+        syslog(LOG_ERR, "JMAP auth: flagged token received from %s",
+               httpd_remoteip);
         goto done;
     }
 

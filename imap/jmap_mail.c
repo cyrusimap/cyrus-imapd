@@ -352,7 +352,8 @@ static char *jmapmbox_role(jmap_req_t *req, const mbname_t *mbname)
     /* XXX How to determine the templates role? */
 
     /* Does this mailbox have an IMAP special use role? */
-    annotatemore_lookup(mbname_intname(mbname), "/specialuse", req->userid, &buf);
+    annotatemore_lookup(mbname_intname(mbname), "/specialuse",
+                        req->userid, &buf);
     if (buf.len) {
         strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
         if (uses->count) {
@@ -377,7 +378,8 @@ static char *jmapmbox_role(jmap_req_t *req, const mbname_t *mbname)
     /* Otherwise, does it have the x-role annotation set? */
     if (!role) {
         buf_reset(&buf);
-        annotatemore_lookup(mbname_intname(mbname), IMAP_ANNOT_NS "x-role", req->userid, &buf);
+        annotatemore_lookup(mbname_intname(mbname),
+                            IMAP_ANNOT_NS "x-role", req->userid, &buf);
         if (buf.len) {
             role = buf_cstring(&buf);
         }
@@ -394,7 +396,8 @@ static char *jmapmbox_name(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf attrib = BUF_INITIALIZER;
 
-    int r = annotatemore_lookup(mbname_intname(mbname), IMAP_ANNOT_NS "displayname",
+    int r = annotatemore_lookup(mbname_intname(mbname),
+                                IMAP_ANNOT_NS "displayname",
             req->userid, &attrib);
     if (!r && attrib.len) {
         /* We got a mailbox with a displayname annotation. Use it. */
@@ -414,7 +417,8 @@ static char *jmapmbox_name(jmap_req_t *req, const mbname_t *mbname)
         extname = xstrdup(strarray_nth(boxes, strarray_size(boxes)-1));
         /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
         charset_t cs = charset_lookupname("imap-utf-7");
-        char *decoded = charset_to_utf8(extname, strlen(extname), cs, ENCODING_NONE);
+        char *decoded = charset_to_utf8(extname, strlen(extname),
+                                        cs, ENCODING_NONE);
         if (decoded) {
             free(extname);
             extname = decoded;
@@ -434,7 +438,8 @@ static int jmapmbox_sort_order(jmap_req_t *req, const mbname_t *mbname)
     char *role = NULL;
 
     /* Ignore lookup errors here. */
-    annotatemore_lookup(mbname_intname(mbname), IMAP_ANNOT_NS "sortOrder", req->userid, &attrib);
+    annotatemore_lookup(mbname_intname(mbname),
+                        IMAP_ANNOT_NS "sortOrder", req->userid, &attrib);
     if (attrib.len) {
         uint64_t t = str2uint64(buf_cstring(&attrib));
         if (t < INT_MAX) {
@@ -536,16 +541,20 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
     }
 
     if (_wantprop(props, "mayReadItems")) {
-        json_object_set_new(obj, "mayReadItems", json_boolean(rights & ACL_READ));
+        json_object_set_new(obj, "mayReadItems",
+                            json_boolean(rights & ACL_READ));
     }
     if (_wantprop(props, "mayAddItems")) {
-        json_object_set_new(obj, "mayAddItems", json_boolean(rights & ACL_INSERT));
+        json_object_set_new(obj, "mayAddItems",
+                            json_boolean(rights & ACL_INSERT));
     }
     if (_wantprop(props, "mayRemoveItems")) {
-        json_object_set_new(obj, "mayRemoveItems", json_boolean(rights & ACL_DELETEMSG));
+        json_object_set_new(obj, "mayRemoveItems",
+                            json_boolean(rights & ACL_DELETEMSG));
     }
     if (_wantprop(props, "mayCreateChild")) {
-        json_object_set_new(obj, "mayCreateChild", json_boolean(rights & ACL_CREATE));
+        json_object_set_new(obj, "mayCreateChild",
+                            json_boolean(rights & ACL_CREATE));
     }
 
     if (_wantprop(props, "totalMessages")) {
@@ -557,9 +566,10 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
 
     if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
         conv_status_t xconv = CONV_STATUS_INIT;
-        if ((r = conversation_getstatus(req->cstate, mbname_intname(mbname), &xconv))) {
-            syslog(LOG_ERR, "conversation_getstatus(%s): %s", mbname_intname(mbname),
-                    error_message(r));
+        if ((r = conversation_getstatus(req->cstate,
+                                        mbname_intname(mbname), &xconv))) {
+            syslog(LOG_ERR, "conversation_getstatus(%s): %s",
+                   mbname_intname(mbname), error_message(r));
             goto done;
         }
         if (_wantprop(props, "totalThreads")) {
@@ -573,7 +583,8 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
         mbentry_t *parent = NULL;
         mboxlist_findparent(mbname_intname(mbname), &parent);
         if (_wantprop(props, "parentId")) {
-            json_object_set_new(obj, "parentId", (is_inbox || parent_is_inbox || !parent) ?
+            json_object_set_new(obj, "parentId",
+                                (is_inbox || parent_is_inbox || !parent) ?
                                 json_null() : json_string(parent->uniqueid));
         }
         if (_wantprop(props, "mayRename")) {

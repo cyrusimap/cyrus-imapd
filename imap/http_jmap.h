@@ -95,7 +95,8 @@ extern jmap_msg_t jmap_contact_messages[];
 extern jmap_msg_t jmap_calendar_messages[];
 
 /* Request-scoped mailbox cache */
-extern int  jmap_openmbox(jmap_req_t *req, const char *name, struct mailbox **mboxp, int rw);
+extern int  jmap_openmbox(jmap_req_t *req, const char *name,
+                          struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
