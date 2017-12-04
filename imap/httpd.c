@@ -2990,7 +2990,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     /* Output data */
     if (txn->flags.ver == VER_2) {
         /* HTTP/2 chunk */
-        http2_data_chunk(txn, buf + offset, len, last_chunk, &ctx);
+        http2_data_chunk(txn, buf + offset, outlen, last_chunk, &ctx);
     }
     else if (txn->flags.te && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
