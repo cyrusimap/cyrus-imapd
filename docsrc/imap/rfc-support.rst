@@ -54,6 +54,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     DEFLATE Compressed Data Format Specification version 1.3
 
+:rfc:`1952`
+
+    GZIP file format specification version 4.3
+
 :rfc:`2033`
 
     Local Mail Transfer Protocol
@@ -681,6 +685,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7809`
 
     CalDAV: Time Zones by Reference
+
+:rfc:`7932`
+
+    Brotli Compressed Data Format
 
 :rfc:`7953`
 
