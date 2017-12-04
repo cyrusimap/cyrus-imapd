@@ -70,6 +70,13 @@
 
 #include "http_jmap.h"
 
+#define JMAP_ROOT          "/jmap"
+#define JMAP_BASE_URL      JMAP_ROOT "/"
+#define JMAP_AUTH_COL      "auth/"
+#define JMAP_UPLOAD_COL    "upload/"
+#define JMAP_DOWNLOAD_COL  "download/"
+#define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}"
+
 struct namespace jmap_namespace;
 
 static time_t compile_time;
@@ -103,7 +110,7 @@ static int myrights_byname(struct auth_state *authstate,
 
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
-    URL_NS_JMAP, 0, "/jmap", "/.well-known/jmap",
+    URL_NS_JMAP, 0, JMAP_ROOT, "/.well-known/jmap",
     jmap_checkurl, AUTH_BEARER,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
@@ -131,6 +138,48 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+
+static int jmap_parse_path(struct transaction_t *txn)
+{
+    struct request_target_t *tgt = &txn->req_tgt;
+    size_t len;
+    char *p;
+
+    if (*tgt->path) return 0;  /* Already parsed */
+
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
+    p = tgt->path;
+
+    /* Sanity check namespace */
+    len = strlen(namespace_jmap.prefix);
+    if (strlen(p) < len ||
+        strncmp(namespace_jmap.prefix, p, len) ||
+        (tgt->path[len] && tgt->path[len] != '/')) {
+        txn->error.desc = "Namespace mismatch request target path";
+        return HTTP_FORBIDDEN;
+    }
+
+    /* Skip namespace */
+    p += len;
+    if (!*p) {
+        /* Canonicalize URL */
+        txn->location = JMAP_BASE_URL;
+        return HTTP_MOVED;
+    }
+
+    /* Check for path after prefix */
+    if (*++p) {
+        /* Get "collection" */
+        tgt->collection = p;
+
+        /* Get "resource" */
+        p = strchr(tgt->collection, '/');
+        if (p) tgt->resource = ++p;
+    }
+
+    return 0;
+}
 
 static ptrarray_t messages = PTRARRAY_INITIALIZER;
 
@@ -260,7 +309,9 @@ static int jmap_auth(const char *userid __attribute__((unused)))
 static int jmap_delete(struct transaction_t *txn,
                        void *params __attribute__((unused)))
 {
-    if (!strcmp(txn->req_uri->path, "/jmap/auth/")) {
+    int r = jmap_parse_path(txn);
+
+    if (!r && !strcmpnull(txn->req_tgt.collection, JMAP_AUTH_COL)) {
         return jmap_authdel(txn);
     }
 
@@ -271,13 +322,18 @@ static int jmap_delete(struct transaction_t *txn,
 static int jmap_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
-    if (!strncmp(txn->req_uri->path, "/jmap/download/", 15)) {
-        return jmap_download(txn);
+    int r = jmap_parse_path(txn);
+
+    if (!r && txn->req_tgt.collection) {
+        if (!strncmp(txn->req_tgt.collection,
+                     JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
+            return jmap_download(txn);
+        }
+        else if (!strcmp(txn->req_tgt.collection, JMAP_AUTH_COL)) {
+            return jmap_settings(txn);
+        }
     }
 
-    if (!strcmp(txn->req_uri->path, "/jmap/auth/")) {
-        return jmap_settings(txn);
-    }
     return HTTP_NOT_FOUND;
 }
 
@@ -496,32 +552,22 @@ static int jmap_post(struct transaction_t *txn,
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_req_body(txn);
-    if (ret) {
-        txn->flags.conn = CONN_CLOSE;
-        return ret;
-    }
+    int r = jmap_parse_path(txn);
 
-    /* Handle uploads */
-    if (!strncmp(txn->req_uri->path, "/jmap/upload/", 13)) {
-        return jmap_upload(txn);
-    }
-
-    /* Handle POST to the authentication endpoint */
-    if (!strcmp(txn->req_uri->path, "/jmap/auth/")) {
-        return jmap_authreq(txn);
-    }
-
-    /* Must be a regular JMAP POST request */
-    /* Canonicalize URL */
-    if (!strcmp(txn->req_uri->path, "/jmap")) {
-        txn->location = "/jmap/";
-        return HTTP_MOVED;
-    }
-    if (strcmp(txn->req_uri->path, "/jmap/")) {
-        return HTTP_NOT_FOUND;
+    if (r) return r;
+    else if (txn->req_tgt.collection) {
+        /* Handle uploads */
+        if (!strcmp(txn->req_tgt.collection, JMAP_UPLOAD_COL)) {
+            return jmap_upload(txn);
+        }
+        /* Handle POST to the authentication endpoint */
+        else if (!strcmp(txn->req_tgt.collection, JMAP_AUTH_COL)) {
+            return jmap_authreq(txn);
+        }
+        /* Must be a regular JMAP POST request */
+        else {
+            return HTTP_NOT_FOUND;
+        }
     }
 
     /* Check Content-Type */
@@ -531,6 +577,13 @@ static int jmap_post(struct transaction_t *txn,
         return HTTP_BAD_MEDIATYPE;
     }
 
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    ret = http_read_req_body(txn);
+    if (ret) {
+        txn->flags.conn = CONN_CLOSE;
+        return ret;
+    }
     if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
 
     /* Allocate map to store uids */
@@ -1492,8 +1545,8 @@ EXPORTED char *jmap_xhref(const char *mboxname, const char *resource)
 
 static int jmap_checkurl(struct transaction_t *txn)
 {
-    if (!strcmp(txn->req_line.meth, "POST") &&
-        !strncmp(txn->req_uri->path, "/jmap/auth/", 11)) {
+    if (!strcmp(txn->req_line.meth, "POST") && !jmap_parse_path(txn) &&
+        !strcmpnull(txn->req_tgt.collection, JMAP_AUTH_COL)) {
         return 0;
     }
     return HTTP_UNAUTHORIZED;
@@ -1592,10 +1645,10 @@ static json_t *user_settings(const char *userid)
             "username", userid,
             "accounts", accounts,
             "capabilities", json_pack("{}"), /* TODO update with JMAP URIs */
-            "apiUrl", "/jmap/",
-            "downloadUrl", "/jmap/download/{accountId}/{blobId}/{name}",
+            "apiUrl", JMAP_BASE_URL,
+            "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
             /* FIXME eventSourceUrl */
-            "uploadUrl", "/jmap/upload/");
+            "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL);
 }
 
 static int jmap_login(const char *login_id, const char *password,
@@ -1884,7 +1937,7 @@ done:
     return ret;
 }
 
-static int jmap_authdel(struct transaction_t *txn __attribute__((unused)))
+static int jmap_authdel(struct transaction_t *txn)
 {
     /* Get the access token. */
     const char **hdr = spool_getheader(txn->req_hdrs, "Authorization");
