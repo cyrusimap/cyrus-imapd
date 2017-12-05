@@ -45,6 +45,7 @@
 #define _HTTP_PROXY_H
 
 #include "backend.h"
+#include "http_h2.h"
 
 
 extern struct protocol_t http_protocol;
