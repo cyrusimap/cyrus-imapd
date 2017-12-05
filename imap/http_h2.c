@@ -82,10 +82,10 @@ static int _alpn_select_cb(SSL *ssl __attribute__((unused)),
     return SSL_TLSEXT_ERR_NOACK;
 }
 
-EXPORTED ssize_t http2_send_cb(nghttp2_session *session __attribute__((unused)),
-                               const uint8_t *data, size_t length,
-                               int flags __attribute__((unused)),
-                               void *user_data)
+static ssize_t send_cb(nghttp2_session *session __attribute__((unused)),
+                       const uint8_t *data, size_t length,
+                       int flags __attribute__((unused)),
+                       void *user_data)
 {
     struct http_connection *conn = (struct http_connection *) user_data;
     struct protstream *pout = conn->pout;
@@ -100,10 +100,10 @@ EXPORTED ssize_t http2_send_cb(nghttp2_session *session __attribute__((unused)),
     return length;
 }
 
-EXPORTED ssize_t http2_recv_cb(nghttp2_session *session __attribute__((unused)),
-                               uint8_t *buf, size_t length,
-                               int flags __attribute__((unused)),
-                               void *user_data)
+static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
+                       uint8_t *buf, size_t length,
+                       int flags __attribute__((unused)),
+                       void *user_data)
 {
     struct http_connection *conn = (struct http_connection *) user_data;
     struct protstream *pin = conn->pin;
@@ -134,12 +134,12 @@ EXPORTED ssize_t http2_recv_cb(nghttp2_session *session __attribute__((unused)),
     return n;
 }
 
-EXPORTED ssize_t http2_data_source_read_cb(nghttp2_session *session __attribute__((unused)),
-                                           int32_t stream_id,
-                                           uint8_t *buf, size_t length,
-                                           uint32_t *data_flags,
-                                           nghttp2_data_source *source,
-                                           void *user_data __attribute__((unused)))
+static ssize_t data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
+                                   int32_t stream_id,
+                                   uint8_t *buf, size_t length,
+                                   uint32_t *data_flags,
+                                   nghttp2_data_source *source,
+                                   void *user_data __attribute__((unused)))
 {
     struct protstream *s = source->ptr;
     size_t n = prot_read(s, (char *) buf, length);
@@ -156,8 +156,8 @@ EXPORTED ssize_t http2_data_source_read_cb(nghttp2_session *session __attribute_
     return n;
 }
 
-EXPORTED int http2_begin_headers_cb(nghttp2_session *session,
-                                    const nghttp2_frame *frame, void *user_data)
+static int begin_headers_cb(nghttp2_session *session,
+                            const nghttp2_frame *frame, void *user_data)
 {
     if (frame->hd.type != NGHTTP2_HEADERS ||
         frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
@@ -187,12 +187,12 @@ EXPORTED int http2_begin_headers_cb(nghttp2_session *session,
     return 0;
 }
 
-EXPORTED int http2_header_cb(nghttp2_session *session,
-                             const nghttp2_frame *frame,
-                             const uint8_t *name, size_t namelen,
-                             const uint8_t *value, size_t valuelen,
-                             uint8_t flags __attribute__((unused)),
-                             void *user_data __attribute__((unused)))
+static int header_cb(nghttp2_session *session,
+                     const nghttp2_frame *frame,
+                     const uint8_t *name, size_t namelen,
+                     const uint8_t *value, size_t valuelen,
+                     uint8_t flags __attribute__((unused)),
+                     void *user_data __attribute__((unused)))
 {
     if (frame->hd.type != NGHTTP2_HEADERS ||
         frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
@@ -233,11 +233,11 @@ EXPORTED int http2_header_cb(nghttp2_session *session,
     return 0;
 }
 
-EXPORTED int http2_data_chunk_recv_cb(nghttp2_session *session,
-                                      uint8_t flags __attribute__((unused)),
-                                      int32_t stream_id,
-                                      const uint8_t *data, size_t len,
-                                      void *user_data __attribute__((unused)))
+static int data_chunk_recv_cb(nghttp2_session *session,
+                              uint8_t flags __attribute__((unused)),
+                              int32_t stream_id,
+                              const uint8_t *data, size_t len,
+                              void *user_data __attribute__((unused)))
 {
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, stream_id);
@@ -258,9 +258,9 @@ EXPORTED int http2_data_chunk_recv_cb(nghttp2_session *session,
     return 0;
 }
 
-EXPORTED int http2_frame_recv_cb(nghttp2_session *session,
-                                 const nghttp2_frame *frame,
-                                 void *user_data __attribute__((unused)))
+static int frame_recv_cb(nghttp2_session *session,
+                         const nghttp2_frame *frame,
+                         void *user_data __attribute__((unused)))
 {
     int ret = 0;
     struct transaction_t *txn =
@@ -333,9 +333,9 @@ EXPORTED int http2_frame_recv_cb(nghttp2_session *session,
     return 0;
 }
 
-EXPORTED int http2_stream_close_cb(nghttp2_session *session, int32_t stream_id,
-                                   uint32_t error_code __attribute__((unused)),
-                                   void *user_data __attribute__((unused)))
+static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
+                           uint32_t error_code __attribute__((unused)),
+                           void *user_data __attribute__((unused)))
 {
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, stream_id);
@@ -351,10 +351,10 @@ EXPORTED int http2_stream_close_cb(nghttp2_session *session, int32_t stream_id,
     return 0;
 }
 
-EXPORTED int http2_frame_not_send_cb(nghttp2_session *session,
-                                     const nghttp2_frame *frame,
-                                     int lib_error_code,
-                                     void *user_data __attribute__((unused)))
+static int frame_not_send_cb(nghttp2_session *session,
+                             const nghttp2_frame *frame,
+                             int lib_error_code,
+                             void *user_data __attribute__((unused)))
 {
     syslog(LOG_DEBUG, "http2_frame_not_send_cb(id=%d)", frame->hd.stream_id);
 
@@ -366,7 +366,7 @@ EXPORTED int http2_frame_not_send_cb(nghttp2_session *session,
 }
 
 
-EXPORTED void http2_init(struct buf *serverinfo)
+HIDDEN void http2_init(struct buf *serverinfo)
 {
     int r;
 
@@ -380,34 +380,34 @@ EXPORTED void http2_init(struct buf *serverinfo)
     }
 
     nghttp2_session_callbacks_set_send_callback(http2_callbacks,
-                                                &http2_send_cb);
+                                                &send_cb);
     nghttp2_session_callbacks_set_recv_callback(http2_callbacks,
-                                                &http2_recv_cb);
+                                                &recv_cb);
     nghttp2_session_callbacks_set_on_begin_headers_callback(http2_callbacks,
-                                                            &http2_begin_headers_cb);
+                                                            &begin_headers_cb);
     nghttp2_session_callbacks_set_on_header_callback(http2_callbacks,
-                                                     http2_header_cb);
+                                                     &header_cb);
     nghttp2_session_callbacks_set_on_data_chunk_recv_callback(http2_callbacks,
-                                                              http2_data_chunk_recv_cb);
+                                                              &data_chunk_recv_cb);
     nghttp2_session_callbacks_set_on_frame_recv_callback(http2_callbacks,
-                                                         http2_frame_recv_cb);
+                                                         &frame_recv_cb);
     nghttp2_session_callbacks_set_on_stream_close_callback(http2_callbacks,
-                                                           &http2_stream_close_cb);
+                                                           &stream_close_cb);
     nghttp2_session_callbacks_set_on_frame_not_send_callback(http2_callbacks,
-                                                             &http2_frame_not_send_cb);
+                                                             &frame_not_send_cb);
 
     /* Setup for ALPN */
     alpn_select_cb = &_alpn_select_cb;
 }
 
 
-EXPORTED void http2_done()
+HIDDEN void http2_done()
 {
     nghttp2_session_callbacks_del(http2_callbacks);
 }
 
 
-EXPORTED int http2_preface(struct transaction_t *txn)
+HIDDEN int http2_preface(struct transaction_t *txn)
 {
     if (http2_callbacks) {
         struct protstream *pin = txn->conn->pin;
@@ -425,7 +425,7 @@ EXPORTED int http2_preface(struct transaction_t *txn)
 }
 
 
-EXPORTED int http2_start(struct http_connection *conn, struct transaction_t *txn)
+HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
 {
     nghttp2_settings_entry iv = { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
     int r;
@@ -487,14 +487,14 @@ EXPORTED int http2_start(struct http_connection *conn, struct transaction_t *txn
 }
 
 
-EXPORTED void http2_end(struct http_connection *conn)
+HIDDEN void http2_end(struct http_connection *conn)
 {
     nghttp2_option_del(conn->http2_options);
     nghttp2_session_del(conn->http2_session);
 }
 
 
-EXPORTED void http2_output(struct transaction_t *txn)
+HIDDEN void http2_output(struct transaction_t *txn)
 {
     if (nghttp2_session_want_write(txn->conn->http2_session)) {
         /* Send queued frame(s) */
@@ -507,7 +507,7 @@ EXPORTED void http2_output(struct transaction_t *txn)
 }
 
 
-EXPORTED void http2_input(struct transaction_t *txn)
+HIDDEN void http2_input(struct transaction_t *txn)
 {
     int want_read = nghttp2_session_want_read(txn->conn->http2_session);
     int goaway = txn->flags.conn & CONN_CLOSE;
@@ -577,8 +577,8 @@ EXPORTED void http2_input(struct transaction_t *txn)
 }
 
 
-EXPORTED void http2_add_header(struct transaction_t *txn,
-                               const char  *name, struct buf *value)
+HIDDEN void http2_add_header(struct transaction_t *txn,
+                             const char  *name, struct buf *value)
 {
     if (txn->http2.num_resp_hdrs >= HTTP2_MAX_HEADERS) {
         buf_free(value);
@@ -600,7 +600,7 @@ EXPORTED void http2_add_header(struct transaction_t *txn,
 }
 
 
-EXPORTED int http2_end_headers(struct transaction_t *txn, long code)
+HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
 {
     uint8_t flags = NGHTTP2_FLAG_NONE;
     int r;
@@ -664,9 +664,9 @@ EXPORTED int http2_end_headers(struct transaction_t *txn, long code)
 }
 
 
-EXPORTED void http2_data_chunk(struct transaction_t *txn,
-                               const char *data, unsigned datalen,
-                               int last_chunk, MD5_CTX *md5ctx)
+HIDDEN void http2_data_chunk(struct transaction_t *txn,
+                             const char *data, unsigned datalen,
+                             int last_chunk, MD5_CTX *md5ctx)
 {
     static unsigned char md5[MD5_DIGEST_LENGTH];
     uint8_t flags = NGHTTP2_FLAG_END_STREAM;
@@ -676,7 +676,7 @@ EXPORTED void http2_data_chunk(struct transaction_t *txn,
     /* NOTE: The protstream that we use as the data source MUST remain
        available until the data source read callback has retrieved all data */
     prd.source.ptr = prot_readmap(data, datalen);
-    prd.read_callback = http2_data_source_read_cb;
+    prd.read_callback = data_source_read_cb;
 
     if (txn->flags.te) {
         if (!last_chunk) {
@@ -717,51 +717,51 @@ EXPORTED void http2_data_chunk(struct transaction_t *txn,
 
 void *http2_callbacks = NULL;
 
-EXPORTED void http2_init(struct buf *serverinfo __attribute__((unused))) {}
+HIDDEN void http2_init(struct buf *serverinfo __attribute__((unused))) {}
 
-EXPORTED void http2_done() {}
+HIDDEN void http2_done() {}
 
-EXPORTED int http2_preface(struct transaction_t *txn __attribute__((unused)))
+HIDDEN int http2_preface(struct transaction_t *txn __attribute__((unused)))
 {
     return 0;
 }
 
-EXPORTED int http2_start(struct http_connection *conn __attribute__((unused)),
-                         struct transaction_t *txn __attribute__((unused)))
+HIDDEN int http2_start(struct http_connection *conn __attribute__((unused)),
+                       struct transaction_t *txn __attribute__((unused)))
 {
     fatal("http2_start() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-EXPORTED void http2_end(struct http_connection *conn __attribute__((unused))) {}
+HIDDEN void http2_end(struct http_connection *conn __attribute__((unused))) {}
 
-EXPORTED void http2_output(struct transaction_t *txn __attribute__((unused)))
+HIDDEN void http2_output(struct transaction_t *txn __attribute__((unused)))
 {
     fatal("http2_output() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-EXPORTED void http2_input(struct transaction_t *txn __attribute__((unused)))
+HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))
 {
     fatal("http2_input() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-EXPORTED void http2_add_header(struct transaction_t *txn __attribute__((unused)),
-                               const char *name __attribute__((unused)),
-                               struct buf *value __attribute__((unused)))
+HIDDEN void http2_add_header(struct transaction_t *txn __attribute__((unused)),
+                             const char *name __attribute__((unused)),
+                             struct buf *value __attribute__((unused)))
 {
     fatal("http2_add_header() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-EXPORTED int http2_end_headers(struct transaction_t *txn __attribute__((unused)),
-                               long code __attribute__((unused)))
+HIDDEN int http2_end_headers(struct transaction_t *txn __attribute__((unused)),
+                             long code __attribute__((unused)))
 {
     fatal("http2_end_headers() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-EXPORTED void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
-                               const char *data __attribute__((unused)),
-                               unsigned datalen __attribute__((unused)),
-                               int last_chunk __attribute__((unused)),
-                               MD5_CTX *md5ctx __attribute__((unused)))
+HIDDEN void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
+                             const char *data __attribute__((unused)),
+                             unsigned datalen __attribute__((unused)),
+                             int last_chunk __attribute__((unused)),
+                             MD5_CTX *md5ctx __attribute__((unused)))
 {
     fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
 }
