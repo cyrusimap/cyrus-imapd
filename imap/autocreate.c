@@ -139,7 +139,7 @@ static int setup_sieve_filenames(const char *script_dir, const char *sievename,
 
     for (i = 0; i < SIEVE_NUM_FILE_TYPES; i++) {
         struct sieve_scripts_info *info = &sieve_names[i];
-        int ret;
+        int ret = 0;
         switch(info->stype) {
             case SIEVE_TMP_1:
                 ret = snprintf(fnames->tmpname1, MAX_FILENAME, "%s/%s%s",
