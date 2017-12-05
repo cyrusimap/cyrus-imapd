@@ -1373,12 +1373,7 @@ EXPORTED int tls_prune_sessions(void)
     }
 
     ret = cyrusdb_open(DB, fname, 0, &sessdb);
-    if (ret != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       fname, cyrusdb_strerror(ret));
-	return 1;
-    }
-    else {
+    if (ret == CYRUSDB_OK) {
 	/* check each session in our database */
 	sess_dbopen = 1;
 	prock.count = prock.deletions = 0;
@@ -1389,6 +1384,15 @@ EXPORTED int tls_prune_sessions(void)
 
 	syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
 	       prock.deletions, prock.count);
+    }
+    else if (ret == CYRUSDB_NOTFOUND) {
+	syslog(LOG_NOTICE, "tls_prune: %s not found, nothing to do", fname);
+	return 0;
+    }
+    else {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       fname, cyrusdb_strerror(ret));
+	return 1;
     }
 
     free(tofree);
