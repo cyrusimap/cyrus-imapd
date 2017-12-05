@@ -554,6 +554,15 @@ static int jmap_post(struct transaction_t *txn,
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    ret = http_read_req_body(txn);
+    if (ret) {
+        txn->flags.conn = CONN_CLOSE;
+        return ret;
+    }
+    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
+
     int r = jmap_parse_path(txn);
 
     if (r) return r;
@@ -578,15 +587,6 @@ static int jmap_post(struct transaction_t *txn,
         txn->error.desc = "This method requires a JSON request body";
         return HTTP_BAD_MEDIATYPE;
     }
-
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_req_body(txn);
-    if (ret) {
-        txn->flags.conn = CONN_CLOSE;
-        return ret;
-    }
-    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
 
     /* Allocate map to store uids */
     construct_hash_table(&idmap.mailboxes, 64, 0);
