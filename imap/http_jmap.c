@@ -561,7 +561,6 @@ static int jmap_post(struct transaction_t *txn,
         txn->flags.conn = CONN_CLOSE;
         return ret;
     }
-    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
 
     int r = jmap_parse_path(txn);
 
@@ -587,6 +586,9 @@ static int jmap_post(struct transaction_t *txn,
         txn->error.desc = "This method requires a JSON request body";
         return HTTP_BAD_MEDIATYPE;
     }
+
+    /* Check the payload size. */
+    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
 
     /* Allocate map to store uids */
     construct_hash_table(&idmap.mailboxes, 64, 0);
@@ -745,6 +747,7 @@ static int jmap_post(struct transaction_t *txn,
     if (req) json_decref(req);
     if (resp) json_decref(resp);
 
+    syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
     return ret;
 }
 
