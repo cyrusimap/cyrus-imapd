@@ -1898,9 +1898,9 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
                         else if (http2_callbacks &&
-                                 !strncmp(upgrade[0],
-                                          NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-                                          strcspn(upgrade[0], " ,"))) {
+                                 !strncmpsafe(upgrade[0],
+                                              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                              strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_HTTP2;

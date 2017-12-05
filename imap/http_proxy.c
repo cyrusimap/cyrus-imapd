@@ -686,11 +686,7 @@ static void send_response(struct transaction_t *txn, long code,
         const char *conn_tokens[] =
             { "close", "Upgrade", "Keep-Alive", NULL };
         const char *upgrade_tokens[] =
-            { TLS_VERSION,
-#ifdef HAVE_NGHTTP2
-              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-#endif
-              NULL };
+            { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, NULL };
 
         comma_list_hdr(txn, "Connection", conn_tokens, txn->flags.conn);
 

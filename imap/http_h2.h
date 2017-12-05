@@ -53,7 +53,7 @@ extern nghttp2_session_callbacks *http2_callbacks;
 
 #else /* !HAVE_NGHTTP2 */
 
-#define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID ""
+#define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID NULL
 extern void *http2_callbacks;
 
 #endif /* HAVE_NGHTTP2 */
