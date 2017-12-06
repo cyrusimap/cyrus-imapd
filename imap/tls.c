@@ -533,11 +533,11 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
         session_id = SSL_SESSION_get_id(sess, &session_id_length);
         if (session_id_length) {
-	    do {
-	        ret = cyrusdb_store(sessdb, (const char *) session_id,
-			        session_id_length,
-			        (const char *) data, len + sizeof(time_t), NULL);
-	    } while (ret == CYRUSDB_AGAIN);
+            do {
+                ret = cyrusdb_store(sessdb, (const char *) session_id,
+                                session_id_length,
+                                (const char *) data, len + sizeof(time_t), NULL);
+            } while (ret == CYRUSDB_AGAIN);
         }
     }
 
