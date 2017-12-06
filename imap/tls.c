@@ -1447,18 +1447,17 @@ EXPORTED int tls_prune_sessions(void)
     }
     else if (ret == CYRUSDB_NOTFOUND) {
         syslog(LOG_NOTICE, "tls_prune: %s not found, nothing to do", fname);
-        return 0;
+        ret = 0;
     }
     else {
         syslog(LOG_ERR, "DBERROR: opening %s: %s",
                fname, cyrusdb_strerror(ret));
-        free(tofree);
-        return 1;
     }
 
-    free(tofree);
+    if (tofree)
+	free(tofree);
 
-    return 0;
+    return ret;
 }
 
 /* fill string buffer with info about tls connection */
