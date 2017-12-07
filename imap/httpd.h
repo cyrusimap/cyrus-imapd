@@ -1,6 +1,6 @@
-/* httpd.h -- Common state for HTTP/RSS/WebDAV/CalDAV/iSchedule daemon
+/* httpd.h -- Common state for HTTP/RSS/xDAV/JMAP/TZdist/iSchedule daemon
  *
- * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,16 +48,6 @@
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>
-
-#ifdef HAVE_NGHTTP2
-#include <nghttp2/nghttp2.h>
-
-#define HTTP2_MAX_HEADERS  100
-#else /* !HAVE_NGHTTP2 */
-
-#define HTTP2_MAX_HEADERS  1
-typedef struct { void *value; } nghttp2_nv;
-#endif /* HAVE_NGHTTP2 */
 
 #include "annotate.h" /* for strlist */
 #include "hash.h"
@@ -328,22 +318,14 @@ struct http_connection {
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
 
-    void *http2_session;                /* HTTP/2 session context */
-    void *http2_options;                /* Config options for HTTP/2 session */
-};
-
-/* HTTP/2 stream context */
-struct http2_stream {
-    int32_t stream_id;                  /* Stream ID */
-    size_t num_resp_hdrs;               /* Number of response headers */
-    nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+    void *http2_ctx;                    /* HTTP/2 session context */
 };
 
 
 /* Transaction context */
 struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
-    struct http2_stream http2;          /* HTTP/2 stream data */
+    void *http2_strm;                   /* HTTP/2 stream context */
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */

@@ -49,12 +49,9 @@
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
 
-extern nghttp2_session_callbacks *http2_callbacks;
-
 #else /* !HAVE_NGHTTP2 */
 
 #define NGHTTP2_CLEARTEXT_PROTO_VERSION_ID NULL
-extern void *http2_callbacks;
 
 #endif /* HAVE_NGHTTP2 */
 
@@ -71,6 +68,8 @@ extern int (*alpn_select_cb)(SSL *ssl,
 
 extern void http2_init(struct buf *serverinfo);
 
+extern int http2_enabled();
+
 extern void http2_done();
 
 extern int http2_preface(struct transaction_t *txn);
@@ -83,6 +82,8 @@ extern void http2_output(struct transaction_t *txn);
 
 extern void http2_input(struct transaction_t *txn);
 
+extern void http2_begin_headers(struct transaction_t *txn);
+
 extern void http2_add_header(struct transaction_t *txn,
                              const char *name, struct buf *value);
 
@@ -91,5 +92,7 @@ extern int http2_end_headers(struct transaction_t *txn, long code);
 extern void http2_data_chunk(struct transaction_t *txn,
                              const char *data, unsigned datalen,
                              int last_chunk, MD5_CTX *md5ctx);
+
+extern void http2_free_stream(void *http2_strm);
 
 #endif /* HTTPD_H2_H */

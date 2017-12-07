@@ -1,6 +1,6 @@
-/* httpd.c -- HTTP/WebDAV/CalDAV server protocol parsing
+/* httpd.c -- HTTP/RSS/xDAV/JMAP/TZdist/iSchedule server protocol parsing
  *
- * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -479,7 +479,7 @@ struct namespace_t *namespaces[] = {
 };
 
 
-static void httpd_reset(void)
+static void httpd_reset(struct http_connection *conn)
 {
     int i;
     int bytes_in = 0;
@@ -537,6 +537,13 @@ static void httpd_reset(void)
         tls_conn = NULL;
     }
 #endif
+
+    xmlFreeParserCtxt(conn->xml);
+
+    http2_end(conn);
+
+    zlib_done(conn->zstrm);
+    brotli_done(conn->brotli);
 
     cyrus_reset_stdio();
 
@@ -829,14 +836,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* cleanup */
     signal(SIGALRM, SIG_IGN);
-    httpd_reset();
-
-    xmlFreeParserCtxt(http_conn.xml);
-
-    http2_end(&http_conn);
-
-    zlib_done(http_conn.zstrm);
-    brotli_done(http_conn.brotli);
+    httpd_reset(&http_conn);
 
     return 0;
 }
@@ -975,7 +975,7 @@ static int starttls(struct transaction_t *txn, int *http2)
     }
 
     *http2 = 0;
-    if (http2_callbacks) {
+    if (http2_enabled()) {
 #ifdef HAVE_TLS_ALPN
         /* enable TLS ALPN extension */
         SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, http2);
@@ -1619,7 +1619,7 @@ static void transaction_reset(struct transaction_t *txn)
     txn->meth = METH_UNKNOWN;
 
     memset(&txn->flags, 0, sizeof(struct txn_flags_t));
-    txn->flags.ver = txn->conn->http2_session ? VER_2 : VER_1_1;
+    txn->flags.ver = txn->conn->http2_ctx ? VER_2 : VER_1_1;
     txn->flags.vary = VARY_AE;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
@@ -1658,11 +1658,7 @@ static void transaction_reset(struct transaction_t *txn)
 
 EXPORTED void transaction_free(struct transaction_t *txn)
 {
-    size_t i;
-
-    for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
-        free(txn->http2.resp_hdrs[i].value);
-    }
+    http2_free_stream(txn->http2_strm);
 
     transaction_reset(txn);
 
@@ -1897,7 +1893,7 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
-                        else if (http2_callbacks &&
+                        else if (http2_enabled() &&
                                  !strncmpsafe(upgrade[0],
                                               NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
                                               strcspn(upgrade[0], " ,"))) {
@@ -2195,7 +2191,7 @@ EXPORTED void content_md5_hdr(struct transaction_t *txn,
 EXPORTED void begin_resp_headers(struct transaction_t *txn, long code)
 {
     if (txn->flags.ver == VER_2) {
-        txn->http2.num_resp_hdrs = 0;
+        http2_begin_headers(txn);
         if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
     }
     else if (code) prot_printf(txn->conn->pout, "%s\r\n", http_statusline(code));

@@ -65,7 +65,22 @@ int (*alpn_select_cb)(SSL *ssl,
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-nghttp2_session_callbacks *http2_callbacks = NULL;
+#define HTTP2_MAX_HEADERS  100
+
+/* HTTP/2 session context */
+struct http2_context {
+    nghttp2_session *session;           /* HTTP/2 session */
+    nghttp2_option *options;            /* Config options for HTTP/2 session */
+};
+
+/* HTTP/2 stream context */
+struct http2_stream {
+    int32_t id;                         /* Stream ID */
+    size_t num_resp_hdrs;               /* Number of response headers */
+    nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+};
+
+static nghttp2_session_callbacks *http2_callbacks = NULL;
 
 static int _alpn_select_cb(SSL *ssl __attribute__((unused)),
                            const unsigned char **out, unsigned char *outlen,
@@ -170,11 +185,15 @@ static int begin_headers_cb(nghttp2_session *session,
     struct transaction_t *txn = xzmalloc(sizeof(struct transaction_t));
 
     txn->conn = (struct http_connection *) user_data;
-    txn->http2.stream_id = frame->hd.stream_id;
     txn->meth = METH_UNKNOWN;
     txn->flags.ver = VER_2;
     txn->flags.vary = VARY_AE;
     txn->req_line.ver = HTTP2_VERSION;
+
+    struct http2_stream *strm = xzmalloc(sizeof(struct http2_stream));
+
+    strm->id = frame->hd.stream_id;
+    txn->http2_strm = strm;
 
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
@@ -265,8 +284,11 @@ static int frame_recv_cb(nghttp2_session *session,
     int ret = 0;
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    struct http2_context *ctx;
 
     if (!txn) return 0;
+
+    ctx = (struct http2_context *) txn->conn->http2_ctx;
 
     syslog(LOG_DEBUG, "http2_frame_recv_cb(id=%d, type=%d, flags=%#x",
            frame->hd.stream_id, frame->hd.type, frame->hd.flags);
@@ -319,11 +341,11 @@ static int frame_recv_cb(nghttp2_session *session,
         if (ret) error_response(ret, txn);
 
         if (txn->flags.conn & CONN_CLOSE) {
-            syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
+            int32_t stream_id =
+                nghttp2_session_get_last_proc_stream_id(ctx->session);
 
-            nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE,
-                                  nghttp2_session_get_last_proc_stream_id(
-                                      txn->conn->http2_session),
+            syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
+            nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, stream_id,
                                   NGHTTP2_NO_ERROR, NULL, 0);
         }
 
@@ -347,7 +369,7 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
         transaction_free(txn);
         free(txn);
     }
-            
+
     return 0;
 }
 
@@ -401,6 +423,11 @@ HIDDEN void http2_init(struct buf *serverinfo)
 }
 
 
+HIDDEN int http2_enabled()
+{
+    return (http2_callbacks != NULL);
+}
+
 HIDDEN void http2_done()
 {
     nghttp2_session_callbacks_del(http2_callbacks);
@@ -409,7 +436,7 @@ HIDDEN void http2_done()
 
 HIDDEN int http2_preface(struct transaction_t *txn)
 {
-    if (http2_callbacks) {
+    if (http2_enabled()) {
         struct protstream *pin = txn->conn->pin;
 
         /* Force read of initial client input and check for HTTP/2 preface */
@@ -428,17 +455,31 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
 {
     nghttp2_settings_entry iv = { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
+    struct http2_context *ctx = xzmalloc(sizeof(struct http2_context));
     int r;
 
-    r = nghttp2_session_server_new2((nghttp2_session **) &conn->http2_session,
-                                    http2_callbacks, conn, conn->http2_options);
+    r = nghttp2_option_new(&ctx->options);
     if (r) {
         syslog(LOG_WARNING,
-               "nghttp2_session_server_new: %s", nghttp2_strerror(r));
+               "nghttp2_option_new: %s", nghttp2_strerror(r));
+        free(ctx);
         return HTTP_SERVER_ERROR;
     }
 
+    r = nghttp2_session_server_new2(&ctx->session,
+                                    http2_callbacks, conn, ctx->options);
+    if (r) {
+        syslog(LOG_WARNING,
+               "nghttp2_session_server_new2: %s", nghttp2_strerror(r));
+        free(ctx);
+        return HTTP_SERVER_ERROR;
+    }
+
+    conn->http2_ctx = ctx;
+
     if (txn && (txn->flags.conn & CONN_UPGRADE)) {
+        struct http2_stream *strm;
+
         const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
         if (!hdr || hdr[1]) return 0;
 
@@ -459,7 +500,7 @@ HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
             buf_free(&buf);
             return HTTP_BAD_REQUEST;
         }
-        r = nghttp2_session_upgrade2(conn->http2_session,
+        r = nghttp2_session_upgrade2(ctx->session,
                                      (const uint8_t *) buf_base(&buf),
                                      outlen, txn->meth == METH_HEAD, NULL);
         buf_free(&buf);
@@ -473,11 +514,13 @@ HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
         response_header(HTTP_SWITCH_PROT, txn);
 
         txn->flags.ver = VER_2;
-        txn->http2.stream_id =
-            nghttp2_session_get_last_proc_stream_id(conn->http2_session);
+
+        strm = xzmalloc(sizeof(struct http2_stream));
+        strm->id = nghttp2_session_get_last_proc_stream_id(ctx->session);
+        txn->http2_strm = strm;
     }
 
-    r = nghttp2_submit_settings(conn->http2_session, NGHTTP2_FLAG_NONE, &iv, 1);
+    r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, &iv, 1);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_settings: %s", nghttp2_strerror(r));
         return HTTP_SERVER_ERROR;
@@ -489,16 +532,23 @@ HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
 
 HIDDEN void http2_end(struct http_connection *conn)
 {
-    nghttp2_option_del(conn->http2_options);
-    nghttp2_session_del(conn->http2_session);
+    struct http2_context *ctx = (struct http2_context *) conn->http2_ctx;
+
+    if (!ctx) return;
+
+    nghttp2_option_del(ctx->options);
+    nghttp2_session_del(ctx->session);
+    free(ctx);
 }
 
 
 HIDDEN void http2_output(struct transaction_t *txn)
 {
-    if (nghttp2_session_want_write(txn->conn->http2_session)) {
+    struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
+
+    if (nghttp2_session_want_write(ctx->session)) {
         /* Send queued frame(s) */
-        int r = nghttp2_session_send(txn->conn->http2_session);
+        int r = nghttp2_session_send(ctx->session);
         if (r) {
             syslog(LOG_ERR, "nghttp2_session_send: %s", nghttp2_strerror(r));
             txn->flags.conn = CONN_CLOSE;
@@ -509,7 +559,8 @@ HIDDEN void http2_output(struct transaction_t *txn)
 
 HIDDEN void http2_input(struct transaction_t *txn)
 {
-    int want_read = nghttp2_session_want_read(txn->conn->http2_session);
+    struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
+    int want_read = nghttp2_session_want_read(ctx->session);
     int goaway = txn->flags.conn & CONN_CLOSE;
     nghttp2_error_code err = goaway ? NGHTTP2_REFUSED_STREAM : NGHTTP2_NO_ERROR;
 
@@ -518,7 +569,7 @@ HIDDEN void http2_input(struct transaction_t *txn)
 
     if (want_read && !goaway) {
         /* Read frame(s) */
-        int r = nghttp2_session_recv(txn->conn->http2_session);
+        int r = nghttp2_session_recv(ctx->session);
 
         if (!r) {
             /* Successfully received frames */
@@ -556,12 +607,12 @@ HIDDEN void http2_input(struct transaction_t *txn)
     if (goaway) {
         /* Tell client we are closing session */
         int32_t stream_id =
-            nghttp2_session_get_last_proc_stream_id(txn->conn->http2_session);
+            nghttp2_session_get_last_proc_stream_id(ctx->session);
 
         syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
 
         syslog(LOG_DEBUG, "nghttp2_submit_goaway()");
-        int r = nghttp2_submit_goaway(txn->conn->http2_session,
+        int r = nghttp2_submit_goaway(ctx->session,
                                       NGHTTP2_FLAG_NONE, stream_id, err,
                                       (const uint8_t *) txn->error.desc,
                                       strlen(txn->error.desc));
@@ -577,15 +628,25 @@ HIDDEN void http2_input(struct transaction_t *txn)
 }
 
 
+HIDDEN void http2_begin_headers(struct transaction_t *txn)
+{
+    struct http2_stream *strm = (struct http2_stream *) txn->http2_strm;
+
+    strm->num_resp_hdrs = 0;
+}
+
+
 HIDDEN void http2_add_header(struct transaction_t *txn,
                              const char  *name, struct buf *value)
 {
-    if (txn->http2.num_resp_hdrs >= HTTP2_MAX_HEADERS) {
+    struct http2_stream *strm = (struct http2_stream *) txn->http2_strm;
+
+    if (strm->num_resp_hdrs >= HTTP2_MAX_HEADERS) {
         buf_free(value);
         return;
     }
     else {
-        nghttp2_nv *nv = &txn->http2.resp_hdrs[txn->http2.num_resp_hdrs];
+        nghttp2_nv *nv = &strm->resp_hdrs[strm->num_resp_hdrs];
 
         free(nv->value);
 
@@ -595,13 +656,16 @@ HIDDEN void http2_add_header(struct transaction_t *txn,
         nv->value = (uint8_t *) buf_release(value);
         nv->flags = NGHTTP2_NV_FLAG_NO_COPY_VALUE;
 
-        txn->http2.num_resp_hdrs++;
+        strm->num_resp_hdrs++;
     }
 }
 
 
 HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
 {
+    struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
+    struct http2_stream *strm = (struct http2_stream *) txn->http2_strm;
+
     uint8_t flags = NGHTTP2_FLAG_NONE;
     int r;
 
@@ -640,19 +704,15 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
 
     syslog(LOG_DEBUG, "%s(id=%d, flags=%#x)",
            code ? "nghttp2_submit headers" : "nghttp2_submit_trailers",
-           txn->http2.stream_id, flags);
+           strm->id, flags);
 
     if (code) {
-        r = nghttp2_submit_headers(txn->conn->http2_session,
-                                   flags, txn->http2.stream_id, NULL,
-                                   txn->http2.resp_hdrs,
-                                   txn->http2.num_resp_hdrs, NULL);
+        r = nghttp2_submit_headers(ctx->session, flags, strm->id, NULL,
+                                   strm->resp_hdrs, strm->num_resp_hdrs, NULL);
     }
     else {
-        r = nghttp2_submit_trailer(txn->conn->http2_session,
-                                   txn->http2.stream_id,
-                                   txn->http2.resp_hdrs,
-                                   txn->http2.num_resp_hdrs);
+        r = nghttp2_submit_trailer(ctx->session, strm->id,
+                                   strm->resp_hdrs, strm->num_resp_hdrs);
     }
     if (r) {
         syslog(LOG_ERR, "%s: %s",
@@ -669,6 +729,8 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
                              int last_chunk, MD5_CTX *md5ctx)
 {
     static unsigned char md5[MD5_DIGEST_LENGTH];
+    struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
+    struct http2_stream *strm = (struct http2_stream *) txn->http2_strm;
     uint8_t flags = NGHTTP2_FLAG_END_STREAM;
     nghttp2_data_provider prd;
     int r;
@@ -692,10 +754,9 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
     }
 
     syslog(LOG_DEBUG, "nghttp2_submit_data(id=%d, datalen=%d, flags=%#x)",
-           txn->http2.stream_id, datalen, flags);
+           strm->id, datalen, flags);
 
-    r = nghttp2_submit_data(txn->conn->http2_session,
-                            flags, txn->http2.stream_id, &prd);
+    r = nghttp2_submit_data(ctx->session, flags, strm->id, &prd);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_data: %s", nghttp2_strerror(r));
     }
@@ -713,11 +774,29 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
     }
 }
 
+HIDDEN void http2_free_stream(void *http2_strm)
+{
+    struct http2_stream *strm = (struct http2_stream *) http2_strm;
+    int i;
+
+    if (!strm) return;
+
+    for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
+        free(strm->resp_hdrs[i].value);
+    }
+    free(strm);
+}
+
 #else /* !HAVE_NGHTTP2 */
 
 void *http2_callbacks = NULL;
 
 HIDDEN void http2_init(struct buf *serverinfo __attribute__((unused))) {}
+
+HIDDEN int http2_enabled()
+{
+    return 0;
+}
 
 HIDDEN void http2_done() {}
 
@@ -744,6 +823,11 @@ HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))
     fatal("http2_input() called, but no Nghttp2", EC_SOFTWARE);
 }
 
+HIDDEN int http2_begin_headers(struct transaction_t *txn __attribute__((unused)))
+{
+    fatal("http2_begin_headers() called, but no Nghttp2", EC_SOFTWARE);
+}
+
 HIDDEN void http2_add_header(struct transaction_t *txn __attribute__((unused)),
                              const char *name __attribute__((unused)),
                              struct buf *value __attribute__((unused)))
@@ -765,6 +849,8 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
 {
     fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
 }
+
+HIDDEN void http2_free_stream(void *http2_strm __attribute__((unused))) {}
 
 #endif /* HAVE_NGHTTP2 */
 
