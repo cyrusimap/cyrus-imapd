@@ -139,6 +139,13 @@ struct namespace_t namespace_jmap = {
     }
 };
 
+enum {
+    JMAP_ENDPOINT_API,
+    JMAP_ENDPOINT_AUTH,
+    JMAP_ENDPOINT_UPLOAD,
+    JMAP_ENDPOINT_DOWNLOAD
+};
+
 static int jmap_parse_path(struct transaction_t *txn)
 {
     struct request_target_t *tgt = &txn->req_tgt;
@@ -173,9 +180,29 @@ static int jmap_parse_path(struct transaction_t *txn)
         /* Get "collection" */
         tgt->collection = p;
 
-        /* Get "resource" */
-        p = strchr(tgt->collection, '/');
-        if (p) tgt->resource = ++p;
+        if (!strcmp(tgt->collection, JMAP_AUTH_COL)) {
+            tgt->flags = JMAP_ENDPOINT_AUTH;
+            tgt->allow = ALLOW_READ | ALLOW_POST | ALLOW_DELETE;
+        }
+        else if (!strcmp(tgt->collection, JMAP_UPLOAD_COL)) {
+            tgt->flags = JMAP_ENDPOINT_UPLOAD;
+            tgt->allow = ALLOW_POST;
+        }
+        else if (!strncmp(tgt->collection,
+                          JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
+            tgt->flags = JMAP_ENDPOINT_DOWNLOAD;
+            tgt->allow = ALLOW_READ;
+
+            /* Get "resource" */
+            tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
+        }
+        else {
+            return HTTP_NOT_ALLOWED;
+        }
+    }
+    else {
+        tgt->flags = JMAP_ENDPOINT_API;
+        tgt->allow = ALLOW_POST;
     }
 
     return 0;
@@ -311,11 +338,11 @@ static int jmap_delete(struct transaction_t *txn,
 {
     int r = jmap_parse_path(txn);
 
-    if (!r && !strcmpnull(txn->req_tgt.collection, JMAP_AUTH_COL)) {
-        return jmap_authdel(txn);
+    if (r || !(txn->req_tgt.allow & ALLOW_DELETE)) {
+        return HTTP_NOT_ALLOWED;
     }
 
-    return HTTP_NOT_ALLOWED;
+    return jmap_authdel(txn);
 }
 
 /* Perform a GET/HEAD request */
@@ -324,17 +351,15 @@ static int jmap_get(struct transaction_t *txn,
 {
     int r = jmap_parse_path(txn);
 
-    if (!r && txn->req_tgt.collection) {
-        if (!strncmp(txn->req_tgt.collection,
-                     JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
-            return jmap_download(txn);
-        }
-        else if (!strcmp(txn->req_tgt.collection, JMAP_AUTH_COL)) {
-            return jmap_settings(txn);
-        }
+    if (r || !(txn->req_tgt.allow & ALLOW_READ)) {
+        return HTTP_NOT_FOUND;
     }
 
-    return HTTP_NOT_FOUND;
+    if (txn->req_tgt.flags == JMAP_ENDPOINT_AUTH) {
+        return jmap_settings(txn);
+    }
+
+    return jmap_download(txn);
 }
 
 static int is_accessible(const mbentry_t *mbentry,
@@ -533,13 +558,45 @@ fail:
     return ret;
 }
 
+static int parse_json_body(struct transaction_t *txn, json_t **req)
+{
+    const char **hdr;
+    json_error_t jerr;
+    int ret;
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+        !is_mediatype("application/json", hdr[0])) {
+        txn->error.desc = "This method requires a JSON request body";
+        return HTTP_BAD_MEDIATYPE;
+    }
+
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    ret = http_read_req_body(txn);
+    if (ret) {
+        txn->flags.conn = CONN_CLOSE;
+        return ret;
+    }
+
+    /* Parse the JSON request */
+    *req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
+    if (!*req) {
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf,
+                   "Unable to parse JSON request body: %s", jerr.text);
+        txn->error.desc = buf_cstring(&txn->buf);
+        return HTTP_BAD_REQUEST;
+    }
+
+    return 0;
+}
+
 /* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
-    const char **hdr;
     json_t *req, *resp = NULL;
-    json_error_t jerr;
     struct jmap_idmap idmap = {
         HASH_TABLE_INITIALIZER,
         HASH_TABLE_INITIALIZER,
@@ -554,57 +611,29 @@ static int jmap_post(struct transaction_t *txn,
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_req_body(txn);
-    if (ret) {
-        txn->flags.conn = CONN_CLOSE;
-        return ret;
+    ret = jmap_parse_path(txn);
+
+    if (ret) return ret;
+    if (!(txn->req_tgt.allow & ALLOW_POST)) {
+        return HTTP_NOT_ALLOWED;
     }
 
-    int r = jmap_parse_path(txn);
-
-    if (r) return r;
-    else if (txn->req_tgt.collection) {
-        /* Handle uploads */
-        if (!strcmp(txn->req_tgt.collection, JMAP_UPLOAD_COL)) {
-            return jmap_upload(txn);
-        }
-        /* Handle POST to the authentication endpoint */
-        else if (!strcmp(txn->req_tgt.collection, JMAP_AUTH_COL)) {
-            return jmap_authreq(txn);
-        }
-        /* Must be a regular JMAP POST request */
-        else {
-            return HTTP_NOT_FOUND;
-        }
+    /* Handle uploads */
+    if (txn->req_tgt.flags == JMAP_ENDPOINT_UPLOAD) {
+        return jmap_upload(txn);
+    }
+    /* Handle POST to the authentication endpoint */
+    else if (txn->req_tgt.flags == JMAP_ENDPOINT_AUTH) {
+        return jmap_authreq(txn);
     }
 
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-        !is_mediatype("application/json", hdr[0])) {
-        txn->error.desc = "This method requires a JSON request body";
-        return HTTP_BAD_MEDIATYPE;
-    }
-
-    /* Check the payload size. */
-    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
-
-    /* Allocate map to store uids */
-    construct_hash_table(&idmap.mailboxes, 64, 0);
-    construct_hash_table(&idmap.messages, 64, 0);
-    construct_hash_table(&idmap.calendars, 64, 0);
-    construct_hash_table(&idmap.calendarevents, 64, 0);
-    construct_hash_table(&idmap.contactgroups, 64, 0);
-    construct_hash_table(&idmap.contacts, 64, 0);
-
-
-    /* Parse the JSON request */
-    req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
-    if (!req || !json_is_array(req)) {
-        txn->error.desc = "Unable to parse JSON request body";
+    /* Regular JMAP POST request */
+    ret = parse_json_body(txn, &req);
+    if (ret) goto done;
+    else if (!json_is_array(req)) {
+        txn->error.desc = "JSON request body is not an array";
         ret = HTTP_BAD_REQUEST;
-        goto done;
+	goto done;
     }
 
     /* Start JSON response */
@@ -614,6 +643,14 @@ static int jmap_post(struct transaction_t *txn,
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
+    
+    /* Allocate map to store uids */
+    construct_hash_table(&idmap.mailboxes, 64, 0);
+    construct_hash_table(&idmap.messages, 64, 0);
+    construct_hash_table(&idmap.calendars, 64, 0);
+    construct_hash_table(&idmap.calendarevents, 64, 0);
+    construct_hash_table(&idmap.contactgroups, 64, 0);
+    construct_hash_table(&idmap.contacts, 64, 0);
 
     construct_hash_table(&accounts, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
@@ -1227,12 +1264,8 @@ static int data_domain(const char *p, size_t n)
 EXPORTED int jmap_upload(struct transaction_t *txn)
 {
     strarray_t flags = STRARRAY_INITIALIZER;
-    strarray_append(&flags, "\\Deleted");
-    strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
 
     struct body *body = NULL;
-    const char *data = buf_base(&txn->req_body.payload);
-    size_t datalen = buf_len(&txn->req_body.payload);
 
     int ret = HTTP_CREATED;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -1244,6 +1277,18 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
 
     struct mailbox *mailbox = NULL;
     int r = 0;
+
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    r = http_read_req_body(txn);
+    if (r) {
+        txn->flags.conn = CONN_CLOSE;
+        return r;
+    }
+
+    const char *data = buf_base(&txn->req_body.payload);
+    size_t datalen = buf_len(&txn->req_body.payload);
+
     const char *accountid = httpd_userid;
     if ((hdr = spool_getheader(hdrcache, "X-JMAP-AccountId"))) {
         accountid = hdr[0];
@@ -1355,6 +1400,8 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     }
 
     /* Append the message to the mailbox */
+    strarray_append(&flags, "\\Deleted");
+    strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
     r = append_fromstage(&as, &body, stage, now, &flags, 0, /*annots*/NULL);
 
     if (r) {
@@ -1774,24 +1821,10 @@ static int jmap_authreq(struct transaction_t *txn)
 {
     int ret = 0, r = 0;
     json_t *req = NULL;
-    json_error_t jerr;
-    const char **hdr;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-            !is_mediatype("application/json", hdr[0])) {
-        txn->error.desc = "This method requires a JSON request body";
-        return HTTP_BAD_MEDIATYPE;
-    }
 
     /* Parse the JSON request */
-    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
-    req = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
-    if (!req || !json_is_object(req)) {
-        txn->error.desc = "Unable to parse JSON request body";
-        ret = HTTP_BAD_REQUEST;
-        goto done;
-    }
+    ret = parse_json_body(txn, &req);
+    if (ret) goto done;
 
     if (json_object_get(req, "username")) {
         const char *userid = json_string_value(json_object_get(req, "username"));
