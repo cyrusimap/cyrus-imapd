@@ -313,12 +313,13 @@ struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
 
+    void *tls_ctx;                      /* TLS context */
+    void *http2_ctx;                    /* HTTP/2 session context */
+
     xmlParserCtxtPtr xml;               /* XML parser content */
 
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
-
-    void *http2_ctx;                    /* HTTP/2 session context */
 };
 
 
@@ -484,7 +485,6 @@ extern struct protstream *httpd_in;
 extern struct protstream *httpd_out;
 extern int https;
 extern sasl_conn_t *httpd_saslconn;
-extern int httpd_tls_done;
 extern int httpd_timeout;
 extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;

@@ -699,7 +699,7 @@ static void send_response(struct transaction_t *txn, long code,
         }
     }
 
-    if (httpd_tls_done) {
+    if (txn->conn->tls_ctx) {
         simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
     }
 

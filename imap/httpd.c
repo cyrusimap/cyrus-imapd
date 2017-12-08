@@ -285,10 +285,6 @@ extern int optind;
 extern char *optarg;
 extern int opterr;
 
-#ifdef HAVE_SSL
-static SSL *tls_conn;
-#endif /* HAVE_SSL */
-
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct wildmat *allow_cors = NULL;
@@ -310,7 +306,6 @@ static int httpd_logfd = -1;
 
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
-int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
@@ -366,7 +361,7 @@ struct backend **backend_cached = NULL;
 
 /* end PROXY stuff */
 
-static int starttls(struct transaction_t *txn, int *http2);
+static int starttls(struct transaction_t *txn, void **tls , int *http2);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -532,9 +527,9 @@ static void httpd_reset(struct http_connection *conn)
     if (protin) protgroup_reset(protin);
 
 #ifdef HAVE_SSL
-    if (tls_conn) {
-        tls_reset_servertls(&tls_conn);
-        tls_conn = NULL;
+    if (conn->tls_ctx) {
+        tls_reset_servertls((SSL **) &conn->tls_ctx);
+        conn->tls_ctx = NULL;
     }
 #endif
 
@@ -577,7 +572,6 @@ static void httpd_reset(struct http_connection *conn)
         sasl_dispose(&httpd_saslconn);
         httpd_saslconn = NULL;
     }
-    httpd_tls_done = 0;
 
     saslprops_reset(&saslprops);
 
@@ -802,7 +796,7 @@ int service_main(int argc __attribute__((unused)),
     if (https == 1) {
         int r, http2 = 0;
 
-        r = starttls(NULL, &http2);
+        r = starttls(NULL, &http_conn.tls_ctx, &http2);
         if (!r && http2) r = http2_start_session(&http_conn, NULL);
         if (r) shut_down(0);
     }
@@ -956,7 +950,7 @@ void fatal(const char* s, int code)
 
 
 #ifdef HAVE_SSL
-static int starttls(struct transaction_t *txn, int *http2)
+static int starttls(struct transaction_t *txn, void **tls, int *http2)
 {
     int https = (txn == NULL);
     int result;
@@ -991,7 +985,7 @@ static int starttls(struct transaction_t *txn, int *http2)
                                1, /* write */
                                https ? 180 : httpd_timeout,
                                &saslprops,
-                               &tls_conn);
+                               (SSL **) tls);
 
     /* if error */
     if (result == -1) {
@@ -1013,10 +1007,9 @@ static int starttls(struct transaction_t *txn, int *http2)
     }
 
     /* tell the prot layer about our new layers */
-    prot_settls(httpd_in, tls_conn);
-    prot_settls(httpd_out, tls_conn);
+    prot_settls(httpd_in, *tls);
+    prot_settls(httpd_out, *tls);
 
-    httpd_tls_done = 1;
     httpd_tls_required = 0;
 
     avail_auth_schemes |= AUTH_BASIC;
@@ -1025,6 +1018,7 @@ static int starttls(struct transaction_t *txn, int *http2)
 }
 #else
 static int starttls(struct transaction_t *txn __attribute__((unused)),
+                    void **tls __attribute__((unused)),
                     int *http2 __attribute__((unused)))
 {
     fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
@@ -1267,7 +1261,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
 
         if (txn->flags.upgrade & UPGRADE_TLS) {
             int http2 = 0;
-            if ((ret = starttls(txn, &http2))) {
+            if ((ret = starttls(txn, &txn->conn->tls_ctx, &http2))) {
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
@@ -1278,7 +1272,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
                txn->flags.upgrade, httpd_tls_required);
         if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
             if ((ret = http2_start_session(txn->conn,
-                                           httpd_tls_done ? NULL : txn))) {
+                                           txn->conn->tls_ctx ? NULL : txn))) {
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
@@ -1287,7 +1281,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
         txn->flags.conn &= ~CONN_UPGRADE;
         txn->flags.upgrade = 0;
     }
-    else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
+    else if (!txn->conn->tls_ctx && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
         if (tls_enabled() &&
             config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -1317,7 +1311,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 hdr = spool_getheader(txn->req_hdrs, "Host");
                 buf_reset(&txn->buf);
                 buf_printf(&txn->buf, "%s://%s",
-                           https? "https" : "http", hdr[0]);
+                           https ? "https" : "http", hdr[0]);
                 buf_appendcstr(&txn->buf, namespaces[i]->prefix);
                 buf_appendcstr(&txn->buf, path + len);
                 if (query) buf_printf(&txn->buf, "?%s", query);
@@ -1890,7 +1884,7 @@ static int parse_connection(struct transaction_t *txn)
                         spool_getheader(txn->req_hdrs, "Upgrade");
 
                     if (upgrade && upgrade[0]) {
-                        if (!httpd_tls_done && tls_enabled() &&
+                        if (!txn->conn->tls_ctx && tls_enabled() &&
                             !strncmp(upgrade[0], TLS_VERSION,
                                      strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to TLS */
@@ -2295,7 +2289,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Control Data */
-    if (httpd_tls_done) {
+    if (txn->conn->tls_ctx) {
         simple_hdr(txn, "Strict-Transport-Security", "max-age=600");
     }
     if (txn->location) {
@@ -3353,7 +3347,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
            httpd_clienthost, httpd_userid, scheme->name,
-           httpd_tls_done ? "+TLS" : "", "User logged in",
+           txn->conn->tls_ctx ? "+TLS" : "", "User logged in",
            session_id());
 
 
