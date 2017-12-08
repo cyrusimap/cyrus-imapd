@@ -441,8 +441,8 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 
         /* Force read of initial client input and check for HTTP/2 preface */
         prot_ungetc(prot_getc(pin), pin);
-        if (!strncmp(NGHTTP2_CLIENT_MAGIC,
-                     (const char *) pin->ptr, NGHTTP2_CLIENT_MAGIC_LEN)) {
+        if (pin->cnt >= NGHTTP2_CLIENT_MAGIC_LEN &&
+            !memcmp(pin->ptr, NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN)) {
             syslog(LOG_DEBUG, "HTTP/2 client connection preface");
             return 1;
         }
