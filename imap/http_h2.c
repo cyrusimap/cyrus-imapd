@@ -143,8 +143,8 @@ static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
     }
 
     syslog(LOG_DEBUG,
-           "http2_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %d",
-           length, n, pin->eof, pin->error ? pin->error : "", errno);
+           "http2_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
+           length, n, pin->eof, pin->error ? pin->error : "");
 
     return n;
 }
