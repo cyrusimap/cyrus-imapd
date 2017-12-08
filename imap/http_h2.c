@@ -452,7 +452,8 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 }
 
 
-HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
+HIDDEN int http2_start_session(struct http_connection *conn,
+                               struct transaction_t *txn)
 {
     nghttp2_settings_entry iv = { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
     struct http2_context *ctx = xzmalloc(sizeof(struct http2_context));
@@ -529,7 +530,7 @@ HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
 }
 
 
-HIDDEN void http2_end(struct http_connection *conn)
+HIDDEN void http2_end_session(struct http_connection *conn)
 {
     struct http2_context *ctx = (struct http2_context *) conn->http2_ctx;
 
@@ -773,7 +774,7 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
     }
 }
 
-HIDDEN void http2_free_stream(void *http2_strm)
+HIDDEN void http2_end_stream(void *http2_strm)
 {
     struct http2_stream *strm = (struct http2_stream *) http2_strm;
     int i;
@@ -802,13 +803,15 @@ HIDDEN int http2_preface(struct transaction_t *txn __attribute__((unused)))
     return 0;
 }
 
-HIDDEN int http2_start(struct http_connection *conn __attribute__((unused)),
-                       struct transaction_t *txn __attribute__((unused)))
+HIDDEN int http2_start_session(struct http_connection *c __attribute__((unused)),
+                               struct transaction_t *txn __attribute__((unused)))
 {
     fatal("http2_start() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-HIDDEN void http2_end(struct http_connection *conn __attribute__((unused))) {}
+HIDDEN void http2_end_session(struct http_connection *c __attribute__((unused)))
+{
+}
 
 HIDDEN void http2_output(struct transaction_t *txn __attribute__((unused)))
 {
@@ -847,7 +850,7 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
     fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-HIDDEN void http2_free_stream(void *http2_strm __attribute__((unused))) {}
+HIDDEN void http2_end_stream(void *http2_strm __attribute__((unused))) {}
 
 #endif /* HAVE_NGHTTP2 */
 

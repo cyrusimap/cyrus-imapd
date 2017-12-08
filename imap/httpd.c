@@ -540,7 +540,7 @@ static void httpd_reset(struct http_connection *conn)
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end(conn);
+    http2_end_session(conn);
 
     zlib_done(conn->zstrm);
     brotli_done(conn->brotli);
@@ -803,7 +803,7 @@ int service_main(int argc __attribute__((unused)),
         int r, http2 = 0;
 
         r = starttls(NULL, &http2);
-        if (!r && http2) r = http2_start(&http_conn, NULL);
+        if (!r && http2) r = http2_start_session(&http_conn, NULL);
         if (r) shut_down(0);
     }
 
@@ -1277,7 +1277,8 @@ EXPORTED int examine_request(struct transaction_t *txn)
         syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
                txn->flags.upgrade, httpd_tls_required);
         if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
-            if ((ret = http2_start(txn->conn, httpd_tls_done ? NULL : txn))) {
+            if ((ret = http2_start_session(txn->conn,
+                                           httpd_tls_done ? NULL : txn))) {
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
@@ -1661,9 +1662,9 @@ static void transaction_reset(struct transaction_t *txn)
 
 EXPORTED void transaction_free(struct transaction_t *txn)
 {
-    http2_free_stream(txn->http2_strm);
-
     transaction_reset(txn);
+
+    http2_end_stream(txn->http2_strm);
 
     buf_free(&txn->req_body.payload);
     buf_free(&txn->resp_body.payload);
@@ -1725,7 +1726,7 @@ static void cmdloop(struct http_connection *conn)
         }
         else if (http2_preface(&txn)) {
             /* HTTP/2 client connection preface */
-            ret = http2_start(txn.conn, &txn);
+            ret = http2_start_session(txn.conn, &txn);
         }
         else {
             /* HTTP/1.x request */
