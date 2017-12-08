@@ -513,11 +513,10 @@ HIDDEN int http2_start(struct http_connection *conn, struct transaction_t *txn)
         /* tell client to start h2c upgrade (RFC 7540) */
         response_header(HTTP_SWITCH_PROT, txn);
 
-        txn->flags.ver = VER_2;
-
         strm = xzmalloc(sizeof(struct http2_stream));
         strm->id = nghttp2_session_get_last_proc_stream_id(ctx->session);
         txn->http2_strm = strm;
+        txn->flags.ver = VER_2;
     }
 
     r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, &iv, 1);
@@ -788,8 +787,6 @@ HIDDEN void http2_free_stream(void *http2_strm)
 }
 
 #else /* !HAVE_NGHTTP2 */
-
-void *http2_callbacks = NULL;
 
 HIDDEN void http2_init(struct buf *serverinfo __attribute__((unused))) {}
 

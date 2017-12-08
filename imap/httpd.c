@@ -1288,10 +1288,13 @@ EXPORTED int examine_request(struct transaction_t *txn)
     }
     else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
-        txn->flags.conn |= CONN_UPGRADE;
-        txn->flags.upgrade = UPGRADE_HTTP2;
-        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))
+        if (tls_enabled() &&
+            config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
             txn->flags.upgrade |= UPGRADE_TLS;
+        }
+        if (http2_enabled()) txn->flags.upgrade |= UPGRADE_HTTP2;
+
+        if (txn->flags.upgrade) txn->flags.conn |= CONN_UPGRADE;
     }
 
     query = URI_QUERY(txn->req_uri);
@@ -1619,7 +1622,7 @@ static void transaction_reset(struct transaction_t *txn)
     txn->meth = METH_UNKNOWN;
 
     memset(&txn->flags, 0, sizeof(struct txn_flags_t));
-    txn->flags.ver = txn->conn->http2_ctx ? VER_2 : VER_1_1;
+    txn->flags.ver = VER_1_1;
     txn->flags.vary = VARY_AE;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
@@ -1692,7 +1695,7 @@ static void cmdloop(struct http_connection *conn)
         /* Check for input from client */
         do {
             /* Flush any buffered output */
-            if (txn.flags.ver == VER_2) {
+            if (txn.conn->http2_ctx) {
                 /* HTTP/2 output */
                 http2_output(&txn);
             }
@@ -1716,7 +1719,7 @@ static void cmdloop(struct http_connection *conn)
                                     NULL, 0));
 
         
-        if (txn.flags.ver == VER_2) {
+        if (txn.conn->http2_ctx) {
             /* HTTP/2 input */
             http2_input(&txn);
         }
@@ -1894,9 +1897,9 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
                         else if (http2_enabled() &&
-                                 !strncmpsafe(upgrade[0],
-                                              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-                                              strcspn(upgrade[0], " ,"))) {
+                                 !strncmp(upgrade[0],
+                                          NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                          strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_HTTP2;
