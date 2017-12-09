@@ -724,9 +724,9 @@ HIDDEN int http2_end_headers(struct transaction_t *txn, long code)
 }
 
 
-HIDDEN void http2_data_chunk(struct transaction_t *txn,
-                             const char *data, unsigned datalen,
-                             int last_chunk, MD5_CTX *md5ctx)
+HIDDEN int http2_data_chunk(struct transaction_t *txn,
+                            const char *data, unsigned datalen,
+                            int last_chunk, MD5_CTX *md5ctx)
 {
     static unsigned char md5[MD5_DIGEST_LENGTH];
     struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
@@ -759,6 +759,7 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
     r = nghttp2_submit_data(ctx->session, flags, strm->id, &prd);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_data: %s", nghttp2_strerror(r));
+        return HTTP_SERVER_ERROR;
     }
     else {
         http2_output(txn);
@@ -772,6 +773,8 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
             end_resp_headers(txn, 0);
         }
     }
+
+    return 0;
 }
 
 HIDDEN int32_t http2_get_streamid(void *http2_strm)
@@ -848,11 +851,11 @@ HIDDEN int http2_end_headers(struct transaction_t *txn __attribute__((unused)),
     fatal("http2_end_headers() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-HIDDEN void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
-                             const char *data __attribute__((unused)),
-                             unsigned datalen __attribute__((unused)),
-                             int last_chunk __attribute__((unused)),
-                             MD5_CTX *md5ctx __attribute__((unused)))
+HIDDEN int http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
+                            const char *data __attribute__((unused)),
+                            unsigned datalen __attribute__((unused)),
+                            int last_chunk __attribute__((unused)),
+                            MD5_CTX *md5ctx __attribute__((unused)))
 {
     fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
 }
