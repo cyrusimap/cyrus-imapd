@@ -530,9 +530,9 @@ HIDDEN int http2_start_session(struct http_connection *conn,
 }
 
 
-HIDDEN void http2_end_session(struct http_connection *conn)
+HIDDEN void http2_end_session(void *http2_ctx)
 {
-    struct http2_context *ctx = (struct http2_context *) conn->http2_ctx;
+    struct http2_context *ctx = (struct http2_context *) http2_ctx;
 
     if (!ctx) return;
 
@@ -774,6 +774,13 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn,
     }
 }
 
+HIDDEN int32_t http2_get_streamid(void *http2_strm)
+{
+    struct http2_stream *strm = (struct http2_stream *) http2_strm;
+
+    return strm ? strm->id : 0;
+}
+
 HIDDEN void http2_end_stream(void *http2_strm)
 {
     struct http2_stream *strm = (struct http2_stream *) http2_strm;
@@ -809,7 +816,7 @@ HIDDEN int http2_start_session(struct http_connection *c __attribute__((unused))
     fatal("http2_start() called, but no Nghttp2", EC_SOFTWARE);
 }
 
-HIDDEN void http2_end_session(struct http_connection *c __attribute__((unused)))
+HIDDEN void http2_end_session(void *http2_ctx __attribute__((unused)))
 {
 }
 
@@ -848,6 +855,11 @@ HIDDEN void http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
                              MD5_CTX *md5ctx __attribute__((unused)))
 {
     fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
+}
+
+HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))
+{
+    return 0;
 }
 
 HIDDEN void http2_end_stream(void *http2_strm __attribute__((unused))) {}

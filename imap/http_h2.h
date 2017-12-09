@@ -77,7 +77,7 @@ extern int http2_preface(struct transaction_t *txn);
 extern int http2_start_session(struct http_connection *conn,
                                struct transaction_t *txn);
 
-extern void http2_end_session(struct http_connection *conn);
+extern void http2_end_session(void *http2_ctx);
 
 extern void http2_output(struct transaction_t *txn);
 
@@ -93,6 +93,8 @@ extern int http2_end_headers(struct transaction_t *txn, long code);
 extern void http2_data_chunk(struct transaction_t *txn,
                              const char *data, unsigned datalen,
                              int last_chunk, MD5_CTX *md5ctx);
+
+extern int32_t http2_get_streamid(void *http2_strm);
 
 extern void http2_end_stream(void *http2_strm);
 

@@ -535,7 +535,7 @@ static void httpd_reset(struct http_connection *conn)
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(conn);
+    http2_end_session(conn->http2_ctx);
 
     zlib_done(conn->zstrm);
     brotli_done(conn->brotli);
@@ -2703,6 +2703,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
+    if (txn->http2_strm) {
+        buf_printf(&log, "%sstream-id=%d", sep,
+                   http2_get_streamid(txn->http2_strm));
+        sep = "; ";
+    }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
         buf_printf(&log, "%supgrade=", sep);
         comma_list_body(&log, upgrd_tokens, txn->flags.upgrade, NULL);
