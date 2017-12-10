@@ -1465,6 +1465,7 @@ AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
 HTTP_CPPFLAGS=
 HTTP_LIBS=
 with_nghttp2=no
+with_wslay=no
 with_xml2=no
 with_ical=no
 with_icu4c=no
@@ -1596,6 +1597,15 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
 
+dnl  Don't bother checking for Wslay until CalConnect finalizes streaming updates
+        PKG_CHECK_MODULES([WSLAY], [libwslay], [
+                AC_DEFINE(HAVE_WSLAY,[],
+                        [Build WebSockets support into httpd?])
+                with_wslay=yes
+                ],
+                AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing wslay]))
+
+
         PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
                 AC_DEFINE(HAVE_BROTLI,[],
                         [Build Brotli compression support into httpd?])
@@ -1616,8 +1626,8 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -2326,6 +2336,7 @@ External dependencies:
    openio:             $with_openio
    -----------------------
    nghttp2:            $with_nghttp2
+   wslay:              $with_wslay
    brotli:             $with_brotli
    xml2:               $with_xml2
    ical:               $with_ical

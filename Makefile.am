@@ -1220,6 +1220,8 @@ imap_httpd_SOURCES = \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
 	imap/http_webdav.c \
+	imap/http_ws.c \
+	imap/http_ws.h \
 	imap/httpd.c \
 	imap/httpd.h \
 	imap/jcal.c \

@@ -302,7 +302,7 @@ struct resp_body_t {
 struct txn_flags_t {
     unsigned long ver      : 2;         /* HTTP version of request */
     unsigned long conn     : 3;         /* Connection opts on req/resp */
-    unsigned long upgrade  : 2;         /* Upgrade protocols */
+    unsigned long upgrade  : 3;         /* Upgrade protocols */
     unsigned long override : 1;         /* HTTP method override */
     unsigned long cors     : 3;         /* Cross-Origin Resource Sharing */
     unsigned long mime     : 1;         /* MIME-conformant response */
@@ -311,12 +311,14 @@ struct txn_flags_t {
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
+    unsigned long ws_ext   : 1;         /* Available WebSocket extension(s) */
 };
 
 /* HTTP connection context */
 struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
+    const char *clienthost;             /* Name of client host */
 
     void *tls_ctx;                      /* TLS context */
     void *http2_ctx;                    /* HTTP/2 session context */
@@ -329,6 +331,7 @@ struct http_connection {
 struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     void *http2_strm;                   /* HTTP/2 stream context */
+    void *ws_ctx;                       /* WebSocket channel context */
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -378,7 +381,8 @@ enum {
 /* Upgrade protocol flags */
 enum {
     UPGRADE_TLS =       (1<<0),
-    UPGRADE_HTTP2 =     (1<<1)
+    UPGRADE_HTTP2 =     (1<<1),
+    UPGRADE_WS =        (1<<2)
 };
 
 /* Cross-Origin Resource Sharing flags */
