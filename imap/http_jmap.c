@@ -1703,7 +1703,7 @@ static json_t *user_settings(const char *userid)
     return json_pack("{s:s s:o s:o s:s s:s s:s}",
             "username", userid,
             "accounts", accounts,
-            "capabilities", json_pack("{}"), /* TODO update with JMAP URIs */
+            "capabilities", json_pack("{s:{}}", "ietf:jmapmail"),
             "apiUrl", JMAP_BASE_URL,
             "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
             /* FIXME eventSourceUrl */
