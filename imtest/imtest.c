@@ -3034,6 +3034,8 @@ int main(int argc, char **argv)
 
     conn = NULL;
     do {
+        unsigned flags = 0;
+
         if (conn) {
             /* send LOGOUT */
             logout(&protocol->logout_cmd, 1);
@@ -3060,9 +3062,11 @@ int main(int argc, char **argv)
                          servername, port);
         }
 
-        if (init_sasl(protocol->service, servername, minssf, maxssf,
-                      protocol->sasl_cmd.parse_success ?
-                      SASL_SUCCESS_DATA : 0) != IMTEST_OK) {
+        if (username && strcmpnull(authname, username)) flags += SASL_NEED_PROXY;
+        if (protocol->sasl_cmd.parse_success) flags += SASL_SUCCESS_DATA;
+
+        if (init_sasl(protocol->service, servername,
+                      minssf, maxssf, flags) != IMTEST_OK) {
             imtest_fatal("SASL initialization");
         }
 
