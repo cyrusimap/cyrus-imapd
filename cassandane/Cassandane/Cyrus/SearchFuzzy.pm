@@ -66,6 +66,14 @@ sub set_up
         return;
     }
     $self->{test_fuzzy_search} = 1;
+
+    # This will be "vanilla" if using a standard/distro xapian, "cyruslibs"
+    # if using our fork of xapian, or "none" if the Cyrus being tested isn't
+    # new enough to know the difference.
+    $self->{xapian_flavor} =
+        $self->{instance}->{buildinfo}->{search}->{xapian_flavor} || "none";
+
+    xlog "Xapian flavor '$self->{xapian_flavor}' detected.\n";
 }
 
 sub tear_down
