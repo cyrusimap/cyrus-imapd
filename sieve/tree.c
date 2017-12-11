@@ -250,7 +250,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case NOTIFY:
     case ENOTIFY:
         /* actual type and availability will be determined by parser */
-        p->type = p->u.n.priority = -1;
+        p->u.n.priority = -1;
         break;
 
     case ERROR:

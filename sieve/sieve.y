@@ -885,7 +885,6 @@ ntags: /* empty */               { $$ = new_command(NOTIFY, sscript); }
                                                       "priority");
                                      }
 
-                                     $$->type = NOTIFY;
                                      $$->u.n.priority = $2;
                                  }
 

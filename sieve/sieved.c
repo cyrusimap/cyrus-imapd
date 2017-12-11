@@ -816,9 +816,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
             i = unwrap_string(d, i, &data, &len);
 
-            printf("            %s({%d}%s) OPTIONS ",
+            printf("            %s({%d}%s) OPTIONS {%d}",
                    (op == B_ENOTIFY ? "FROM" : "ID"),
-                   len, (!data ? "[nil]" : data));
+                   len, (!data ? "[nil]" : data), ntohl(d[i].len));
 
             i=write_list(ntohl(d[i].len),i+1,d);
 

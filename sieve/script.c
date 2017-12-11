@@ -362,9 +362,10 @@ static int send_notify_callback(sieve_interp_t *interp,
     nc.options = notify->options ? notify->options : NULL;
     nc.priority = notify->priority;
 
-    if(nc.options && !strcmp(nc.method,"mailto"))
-      if(!strcmp("$env-from$",*nc.options))
-        interp->getenvelope(message_context, "From", &nc.options);
+    if (nc.options && !strcmp(nc.method, "mailto")) {
+        if (!strcmpsafe("$env-from$", *nc.options))
+            interp->getenvelope(message_context, "From", &nc.options);
+    }
 
     build_notify_message(interp, notify->message, message_context,
                          &out);
