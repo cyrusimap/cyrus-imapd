@@ -608,6 +608,7 @@ static int jmap_post(struct transaction_t *txn,
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf, *inboxname = NULL;
+    json_t *val;
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
@@ -630,10 +631,27 @@ static int jmap_post(struct transaction_t *txn,
     /* Regular JMAP POST request */
     ret = parse_json_body(txn, &req);
     if (ret) goto done;
-    else if (!json_is_array(req)) {
-        txn->error.desc = "JSON request body is not an array";
+
+    /* Validate Request object */
+    json_t *using = json_object_get(req, "using");
+    json_t *calls = json_object_get(req, "methodCalls");
+    int is_valid = 1;
+    if (!json_is_array(using) || !json_is_array(calls)) {
+        is_valid = 0;
+    }
+    json_array_foreach(calls, i, val) {
+        if (json_array_size(val) != 3 ||
+                !json_is_string(json_array_get(val, 0)) ||
+                !json_is_object(json_array_get(val, 1)) ||
+                !json_is_string(json_array_get(val, 2))) {
+            is_valid = 0;
+            break;
+        }
+    }
+    if (!is_valid) {
+        txn->error.desc = "JSON request body is not a JMAP Request object";
         ret = HTTP_BAD_REQUEST;
-	goto done;
+        goto done;
     }
 
     /* Start JSON response */
@@ -643,7 +661,7 @@ static int jmap_post(struct transaction_t *txn,
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
-    
+
     /* Allocate map to store uids */
     construct_hash_table(&idmap.mailboxes, 64, 0);
     construct_hash_table(&idmap.messages, 64, 0);
@@ -656,21 +674,13 @@ static int jmap_post(struct transaction_t *txn,
     construct_hash_table(&mboxrights, 64, 0);
 
     /* Process each message in the request */
-    for (i = 0; i < json_array_size(req); i++) {
+    for (i = 0; i < json_array_size(calls); i++) {
         const jmap_msg_t *mp;
-        json_t *msg = json_array_get(req, i);
-        const char *tag, *name = json_string_value(json_array_get(msg, 0));
-        json_t *args = json_array_get(msg, 1), *arg;
-        json_t *id = json_array_get(msg, 2);
+        json_t *call = json_array_get(calls, i);
+        const char *name = json_string_value(json_array_get(call, 0));
+        json_t *args = json_array_get(call, 1), *arg;
+        const char *tag = json_string_value(json_array_get(call, 2));
         int r = 0;
-
-        /* XXX - better error reporting */
-        if (!id) {
-            txn->error.desc = "Missing id on request";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-        tag = json_string_value(id);
 
         /* Find the message processor */
         if (!(mp = find_message(name))) {
@@ -681,7 +691,7 @@ static int jmap_post(struct transaction_t *txn,
 
         /* Determine account */
         const char *accountid = httpd_userid;
-        arg = json_object_get(json_array_get(msg, 1), "accountId");
+        arg = json_object_get(args, "accountId");
         if (arg && arg != json_null()) {
             if ((accountid = json_string_value(arg)) == NULL) {
                 json_t *err = json_pack("{s:s, s:[s]}",
@@ -757,8 +767,10 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* Dump JSON object into a text buffer */
+    json_t *res = json_pack("{s:O}", "methodResponses", resp);
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-    buf = json_dumps(resp, flags);
+    buf = json_dumps(res, flags);
+    json_decref(res);
 
     if (!buf) {
         txn->error.desc = "Error dumping JSON response object";
