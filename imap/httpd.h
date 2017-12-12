@@ -317,9 +317,6 @@ struct http_connection {
     void *http2_ctx;                    /* HTTP/2 session context */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
-
-    void *zstrm;                        /* Zlib compression context */
-    void *brotli;                       /* Brotli compression context */
 };
 
 
@@ -354,6 +351,9 @@ struct transaction_t {
                                            http_ischedule:
                                              - error desc string
                                         */
+
+    void *zstrm;                        /* Zlib compression context */
+    void *brotli;                       /* Brotli compression context */
 };
 
 /* HTTP version flags */
@@ -546,5 +546,8 @@ extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry
 extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
+
+extern void *zlib_init();
+extern void *brotli_init();
 
 #endif /* HTTPD_H */

@@ -190,6 +190,12 @@ static int begin_headers_cb(nghttp2_session *session,
     txn->flags.vary = VARY_AE;
     txn->req_line.ver = HTTP2_VERSION;
 
+    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
+        txn->zstrm = zlib_init();
+        txn->brotli = brotli_init();
+    }
+
+
     struct http2_stream *strm = xzmalloc(sizeof(struct http2_stream));
 
     strm->id = frame->hd.stream_id;
