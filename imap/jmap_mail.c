@@ -2905,19 +2905,49 @@ static int find_msgbodies(struct body *root, struct buf *msg_buf,
     return 0;
 }
 
+/* headers that are also used for non header.* properties are "special" */
+static int is_special_header (const char *key) {
+    if (strcasecmp(key, "sender") == 0) {
+        return 1;
+    }
+    else if (strcasecmp(key, "reply-to") == 0) {
+        return 1;
+    }
+    return 0;
+}
+
+struct extract_headers_rock {
+    json_t *headers;
+    hash_table *props;
+};
+
 static int extract_headers(const char *key, const char *val, void *rock)
 {
-    json_t *headers = (json_t*) rock;
+    json_t *headers = ((struct extract_headers_rock*) rock)->headers;
+    hash_table *props = ((struct extract_headers_rock*) rock)->props;
     json_t *curval;
     char *decodedval = NULL;
     char *lckey = xstrdup(key);
+    char *wantheader = NULL;
     char *p;
     for (p = lckey; *p; p++) {
         *p = tolower(*p);
     }
 
+    wantheader = strconcat("headers.", lckey, NULL);
+
+    if (!(   _wantprop(props, "headers")
+          || _wantprop(props, wantheader)
+          || is_special_header(lckey))) {
+        /* don't need this header, skip out early */
+        free(lckey);
+        free(wantheader);
+        return 0;
+    }
+
     if (isspace(*val)) val++;
 
+    /* n.b. charset_decode_mimeheader is expensive! */
     decodedval = charset_decode_mimeheader(val, CHARSET_SNIPPET);
     if (!decodedval) goto done;
 
@@ -2932,6 +2962,7 @@ static int extract_headers(const char *key, const char *val, void *rock)
 done:
     free(lckey);
     free(decodedval);
+    free(wantheader);
     return  0;
 }
 
@@ -3259,8 +3290,9 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     if (r) goto done;
 
     /* Always read the message headers */
+    struct extract_headers_rock ehrock = { headers, props };
     r = message_foreach_header(msg_buf->s + body->header_offset,
-                               body->header_size, extract_headers, headers);
+                               body->header_size, extract_headers, &ehrock);
     if (r) goto done;
 
     r = msgrecord_annot_findall(mr, "*", extract_annotations, annotations);
@@ -3315,6 +3347,10 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_decref(wantannotations);
     }
 
+    /* additional properties that are derived from header fields should have
+     * their header field added to is_special_header to ensure it's fetched,
+     * c.f. 'sender' and 'reply-to'.
+     */
 
     /* sender */
     if (_wantprop(props, "sender")) {
