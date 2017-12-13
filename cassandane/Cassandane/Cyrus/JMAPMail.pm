@@ -4440,7 +4440,7 @@ sub test_getmessagelist_keywords
 
     xlog "fetch messages sorted ascending by \$Flagged flag";
     $res = $jmap->Request([['getMessageList', {
-        sort => [ 'keyword:$Flagged asc' ],
+        sort => [ 'hasKeyword:$Flagged asc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4448,7 +4448,7 @@ sub test_getmessagelist_keywords
 
     xlog "fetch messages sorted descending by \$Flagged flag";
     $res = $jmap->Request([['getMessageList', {
-        sort => [ 'keyword:$Flagged desc' ],
+        sort => [ 'hasKeyword:$Flagged desc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4509,7 +4509,7 @@ sub test_getmessagelist_userkeywords
 
     xlog "fetch messages sorted ascending by foo flag";
     $res = $jmap->Request([['getMessageList', {
-        sort => [ 'keyword:foo asc' ],
+        sort => [ 'hasKeyword:foo asc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4517,7 +4517,7 @@ sub test_getmessagelist_userkeywords
 
     xlog "fetch messages sorted descending by foo flag";
     $res = $jmap->Request([['getMessageList', {
-        sort => [ 'keyword:foo desc' ],
+        sort => [ 'hasKeyword:foo desc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4628,7 +4628,7 @@ sub test_getmessagelist_threadkeywords
 
         xlog "fetch collapsed threads sorted ascending by $flag";
         $res = $jmap->Request([['getMessageList', {
-            sort => ["someThreadKeyword:$flag asc"],
+            sort => ["someInThreadHaveKeyword:$flag asc"],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
@@ -4637,7 +4637,7 @@ sub test_getmessagelist_threadkeywords
 
         xlog "fetch collapsed threads sorted descending by $flag";
         $res = $jmap->Request([['getMessageList', {
-            sort => ["someThreadKeyword:$flag desc"],
+            sort => ["someInThreadHaveKeyword:$flag desc"],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
@@ -4670,12 +4670,12 @@ sub test_getmessagelist_threadkeywords
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
 
-    # Regression #2: test that 'allThreadKeyword' sorts fail with
+    # Regression #2: test that 'allInThreadHaveKeyword' sorts fail with
     # an 'unsupportedSort' error even for supported conversation flags
     $flag =~ s+^\\+\$+ ;
     xlog "fetch collapsed threads sorted by all having $flag flag";
     $res = $jmap->Request([['getMessageList', {
-                    sort => ["allThreadKeyword:$flag asc"],
+                    sort => ["allInThreadHaveKeyword:$flag asc"],
                     collapseThreads => JSON::true,
                 }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
