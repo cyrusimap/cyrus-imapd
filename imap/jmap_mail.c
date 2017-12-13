@@ -6649,14 +6649,6 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
         json_array_append_new(invalid, json_string("replyTo"));
     }
 
-    pe = readprop(msg, "receivedAt", 0, invalid, "s", &sval);
-    if (pe > 0) {
-        const char *p = strptime(sval, "%Y-%m-%dT%H:%M:%SZ", date);
-        if (!p || *p) {
-            json_array_append_new(invalid, json_string("receivedAt"));
-        }
-    }
-
     if (json_object_get(msg, "size")) {
         json_array_append_new(invalid, json_string("size"));
     }
@@ -7244,12 +7236,6 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     validate_createmsg(msg, invalid, 0/*is_attached*/);
     if (json_array_size(invalid)) {
         return 0;
-    }
-
-    /* override internaldate */
-    const char *datestr = json_string_value(json_object_get(msg, "receivedAt"));
-    if (datestr) {
-        time_from_iso8601(datestr, &internaldate);
     }
 
     /* Gather keywords */
