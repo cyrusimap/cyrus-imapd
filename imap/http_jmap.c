@@ -74,6 +74,7 @@
 #define JMAP_BASE_URL      JMAP_ROOT "/"
 #define JMAP_AUTH_COL      "auth/"
 #define JMAP_UPLOAD_COL    "upload/"
+#define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
 #define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}"
 
@@ -184,9 +185,13 @@ static int jmap_parse_path(struct transaction_t *txn)
             tgt->flags = JMAP_ENDPOINT_AUTH;
             tgt->allow = ALLOW_READ | ALLOW_POST | ALLOW_DELETE;
         }
-        else if (!strcmp(tgt->collection, JMAP_UPLOAD_COL)) {
+        else if (!strncmp(tgt->collection, JMAP_UPLOAD_COL,
+                          strlen(JMAP_UPLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_UPLOAD;
             tgt->allow = ALLOW_POST;
+
+            /* Get "resource" which must be the accountId */
+            tgt->resource = tgt->collection + strlen(JMAP_UPLOAD_COL);
         }
         else if (!strncmp(tgt->collection,
                           JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
@@ -1301,18 +1306,23 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     const char *data = buf_base(&txn->req_body.payload);
     size_t datalen = buf_len(&txn->req_body.payload);
 
-    const char *accountid = httpd_userid;
-    if ((hdr = spool_getheader(hdrcache, "X-JMAP-AccountId"))) {
-        accountid = hdr[0];
+    /* Resource must be {accountId}/ with no trailing path */
+    char *accountid = xstrdup(txn->req_tgt.resource);
+    char *slash = strchr(accountid, '/');
+    if (!slash || *(slash + 1) != '\0') {
+        ret = HTTP_NOT_FOUND;
+        goto done;
     }
+    *slash = '\0';
+
     r = create_upload_collection(accountid, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "create_upload_collection: %s", error_message(r));
-        ret = HTTP_BAD_REQUEST;
+        syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
+               error_message(r), accountid);
+        ret = HTTP_NOT_FOUND;
         goto done;
     }
 
-    json_t *resp = json_pack("{s:s}", "accountId", accountid);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -1438,6 +1448,9 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
     char *blobid = jmap_blobid(&body->content_guid);
+
+    /* Create response object */
+    json_t *resp = json_pack("{s:s}", "accountId", accountid);
     json_object_set_new(resp, "blobId", json_string(blobid));
     free(blobid);
     json_object_set_new(resp, "type", json_string(type));
@@ -1448,7 +1461,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     size_t jflags = JSON_PRESERVE_ORDER;
     jflags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
     char *buf = json_dumps(resp, jflags);
-
+    json_decref(resp);
     if (!buf) {
         txn->error.desc = "Error dumping JSON response object";
         ret = HTTP_SERVER_ERROR;
@@ -1462,7 +1475,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     ret = 0;
 
 done:
-    json_decref(resp);
+    free(accountid);
     if (body) {
         message_free_body(body);
         free(body);
@@ -1719,7 +1732,7 @@ static json_t *user_settings(const char *userid)
             "apiUrl", JMAP_BASE_URL,
             "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
             /* FIXME eventSourceUrl */
-            "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL);
+            "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL);
 }
 
 static int jmap_login(const char *login_id, const char *password,
