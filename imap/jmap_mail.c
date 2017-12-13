@@ -3305,8 +3305,8 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         json_object_set_new(msg, "subject", json_string(subject ? subject : ""));
         free(subject);
     }
-    /* date */
-    if (_wantprop(props, "date")) {
+    /* receivedAt */
+    if (_wantprop(props, "receivedAt")) {
         char datestr[RFC3339_DATETIME_MAX];
         time_t t;
 
@@ -3317,7 +3317,24 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             time_from_rfc5322(body->date, &t, DATETIME_FULL);
 
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
-        json_object_set_new(msg, "date", json_string(datestr));
+        json_object_set_new(msg, "receivedAt", json_string(datestr));
+    }
+    /* sentAt */
+    if (_wantprop(props, "sentAt")) {
+        json_t *jval = json_object_get(headers, "date");
+        if (jval) {
+            char *p, *headerval = xstrdup(json_string_value(jval));
+            for (p = headerval; *p; p++) {
+                if (*p == '\n') *p = ' ';
+            }
+            time_t t;
+            if (time_from_rfc822(headerval, &t) != -1) {
+                char datestr[RFC3339_DATETIME_MAX];
+                time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+                json_object_set_new(msg, "sentAt", json_string(datestr));
+            }
+            free(headerval);
+        }
     }
 
     if (_wantprop(props, "textBody") ||
@@ -4249,7 +4266,7 @@ static struct sortcrit *buildsort(json_t *sort)
 
         /* Note: add any new sort criteria also to is_supported_msglist_sort */
 
-        if (!strcmp(prop.s, "date")) {
+        if (!strcmp(prop.s, "receivedAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
         if (!strcmp(prop.s, "from")) {
@@ -4653,7 +4670,7 @@ done:
 
 static int is_supported_msglist_sort(const char *field)
 {
-    if (!strcmp(field, "date") ||
+    if (!strcmp(field, "receivedAt") ||
         !strcmp(field, "from") ||
         !strcmp(field, "id") ||
         !strcmp(field, "messagestate") ||
@@ -6355,14 +6372,14 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     if (!d.subject) d.subject = xstrdup("");
 
     /* Override Date header */
-    /* Precedence (highest first): "date" property, Date header, now */
+    /* Precedence (highest first): "receivedAt" property, Date header, now */
     time_t date = time(NULL);
-    if ((s = json_string_value(json_object_get(msg, "date")))) {
+    if ((s = json_string_value(json_object_get(msg, "receivedAt")))) {
         struct tm tm;
         strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
         date = mktime(&tm);
     }
-    if (json_object_get(msg, "date") || !d.date) {
+    if (json_object_get(msg, "receivedAt") || !d.date) {
         char fmt[RFC5322_DATETIME_MAX+1];
         memset(fmt, 0, RFC5322_DATETIME_MAX+1);
         time_to_rfc5322(date, fmt, RFC5322_DATETIME_MAX+1);
@@ -6632,11 +6649,11 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
         json_array_append_new(invalid, json_string("replyTo"));
     }
 
-    pe = readprop(msg, "date", 0, invalid, "s", &sval);
+    pe = readprop(msg, "receivedAt", 0, invalid, "s", &sval);
     if (pe > 0) {
         const char *p = strptime(sval, "%Y-%m-%dT%H:%M:%SZ", date);
         if (!p || *p) {
-            json_array_append_new(invalid, json_string("date"));
+            json_array_append_new(invalid, json_string("receivedAt"));
         }
     }
 
@@ -7230,7 +7247,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     }
 
     /* override internaldate */
-    const char *datestr = json_string_value(json_object_get(msg, "date"));
+    const char *datestr = json_string_value(json_object_get(msg, "receivedAt"));
     if (datestr) {
         time_from_iso8601(datestr, &internaldate);
     }
@@ -7965,7 +7982,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     }
 
     /* check for internaldate */
-    const char *datestr = json_string_value(json_object_get(msg, "date"));
+    const char *datestr = json_string_value(json_object_get(msg, "receivedAt"));
     if (datestr) {
         time_from_iso8601(datestr, &internaldate);
     }
@@ -8052,7 +8069,7 @@ static int importMessages(jmap_req_t *req)
             }
         }
 
-        int pe = readprop_full(msg, prefix, "date", 0, invalid, "s", &s);
+        int pe = readprop_full(msg, prefix, "receivedAt", 0, invalid, "s", &s);
         if (pe > 0) {
             struct tm date;
             const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &date);
