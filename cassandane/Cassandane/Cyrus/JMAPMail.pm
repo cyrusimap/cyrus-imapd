@@ -1549,7 +1549,7 @@ sub test_getmessages
     $self->assert_str_equals($msg->{subject}, "Message A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($datestr, $msg->{date});
+    $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
 
     xlog "fetch again but only some properties";
@@ -1725,7 +1725,7 @@ sub test_getmessages_fetchmessages
     $self->assert_str_equals($msg->{subject}, "Message A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($datestr, $msg->{date});
+    $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
 
     xlog "fetch again but only some properties";
@@ -1860,7 +1860,7 @@ sub test_getmessages_threads
     $self->assert_str_equals($msg->{subject}, "Message A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($datestr, $msg->{date});
+    $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
 }
 
@@ -2170,7 +2170,7 @@ sub test_getmessages_body_multi
     $self->assert_null($submsg->{bcc});
     $self->assert_null($submsg->{replyTo});
     $self->assert_str_equals("bar", $submsg->{subject});
-    $self->assert_str_equals("2016-10-05T03:59:07Z", $submsg->{date});
+    $self->assert_str_equals("2016-10-05T03:59:07Z", $submsg->{sentAt});
     $self->assert_str_equals("Jeez....an embedded message", $submsg->{textBody});
     $self->assert_null($submsg->{mailboxIds});
     $self->assert_null($submsg->{keywords});
@@ -3965,19 +3965,19 @@ sub test_getmessagelist
                 }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 
-    xlog "sort by ascending date";
+    xlog "sort by ascending receivedAt";
     $res = $jmap->Request([['getMessageList', {
                     accountId => $account,
-                    sort => [ "date asc" ],
+                    sort => [ "receivedAt asc" ],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
-    xlog "sort by descending date";
+    xlog "sort by descending receivedAt";
     $res = $jmap->Request([['getMessageList', {
                     accountId => $account,
-                    sort => [ "date desc" ],
+                    sort => [ "receivedAt desc" ],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -4298,19 +4298,19 @@ sub test_getmessagelist_shared
                     }, "R1"]]);
         $self->assert_null($res->[0][1]->{ids});
 
-        xlog "sort by ascending date";
+        xlog "sort by ascending receivedAt";
         $res = $jmap->Request([['getMessageList', {
                         accountId => $account,
-                        sort => [ "date asc" ],
+                        sort => [ "receivedAt asc" ],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
-        xlog "sort by descending date";
+        xlog "sort by descending receivedAt";
         $res = $jmap->Request([['getMessageList', {
                         accountId => $account,
-                        sort => [ "date desc" ],
+                        sort => [ "receivedAt desc" ],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -6227,7 +6227,7 @@ EOF
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
-    my $date = '2016-12-07T11:11:12Z';
+    my $receivedAt = '2016-12-10T01:02:03Z';
     xlog "import message from blob $blobid";
     $res = eval {
         $jmap->Request([['importMessages', {
@@ -6238,7 +6238,7 @@ EOF
                     keywords => {
                         '$Draft' => JSON::true,
                     },
-                    date => $date,
+                    receivedAt => $receivedAt,
                 },
             },
         }, "R1"], ['getMessages', {ids => ["#1"]}, "R2"]]);
@@ -6248,9 +6248,11 @@ EOF
     my $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
 
+    my $sentAt = '2016-12-07T11:11:11Z';
     $self->assert_str_equals("messages", $res->[1][0]);
     $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
-    $self->assert_str_equals($date, $res->[1][1]{list}[0]->{date});
+    $self->assert_str_equals($receivedAt, $res->[1][1]{list}[0]->{receivedAt});
+    $self->assert_str_equals($sentAt, $res->[1][1]{list}[0]->{sentAt});
 }
 
 sub test_getthreadonemsg
@@ -6719,7 +6721,7 @@ sub test_refobjects_extended
     xlog "get message properties using reference";
     my $res = $jmap->Request([
         ['getMessageList', {
-            sort => [ 'date desc' ],
+            sort => [ 'receivedAt desc' ],
             collapseThreads => JSON::true,
             position => 0,
             limit => 10,
