@@ -2950,23 +2950,10 @@ sub test_upload_multiaccount
 }
 
 sub test_uploadcharset
-    :JMAP :min_version_3_1
+:JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
-
-    xlog "create drafts mailbox";
-    my $res = $jmap->Request([
-            ['setMailboxes', { create => { "1" => {
-                            name => "drafts",
-                            parentId => undef,
-                            role => "drafts"
-             }}}, "R1"]
-    ]);
-    $self->assert_str_equals($res->[0][0], 'mailboxesSet');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     my $data = $jmap->Upload("some test with utf8", "text/plain; charset=utf-8");
 
@@ -2975,6 +2962,18 @@ sub test_uploadcharset
     $self->assert_str_equals('text/plain; charset=utf-8', $resp->{headers}{'content-type'});
 
     # XXX - fetch back the parts
+}
+
+sub test_uploadtype
+:JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $data = $jmap->Upload("some test with a funky type", "text/plain;"
+        . "\r\n charset=utf-8;"
+        . "title==?US-ASCII?Q?This is fun?=");
+    $self->assert_str_equals("text/plain; charset=utf-8;title=This is fun", $data->{type});
 }
 
 sub test_uploadbin
