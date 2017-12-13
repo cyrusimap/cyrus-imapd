@@ -1453,9 +1453,13 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     json_t *resp = json_pack("{s:s}", "accountId", accountid);
     json_object_set_new(resp, "blobId", json_string(blobid));
     free(blobid);
-    json_object_set_new(resp, "type", json_string(type));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
+
+    /* Remove CFWS and encodings from type */
+    char *normalisedtype = charset_decode_mimeheader(type, CHARSET_SNIPPET);
+    json_object_set_new(resp, "type", json_string(normalisedtype));
+    free(normalisedtype);
 
     /* Dump JSON object into a text buffer */
     size_t jflags = JSON_PRESERVE_ORDER;
