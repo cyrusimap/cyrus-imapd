@@ -70,7 +70,16 @@
 
 /* WebSocket Extension flags */
 enum {
-    WS_EXT_PMCE_DEFLATE = (1<<0)     /* Per-Message Compression Ext (RFC 7692) */
+    EXT_PMCE_DEFLATE   = (1<<0)      /* Per-Message Compression Ext (RFC 7692) */
+};
+
+/* Supported WebSocket Extensions */
+static struct ws_extension {
+    const char *name;
+    unsigned flag;
+} extensions[] = {
+    { "permessage-deflate", EXT_PMCE_DEFLATE },
+    { NULL, 0 }
 };
 
 
@@ -79,6 +88,15 @@ struct ws_context {
     wslay_event_context_ptr event;
     struct buf log;
     int log_tail;
+    unsigned ext;                    /* Bitmask of negotiated extension(s) */
+
+    union {
+        struct {
+            void *zstrm;             /* Zlib decompression context */
+            unsigned no_context : 1;
+            unsigned max_wbits;
+        } deflate;
+    } pmce;
 };
 
 
@@ -181,25 +199,94 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     return n;
 }
 
-void on_msg_recv_cb(wslay_event_context_ptr ev,
-                    const struct wslay_event_on_msg_recv_arg *arg,
-                    void *user_data)
+static int zlib_decompress(struct transaction_t *txn,
+                           const char *buf, unsigned len)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    z_stream *zstrm = ctx->pmce.deflate.zstrm;
+
+    zstrm->next_in = (Bytef *) buf;
+    zstrm->avail_in = len;
+
+    buf_reset(&txn->zbuf);
+
+    do {
+        int zr;
+
+        buf_ensure(&txn->zbuf, 4096);
+
+        zstrm->next_out = (Bytef *) txn->zbuf.s + txn->zbuf.len;
+        zstrm->avail_out = txn->zbuf.alloc - txn->zbuf.len;
+
+        zr = inflate(zstrm, Z_SYNC_FLUSH);
+        if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
+            /* something went wrong */
+            syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+            return -1;
+        }
+
+        txn->zbuf.len = txn->zbuf.alloc - zstrm->avail_out;
+
+    } while (!zstrm->avail_out);
+
+    return 0;
+}
+
+#define COMP_FAILED_ERR    "Compressing message failed"
+#define DECOMP_FAILED_ERR  "Decompressing message failed"
+
+static void on_msg_recv_cb(wslay_event_context_ptr ev,
+                           const struct wslay_event_on_msg_recv_arg *arg,
+                           void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    struct buf inbuf = BUF_INITIALIZER;
+    const char *msg;
+    int r;
 
-    /* Log the client request */
+    /* Place client request into a buf */
+    buf_init_ro(&inbuf, (const char *) arg->msg, arg->msg_length);
+
+    /* Decompress request, if necessary */
+    if (wslay_get_rsv1(arg->rsv)) {
+        /* Add trailing 4 bytes */
+        buf_appendmap(&inbuf, "\x00\x00\xff\xff", 4);
+
+        r = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
+        if (r) {
+            syslog(LOG_ERR, "on_msg_recv_cb(): zlib_decompress() failed");
+
+            syslog(LOG_DEBUG, "wslay_event_queue_close()");
+            wslay_event_queue_close(ev, WSLAY_CODE_PROTOCOL_ERROR,
+                                    (uint8_t *) DECOMP_FAILED_ERR,
+                                    strlen(DECOMP_FAILED_ERR));
+            goto done;
+        }
+
+        buf_move(&inbuf, &txn->zbuf);
+    }
+
+    /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
     buf_printf(&ctx->log, " Recv(opcode=%s, rsv=0x%x, length=%ld",
                wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
+
+    msg = buf_cstring(&inbuf);
+
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
         buf_printf(&ctx->log, ", status=%d", arg->status_code);
+        if (buf_len(&inbuf)) msg += 2;
 
         GCC_FALLTHROUGH
 
     case WSLAY_TEXT_FRAME:
-        buf_printf(&ctx->log, ", msg='%s'", arg->msg ? (char *) arg->msg : "");
+        buf_printf(&ctx->log, ", msg='%s'", msg);
+        break;
+
+    default:
+        msg = NULL;
         break;
     }
     buf_putc(&ctx->log, ')');
@@ -213,25 +300,54 @@ void on_msg_recv_cb(wslay_event_context_ptr ev,
      *   https://github.com/websockets/wscat
      */
     if (!wslay_is_ctrl_frame(arg->opcode)) {
-        struct wslay_event_msg msgarg = {
-            arg->opcode, arg->msg, arg->msg_length
-        };
+        struct wslay_event_msg msgarg = { arg->opcode, NULL, 0 };
         uint8_t rsv = WSLAY_RSV_NONE;
+        char *freeme = NULL;
+        struct buf *outbuf = &inbuf;
 
+        /* Compress the server response, if supported by the client */
+        if (ctx->ext & EXT_PMCE_DEFLATE) {
+            /* Make a copy of the uncompressed text */
+            if (msg) msg = freeme = xstrdup(msg);
+
+            r = zlib_compress(txn,
+                              ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
+                              buf_base(&inbuf), buf_len(&inbuf));
+            if (r) {
+                syslog(LOG_ERR, "on_msg_recv_cb(): zlib_compress() failed");
+
+                syslog(LOG_DEBUG, "wslay_event_queue_close()");
+                wslay_event_queue_close(ev, WSLAY_CODE_INTERNAL_SERVER_ERROR,
+                                        (uint8_t *) COMP_FAILED_ERR,
+                                        strlen(COMP_FAILED_ERR));
+                goto done;
+            }
+
+            /* Trim the trailing 4 bytes */
+            buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
+            outbuf = &txn->zbuf;
+
+            rsv |= WSLAY_RSV1_BIT;
+        }
+
+        /* Queue the server response */
+        msgarg.msg = (const uint8_t *) buf_base(outbuf);
+        msgarg.msg_length = buf_len(outbuf);
         wslay_event_queue_msg_ex(ev, &msgarg, rsv);
 
-
-        /* Log the server response */
+        /* Log the server response (uncompressed text) */
         buf_printf(&ctx->log, " => Send(opcode=%s, rsv=0x%x, length=%ld",
                    wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
-        if (arg->opcode == WSLAY_TEXT_FRAME) {
-            buf_printf(&ctx->log, ", msg='%s'",
-                       msgarg.msg ? (char *) msgarg.msg : "");
-        }
+        if (msg) buf_printf(&ctx->log, ", msg='%s'", msg);
         buf_putc(&ctx->log, ')');
+
+        free(freeme);
     }
 
     syslog(LOG_INFO, "%s", buf_cstring(&ctx->log));
+
+  done:
+    buf_free(&inbuf);
 }
 
 
@@ -256,23 +372,91 @@ HIDDEN void ws_done()
 /* Parse Sec-WebSocket-Extensions header(s) for interesting extensions */
 static void parse_extensions(struct transaction_t *txn)
 {
-    const char **ext =
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    const char **ext_hdr =
         spool_getheader(txn->req_hdrs, "Sec-WebSocket-Extensions");
     int i;
 
     /* Look for interesting extensions.  Unknown == ignore */
-    for (i = 0; ext && ext[i]; i++) {
-        tok_t tok = TOK_INITIALIZER(ext[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    for (i = 0; ext_hdr && ext_hdr[i]; i++) {
+        tok_t ext = TOK_INITIALIZER(ext_hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
 
-        while ((token = tok_next(&tok))) {
+        while ((token = tok_next(&ext))) {
+            struct ws_extension *extp = extensions;
+            tok_t param;
+
+            tok_initm(&param, token, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            token = tok_next(&param);
+
+            /* Locate a matching extension */
+            while (extp->name && strcmp(token, extp->name)) extp++;
+
             /* Check if client wants per-message compression */
-            if (!strncmp("permessage-deflate", token, strcspn(token, " ;"))) {
-//                txn->flags.ws_ext = WS_EXT_PMCE_DEFLATE;
+            if (extp->flag == EXT_PMCE_DEFLATE) {
+                unsigned client_max_wbits = MAX_WBITS;
+
+                ctx->pmce.deflate.max_wbits = MAX_WBITS;
+
+                /* Process parameters */
+                while ((token = tok_next(&param))) {
+                    char *value = strchr(token, '=');
+
+                    if (value) *value++ = '\0';
+
+                    if (!strcmp(token, "server_no_context_takeover")) {
+                        ctx->pmce.deflate.no_context = 1;
+                    }
+                    else if (!strcmp(token, "client_no_context_takeover")) {
+                        /* Don't HAVE to do anything here */
+                    }
+                    else if (!strcmp(token, "server_max_window_bits")) {
+                        if (value) {
+                            if (*value == '"') value++;
+                            ctx->pmce.deflate.max_wbits = atoi(value);
+                        }
+                        else ctx->pmce.deflate.max_wbits = 0;  /* force error */
+                    }
+                    else if (!strcmp(token, "client_max_window_bits")) {
+                        if (value) {
+                            if (*value == '"') value++;
+                            client_max_wbits = atoi(value);
+                        }
+                    }
+                }
+#ifdef HAVE_ZLIB
+                /* Reconfigure compression context for raw deflate */
+                if (txn->zstrm) deflateEnd(txn->zstrm);
+                else txn->zstrm = xmalloc(sizeof(z_stream));
+
+                if (deflateInit2(txn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                                 -ctx->pmce.deflate.max_wbits,
+                                 MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
+                    free(txn->zstrm);
+                    txn->zstrm = NULL;
+                }
+                if (txn->zstrm) {
+                    /* Configure decompression context for raw deflate */
+                    ctx->pmce.deflate.zstrm = xmalloc(sizeof(z_stream));
+                    if (inflateInit2(ctx->pmce.deflate.zstrm,
+                                     -client_max_wbits) != Z_OK) {
+                        free(ctx->pmce.deflate.zstrm);
+                        ctx->pmce.deflate.zstrm = NULL;
+                    }
+                }
+#endif /* HAVE_ZLIB */
+                if (ctx->pmce.deflate.zstrm) {
+                    /* Compression has been enabled */
+                    wslay_event_config_set_allowed_rsv_bits(ctx->event,
+                                                            WSLAY_RSV1_BIT);
+                    ctx->ext = extp->flag;
+                }
             }
+
+            tok_fini(&param);
         }
 
-        tok_fini(&tok);
+        tok_fini(&ext);
     }
 }
 
@@ -332,13 +516,13 @@ HIDDEN int ws_start_channel(struct transaction_t *txn)
         goto err;
     }
 
-    /* Check for supported WebSocket extensions */
-    parse_extensions(txn);
-
     /* Create channel context */
     ctx = xzmalloc(sizeof(struct ws_context));
     ctx->event = ev;
     txn->ws_ctx = ctx;
+
+    /* Check for supported WebSocket extensions */
+    parse_extensions(txn);
 
     /* Prepare log buffer */
 
@@ -367,6 +551,24 @@ HIDDEN int ws_start_channel(struct transaction_t *txn)
 }
 
 
+HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
+{
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    if (!ctx) return;
+
+    simple_hdr(txn, "Sec-WebSocket-Accept", buf_cstring(&txn->buf));
+
+    if (ctx->ext & EXT_PMCE_DEFLATE) {
+        simple_hdr(txn, "Sec-WebSocket-Extensions",
+                   "permessage-deflate%s; server_max_window_bits=%u",
+                   ctx->pmce.deflate.no_context ?
+                   "; server_no_context_takeover" : "",
+                   ctx->pmce.deflate.max_wbits);
+    }
+}
+
+
 HIDDEN void ws_end_channel(void *ws_ctx)
 {
     struct ws_context *ctx = (struct ws_context *) ws_ctx;
@@ -375,6 +577,13 @@ HIDDEN void ws_end_channel(void *ws_ctx)
     
     wslay_event_context_free(ctx->event);
     buf_free(&ctx->log);
+
+    if (ctx->pmce.deflate.zstrm) {
+        inflateEnd(ctx->pmce.deflate.zstrm);
+        free(ctx->pmce.deflate.zstrm);
+    }
+
+    free(ctx);
 }
 
 
@@ -466,6 +675,10 @@ HIDDEN void ws_init(struct buf *serverinfo __attribute__((unused))) {}
 HIDDEN int ws_enabled()
 {
     return 0;
+}
+
+HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
+{
 }
 
 HIDDEN void ws_done() {}

@@ -60,6 +60,9 @@
 #define MARKUP_INDENT   2     /* # spaces to indent each line of markup */
 #define GZIP_MIN_LEN    300   /* minimum length of data to gzip */
 
+#define COMPRESS_START (1<<0)
+#define COMPRESS_END   (1<<1)
+
 #define DFLAG_UNBIND    "DAV:unbind"
 #define DFLAG_UNCHANGED "DAV:unchanged"
 
@@ -311,7 +314,6 @@ struct txn_flags_t {
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
-    unsigned long ws_ext   : 1;         /* Available WebSocket extension(s) */
 };
 
 /* HTTP connection context */
@@ -558,6 +560,9 @@ extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
 
 extern void *zlib_init();
+extern int zlib_compress(struct transaction_t *txn, unsigned flags,
+                         const char *buf, unsigned len);
+
 extern void *brotli_init();
 
 #endif /* HTTPD_H */

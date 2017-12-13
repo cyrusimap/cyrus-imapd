@@ -107,9 +107,6 @@
 #include <libxml/HTMLtree.h>
 #include <libxml/uri.h>
 
-#define COMPRESS_START (1<<0)
-#define COMPRESS_END   (1<<1)
-
 static unsigned accept_encodings = 0;
 
 #ifdef HAVE_ZLIB
@@ -132,14 +129,20 @@ HIDDEN void *zlib_init()
     }
 }
 
-static void zlib_compress(struct transaction_t *txn, unsigned flags,
-                          const char *buf, unsigned len)
+HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
+                         const char *buf, unsigned len)
 {
-    /* Only flush for static content or on last (zero-length) chunk */
-    unsigned flush = (flags & COMPRESS_END) ? Z_FINISH : Z_NO_FLUSH;
     z_stream *zstrm = txn->zstrm;
+    unsigned flush;
 
     if (flags & COMPRESS_START) deflateReset(zstrm);
+
+    if (txn->ws_ctx) flush = Z_SYNC_FLUSH;
+    else {
+        /* Only flush for static content or on last (zero-length) chunk */
+        if (flags & COMPRESS_END) flush = Z_FINISH;
+        else flush = Z_NO_FLUSH;
+    }
 
     zstrm->next_in = (Bytef *) buf;
     zstrm->avail_in = len;
@@ -157,7 +160,7 @@ static void zlib_compress(struct transaction_t *txn, unsigned flags,
             if (zr != Z_OK) {
                 /* something went wrong */
                 syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
-                fatal("zlib: Error while compressing data", EC_SOFTWARE);
+                return -1;
             }
 
             buf_ensure(&txn->zbuf, pending);
@@ -170,12 +173,14 @@ static void zlib_compress(struct transaction_t *txn, unsigned flags,
         if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
             /* something went wrong */
             syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
-            fatal("zlib: Error while compressing data", EC_SOFTWARE);
+            return -1;
         }
 
         txn->zbuf.len = txn->zbuf.alloc - zstrm->avail_out;
 
     } while (!zstrm->avail_out);
+
+    return 0;
 }
 
 static void zlib_done(z_stream *zstrm)
@@ -189,10 +194,10 @@ static void zlib_done(z_stream *zstrm)
 
 HIDDEN void *zlib_init() { return NULL; }
 
-static void zlib_compress(struct transaction_t *txn __attribute__((unused)),
-                          unsigned flags __attribute__((unused)),
-                          const char *buf __attribute__((unused)),
-                          unsigned len __attribute__((unused)))
+HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
+                         unsigned flags __attribute__((unused)),
+                         const char *buf __attribute__((unused)),
+                         unsigned len __attribute__((unused)))
 {
     fatal("Compression requested, but no zlib", EC_SOFTWARE);
 }
@@ -222,8 +227,8 @@ HIDDEN void *brotli_init()
     return brotli;
 }
 
-static void brotli_compress(struct transaction_t *txn,
-                            unsigned flags, const char *buf, unsigned len)
+static int brotli_compress(struct transaction_t *txn,
+                           unsigned flags, const char *buf, unsigned len)
 {
     /* Only flush for static content or on last (zero-length) chunk */
     unsigned op = (flags & COMPRESS_END) ?
@@ -242,7 +247,8 @@ static void brotli_compress(struct transaction_t *txn,
         if (!BrotliEncoderCompressStream(brotli, op,
                                          &avail_in, &next_in,
                                          &avail_out, &next_out, NULL)) {
-            fatal("Brotli: Error while compressing data", EC_SOFTWARE);
+            syslog(LOG_ERR, "Brotli: Error while compressing data");
+            return -1;
         }
 
         txn->zbuf.len = txn->zbuf.alloc - avail_out;
@@ -252,6 +258,8 @@ static void brotli_compress(struct transaction_t *txn,
         BrotliEncoderDestroyInstance(brotli);
         txn->brotli = brotli_init();
     }
+
+    return 0;
 }
 
 static void brotli_done(BrotliEncoderState *brotli)
@@ -263,10 +271,10 @@ static void brotli_done(BrotliEncoderState *brotli)
 
 HIDDEN void *brotli_init() { return NULL; }
 
-static void brotli_compress(struct transaction_t *txn __attribute__((unused)),
-                            unsigned flags __attribute__((unused)),
-                            const char *buf __attribute__((unused)),
-                            unsigned len __attribute__((unused)))
+static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
+                           unsigned flags __attribute__((unused)),
+                           const char *buf __attribute__((unused)),
+                           unsigned len __attribute__((unused)))
 {
     fatal("Brotli Compression requested, but not available", EC_SOFTWARE);
 }
@@ -2310,15 +2318,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
                 if (txn->ws_ctx) {
                     /* Add WebSocket headers */
-                    simple_hdr(txn, "Sec-WebSocket-Accept",
-                               buf_cstring(&txn->buf));
-
-                    if (txn->flags.ws_ext) {
-                        const char *ws_ext[] = { "permessage-deflate", NULL };
- 
-                        comma_list_hdr(txn, "Sec-WebSocket-Extensions",
-                                       ws_ext, txn->flags.ws_ext);
-                    }
+                    ws_add_resp_hdrs(txn);
                 }
             }
             if (txn->flags.conn & CONN_KEEPALIVE) {
@@ -2972,11 +2972,12 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         if (code) flags |= COMPRESS_START;
         if (last_chunk) flags |= COMPRESS_END;
 
-        if (txn->resp_body.enc == CE_BR) {
-            brotli_compress(txn, flags, buf, len);
+        if ((txn->resp_body.enc == CE_BR) &&
+            brotli_compress(txn, flags, buf, len) < 0) {
+            fatal("Brotli: Error while compressing data", EC_SOFTWARE);
         }
-        else {
-            zlib_compress(txn, flags, buf, len);
+        else if (zlib_compress(txn, flags, buf, len) < 0) {
+            fatal("zlib: Error while compressing data", EC_SOFTWARE);
         }
 
         buf = txn->zbuf.s;
