@@ -2926,6 +2926,29 @@ sub test_upload
     $self->assert_not_null($msgresp->[0][1]{created});
 }
 
+sub test_upload_multiaccount
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create user and share mailbox
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lrwkxd") or die;
+
+    # Create user but don't share mailbox
+    $self->{instance}->create_user("bar");
+
+    my @res = $jmap->Upload("a message with some text", "text/rubbish", "foo");
+    $self->assert_str_equals($res[0]->{status}, '201');
+
+    @res = $jmap->Upload("a message with some text", "text/rubbish", "bar");
+    $self->assert_str_equals($res[0]->{status}, '404');
+}
+
 sub test_uploadcharset
     :JMAP :min_version_3_1
 {
