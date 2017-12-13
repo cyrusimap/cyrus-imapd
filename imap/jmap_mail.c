@@ -4287,15 +4287,15 @@ static struct sortcrit *buildsort(json_t *sort)
         if (!strcmp(prop.s, "to")) {
             sortcrit[i].key = SORT_TO;
         }
-        if (!strncmp(prop.s, "keyword:", 8)) {
-            const char *name = jmap_keyword_to_imap(prop.s + 8);
+        if (!strncmp(prop.s, "hasKeyword:", 11)) {
+            const char *name = jmap_keyword_to_imap(prop.s + 11);
             if (name) {
                 sortcrit[i].key = SORT_HASFLAG;
                 sortcrit[i].args.flag.name = xstrdup(name);
             }
         }
-        if (!strncmp(prop.s, "someThreadKeyword:", 18)) {
-            const char *name = jmap_keyword_to_imap(prop.s + 18);
+        if (!strncmp(prop.s, "someInThreadHaveKeyword:", 24)) {
+            const char *name = jmap_keyword_to_imap(prop.s + 24);
             if (name) {
                 sortcrit[i].key = SORT_HASFLAG;
                 sortcrit[i].args.flag.name = xstrdup(name);
@@ -4679,11 +4679,11 @@ static int is_supported_msglist_sort(const char *field)
         !strcmp(field, "to")) {
         return 1;
     }
-    if (!strncmp(field, "keyword:", 8) && is_valid_keyword(field + 8)) {
+    if (!strncmp(field, "hasKeyword:", 11) && is_valid_keyword(field + 11)) {
         return 1;
     }
-    if (!strncmp(field, "someThreadKeyword:", 18)) {
-        const char *s = field + 18;
+    if (!strncmp(field, "someInThreadHaveKeyword:", 24)) {
+        const char *s = field + 24;
         if (is_valid_keyword(s) && is_supported_convkeyword(s)) {
             return 1;
         }
