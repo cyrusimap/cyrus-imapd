@@ -296,7 +296,7 @@ static int frame_recv_cb(nghttp2_session *session,
 
     ctx = (struct http2_context *) txn->conn->http2_ctx;
 
-    syslog(LOG_DEBUG, "http2_frame_recv_cb(id=%d, type=%d, flags=%#x",
+    syslog(LOG_DEBUG, "http2_frame_recv_cb(id=%d, type=%d, flags=%#x)",
            frame->hd.stream_id, frame->hd.type, frame->hd.flags);
 
     switch (frame->hd.type) {
