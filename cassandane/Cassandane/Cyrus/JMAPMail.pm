@@ -468,6 +468,27 @@ sub test_getmailboxlist
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
     $self->assert_num_equals(2, $res->[0][1]->{position});
+
+    xlog "list mailboxes (with position)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            position => 3,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+
+    xlog "list mailboxes (with negative position)";
+    $res = $jmap->Request([
+        ['getMailboxList', {
+            sort => ["name asc"],
+            position => -2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
 }
 
 sub test_getmailboxlistupdates
