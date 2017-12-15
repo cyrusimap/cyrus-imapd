@@ -75,21 +75,21 @@
 #include "imap/imap_err.h"
 
 static int getCalendars(struct jmap_req *req);
-static int getCalendarUpdates(struct jmap_req *req);
+static int getCalendarsUpdates(struct jmap_req *req);
 static int setCalendars(struct jmap_req *req);
 static int getCalendarEvents(struct jmap_req *req);
-static int getCalendarEventUpdates(struct jmap_req *req);
-static int getCalendarEventList(struct jmap_req *req);
+static int getCalendarEventsUpdates(struct jmap_req *req);
+static int getCalendarEventsList(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
 static int getCalendarPreferences(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
     { "getCalendars",           &getCalendars },
-    { "getCalendarUpdates",     &getCalendarUpdates },
+    { "getCalendarsUpdates",     &getCalendarsUpdates },
     { "setCalendars",           &setCalendars },
     { "getCalendarEvents",      &getCalendarEvents },
-    { "getCalendarEventUpdates",&getCalendarEventUpdates },
-    { "getCalendarEventList",   &getCalendarEventList },
+    { "getCalendarEventsUpdates",&getCalendarEventsUpdates },
+    { "getCalendarEventsList",   &getCalendarEventsList },
     { "setCalendarEvents",      &setCalendarEvents },
     { "getCalendarPreferences", &getCalendarPreferences },
     { NULL,                     NULL}
@@ -520,7 +520,7 @@ done:
     return r;
 }
 
-static int getCalendarUpdates(struct jmap_req *req)
+static int getCalendarsUpdates(struct jmap_req *req)
 {
     int r, pe;
     json_t *invalid;
@@ -590,7 +590,7 @@ static int getCalendarUpdates(struct jmap_req *req)
     json_object_set_new(calendarUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarUpdates"));
+    json_array_append_new(item, json_string("calendarsUpdates"));
     json_array_append_new(item, calendarUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -1973,7 +1973,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_free(&mboxevent);
 
     /* Keep the VEVENT in the database but set alive to 0, to report
-     * with getCalendarEventUpdates. */
+     * with getCalendarEventsUpdates. */
     cdata->dav.alive = 0;
     cdata->dav.modseq = record.modseq;
     cdata->dav.imap_uid = record.uid;
@@ -2284,7 +2284,7 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
     return 0;
 }
 
-static int getCalendarEventUpdates(struct jmap_req *req)
+static int getCalendarEventsUpdates(struct jmap_req *req)
 {
     int r, pe;
     json_t *invalid;
@@ -2367,7 +2367,7 @@ static int getCalendarEventUpdates(struct jmap_req *req)
     json_object_set(eventUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEventUpdates"));
+    json_array_append_new(item, json_string("calendarEventsUpdates"));
     json_array_append_new(item, eventUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2870,7 +2870,7 @@ static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
     buf_free(&buf);
 }
 
-static int getCalendarEventList(struct jmap_req *req)
+static int getCalendarEventsList(struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *invalid;
@@ -2938,7 +2938,7 @@ static int getCalendarEventList(struct jmap_req *req)
     if (filter) json_object_set(eventList, "filter", filter);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEventList"));
+    json_array_append_new(item, json_string("calendarEventsList"));
     json_array_append_new(item, eventList);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
