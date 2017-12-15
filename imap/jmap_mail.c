@@ -1015,7 +1015,7 @@ done:
 }
 
 struct getmboxlist_window {
-    size_t position;
+    ssize_t position;
     const char *anchor;
     int anchor_off;
     size_t limit;
@@ -1077,12 +1077,23 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
     *total = query->result.count;
 
     /* Apply window */
-    int i;
+    ssize_t i, frompos = 0;
     int seen_anchor = 0;
     ssize_t skip_anchor = 0;
     ssize_t result_pos = -1;
 
-    for (i = 0; i < query->result.count; i++) {
+    /* Set position of first result */
+    if (!window->anchor) {
+        if (window->position > 0) {
+            frompos = window->position;
+        }
+        else if (window->position < 0) {
+            frompos = query->result.count + window->position ;
+            if (frompos < 0) frompos = 0;
+        }
+    }
+
+    for (i = frompos; i < query->result.count; i++) {
         mboxsearch_record_t *rec = ptrarray_nth(&query->result, i);
 
         /* Check anchor */
@@ -1110,10 +1121,6 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
         }
         else if (window->anchor && skip_anchor) {
             if (--skip_anchor) continue;
-        }
-        /* Check position */
-        else if (window->position && (size_t) i < window->position) {
-            continue;
         }
 
         /* Check limit. */
@@ -1204,7 +1211,6 @@ static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
     readprop(jargs, "anchor", 0, invalid, "s", &args->window.anchor);
     readprop(jargs, "anchorOffset", 0, invalid, "i", &args->window.anchor_off);
     if (readprop(jargs, "position", 0, invalid, "I", &jint) > 0) {
-        if (jint < 0) json_array_append_new(invalid, json_string("position"));
         args->window.position = jint;
     }
     if (readprop(jargs, "limit", 0, invalid, "I", &jint) > 0) {
