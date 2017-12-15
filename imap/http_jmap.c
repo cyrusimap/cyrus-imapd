@@ -495,7 +495,7 @@ static int process_resultrefs(json_t *args, json_t *resp)
             continue;
         }
 
-        const char *of, *path;
+        const char *of, *path, *name;
         json_t *res = NULL;
 
         /* Parse result reference object */
@@ -507,6 +507,10 @@ static int process_resultrefs(json_t *args, json_t *resp)
         if (!path || *path == '\0') {
             goto fail;
         }
+        name = json_string_value(json_object_get(ref, "name"));
+        if (!name || *name == '\0') {
+            goto fail;
+        }
 
         /* Lookup referenced response */
         json_t *v;
@@ -516,8 +520,8 @@ static int process_resultrefs(json_t *args, json_t *resp)
             if (!tag || strcmp(tag, of)) {
                 continue;
             }
-            const char *typ = json_string_value(json_array_get(v, 0));
-            if (!typ || !strcmp("error", typ)) {
+            const char *mname = json_string_value(json_array_get(v, 0));
+            if (!mname || strcmp(name, mname)) {
                 goto fail;
             }
             res = v;
