@@ -131,8 +131,8 @@ sub test_getmailboxes
     $self->assert_equals($inbox->{mayCreateChild}, JSON::true);
     $self->assert_equals($inbox->{mayRename}, JSON::false);
     $self->assert_equals($inbox->{mayDelete}, JSON::false);
-    $self->assert_num_equals($inbox->{totalMessages}, 0);
-    $self->assert_num_equals($inbox->{unreadMessages}, 0);
+    $self->assert_num_equals($inbox->{totalEmails}, 0);
+    $self->assert_num_equals($inbox->{unreadEmails}, 0);
     $self->assert_num_equals($inbox->{totalThreads}, 0);
     $self->assert_num_equals($inbox->{unreadThreads}, 0);
 
@@ -148,8 +148,8 @@ sub test_getmailboxes
     $self->assert_equals($foo->{mayCreateChild}, JSON::true);
     $self->assert_equals($foo->{mayRename}, JSON::true);
     $self->assert_equals($foo->{mayDelete}, JSON::true);
-    $self->assert_num_equals($foo->{totalMessages}, 0);
-    $self->assert_num_equals($foo->{unreadMessages}, 0);
+    $self->assert_num_equals($foo->{totalEmails}, 0);
+    $self->assert_num_equals($foo->{unreadEmails}, 0);
     $self->assert_num_equals($foo->{totalThreads}, 0);
     $self->assert_num_equals($foo->{unreadThreads}, 0);
 
@@ -165,8 +165,8 @@ sub test_getmailboxes
     $self->assert_equals($bar->{mayCreateChild}, JSON::true);
     $self->assert_equals($bar->{mayRename}, JSON::true);
     $self->assert_equals($bar->{mayDelete}, JSON::true);
-    $self->assert_num_equals($bar->{totalMessages}, 0);
-    $self->assert_num_equals($bar->{unreadMessages}, 0);
+    $self->assert_num_equals($bar->{totalEmails}, 0);
+    $self->assert_num_equals($bar->{unreadEmails}, 0);
     $self->assert_num_equals($bar->{totalThreads}, 0);
     $self->assert_num_equals($bar->{unreadThreads}, 0);
 }
@@ -559,8 +559,8 @@ sub test_setmailboxes
     $self->assert_equals($mbox->{mayCreateChild}, JSON::true);
     $self->assert_equals($mbox->{mayRename}, JSON::true);
     $self->assert_equals($mbox->{mayDelete}, JSON::true);
-    $self->assert_num_equals($mbox->{totalMessages}, 0);
-    $self->assert_num_equals($mbox->{unreadMessages}, 0);
+    $self->assert_num_equals($mbox->{totalEmails}, 0);
+    $self->assert_num_equals($mbox->{unreadEmails}, 0);
     $self->assert_num_equals($mbox->{totalThreads}, 0);
     $self->assert_num_equals($mbox->{unreadThreads}, 0);
 
@@ -1016,11 +1016,11 @@ sub test_setmailboxes_destroy_empty
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("Message A") || die;
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     my $msgid = $res->[0][1]->{ids}[0];
 
@@ -1045,8 +1045,8 @@ sub test_setmailboxes_destroy_empty
     $self->assert_not_null($res->[0][1]{created});
     my $mboxid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "copy message to newly created mailbox";
-    $res = $jmap->Request([['setMessages', {
+    xlog "copy email to newly created mailbox";
+    $res = $jmap->Request([['setEmails', {
         update => { $msgid => { mailboxIds => {
             $inbox->{id} => JSON::true,
             $mboxid => JSON::true,
@@ -1054,14 +1054,14 @@ sub test_setmailboxes_destroy_empty
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "attempt to destroy mailbox with message";
+    xlog "attempt to destroy mailbox with email";
     $res = $jmap->Request([
             ['setMailboxes', { destroy => [ $mboxid ] }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{notDestroyed}{$mboxid});
 
-    xlog "remove message from mailbox";
-    $res = $jmap->Request([['setMessages', {
+    xlog "remove email from mailbox";
+    $res = $jmap->Request([['setEmails', {
         update => { $msgid => { mailboxIds => {
             $inbox->{id} => JSON::true,
         }}},
@@ -1327,11 +1327,11 @@ sub test_getmailboxesupdates_counts
     $state = $res->[0][1]{newState};
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $msgid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "update message";
-    $res = $jmap->Request([['setMessages', {
+    xlog "update email";
+    $res = $jmap->Request([['setEmails', {
             update => { $msgid => {
                     keywords => {
                         '$Draft' => JSON::true,
@@ -1359,8 +1359,8 @@ sub test_getmailboxesupdates_counts
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
     $state = $res->[0][1]{newState};
 
-    xlog "update message";
-    $res = $jmap->Request([['setMessages', { update => { $msgid => { isUnread => JSON::false }}
+    xlog "update email";
+    $res = $jmap->Request([['setEmails', { update => { $msgid => { isUnread => JSON::false }}
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgid});
 
@@ -1391,7 +1391,7 @@ sub test_getmailboxesupdates_counts
     $draft->{subject} = "memo2";
 
     xlog "Create another draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     $msgid = $res->[0][1]{created}{"1"}{id};
 
     xlog "get mailbox updates";
@@ -1475,7 +1475,7 @@ sub test_getmailboxesupdates_shared
     $state = $res->[0][1]->{newState};
 }
 
-sub test_getmessages
+sub test_getemails
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1494,7 +1494,7 @@ sub test_getmessages
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => -10));
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
         date => $maildate,
@@ -1525,15 +1525,15 @@ sub test_getmessages
         ],
         body => $body
     );
-    $self->make_message("Message A", %params) || die;
+    $self->make_message("Email A", %params) || die;
 
-    xlog "get message list";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
 
-    xlog "get messages";
+    xlog "get emails";
     my $ids = $res->[0][1]->{ids};
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_not_null($msg->{mailboxIds}{$inboxid});
@@ -1567,14 +1567,14 @@ sub test_getmessages
             name => "Bla",
             email => "blu\@local"
     });
-    $self->assert_str_equals($msg->{subject}, "Message A");
+    $self->assert_str_equals($msg->{subject}, "Email A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
 
     xlog "fetch again but only some properties";
-    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ['sender', 'headers.x-tra'] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => $ids, properties => ['sender', 'headers.x-tra'] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
     $hdrs = $msg->{headers};
     $self->assert_null($msg->{mailboxIds});
@@ -1587,7 +1587,7 @@ sub test_getmessages
     $self->assert_str_equals('foo bar baz', $hdrs->{'x-tra'});
 }
 
-sub test_getmessages_mimeencode
+sub test_getemails_mimeencode
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1606,7 +1606,7 @@ sub test_getmessages_mimeencode
 
      # Thanks to http://dogmamix.com/MimeHeadersDecoder/ for examples
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
         date => $maildate,
@@ -1634,10 +1634,10 @@ sub test_getmessages_mimeencode
           "=?ISO-8859-2?B?dSB1bmRlcnN0YW5kIHRoZSBleGFtcGxlLg==?=",
     %params ) || die;
 
-    xlog "get message list";
+    xlog "get email list";
     $res = $jmap->Request([
-            ['getMessagesList', { }, 'R1'],
-            ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2'],
+            ['getEmailsList', { }, 'R1'],
+            ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2'],
     ]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     my $msg = $res->[1][1]->{list}[0];
@@ -1648,7 +1648,7 @@ sub test_getmessages_mimeencode
     $self->assert_str_equals("Tom To", $msg->{to}[0]{name});
 }
 
-sub test_getmessages_fetchmessages
+sub test_getemails_fetchemails
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1667,7 +1667,7 @@ sub test_getmessages_fetchmessages
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => -10));
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
         date => $maildate,
@@ -1698,16 +1698,16 @@ sub test_getmessages_fetchmessages
         ],
         body => $body
     );
-    $self->make_message("Message A", %params) || die;
+    $self->make_message("Email A", %params) || die;
 
-    xlog "get message list";
+    xlog "get email list";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2' ],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2' ],
     ]);
     $self->assert_num_equals(scalar @{$res}, 2);
-    $self->assert_str_equals($res->[0][0], "messagesList");
-    $self->assert_str_equals($res->[1][0], "messages");
+    $self->assert_str_equals($res->[0][0], "emailsList");
+    $self->assert_str_equals($res->[1][0], "emails");
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
 
@@ -1743,7 +1743,7 @@ sub test_getmessages_fetchmessages
             name => "Bla",
             email => "blu\@local"
     });
-    $self->assert_str_equals($msg->{subject}, "Message A");
+    $self->assert_str_equals($msg->{subject}, "Email A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{receivedAt});
@@ -1751,16 +1751,16 @@ sub test_getmessages_fetchmessages
 
     xlog "fetch again but only some properties";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', {
-            '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' },
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', {
+            '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' },
             properties => ['sender', 'headers.x-tra']
         }, 'R2'],
     ]);
 
     $self->assert_num_equals(scalar @{$res}, 2);
-    $self->assert_str_equals($res->[0][0], "messagesList");
-    $self->assert_str_equals($res->[1][0], "messages");
+    $self->assert_str_equals($res->[0][0], "emailsList");
+    $self->assert_str_equals($res->[1][0], "emails");
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
 
@@ -1776,7 +1776,7 @@ sub test_getmessages_fetchmessages
     $self->assert_str_equals('foo bar baz', $hdrs->{'x-tra'});
 }
 
-sub test_getmessages_threads
+sub test_getemails_threads
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1795,7 +1795,7 @@ sub test_getmessages_threads
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => -10));
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
         date => $maildate,
@@ -1826,25 +1826,25 @@ sub test_getmessages_threads
         ],
         body => $body
     );
-    $self->make_message("Message A", %params) || die;
+    $self->make_message("Email A", %params) || die;
 
-    xlog "get message list";
+    xlog "get email list";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getThreads', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/threadIds' }}, 'R2' ],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' }}, 'R3' ],
+        ['getEmailsList', { }, "R1"],
+        ['getThreads', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/threadIds' }}, 'R2' ],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' }}, 'R3' ],
     ]);
     $self->assert_num_equals(scalar @{$res}, 3);
-    $self->assert_str_equals($res->[0][0], "messagesList");
+    $self->assert_str_equals($res->[0][0], "emailsList");
     $self->assert_str_equals($res->[1][0], "threads");
-    $self->assert_str_equals($res->[2][0], "messages");
+    $self->assert_str_equals($res->[2][0], "emails");
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
     $self->assert_num_equals(scalar @{$res->[2][1]->{list}}, 1);
 
     my $thread = $res->[1][1]->{list}[0];
 
-    $self->assert_num_equals(scalar @{$thread->{messageIds}}, 1);
+    $self->assert_num_equals(scalar @{$thread->{emailIds}}, 1);
 
     my $msg = $res->[2][1]->{list}[0];
 
@@ -1878,14 +1878,14 @@ sub test_getmessages_threads
             name => "Bla",
             email => "blu\@local"
     });
-    $self->assert_str_equals($msg->{subject}, "Message A");
+    $self->assert_str_equals($msg->{subject}, "Email A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
 }
 
-sub test_getmessages_multimailboxes
+sub test_getemails_multimailboxes
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1896,15 +1896,15 @@ sub test_getmessages_multimailboxes
 
     my $now = DateTime->now();
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     my $res = $self->make_message("foo") || die;
     my $uid = $res->{attrs}->{uid};
     my $msg;
 
-    xlog "get message";
+    xlog "get email";
     $res = $jmap->Request([
-        ['getMessagesList', {}, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2'],
+        ['getEmailsList', {}, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2'],
     ]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -1913,20 +1913,20 @@ sub test_getmessages_multimailboxes
     xlog "Create target mailbox";
     $talk->create("INBOX.target");
 
-    xlog "Copy message into INBOX.target";
+    xlog "Copy email into INBOX.target";
     $talk->copy($uid, "INBOX.target");
 
-    xlog "get message";
+    xlog "get email";
     $res = $jmap->Request([
-        ['getMessagesList', {}, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2'],
+        ['getEmailsList', {}, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2'],
     ]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
 }
 
-sub test_getmessages_body_both
+sub test_getemails_body_both
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1936,7 +1936,7 @@ sub test_getmessages_body_both
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
@@ -1962,26 +1962,26 @@ sub test_getmessages_body_both
         body => $body
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($textBody, $msg->{textBody});
     $self->assert_str_equals($htmlBody, $msg->{htmlBody});
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids, properties => ["body"] }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($htmlBody, $msg->{htmlBody});
     $self->assert(not exists $msg->{textBody});
 }
 
-sub test_getmessages_body_plain
+sub test_getemails_body_plain
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1991,37 +1991,37 @@ sub test_getmessages_body_plain
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
-    my $body = "A plain text message.";
+    my $body = "A plain text email.";
     $exp_sub{A} = $self->make_message("foo",
         body => $body
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get emails";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($body, $msg->{textBody});
     $self->assert_null($msg->{htmlBody});
 
-    xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $ids, properties => ["body"] }, "R1"]]);
+    xlog "get emails";
+    $res = $jmap->Request([['getEmails', { ids => $ids, properties => ["body"] }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals($body, $msg->{textBody});
     $self->assert_null($msg->{htmlBody});
 }
 
-sub test_getmessages_body_html
+sub test_getemails_body_html
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2031,31 +2031,31 @@ sub test_getmessages_body_html
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
-    my $body = "<html><body> <p>A HTML message.</p> </body></html>";
+    my $body = "<html><body> <p>A HTML email.</p> </body></html>";
     $exp_sub{A} = $self->make_message("foo",
         mime_type => "text/html",
         body => $body
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals('A HTML message.', $msg->{textBody});
+    $self->assert_str_equals('A HTML email.', $msg->{textBody});
     $self->assert_str_equals($body, $msg->{htmlBody});
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', {
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', {
         ids => $ids, properties => ["body"],
     }, "R1"]]);
     $msg = $res->[0][1]{list}[0];
@@ -2063,7 +2063,7 @@ sub test_getmessages_body_html
     $self->assert(not exists $msg->{textBody});
 }
 
-sub test_getmessages_body_multi
+sub test_getemails_body_multi
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2078,7 +2078,7 @@ sub test_getmessages_body_multi
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
@@ -2146,7 +2146,7 @@ sub test_getmessages_body_multi
             "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n".
             "To: Test User <test\@local>\r\n".
             "\r\n".
-            "Jeez....an embedded message".
+            "Jeez....an embedded email".
             "\r\n--subsubsub--\r\n".
         "\r\n--subsub\r\n".
         "Content-Type: text/plain\r\n".
@@ -2162,21 +2162,21 @@ sub test_getmessages_body_multi
     );
     $talk->store('1', '+flags', '($HasAttachment)');
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals("Be that the best text that we'll find", $msg->{textBody});
 
     $self->assert_equals(JSON::true, $msg->{hasAttachment});
 
-    # Assert embedded message support
-    $self->assert_num_equals(1, scalar keys %{$msg->{attachedMessages}});
-    my $submsg = (values %{$msg->{attachedMessages}})[0];
+    # Assert embedded email support
+    $self->assert_num_equals(1, scalar keys %{$msg->{attachedEmails}});
+    my $submsg = (values %{$msg->{attachedEmails}})[0];
 
     $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'message-id'});
     $self->assert_deep_equals({
@@ -2192,7 +2192,7 @@ sub test_getmessages_body_multi
     $self->assert_null($submsg->{replyTo});
     $self->assert_str_equals("bar", $submsg->{subject});
     $self->assert_str_equals("2016-10-05T03:59:07Z", $submsg->{sentAt});
-    $self->assert_str_equals("Jeez....an embedded message", $submsg->{textBody});
+    $self->assert_str_equals("Jeez....an embedded email", $submsg->{textBody});
     $self->assert_null($submsg->{mailboxIds});
     $self->assert_null($submsg->{keywords});
     $self->assert_null($submsg->{size});
@@ -2223,7 +2223,7 @@ sub test_getmessages_body_multi
     $self->assert_null($att->{cid});
 }
 
-sub test_getmessages_body_multi_fromlist
+sub test_getemails_body_multi_fromlist
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2238,7 +2238,7 @@ sub test_getmessages_body_multi_fromlist
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
@@ -2323,12 +2323,12 @@ sub test_getmessages_body_multi_fromlist
         body => $body
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_str_equals("bodyA\nbodyB\n[Inline image]\nbodyD\nbodyK", $msg->{textBody});
@@ -2336,7 +2336,7 @@ sub test_getmessages_body_multi_fromlist
 
 }
 
-sub test_getmessages_attachment_name
+sub test_getemails_attachment_name
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2346,7 +2346,7 @@ sub test_getmessages_attachment_name
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
@@ -2401,17 +2401,17 @@ sub test_getmessages_attachment_name
     );
     $talk->store('1', '+flags', '($HasAttachment)');
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     $self->assert_equals(JSON::true, $msg->{hasAttachment});
 
-    # Assert embedded message support
+    # Assert embedded email support
     my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
     my $att;
 
@@ -2440,7 +2440,7 @@ sub test_getmessages_attachment_name
     $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
 }
 
-sub test_getmessages_body_notext
+sub test_getemails_body_notext
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2450,17 +2450,17 @@ sub test_getmessages_body_notext
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    # Generate a message to have some blob ids
-    xlog "Generate a message in $inbox via IMAP";
+    # Generate a email to have some blob ids
+    xlog "Generate a email in $inbox via IMAP";
     $self->make_message("foo",
         mime_type => "application/zip",
         body => "boguszip",
     );
 
-    xlog "get message list";
+    xlog "get email list";
     my $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2'],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2'],
     ]);
     my $msg = $res->[1][1]->{list}[0];
 
@@ -2469,7 +2469,7 @@ sub test_getmessages_body_notext
 }
 
 
-sub test_getmessages_preview
+sub test_getemails_preview
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2479,29 +2479,29 @@ sub test_getmessages_preview
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    xlog "Generate a message in $inbox via IMAP";
+    xlog "Generate a email in $inbox via IMAP";
     my %exp_sub;
     $store->set_folder($inbox);
     $store->_select();
     $self->{gen}->set_next_uid(1);
 
-    my $body = "A   plain\r\ntext message.";
+    my $body = "A   plain\r\ntext email.";
     $exp_sub{A} = $self->make_message("foo",
         body => $body
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
 
-    xlog "get messages";
-    $res = $jmap->Request([['getMessages', { ids => $res->[0][1]->{ids} }, "R1"]]);
+    xlog "get emails";
+    $res = $jmap->Request([['getEmails', { ids => $res->[0][1]->{ids} }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($msg->{textBody}, "A   plain\r\ntext message.");
-    $self->assert_str_equals($msg->{preview}, 'A plain text message.');
+    $self->assert_str_equals($msg->{textBody}, "A   plain\r\ntext email.");
+    $self->assert_str_equals($msg->{preview}, 'A plain text email.');
 }
 
-sub test_getmessages_shared
+sub test_getemails_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2519,30 +2519,30 @@ sub test_getmessages_shared
     $admintalk->create("user.foo.box1") or die;
     $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
 
-    xlog "Create message in shared account";
+    xlog "Create email in shared account";
     $self->{adminstore}->set_folder('user.foo.box1');
-    $self->make_message("Message foo", store => $self->{adminstore}) or die;
+    $self->make_message("Email foo", store => $self->{adminstore}) or die;
 
-    xlog "get message list in shared account";
-    my $res = $jmap->Request([['getMessagesList', { accountId => 'foo' }, "R1"]]);
+    xlog "get email list in shared account";
+    my $res = $jmap->Request([['getEmailsList', { accountId => 'foo' }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $id = $res->[0][1]->{ids}[0];
 
-    xlog "get message from shared account";
-    $res = $jmap->Request([['getMessages', { accountId => 'foo', ids => [$id]}, "R1"]]);
+    xlog "get email from shared account";
+    $res = $jmap->Request([['getEmails', { accountId => 'foo', ids => [$id]}, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
     $self->assert_not_null($msg);
-    $self->assert_str_equals("Message foo", $msg->{subject});
+    $self->assert_str_equals("Email foo", $msg->{subject});
 
     xlog "Unshare mailbox";
     $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
 
-    xlog "refetch message from unshared mailbox (should fail)";
-    $res = $jmap->Request([['getMessages', { accountId => 'foo', ids => [$id]}, "R1"]]);
+    xlog "refetch email from unshared mailbox (should fail)";
+    $res = $jmap->Request([['getEmails', { accountId => 'foo', ids => [$id]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 }
 
-sub test_setmessages_draft
+sub test_setemails_draft
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2587,11 +2587,11 @@ sub test_setmessages_draft
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
@@ -2609,7 +2609,7 @@ sub test_setmessages_draft
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
 }
 
-sub test_setmessages_inreplyto
+sub test_setemails_inreplyto
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2621,11 +2621,11 @@ sub test_setmessages_inreplyto
     my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
     my $origid = $res->[0][1]{list}[0]{id};
 
-    xlog "Create message to reply to";
+    xlog "Create email to reply to";
     $self->make_message("foo") || die;
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2'],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
@@ -2656,19 +2656,19 @@ sub test_setmessages_inreplyto
         keywords => { '$Draft' => JSON::true },
     };
 
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_str_equals($orig_msgid, $msg->{headers}->{"in-reply-to"});
 
-    $res = $jmap->Request([['getMessages', { ids => [$orig_id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$orig_id] }, "R1"]]);
     $orig_msg = $res->[0][1]->{list}[0];
     $self->assert_equals(JSON::true, $orig_msg->{keywords}->{'$Answered'});
 }
 
-sub test_setmessages_attachedmessages
+sub test_setemails_attachedemails
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2696,11 +2696,11 @@ sub test_setmessages_attachedmessages
         subject => "Memo",
         textBody => "I'm givin' ya one last chance ta surrenda!",
         htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
-        attachedMessages => {
+        attachedEmails => {
             "1" => {
                 from => [ { name => "Bla", email => "bla\@acme.local" } ],
                 to => [ { name => "Blu",   email => "blu\@acme.local" } ],
-                subject  => "an embedded message",
+                subject  => "an embedded email",
                 textBody => "Yo!",
             },
         },
@@ -2708,11 +2708,11 @@ sub test_setmessages_attachedmessages
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
@@ -2721,15 +2721,15 @@ sub test_setmessages_attachedmessages
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
 
-    my $got = (values %{$msg->{attachedMessages}})[0];
-    my $want = $draft->{attachedMessages}->{1};
+    my $got = (values %{$msg->{attachedEmails}})[0];
+    my $want = $draft->{attachedEmails}->{1};
     $self->assert_deep_equals($got->{from}, $want->{from});
     $self->assert_deep_equals($got->{to}, $want->{to});
     $self->assert_str_equals($got->{textBody}, $want->{textBody});
     $self->assert_str_equals($got->{subject}, $want->{subject});
 }
 
-sub test_setmessages_shared
+sub test_setemails_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2742,18 +2742,18 @@ sub test_setmessages_shared
     $self->{instance}->create_user("foo");
     $admintalk->setacl("user.foo", "cassandane", "lrntex") or die;
 
-    xlog "Create message in shared account via IMAP";
+    xlog "Create email in shared account via IMAP";
     $self->{adminstore}->set_folder('user.foo');
-    $self->make_message("Message foo", store => $self->{adminstore}) or die;
+    $self->make_message("Email foo", store => $self->{adminstore}) or die;
 
-    xlog "get message";
+    xlog "get email";
     my $res = $jmap->Request([
-        ['getMessagesList', { accountId => 'foo' }, "R1"],
+        ['getEmailsList', { accountId => 'foo' }, "R1"],
     ]);
     my $id = $res->[0][1]->{ids}[0];
 
-    xlog "toggle Seen flag on message";
-    $res = $jmap->Request([['setMessages', {
+    xlog "toggle Seen flag on email";
+    $res = $jmap->Request([['setEmails', {
         accountId => 'foo',
         update => { $id => { keywords => { '$Seen' => JSON::true } } },
     }, "R1"]]);
@@ -2762,35 +2762,35 @@ sub test_setmessages_shared
     xlog "Remove right to write annotations";
     $admintalk->setacl("user.foo", "cassandane", "lrtex") or die;
 
-    xlog 'Toggle \\Seen flag on message (should fail)';
-    $res = $jmap->Request([['setMessages', {
+    xlog 'Toggle \\Seen flag on email (should fail)';
+    $res = $jmap->Request([['setEmails', {
         accountId => 'foo',
         update => { $id => { keywords => { } } },
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{notUpdated}{$id});
 
-    xlog "Remove right to delete message";
+    xlog "Remove right to delete email";
     $admintalk->setacl("user.foo", "cassandane", "lr") or die;
 
-    xlog 'Delete message (should fail)';
-    $res = $jmap->Request([['setMessages', {
+    xlog 'Delete email (should fail)';
+    $res = $jmap->Request([['setEmails', {
         accountId => 'foo',
         destroy => [ $id ],
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{notDestroyed}{$id});
 
-    xlog "Add right to delete message";
+    xlog "Add right to delete email";
     $admintalk->setacl("user.foo", "cassandane", "lrtex") or die;
 
-    xlog 'Delete message';
-    $res = $jmap->Request([['setMessages', {
+    xlog 'Delete email';
+    $res = $jmap->Request([['setEmails', {
             accountId => 'foo',
             destroy => [ $id ],
     }, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 }
 
-sub test_setmessages_userkeywords
+sub test_setemails_userkeywords
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -2824,11 +2824,11 @@ sub test_setmessages_userkeywords
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
@@ -2836,7 +2836,7 @@ sub test_setmessages_userkeywords
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
 
     xlog "Update draft";
-    $res = $jmap->Request([['setMessages', {
+    $res = $jmap->Request([['setEmails', {
         update => {
             $id => {
                 "keywords" => {
@@ -2849,7 +2849,7 @@ sub test_setmessages_userkeywords
     }, "R1"]]);
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
@@ -2882,7 +2882,7 @@ sub test_uploadzero
     $self->assert_str_equals("text/plain", $data->{type});
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "2" => {
+      ['setEmails', { create => { "2" => {
         mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -2927,7 +2927,7 @@ sub test_upload
     $self->assert_str_equals("text/rubbish", $data->{type});
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "2" => {
+      ['setEmails', { create => { "2" => {
         mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -2963,10 +2963,10 @@ sub test_upload_multiaccount
     # Create user but don't share mailbox
     $self->{instance}->create_user("bar");
 
-    my @res = $jmap->Upload("a message with some text", "text/rubbish", "foo");
+    my @res = $jmap->Upload("a email with some text", "text/rubbish", "foo");
     $self->assert_str_equals($res[0]->{status}, '201');
 
-    @res = $jmap->Upload("a message with some text", "text/rubbish", "bar");
+    @res = $jmap->Upload("a email with some text", "text/rubbish", "bar");
     $self->assert_str_equals($res[0]->{status}, '404');
 }
 
@@ -3024,7 +3024,7 @@ sub test_uploadbin
     my $data = $jmap->Upload($binary, "image/gif");
 
     my $msgresp = $jmap->Request([
-      ['setMessages', { create => { "2" => {
+      ['setEmails', { create => { "2" => {
         mailboxIds =>  { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [
@@ -3056,8 +3056,8 @@ sub test_download
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    # Generate a message to have some blob ids
-    xlog "Generate a message in $inbox via IMAP";
+    # Generate a email to have some blob ids
+    xlog "Generate a email in $inbox via IMAP";
     $self->make_message("foo",
         mime_type => "multipart/mixed",
         mime_boundary => "sub",
@@ -3078,12 +3078,12 @@ sub test_download
           . "\r\n--sub--",
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
@@ -3096,7 +3096,7 @@ sub test_download
     $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
 }
 
-sub test_setmessages_attachments
+sub test_setemails_attachments
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3106,8 +3106,8 @@ sub test_setmessages_attachments
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    # Generate a message to have some blob ids
-    xlog "Generate a message in $inbox via IMAP";
+    # Generate a email to have some blob ids
+    xlog "Generate a email in $inbox via IMAP";
     $self->make_message("foo",
         mime_type => "multipart/mixed",
         mime_boundary => "sub",
@@ -3128,12 +3128,12 @@ sub test_setmessages_attachments
           . "\r\n--sub--",
     );
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ids = $res->[0][1]->{ids};
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => $ids }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
     my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
@@ -3183,11 +3183,11 @@ sub test_setmessages_attachments
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
 
     %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
@@ -3217,7 +3217,7 @@ sub test_setmessages_attachments
     $self->assert_str_equals("simple", $att->{name});
 }
 
-sub test_setmessages_flagged
+sub test_setemails_flagged
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3243,11 +3243,11 @@ sub test_setmessages_flagged
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
@@ -3255,7 +3255,7 @@ sub test_setmessages_flagged
 }
 
 
-sub test_setmessages_invalid_mailaddr
+sub test_setemails_invalid_mailaddr
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3272,20 +3272,20 @@ sub test_setmessages_invalid_mailaddr
         keywords => { },
     };
 
-    xlog 'Create a message with invalid replyTo property without $Drafts flags (should fail)';
+    xlog 'Create a email with invalid replyTo property without $Drafts flags (should fail)';
     $msg->{replyTo} = [ { name => "", email => "a\@bad\@address\@acme.local" } ];
-    my $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    my $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('replyTo[0].email', $res->[0][1]{notCreated}{"1"}{properties}[0]);
 
-    xlog 'Create a message with invalid replyTo property with $Drafts flags';
+    xlog 'Create a email with invalid replyTo property with $Drafts flags';
     $msg->{keywords} = { '$Draft' => JSON::true };
     $msg->{replyTo} = [ { name => "", email => "address\@acme.local" } ];
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_not_null($res->[0][1]{created}{"1"});
 }
 
-sub test_setmessages_mailboxids
+sub test_setemails_mailboxids
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3311,34 +3311,34 @@ sub test_setmessages_mailboxids
     };
 
     # Not OK: at least one mailbox must be specified
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
     $msg->{mailboxIds} = {};
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
     $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
 
     # OK: drafts mailbox isn't required (anymore)
     $msg->{mailboxIds} = { $inboxid => JSON::true },
-    $msg->{subject} = "Message 1";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $msg->{subject} = "Email 1";
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
 
     # OK: drafts mailbox is OK to create in
     $msg->{mailboxIds} = { $draftsid => JSON::true },
-    $msg->{subject} = "Message 2";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $msg->{subject} = "Email 2";
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
 
     # OK: drafts mailbox is OK to create in, as is for multiple mailboxes
     $msg->{mailboxIds} = { $draftsid => JSON::true, $inboxid => JSON::true },
-    $msg->{subject} = "Message 3";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $msg }}, "R1"]]);
+    $msg->{subject} = "Email 3";
+    $res = $jmap->Request([['setEmails', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
 }
 
-sub test_setmessagesubmissions
+sub test_setemailsubmissions
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3348,34 +3348,34 @@ sub test_setmessagesubmissions
     my $identityid = $res->[0][1]->{list}[0]->{id};
     $self->assert_not_null($identityid);
 
-    xlog "Generate a message via IMAP";
-    $self->make_message("foo", body => "a message") or die;
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email") or die;
 
-    xlog "get message id";
-    $res = $jmap->Request( [ [ 'getMessagesList', {}, "R1" ] ] );
-    my $messageid = $res->[0][1]->{ids}[0];
+    xlog "get email id";
+    $res = $jmap->Request( [ [ 'getEmailsList', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
     my $threadid = $res->[0][1]->{threadIds}[0];
 
-    xlog "create message submission";
-    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+    xlog "create email submission";
+    $res = $jmap->Request( [ [ 'setEmailSubmissions', {
         create => {
             '1' => {
                 identityId => $identityid,
-                messageId  => $messageid,
+                emailId  => $emailid,
             }
        }
     }, "R1" ] ] );
     my $msgsubid = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($msgsubid);
 
-    xlog "get message submission";
-    $res = $jmap->Request( [ [ 'getMessageSubmissions', {
+    xlog "get email submission";
+    $res = $jmap->Request( [ [ 'getEmailSubmissions', {
         ids => [ $msgsubid ],
     }, "R1" ] ] );
     $self->assert_str_equals($msgsubid, $res->[0][1]->{notFound}[0]);
 
-    xlog "update message submission";
-    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+    xlog "update email submission";
+    $res = $jmap->Request( [ [ 'setEmailSubmissions', {
         update => {
             $msgsubid => {
                 undoStatus => 'canceled',
@@ -3384,14 +3384,14 @@ sub test_setmessagesubmissions
     }, "R1" ] ] );
     $self->assert_str_equals('notFound', $res->[0][1]->{notUpdated}{$msgsubid}{type});
 
-    xlog "destroy message submission";
-    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+    xlog "destroy email submission";
+    $res = $jmap->Request( [ [ 'setEmailSubmissions', {
         destroy => [ $msgsubid ],
     }, "R1" ] ] );
     $self->assert_str_equals("notFound", $res->[0][1]->{notDestroyed}{$msgsubid}{type});
 }
 
-sub test_setmessagesubmissions_with_envelope
+sub test_setemailsubmissions_with_envelope
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3401,20 +3401,20 @@ sub test_setmessagesubmissions_with_envelope
     my $identityid = $res->[0][1]->{list}[0]->{id};
     $self->assert_not_null($identityid);
 
-    xlog "Generate a message via IMAP";
-    $self->make_message("foo", body => "a message\r\nwithCRLF\r\n") or die;
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
 
-    xlog "get message id";
-    $res = $jmap->Request( [ [ 'getMessagesList', {}, "R1" ] ] );
-    my $messageid = $res->[0][1]->{ids}[0];
+    xlog "get email id";
+    $res = $jmap->Request( [ [ 'getEmailsList', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
     my $threadid = $res->[0][1]->{threadIds}[0];
 
-    xlog "create message submission";
-    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+    xlog "create email submission";
+    $res = $jmap->Request( [ [ 'setEmailSubmissions', {
         create => {
             '1' => {
                 identityId => $identityid,
-                messageId  => $messageid,
+                emailId  => $emailid,
                 envelope => {
                     mailFrom => {
                         email => 'from@localhost',
@@ -3432,7 +3432,7 @@ sub test_setmessagesubmissions_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
-sub test_getmessagesubmissionsupdates
+sub test_getemailsubmissionsupdates
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3442,38 +3442,38 @@ sub test_getmessagesubmissionsupdates
     my $identityid = $res->[0][1]->{list}[0]->{id};
     $self->assert_not_null($identityid);
 
-    xlog "get current message submission state";
-    $res = $jmap->Request([['getMessageSubmissionsList', { }, "R1"]]);
+    xlog "get current email submission state";
+    $res = $jmap->Request([['getEmailSubmissionsList', { }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "get message submission updates";
-    $res = $jmap->Request( [ [ 'getMessageSubmissionsUpdates', {
+    xlog "get email submission updates";
+    $res = $jmap->Request( [ [ 'getEmailSubmissionsUpdates', {
         sinceState => $state,
     }, "R1" ] ] );
     $self->assert_null($res->[0][1]->{changed});
     $self->assert_null($res->[0][1]->{removed});
 
-    xlog "Generate a message via IMAP";
-    $self->make_message("foo", body => "a message") or die;
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email") or die;
 
-    xlog "get message id";
-    $res = $jmap->Request( [ [ 'getMessagesList', {}, "R1" ] ] );
-    my $messageid = $res->[0][1]->{ids}[0];
+    xlog "get email id";
+    $res = $jmap->Request( [ [ 'getEmailsList', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
     my $threadid = $res->[0][1]->{threadIds}[0];
 
-    xlog "create message submission but don't update state";
-    $res = $jmap->Request( [ [ 'setMessageSubmissions', {
+    xlog "create email submission but don't update state";
+    $res = $jmap->Request( [ [ 'setEmailSubmissions', {
         create => {
             '1' => {
                 identityId => $identityid,
-                messageId  => $messageid,
+                emailId  => $emailid,
             }
        }
     }, "R1" ] ] );
 
-    xlog "get message submission updates";
-    $res = $jmap->Request( [ [ 'getMessageSubmissionsUpdates', {
+    xlog "get email submission updates";
+    $res = $jmap->Request( [ [ 'getEmailSubmissionsUpdates', {
         sinceState => $state,
     }, "R1" ] ] );
     $self->assert(exists $res->[0][1]->{changed});
@@ -3482,14 +3482,14 @@ sub test_getmessagesubmissionsupdates
     $self->assert_null($res->[0][1]->{removed});
 }
 
-sub test_getmessagesubmissionslist
+sub test_getemailsubmissionslist
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "get message submission list (no arguments)";
-    my $res = $jmap->Request([['getMessageSubmissionsList', { }, "R1"]]);
+    xlog "get email submission list (no arguments)";
+    my $res = $jmap->Request([['getEmailSubmissionsList', { }, "R1"]]);
     $self->assert_null($res->[0][1]{filter});
     $self->assert_null($res->[0][1]{sort});
     $self->assert_not_null($res->[0][1]{state});
@@ -3498,22 +3498,22 @@ sub test_getmessagesubmissionslist
     $self->assert_num_equals(0, $res->[0][1]{total});
     $self->assert_not_null($res->[0][1]{ids});
     $self->assert_not_null($res->[0][1]{threadIds});
-    $self->assert_not_null($res->[0][1]{messageIds});
+    $self->assert_not_null($res->[0][1]{emailIds});
 }
 
-sub test_getmessagesubmissionslistupdates
+sub test_getemailsubmissionslistupdates
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "get current message submission state";
-    my $res = $jmap->Request([['getMessageSubmissionsList', { }, "R1"]]);
+    xlog "get current email submission state";
+    my $res = $jmap->Request([['getEmailSubmissionsList', { }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "get message submission list updates (empty filter)";
-    $res = $jmap->Request([['getMessageSubmissionsListUpdates', {
+    xlog "get email submission list updates (empty filter)";
+    $res = $jmap->Request([['getEmailSubmissionsListUpdates', {
         filter => {},
         sinceState => $state,
     }, "R1"]]);
@@ -3528,7 +3528,7 @@ sub test_getmessagesubmissionslistupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
 }
 
-sub test_setmessages_move
+sub test_setemails_move
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3553,31 +3553,31 @@ sub test_setmessages_move
     my $c = $res->[0][1]{created}{"c"}{id};
     my $d = $res->[0][1]{created}{"d"}{id};
 
-    xlog "Generate a message via IMAP";
+    xlog "Generate a email via IMAP";
     my %exp_sub;
     $exp_sub{A} = $self->make_message(
-        "foo", body => "a message",
+        "foo", body => "a email",
     );
 
-    xlog "get message id";
-    $res = $jmap->Request( [ [ 'getMessagesList', {}, "R1" ] ] );
+    xlog "get email id";
+    $res = $jmap->Request( [ [ 'getEmailsList', {}, "R1" ] ] );
     my $id = $res->[0][1]->{ids}[0];
 
-    xlog "get message";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    xlog "get email";
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
     local *assert_move = sub {
         my ($moveto) = (@_);
 
-        xlog "move message to " . Dumper($moveto);
+        xlog "move email to " . Dumper($moveto);
         $msg->{mailboxIds} = $moveto;
         $res = $jmap->Request(
-            [ [ 'setMessages', { update => { $id => $msg } }, "R1" ] ] );
+            [ [ 'setEmails', { update => { $id => $msg } }, "R1" ] ] );
         $self->assert(exists $res->[0][1]{updated}{$id});
 
-        $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ] );
+        $res = $jmap->Request( [ [ 'getEmails', { ids => [$id] }, "R1" ] ] );
         $msg = $res->[0][1]->{list}[0];
 
         $self->assert_deep_equals($moveto, $msg->{mailboxIds});
@@ -3588,7 +3588,7 @@ sub test_setmessages_move
     assert_move({$d => JSON::true});
 }
 
-sub test_setmessages_update
+sub test_setemails_update
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3620,11 +3620,11 @@ sub test_setmessages_update
     };
 
     xlog "Create a draft";
-    $res = $jmap->Request([['setMessages', { create => { "1" => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     xlog "Update draft $id";
@@ -3634,15 +3634,15 @@ sub test_setmessages_update
         '$Seen' => JSON::true,
         '$Answered' => JSON::true,
     };
-    $res = $jmap->Request([['setMessages', { update => { $id => $draft }}, "R1"]]);
+    $res = $jmap->Request([['setEmails', { update => { $id => $draft }}, "R1"]]);
 
     xlog "Get draft $id";
-    $res = $jmap->Request([['getMessages', { ids => [$id] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
     $self->assert_deep_equals($draft->{keywords}, $msg->{keywords});
 }
 
-sub test_setmessages_destroy
+sub test_setemails_destroy
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3693,31 +3693,31 @@ sub test_setmessages_destroy
         keywords => { '$Draft' => JSON::true },
     };
     $res = $jmap->Request(
-        [ [ 'setMessages', { create => { "1" => $draft } }, "R1" ] ],
+        [ [ 'setEmails', { create => { "1" => $draft } }, "R1" ] ],
     );
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
 
     xlog "Get draft $id";
-    $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ]);
+    $res = $jmap->Request( [ [ 'getEmails', { ids => [$id] }, "R1" ] ]);
     $self->assert_num_equals(3, scalar keys %{$res->[0][1]->{list}[0]{mailboxIds}});
 
     xlog "Destroy draft $id";
     $res = $jmap->Request(
-        [ [ 'setMessages', { destroy => [ $id ] }, "R1" ] ],
+        [ [ 'setEmails', { destroy => [ $id ] }, "R1" ] ],
     );
     $self->assert_str_equals( $res->[0][1]{destroyed}[0], $id );
 
     xlog "Get draft $id";
-    $res = $jmap->Request( [ [ 'getMessages', { ids => [$id] }, "R1" ] ]);
+    $res = $jmap->Request( [ [ 'getEmails', { ids => [$id] }, "R1" ] ]);
     $self->assert_str_equals( $res->[0][1]->{notFound}[0], $id );
 
-    xlog "Get messages";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "Get emails";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 }
 
-sub test_getmessageslist
+sub test_getemailslist
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3745,7 +3745,7 @@ sub test_getmessageslist
     $self->assert_not_null($mboxb);
     $self->assert_not_null($mboxc);
 
-    xlog "create messages";
+    xlog "create emails";
     my %params;
     $store->set_folder("$mboxprefix.A");
     my $dtfoo = DateTime->new(
@@ -3755,7 +3755,7 @@ sub test_getmessageslist
         hour       => 7,
         time_zone  => 'Etc/UTC',
     );
-    my $bodyfoo = "A rather short message";
+    my $bodyfoo = "A rather short email";
     %params = (
         date => $dtfoo,
         body => $bodyfoo,
@@ -3773,21 +3773,21 @@ sub test_getmessageslist
         time_zone  => 'Etc/UTC',
     );
     my $bodybar = ""
-    . "In the context of electronic mail, messages are viewed as having an\r\n"
+    . "In the context of electronic mail, emails are viewed as having an\r\n"
     . "envelope and contents.  The envelope contains whatever information is\r\n"
     . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
     . "discussion of the envelope.)  The contents comprise the object to be\r\n"
     . "delivered to the recipient.  This specification applies only to the\r\n"
-    . "format and some of the semantics of message contents.  It contains no\r\n"
+    . "format and some of the semantics of email contents.  It contains no\r\n"
     . "specification of the information in the envelope.i\r\n"
     . "\r\n"
-    . "However, some message systems may use information from the contents\r\n"
+    . "However, some email systems may use information from the contents\r\n"
     . "to create the envelope.  It is intended that this specification\r\n"
     . "facilitate the acquisition of such information by programs.\r\n"
     . "\r\n"
-    . "This specification is intended as a definition of what message\r\n"
-    . "content format is to be passed between systems.  Though some message\r\n"
-    . "systems locally store messages in this format (which eliminates the\r\n"
+    . "This specification is intended as a definition of what email\r\n"
+    . "content format is to be passed between systems.  Though some email\r\n"
+    . "systems locally store emails in this format (which eliminates the\r\n"
     . "need for translation between formats) and others use formats that\r\n"
     . "differ from the one specified in this specification, local storage is\r\n"
     . "outside of the scope of this specification.\r\n";
@@ -3805,12 +3805,12 @@ sub test_getmessageslist
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch messages without filter";
+    xlog "fetch emails without filter";
     $res = $jmap->Request([
-        ['getMessagesList', { accountId => $account }, 'R1'],
-        ['getMessages', {
+        ['getEmailsList', { accountId => $account }, 'R1'],
+        ['getEmails', {
             accountId => $account,
-            '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' }
+            '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' }
         }, 'R2'],
     ]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -3823,7 +3823,7 @@ sub test_getmessageslist
     $self->assert_not_null($bar);
 
     xlog "filter text";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         text => "foo",
@@ -3833,7 +3833,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter NOT text";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         operator => "NOT",
@@ -3844,7 +3844,7 @@ sub test_getmessageslist
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
     xlog "filter mailbox A";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         inMailbox => $mboxa,
@@ -3854,7 +3854,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter mailboxes";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         operator => 'OR',
@@ -3872,7 +3872,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter mailboxes with not in";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         inMailboxOtherThan => [$mboxb],
@@ -3882,7 +3882,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter mailboxes";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         operator => 'AND',
@@ -3902,7 +3902,7 @@ sub test_getmessageslist
     $self->assert_null($res->[0][1]->{ids});
 
     xlog "filter not in mailbox A";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         operator => 'NOT',
@@ -3917,7 +3917,7 @@ sub test_getmessageslist
 
     xlog "filter by before";
     my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
@@ -3928,7 +3928,7 @@ sub test_getmessageslist
 
     xlog "filter by after",
     my $dtafter = $dtbar->clone()->add(seconds => 1);
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         after => $dtafter->strftime('%Y-%m-%dT%TZ'),
@@ -3938,7 +3938,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter by after and before",
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         after => $dtafter->strftime('%Y-%m-%dT%TZ'),
@@ -3948,7 +3948,7 @@ sub test_getmessageslist
     $self->assert_null($res->[0][1]->{ids});
 
     xlog "filter by minSize";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         minSize => length($bodybar),
@@ -3958,7 +3958,7 @@ sub test_getmessageslist
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
     xlog "filter by maxSize";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         maxSize => length($bodybar),
@@ -3968,7 +3968,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
     xlog "filter by header";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         header => [ "x-tra" ],
@@ -3978,7 +3978,7 @@ sub test_getmessageslist
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
     xlog "filter by header and value";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     filter => {
                         header => [ "x-tra", "bam" ],
@@ -3987,7 +3987,7 @@ sub test_getmessageslist
     $self->assert_null($res->[0][1]->{ids});
 
     xlog "sort by ascending receivedAt";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "receivedAt asc" ],
                 }, "R1"]]);
@@ -3996,7 +3996,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
     xlog "sort by descending receivedAt";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "receivedAt desc" ],
                 }, "R1"]]);
@@ -4005,7 +4005,7 @@ sub test_getmessageslist
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
 
     xlog "sort by ascending size";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "size asc" ],
                 }, "R1"]]);
@@ -4014,7 +4014,7 @@ sub test_getmessageslist
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
 
     xlog "sort by descending size";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "size desc" ],
                 }, "R1"]]);
@@ -4023,7 +4023,7 @@ sub test_getmessageslist
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
     xlog "sort by ascending id";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "id asc" ],
                 }, "R1"]]);
@@ -4031,7 +4031,7 @@ sub test_getmessageslist
     $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
 
     xlog "sort by descending id";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     accountId => $account,
                     sort => [ "id desc" ],
                 }, "R1"]]);
@@ -4044,7 +4044,7 @@ sub test_getmessageslist
     $talk->delete("$mboxprefix.C") or die;
 }
 
-sub test_getmessageslist_shared
+sub test_getemailslist_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4078,7 +4078,7 @@ sub test_getmessageslist_shared
         $self->assert_not_null($mboxb);
         $self->assert_not_null($mboxc);
 
-        xlog "create messages";
+        xlog "create emails";
         my %params;
         $store->set_folder("$mboxprefix.A");
         my $dtfoo = DateTime->new(
@@ -4088,7 +4088,7 @@ sub test_getmessageslist_shared
             hour       => 7,
             time_zone  => 'Etc/UTC',
         );
-        my $bodyfoo = "A rather short message";
+        my $bodyfoo = "A rather short email";
         %params = (
             date => $dtfoo,
             body => $bodyfoo,
@@ -4106,21 +4106,21 @@ sub test_getmessageslist_shared
             time_zone  => 'Etc/UTC',
         );
         my $bodybar = ""
-        . "In the context of electronic mail, messages are viewed as having an\r\n"
+        . "In the context of electronic mail, emails are viewed as having an\r\n"
         . "envelope and contents.  The envelope contains whatever information is\r\n"
         . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
         . "discussion of the envelope.)  The contents comprise the object to be\r\n"
         . "delivered to the recipient.  This specification applies only to the\r\n"
-        . "format and some of the semantics of message contents.  It contains no\r\n"
+        . "format and some of the semantics of email contents.  It contains no\r\n"
         . "specification of the information in the envelope.i\r\n"
         . "\r\n"
-        . "However, some message systems may use information from the contents\r\n"
+        . "However, some email systems may use information from the contents\r\n"
         . "to create the envelope.  It is intended that this specification\r\n"
         . "facilitate the acquisition of such information by programs.\r\n"
         . "\r\n"
-        . "This specification is intended as a definition of what message\r\n"
-        . "content format is to be passed between systems.  Though some message\r\n"
-        . "systems locally store messages in this format (which eliminates the\r\n"
+        . "This specification is intended as a definition of what email\r\n"
+        . "content format is to be passed between systems.  Though some email\r\n"
+        . "systems locally store emails in this format (which eliminates the\r\n"
         . "need for translation between formats) and others use formats that\r\n"
         . "differ from the one specified in this specification, local storage is\r\n"
         . "outside of the scope of this specification.\r\n";
@@ -4138,12 +4138,12 @@ sub test_getmessageslist_shared
         xlog "run squatter";
         $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-        xlog "fetch messages without filter";
+        xlog "fetch emails without filter";
         $res = $jmap->Request([
-                ['getMessagesList', { accountId => $account }, 'R1'],
-                ['getMessages', {
+                ['getEmailsList', { accountId => $account }, 'R1'],
+                ['getEmails', {
                         accountId => $account,
-                        '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' }
+                        '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' }
                     }, 'R2'],
             ]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -4156,7 +4156,7 @@ sub test_getmessageslist_shared
         $self->assert_not_null($bar);
 
         xlog "filter text";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             text => "foo",
@@ -4166,7 +4166,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter NOT text";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             operator => "NOT",
@@ -4177,7 +4177,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailbox A";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             inMailbox => $mboxa,
@@ -4187,7 +4187,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailboxes";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             operator => 'OR',
@@ -4205,7 +4205,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailboxes with not in";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             inMailboxOtherThan => [$mboxb],
@@ -4215,7 +4215,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailboxes with not in";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             inMailboxOtherThan => [$mboxa],
@@ -4224,7 +4224,7 @@ sub test_getmessageslist_shared
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
 
         xlog "filter mailboxes with not in";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             inMailboxOtherThan => [$mboxa, $mboxc],
@@ -4234,7 +4234,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailboxes";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             operator => 'AND',
@@ -4254,7 +4254,7 @@ sub test_getmessageslist_shared
         $self->assert_null($res->[0][1]->{ids});
 
         xlog "filter not in mailbox A";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             operator => 'NOT',
@@ -4269,7 +4269,7 @@ sub test_getmessageslist_shared
 
         xlog "filter by before";
         my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
@@ -4280,7 +4280,7 @@ sub test_getmessageslist_shared
 
         xlog "filter by after",
         my $dtafter = $dtbar->clone()->add(seconds => 1);
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             after => $dtafter->strftime('%Y-%m-%dT%TZ'),
@@ -4290,7 +4290,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter by after and before",
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             after => $dtafter->strftime('%Y-%m-%dT%TZ'),
@@ -4300,7 +4300,7 @@ sub test_getmessageslist_shared
         $self->assert_null($res->[0][1]->{ids});
 
         xlog "filter by minSize";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             minSize => length($bodybar),
@@ -4310,7 +4310,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
         xlog "filter by maxSize";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             maxSize => length($bodybar),
@@ -4320,7 +4320,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
 
         xlog "filter by header";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             header => [ "x-tra" ],
@@ -4330,7 +4330,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
         xlog "filter by header and value";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         filter => {
                             header => [ "x-tra", "bam" ],
@@ -4339,7 +4339,7 @@ sub test_getmessageslist_shared
         $self->assert_null($res->[0][1]->{ids});
 
         xlog "sort by ascending receivedAt";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "receivedAt asc" ],
                     }, "R1"]]);
@@ -4348,7 +4348,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
         xlog "sort by descending receivedAt";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "receivedAt desc" ],
                     }, "R1"]]);
@@ -4357,7 +4357,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
 
         xlog "sort by ascending size";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "size asc" ],
                     }, "R1"]]);
@@ -4366,7 +4366,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
 
         xlog "sort by descending size";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "size desc" ],
                     }, "R1"]]);
@@ -4375,7 +4375,7 @@ sub test_getmessageslist_shared
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
 
         xlog "sort by ascending id";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "id asc" ],
                     }, "R1"]]);
@@ -4383,7 +4383,7 @@ sub test_getmessageslist_shared
         $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
 
         xlog "sort by descending id";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
                         accountId => $account,
                         sort => [ "id desc" ],
                     }, "R1"]]);
@@ -4397,7 +4397,7 @@ sub test_getmessageslist_shared
     }
 }
 
-sub test_getmessageslist_keywords
+sub test_getemailslist_keywords
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4409,38 +4409,38 @@ sub test_getmessageslist_keywords
     my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};
 
-    xlog "create message";
+    xlog "create email";
     $res = $self->make_message("foo") || die;
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch messages without filter";
+    xlog "fetch emails without filter";
     $res = $jmap->Request([
-        ['getMessagesList', { }, 'R1'],
+        ['getEmailsList', { }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $fooid = $res->[0][1]->{ids}[0];
 
-    xlog "fetch messages with \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails with \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             hasKeyword => '$Flagged',
         }
     }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 
-    xlog "fetch messages without \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails without \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             notHasKeyword => '$Flagged',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog 'set $Flagged flag on message';
-    $res = $jmap->Request([['setMessages', {
+    xlog 'set $Flagged flag on email';
+    $res = $jmap->Request([['setEmails', {
         update => {
             $fooid => {
                 keywords => { '$Flagged' => JSON::true },
@@ -4449,27 +4449,27 @@ sub test_getmessageslist_keywords
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$fooid});
 
-    xlog "fetch messages with \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails with \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             hasKeyword => '$Flagged',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog "fetch messages without \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails without \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             notHasKeyword => '$Flagged',
         }
     }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 
-    xlog "create message";
+    xlog "create email";
     $res = $self->make_message("bar") || die;
 
-    xlog "fetch messages without \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails without \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             notHasKeyword => '$Flagged',
         }
@@ -4478,16 +4478,16 @@ sub test_getmessageslist_keywords
     my $barid = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($barid, $fooid);
 
-    xlog "fetch messages sorted ascending by \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails sorted ascending by \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         sort => [ 'hasKeyword:$Flagged asc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[1]);
 
-    xlog "fetch messages sorted descending by \$Flagged flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails sorted descending by \$Flagged flag";
+    $res = $jmap->Request([['getEmailsList', {
         sort => [ 'hasKeyword:$Flagged desc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -4495,7 +4495,7 @@ sub test_getmessageslist_keywords
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[1]);
 }
 
-sub test_getmessageslist_userkeywords
+sub test_getemailslist_userkeywords
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4504,16 +4504,16 @@ sub test_getmessageslist_userkeywords
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "create message foo";
+    xlog "create email foo";
     my $res = $self->make_message("foo") || die;
 
     xlog "fetch foo's id";
-    $res = $jmap->Request([['getMessagesList', { }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { }, "R1"]]);
     my $fooid = $res->[0][1]->{ids}[0];
     $self->assert_not_null($fooid);
 
-    xlog 'set foo flag on message foo';
-    $res = $jmap->Request([['setMessages', {
+    xlog 'set foo flag on email foo';
+    $res = $jmap->Request([['setEmails', {
         update => {
             $fooid => {
                 keywords => { 'foo' => JSON::true },
@@ -4525,8 +4525,8 @@ sub test_getmessageslist_userkeywords
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch messages with foo flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails with foo flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             hasKeyword => 'foo',
         }
@@ -4534,11 +4534,11 @@ sub test_getmessageslist_userkeywords
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
 
-    xlog "create message bar";
+    xlog "create email bar";
     $res = $self->make_message("bar") || die;
 
-    xlog "fetch messages without foo flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails without foo flag";
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             notHasKeyword => 'foo',
         }
@@ -4547,16 +4547,16 @@ sub test_getmessageslist_userkeywords
     my $barid = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($barid, $fooid);
 
-    xlog "fetch messages sorted ascending by foo flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails sorted ascending by foo flag";
+    $res = $jmap->Request([['getEmailsList', {
         sort => [ 'hasKeyword:foo asc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[1]);
 
-    xlog "fetch messages sorted descending by foo flag";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "fetch emails sorted descending by foo flag";
+    $res = $jmap->Request([['getEmailsList', {
         sort => [ 'hasKeyword:foo desc' ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -4564,7 +4564,7 @@ sub test_getmessageslist_userkeywords
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[1]);
 }
 
-sub test_getmessageslist_threadkeywords
+sub test_getemailslist_threadkeywords
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4589,34 +4589,34 @@ sub test_getmessageslist_threadkeywords
     my %params = (store => $store);
     $store->set_folder("INBOX");
 
-    xlog "generating message A";
-    $exp{A} = $self->make_message("Message A", %params);
+    xlog "generating email A";
+    $exp{A} = $self->make_message("Email A", %params);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B", %params);
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B", %params);
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message C referencing A";
+    xlog "generating email C referencing A";
     %params = (
         references => [ $exp{A} ],
         store => $store,
     );
-    $exp{C} = $self->make_message("Re: Message A", %params);
+    $exp{C} = $self->make_message("Re: Email A", %params);
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch message ids";
+    xlog "fetch email ids";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2' ],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2' ],
     ]);
     my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
-    my $msga = $m{"Message A"};
-    my $msgb = $m{"Message B"};
-    my $msgc = $m{"Re: Message A"};
+    my $msga = $m{"Email A"};
+    my $msgb = $m{"Email B"};
+    my $msgc = $m{"Re: Email A"};
     $self->assert_not_null($msga);
     $self->assert_not_null($msgb);
     $self->assert_not_null($msgc);
@@ -4629,7 +4629,7 @@ sub test_getmessageslist_threadkeywords
         $flag =~ s+^\\+\$+ ;
 
         xlog "fetch collapsed threads with some $flag flag";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
             filter => {
                 someInThreadHaveKeyword => $flag,
             },
@@ -4637,8 +4637,8 @@ sub test_getmessageslist_threadkeywords
         }, "R1"]]);
         $self->assert_null($res->[0][1]->{threadIds});
 
-        xlog "set $flag flag on message message A";
-        $res = $jmap->Request([['setMessages', {
+        xlog "set $flag flag on email email A";
+        $res = $jmap->Request([['setEmails', {
             update => {
                 $msga->{id} => {
                     keywords => { $flag => JSON::true },
@@ -4647,7 +4647,7 @@ sub test_getmessageslist_threadkeywords
         }, "R1"]]);
 
         xlog "fetch collapsed threads with some $flag flag";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
             filter => {
                 someInThreadHaveKeyword => $flag,
             },
@@ -4657,7 +4657,7 @@ sub test_getmessageslist_threadkeywords
         $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[0]);
 
         xlog "fetch collapsed threads with no $flag flag";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
             filter => {
                 noneInThreadHaveKeyword => $flag,
             },
@@ -4667,7 +4667,7 @@ sub test_getmessageslist_threadkeywords
         $self->assert_str_equals($msgb->{threadId}, $res->[0][1]->{threadIds}[0]);
 
         xlog "fetch collapsed threads sorted ascending by $flag";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
             sort => ["someInThreadHaveKeyword:$flag asc"],
             collapseThreads => JSON::true,
         }, "R1"]]);
@@ -4676,7 +4676,7 @@ sub test_getmessageslist_threadkeywords
         $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[1]);
 
         xlog "fetch collapsed threads sorted descending by $flag";
-        $res = $jmap->Request([['getMessagesList', {
+        $res = $jmap->Request([['getEmailsList', {
             sort => ["someInThreadHaveKeyword:$flag desc"],
             collapseThreads => JSON::true,
         }, "R1"]]);
@@ -4684,8 +4684,8 @@ sub test_getmessageslist_threadkeywords
         $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[0]);
         $self->assert_str_equals($msgb->{threadId}, $res->[0][1]->{threadIds}[1]);
 
-        xlog 'reset keywords on message message A';
-        $res = $jmap->Request([['setMessages', {
+        xlog 'reset keywords on email email A';
+        $res = $jmap->Request([['setEmails', {
             update => {
                 $msga->{id} => {
                     keywords => { },
@@ -4701,7 +4701,7 @@ sub test_getmessageslist_threadkeywords
     my $flag = $flags[0];
     $flag =~ s+^\\+\$+ ;
     xlog "fetch collapsed threads with all having $flag flag";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     filter => {
                         allInThreadHaveKeyword => $flag,
                     },
@@ -4714,7 +4714,7 @@ sub test_getmessageslist_threadkeywords
     # an 'unsupportedSort' error even for supported conversation flags
     $flag =~ s+^\\+\$+ ;
     xlog "fetch collapsed threads sorted by all having $flag flag";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
                     sort => ["allInThreadHaveKeyword:$flag asc"],
                     collapseThreads => JSON::true,
                 }, "R1"]]);
@@ -4725,7 +4725,7 @@ sub test_getmessageslist_threadkeywords
     # with an 'cannotDoFilter' error for flags that are not defined
     # in the conversations_counted_flags config option
     xlog "fetch collapsed threads with unsupported flag";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             someInThreadHaveKeyword => 'notcountedflag',
         },
@@ -4735,7 +4735,7 @@ sub test_getmessageslist_threadkeywords
     $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
 }
 
-sub test_getmessageslist_collapse
+sub test_getemailslist_collapse
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4762,29 +4762,29 @@ sub test_getmessageslist_collapse
         my %params = (store => $store);
         $store->set_folder($mboxprefix);
 
-        xlog "generating message A";
-        $exp{A} = $self->make_message("Message A", %params);
+        xlog "generating email A";
+        $exp{A} = $self->make_message("Email A", %params);
         $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-        xlog "generating message B";
-        $exp{B} = $self->make_message("Message B", %params);
+        xlog "generating email B";
+        $exp{B} = $self->make_message("Email B", %params);
         $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-        xlog "generating message C referencing A";
+        xlog "generating email C referencing A";
         %params = (
             references => [ $exp{A} ],
             store => $store,
         );
-        $exp{C} = $self->make_message("Re: Message A", %params);
+        $exp{C} = $self->make_message("Re: Email A", %params);
         $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
         xlog "list uncollapsed threads";
-        $res = $jmap->Request([['getMessagesList', { accountId => $account }, "R1"]]);
+        $res = $jmap->Request([['getEmailsList', { accountId => $account }, "R1"]]);
         $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
         $self->assert_num_equals(3, scalar @{$res->[0][1]->{threadIds}});
         $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
 
-        $res = $jmap->Request([['getMessagesList', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
+        $res = $jmap->Request([['getEmailsList', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
         $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
@@ -4807,32 +4807,32 @@ sub test_collapsethreads_issue2024
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
-    $exp{A} = $self->make_message("Message A");
+    xlog "generating email A";
+    $exp{A} = $self->make_message("Email A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B");
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message C referencing A";
-    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    xlog "generating email C referencing A";
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ]);
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
-    $res = $jmap->Request([['getMessagesList', { collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { collapseThreads => JSON::true }, "R1"]]);
     $self->assert_equals(JSON::true, $res->[0][1]->{collapseThreads});
 
-    $res = $jmap->Request([['getMessagesList', { collapseThreads => JSON::false }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { collapseThreads => JSON::false }, "R1"]]);
     $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
 
-    $res = $jmap->Request([['getMessagesList', { collapseThreads => undef }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { collapseThreads => undef }, "R1"]]);
     $self->assert_null($res->[0][1]->{collapseThreads});
 
-    $res = $jmap->Request([['getMessagesList', { }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { }, "R1"]]);
     $self->assert_null($res->[0][1]->{collapseThreads});
 }
 
-sub test_getmessageslist_window
+sub test_getemailslist_window
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4845,57 +4845,57 @@ sub test_getmessageslist_window
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
-    $exp{A} = $self->make_message("Message A");
+    xlog "generating email A";
+    $exp{A} = $self->make_message("Email A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B");
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message C referencing A";
-    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    xlog "generating email C referencing A";
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ]);
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "generating message D";
-    $exp{D} = $self->make_message("Message D");
+    xlog "generating email D";
+    $exp{D} = $self->make_message("Email D");
     $exp{D}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "list all messages";
-    $res = $jmap->Request([['getMessagesList', { }, "R1"]]);
+    xlog "list all emails";
+    $res = $jmap->Request([['getEmailsList', { }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
     my $ids = $res->[0][1]->{ids};
     my @subids;
 
-    xlog "list messages from position 1";
-    $res = $jmap->Request([['getMessagesList', { position => 1 }, "R1"]]);
+    xlog "list emails from position 1";
+    $res = $jmap->Request([['getEmailsList', { position => 1 }, "R1"]]);
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
-    xlog "list messages from position 4";
-    $res = $jmap->Request([['getMessagesList', { position => 4 }, "R1"]]);
+    xlog "list emails from position 4";
+    $res = $jmap->Request([['getEmailsList', { position => 4 }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
-    xlog "limit messages from position 1 to one message";
-    $res = $jmap->Request([['getMessagesList', { position => 1, limit => 1 }, "R1"]]);
+    xlog "limit emails from position 1 to one email";
+    $res = $jmap->Request([['getEmailsList', { position => 1, limit => 1 }, "R1"]]);
     @subids = @{$ids}[1..1];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "anchor at 2nd message";
-    $res = $jmap->Request([['getMessagesList', { anchor => @{$ids}[1] }, "R1"]]);
+    xlog "anchor at 2nd email";
+    $res = $jmap->Request([['getEmailsList', { anchor => @{$ids}[1] }, "R1"]]);
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "anchor at 2nd message and offset -1";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "anchor at 2nd email and offset -1";
+    $res = $jmap->Request([['getEmailsList', {
         anchor => @{$ids}[1], anchorOffset => -1,
     }, "R1"]]);
     @subids = @{$ids}[2..3];
@@ -4903,8 +4903,8 @@ sub test_getmessageslist_window
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(2, $res->[0][1]->{position});
 
-    xlog "anchor at 3rd message and offset 1";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "anchor at 3rd email and offset 1";
+    $res = $jmap->Request([['getEmailsList', {
         anchor => @{$ids}[2], anchorOffset => 1,
     }, "R1"]]);
     @subids = @{$ids}[1..3];
@@ -4912,8 +4912,8 @@ sub test_getmessageslist_window
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "anchor at 1st message offset -1 and limit 2";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "anchor at 1st email offset -1 and limit 2";
+    $res = $jmap->Request([['getEmailsList', {
         anchor => @{$ids}[0], anchorOffset => -1, limit => 2
     }, "R1"]]);
     @subids = @{$ids}[1..2];
@@ -4922,7 +4922,7 @@ sub test_getmessageslist_window
     $self->assert_num_equals(1, $res->[0][1]->{position});
 }
 
-sub test_getmessageslist_long
+sub test_getemailslist_long
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4936,11 +4936,11 @@ sub test_getmessageslist_long
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
     for (1..100) {
-        $self->make_message("Message $_");
+        $self->make_message("Email $_");
     }
 
-    xlog "list first 60 messages";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "list first 60 emails";
+    $res = $jmap->Request([['getEmailsList', {
         limit => 60,
         offset => 0,
         collapseThreads => JSON::true,
@@ -4950,8 +4950,8 @@ sub test_getmessageslist_long
     $self->assert_num_equals(100, $res->[0][1]->{total});
     $self->assert_num_equals(0, $res->[0][1]->{position});
 
-    xlog "list 5 messages from offset 55 by anchor";
-    $res = $jmap->Request([['getMessagesList', {
+    xlog "list 5 emails from offset 55 by anchor";
+    $res = $jmap->Request([['getEmailsList', {
         limit => 5,
         anchorOffset => 1,
         anchor => $res->[0][1]->{ids}[55],
@@ -4966,7 +4966,7 @@ sub test_getmessageslist_long
     my @subids;
 }
 
-sub test_getmessageslist_acl
+sub test_getemailslist_acl
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -4981,33 +4981,33 @@ sub test_getmessageslist_acl
     $self->{instance}->create_user("foo");
     $admintalk->setacl("user.foo", "cassandane", "lr") or die;
 
-    xlog "get message list";
-    my $res = $jmap->Request([['getMessagesList', { accountId => 'foo' }, "R1"]]);
+    xlog "get email list";
+    my $res = $jmap->Request([['getEmailsList', { accountId => 'foo' }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 
-    xlog "Create message in shared account";
+    xlog "Create email in shared account";
     $self->{adminstore}->set_folder('user.foo');
-    $self->make_message("Message foo", store => $self->{adminstore}) or die;
+    $self->make_message("Email foo", store => $self->{adminstore}) or die;
 
-    xlog "get message list in main account";
-    $res = $jmap->Request([['getMessagesList', { }, "R1"]]);
+    xlog "get email list in main account";
+    $res = $jmap->Request([['getEmailsList', { }, "R1"]]);
     $self->assert_null($res->[0][1]->{ids});
 
-    xlog "get message list in shared account";
-    $res = $jmap->Request([['getMessagesList', { accountId => 'foo' }, "R1"]]);
+    xlog "get email list in shared account";
+    $res = $jmap->Request([['getEmailsList', { accountId => 'foo' }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $id = $res->[0][1]->{ids}[0];
 
-    xlog "Create message in main account";
-    $self->make_message("Message cassandane") or die;
+    xlog "Create email in main account";
+    $self->make_message("Email cassandane") or die;
 
-    xlog "get message list in main account";
-    $res = $jmap->Request([['getMessagesList', { }, "R1"]]);
+    xlog "get email list in main account";
+    $res = $jmap->Request([['getEmailsList', { }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_not_equals($id, $res->[0][1]->{ids}[0]);
 
-    xlog "get message list in shared account";
-    $res = $jmap->Request([['getMessagesList', { accountId => 'foo' }, "R1"]]);
+    xlog "get email list in shared account";
+    $res = $jmap->Request([['getEmailsList', { accountId => 'foo' }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id, $res->[0][1]->{ids}[0]);
 
@@ -5015,12 +5015,12 @@ sub test_getmessageslist_acl
     $admintalk->create("user.foo.box1") or die;
     $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
 
-    xlog "create message in private mailbox";
+    xlog "create email in private mailbox";
     $self->{adminstore}->set_folder('user.foo.box1');
-    $self->make_message("Message private foo", store => $self->{adminstore}) or die;
+    $self->make_message("Email private foo", store => $self->{adminstore}) or die;
 
-    xlog "get message list in shared account";
-    $res = $jmap->Request([['getMessagesList', { accountId => 'foo' }, "R1"]]);
+    xlog "get email list in shared account";
+    $res = $jmap->Request([['getEmailsList', { accountId => 'foo' }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id, $res->[0][1]->{ids}[0]);
 }
@@ -5037,7 +5037,7 @@ sub test_getsearchsnippets
     my $res = $jmap->Request([['getMailboxes', { }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};
 
-    xlog "create messages";
+    xlog "create emails";
     my %params = (
         body => "A simple message",
     );
@@ -5084,10 +5084,10 @@ sub test_getsearchsnippets
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch message ids";
+    xlog "fetch email ids";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2' ],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
@@ -5100,16 +5100,16 @@ sub test_getsearchsnippets
 
     xlog "fetch snippets";
     $res = $jmap->Request([['getSearchSnippets', {
-            messageIds => [ $foo, $bar ],
+            emailIds => [ $foo, $bar ],
             filter => { text => "message" },
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
     $self->assert_null($res->[0][1]->{notFound});
-    %m = map { $_->{messageId} => $_ } @{$res->[0][1]{list}};
+    %m = map { $_->{emailId} => $_ } @{$res->[0][1]{list}};
     $self->assert_not_null($m{$foo});
     $self->assert_not_null($m{$bar});
 
-    %m = map { $_->{messageId} => $_ } @{$res->[0][1]{list}};
+    %m = map { $_->{emailId} => $_ } @{$res->[0][1]{list}};
     $self->assert_num_not_equals(-1, index($m{$foo}->{subject}, "<mark>Message</mark> foo"));
     $self->assert_num_not_equals(-1, index($m{$foo}->{preview}, "A simple <mark>message</mark>"));
     $self->assert_num_not_equals(-1, index($m{$bar}->{subject}, "<mark>Message</mark> bar"));
@@ -5119,7 +5119,7 @@ sub test_getsearchsnippets
 
     xlog "fetch snippets with one unknown id";
     $res = $jmap->Request([['getSearchSnippets', {
-            messageIds => [ $foo, "bam" ],
+            emailIds => [ $foo, "bam" ],
             filter => { text => "message" },
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
@@ -5127,7 +5127,7 @@ sub test_getsearchsnippets
 
     xlog "fetch snippets with only a matching subject";
     $res = $jmap->Request([['getSearchSnippets', {
-            messageIds => [ $baz ],
+            emailIds => [ $baz ],
             filter => { text => "message" },
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]->{list}[0]->{subject});
@@ -5154,50 +5154,50 @@ sub test_getsearchsnippets_shared
     my $res = $jmap->Request([['getMailboxes', { accountId => 'foo' }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};
 
-    xlog "create messages in shared account";
+    xlog "create emails in shared account";
     $self->{adminstore}->set_folder('user.foo');
     my %params = (
-        body => "A simple message",
+        body => "A simple email",
     );
-    $res = $self->make_message("Message foo", %params, store => $self->{adminstore}) || die;
+    $res = $self->make_message("Email foo", %params, store => $self->{adminstore}) || die;
     $self->{adminstore}->set_folder('user.foo.box1');
     %params = (
-        body => "Another simple message",
+        body => "Another simple email",
     );
-    $res = $self->make_message("Message bar", %params, store => $self->{adminstore}) || die;
+    $res = $self->make_message("Email bar", %params, store => $self->{adminstore}) || die;
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch message ids";
+    xlog "fetch email ids";
     $res = $jmap->Request([
-        ['getMessagesList', { accountId => 'foo' }, "R1"],
-        ['getMessages', {
+        ['getEmailsList', { accountId => 'foo' }, "R1"],
+        ['getEmails', {
             accountId => 'foo',
-            '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' }
+            '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' }
         }, 'R2' ],
     ]);
 
     my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
-    my $foo = $m{"Message foo"}->{id};
-    my $bar = $m{"Message bar"}->{id};
+    my $foo = $m{"Email foo"}->{id};
+    my $bar = $m{"Email bar"}->{id};
     $self->assert_not_null($foo);
     $self->assert_not_null($bar);
 
-    xlog "remove read rights for mailbox containing message $bar";
+    xlog "remove read rights for mailbox containing email $bar";
     $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
 
     xlog "fetch snippets";
     $res = $jmap->Request([['getSearchSnippets', {
             accountId => 'foo',
-            messageIds => [ $foo, $bar ],
+            emailIds => [ $foo, $bar ],
             filter => { text => "simple" },
     }, "R1"]]);
-    $self->assert_str_equals($foo, $res->[0][1]->{list}[0]{messageId});
+    $self->assert_str_equals($foo, $res->[0][1]->{list}[0]{emailId});
     $self->assert_str_equals($bar, $res->[0][1]->{notFound}[0]);
 }
 
-sub test_getmessageslist_snippets
+sub test_getemailslist_snippets
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5210,25 +5210,25 @@ sub test_getmessageslist_snippets
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
-    $exp{A} = $self->make_message("Message A");
+    xlog "generating email A";
+    $exp{A} = $self->make_message("Email A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "fetch message and snippet";
+    xlog "fetch email and snippet";
     $res = $jmap->Request([
-        ['getMessagesList', { filter => { text => "message" }}, "R1"],
+        ['getEmailsList', { filter => { text => "email" }}, "R1"],
         ['getSearchSnippets', {
-            '#messageIds' => {
+            '#emailIds' => {
                 resultOf => 'R1',
-                name => 'messagesList',
+                name => 'emailsList',
                 path => '/ids',
             },
             '#filter' => {
                 resultOf => 'R1',
-                name => 'messagesList', 
+                name => 'emailsList', 
                 path => '/filter',
             },
         }, 'R2'],
@@ -5236,15 +5236,15 @@ sub test_getmessageslist_snippets
 
     my $snippet = $res->[1][1]{list}[0];
     $self->assert_not_null($snippet);
-    $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Message</mark> A"));
+    $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Email</mark> A"));
 
-    xlog "fetch message and snippet with no filter";
+    xlog "fetch email and snippet with no filter";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
+        ['getEmailsList', { }, "R1"],
         ['getSearchSnippets', {
-            '#messageIds' => {
+            '#emailIds' => {
                 resultOf => 'R1',
-                name => 'messagesList', 
+                name => 'emailsList', 
                 path => '/ids',
             },
         }, 'R2'],
@@ -5254,23 +5254,23 @@ sub test_getmessageslist_snippets
     $self->assert_null($snippet->{subject});
     $self->assert_null($snippet->{preview});
 
-    xlog "fetch message and snippet with no text filter";
+    xlog "fetch email and snippet with no text filter";
     $res = $jmap->Request([
-        ['getMessagesList', {
+        ['getEmailsList', {
             filter => {
                 operator => "OR",
                 conditions => [{minSize => 1}, {maxSize => 1}]
             },
         }, "R1"],
         ['getSearchSnippets', {
-            '#messageIds' => {
+            '#emailIds' => {
                 resultOf => 'R1',
-                name => 'messagesList',
+                name => 'emailsList',
                 path => '/ids',
             },
             '#filter' => {
                 resultOf => 'R1',
-                name => 'messagesList',
+                name => 'emailsList',
                 path => '/filter',
             },
         }, 'R2'],
@@ -5282,7 +5282,7 @@ sub test_getmessageslist_snippets
     $self->assert_null($snippet->{preview});
 }
 
-sub test_getmessageslist_attachments
+sub test_getemailslist_attachments
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5301,7 +5301,7 @@ sub test_getmessageslist_attachments
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
-    # create a message with an attachment
+    # create a email with an attachment
     my $logofile = abs_path('data/logo.gif');
     open(FH, "<$logofile");
     local $/ = undef;
@@ -5310,7 +5310,7 @@ sub test_getmessageslist_attachments
     my $data = $jmap->Upload($binary, "image/gif");
 
     $res = $jmap->Request([
-      ['setMessages', { create => {
+      ['setEmails', { create => {
                   "1" => {
                       mailboxIds => {$draftsmbox =>  JSON::true},
                       from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
@@ -5348,7 +5348,7 @@ sub test_getmessageslist_attachments
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     xlog "filter attachmentName";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             attachmentName => "logo",
         },
@@ -5357,7 +5357,7 @@ sub test_getmessageslist_attachments
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 
     xlog "filter attachmentName";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             attachmentName => "somethingelse.gif",
         },
@@ -5366,7 +5366,7 @@ sub test_getmessageslist_attachments
     $self->assert_str_equals($id2, $res->[0][1]->{ids}[0]);
 
     xlog "filter attachmentName";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             attachmentName => "gif",
         },
@@ -5374,7 +5374,7 @@ sub test_getmessageslist_attachments
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
 
     xlog "filter text";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             text => "logo",
         },
@@ -5383,7 +5383,7 @@ sub test_getmessageslist_attachments
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 }
 
-sub test_getmessageslist_attachmentname
+sub test_getemailslist_attachmentname
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5402,7 +5402,7 @@ sub test_getmessageslist_attachmentname
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
-    # create a message with an attachment
+    # create a email with an attachment
     my $logofile = abs_path('data/logo.gif');
     open(FH, "<$logofile");
     local $/ = undef;
@@ -5411,7 +5411,7 @@ sub test_getmessageslist_attachmentname
     my $data = $jmap->Upload($binary, "image/gif");
 
     $res = $jmap->Request([
-      ['setMessages', { create => {
+      ['setEmails', { create => {
                   "1" => {
                       mailboxIds => {$draftsmbox =>  JSON::true},
                       from => [ { name => "", email => "sam\@acme.local" } ] ,
@@ -5432,7 +5432,7 @@ sub test_getmessageslist_attachmentname
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     xlog "filter attachmentName";
-    $res = $jmap->Request([['getMessagesList', {
+    $res = $jmap->Request([['getEmailsList', {
         filter => {
             attachmentName => "r\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl",
         },
@@ -5464,32 +5464,32 @@ sub test_getthreads
     my $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
-    xlog "generating message A";
+    xlog "generating email A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -3));
-    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B", body => "b");
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message C referencing A";
+    xlog "generating email C referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -2));
-    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "generating message D referencing A";
+    xlog "generating email D referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -1));
-    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "fetch messages";
+    xlog "fetch emails";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2' ],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
@@ -5505,14 +5505,14 @@ sub test_getthreads
     %m = map { $_->{threadId} => 1 } @{$res->[1][1]{list}};
     my @threadids = keys %m;
 
-    xlog "create draft replying to message A";
+    xlog "create draft replying to email A";
     $res = $jmap->Request(
-        [[ 'setMessages', { create => { "1" => {
+        [[ 'setEmails', { create => { "1" => {
             mailboxIds           => {$drafts =>  JSON::true},
             headers              => { "In-Reply-To" => $msgA->{headers}{"message-id"}},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
-            subject              => "Re: Message A",
+            subject              => "Re: Email A",
             textBody             => "I'm givin' ya one last chance ta surrenda!",
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
@@ -5528,15 +5528,15 @@ sub test_getthreads
     my $threadA = $m{$msgA->{threadId}};
     my $threadB = $m{$msgB->{threadId}};
 
-    # Assert all messages are listed
-    $self->assert_num_equals(4, scalar @{$threadA->{messageIds}});
-    $self->assert_num_equals(1, scalar @{$threadB->{messageIds}});
+    # Assert all emails are listed
+    $self->assert_num_equals(4, scalar @{$threadA->{emailIds}});
+    $self->assert_num_equals(1, scalar @{$threadB->{emailIds}});
 
     # Assert sort order by date
-    $self->assert_str_equals($msgA->{id}, $threadA->{messageIds}[0]);
-    $self->assert_str_equals($draftid, $threadA->{messageIds}[1]);
-    $self->assert_str_equals($msgC->{id}, $threadA->{messageIds}[2]);
-    $self->assert_str_equals($msgD->{id}, $threadA->{messageIds}[3]);
+    $self->assert_str_equals($msgA->{id}, $threadA->{emailIds}[0]);
+    $self->assert_str_equals($draftid, $threadA->{emailIds}[1]);
+    $self->assert_str_equals($msgC->{id}, $threadA->{emailIds}[2]);
+    $self->assert_str_equals($msgD->{id}, $threadA->{emailIds}[3]);
 }
 
 sub test_getidentities
@@ -5580,17 +5580,17 @@ sub test_emptyids
     $res = $jmap->Request([['getThreads', { ids => [] }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
-    $res = $jmap->Request([['getMessages', { ids => [] }, "R1"]]);
+    $res = $jmap->Request([['getEmails', { ids => [] }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
     $res = $jmap->Request([['getIdentities', { ids => [] }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
-    $res = $jmap->Request([['getSearchSnippets', { messageIds => [], filter => { text => "foo" } }, "R1"]]);
+    $res = $jmap->Request([['getSearchSnippets', { emailIds => [], filter => { text => "foo" } }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 }
 
-sub test_getmessageupdates
+sub test_getemailupdates
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5612,35 +5612,35 @@ sub test_getmessageupdates
     ]);
     $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get message updates (expect error)";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => 0 }, "R1"]]);
+    xlog "get email updates (expect error)";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => 0 }, "R1"]]);
     $self->assert_str_equals($res->[0][1]->{type}, "invalidArguments");
     $self->assert_str_equals($res->[0][1]->{arguments}[0], "sinceState");
 
-    xlog "get message list";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email list";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("Message A") || die;
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
 
-    xlog "Get message id";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "Get email id";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -5649,22 +5649,22 @@ sub test_getmessageupdates
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "get message updates (expect no changes)";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates (expect no changes)";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "update message $ida";
-    $res = $jmap->Request([['setMessages', {
+    xlog "update email $ida";
+    $res = $jmap->Request([['setEmails', {
         update => { $ida => { keywords => { '$Seen' => JSON::true }}}
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$ida});
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -5673,12 +5673,12 @@ sub test_getmessageupdates
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "delete message $ida";
-    $res = $jmap->Request([['setMessages', {destroy => [ $ida ] }, "R1"]]);
+    xlog "delete email $ida";
+    $res = $jmap->Request([['setEmails', {destroy => [ $ida ] }, "R1"]]);
     $self->assert_str_equals($ida, $res->[0][1]->{destroyed}[0]);
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -5687,42 +5687,42 @@ sub test_getmessageupdates
     $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]->{newState};
 
-    xlog "get message updates (expect no changes)";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates (expect no changes)";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "create message B";
+    xlog "create email B";
     $res = $jmap->Request(
-        [[ 'setMessages', { create => { "1" => {
+        [[ 'setEmails', { create => { "1" => {
             mailboxIds           => {$draftsmbox =>  JSON::true},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
-            subject              => "Message B",
+            subject              => "Email B",
             textBody             => "I'm givin' ya one last chance ta surrenda!",
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
     my $idb = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($idb);
 
-    xlog "create message C";
+    xlog "create email C";
     $res = $jmap->Request(
-        [[ 'setMessages', { create => { "1" => {
+        [[ 'setEmails', { create => { "1" => {
             mailboxIds           => {$draftsmbox =>  JSON::true},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
-            subject              => "Message C",
+            subject              => "Email C",
             textBody             => "I *hate* that rabbit!",
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
     my $idc = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($idc);
 
-    xlog "get max 1 message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    xlog "get max 1 email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
@@ -5731,8 +5731,8 @@ sub test_getmessageupdates
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "get max 1 message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    xlog "get max 1 email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -5741,8 +5741,8 @@ sub test_getmessageupdates
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "get message updates (expect no changes)";
-    $res = $jmap->Request([['getMessagesUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email updates (expect no changes)";
+    $res = $jmap->Request([['getEmailsUpdates', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -5750,7 +5750,7 @@ sub test_getmessageupdates
     $self->assert_null($res->[0][1]{removed});
 }
 
-sub test_getmessageslistupdates
+sub test_getemailslistupdates
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5761,34 +5761,34 @@ sub test_getmessageslistupdates
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("Message A") || die;
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
 
-    xlog "Get message id";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "Get email id";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
     $state = $res->[0][1]->{state};
 
-    $self->make_message("Message B") || die;
+    $self->make_message("Email B") || die;
 
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
 
     my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{ids}};
 
-    xlog "get message list updates";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email list updates";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 
-    xlog "get message list updates with threads collapsed";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    xlog "get email list updates with threads collapsed";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 }
 
-sub test_getmessageslistupdates_zerosince
+sub test_getemailslistupdates_zerosince
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5799,35 +5799,35 @@ sub test_getmessageslistupdates_zerosince
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("Message A") || die;
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
 
-    xlog "Get message id";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "Get email id";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
     $state = $res->[0][1]->{state};
 
-    $self->make_message("Message B") || die;
+    $self->make_message("Email B") || die;
 
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
 
     my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{ids}};
 
-    xlog "get message list updates";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state }, "R1"]]);
+    xlog "get email list updates";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 
-    xlog "get message list updates with threads collapsed";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => "0", collapseThreads => JSON::true }, "R1"]]);
+    xlog "get email list updates with threads collapsed";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => "0", collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_equals($res->[0][0], 'error');
 }
 
 
-sub test_getmessageslistupdates_thread
+sub test_getemailslistupdates_thread
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5840,36 +5840,36 @@ sub test_getmessageslistupdates_thread
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "generating message A";
+    xlog "generating email A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -3));
-    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
-    xlog "Get message id";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "Get email id";
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
     $state = $res->[0][1]->{state};
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B", body => "b");
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message C referencing A";
+    xlog "generating email C referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -2));
-    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "generating message D referencing A";
+    xlog "generating email D referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -1));
-    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
     $state = $res->[0][1]{newState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
@@ -5882,7 +5882,7 @@ sub test_getmessageslistupdates_thread
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
     $state = $res->[0][1]{newState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
@@ -5892,7 +5892,7 @@ sub test_getmessageslistupdates_thread
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));
@@ -5903,7 +5903,7 @@ sub test_getmessageslistupdates_thread
     #$self->assert_str_equals($res->[0][1]{added}[0]{threadId}, $res->[0][1]{removed}[0]{threadId});
 }
 
-sub test_getmessageslistupdates_order
+sub test_getemailslistupdates_order
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5914,30 +5914,30 @@ sub test_getmessageslistupdates_order
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     $self->make_message("A") || die;
 
-    # First order descending by subject. We expect getMessagesListUpdates
+    # First order descending by subject. We expect getEmailsListUpdates
     # to return any items added after 'state' to show up at the start of
     # the result list.
     my $sort = [ "subject desc" ];
 
-    xlog "Get message id and state";
-    $res = $jmap->Request([['getMessagesList', { sort => $sort }, "R1"]]);
+    xlog "Get email id and state";
+    $res = $jmap->Request([['getEmailsList', { sort => $sort }, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
     $state = $res->[0][1]->{state};
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     $self->make_message("B") || die;
 
     xlog "Fetch updated list";
-    $res = $jmap->Request([['getMessagesList', { sort => $sort }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { sort => $sort }, "R1"]]);
     my $idb = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($ida, $idb);
 
-    xlog "get message list updates";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
+    xlog "get email list updates";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
     $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
     $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
 
@@ -5946,23 +5946,23 @@ sub test_getmessageslistupdates_order
     # end of the result list.
     xlog "Fetch reverse sorted list and state";
     $sort = [ "subject asc" ];
-    $res = $jmap->Request([['getMessagesList', { sort => $sort }, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', { sort => $sort }, "R1"]]);
     $ida = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($ida, $idb);
     $idb = $res->[0][1]->{ids}[1];
     $state = $res->[0][1]->{state};
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     $self->make_message("C") || die;
 
-    xlog "get message list updates";
-    $res = $jmap->Request([['getMessagesListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
+    xlog "get email list updates";
+    $res = $jmap->Request([['getEmailsListUpdates', { sinceState => $state, sort => $sort }, "R1"]]);
     $self->assert_str_not_equals($ida, $res->[0][1]{added}[0]{id});
     $self->assert_str_not_equals($idb, $res->[0][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
 }
 
-sub test_getmessageupdates_shared
+sub test_getemailupdates_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -5981,25 +5981,25 @@ sub test_getmessageupdates_shared
     $admintalk->create("user.foo.box1") or die;
     $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
 
-    xlog "get message state";
-    $res = $jmap->Request([['getMessagesList', { accountId => 'foo', }, "R1"]]);
+    xlog "get email state";
+    $res = $jmap->Request([['getEmailsList', { accountId => 'foo', }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "get message updates (expect no changes)";
-    $res = $jmap->Request([['getMessagesUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    xlog "get email updates (expect no changes)";
+    $res = $jmap->Request([['getEmailsUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "Generate a message in shared account INBOX via IMAP";
+    xlog "Generate a email in shared account INBOX via IMAP";
     $self->{adminstore}->set_folder('user.foo');
-    $self->make_message("Message A", store => $self->{adminstore}) || die;
+    $self->make_message("Email A", store => $self->{adminstore}) || die;
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -6008,12 +6008,12 @@ sub test_getmessageupdates_shared
     $state = $res->[0][1]->{newState};
     my $ida = $res->[0][1]{changed}[0];
 
-    xlog "create message in non-shared mailbox";
+    xlog "create email in non-shared mailbox";
     $self->{adminstore}->set_folder('user.foo.box1');
-    $self->make_message("Message B", store => $self->{adminstore}) || die;
+    $self->make_message("Email B", store => $self->{adminstore}) || die;
 
-    xlog "get message updates (expect no changes)";
-    $res = $jmap->Request([['getMessagesUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    xlog "get email updates (expect no changes)";
+    $res = $jmap->Request([['getEmailsUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -6023,8 +6023,8 @@ sub test_getmessageupdates_shared
     xlog "share private mailbox box1";
     $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -6032,12 +6032,12 @@ sub test_getmessageupdates_shared
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "delete message $ida";
-    $res = $jmap->Request([['setMessages', { accountId => 'foo', destroy => [ $ida ] }, "R1"]]);
+    xlog "delete email $ida";
+    $res = $jmap->Request([['setEmails', { accountId => 'foo', destroy => [ $ida ] }, "R1"]]);
     $self->assert_str_equals($ida, $res->[0][1]->{destroyed}[0]);
 
-    xlog "get message updates";
-    $res = $jmap->Request([['getMessagesUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    xlog "get email updates";
+    $res = $jmap->Request([['getEmailsUpdates', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
@@ -6053,24 +6053,24 @@ sub test_uploaddownload822
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $message = <<'EOF';
+    my $email = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
-Subject: test message
+Subject: test email
 Date: Wed, 7 Dec 2016 00:21:50 -0500
 MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
 Content-Transfer-Encoding: quoted-printable
 
-This is a test message.
+This is a test email.
 EOF
-    $message =~ s/\r?\n/\r\n/gs;
-    my $data = $jmap->Upload($message, "message/rfc822");
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
 
     my $download = $jmap->Download('cassandane', $blobid);
 
-    $self->assert_str_equals($download->{content}, $message);
+    $self->assert_str_equals($download->{content}, $email);
 }
 
 sub test_uploadsametype
@@ -6150,19 +6150,19 @@ sub test_brokenrfc822_badendline
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $message = <<'EOF';
+    my $email = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
-Subject: test message
+Subject: test email
 Date: Wed, 7 Dec 2016 00:21:50 -0500
 MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
 Content-Transfer-Encoding: quoted-printable
 
-This is a test message.
+This is a test email.
 EOF
-    $message =~ s/\r//gs;
-    my $data = $jmap->Upload($message, "message/rfc822");
+    $email =~ s/\r//gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
 
     xlog "create drafts mailbox";
@@ -6176,9 +6176,9 @@ EOF
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
-    xlog "import message from blob $blobid";
-    $res = $jmap->Request([['importMessages', {
-            messages => {
+    xlog "import email from blob $blobid";
+    $res = $jmap->Request([['importEmails', {
+            emails => {
                 "1" => {
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
@@ -6189,28 +6189,28 @@ EOF
             },
         }, "R1"]]);
     my $error = $@;
-    $self->assert_str_equals("messageContainsBareNewlines", $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals("emailContainsBareNewlines", $res->[0][1]{notCreated}{1}{type});
 }
 
-sub test_importmessages_zerobyte
+sub test_importemails_zerobyte
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    # A bogus message with an unencoded zero byte
-    my $message = <<"EOF";
+    # A bogus email with an unencoded zero byte
+    my $email = <<"EOF";
 From: \"Some Example Sender\" <example\@local>\r\n
 To: baseball\@local\r\n
-Subject: test message\r\n
+Subject: test email\r\n
 Date: Wed, 7 Dec 2016 22:11:11 +1100\r\n
 MIME-Version: 1.0\r\n
 Content-Type: text/plain; charset="UTF-8"\r\n
 \r\n
-This is a test message with a \x{0}-byte.\r\n
+This is a test email with a \x{0}-byte.\r\n
 EOF
 
-    my $data = $jmap->Upload($message, "message/rfc822");
+    my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
 
     xlog "create drafts mailbox";
@@ -6224,9 +6224,9 @@ EOF
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($draftsmbox);
 
-    xlog "import message from blob $blobid";
-    $res = $jmap->Request([['importMessages', {
-            messages => {
+    xlog "import email from blob $blobid";
+    $res = $jmap->Request([['importEmails', {
+            emails => {
                 "1" => {
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
@@ -6236,7 +6236,7 @@ EOF
                 },
             },
         }, "R1"]]);
-    $self->assert_str_equals("messageContainsNulByte", $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals("emailContainsNulByte", $res->[0][1]{notCreated}{1}{type});
 }
 
 
@@ -6246,19 +6246,19 @@ sub test_import_setdate
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $message = <<'EOF';
+    my $email = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
-Subject: test message
+Subject: test email
 Date: Wed, 7 Dec 2016 22:11:11 +1100
 MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
 Content-Transfer-Encoding: quoted-printable
 
-This is a test message.
+This is a test email.
 EOF
-    $message =~ s/\r?\n/\r\n/gs;
-    my $data = $jmap->Upload($message, "message/rfc822");
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
 
     xlog "create drafts mailbox";
@@ -6273,10 +6273,10 @@ EOF
     $self->assert_not_null($draftsmbox);
 
     my $receivedAt = '2016-12-10T01:02:03Z';
-    xlog "import message from blob $blobid";
+    xlog "import email from blob $blobid";
     $res = eval {
-        $jmap->Request([['importMessages', {
-            messages => {
+        $jmap->Request([['importEmails', {
+            emails => {
                 "1" => {
                     blobId => $blobid,
                     mailboxIds => {$draftsmbox =>  JSON::true},
@@ -6286,15 +6286,15 @@ EOF
                     receivedAt => $receivedAt,
                 },
             },
-        }, "R1"], ['getMessages', {ids => ["#1"]}, "R2"]]);
+        }, "R1"], ['getEmails', {ids => ["#1"]}, "R2"]]);
     };
 
-    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    $self->assert_str_equals("emailsImported", $res->[0][0]);
     my $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
 
     my $sentAt = '2016-12-07T11:11:11Z';
-    $self->assert_str_equals("messages", $res->[1][0]);
+    $self->assert_str_equals("emails", $res->[1][0]);
     $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($receivedAt, $res->[1][1]{list}[0]->{receivedAt});
     $self->assert_str_equals($sentAt, $res->[1][1]{list}[0]->{sentAt});
@@ -6330,7 +6330,7 @@ sub test_getthreadonemsg
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    my $message = <<'EOF';
+    my $email = <<'EOF';
 Return-Path: <Hannah.Smith@gmail.com>
 Received: from gateway (gateway.vmtom.com [10.0.0.1])
     by ahost (ahost.vmtom.com[10.0.0.2]); Wed, 07 Dec 2016 11:43:25 +1100
@@ -6339,7 +6339,7 @@ Received: from mail.gmail.com (mail.gmail.com [192.168.0.1])
 Mime-Version: 1.0
 Content-Type: text/plain; charset="us-ascii"
 Content-Transfer-Encoding: 7bit
-Subject: Message A
+Subject: Email A
 From: Hannah V. Smith <Hannah.Smith@gmail.com>
 Message-ID: <fake.1481071405.58492@gmail.com>
 Date: Wed, 07 Dec 2016 11:43:25 +1100
@@ -6348,12 +6348,12 @@ X-Cassandane-Unique: 294f71c341218d36d4bda75aad56599b7be3d15b
 
 a
 EOF
-    $message =~ s/\r?\n/\r\n/gs;
-    my $data = $jmap->Upload($message, "message/rfc822");
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
-    xlog "import message from blob $blobid";
-    $res = $jmap->Request([['importMessages', {
-        messages => {
+    xlog "import email from blob $blobid";
+    $res = $jmap->Request([['importEmails', {
+        emails => {
             "1" => {
                 blobId => $blobid,
                 mailboxIds => {$draftsmbox =>  JSON::true},
@@ -6397,7 +6397,7 @@ sub test_getthreadsupdates
     $self->assert_not_null($draftsmbox);
 
     xlog "get thread state";
-    $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
@@ -6409,10 +6409,10 @@ sub test_getthreadsupdates
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "generating message A";
+    xlog "generating email A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -3));
-    $exp{A} = $self->make_message("Message A", date => $dt, body => "a");
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
     xlog "get thread updates";
@@ -6425,10 +6425,10 @@ sub test_getthreadsupdates
     $state = $res->[0][1]->{newState};
     $threadA = $res->[0][1]{changed}[0];
 
-    xlog "generating message C referencing A";
+    xlog "generating email C referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -2));
-    $exp{C} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
     $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
     xlog "get thread updates";
@@ -6449,20 +6449,20 @@ sub test_getthreadsupdates
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{removed});
 
-    xlog "generating message B";
-    $exp{B} = $self->make_message("Message B", body => "b");
+    xlog "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
 
-    xlog "generating message D referencing A";
+    xlog "generating email D referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(hours => -1));
-    $exp{D} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    xlog "generating message E referencing A";
+    xlog "generating email E referencing A";
     $dt = DateTime->now();
     $dt->add(DateTime::Duration->new(minutes => -30));
-    $exp{E} = $self->make_message("Re: Message A", references => [ $exp{A} ], date => $dt, body => "e");
+    $exp{E} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "e");
     $exp{E}->set_attributes(uid => 5, cid => $exp{A}->get_attribute('cid'));
 
     xlog "get max 1 thread updates";
@@ -6486,10 +6486,10 @@ sub test_getthreadsupdates
     $self->assert_null($res->[0][1]{removed});
     $state = $res->[0][1]->{newState};
 
-    xlog "fetch messages";
+    xlog "fetch emails";
     $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' } }, 'R2' ],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', { '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
@@ -6504,8 +6504,8 @@ sub test_getthreadsupdates
     $self->assert_not_null($msgD);
     $self->assert_not_null($msgE);
 
-    xlog "destroy message b, update message d";
-    $res = $jmap->Request([['setMessages', {
+    xlog "destroy email b, update email d";
+    $res = $jmap->Request([['setEmails', {
         destroy => [ $msgB->{id} ],
         update =>  { $msgD->{id} => { isUnread => JSON::false }},
     }, "R1"]]);
@@ -6523,8 +6523,8 @@ sub test_getthreadsupdates
     $self->assert_str_equals($threadB, $res->[0][1]{removed}[0]);
     $state = $res->[0][1]->{newState};
 
-    xlog "destroy messages c and e";
-    $res = $jmap->Request([['setMessages', {
+    xlog "destroy emails c and e";
+    $res = $jmap->Request([['setEmails', {
         destroy => [ $msgC->{id}, $msgE->{id} ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
@@ -6546,8 +6546,8 @@ sub test_getthreadsupdates
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals($threadA, $res->[1][1]{list}[0]->{id});
 
-    xlog "destroy messages a and d";
-    $res = $jmap->Request([['setMessages', {
+    xlog "destroy emails a and d";
+    $res = $jmap->Request([['setEmails', {
         destroy => [ $msgA->{id}, $msgD->{id} ],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
@@ -6571,7 +6571,7 @@ sub test_getthreadsupdates
     $self->assert_null($res->[0][1]{removed});
 }
 
-sub test_importmessages
+sub test_importemails
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -6583,8 +6583,8 @@ sub test_importmessages
     my $inbox = $self->getinbox()->{id};
     $self->assert_not_null($inbox);
 
-    # Generate an embedded message to get a blob id
-    xlog "Generate a message in INBOX via IMAP";
+    # Generate an embedded email to get a blob id
+    xlog "Generate a email in INBOX via IMAP";
     $self->make_message("foo",
         mime_type => "multipart/mixed",
         mime_boundary => "sub",
@@ -6606,19 +6606,19 @@ sub test_importmessages
           . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
           . "To: Test User <test\@local>\r\n"
           . "\r\n"
-          . "An embedded message"
+          . "An embedded email"
           . "\r\n--sub--",
     ) || die;
 
     xlog "get blobId";
     my $res = $jmap->Request([
-        ['getMessagesList', { }, "R1"],
-        ['getMessages', {
-            '#ids' => { resultOf => 'R1', name => 'messagesList', path => '/ids' },
-            properties => ['attachedMessages'],
+        ['getEmailsList', { }, "R1"],
+        ['getEmails', {
+            '#ids' => { resultOf => 'R1', name => 'emailsList', path => '/ids' },
+            properties => ['attachedEmails'],
         }, 'R2' ],
     ]);
-    my $blobid = (keys %{$res->[1][1]->{list}[0]->{attachedMessages}})[0];
+    my $blobid = (keys %{$res->[1][1]->{list}[0]->{attachedEmails}})[0];
     $self->assert_not_null($blobid);
 
     xlog "create drafts mailbox";
@@ -6632,32 +6632,32 @@ sub test_importmessages
     my $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
-    xlog "import and get message from blob $blobid";
-    $res = $jmap->Request([['importMessages', {
-        messages => {
+    xlog "import and get email from blob $blobid";
+    $res = $jmap->Request([['importEmails', {
+        emails => {
             "1" => {
                 blobId => $blobid,
                 mailboxIds => {$drafts =>  JSON::true},
                 keywords => { '$Draft' => JSON::true },
             },
         },
-    }, "R1"], ["getMessages", { ids => ["#1"] }, "R2" ]]);
+    }, "R1"], ["getEmails", { ids => ["#1"] }, "R2" ]]);
 
-    $self->assert_str_equals("messagesImported", $res->[0][0]);
+    $self->assert_str_equals("emailsImported", $res->[0][0]);
     my $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
 
-    $self->assert_str_equals("messages", $res->[1][0]);
+    $self->assert_str_equals("emails", $res->[1][0]);
     $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
 
-    xlog "load message";
-    $res = $jmap->Request([['getMessages', { ids => [$msg->{id}] }, "R1"]]);
+    xlog "load email";
+    $res = $jmap->Request([['getEmails', { ids => [$msg->{id}] }, "R1"]]);
     $self->assert_num_equals(1, scalar keys %{$res->[0][1]{list}[0]->{mailboxIds}});
     $self->assert_not_null($res->[0][1]{list}[0]->{mailboxIds}{$drafts});
 
-    xlog "import existing message (expect message exists error)";
-    $res = $jmap->Request([['importMessages', {
-        messages => {
+    xlog "import existing email (expect email exists error)";
+    $res = $jmap->Request([['importEmails', {
+        emails => {
             "1" => {
                 blobId => $blobid,
                 mailboxIds => {$drafts =>  JSON::true, $inbox => JSON::true},
@@ -6665,11 +6665,11 @@ sub test_importmessages
             },
         },
     }, "R1"]]);
-    $self->assert_str_equals("messagesImported", $res->[0][0]);
-    $self->assert_str_equals("messageExists", $res->[0][1]->{notCreated}{"1"}{type});
+    $self->assert_str_equals("emailsImported", $res->[0][0]);
+    $self->assert_str_equals("emailExists", $res->[0][1]->{notCreated}{"1"}{type});
 }
 
-sub test_importmessages_shared
+sub test_importemails_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -6681,26 +6681,26 @@ sub test_importmessages_shared
     $self->{instance}->create_user("foo");
     $admintalk->setacl("user.foo", "cassandane", "lkrwpsintex") or die;
 
-    my $message = <<'EOF';
+    my $email = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
-Subject: test message
+Subject: test email
 Date: Wed, 7 Dec 2016 22:11:11 +1100
 MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
 Content-Transfer-Encoding: quoted-printable
 
-This is a test message.
+This is a test email.
 EOF
-    $message =~ s/\r?\n/\r\n/gs;
-    my $data = $jmap->Upload($message, "message/rfc822", "foo");
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822", "foo");
     my $blobid = $data->{blobId};
 
     my $mboxid = $self->getinbox(accountId => 'foo')->{id};
 
-    my $req = ['importMessages', {
+    my $req = ['importEmails', {
                 accountId => 'foo',
-                messages => {
+                emails => {
                     "1" => {
                         blobId => $blobid,
                         mailboxIds => {$mboxid =>  JSON::true},
@@ -6710,7 +6710,7 @@ EOF
             }, "R1"
     ];
 
-    xlog "import message from blob $blobid";
+    xlog "import email from blob $blobid";
     my $res = eval { $jmap->Request([$req]) };
     $self->assert(exists $res->[0][1]->{created}{"1"});
 }
@@ -6724,29 +6724,29 @@ sub test_refobjects_simple
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "get message state";
-    my $res = $jmap->Request([['getMessagesList', {}, "R1"]]);
+    xlog "get email state";
+    my $res = $jmap->Request([['getEmailsList', {}, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "Generate a message in INBOX via IMAP";
-    $self->make_message("Message A") || die;
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
 
-    xlog "get message updates and message using reference";
+    xlog "get email updates and email using reference";
     $res = $jmap->Request([
-        ['getMessagesUpdates', {
+        ['getEmailsUpdates', {
             sinceState => $state,
         }, 'R1'],
-        ['getMessages', {
+        ['getEmails', {
             '#ids' => {
                 resultOf => 'R1',
-                name => 'messagesUpdates',
+                name => 'emailsUpdates',
                 path => '/changed',
             },
         }, 'R2'],
     ]);
 
-    # assert that the changed id equals the id of the returned message
+    # assert that the changed id equals the id of the returned email
     $self->assert_str_equals($res->[0][1]{changed}[0], $res->[1][1]{list}[0]{id});
 }
 
@@ -6759,23 +6759,23 @@ sub test_refobjects_extended
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a message in INBOX via IMAP";
+    xlog "Generate a email in INBOX via IMAP";
     foreach my $i (1..10) {
-        $self->make_message("Message$i") || die;
+        $self->make_message("Email$i") || die;
     }
 
-    xlog "get message properties using reference";
+    xlog "get email properties using reference";
     my $res = $jmap->Request([
-        ['getMessagesList', {
+        ['getEmailsList', {
             sort => [ 'receivedAt desc' ],
             collapseThreads => JSON::true,
             position => 0,
             limit => 10,
         }, 'R1'],
-        ['getMessages', {
+        ['getEmails', {
             '#ids' => {
                 resultOf => 'R1',
-                name => 'messagesList',
+                name => 'emailsList',
                 path => '/ids',
             },
             properties => [ 'threadId' ],
@@ -6783,7 +6783,7 @@ sub test_refobjects_extended
         ['getThreads', {
             '#ids' => {
                 resultOf => 'R2',
-                name => 'messages',
+                name => 'emails',
                 path => '/list/*/threadId',
             },
         }, 'R3'],
@@ -6791,7 +6791,7 @@ sub test_refobjects_extended
     $self->assert_num_equals(10, scalar @{$res->[2][1]{list}});
 }
 
-sub test_setmessages_patch
+sub test_setemails_patch
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -6812,14 +6812,14 @@ sub test_setmessages_patch
         keywords => { '$Draft' => JSON::true, foo => JSON::true },
     };
 
-    xlog "Create draft message";
+    xlog "Create draft email";
     $res = $jmap->Request([
-        ['setMessages', { create => { "1" => $draft }}, "R1"],
+        ['setEmails', { create => { "1" => $draft }}, "R1"],
     ]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     $res = $jmap->Request([
-        ['getMessages', { 'ids' => [$id] }, 'R2' ]
+        ['getEmails', { 'ids' => [$id] }, 'R2' ]
     ]);
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
@@ -6828,9 +6828,9 @@ sub test_setmessages_patch
     $self->assert_equals(JSON::true, $msg->{mailboxIds}->{$inboxid});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
-    xlog "Patch message keywords";
+    xlog "Patch email keywords";
     $res = $jmap->Request([
-        ['setMessages', {
+        ['setEmails', {
             update => {
                 $id => {
                     "/keywords/foo" => undef,
@@ -6838,7 +6838,7 @@ sub test_setmessages_patch
                 }
             }
         }, "R1"],
-        ['getMessages', { ids => [$id], properties => ['keywords'] }, 'R2'],
+        ['getEmails', { ids => [$id], properties => ['keywords'] }, 'R2'],
     ]);
 
     $msg = $res->[1][1]->{list}[0];
@@ -6851,9 +6851,9 @@ sub test_setmessages_patch
     my $mboxid = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($mboxid);
 
-    xlog "Patch message mailboxes";
+    xlog "Patch email mailboxes";
     $res = $jmap->Request([
-        ['setMessages', {
+        ['setEmails', {
             update => {
                 $id => {
                     "/mailboxIds/$inboxid" => undef,
@@ -6861,7 +6861,7 @@ sub test_setmessages_patch
                 }
             }
         }, "R1"],
-        ['getMessages', { ids => [$id], properties => ['mailboxIds'] }, 'R2'],
+        ['getEmails', { ids => [$id], properties => ['mailboxIds'] }, 'R2'],
     ]);
     $msg = $res->[1][1]->{list}[0];
     $self->assert_equals(JSON::true, $msg->{mailboxIds}->{$mboxid});
