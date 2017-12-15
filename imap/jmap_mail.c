@@ -1014,16 +1014,16 @@ done:
     return r;
 }
 
-struct getmboxlist_window {
+typedef struct {
     ssize_t position;
     const char *anchor;
     int anchor_off;
     size_t limit;
     int cancalcupdates;
-};
+} getmboxlist_window_t;
 
 static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                           struct getmboxlist_window *window,
+                           getmboxlist_window_t *window,
                            size_t *total, json_t **ids)
 {
     int r = 0;
@@ -1157,22 +1157,22 @@ static int is_supported_mboxlist_sort(const char *field)
     return 0;
 }
 
-struct getmboxlist_args {
+typedef struct {
     json_t *filter;
     json_t *sort;
-    struct getmboxlist_window window;
-};
+    getmboxlist_window_t window;
+} getmboxlist_args_t;
 
 static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
                                  json_t *jargs,
-                                 struct getmboxlist_args *args,
+                                 getmboxlist_args_t *args,
                                  json_t *invalid,
                                  json_t *unsupported_filter,
                                  json_t *unsupported_sort)
 {
     json_t *arg;
 	json_int_t jint = 0;
-    memset(args, 0, sizeof(struct getmboxlist_args));
+    memset(args, 0, sizeof(getmboxlist_args_t));
 
     /* Validate filter */
     arg = json_object_get(jargs, "filter");
@@ -1224,7 +1224,7 @@ static int getMailboxList(jmap_req_t *req)
     int r = 0;
     json_t *ids = NULL, *item, *res;
     size_t total = 0;
-    struct getmboxlist_args args;
+    getmboxlist_args_t args;
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -1280,7 +1280,7 @@ done:
 static int getMailboxListUpdates(jmap_req_t *req)
 {
     int r = 0;
-    struct getmboxlist_args args;
+    getmboxlist_args_t args;
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
