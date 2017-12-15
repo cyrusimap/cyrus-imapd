@@ -104,7 +104,10 @@ sub test_login
         'Content-Type'  => "application/json",
         'Authorization' => "Bearer " . $data->{accessToken},
       },
-      content => encode_json([['getMailboxes', {}, "R1"]]),
+      content => encode_json({
+        using => [ "ietf:jmap", "ietf:jmapmail" ],
+        methodCalls => [['getMailboxes', {}, "R1"]]
+      }),
     };
 
     my $Response = $jmap->ua->post($jmap->uri(), $Request);
@@ -191,6 +194,8 @@ sub test_settings
     $self->assert_not_null($jdata->{apiUrl});
     $self->assert_not_null($jdata->{downloadUrl});
     $self->assert_not_null($jdata->{uploadUrl});
+    $self->assert(exists $jdata->{capabilities}->{"ietf:jmap"});
+    $self->assert(exists $jdata->{capabilities}->{"ietf:jmapmail"});
 }
 
 sub test_login_wrongpass
