@@ -84,15 +84,15 @@ static int setCalendarEvents(struct jmap_req *req);
 static int getCalendarPreferences(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
-    { "getCalendars",           &getCalendars },
-    { "getCalendarsUpdates",     &getCalendarsUpdates },
-    { "setCalendars",           &setCalendars },
-    { "getCalendarEvents",      &getCalendarEvents },
-    { "getCalendarEventsUpdates",&getCalendarEventsUpdates },
-    { "getCalendarEventsList",   &getCalendarEventsList },
-    { "setCalendarEvents",      &setCalendarEvents },
-    { "getCalendarPreferences", &getCalendarPreferences },
-    { NULL,                     NULL}
+    { "Calendar/get",             &getCalendars },
+    { "Calendar/changes",         &getCalendarsUpdates },
+    { "Calendar/set",             &setCalendars },
+    { "CalendarEvent/get",        &getCalendarEvents },
+    { "CalendarEvent/changes",    &getCalendarEventsUpdates },
+    { "CalendarEvent/query",      &getCalendarEventsList },
+    { "CalendarEvent/set",        &setCalendarEvents },
+    { "CalendarPreference/get",   &getCalendarPreferences },
+    { NULL,                       NULL}
 };
 
 int jmap_calendar_init(ptrarray_t *methods, json_t *capabilities __attribute__((unused)))
@@ -442,7 +442,7 @@ doneloop:
     }
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendars"));
+    json_array_append_new(item, json_string("Calendar/get"));
     json_array_append_new(item, calendars);
     json_array_append_new(item, json_string(req->tag));
 
@@ -590,7 +590,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
     json_object_set_new(calendarUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarsUpdates"));
+    json_array_append_new(item, json_string("Calendar/changes"));
     json_array_append_new(item, calendarUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -1171,7 +1171,7 @@ static int setCalendars(struct jmap_req *req)
 
     json_incref(set);
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarsSet"));
+    json_array_append_new(item, json_string("Calendar/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -1449,7 +1449,7 @@ static int getCalendarEvents(struct jmap_req *req)
     }
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEvents"));
+    json_array_append_new(item, json_string("CalendarEvent/get"));
     json_array_append_new(item, events);
     json_array_append_new(item, json_string(req->tag));
 
@@ -2212,7 +2212,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
     json_incref(set);
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEventsSet"));
+    json_array_append_new(item, json_string("CalendarEvent/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2367,7 +2367,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     json_object_set(eventUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEventsUpdates"));
+    json_array_append_new(item, json_string("CalendarEvent/Changes"));
     json_array_append_new(item, eventUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2938,7 +2938,7 @@ static int getCalendarEventsList(struct jmap_req *req)
     if (filter) json_object_set(eventList, "filter", filter);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("calendarEventsList"));
+    json_array_append_new(item, json_string("CalendarEvent/query"));
     json_array_append_new(item, eventList);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2964,7 +2964,7 @@ static int getCalendarPreferences(struct jmap_req *req)
     /* Just a dummy implementation to make the JMAP web client happy. */
     json_t *item = json_pack("[]");
     json_t *res = json_pack("{}");
-    json_array_append_new(item, json_string("calendarPreferences"));
+    json_array_append_new(item, json_string("CalendarPreference/get"));
     json_array_append_new(item, res);
     json_object_set_new(res, "accountId", json_string(req->accountid));
     json_array_append_new(item, json_string(req->tag));
