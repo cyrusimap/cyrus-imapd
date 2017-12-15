@@ -586,6 +586,43 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
     return 0;
 }
 
+static int validate_request(struct transaction_t *txn, json_t *req)
+{
+    json_t *using = json_object_get(req, "using");
+    json_t *calls = json_object_get(req, "methodCalls");
+
+    if (!json_is_array(using) || !json_is_array(calls)) {
+        txn->error.desc = "JSON request body is not a JMAP Request object";
+        return HTTP_BAD_REQUEST;
+    }
+
+    size_t i;
+    json_t *val;
+    json_array_foreach(calls, i, val) {
+        if (json_array_size(val) != 3 ||
+                !json_is_string(json_array_get(val, 0)) ||
+                !json_is_object(json_array_get(val, 1)) ||
+                !json_is_string(json_array_get(val, 2))) {
+            txn->error.desc = "JSON request body is not a JMAP Request object";
+            return HTTP_BAD_REQUEST;
+        }
+    }
+
+    json_array_foreach(using, i, val) {
+        const char *s = json_string_value(val);
+        if (!s) {
+            txn->error.desc = "JSON request body is not a JMAP Request object";
+            return HTTP_BAD_REQUEST;
+        }
+        if (!json_object_get(jmap_capabilities, s)) {
+            txn->error.desc = "JSON request uses unsupported capabilities";
+            return HTTP_BAD_REQUEST;
+        }
+    }
+
+    return 0;
+}
+
 /* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
@@ -602,7 +639,6 @@ static int jmap_post(struct transaction_t *txn,
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf, *inboxname = NULL;
-    json_t *val;
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
 
@@ -627,38 +663,8 @@ static int jmap_post(struct transaction_t *txn,
     if (ret) goto done;
 
     /* Validate Request object */
-    json_t *using = json_object_get(req, "using");
-    json_t *calls = json_object_get(req, "methodCalls");
-    int is_valid = 1;
-    if (!json_is_array(using) || !json_is_array(calls)) {
-        is_valid = 0;
-    }
-    json_array_foreach(calls, i, val) {
-        if (json_array_size(val) != 3 ||
-                !json_is_string(json_array_get(val, 0)) ||
-                !json_is_object(json_array_get(val, 1)) ||
-                !json_is_string(json_array_get(val, 2))) {
-            is_valid = 0;
-            break;
-        }
-    }
-    if (!is_valid) {
-        txn->error.desc = "JSON request body is not a JMAP Request object";
-        ret = HTTP_BAD_REQUEST;
+    if ((ret = validate_request(txn, req))) {
         goto done;
-    }
-    json_array_foreach(using, i, val) {
-        const char *s = json_string_value(val);
-        if (!s) {
-            txn->error.desc = "JSON request body is not a JMAP Request object";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-        if (!json_object_get(jmap_capabilities, s)) {
-            txn->error.desc = "JSON request uses unsupported capabilities";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
     }
 
     /* Start JSON response */
@@ -680,13 +686,13 @@ static int jmap_post(struct transaction_t *txn,
     construct_hash_table(&accounts, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
 
-    /* Process each message in the request */
-    for (i = 0; i < json_array_size(calls); i++) {
+    /* Process each method call in the request */
+    json_t *mc;
+    json_array_foreach(json_object_get(req, "methodCalls"), i, mc) {
         const jmap_method_t *mp;
-        json_t *call = json_array_get(calls, i);
-        const char *name = json_string_value(json_array_get(call, 0));
-        json_t *args = json_array_get(call, 1), *arg;
-        const char *tag = json_string_value(json_array_get(call, 2));
+        const char *name = json_string_value(json_array_get(mc, 0));
+        json_t *args = json_array_get(mc, 1), *arg;
+        const char *tag = json_string_value(json_array_get(mc, 2));
         int r = 0;
 
         /* Find the message processor */
