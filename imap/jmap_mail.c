@@ -83,31 +83,31 @@
 
 static int getMailboxes(jmap_req_t *req);
 static int setMailboxes(jmap_req_t *req);
-static int getMailboxUpdates(jmap_req_t *req);
-static int getMailboxList(jmap_req_t *req);
-static int getMailboxListUpdates(jmap_req_t *req);
-static int getMessageList(jmap_req_t *req);
-static int getMessageListUpdates(jmap_req_t *req);
+static int getMailboxesUpdates(jmap_req_t *req);
+static int getMailboxesList(jmap_req_t *req);
+static int getMailboxesListUpdates(jmap_req_t *req);
+static int getMessagesList(jmap_req_t *req);
+static int getMessagesListUpdates(jmap_req_t *req);
 static int getMessages(jmap_req_t *req);
 static int setMessages(jmap_req_t *req);
-static int getMessageUpdates(jmap_req_t *req);
+static int getMessagesUpdates(jmap_req_t *req);
 static int importMessages(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
 static int getIdentities(jmap_req_t *req);
-static int getThreadUpdates(jmap_req_t *req);
+static int getThreadsUpdates(jmap_req_t *req);
 static int getMessageSubmissions(jmap_req_t *req);
 static int setMessageSubmissions(jmap_req_t *req);
-static int getMessageSubmissionUpdates(jmap_req_t *req);
-static int getMessageSubmissionList(jmap_req_t *req);
-static int getMessageSubmissionListUpdates(jmap_req_t *req);
+static int getMessageSubmissionsUpdates(jmap_req_t *req);
+static int getMessageSubmissionsList(jmap_req_t *req);
+static int getMessageSubmissionsListUpdates(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
  * - copyMessages
  * - getVacationResponse
  * - setVacationResponse
- * - getIdentityUpdates
+ * - getIdentitiesUpdates
  * - setIdentities
  * - reportMessages
  */
@@ -123,28 +123,28 @@ static int getMessageSubmissionListUpdates(jmap_req_t *req);
 jmap_method_t jmap_mail_methods[] = {
     { "getMailboxes",                    &getMailboxes },
     { "setMailboxes",                    &setMailboxes },
-    { "getMailboxUpdates",               &getMailboxUpdates },
-    { "getMailboxList",                  &getMailboxList },
-    { "getMailboxListUpdates",           &getMailboxListUpdates },
-    { "getMessageList",                  &getMessageList },
-    { "getMessageListUpdates",           &getMessageListUpdates },
+    { "getMailboxesUpdates",               &getMailboxesUpdates },
+    { "getMailboxesList",                  &getMailboxesList },
+    { "getMailboxesListUpdates",           &getMailboxesListUpdates },
+    { "getMessagesList",                  &getMessagesList },
+    { "getMessagesListUpdates",           &getMessagesListUpdates },
     { "getMessages",                     &getMessages },
     { "setMessages",                     &setMessages },
-    { "getMessageUpdates",               &getMessageUpdates },
+    { "getMessagesUpdates",               &getMessagesUpdates },
     { "importMessages",                  &importMessages },
     { "getSearchSnippets",               &getSearchSnippets },
     { "getThreads",                      &getThreads },
-    { "getThreadUpdates",                &getThreadUpdates },
+    { "getThreadsUpdates",                &getThreadsUpdates },
     { "getIdentities",                   &getIdentities },
     { "getMessageSubmissions",           &getMessageSubmissions },
     { "setMessageSubmissions",           &setMessageSubmissions },
-    { "getMessageSubmissionUpdates",     &getMessageSubmissionUpdates },
-    { "getMessageSubmissionList",        &getMessageSubmissionList },
-    { "getMessageSubmissionListUpdates", &getMessageSubmissionListUpdates },
+    { "getMessageSubmissionsUpdates",     &getMessageSubmissionsUpdates },
+    { "getMessageSubmissionsList",        &getMessageSubmissionsList },
+    { "getMessageSubmissionsListUpdates", &getMessageSubmissionsListUpdates },
     { NULL,                              NULL}
 };
 
-/* NULL terminated list of supported getMessageList sort fields */
+/* NULL terminated list of supported getMessagesList sort fields */
 static const char *msglist_sortfields[];
 
 int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
@@ -164,7 +164,7 @@ int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
             "maxMailboxesPerMessage", json_null(),
             "maxSizeAttachmentsPerMessage", 0,
             "maxDelayedSend", 0,
-            "messageListSortOptions", sortopts,
+            "messagesListSortOptions", sortopts,
             "submissionExtensions", json_object());
 
     json_object_set_new(capabilities, "ietf:jmapmail", my_capabilities);
@@ -227,7 +227,7 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
 
 static void validate_string_array(json_t *arg, const char *prefix, json_t *invalid) {
-    /* FIXME probably use in getMessageList */
+    /* FIXME probably use in getMessagesList */
     if (!JNOTNULL(arg)) {
         return;
     }
@@ -1030,10 +1030,10 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
     size_t j;
     json_t *val;
 
-    /* Reject any attempt to calculcate updates for getMailboxListUpdates.
+    /* Reject any attempt to calculcate updates for getMailboxesListUpdates.
      * All of the filter and sort criteria are mutable. That only leaves
      * an unsorted and unfiltered mailbox list which we internally sort
-     * by mailbox ids, which isn't any better than getMailboxUpdates. */
+     * by mailbox ids, which isn't any better than getMailboxesUpdates. */
     window->cancalcupdates = 0;
 
     /* Prepare query */
@@ -1219,7 +1219,7 @@ static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
     }
 }
 
-static int getMailboxList(jmap_req_t *req)
+static int getMailboxesList(jmap_req_t *req)
 {
     int r = 0;
     json_t *ids = NULL, *item, *res;
@@ -1264,7 +1264,7 @@ static int getMailboxList(jmap_req_t *req)
     json_object_set(res, "ids", ids);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("mailboxList"));
+    json_array_append_new(item, json_string("mailboxesList"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -1277,7 +1277,7 @@ done:
     return r;
 }
 
-static int getMailboxListUpdates(jmap_req_t *req)
+static int getMailboxesListUpdates(jmap_req_t *req)
 {
     int r = 0;
     getmboxlist_args_t args;
@@ -2385,7 +2385,7 @@ done:
     return r;
 }
 
-static int getMailboxUpdates(jmap_req_t *req)
+static int getMailboxesUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     int has_more = 0, only_counts_changed = 0;
@@ -2437,7 +2437,7 @@ static int getMailboxUpdates(jmap_req_t *req)
                                    "totalThreads", "unreadThreads") :
             json_null());
     item = json_pack("[]");
-    json_array_append_new(item, json_string("mailboxUpdates"));
+    json_array_append_new(item, json_string("mailboxesUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4488,7 +4488,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &ids);
 
-        /* we're doing getMessageListUpdates - we use the results differently */
+        /* we're doing getMessagesListUpdates - we use the results differently */
         if (window->sincemodseq) {
             /* Keep track of the highest modseq */
             if (window->highestmodseq < md->modseq)
@@ -4519,9 +4519,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              *
              * The concept of "exemplar" comes from the xconv* commands in index.c.
              * The "exemplar" is the first message that matches the current sort/search
-             * for a given conversation.  For getMessageList this is fairly simple,
+             * for a given conversation.  For getMessagesList this is fairly simple,
              * just show the first message you find with a given cid, but for
-             * getMessageListUpdates, you need to say "removed" for every message
+             * getMessagesListUpdates, you need to say "removed" for every message
              * which MIGHT have been the previous exemplar, because it will be in the
              * client cache, and you need to say both "removed" and "added" for the
              * new exemplar unless you can be sure it was also the old exemplar.
@@ -4750,7 +4750,7 @@ static int is_supported_msglist_sort(const char *field)
     return 0;
 }
 
-static int getMessageList(jmap_req_t *req)
+static int getMessagesList(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -4852,7 +4852,7 @@ static int getMessageList(jmap_req_t *req)
     json_object_set(res, "threadIds", threadids);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messageList"));
+    json_array_append_new(item, json_string("messagesList"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4863,7 +4863,7 @@ done:
     return r;
 }
 
-static int getMessageListUpdates(jmap_req_t *req)
+static int getMessagesListUpdates(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -4985,7 +4985,7 @@ static int getMessageListUpdates(jmap_req_t *req)
     json_object_set_new(res, "total", json_integer(total));
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messageListUpdates"));
+    json_array_append_new(item, json_string("messagesListUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4997,7 +4997,7 @@ done:
     return r;
 }
 
-static int getMessageUpdates(jmap_req_t *req)
+static int getMessagesUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter = NULL, *sort = NULL;
@@ -5066,7 +5066,7 @@ static int getMessageUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messageUpdates"));
+    json_array_append_new(item, json_string("messagesUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5080,7 +5080,7 @@ done:
     return r;
 }
 
-static int getThreadUpdates(jmap_req_t *req)
+static int getThreadsUpdates(jmap_req_t *req)
 {
     int pe, has_more = 0, r = 0;
     json_int_t max = 0;
@@ -5189,7 +5189,7 @@ static int getThreadUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("threadUpdates"));
+    json_array_append_new(item, json_string("threadsUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -7066,7 +7066,7 @@ static int jmapmsg_append(jmap_req_t *req,
 
     if (has_attachment) {
         /* Set the $HasAttachment flag. We mainly use that to support
-         * the hasAttachment filter property in getMessageList */
+         * the hasAttachment filter property in getMessagesList */
         int userflag;
         r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
         if (r) goto done;
@@ -9082,7 +9082,7 @@ done:
     return r;
 }
 
-static int getMessageSubmissionUpdates(jmap_req_t *req)
+static int getMessageSubmissionsUpdates(jmap_req_t *req)
 {
     int pe;
     json_int_t max = 0;
@@ -9123,7 +9123,7 @@ static int getMessageSubmissionUpdates(jmap_req_t *req)
     json_object_set_new(res, "removed", json_null());
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionUpdates"));
+    json_array_append_new(item, json_string("messageSubmissionsUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9190,7 +9190,7 @@ static int is_supported_msgsub_sort(const char *field)
     return 0;
 }
 
-static int getMessageSubmissionList(jmap_req_t *req)
+static int getMessageSubmissionsList(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -9269,7 +9269,7 @@ static int getMessageSubmissionList(jmap_req_t *req)
     json_object_set(res, "threadIds", threadids);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionList"));
+    json_array_append_new(item, json_string("messageSubmissionsList"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9280,7 +9280,7 @@ done:
     return r;
 }
 
-static int getMessageSubmissionListUpdates(jmap_req_t *req)
+static int getMessageSubmissionsListUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter, *sort;
@@ -9361,7 +9361,7 @@ static int getMessageSubmissionListUpdates(jmap_req_t *req)
     json_object_set(res, "sort", sort);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionListUpdates"));
+    json_array_append_new(item, json_string("messageSubmissionsListUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
