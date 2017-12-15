@@ -1616,7 +1616,7 @@ sub test_getmessages_mimeencode
     xlog "get message list";
     $res = $jmap->Request([
             ['getMessageList', { }, 'R1'],
-            ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2'],
+            ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2'],
     ]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     my $msg = $res->[1][1]->{list}[0];
@@ -1682,7 +1682,7 @@ sub test_getmessages_fetchmessages
     xlog "get message list";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2' ],
     ]);
     $self->assert_num_equals(scalar @{$res}, 2);
     $self->assert_str_equals($res->[0][0], "messageList");
@@ -1732,7 +1732,7 @@ sub test_getmessages_fetchmessages
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
         ['getMessages', {
-            '#ids' => { resultOf => 'R1', path => '/ids' },
+            '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' },
             properties => ['sender', 'headers.x-tra']
         }, 'R2'],
     ]);
@@ -1810,8 +1810,8 @@ sub test_getmessages_threads
     xlog "get message list";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getThreads', { '#ids' => { resultOf => 'R1', path => '/threadIds' }}, 'R2' ],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' }}, 'R3' ],
+        ['getThreads', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/threadIds' }}, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' }}, 'R3' ],
     ]);
     $self->assert_num_equals(scalar @{$res}, 3);
     $self->assert_str_equals($res->[0][0], "messageList");
@@ -1883,7 +1883,7 @@ sub test_getmessages_multimailboxes
     xlog "get message";
     $res = $jmap->Request([
         ['getMessageList', {}, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2'],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2'],
     ]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -1898,7 +1898,7 @@ sub test_getmessages_multimailboxes
     xlog "get message";
     $res = $jmap->Request([
         ['getMessageList', {}, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2'],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2'],
     ]);
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -2439,7 +2439,7 @@ sub test_getmessages_body_notext
     xlog "get message list";
     my $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2'],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2'],
     ]);
     my $msg = $res->[1][1]->{list}[0];
 
@@ -2604,7 +2604,7 @@ sub test_setmessages_inreplyto
     $self->make_message("foo") || die;
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2'],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
@@ -3789,7 +3789,7 @@ sub test_getmessagelist
         ['getMessageList', { accountId => $account }, 'R1'],
         ['getMessages', {
             accountId => $account,
-            '#ids' => { resultOf => 'R1', path => '/ids' }
+            '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' }
         }, 'R2'],
     ]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -4122,7 +4122,7 @@ sub test_getmessagelist_shared
                 ['getMessageList', { accountId => $account }, 'R1'],
                 ['getMessages', {
                         accountId => $account,
-                        '#ids' => { resultOf => 'R1', path => '/ids' }
+                        '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' }
                     }, 'R2'],
             ]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -4590,7 +4590,7 @@ sub test_getmessagelist_threadkeywords
     xlog "fetch message ids";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2' ],
     ]);
     my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
     my $msga = $m{"Message A"};
@@ -5066,7 +5066,7 @@ sub test_getsearchsnippets
     xlog "fetch message ids";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
@@ -5153,7 +5153,7 @@ sub test_getsearchsnippets_shared
         ['getMessageList', { accountId => 'foo' }, "R1"],
         ['getMessages', {
             accountId => 'foo',
-            '#ids' => { resultOf => 'R1', path => '/ids' }
+            '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' }
         }, 'R2' ],
     ]);
 
@@ -5202,10 +5202,12 @@ sub test_getmessagelist_snippets
         ['getSearchSnippets', {
             '#messageIds' => {
                 resultOf => 'R1',
+                name => 'messageList',
                 path => '/ids',
             },
             '#filter' => {
                 resultOf => 'R1',
+                name => 'messageList', 
                 path => '/filter',
             },
         }, 'R2'],
@@ -5221,6 +5223,7 @@ sub test_getmessagelist_snippets
         ['getSearchSnippets', {
             '#messageIds' => {
                 resultOf => 'R1',
+                name => 'messageList', 
                 path => '/ids',
             },
         }, 'R2'],
@@ -5241,10 +5244,12 @@ sub test_getmessagelist_snippets
         ['getSearchSnippets', {
             '#messageIds' => {
                 resultOf => 'R1',
+                name => 'messageList',
                 path => '/ids',
             },
             '#filter' => {
                 resultOf => 'R1',
+                name => 'messageList',
                 path => '/filter',
             },
         }, 'R2'],
@@ -5463,7 +5468,7 @@ sub test_getthreads
     xlog "fetch messages";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
@@ -6463,7 +6468,7 @@ sub test_getthreadupdates
     xlog "fetch messages";
     $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/ids' } }, 'R2' ],
+        ['getMessages', { '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' } }, 'R2' ],
     ]);
 
     my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
@@ -6506,7 +6511,7 @@ sub test_getthreadupdates
     xlog "get thread updates, fetch threads";
     $res = $jmap->Request([
         ['getThreadUpdates', { sinceState => $state }, "R1"],
-        ['getThreads', { '#ids' => { resultOf => 'R1', path => '/changed' }}, 'R2'],
+        ['getThreads', { '#ids' => { resultOf => 'R1', name => 'threadUpdates', path => '/changed' }}, 'R2'],
     ]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -6588,7 +6593,7 @@ sub test_importmessages
     my $res = $jmap->Request([
         ['getMessageList', { }, "R1"],
         ['getMessages', {
-            '#ids' => { resultOf => 'R1', path => '/ids' },
+            '#ids' => { resultOf => 'R1', name => 'messageList', path => '/ids' },
             properties => ['attachedMessages'],
         }, 'R2' ],
     ]);
@@ -6713,8 +6718,9 @@ sub test_refobjects_simple
         }, 'R1'],
         ['getMessages', {
             '#ids' => {
-                'resultOf' => 'R1',
-                'path' => '/changed',
+                resultOf => 'R1',
+                name => 'messageUpdates',
+                path => '/changed',
             },
         }, 'R2'],
     ]);
@@ -6747,25 +6753,21 @@ sub test_refobjects_extended
         }, 'R1'],
         ['getMessages', {
             '#ids' => {
-                'resultOf' => 'R1',
-                'path' => '/ids',
+                resultOf => 'R1',
+                name => 'messageList',
+                path => '/ids',
             },
             properties => [ 'threadId' ],
         }, 'R2'],
         ['getThreads', {
             '#ids' => {
                 resultOf => 'R2',
+                name => 'messages',
                 path => '/list/*/threadId',
             },
         }, 'R3'],
-        ['getThreads', {
-            '#ids' => {
-                resultOf => 'R2',
-                path => '/list/1/threadId',
-            },
-        }, 'R4'],
     ]);
-    $self->assert_str_equals($res->[2][1]{list}[1]{id}, $res->[3][1]{list}[0]{id});
+    $self->assert_num_equals(10, scalar @{$res->[2][1]{list}});
 }
 
 sub test_setmessages_patch
@@ -6792,11 +6794,13 @@ sub test_setmessages_patch
     xlog "Create draft message";
     $res = $jmap->Request([
         ['setMessages', { create => { "1" => $draft }}, "R1"],
-        ['getMessages', { '#ids' => { resultOf => 'R1', path => '/created/1/id' }}, 'R2' ],
     ]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    my $msg = $res->[1][1]->{list}[0];
+    $res = $jmap->Request([
+        ['getMessages', { 'ids' => [$id] }, 'R2' ]
+    ]);
+    my $msg = $res->[0][1]->{list}[0];
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
@@ -6815,6 +6819,7 @@ sub test_setmessages_patch
         }, "R1"],
         ['getMessages', { ids => [$id], properties => ['keywords'] }, 'R2'],
     ]);
+
     $msg = $res->[1][1]->{list}[0];
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'bar'});
