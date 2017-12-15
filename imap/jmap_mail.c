@@ -86,30 +86,30 @@ static int setMailboxes(jmap_req_t *req);
 static int getMailboxesUpdates(jmap_req_t *req);
 static int getMailboxesList(jmap_req_t *req);
 static int getMailboxesListUpdates(jmap_req_t *req);
-static int getMessagesList(jmap_req_t *req);
-static int getMessagesListUpdates(jmap_req_t *req);
-static int getMessages(jmap_req_t *req);
-static int setMessages(jmap_req_t *req);
-static int getMessagesUpdates(jmap_req_t *req);
-static int importMessages(jmap_req_t *req);
+static int getEmailsList(jmap_req_t *req);
+static int getEmailsListUpdates(jmap_req_t *req);
+static int getEmails(jmap_req_t *req);
+static int setEmails(jmap_req_t *req);
+static int getEmailsUpdates(jmap_req_t *req);
+static int importEmails(jmap_req_t *req);
 static int getSearchSnippets(jmap_req_t *req);
 static int getThreads(jmap_req_t *req);
 static int getIdentities(jmap_req_t *req);
 static int getThreadsUpdates(jmap_req_t *req);
-static int getMessageSubmissions(jmap_req_t *req);
-static int setMessageSubmissions(jmap_req_t *req);
-static int getMessageSubmissionsUpdates(jmap_req_t *req);
-static int getMessageSubmissionsList(jmap_req_t *req);
-static int getMessageSubmissionsListUpdates(jmap_req_t *req);
+static int getEmailSubmissions(jmap_req_t *req);
+static int setEmailSubmissions(jmap_req_t *req);
+static int getEmailSubmissionsUpdates(jmap_req_t *req);
+static int getEmailSubmissionsList(jmap_req_t *req);
+static int getEmailSubmissionsListUpdates(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
- * - copyMessages
+ * - copyEmails
  * - getVacationResponse
  * - setVacationResponse
  * - getIdentitiesUpdates
  * - setIdentities
- * - reportMessages
+ * - reportEmails
  */
 
 /*
@@ -121,30 +121,30 @@ static int getMessageSubmissionsListUpdates(jmap_req_t *req);
  */
 
 jmap_method_t jmap_mail_methods[] = {
-    { "getMailboxes",                    &getMailboxes },
-    { "setMailboxes",                    &setMailboxes },
-    { "getMailboxesUpdates",               &getMailboxesUpdates },
-    { "getMailboxesList",                  &getMailboxesList },
-    { "getMailboxesListUpdates",           &getMailboxesListUpdates },
-    { "getMessagesList",                  &getMessagesList },
-    { "getMessagesListUpdates",           &getMessagesListUpdates },
-    { "getMessages",                     &getMessages },
-    { "setMessages",                     &setMessages },
-    { "getMessagesUpdates",               &getMessagesUpdates },
-    { "importMessages",                  &importMessages },
-    { "getSearchSnippets",               &getSearchSnippets },
-    { "getThreads",                      &getThreads },
-    { "getThreadsUpdates",                &getThreadsUpdates },
-    { "getIdentities",                   &getIdentities },
-    { "getMessageSubmissions",           &getMessageSubmissions },
-    { "setMessageSubmissions",           &setMessageSubmissions },
-    { "getMessageSubmissionsUpdates",     &getMessageSubmissionsUpdates },
-    { "getMessageSubmissionsList",        &getMessageSubmissionsList },
-    { "getMessageSubmissionsListUpdates", &getMessageSubmissionsListUpdates },
+    { "getMailboxes",                   &getMailboxes },
+    { "setMailboxes",                   &setMailboxes },
+    { "getMailboxesUpdates",            &getMailboxesUpdates },
+    { "getMailboxesList",               &getMailboxesList },
+    { "getMailboxesListUpdates",        &getMailboxesListUpdates },
+    { "getEmailsList",                  &getEmailsList },
+    { "getEmailsListUpdates",           &getEmailsListUpdates },
+    { "getEmails",                      &getEmails },
+    { "setEmails",                      &setEmails },
+    { "getEmailsUpdates",               &getEmailsUpdates },
+    { "importEmails",                   &importEmails },
+    { "getSearchSnippets",              &getSearchSnippets },
+    { "getThreads",                     &getThreads },
+    { "getThreadsUpdates",              &getThreadsUpdates },
+    { "getIdentities",                  &getIdentities },
+    { "getEmailSubmissions",            &getEmailSubmissions },
+    { "setEmailSubmissions",            &setEmailSubmissions },
+    { "getEmailSubmissionsUpdates",     &getEmailSubmissionsUpdates },
+    { "getEmailSubmissionsList",        &getEmailSubmissionsList },
+    { "getEmailSubmissionsListUpdates", &getEmailSubmissionsListUpdates },
     { NULL,                              NULL}
 };
 
-/* NULL terminated list of supported getMessagesList sort fields */
+/* NULL terminated list of supported getEmailsList sort fields */
 static const char *msglist_sortfields[];
 
 int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
@@ -161,10 +161,10 @@ int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
     }
 
     json_t *my_capabilities = json_pack("{s:o? s:i s:i s:O s:O}",
-            "maxMailboxesPerMessage", json_null(),
-            "maxSizeAttachmentsPerMessage", 0,
+            "maxMailboxesPerEmail", json_null(),
+            "maxSizeAttachmentsPerEmail", 0,
             "maxDelayedSend", 0,
-            "messagesListSortOptions", sortopts,
+            "emailsListSortOptions", sortopts,
             "submissionExtensions", json_object());
 
     json_object_set_new(capabilities, "ietf:jmapmail", my_capabilities);
@@ -227,7 +227,7 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
 
 static void validate_string_array(json_t *arg, const char *prefix, json_t *invalid) {
-    /* FIXME probably use in getMessagesList */
+    /* FIXME probably use in getEmailsList */
     if (!JNOTNULL(arg)) {
         return;
     }
@@ -584,11 +584,11 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                             json_boolean(rights & ACL_CREATE));
     }
 
-    if (_wantprop(props, "totalMessages")) {
-        json_object_set_new(obj, "totalMessages", json_integer(sdata.messages));
+    if (_wantprop(props, "totalEmails")) {
+        json_object_set_new(obj, "totalEmails", json_integer(sdata.messages));
     }
-    if (_wantprop(props, "unreadMessages")) {
-        json_object_set_new(obj, "unreadMessages", json_integer(sdata.unseen));
+    if (_wantprop(props, "unreadEmails")) {
+        json_object_set_new(obj, "unreadEmails", json_integer(sdata.unseen));
     }
 
     if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
@@ -1574,11 +1574,11 @@ static void setmailboxes_read_args(jmap_req_t *req,
     if (json_object_get(jargs, "mayDelete") && is_create) {
         json_array_append_new(invalid, json_string("mayDelete"));
     }
-    if (json_object_get(jargs, "totalMessages") && is_create) {
-        json_array_append_new(invalid, json_string("totalMessages"));
+    if (json_object_get(jargs, "totalEmails") && is_create) {
+        json_array_append_new(invalid, json_string("totalEmails"));
     }
-    if (json_object_get(jargs, "unreadMessages") && is_create) {
-        json_array_append_new(invalid, json_string("unreadMessages"));
+    if (json_object_get(jargs, "unreadEmails") && is_create) {
+        json_array_append_new(invalid, json_string("unreadEmails"));
     }
     if (json_object_get(jargs, "totalThreads") && is_create) {
         json_array_append_new(invalid, json_string("totalThreads"));
@@ -1941,7 +1941,7 @@ static int jmapmbox_destroy(jmap_req_t *req, const char *mboxid, json_t **err)
     if (r) goto done;
     iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
     if (mailbox_iter_step(iter) != NULL)
-        *err = json_pack("{s:s}", "type", "mailboxHasMessage");
+        *err = json_pack("{s:s}", "type", "mailboxHasEmail");
     mailbox_iter_done(&iter);
     jmap_closembox(req, &mbox);
     if (*err) goto done;
@@ -2433,7 +2433,7 @@ static int getMailboxesUpdates(jmap_req_t *req)
     json_object_set_new(res, "changed", changed);
     json_object_set_new(res, "removed", removed);
     json_object_set_new(res, "changedProperties", only_counts_changed ?
-            json_pack("[s,s,s,s]", "totalMessages", "unreadMessages",
+            json_pack("[s,s,s,s]", "totalEmails", "unreadEmails",
                                    "totalThreads", "unreadThreads") :
             json_null());
     item = json_pack("[]");
@@ -2447,7 +2447,7 @@ done:
 }
 
 /*
- * Messages
+ * Emails
  */
 
 static json_t *emailer_from_addr(const struct address *a)
@@ -3522,8 +3522,8 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
         if (inlinedcids) json_decref(inlinedcids);
     }
 
-    /* attachedMessages */
-    if (_wantprop(props, "attachedMessages")) {
+    /* attachedEmails */
+    if (_wantprop(props, "attachedEmails")) {
         int i;
         json_t *msgs = json_pack("{}");
 
@@ -3543,7 +3543,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
             json_decref(msgs);
             msgs = json_null();
         }
-        json_object_set_new(msg, "attachedMessages", msgs);
+        json_object_set_new(msg, "attachedEmails", msgs);
     }
 
     if (type == MSG_IS_ROOT) {
@@ -4106,7 +4106,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
         }
-        if ((s = json_string_value(json_object_get(filter, "sinceMessageState")))) {
+        if ((s = json_string_value(json_object_get(filter, "sinceEmailState")))) {
             /* non-standard */
             e = search_expr_new(this, SEOP_GT);
             e->attr = search_attr_find("modseq");
@@ -4317,7 +4317,7 @@ static struct sortcrit *buildsort(json_t *sort)
         if (!strcmp(prop.s, "id")) {
             sortcrit[i].key = SORT_GUID;
         }
-        if (!strcmp(prop.s, "messageState")) {
+        if (!strcmp(prop.s, "emailState")) {
             sortcrit[i].key = SORT_MODSEQ;
         }
         if (!strcmp(prop.s, "size")) {
@@ -4488,7 +4488,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &ids);
 
-        /* we're doing getMessagesListUpdates - we use the results differently */
+        /* we're doing getEmailsListUpdates - we use the results differently */
         if (window->sincemodseq) {
             /* Keep track of the highest modseq */
             if (window->highestmodseq < md->modseq)
@@ -4519,9 +4519,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              *
              * The concept of "exemplar" comes from the xconv* commands in index.c.
              * The "exemplar" is the first message that matches the current sort/search
-             * for a given conversation.  For getMessagesList this is fairly simple,
+             * for a given conversation.  For getEmailsList this is fairly simple,
              * just show the first message you find with a given cid, but for
-             * getMessagesListUpdates, you need to say "removed" for every message
+             * getEmailsListUpdates, you need to say "removed" for every message
              * which MIGHT have been the previous exemplar, because it will be in the
              * client cache, and you need to say both "removed" and "added" for the
              * new exemplar unless you can be sure it was also the old exemplar.
@@ -4721,7 +4721,7 @@ static const char *msglist_sortfields[] = {
     "receivedAt",
     "from",
     "id",
-    "messagestate",
+    "emailstate",
     "size",
     "subject",
     "to",
@@ -4750,7 +4750,7 @@ static int is_supported_msglist_sort(const char *field)
     return 0;
 }
 
-static int getMessagesList(jmap_req_t *req)
+static int getEmailsList(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -4852,7 +4852,7 @@ static int getMessagesList(jmap_req_t *req)
     json_object_set(res, "threadIds", threadids);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messagesList"));
+    json_array_append_new(item, json_string("emailsList"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4863,7 +4863,7 @@ done:
     return r;
 }
 
-static int getMessagesListUpdates(jmap_req_t *req)
+static int getEmailsListUpdates(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -4904,8 +4904,8 @@ static int getMessagesListUpdates(jmap_req_t *req)
     }
     window.sincemodseq = atomodseq_t(since);
 
-    /* uptoMessageId */
-    readprop(req->args, "uptoMessageId", 0, invalid, "s", &upto);
+    /* uptoEmailId */
+    readprop(req->args, "uptoEmailId", 0, invalid, "s", &upto);
     window.uptomsgid = upto;
 
     /* maxChanges */
@@ -4981,11 +4981,11 @@ static int getMessagesListUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
-    json_object_set_new(res, "uptoMessageId", json_string(upto));
+    json_object_set_new(res, "uptoEmailId", json_string(upto));
     json_object_set_new(res, "total", json_integer(total));
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messagesListUpdates"));
+    json_array_append_new(item, json_string("emailsListUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4997,7 +4997,7 @@ done:
     return r;
 }
 
-static int getMessagesUpdates(jmap_req_t *req)
+static int getEmailsUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter = NULL, *sort = NULL;
@@ -5034,8 +5034,8 @@ static int getMessagesUpdates(jmap_req_t *req)
     json_decref(invalid);
 
     /* Search for updates */
-    filter = json_pack("{s:s}", "sinceMessageState", since);
-    sort = json_pack("[s]", "messageState asc");
+    filter = json_pack("{s:s}", "sinceEmailState", since);
+    sort = json_pack("[s]", "emailState asc");
 
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
@@ -5066,7 +5066,7 @@ static int getMessagesUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messagesUpdates"));
+    json_array_append_new(item, json_string("emailsUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5118,8 +5118,8 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_decref(invalid);
 
     /* Search for message updates and collapse threads */
-    json_t *filter = json_pack("{s:s}", "sinceMessageState", since);
-    json_t *sort = json_pack("[s]", "messageState asc");
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", since);
+    json_t *sort = json_pack("[s]", "emailState asc");
     window.collapse = 1;
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
@@ -5312,7 +5312,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
         r = msgrecord_get_message(mr, &msg);
         if (r) goto doneloop;
 
-        json_object_set_new(snippet, "messageId", json_string(msgid));
+        json_object_set_new(snippet, "emailId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
         json_object_set_new(snippet, "preview", json_null());
         index_getsearchtext(msg, rx, /*snippet*/1);
@@ -5412,16 +5412,16 @@ static int getSearchSnippets(jmap_req_t *req)
     }
 
     /* messageIds */
-    messageids = json_object_get(req->args, "messageIds");
+    messageids = json_object_get(req->args, "emailIds");
     json_array_foreach(messageids, i, val) {
         if (!(s = json_string_value(val)) || !strlen(s)) {
-            buf_printf(&buf, "messageIds[%zu]", i);
+            buf_printf(&buf, "emailIds[%zu]", i);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         }
     }
     if (!json_is_array(messageids)) {
-        json_array_append_new(invalid, json_string("messageIds"));
+        json_array_append_new(invalid, json_string("emailIds"));
     }
 
     /* Bail out for argument errors */
@@ -5454,7 +5454,7 @@ static int getSearchSnippets(jmap_req_t *req)
 
         json_array_foreach(messageids, i, val) {
             json_array_append_new(snippets, json_pack("{s:s s:n s:n}",
-                        "messageId", json_string_value(val),
+                        "emailId", json_string_value(val),
                         "subject", "preview"));
         }
     }
@@ -5509,7 +5509,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
             free(msgid);
         }
 
-        json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "messageIds", ids);
+        json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "emailIds", ids);
         json_array_append_new(*threads, jthread);
 
         conversation_free(conv);
@@ -5590,7 +5590,7 @@ done:
     return r;
 }
 
-static int getMessages(jmap_req_t *req)
+static int getEmails(jmap_req_t *req)
 {
     int r = 0;
     json_t *list = json_pack("[]");
@@ -5693,7 +5693,7 @@ doneloop:
     json_object_set(res, "notFound", notfound);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messages"));
+    json_array_append_new(item, json_string("emails"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
 
@@ -5986,7 +5986,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
         lcase(content_type);
     }
     else {
-        content_type = xstrdup("message/rfc822");
+        content_type = xstrdup("email/rfc822");
     }
 
     fputs("Content-Type: ", out);
@@ -6135,7 +6135,7 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
     json_incref(html);
 
     /* Determine attached messages */
-    attached_msgs = json_object_get(mymsg, "attachedMessages");
+    attached_msgs = json_object_get(mymsg, "attachedEmails");
     json_incref(attached_msgs);
 
     /* Split attachments into ones with and without cid. If there's no
@@ -6176,7 +6176,7 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
         /* Remove any non-cid attachments and attached messages. We'll
          * write them after the trimmed down message is serialised. */
         json_object_del(mymsg, "attachments");
-        json_object_del(mymsg, "attachedMessages");
+        json_object_del(mymsg, "attachedEmails");
 
         /* If there's attachments with CIDs pass them on so the
          * htmlBody can be serialised together with is attachments. */
@@ -6284,7 +6284,7 @@ done:
     return r;
 }
 
-/* Write the JMAP Message msg in RFC-5322 compliant wire format.
+/* Write the JMAP Email msg in RFC-5322 compliant wire format.
  *
  * The message is assumed to not contain value errors. If 'date' is neither
  * set in the message headers nor property, the current date is set. If
@@ -6565,10 +6565,10 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
         json_array_append_new(invalid, json_string("threadId"));
     }
 
-    prop = json_object_get(msg, "inReplyToMessageId");
+    prop = json_object_get(msg, "inReplyToEmailId");
     if (JNOTNULL(prop)) {
         if (!((sval = json_string_value(prop)) && strlen(sval))) {
-            json_array_append_new(invalid, json_string("inReplyToMessageId"));
+            json_array_append_new(invalid, json_string("inReplyToEmailId"));
         }
     }
 
@@ -6721,7 +6721,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
     readprop(msg, "textBody", 0, invalid, "s", &sval);
     readprop(msg, "htmlBody", 0, invalid, "s", &sval);
 
-    prop = json_object_get(msg, "attachedMessages");
+    prop = json_object_get(msg, "attachedEmails");
     if (json_object_size(prop)) {
         json_t *submsg;
         const char *subid;
@@ -6732,7 +6732,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
 
             validate_createmsg(submsg, subinvalid, 1/*is_attached*/);
 
-            buf_printf(&buf, "attachedMessages[%s]", subid);
+            buf_printf(&buf, "attachedEmails[%s]", subid);
             json_array_foreach(subinvalid, j, errprop) {
                 const char *s = json_string_value(errprop);
                 buf_appendcstr(&buf, ".");
@@ -6745,7 +6745,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
         }
     }
     else if (JNOTNULL(prop)) {
-        json_array_append_new(invalid, json_string("attachedMessages"));
+        json_array_append_new(invalid, json_string("attachedEmails"));
     }
 
     prop = json_object_get(msg, "attachments");
@@ -7066,7 +7066,7 @@ static int jmapmsg_append(jmap_req_t *req,
 
     if (has_attachment) {
         /* Set the $HasAttachment flag. We mainly use that to support
-         * the hasAttachment filter property in getMessagesList */
+         * the hasAttachment filter property in getEmailsList */
         int userflag;
         r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
         if (r) goto done;
@@ -7309,7 +7309,7 @@ static int jmapmsg_create(jmap_req_t *req, json_t *msg, char **msgid,
     /* Determine if we need to set the $HasAttachment flag */
     int has_attachment = 0;
     if (json_array_size(json_object_get(msg, "attachments")) ||
-        json_object_size(json_object_get(msg, "attachedMessages"))) {
+        json_object_size(json_object_get(msg, "attachedEmails"))) {
         has_attachment = 1;
     }
 
@@ -7718,7 +7718,7 @@ static int jmapmsg_delete(jmap_req_t *req, const char *msgid)
     return data.deleted ? 0 : IMAP_NOTFOUND;
 }
 
-static int setMessages(jmap_req_t *req)
+static int setEmails(jmap_req_t *req)
 {
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
@@ -7916,7 +7916,7 @@ static int setMessages(jmap_req_t *req)
 
     json_incref(set);
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messagesSet"));
+    json_array_append_new(item, json_string("emailsSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -8076,7 +8076,7 @@ done:
     return r;
 }
 
-static int importMessages(jmap_req_t *req)
+static int importEmails(jmap_req_t *req)
 {
     int r = 0;
     json_t *res, *item, *msgs, *msg, *created, *notcreated;
@@ -8093,14 +8093,14 @@ static int importMessages(jmap_req_t *req)
     notcreated = json_pack("{}");
 
     /* messages */
-    msgs = json_object_get(req->args, "messages");
+    msgs = json_object_get(req->args, "emails");
     json_object_foreach(msgs, id, msg) {
         const char *prefix;
         size_t i;
         json_t *val;
         const char *s;
 
-        buf_printf(&buf, "messages[%s]", id);
+        buf_printf(&buf, "emails[%s]", id);
         prefix = buf_cstring(&buf);
 
         json_t *keywords;
@@ -8145,7 +8145,7 @@ static int importMessages(jmap_req_t *req)
         buf_reset(&buf);
     }
     if (!json_object_size(msgs)) {
-        json_array_append_new(invalid, json_string("messages"));
+        json_array_append_new(invalid, json_string("emails"));
     }
 
     /* Bail out for argument */
@@ -8185,25 +8185,25 @@ static int importMessages(jmap_req_t *req)
                     err = "forbidden";
                     break;
                 case IMAP_MAILBOX_EXISTS:
-                    err = "messageExists";
+                    err = "emailExists";
                     break;
                 case IMAP_QUOTA_EXCEEDED:
                     err = "maxQuotaReached";
                     break;
                 case IMAP_MESSAGE_CONTAINSNULL:
-                    err = "messageContainsNulByte";
+                    err = "emailContainsNulByte";
                     break;
                 case IMAP_MESSAGE_CONTAINSNL:
-                    err = "messageContainsBareNewlines";
+                    err = "emailContainsBareNewlines";
                     break;
                 case IMAP_MESSAGE_CONTAINS8BIT:
-                    err = "messageContainsNonASCIIHeader";
+                    err = "emailContainsNonASCIIHeader";
                     break;
                 case IMAP_MESSAGE_BADHEADER:
-                    err = "messageContainsInvalidHeader";
+                    err = "emailContainsInvalidHeader";
                     break;
                 case IMAP_MESSAGE_NOBLANKLINE:
-                    err = "messageHasNoHeaderBodySeparator";
+                    err = "emailHasNoHeaderBodySeparator";
                     break;
             }
             if (err) {
@@ -8236,7 +8236,7 @@ static int importMessages(jmap_req_t *req)
     json_object_set(res, "notCreated", notcreated);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messagesImported"));
+    json_array_append_new(item, json_string("emailsImported"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -8588,7 +8588,7 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
 
     /* messageId */
     const char *msgid = NULL;
-    if (readprop(msgsub, "messageId", 1, invalid, "s", &msgid) > 0) {
+    if (readprop(msgsub, "emailId", 1, invalid, "s", &msgid) > 0) {
         if (*msgid == '#') {
             const char *id = hash_lookup(msgid + 1, &req->idmap->messages);
             if (id) {
@@ -8673,14 +8673,14 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     r = jmapmsg_find(req, msgid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
-            *err = json_pack("{s:s}", "type", "messageNotFound");
+            *err = json_pack("{s:s}", "type", "emailNotFound");
         }
         goto done;
     }
 
     /* Check ACL */
     if (!(jmap_myrights_byname(req, mboxname) & ACL_READ)) {
-        *err = json_pack("{s:s}", "type", "messageNotFound");
+        *err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }
 
@@ -8781,7 +8781,7 @@ done:
     return r;
 }
 
-static int getMessageSubmissions(jmap_req_t *req)
+static int getEmailSubmissions(jmap_req_t *req)
 {
     int r = 0;
     json_t *list = json_pack("[]");
@@ -8841,7 +8841,7 @@ static int getMessageSubmissions(jmap_req_t *req)
     json_object_set(res, "notFound", notfound);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messages"));
+    json_array_append_new(item, json_string("emails"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
 
@@ -8853,7 +8853,7 @@ done:
     return r;
 }
 
-static int setMessageSubmissions(jmap_req_t *req)
+static int setEmailSubmissions(jmap_req_t *req)
 {
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
@@ -8872,28 +8872,28 @@ static int setMessageSubmissions(jmap_req_t *req)
     set = json_pack("{s:s}", "accountId", req->accountid);
     json_object_set_new(set, "oldState", state);
 
-    /* onSuccessUpdateMessage */
+    /* onSuccessUpdateEmail */
     json_t *invalid = json_pack("[]");
-    onsuccess_update = json_object_get(req->args, "onSuccessUpdateMessage");
+    onsuccess_update = json_object_get(req->args, "onSuccessUpdateEmail");
     if (JNOTNULL(onsuccess_update)) {
         if (json_is_object(onsuccess_update)) {
             const char *key;
             json_t *val;
             json_object_foreach(onsuccess_update, key, val) {
                 if (!json_is_object(val)) {
-                    buf_printf(&buf, "onSuccessUpdateMessage[%s]", key);
+                    buf_printf(&buf, "onSuccessUpdateEmail[%s]", key);
                     json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                     buf_reset(&buf);
                 }
             }
         } else {
-            json_array_append_new(invalid, json_string("onSuccessUpdateMessage"));
+            json_array_append_new(invalid, json_string("onSuccessUpdateEmail"));
         }
     }
-    /* onSuccessDestroyMessage */
-    onsuccess_destroy = json_object_get(req->args, "onSuccessDestroyMessage");
+    /* onSuccessDestroyEmail */
+    onsuccess_destroy = json_object_get(req->args, "onSuccessDestroyEmail");
     if (JNOTNULL(onsuccess_destroy)) {
-        validate_string_array(onsuccess_destroy, "onSuccessDestroyMessage", invalid);
+        validate_string_array(onsuccess_destroy, "onSuccessDestroyEmail", invalid);
     }
 
     /* Return early for argument errors */
@@ -8956,14 +8956,14 @@ static int setMessageSubmissions(jmap_req_t *req)
             buf_setcstr(&buf, "#");
             buf_appendcstr(&buf, key);
             buf_cstring(&buf);
-            const char *msgid = json_string_value(json_object_get(msgsub, "messageId"));
+            const char *msgid = json_string_value(json_object_get(msgsub, "emailId"));
 
-            /* Process onSuccessUpdateMessage */
+            /* Process onSuccessUpdateEmail */
             json_t *msg = json_object_get(onsuccess_update, buf_cstring(&buf));
             if (msg) {
                     json_object_set(update_msgs, msgid, msg);
             }
-            /* Process onSuccessDestroyMessage */
+            /* Process onSuccessDestroyEmail */
             size_t i;
             json_t *jkey;
             json_array_foreach(onsuccess_destroy, i, jkey) {
@@ -9050,7 +9050,7 @@ static int setMessageSubmissions(jmap_req_t *req)
 
     json_incref(set);
     item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionsSet"));
+    json_array_append_new(item, json_string("emailSubmissionsSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9065,7 +9065,7 @@ static int setMessageSubmissions(jmap_req_t *req)
             json_object_set(subreq.args, "destroy", destroy_msgs);
         }
         json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        r = setMessages(&subreq);
+        r = setEmails(&subreq);
         json_decref(subreq.args);
         if (r) goto done;
     }
@@ -9076,13 +9076,13 @@ done:
     json_decref(destroy_msgs);
     buf_free(&buf);
     if (r) {
-        syslog(LOG_ERR, "setMessageSubmissions: %s", error_message(r));
+        syslog(LOG_ERR, "setEmailSubmissions: %s", error_message(r));
         r = HTTP_SERVER_ERROR;
     }
     return r;
 }
 
-static int getMessageSubmissionsUpdates(jmap_req_t *req)
+static int getEmailSubmissionsUpdates(jmap_req_t *req)
 {
     int pe;
     json_int_t max = 0;
@@ -9123,7 +9123,7 @@ static int getMessageSubmissionsUpdates(jmap_req_t *req)
     json_object_set_new(res, "removed", json_null());
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionsUpdates"));
+    json_array_append_new(item, json_string("emailSubmissionsUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9162,7 +9162,7 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
         }
     }
 
-    arg = json_object_get(filter, "messageIds");
+    arg = json_object_get(filter, "emailIds");
     buf_printf(&buf, "%s.messageIds", prefix);
     validate_string_array(arg, buf_cstring(&buf), invalid);
     buf_reset(&buf);
@@ -9172,7 +9172,7 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
     validate_string_array(arg, buf_cstring(&buf), invalid);
     buf_reset(&buf);
 
-    arg = json_object_get(filter, "messageSubmissionIds");
+    arg = json_object_get(filter, "emailSubmissionIds");
     buf_printf(&buf, "%s.messageSubmissionIds", prefix);
     validate_string_array(arg, buf_cstring(&buf), invalid);
     buf_reset(&buf);
@@ -9182,7 +9182,7 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
 
 static int is_supported_msgsub_sort(const char *field)
 {
-    if (!strcmp(field, "messageId") ||
+    if (!strcmp(field, "emailId") ||
         !strcmp(field, "threadId") ||
         !strcmp(field, "sentAt")) {
         return 1;
@@ -9190,7 +9190,7 @@ static int is_supported_msgsub_sort(const char *field)
     return 0;
 }
 
-static int getMessageSubmissionsList(jmap_req_t *req)
+static int getEmailSubmissionsList(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
@@ -9265,11 +9265,11 @@ static int getMessageSubmissionsList(jmap_req_t *req)
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
     json_object_set(res, "ids", msgsubids);
-    json_object_set(res, "messageIds", messageids);
+    json_object_set(res, "emailIds", messageids);
     json_object_set(res, "threadIds", threadids);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionsList"));
+    json_array_append_new(item, json_string("emailSubmissionsList"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9280,7 +9280,7 @@ done:
     return r;
 }
 
-static int getMessageSubmissionsListUpdates(jmap_req_t *req)
+static int getEmailSubmissionsListUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter, *sort;
@@ -9361,7 +9361,7 @@ static int getMessageSubmissionsListUpdates(jmap_req_t *req)
     json_object_set(res, "sort", sort);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("messageSubmissionsListUpdates"));
+    json_array_append_new(item, json_string("emailSubmissionsListUpdates"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
