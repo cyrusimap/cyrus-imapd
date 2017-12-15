@@ -4062,8 +4062,10 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if ((val = json_object_get(filter, "inMailbox"))) {
             match_mailbox(req, this, val, /*is_not*/0);
         }
-        if ((val = json_object_get(filter, "inMailboxOtherThan"))) {
-            match_mailbox(req, this, val, /*is_not*/1);
+
+        json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
+            e = search_expr_new(this, SEOP_AND);
+            match_mailbox(req, e, val, /*is_not*/1);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
@@ -4172,7 +4174,6 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
         }
 
         readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "inMailboxOtherThan", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
         readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
         readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
@@ -4184,6 +4185,14 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
         readprop_full(filter, prefix, "bcc", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "subject", 0, invalid, "s", &s);
         readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
+
+        json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
+            if (!json_is_string(val)) {
+                buf_printf(&buf, "%s.inMailboxOtherThan[%zu]", prefix, i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
 
         if (readprop_full(filter, prefix, "allInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
             if (!is_valid_keyword(s)) {
