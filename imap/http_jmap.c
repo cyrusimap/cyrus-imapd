@@ -82,6 +82,8 @@ struct namespace jmap_namespace;
 
 static time_t compile_time;
 
+static json_t *jmap_capabilities = NULL;
+
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
@@ -213,20 +215,20 @@ static int jmap_parse_path(struct transaction_t *txn)
     return 0;
 }
 
-static ptrarray_t messages = PTRARRAY_INITIALIZER;
+static ptrarray_t jmap_methods = PTRARRAY_INITIALIZER;
 
-static jmap_msg_t *find_message(const char *name)
+static jmap_method_t *find_methodproc(const char *name)
 {
-    jmap_msg_t *mp = NULL;
+    jmap_method_t *mp = NULL;
     int i;
 
-    for (i = 0; i < messages.count; i++) {
-        mp = (jmap_msg_t*) ptrarray_nth(&messages, i);
+    for (i = 0; i < jmap_methods.count; i++) {
+        mp = (jmap_method_t*) ptrarray_nth(&jmap_methods, i);
         if (!strcmp(mp->name, name)) {
             break;
         }
     }
-    if (i == messages.count) {
+    if (i == jmap_methods.count) {
         mp = NULL;
     }
 
@@ -316,16 +318,21 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
-    jmap_msg_t *mp;
-    for (mp = jmap_mail_messages; mp->name; mp++) {
-        ptrarray_append(&messages, mp);
-    }
-    for (mp = jmap_contact_messages; mp->name; mp++) {
-        ptrarray_append(&messages, mp);
-    }
-    for (mp = jmap_calendar_messages; mp->name; mp++) {
-        ptrarray_append(&messages, mp);
-    }
+    jmap_capabilities = json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
+        "ietf:jmap",
+        "maxSizeUpload", 0,
+        "maxConcurrentUpload", 0,
+        "maxSizeRequest", 0,
+        "maxConcurrentRequests", 0,
+        "maxCallsInRequest", 0,
+        "maxObjectsInGet", 0,
+        "maxObjectsInSet", 0,
+        "collationAlgorithms", json_array()
+    );
+
+    jmap_mail_init(&jmap_methods, jmap_capabilities);
+    jmap_contact_init(&jmap_methods, jmap_capabilities);
+    jmap_calendar_init(&jmap_methods, jmap_capabilities);
 }
 
 
@@ -658,6 +665,19 @@ static int jmap_post(struct transaction_t *txn,
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
+    json_array_foreach(using, i, val) {
+        const char *s = json_string_value(val);
+        if (!s) {
+            txn->error.desc = "JSON request body is not a JMAP Request object";
+            ret = HTTP_BAD_REQUEST;
+            goto done;
+        }
+        if (!json_object_get(jmap_capabilities, s)) {
+            txn->error.desc = "JSON request uses unsupported capabilities";
+            ret = HTTP_BAD_REQUEST;
+            goto done;
+        }
+    }
 
     /* Start JSON response */
     resp = json_array();
@@ -680,7 +700,7 @@ static int jmap_post(struct transaction_t *txn,
 
     /* Process each message in the request */
     for (i = 0; i < json_array_size(calls); i++) {
-        const jmap_msg_t *mp;
+        const jmap_method_t *mp;
         json_t *call = json_array_get(calls, i);
         const char *name = json_string_value(json_array_get(call, 0));
         json_t *args = json_array_get(call, 1), *arg;
@@ -688,7 +708,7 @@ static int jmap_post(struct transaction_t *txn,
         int r = 0;
 
         /* Find the message processor */
-        if (!(mp = find_message(name))) {
+        if (!(mp = find_methodproc(name))) {
             json_array_append(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             continue;
@@ -1729,10 +1749,10 @@ static json_t *user_settings(const char *userid)
     findaccounts_add(ctx.accounts, buf_cstring(&ctx.userid), ctx.rw);
     buf_free(&ctx.userid);
 
-    return json_pack("{s:s s:o s:o s:s s:s s:s}",
+    return json_pack("{s:s s:o s:O s:s s:s s:s}",
             "username", userid,
             "accounts", accounts,
-            "capabilities", json_pack("{s:{}}", "ietf:jmapmail"),
+            "capabilities", jmap_capabilities,
             "apiUrl", JMAP_BASE_URL,
             "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
             /* FIXME eventSourceUrl */

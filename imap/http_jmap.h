@@ -84,15 +84,15 @@ typedef struct jmap_req {
     hash_table *mboxrights;
 } jmap_req_t;
 
-typedef struct jmap_msg {
+typedef struct {
     const char *name;
     int (*proc)(struct jmap_req *req);
-} jmap_msg_t;
+} jmap_method_t;
 
 /* Protocol implementations */
-extern jmap_msg_t jmap_mail_messages[];
-extern jmap_msg_t jmap_contact_messages[];
-extern jmap_msg_t jmap_calendar_messages[];
+extern int jmap_mail_init(ptrarray_t *methods, json_t *capabilities);
+extern int jmap_contact_init(ptrarray_t *methods, json_t *capabilities);
+extern int jmap_calendar_init(ptrarray_t *methods, json_t *capabilities);
 
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,

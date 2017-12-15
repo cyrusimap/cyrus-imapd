@@ -83,7 +83,7 @@ static int getCalendarEventList(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
 static int getCalendarPreferences(struct jmap_req *req);
 
-jmap_msg_t jmap_calendar_messages[] = {
+jmap_method_t jmap_calendar_methods[] = {
     { "getCalendars",           &getCalendars },
     { "getCalendarUpdates",     &getCalendarUpdates },
     { "setCalendars",           &setCalendars },
@@ -94,6 +94,15 @@ jmap_msg_t jmap_calendar_messages[] = {
     { "getCalendarPreferences", &getCalendarPreferences },
     { NULL,                     NULL}
 };
+
+int jmap_calendar_init(ptrarray_t *methods, json_t *capabilities __attribute__((unused)))
+{
+	jmap_method_t *mp;
+	for (mp = jmap_calendar_methods; mp->name; mp++) {
+		ptrarray_append(methods, mp);
+	}
+    return 0;
+}
 
 static int _wantprop(hash_table *props, const char *name)
 {

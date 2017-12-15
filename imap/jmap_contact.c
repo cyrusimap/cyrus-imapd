@@ -78,7 +78,7 @@ static int getContactUpdates(struct jmap_req *req);
 static int getContactList(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
 
-jmap_msg_t jmap_contact_messages[] = {
+jmap_method_t jmap_contact_methods[] = {
     { "getContactGroups",       &getContactGroups },
     { "getContactGroupUpdates", &getContactGroupUpdates },
     { "setContactGroups",       &setContactGroups },
@@ -88,6 +88,15 @@ jmap_msg_t jmap_contact_messages[] = {
     { "setContacts",            &setContacts },
     { NULL,                     NULL}
 };
+
+int jmap_contact_init(ptrarray_t *methods, json_t *capabilities __attribute__((unused)))
+{
+	jmap_method_t *mp;
+	for (mp = jmap_contact_methods; mp->name; mp++) {
+		ptrarray_append(methods, mp);
+	}
+    return 0;
+}
 
 /* FIXME DUPLICATE START */
 

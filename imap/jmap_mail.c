@@ -120,7 +120,7 @@ static int getMessageSubmissionListUpdates(jmap_req_t *req);
  * but the search window handling is also a good candidate.
  */
 
-jmap_msg_t jmap_mail_messages[] = {
+jmap_method_t jmap_mail_methods[] = {
     { "getMailboxes",                    &getMailboxes },
     { "setMailboxes",                    &setMailboxes },
     { "getMailboxUpdates",               &getMailboxUpdates },
@@ -143,6 +143,33 @@ jmap_msg_t jmap_mail_messages[] = {
     { "getMessageSubmissionListUpdates", &getMessageSubmissionListUpdates },
     { NULL,                              NULL}
 };
+
+/* NULL terminated list of supported getMessageList sort fields */
+static const char *msglist_sortfields[];
+
+int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
+{
+	jmap_method_t *mp;
+	for (mp = jmap_mail_methods; mp->name; mp++) {
+		ptrarray_append(methods, mp);
+	}
+
+    json_t *sortopts = json_array();
+    const char **sp;
+    for (sp = msglist_sortfields; *sp; sp++) {
+        json_array_append_new(sortopts, json_string(*sp));
+    }
+
+    json_t *my_capabilities = json_pack("{s:o? s:i s:i s:O s:O}",
+            "maxMailboxesPerMessage", json_null(),
+            "maxSizeAttachmentsPerMessage", 0,
+            "maxDelayedSend", 0,
+            "messageListSortOptions", sortopts,
+            "submissionExtensions", json_object());
+
+    json_object_set_new(capabilities, "ietf:jmapmail", my_capabilities);
+    return 0;
+}
 
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
 
@@ -4668,17 +4695,21 @@ done:
     return r;
 }
 
+static const char *msglist_sortfields[] = {
+    "receivedAt",
+    "from",
+    "id",
+    "messagestate",
+    "size",
+    "subject",
+    "to",
+    "hasKeyword",
+    "someInThreadHaveKeyword",
+    NULL
+};
+
 static int is_supported_msglist_sort(const char *field)
 {
-    if (!strcmp(field, "receivedAt") ||
-        !strcmp(field, "from") ||
-        !strcmp(field, "id") ||
-        !strcmp(field, "messagestate") ||
-        !strcmp(field, "size") ||
-        !strcmp(field, "subject") ||
-        !strcmp(field, "to")) {
-        return 1;
-    }
     if (!strncmp(field, "hasKeyword:", 11) && is_valid_keyword(field + 11)) {
         return 1;
     }
@@ -4688,7 +4719,12 @@ static int is_supported_msglist_sort(const char *field)
             return 1;
         }
     }
-
+    const char **sp;
+    for (sp = msglist_sortfields; *sp; sp++) {
+        if (!strcmp(*sp, field)) {
+            return 1;
+        }
+    }
     return 0;
 }
 
