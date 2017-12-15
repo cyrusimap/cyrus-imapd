@@ -126,7 +126,7 @@ sub test_setcontacts_multicontact
     $self->assert_null($fetch->[0][1]{notFound});
 }
 
-sub test_getcontactupdates
+sub test_getcontactsupdates
     :JMAP :min_version_3_0
 {
     my ($self) = @_;
@@ -138,7 +138,7 @@ sub test_getcontactupdates
     my $state = $res->[0][1]{state};
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -153,7 +153,7 @@ sub test_getcontactupdates
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -174,7 +174,7 @@ sub test_getcontactupdates
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact updates (since last change)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -186,7 +186,7 @@ sub test_getcontactupdates
     $state = $res->[0][1]{newState};
 
     xlog "get contact updates (in bulk)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $oldState
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
@@ -196,7 +196,7 @@ sub test_getcontactupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
     xlog "get contact updates from initial state (maxChanges=1)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $oldState,
                     maxChanges => 1
                 }, "R2"]]);
@@ -209,7 +209,7 @@ sub test_getcontactupdates
     my $interimState = $res->[0][1]{newState};
 
     xlog "get contact updates from interim state (maxChanges=10)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $interimState,
                     maxChanges => 10
                 }, "R2"]]);
@@ -231,7 +231,7 @@ sub test_getcontactupdates
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -249,7 +249,7 @@ sub test_getcontactupdates
     $self->assert_str_equals('R1', $res->[0][2]);
 }
 
-sub test_getcontactupdates_shared
+sub test_getcontactsupdates_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -282,7 +282,7 @@ sub test_getcontactupdates_shared
     my $state = $res->[0][1]{state};
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -301,7 +301,7 @@ sub test_getcontactupdates_shared
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -326,7 +326,7 @@ sub test_getcontactupdates_shared
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact updates (since last change)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -339,7 +339,7 @@ sub test_getcontactupdates_shared
     $state = $res->[0][1]{newState};
 
     xlog "get contact updates (in bulk)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $oldState
                 }, "R2"]]);
@@ -350,7 +350,7 @@ sub test_getcontactupdates_shared
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
     xlog "get contact updates from initial state (maxChanges=1)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $oldState,
                     maxChanges => 1
@@ -364,7 +364,7 @@ sub test_getcontactupdates_shared
     my $interimState = $res->[0][1]{newState};
 
     xlog "get contact updates from interim state (maxChanges=10)";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $interimState,
                     maxChanges => 10
@@ -388,7 +388,7 @@ sub test_getcontactupdates_shared
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "get contact updates";
-    $res = $jmap->Request([['getContactUpdates', {
+    $res = $jmap->Request([['getContactsUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -503,7 +503,7 @@ sub test_setcontactgroups
     $self->assert_str_equals($contact2, $res->[0][1]{list}[0]{contactIds}[1]);
 }
 
-sub test_getcontactlist
+sub test_getcontactslist
     :JMAP :min_version_3_0
 {
     my ($self) = @_;
@@ -583,13 +583,13 @@ sub test_getcontactlist
     my $group3 = $res->[0][1]{created}{"3"}{id};
 
     xlog "get unfiltered contact list";
-    $res = $jmap->Request([ ['getContactList', { }, "R1"] ]);
+    $res = $jmap->Request([ ['getContactsList', { }, "R1"] ]);
 
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by firstName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { firstName => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -597,14 +597,14 @@ sub test_getcontactlist
     $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by lastName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by firstName and lastName (one filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { firstName => "bam", lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -612,7 +612,7 @@ sub test_getcontactlist
     $self->assert_str_equals($id4, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by firstName and lastName (AND filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { operator => "AND", conditions => [{
                                 lastName => "last"
                             }, {
@@ -624,7 +624,7 @@ sub test_getcontactlist
     $self->assert_str_equals($id3, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by firstName (OR filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { operator => "OR", conditions => [{
                                 firstName => "bar"
                             }, {
@@ -635,40 +635,40 @@ sub test_getcontactlist
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by text";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { text => "some" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by email";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { email => "example.com" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by isFlagged (true)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { isFlagged => JSON::true }
                 }, "R1"] ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
     $self->assert_str_equals($id2, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by isFlagged (false)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by inContactGroup";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by inContactGroup and firstName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
@@ -676,7 +676,7 @@ sub test_getcontactlist
 }
 
 
-sub test_getcontactlist_shared
+sub test_getcontactslist_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -781,13 +781,13 @@ sub test_getcontactlist_shared
     my $group3 = $res->[0][1]{created}{"3"}{id};
 
     xlog "get unfiltered contact list";
-    $res = $jmap->Request([ ['getContactList', { accountId => 'manifold' }, "R1"] ]);
+    $res = $jmap->Request([ ['getContactsList', { accountId => 'manifold' }, "R1"] ]);
 
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by firstName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { firstName => "foo" }
                 }, "R1"] ]);
@@ -796,7 +796,7 @@ sub test_getcontactlist_shared
     $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by lastName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { lastName => "last" }
                 }, "R1"] ]);
@@ -804,7 +804,7 @@ sub test_getcontactlist_shared
     $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by firstName and lastName (one filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { firstName => "bam", lastName => "last" }
                 }, "R1"] ]);
@@ -813,7 +813,7 @@ sub test_getcontactlist_shared
     $self->assert_str_equals($id4, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by firstName and lastName (AND filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { operator => "AND", conditions => [{
                                 lastName => "last"
@@ -826,7 +826,7 @@ sub test_getcontactlist_shared
     $self->assert_str_equals($id3, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by firstName (OR filter)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { operator => "OR", conditions => [{
                                 firstName => "bar"
@@ -838,7 +838,7 @@ sub test_getcontactlist_shared
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by text";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { text => "some" }
                 }, "R1"] ]);
@@ -846,7 +846,7 @@ sub test_getcontactlist_shared
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by email";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { email => "example.com" }
                 }, "R1"] ]);
@@ -854,7 +854,7 @@ sub test_getcontactlist_shared
     $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by isFlagged (true)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::true }
                 }, "R1"] ]);
@@ -862,21 +862,21 @@ sub test_getcontactlist_shared
     $self->assert_str_equals($id2, $res->[0][1]{contactIds}[0]);
 
     xlog "filter by isFlagged (false)";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by inContactGroup";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
 
     xlog "filter by inContactGroup and firstName";
-    $res = $jmap->Request([ ['getContactList', {
+    $res = $jmap->Request([ ['getContactsList', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
                 }, "R1"] ]);
@@ -884,7 +884,7 @@ sub test_getcontactlist_shared
     $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
 }
 
-sub test_getcontactgroupupdates
+sub test_getcontactsgroupupdates
     :JMAP :min_version_3_0
 {
     my ($self) = @_;
@@ -920,7 +920,7 @@ sub test_getcontactgroupupdates
 
 
     xlog "get contact group updates";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -942,7 +942,7 @@ sub test_getcontactgroupupdates
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact group updates (since last change)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -954,7 +954,7 @@ sub test_getcontactgroupupdates
     $state = $res->[0][1]{newState};
 
     xlog "get contact group updates (in bulk)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $oldState
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
@@ -964,7 +964,7 @@ sub test_getcontactgroupupdates
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
     xlog "get contact group updates from initial state (maxChanges=1)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $oldState,
                     maxChanges => 1
                 }, "R2"]]);
@@ -977,7 +977,7 @@ sub test_getcontactgroupupdates
     my $interimState = $res->[0][1]{newState};
 
     xlog "get contact group updates from interim state (maxChanges=10)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $interimState,
                     maxChanges => 10
                 }, "R2"]]);
@@ -999,7 +999,7 @@ sub test_getcontactgroupupdates
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "get contact group updates";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     sinceState => $state
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -1017,7 +1017,7 @@ sub test_getcontactgroupupdates
     $self->assert_str_equals('R1', $res->[0][2]);
 }
 
-sub test_getcontactgroupupdates_shared
+sub test_getcontactsgroupupdates_shared
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -1078,7 +1078,7 @@ sub test_getcontactgroupupdates_shared
 
 
     xlog "get contact group updates";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -1103,7 +1103,7 @@ sub test_getcontactgroupupdates_shared
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "get contact group updates (since last change)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -1116,7 +1116,7 @@ sub test_getcontactgroupupdates_shared
     $state = $res->[0][1]{newState};
 
     xlog "get contact group updates (in bulk)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $oldState
                 }, "R2"]]);
@@ -1127,7 +1127,7 @@ sub test_getcontactgroupupdates_shared
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
     xlog "get contact group updates from initial state (maxChanges=1)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $oldState,
                     maxChanges => 1
@@ -1141,7 +1141,7 @@ sub test_getcontactgroupupdates_shared
     my $interimState = $res->[0][1]{newState};
 
     xlog "get contact group updates from interim state (maxChanges=10)";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $interimState,
                     maxChanges => 10
@@ -1165,7 +1165,7 @@ sub test_getcontactgroupupdates_shared
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog "get contact group updates";
-    $res = $jmap->Request([['getContactGroupUpdates', {
+    $res = $jmap->Request([['getContactsGroupUpdates', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
