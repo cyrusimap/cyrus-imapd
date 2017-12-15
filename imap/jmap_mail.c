@@ -4354,7 +4354,7 @@ static struct sortcrit *buildsort(json_t *sort)
 struct getmsglist_window {
     /* input arguments */
     int collapse;
-    size_t position;
+    ssize_t position;
     const char *anchor;
     int anchor_off;
     size_t limit;
@@ -4397,6 +4397,13 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     int foundupto = 0;
     char *msgid = NULL;
     int i, r;
+
+    /* FIXME JMAP spec introduced negative positions for search results, and
+     * this is what breaks the camel's neck for the mess jmapmsg_search got.
+     * This function requires a massive refactor before we can add any new
+     * functionality.
+     * Until then, we fail hard for negative positions */
+    assert(window->position >= 0);
 
     assert(!want_expunged || expungedids);
 
@@ -4639,7 +4646,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 goto doneloop;
             }
         }
-        else if (window->position && *total < window->position + 1) {
+        else if (window->position > 0 && *total < ((size_t) window->position) + 1) {
             goto doneloop;
         }
 
@@ -4778,6 +4785,8 @@ static int getMessageList(jmap_req_t *req)
     readprop(req->args, "anchorOffset", 0, invalid, "i", &window.anchor_off);
 
     if (readprop(req->args, "position", 0, invalid, "I", &i) > 0) {
+        /* FIXME we should, but currently don't support negative
+         * positions, because jmapmsg_search is a mess */
         if (i < 0) json_array_append_new(invalid, json_string("position"));
         window.position = i;
     }
