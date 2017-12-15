@@ -3854,7 +3854,7 @@ sub test_getmessagelist
     $res = $jmap->Request([['getMessageList', {
                     accountId => $account,
                     filter => {
-                        inMailboxOtherThan => $mboxb,
+                        inMailboxOtherThan => [$mboxb],
                     },
                 }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
@@ -4187,11 +4187,30 @@ sub test_getmessagelist_shared
         $res = $jmap->Request([['getMessageList', {
                         accountId => $account,
                         filter => {
-                            inMailboxOtherThan => $mboxb,
+                            inMailboxOtherThan => [$mboxb],
                         },
                     }, "R1"]]);
         $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog "filter mailboxes with not in";
+        $res = $jmap->Request([['getMessageList', {
+                        accountId => $account,
+                        filter => {
+                            inMailboxOtherThan => [$mboxa],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+
+        xlog "filter mailboxes with not in";
+        $res = $jmap->Request([['getMessageList', {
+                        accountId => $account,
+                        filter => {
+                            inMailboxOtherThan => [$mboxa, $mboxc],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
 
         xlog "filter mailboxes";
         $res = $jmap->Request([['getMessageList', {
