@@ -534,24 +534,6 @@ static int process_resultrefs(json_t *args, json_t *resp)
         json_t *val = extract_value(json_array_get(res, 1), path, &pool);
         if (!val) goto fail;
 
-        /* XXX JMAP references are defined that: "If the type of the result
-         * is X, and the expected type of the argument is an array of type X,
-         * wrap the result in an array with a single item."...
-         *
-         * ...which basically requires us to keep a schema of JMAP requests.
-         * In general, that shouldn't be too hard, but the getFooList filters
-         * are polymorph (Condition vs Operator) and recursive.
-         * For now, let's just go with a set of magic argument names that we
-         * allow to promote to arrays (if they aren't already). */
-        if (!json_is_array(val)) {
-            if (!strcmp(arg+1, "ids") ||
-                !strcmp(arg+1, "threadIds") ||
-                !strcmp(arg+1, "mailboxIds")) {
-                val = json_pack("[O]", val);
-                ptrarray_add(&pool, val);
-            }
-        }
-
         /* Replace both key and value of the reference entry */
         json_object_set(args, arg + 1, val);
         json_object_del(args, arg);
