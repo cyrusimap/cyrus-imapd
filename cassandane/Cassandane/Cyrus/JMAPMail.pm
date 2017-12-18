@@ -3497,7 +3497,7 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
-sub test_emailsubmissions_changes
+sub test_emailsubmission_changes
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
