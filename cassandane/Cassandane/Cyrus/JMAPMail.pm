@@ -389,14 +389,18 @@ sub test_mailbox_query
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
 
     xlog "list mailboxes without filter and sort by name ascending";
-    $res = $jmap->Request([['Mailbox/query', { sort => ["name asc"]}, "R1"]]);
+    $res = $jmap->Request([['Mailbox/query', {
+        sort => [{ property => "name" }]},
+    "R1"]]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
 
     xlog "list mailboxes without filter and sort by name descending";
-    $res = $jmap->Request([['Mailbox/query', { sort => ["name desc"]}, "R1"]]);
+    $res = $jmap->Request([['Mailbox/query', {
+        sort => [{ property => "name", isAscending => JSON::false}],
+    }, "R1"]]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
@@ -424,7 +428,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with limit)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             limit => 1,
         }, "R1"]
     ]);
@@ -435,7 +439,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with anchor and limit)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             anchor => $mboxids{'B'},
             limit => 2,
         }, "R1"]
@@ -448,7 +452,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with positive anchor offset)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             anchor => $mboxids{'Inbox'},
             anchorOffset => 2,
         }, "R1"]
@@ -462,7 +466,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with negative anchor offset)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             anchor => $mboxids{'A'},
             anchorOffset => -2,
         }, "R1"]
@@ -475,7 +479,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with position)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             position => 3,
         }, "R1"]
     ]);
@@ -485,7 +489,7 @@ sub test_mailbox_query
     xlog "list mailboxes (with negative position)";
     $res = $jmap->Request([
         ['Mailbox/query', {
-            sort => ["name asc"],
+            sort => [{ property => "name" }],
             position => -2,
         }, "R1"]
     ]);
@@ -4050,7 +4054,7 @@ sub test_email_query
     xlog "sort by ascending receivedAt";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "receivedAt asc" ],
+                    sort => [{ property => "receivedAt" }],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
@@ -4059,7 +4063,7 @@ sub test_email_query
     xlog "sort by descending receivedAt";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "receivedAt desc" ],
+                    sort => [{ property => "receivedAt", isAscending => JSON::false }],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -4068,7 +4072,7 @@ sub test_email_query
     xlog "sort by ascending size";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "size asc" ],
+                    sort => [{ property =>  "size" }],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -4077,7 +4081,7 @@ sub test_email_query
     xlog "sort by descending size";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "size desc" ],
+                    sort => [{ property => "size", isAscending => JSON::false }],
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
@@ -4086,7 +4090,7 @@ sub test_email_query
     xlog "sort by ascending id";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "id asc" ],
+                    sort => [{ property => "id" }],
                 }, "R1"]]);
     my @ids = sort ($foo, $bar);
     $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
@@ -4094,7 +4098,7 @@ sub test_email_query
     xlog "sort by descending id";
     $res = $jmap->Request([['Email/query', {
                     accountId => $account,
-                    sort => [ "id desc" ],
+                    sort => [{ property => "id", isAscending => JSON::false }],
                 }, "R1"]]);
     @ids = reverse sort ($foo, $bar);
     $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
@@ -4402,7 +4406,7 @@ sub test_email_query_shared
         xlog "sort by ascending receivedAt";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "receivedAt asc" ],
+                        sort => [{ property => "receivedAt" }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
@@ -4411,7 +4415,7 @@ sub test_email_query_shared
         xlog "sort by descending receivedAt";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "receivedAt desc" ],
+                        sort => [{ property => "receivedAt", isAscending => JSON::false, }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -4420,7 +4424,7 @@ sub test_email_query_shared
         xlog "sort by ascending size";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "size asc" ],
+                        sort => [{ property => "size" }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
@@ -4429,7 +4433,7 @@ sub test_email_query_shared
         xlog "sort by descending size";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "size desc" ],
+                        sort => [{ property => "size", isAscending => JSON::false }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
         $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
@@ -4438,7 +4442,7 @@ sub test_email_query_shared
         xlog "sort by ascending id";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "id asc" ],
+                        sort => [{ property => "id" }],
                     }, "R1"]]);
         my @ids = sort ($foo, $bar);
         $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
@@ -4446,7 +4450,7 @@ sub test_email_query_shared
         xlog "sort by descending id";
         $res = $jmap->Request([['Email/query', {
                         accountId => $account,
-                        sort => [ "id desc" ],
+                        sort => [{ property => "id", isAscending => JSON::false }],
                     }, "R1"]]);
         @ids = reverse sort ($foo, $bar);
         $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
@@ -4541,7 +4545,7 @@ sub test_email_query_keywords
 
     xlog "fetch emails sorted ascending by \$Flagged flag";
     $res = $jmap->Request([['Email/query', {
-        sort => [ 'hasKeyword:$Flagged asc' ],
+        sort => [{ property => 'hasKeyword:$Flagged' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4549,7 +4553,7 @@ sub test_email_query_keywords
 
     xlog "fetch emails sorted descending by \$Flagged flag";
     $res = $jmap->Request([['Email/query', {
-        sort => [ 'hasKeyword:$Flagged desc' ],
+        sort => [{ property => 'hasKeyword:$Flagged', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4610,7 +4614,7 @@ sub test_email_query_userkeywords
 
     xlog "fetch emails sorted ascending by foo flag";
     $res = $jmap->Request([['Email/query', {
-        sort => [ 'hasKeyword:foo asc' ],
+        sort => [{ property => 'hasKeyword:foo' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4618,7 +4622,7 @@ sub test_email_query_userkeywords
 
     xlog "fetch emails sorted descending by foo flag";
     $res = $jmap->Request([['Email/query', {
-        sort => [ 'hasKeyword:foo desc' ],
+        sort => [{ property => 'hasKeyword:foo', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4729,7 +4733,7 @@ sub test_email_query_threadkeywords
 
         xlog "fetch collapsed threads sorted ascending by $flag";
         $res = $jmap->Request([['Email/query', {
-            sort => ["someInThreadHaveKeyword:$flag asc"],
+            sort => [{ property => "someInThreadHaveKeyword:$flag" }],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
@@ -4738,7 +4742,7 @@ sub test_email_query_threadkeywords
 
         xlog "fetch collapsed threads sorted descending by $flag";
         $res = $jmap->Request([['Email/query', {
-            sort => ["someInThreadHaveKeyword:$flag desc"],
+            sort => [{ property => "someInThreadHaveKeyword:$flag", isAscending => JSON::false }],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
@@ -4776,7 +4780,7 @@ sub test_email_query_threadkeywords
     $flag =~ s+^\\+\$+ ;
     xlog "fetch collapsed threads sorted by all having $flag flag";
     $res = $jmap->Request([['Email/query', {
-                    sort => ["allInThreadHaveKeyword:$flag asc"],
+                    sort => [{ property => "allInThreadHaveKeyword:$flag" }],
                     collapseThreads => JSON::true,
                 }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
@@ -5005,7 +5009,7 @@ sub test_email_query_long
         limit => 60,
         offset => 0,
         collapseThreads => JSON::true,
-        sort => [ "id asc" ],
+        sort => [{ property => "id" }],
     }, "R1"]]);
     $self->assert_num_equals(60, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(100, $res->[0][1]->{total});
@@ -5017,7 +5021,7 @@ sub test_email_query_long
         anchorOffset => 1,
         anchor => $res->[0][1]->{ids}[55],
         collapseThreads => JSON::true,
-        sort => [ "id asc" ],
+        sort => [{ property => "id" }],
     }, "R1"]]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(100, $res->[0][1]->{total});
@@ -5981,7 +5985,7 @@ sub test_email_querychanges_order
     # First order descending by subject. We expect Email/queryChanges
     # to return any items added after 'state' to show up at the start of
     # the result list.
-    my $sort = [ "subject desc" ];
+    my $sort = [{ property => "subject", isAscending => JSON::false }];
 
     xlog "Get email id and state";
     $res = $jmap->Request([['Email/query', { sort => $sort }, "R1"]]);
@@ -6006,7 +6010,7 @@ sub test_email_querychanges_order
     # just to be sure. Then we expect an additional item to show up at the
     # end of the result list.
     xlog "Fetch reverse sorted list and state";
-    $sort = [ "subject asc" ];
+    $sort = [{ property => "subject" }];
     $res = $jmap->Request([['Email/query', { sort => $sort }, "R1"]]);
     $ida = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($ida, $idb);
@@ -6828,7 +6832,7 @@ sub test_misc_refobjects_extended
     xlog "get email properties using reference";
     my $res = $jmap->Request([
         ['Email/query', {
-            sort => [ 'receivedAt desc' ],
+            sort => [{ property => 'receivedAt', isAscending => JSON::false }],
             collapseThreads => JSON::true,
             position => 0,
             limit => 10,
