@@ -1860,8 +1860,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         r = caldav_store_resource(&txn, ical, mbox, resource,
                                   db, 0, httpd_userid, schedule_address);
     }
-    spool_free_hdrcache(txn.req_hdrs);
-    buf_free(&txn.buf);
+    transaction_free(&txn);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
                req->accountid, error_message(r));
