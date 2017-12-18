@@ -3289,7 +3289,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     r = find_msgbodies(body, msg_buf, &bodies);
     if (r) goto done;
 
-    /* Always read the message headers */
+    /* Read message headers, but just the ones we care about */
     struct extract_headers_rock ehrock = { headers, props };
     r = message_foreach_header(msg_buf->s + body->header_offset,
                                body->header_size, extract_headers, &ehrock);
