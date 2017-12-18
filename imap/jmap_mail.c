@@ -8106,6 +8106,8 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 done:
     ptrarray_fini(&bodies.atts);
     ptrarray_fini(&bodies.msgs);
+    ptrarray_fini(&bodies.textlist);
+    ptrarray_fini(&bodies.htmllist);
     strarray_fini(&keywords);
     free_hash_table(&props, NULL);
     buf_free(&content.buf);
@@ -8795,6 +8797,7 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
         json_object_foreach(rcpts, s, jval) {
             json_array_append_new(rcptTo, json_pack("{s:s}", "email", s));
         }
+        json_decref(rcpts);
         json_object_set_new(myenvelope, "rcptTo", rcptTo);
     }
 
@@ -9239,7 +9242,7 @@ static int is_supported_msgsub_sort(const jmap_comparator_t *comp)
 
 static int getEmailSubmissionsList(jmap_req_t *req)
 {
-    int r;
+    int r = 0;
     json_t *filter, *sort;
     json_t *messageids = NULL, *threadids = NULL, *msgsubids = NULL;
     json_int_t i = 0;
@@ -9324,6 +9327,7 @@ static int getEmailSubmissionsList(jmap_req_t *req)
 done:
     if (messageids) json_decref(messageids);
     if (threadids) json_decref(threadids);
+    if (msgsubids) json_decref(msgsubids);
     return r;
 }
 
