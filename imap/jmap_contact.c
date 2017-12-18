@@ -79,14 +79,14 @@ static int getContactsList(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
 
 jmap_method_t jmap_contact_methods[] = {
-    { "getContactGroups",       &getContactGroups },
-    { "getContactsGroupUpdates", &getContactsGroupUpdates },
-    { "setContactGroups",       &setContactGroups },
-    { "getContacts",            &getContacts },
-    { "getContactsUpdates",      &getContactsUpdates },
-    { "getContactsList",         &getContactsList },
-    { "setContacts",            &setContacts },
-    { NULL,                     NULL}
+    { "ContactGroup/get",        &getContactGroups },
+    { "ContactGroup/changes",    &getContactsGroupUpdates },
+    { "ContactGroup/set",        &setContactGroups },
+    { "Contact/get",             &getContacts },
+    { "Contact/changes",         &getContactsUpdates },
+    { "Contact/query",           &getContactsList },
+    { "Contact/set",             &setContacts },
+    { NULL,                      NULL}
 };
 
 int jmap_contact_init(ptrarray_t *methods, json_t *capabilities __attribute__((unused)))
@@ -580,7 +580,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
 static int getContactGroups(struct jmap_req *req)
 {
     return jmap_contacts_get(req, &getgroups_cb,
-                             CARDDAV_KIND_GROUP, "contactGroups");
+                             CARDDAV_KIND_GROUP, "ContactGroup/get");
 }
 
 static const char *_json_object_get_string(const json_t *obj, const char *key)
@@ -696,7 +696,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     json_object_set(contactGroupUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactGroupsUpdates"));
+    json_array_append_new(item, json_string("ContactGroup/changes"));
     json_array_append_new(item, contactGroupUpdates);
     json_array_append_new(item, json_string(req->tag));
 
@@ -1170,7 +1170,7 @@ static int setContactGroups(struct jmap_req *req)
     json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactGroupsSet"));
+    json_array_append_new(item, json_string("ContactGroup/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
 
@@ -1721,7 +1721,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 static int getContacts(struct jmap_req *req)
 {
     return jmap_contacts_get(req, &getcontacts_cb,
-                             CARDDAV_KIND_CONTACT, "contacts");
+                             CARDDAV_KIND_CONTACT, "Contact/get");
 }
 
 static int getContactsUpdates(struct jmap_req *req)
@@ -1801,7 +1801,7 @@ static int getContactsUpdates(struct jmap_req *req)
     json_object_set(contactUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactsUpdates"));
+    json_array_append_new(item, json_string("Contact/changes"));
     json_array_append_new(item, contactUpdates);
     json_array_append_new(item, json_string(req->tag));
 
@@ -2261,7 +2261,7 @@ static int getContactsList(struct jmap_req *req)
     if (filter) json_object_set(contactList, "filter", filter);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactsList"));
+    json_array_append_new(item, json_string("Contact/query"));
     json_array_append_new(item, contactList);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -3233,7 +3233,7 @@ static int setContacts(struct jmap_req *req)
     json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactsSet"));
+    json_array_append_new(item, json_string("Contact/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
 
