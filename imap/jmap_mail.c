@@ -4356,6 +4356,7 @@ static struct sortcrit *buildsort(json_t *sort)
             sortcrit[i].key = SORT_SIZE;
         }
         if (!strcmp(prop, "subject")) {
+            /* FIXME JMAP spec requires support of RFC 5256 for sorting */
             sortcrit[i].key = SORT_SUBJECT;
         }
         if (!strcmp(prop, "to")) {

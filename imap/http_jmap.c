@@ -324,7 +324,7 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
         "maxConcurrentUpload", 0,
         "maxSizeRequest", 0,
         "maxConcurrentRequests", 0,
-        "maxCallsInRequest", 0,
+        "maxCallsInRequest", 0, /* FIXME this MUST be >= 32 but why even limit? */
         "maxObjectsInGet", 0,
         "maxObjectsInSet", 0,
         "collationAlgorithms", json_array()
