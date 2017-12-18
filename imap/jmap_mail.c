@@ -1899,7 +1899,7 @@ done:
     return r;
 }
 
-static int jmapmbox_destroy(jmap_req_t *req, const char *mboxid, json_t **err)
+static int jmapmbox_destroy(jmap_req_t *req, const char *mboxid, int removemsgs, json_t **err)
 {
     int r = 0, rights = 0;
     char *mboxname = NULL;
@@ -1933,18 +1933,21 @@ static int jmapmbox_destroy(jmap_req_t *req, const char *mboxid, json_t **err)
         goto done;
     }
 
-    /* Check if the mailbox has any messages */
-    struct mailbox *mbox = NULL;
-    struct mailbox_iter *iter = NULL;
+    if (!removemsgs) {
+        /* Check if the mailbox has any messages */
+        struct mailbox *mbox = NULL;
+        struct mailbox_iter *iter = NULL;
 
-    r = jmap_openmbox(req, mboxname, &mbox, 0);
-    if (r) goto done;
-    iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
-    if (mailbox_iter_step(iter) != NULL)
-        *err = json_pack("{s:s}", "type", "mailboxHasEmail");
-    mailbox_iter_done(&iter);
-    jmap_closembox(req, &mbox);
-    if (*err) goto done;
+        r = jmap_openmbox(req, mboxname, &mbox, 0);
+        if (r) goto done;
+        iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+        if (mailbox_iter_step(iter) != NULL) {
+            *err = json_pack("{s:s}", "type", "mailboxHasEmail");
+        }
+        mailbox_iter_done(&iter);
+        jmap_closembox(req, &mbox);
+        if (*err) goto done;
+    }
 
     /* Destroy mailbox. */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
@@ -2157,6 +2160,9 @@ static int setMailboxes(jmap_req_t *req)
 
         size_t index;
         json_t *juid;
+        int removemsgs =
+            json_object_get(req->args, "onDestroyRemoveMessages") == json_true();
+
         json_array_foreach(destroy, index, juid) {
 
             /* Validate uid. */
@@ -2175,7 +2181,7 @@ static int setMailboxes(jmap_req_t *req)
             }
 
             json_t *err = NULL;
-            r = jmapmbox_destroy(req, uid, &err);
+            r = jmapmbox_destroy(req, uid, removemsgs, &err);
             if (r)  {
                 goto done;
             }
