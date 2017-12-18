@@ -1062,6 +1062,7 @@ sub test_mailbox_set_destroy_empty
             ['Mailbox/set', { destroy => [ $mboxid ] }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{notDestroyed}{$mboxid});
+    $self->assert_str_equals('mailboxHasEmail', $res->[0][1]{notDestroyed}{$mboxid}{type});
 
     xlog "remove email from mailbox";
     $res = $jmap->Request([['Email/set', {
@@ -1075,6 +1076,63 @@ sub test_mailbox_set_destroy_empty
     $res = $jmap->Request([
             ['Mailbox/set', { destroy => [ $mboxid ] }, "R1"]
     ]);
+    $self->assert_str_equals($res->[0][1]{destroyed}[0], $mboxid);
+}
+
+sub test_mailbox_set_destroy_removemsgs
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog "get email list";
+    my $res = $jmap->Request([['Email/query', {}, "R1"]]);
+    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
+    my $msgid = $res->[0][1]->{ids}[0];
+
+    xlog "get inbox";
+    $res = $jmap->Request([['Mailbox/get', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    xlog "create mailbox";
+    $res = $jmap->Request([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "foo",
+                            parentId => $inbox->{id},
+                            role => undef
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_not_equals($res->[0][1]{newState}, $state);
+    $self->assert_not_null($res->[0][1]{created});
+    my $mboxid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "copy email to newly created mailbox";
+    $res = $jmap->Request([['Email/set', {
+        update => { $msgid => { mailboxIds => {
+            $inbox->{id} => JSON::true,
+            $mboxid => JSON::true,
+        }}},
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "destroy mailbox with email";
+    $res = $jmap->Request([[
+        'Mailbox/set', {
+            destroy => [ $mboxid ],
+            onDestroyRemoveMessages => JSON::true,
+        }, 'R1',
+    ]]);
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $mboxid);
 }
 
