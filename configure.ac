@@ -1994,6 +1994,7 @@ if test "x$use_sqlite" = xyes; then
     LIBS="${LIBS} ${SQLITE_LIBADD}"
     CPPFLAGS="${SQLITE_INCADD} ${CPPFLAGS}"
     AC_DEFINE(HAVE_SQLITE,[],[Build in SQLite support?])
+    AC_SUBST(SQLITE_LIBADD)
   else
     AC_MSG_ERROR([SQLite required but not found])
   fi
