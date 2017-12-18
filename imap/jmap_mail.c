@@ -251,13 +251,19 @@ static void validate_string_array(json_t *arg, const char *prefix, json_t *inval
     buf_free(&buf);
 }
 
+typedef struct {
+    const char *property;
+    short is_ascending;
+    const char *collation;
+} jmap_comparator_t;
+
 static void validate_sort(json_t *sort, json_t *invalid, json_t *unsupported,
-                          int (*is_supported)(const char *field))
+                          int (*is_supported)(const jmap_comparator_t *comp))
 {
     struct buf buf = BUF_INITIALIZER;
     struct buf prop = BUF_INITIALIZER;
-    json_t *val;
-    const char *s, *p;
+    jmap_comparator_t comp;
+    json_t *jcomp;
     size_t i;
 
     if (!JNOTNULL(sort)) {
@@ -269,29 +275,56 @@ static void validate_sort(json_t *sort, json_t *invalid, json_t *unsupported,
         return;
     }
 
-    json_array_foreach(sort, i, val) {
-        buf_reset(&buf);
-        buf_printf(&buf, "sort[%zu]", i);
+    json_array_foreach(sort, i, jcomp) {
+        /* Reset comparator */
+        memset(&comp, 0, sizeof(jmap_comparator_t));
 
-        if ((s = json_string_value(val)) == NULL) {
+        /* Validate sort */
+        if (!json_is_object(jcomp)) {
+            buf_printf(&buf, "sort[%zu]", i);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
             continue;
         }
 
-        p = strchr(s, ' ');
-        if (!p || (strcmp(p + 1, "asc") && strcmp(p + 1, "desc"))) {
+        /* property */
+        json_t *val = json_object_get(jcomp, "property");
+        comp.property = json_string_value(val);
+        if (!comp.property) {
+            buf_printf(&buf, "sort[%zu].property", i);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
             continue;
         }
 
-        buf_setmap(&prop, s, p - s);
-        buf_cstring(&prop);
-
-        if (is_supported(prop.s)) {
-            continue;
+        /* isAscending */
+        comp.is_ascending = 1;
+        val = json_object_get(jcomp, "isAscending");
+        if (JNOTNULL(val)) {
+            if (!json_is_boolean(val)) {
+                buf_printf(&buf, "sort[%zu].isAscending", i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+                continue;
+            }
+            comp.is_ascending = json_boolean_value(val);
         }
 
-        json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
+        /* collation */
+        val = json_object_get(jcomp, "collation");
+        if (JNOTNULL(val) && !json_is_string(val)) {
+            buf_printf(&buf, "sort[%zu].collation", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+            continue;
+        }
+        comp.collation = json_string_value(val);
+
+        if (!is_supported(&comp)) {
+            buf_printf(&buf, "sort[%zu]", i);
+            json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
     }
 
     buf_free(&buf);
@@ -1041,17 +1074,10 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
     /* Prepare sort */
     json_array_foreach(sort, j, val) {
-        const char *s = json_string_value(val);
         mboxsearch_sort_t *crit = xzmalloc(sizeof(mboxsearch_sort_t));
-        if (!strncmp(s, "name ", 5)) {
-            crit->field = xstrdup("name");
-            s += 5;
-        }
-        else if (!strncmp(s, "sortOrder ", 10)) {
-            crit->field = xstrdup("sortOrder");
-            s += 10;
-        }
-        crit->desc = !strcmp(s, "desc");
+        const char *prop = json_string_value(json_object_get(val, "property"));
+        crit->field = xstrdup(prop);
+        crit->desc = json_object_get(val, "isAscending") == json_false();
         ptrarray_append(&query->sort, crit);
     }
 
@@ -1148,13 +1174,18 @@ done:
     return r;
 }
 
-static int is_supported_mboxlist_sort(const char *field)
+static int is_supported_mboxlist_sort(const jmap_comparator_t *comp)
 {
-    if (!strcmp(field, "sortOrder") ||
-        !strcmp(field, "name")) {
-        return 1;
+    /* Reject unsupported properties */
+    if (strcmp(comp->property, "sortOrder") &&
+        strcmp(comp->property, "name")) {
+        return 0;
     }
-    return 0;
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    return 1;
 }
 
 typedef struct {
@@ -4286,11 +4317,9 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
 
 static struct sortcrit *buildsort(json_t *sort)
 {
-    json_t *val;
-    const char *s, *p;
+    json_t *jcomp;
     size_t i;
     struct sortcrit *sortcrit;
-    struct buf prop = BUF_INITIALIZER;
 
     if (!JNOTNULL(sort) || json_array_size(sort) == 0) {
         sortcrit = xzmalloc(2 * sizeof(struct sortcrit));
@@ -4302,48 +4331,45 @@ static struct sortcrit *buildsort(json_t *sort)
 
     sortcrit = xzmalloc((json_array_size(sort) + 1) * sizeof(struct sortcrit));
 
-    json_array_foreach(sort, i, val) {
-        s = json_string_value(val);
-        p = strchr(s, ' ');
-        buf_setmap(&prop, s, p - s);
-        buf_cstring(&prop); /* null-terminate prop string */
+    json_array_foreach(sort, i, jcomp) {
+        const char *prop = json_string_value(json_object_get(jcomp, "property"));
 
-        if (!strcmp(p + 1, "desc")) {
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
             sortcrit[i].flags |= SORT_REVERSE;
         }
 
         /* Note: add any new sort criteria also to is_supported_msglist_sort */
 
-        if (!strcmp(prop.s, "receivedAt")) {
+        if (!strcmp(prop, "receivedAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
-        if (!strcmp(prop.s, "from")) {
+        if (!strcmp(prop, "from")) {
             sortcrit[i].key = SORT_FROM;
         }
-        if (!strcmp(prop.s, "id")) {
+        if (!strcmp(prop, "id")) {
             sortcrit[i].key = SORT_GUID;
         }
-        if (!strcmp(prop.s, "emailState")) {
+        if (!strcmp(prop, "emailState")) {
             sortcrit[i].key = SORT_MODSEQ;
         }
-        if (!strcmp(prop.s, "size")) {
+        if (!strcmp(prop, "size")) {
             sortcrit[i].key = SORT_SIZE;
         }
-        if (!strcmp(prop.s, "subject")) {
+        if (!strcmp(prop, "subject")) {
             sortcrit[i].key = SORT_SUBJECT;
         }
-        if (!strcmp(prop.s, "to")) {
+        if (!strcmp(prop, "to")) {
             sortcrit[i].key = SORT_TO;
         }
-        if (!strncmp(prop.s, "hasKeyword:", 11)) {
-            const char *name = jmap_keyword_to_imap(prop.s + 11);
+        if (!strncmp(prop, "hasKeyword:", 11)) {
+            const char *name = jmap_keyword_to_imap(prop + 11);
             if (name) {
                 sortcrit[i].key = SORT_HASFLAG;
                 sortcrit[i].args.flag.name = xstrdup(name);
             }
         }
-        if (!strncmp(prop.s, "someInThreadHaveKeyword:", 24)) {
-            const char *name = jmap_keyword_to_imap(prop.s + 24);
+        if (!strncmp(prop, "someInThreadHaveKeyword:", 24)) {
+            const char *name = jmap_keyword_to_imap(prop + 24);
             if (name) {
                 sortcrit[i].key = SORT_HASFLAG;
                 sortcrit[i].args.flag.name = xstrdup(name);
@@ -4353,7 +4379,6 @@ static struct sortcrit *buildsort(json_t *sort)
 
     sortcrit[json_array_size(sort)].key = SORT_SEQUENCE;
 
-    buf_free(&prop);
     return sortcrit;
 }
 
@@ -4736,23 +4761,35 @@ static const char *msglist_sortfields[] = {
     NULL
 };
 
-static int is_supported_msglist_sort(const char *field)
+static int is_supported_msglist_sort(const jmap_comparator_t *comp)
 {
-    if (!strncmp(field, "hasKeyword:", 11) && is_valid_keyword(field + 11)) {
-        return 1;
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
     }
-    if (!strncmp(field, "someInThreadHaveKeyword:", 24)) {
-        const char *s = field + 24;
+
+    /* Special case: hasKeyword */
+    if (!strncmp(comp->property, "hasKeyword:", 11)) {
+        if (is_valid_keyword(comp->property + 11)) {
+            return 1;
+        }
+    }
+    /* Special case: someInThreadHaveKeyword */
+    else if (!strncmp(comp->property, "someInThreadHaveKeyword:", 24)) {
+        const char *s = comp->property + 24;
         if (is_valid_keyword(s) && is_supported_convkeyword(s)) {
             return 1;
         }
     }
+
+    /* Search in list of supported sortFields */
     const char **sp;
     for (sp = msglist_sortfields; *sp; sp++) {
-        if (!strcmp(*sp, field)) {
+        if (!strcmp(*sp, comp->property)) {
             return 1;
         }
     }
+
     return 0;
 }
 
@@ -5041,7 +5078,7 @@ static int getEmailsUpdates(jmap_req_t *req)
 
     /* Search for updates */
     filter = json_pack("{s:s}", "sinceEmailState", since);
-    sort = json_pack("[s]", "emailState asc");
+    sort = json_pack("[{s:s}]", "property", "emailState");
 
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
@@ -5125,7 +5162,7 @@ static int getThreadsUpdates(jmap_req_t *req)
 
     /* Search for message updates and collapse threads */
     json_t *filter = json_pack("{s:s}", "sinceEmailState", since);
-    json_t *sort = json_pack("[s]", "emailState asc");
+    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     window.collapse = 1;
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
                        &total, &total_threads, &changed, &removed, &threads);
@@ -9186,11 +9223,14 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
     buf_free(&buf);
 }
 
-static int is_supported_msgsub_sort(const char *field)
+static int is_supported_msgsub_sort(const jmap_comparator_t *comp)
 {
-    if (!strcmp(field, "emailId") ||
-        !strcmp(field, "threadId") ||
-        !strcmp(field, "sentAt")) {
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "emailId") ||
+        !strcmp(comp->property, "threadId") ||
+        !strcmp(comp->property, "sentAt")) {
         return 1;
     }
     return 0;
