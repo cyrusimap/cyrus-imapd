@@ -104,12 +104,12 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
- * - copyEmails
- * - getVacationResponse
- * - setVacationResponse
- * - getIdentitiesUpdates
- * - setIdentities
- * - reportEmails
+ * - Email/copy
+ * - VacationResponse/get
+ * - VacationResponse/set
+ * - Identity/changes
+ * - Identity/set
+ * - Email/report
  */
 
 /*
@@ -121,27 +121,27 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req);
  */
 
 jmap_method_t jmap_mail_methods[] = {
-    { "getMailboxes",                   &getMailboxes },
-    { "setMailboxes",                   &setMailboxes },
-    { "getMailboxesUpdates",            &getMailboxesUpdates },
-    { "getMailboxesList",               &getMailboxesList },
-    { "getMailboxesListUpdates",        &getMailboxesListUpdates },
-    { "getEmailsList",                  &getEmailsList },
-    { "getEmailsListUpdates",           &getEmailsListUpdates },
-    { "getEmails",                      &getEmails },
-    { "setEmails",                      &setEmails },
-    { "getEmailsUpdates",               &getEmailsUpdates },
-    { "importEmails",                   &importEmails },
-    { "getSearchSnippets",              &getSearchSnippets },
-    { "getThreads",                     &getThreads },
-    { "getThreadsUpdates",              &getThreadsUpdates },
-    { "getIdentities",                  &getIdentities },
-    { "getEmailSubmissions",            &getEmailSubmissions },
-    { "setEmailSubmissions",            &setEmailSubmissions },
-    { "getEmailSubmissionsUpdates",     &getEmailSubmissionsUpdates },
-    { "getEmailSubmissionsList",        &getEmailSubmissionsList },
-    { "getEmailSubmissionsListUpdates", &getEmailSubmissionsListUpdates },
-    { NULL,                              NULL}
+    { "Mailbox/get",                  &getMailboxes },
+    { "Mailbox/set",                  &setMailboxes },
+    { "Mailbox/changes",              &getMailboxesUpdates },
+    { "Mailbox/query",                &getMailboxesList },
+    { "Mailbox/queryChanges",         &getMailboxesListUpdates },
+    { "Email/query",                  &getEmailsList },
+    { "Email/queryChanges",           &getEmailsListUpdates },
+    { "Email/get",                    &getEmails },
+    { "Email/set",                    &setEmails },
+    { "Email/changes",                &getEmailsUpdates },
+    { "Email/import",                 &importEmails },
+    { "SearchSnippet/get",            &getSearchSnippets },
+    { "Thread/get",                   &getThreads },
+    { "Thread/changes",               &getThreadsUpdates },
+    { "Identity/get",                 &getIdentities },
+    { "EmailSubmission/get",          &getEmailSubmissions },
+    { "EmailSubmission/set",          &setEmailSubmissions },
+    { "EmailSubmission/changes",      &getEmailSubmissionsUpdates },
+    { "EmailSubmission/query",        &getEmailSubmissionsList },
+    { "EmailSubmission/queryChanges", &getEmailSubmissionsListUpdates },
+    { NULL,                           NULL}
 };
 
 /* NULL terminated list of supported getEmailsList sort fields */
@@ -813,7 +813,7 @@ static int getMailboxes(jmap_req_t *req)
 
     /* Build response */
     json_t *item = json_pack("[s {s:s s:O s:O s:o} s]",
-                     "mailboxes",
+                     "Mailbox/get",
                      "accountId", req->accountid,
                      "list", found,
                      "notFound", notfound,
@@ -1264,7 +1264,7 @@ static int getMailboxesList(jmap_req_t *req)
     json_object_set(res, "ids", ids);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("mailboxesList"));
+    json_array_append_new(item, json_string("Mailbox/query"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2203,7 +2203,7 @@ static int setMailboxes(jmap_req_t *req)
 
     json_incref(set);
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("mailboxesSet"));
+    json_array_append_new(item, json_string("Mailbox/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -2437,7 +2437,7 @@ static int getMailboxesUpdates(jmap_req_t *req)
                                    "totalThreads", "unreadThreads") :
             json_null());
     item = json_pack("[]");
-    json_array_append_new(item, json_string("mailboxesUpdates"));
+    json_array_append_new(item, json_string("Mailbox/changes"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4852,7 +4852,7 @@ static int getEmailsList(jmap_req_t *req)
     json_object_set(res, "threadIds", threadids);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailsList"));
+    json_array_append_new(item, json_string("Email/query"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -4985,7 +4985,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
     json_object_set_new(res, "total", json_integer(total));
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailsListUpdates"));
+    json_array_append_new(item, json_string("Email/queryChanges"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5066,7 +5066,7 @@ static int getEmailsUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailsUpdates"));
+    json_array_append_new(item, json_string("Email/changes"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5189,7 +5189,7 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_object_set(res, "removed", removed);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("threadsUpdates"));
+    json_array_append_new(item, json_string("Thread/changes"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5467,7 +5467,7 @@ static int getSearchSnippets(jmap_req_t *req)
     json_object_set(res, "filter", filter);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("searchSnippets"));
+    json_array_append_new(item, json_string("SearchSnippet/get"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5580,7 +5580,7 @@ static int getThreads(jmap_req_t *req)
     json_object_set_new(res, "notFound", notfound);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("threads"));
+    json_array_append_new(item, json_string("Thread/get"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -5693,7 +5693,7 @@ doneloop:
     json_object_set(res, "notFound", notfound);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emails"));
+    json_array_append_new(item, json_string("Email/get"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
 
@@ -7916,7 +7916,7 @@ static int setEmails(jmap_req_t *req)
 
     json_incref(set);
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailsSet"));
+    json_array_append_new(item, json_string("Email/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -8236,7 +8236,7 @@ static int importEmails(jmap_req_t *req)
     json_object_set(res, "notCreated", notcreated);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailsImported"));
+    json_array_append_new(item, json_string("Email/import"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -8315,7 +8315,7 @@ static int getIdentities(jmap_req_t *req)
     json_object_set_new(res, "notFound", notfound);
 
     item = json_pack("[]");
-    json_array_append_new(item, json_string("identities"));
+    json_array_append_new(item, json_string("Identity/get"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -8841,7 +8841,7 @@ static int getEmailSubmissions(jmap_req_t *req)
     json_object_set(res, "notFound", notfound);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("emails"));
+    json_array_append_new(item, json_string("EmailSubmission/get"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
 
@@ -9050,7 +9050,7 @@ static int setEmailSubmissions(jmap_req_t *req)
 
     json_incref(set);
     item = json_pack("[]");
-    json_array_append_new(item, json_string("emailSubmissionsSet"));
+    json_array_append_new(item, json_string("EmailSubmission/set"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9123,7 +9123,7 @@ static int getEmailSubmissionsUpdates(jmap_req_t *req)
     json_object_set_new(res, "removed", json_null());
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("emailSubmissionsUpdates"));
+    json_array_append_new(item, json_string("EmailSubmission/changes"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9269,7 +9269,7 @@ static int getEmailSubmissionsList(jmap_req_t *req)
     json_object_set(res, "threadIds", threadids);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("emailSubmissionsList"));
+    json_array_append_new(item, json_string("EmailSubmission/query"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
@@ -9361,7 +9361,7 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
     json_object_set(res, "sort", sort);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("emailSubmissionsListUpdates"));
+    json_array_append_new(item, json_string("EmailSubmissions/queryChanges"));
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
