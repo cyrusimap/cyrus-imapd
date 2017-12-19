@@ -3594,7 +3594,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
     for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
          prop; prop = nextprop) {
-        const char *xname, *oldxname;
+        const char *xname = NULL, *oldxname;
         icalproperty_kind kind = icalproperty_isa(prop);
         icalproperty_kind oldkind =
             oldprop ? icalproperty_isa(oldprop) : ICAL_NO_PROPERTY;
@@ -3630,7 +3630,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 break;
 
             case ICAL_X_PROPERTY:
-                if (!strcmp(xname, "X-MOZ-GENERATION")) {
+                if (!strcmpsafe(xname, "X-MOZ-GENERATION")) {
                     /* Ok to modify these - ignore */
                     break;
                 }
