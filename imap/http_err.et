@@ -56,7 +56,7 @@ ec HTTP_SWITCH_PROT,
 ec HTTP_PROCESSING,
    "102 Processing"
 
-# draft-ietf-httpbis-early-hints
+# Indicating Hints (RFC 8297)
 ec HTTP_EARLY_HINTS,
    "103 Early Hints"
 
