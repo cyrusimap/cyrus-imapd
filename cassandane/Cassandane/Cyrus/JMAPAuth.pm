@@ -106,7 +106,7 @@ sub test_login
       },
       content => encode_json({
         using => [ "ietf:jmap", "ietf:jmapmail" ],
-        methodCalls => [['getMailboxes', {}, "R1"]]
+        methodCalls => [['Mailbox/get', {}, "R1"]]
       }),
     };
 
@@ -130,8 +130,8 @@ sub test_revoke
     my $Response;
 
     xlog "send some JMAP request";
-    $Response = $jmap->Request([['getMailboxes', {}, "R1"]]);
-    $self->assert_str_equals($Response->[0][0], 'mailboxes');
+    $Response = $jmap->Request([['Mailbox/get', {}, "R1"]]);
+    $self->assert_str_equals($Response->[0][0], 'Mailbox/get');
 
     xlog "revoke access token";
     $Request = {
@@ -152,7 +152,10 @@ sub test_revoke
         'Content-Type'  => "application/json",
         'Authorization' => "Bearer " . $jmap->{token},
       },
-      content => encode_json([['getMailboxes', {}, "R1"]]),
+      content => encode_json({
+        using => [ "ietf:jmap", "ietf:jmapmail" ],
+        methodCalls => [['Mailbox/get', {}, "R1"]]
+      }),
     };
     $Response = $jmap->ua->post($jmap->uri(), $Request);
     if ($ENV{DEBUGJMAP}) {
