@@ -2876,6 +2876,9 @@ static int setContacts(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
 
+    struct buf prodidbuf = BUF_INITIALIZER;
+    buf_printf(&prodidbuf, "-//CyrusIMAP.org/Cyrus %s (via JMAP)//EN", CYRUS_VERSION);
+
     struct mailbox *mailbox = NULL;
     struct mailbox *newmailbox = NULL;
 
@@ -2928,6 +2931,7 @@ static int setContacts(struct jmap_req *req)
             }
 
             struct vparse_card *card = vparse_new_card("VCARD");
+            vparse_add_entry(card, NULL, "PRODID", buf_cstring(&prodidbuf));
             vparse_add_entry(card, NULL, "VERSION", "3.0");
             vparse_add_entry(card, NULL, "UID", uid);
 
@@ -3082,6 +3086,8 @@ static int setContacts(struct jmap_req *req)
                 continue;
             }
             struct vparse_card *card = vcard->objects;
+            vparse_replace_entry(card, NULL, "VERSION", "3.0");
+            vparse_replace_entry(card, NULL, "PRODID", buf_cstring(&prodidbuf));
 
             json_t *invalid = json_pack("[]");
 
@@ -3237,6 +3243,8 @@ static int setContacts(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
 done:
+    buf_free(&prodidbuf);
+
     mailbox_close(&newmailbox);
     mailbox_close(&mailbox);
 
