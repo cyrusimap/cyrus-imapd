@@ -2872,16 +2872,31 @@ static int _json_to_card(const char *uid,
     return 0;
 }
 
+static const char *_prodid = NULL;
+
+static void _make_prodid() {
+    /* XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
+     * sure that PRODID never exceeds the 75 octet limit without CRLF */
+    struct buf prodidbuf = BUF_INITIALIZER;
+    size_t max_len = 68; /* 75 - strlen("PRODID:") */
+    buf_printf(&prodidbuf, "-//CyrusIMAP.org/Cyrus %s/", CYRUS_VERSION);
+    if (buf_len(&prodidbuf) > max_len) {
+        buf_truncate(&prodidbuf, max_len - 3);
+        buf_appendcstr(&prodidbuf, "../");
+    }
+    _prodid = buf_release(&prodidbuf);
+}
+
 static int setContacts(struct jmap_req *req)
 {
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
 
-    struct buf prodidbuf = BUF_INITIALIZER;
-    buf_printf(&prodidbuf, "-//CyrusIMAP.org/Cyrus %s (via JMAP)//EN", CYRUS_VERSION);
-
     struct mailbox *mailbox = NULL;
     struct mailbox *newmailbox = NULL;
+
+    /* Initialize PRODID value */
+    if (!_prodid) _make_prodid();
 
     int r = 0;
     json_t *jcheckState = json_object_get(req->args, "ifInState");
@@ -2932,7 +2947,7 @@ static int setContacts(struct jmap_req *req)
             }
 
             struct vparse_card *card = vparse_new_card("VCARD");
-            vparse_add_entry(card, NULL, "PRODID", buf_cstring(&prodidbuf));
+            vparse_add_entry(card, NULL, "PRODID", _prodid);
             vparse_add_entry(card, NULL, "VERSION", "3.0");
             vparse_add_entry(card, NULL, "UID", uid);
 
@@ -3088,7 +3103,7 @@ static int setContacts(struct jmap_req *req)
             }
             struct vparse_card *card = vcard->objects;
             vparse_replace_entry(card, NULL, "VERSION", "3.0");
-            vparse_replace_entry(card, NULL, "PRODID", buf_cstring(&prodidbuf));
+            vparse_replace_entry(card, NULL, "PRODID", _prodid);
 
             json_t *invalid = json_pack("[]");
 
@@ -3244,8 +3259,6 @@ static int setContacts(struct jmap_req *req)
     json_array_append_new(req->response, item);
 
 done:
-    buf_free(&prodidbuf);
-
     mailbox_close(&newmailbox);
     mailbox_close(&mailbox);
 
