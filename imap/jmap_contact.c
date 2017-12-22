@@ -2872,21 +2872,6 @@ static int _json_to_card(const char *uid,
     return 0;
 }
 
-static const char *_prodid = NULL;
-
-static void _make_prodid() {
-    /* XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
-     * sure that PRODID never exceeds the 75 octet limit without CRLF */
-    struct buf prodidbuf = BUF_INITIALIZER;
-    size_t max_len = 68; /* 75 - strlen("PRODID:") */
-    buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
-    if (buf_len(&prodidbuf) > max_len) {
-        buf_truncate(&prodidbuf, max_len - 6);
-        buf_appendcstr(&prodidbuf, "..//EN");
-    }
-    _prodid = buf_release(&prodidbuf);
-}
-
 static int setContacts(struct jmap_req *req)
 {
     struct carddav_db *db = carddav_open_userid(req->accountid);
@@ -2896,7 +2881,19 @@ static int setContacts(struct jmap_req *req)
     struct mailbox *newmailbox = NULL;
 
     /* Initialize PRODID value */
-    if (!_prodid) _make_prodid();
+    static char *_prodid = NULL;
+    if (!_prodid) {
+        /* XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
+         * sure that PRODID never exceeds the 75 octet limit without CRLF */
+        struct buf prodidbuf = BUF_INITIALIZER;
+        size_t max_len = 68; /* 75 - strlen("PRODID:") */
+        buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
+        if (buf_len(&prodidbuf) > max_len) {
+            buf_truncate(&prodidbuf, max_len - 6);
+            buf_appendcstr(&prodidbuf, "..//EN");
+        }
+        _prodid = buf_release(&prodidbuf);
+    }
 
     int r = 0;
     json_t *jcheckState = json_object_get(req->args, "ifInState");
