@@ -2693,6 +2693,8 @@ static int _json_to_card(const char *uid,
         fn = vparse_add_entry(card, NULL, "fn", "No Name");
         name_is_dirty = 1;
     }
+    /* always need 'n' as well */
+    struct vparse_entry *n = _card_multi(card, "n", ';');
 
     json_object_foreach(arg, key, jval) {
         if (!strcmp(key, "isFlagged")) {
@@ -2726,7 +2728,6 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 3, val);
         }
         else if (!strcmp(key, "firstName")) {
@@ -2739,7 +2740,6 @@ static int _json_to_card(const char *uid,
             /* JMAP doesn't have a separate field for Middle (aka "Additional
              * Names"), so any extra names are probably in firstName, and we
              * should split them out. See reverse of this in getcontacts_cb */
-            struct vparse_entry *n = _card_multi(card, "n", ';');
             const char *middle = strchr(val, ' ');
             if (middle) {
                 /* multiple worlds, first to First, rest to Middle */
@@ -2759,7 +2759,6 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 0, val);
         }
         else if (!strcmp(key, "suffix")) {
@@ -2769,7 +2768,6 @@ static int _json_to_card(const char *uid,
                 return -1;
             }
             name_is_dirty = 1;
-            struct vparse_entry *n = _card_multi(card, "n", ';');
             strarray_set(n->v.values, 4, val);
         }
         else if (!strcmp(key, "nickname")) {
@@ -2778,7 +2776,6 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("nickname"));
                 return -1;
             }
-            struct vparse_entry *n = _card_multi(card, "nickname", ',');
             strarray_truncate(n->v.values, 0);
             if (*val) strarray_set(n->v.values, 0, val);
             record_is_dirty = 1;
