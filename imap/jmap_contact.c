@@ -2920,7 +2920,7 @@ static int setContacts(struct jmap_req *req)
         const char *key;
         json_t *arg;
         json_object_foreach(create, key, arg) {
-            const char *uid = makeuuid();
+            char *uid = xstrdup(makeuuid());
             struct entryattlist *annots = NULL;
 
             const char *addressbookId = "Default";
@@ -2995,7 +2995,7 @@ static int setContacts(struct jmap_req *req)
             json_object_set_new(created, key, record);
 
             /* hash_insert takes ownership of uid here, skanky I know */
-            hash_insert(key, xstrdup(uid), &req->idmap->contacts);
+            hash_insert(key, uid, &req->idmap->contacts);
         }
 
         if (json_object_size(created))
