@@ -1609,22 +1609,6 @@ fi
 AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
 
 dnl
-dnl see if we're compiling with JMAP support
-dnl
-AC_ARG_ENABLE(jmap,
-        [AS_HELP_STRING([--enable-jmap], [enable JMAP support])],, [enable_jmap="no";])
-if test "x$enable_jmap" = "xyes" ; then
-    if test "x$enable_xapian" = "xno" ; then
-        AC_MSG_ERROR([--enable-jmap requires --enable-xapian])
-    fi
-    if test "x$enable_http" = "xno" ; then
-        AC_MSG_ERROR([--enable-jmap requires --enable-http])
-    fi
-    AC_DEFINE(WITH_JMAP,[],[Build with JMAP support])
-fi
-AM_CONDITIONAL([JMAP], [test "${enable_jmap}" != "no"])
-
-dnl
 dnl see if we're compiling replication support programs
 dnl
 AC_ARG_ENABLE(replication,
@@ -2263,7 +2247,6 @@ Cyrus Server configured components
    replication:        $enable_replication
    sieve:              $enable_sieve
    calalarmd:          $enable_calalarmd
-   jmap:               $enable_jmap
    objectstore:        $enable_objectstore
    backup:             $enable_backup
 

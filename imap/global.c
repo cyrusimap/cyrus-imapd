@@ -109,10 +109,6 @@ HIDDEN const char *config_userdeny_db;
 EXPORTED const char *config_zoneinfo_db;
 EXPORTED const char *config_conversations_db;
 EXPORTED const char *config_backup_db;
-EXPORTED const char *config_jmapauth_db;
-EXPORTED int config_jmapauth_allowsasl;
-EXPORTED int config_jmapauth_token_ttl;
-EXPORTED int config_jmapauth_loginid_ttl;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 
@@ -274,11 +270,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
 
-    /* Set up JMAP authentication */
-    config_jmapauth_allowsasl = config_getswitch(IMAPOPT_JMAPAUTH_ALLOWSASL);
-    config_jmapauth_token_ttl = config_getint(IMAPOPT_JMAPAUTH_TOKEN_TTL);
-    config_jmapauth_loginid_ttl = config_getint(IMAPOPT_JMAPAUTH_LOGINID_TTL);
-
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
         config_mboxlist_db = config_getstring(IMAPOPT_MBOXLIST_DB);
@@ -295,7 +286,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         config_zoneinfo_db = config_getstring(IMAPOPT_ZONEINFO_DB);
         config_conversations_db = config_getstring(IMAPOPT_CONVERSATIONS_DB);
         config_backup_db = config_getstring(IMAPOPT_BACKUP_DB);
-        config_jmapauth_db = config_getstring(IMAPOPT_JMAPAUTH_DB);
 
         /* configure libcyrus as needed */
         libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);

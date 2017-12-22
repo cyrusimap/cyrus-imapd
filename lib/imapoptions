@@ -891,7 +891,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist", "webdav") }
+{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "domainkey", "freebusy", "ischedule", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).
@@ -966,68 +966,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    "standard" uses time() when delivering a message, mtime on reconstruct.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
-
-{ "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
-/* The cyrusdb backend to use for the JMAP authentication database. */
-
-{ "jmapauth_db_path", NULL, STRING }
-/* The absolute path to the JMAP authentication db file.  If not specified,
-   will be confdir/jmapauth.db */
-
-{ "jmapauth_allowsasl", 0, SWITCH }
-/* If enabled, JMAP requests may be authenticated with the enabled
-   SASL auth mechanisms (see sasl_mech_list), including HTTP Basic
-   Authentication (RFC 7617). The default is Bearer only. */
-
-{ "jmapauth_token_ttl", 0, INT }
-/* The maximum idle time of JMAP authentication access tokens in seconds
-   before they expire. Token usage timestamps are only measured within
-   minutes, so tokens are valid until ttl plus 60 seconds have passed.
-   If 0, access tokens never expire. */
-
-{ "jmapauth_loginid_ttl", 300, INT }
-/* The time to live of JMAP login id tokens in seconds. Login id expiry
-   times never refresh, so login attempts must complete successfully
-   within this parameter's time. */
-
-{ "jmap_preview_annot", NULL, STRING }
-/* The name of the per-message annotation, if any, to store message
-   previews. */
-
-{ "jmap_imagesize_annot", NULL, STRING }
-/* The name of the per-message annotation, if any, that stores a
-   JSON object, mapping message part numbers of MIME image types
-   to an array of their image dimensions. The array must have at
-   least two entries, where the first entry denotes the width
-   and the second entry the height of the image. Any additional
-   values are ignored.
-
-   For example, if message part 1.2 contains an image of width 300
-   and height 200, then the value of this annotation would be:
-
-   { "1.2" : [ 300, 200 ] }
-   */
-
-{ "jmap_inlinedcids_annot", NULL, STRING }
-/* The name of the per-message annotation, if any, that stores a
-   JSON object, mapping RFC2392 Content-IDs referenced in HTML bodies
-   to the respective HTML body part number.
-
-   For example, if message part 1.2 contains HTML and references an
-   inlined image at "cid:foo", then the value of this annotation
-   would be:
-
-   { "<foo>" : "1.2" }
-
-   Note that the Content-ID key must be URL-unescaped and enclosed in
-   angular brackets, as defined in RFC2392. */
-
-{ "jmap_preview_length", 64, INT }
-/* The maximum byte length of dynamically generated message previews. Previews
-   stored in jmap_preview_annot take precedence. */
-
-{ "jmapuploadfolder", "#jmap", STRING }
-/* the name of the folder for JMAP uploads (#jmap) */
 
 { "iolog", 0, SWITCH }
 /* Should cyrus output I/O log entries */

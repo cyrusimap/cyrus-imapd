@@ -148,11 +148,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "calalarmd", json_false());
 #endif
-#ifdef WITH_JMAP
-    json_object_set_new(component, "jmap", json_true());
-#else
-    json_object_set_new(component, "jmap", json_false());
-#endif
 #ifdef ENABLE_OBJECTSTORE
     json_object_set_new(component, "objectstore", json_true());
 #else

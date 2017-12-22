@@ -58,7 +58,6 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
-#include "jmap_ical.h"
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
