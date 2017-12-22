@@ -2879,10 +2879,10 @@ static void _make_prodid() {
      * sure that PRODID never exceeds the 75 octet limit without CRLF */
     struct buf prodidbuf = BUF_INITIALIZER;
     size_t max_len = 68; /* 75 - strlen("PRODID:") */
-    buf_printf(&prodidbuf, "-//CyrusIMAP.org/Cyrus %s/", CYRUS_VERSION);
+    buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
     if (buf_len(&prodidbuf) > max_len) {
-        buf_truncate(&prodidbuf, max_len - 3);
-        buf_appendcstr(&prodidbuf, "../");
+        buf_truncate(&prodidbuf, max_len - 6);
+        buf_appendcstr(&prodidbuf, "..//EN");
     }
     _prodid = buf_release(&prodidbuf);
 }
