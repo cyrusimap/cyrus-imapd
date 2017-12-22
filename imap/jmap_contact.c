@@ -2776,8 +2776,9 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("nickname"));
                 return -1;
             }
-            strarray_truncate(n->v.values, 0);
-            if (*val) strarray_set(n->v.values, 0, val);
+            struct vparse_entry *nick = _card_multi(card, "nickname", ',');
+            strarray_truncate(nick->v.values, 0);
+            if (*val) strarray_set(nick->v.values, 0, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
