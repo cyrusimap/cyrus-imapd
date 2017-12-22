@@ -46,7 +46,7 @@ test -s VERSION &&
     exec head -1 VERSION
 
 # first try: based on annotated git tags (real releases)
-version=$(git describe --dirty=-dirty 2>/dev/null)
+version=$(git describe --dirty=-dirty --match 'cyrus-imapd-*' 2>/dev/null)
 test -n "$version" &&
     version=$(echo "$version" | sed -e 's/^cyrus-imapd-//')
 
