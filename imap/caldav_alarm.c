@@ -525,11 +525,15 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
 {
     int has_alarms = 0;
 
+    syslog(LOG_DEBUG, "checking for alarms in mailbox %s uid %u",
+           mailbox->name, uid);
+
     if (ical) {
         /* Check iCalendar resource for VALARMs */
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         icalcomponent_kind kind = icalcomponent_isa(comp);
 
+        syslog(LOG_DEBUG, "checking resource");
         for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
                 return 1;
@@ -538,6 +542,8 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
 
     /* Check all per-user-cal-data for VALARMs */
     struct has_alarms_rock hrock = { mailbox->i.options, &has_alarms };
+
+    syslog(LOG_DEBUG, "checking per-user-data");
     mailbox_get_annotate_state(mailbox, uid, NULL);
     annotatemore_findall(mailbox->name, uid, PER_USER_CAL_DATA, /* modseq */ 0,
                          &has_peruser_alarms_cb, &hrock, /* flags */ 0);
@@ -571,6 +577,10 @@ static int write_lastalarm(struct mailbox *mailbox, const struct index_record *r
                            struct lastalarm_data *data)
 {
     struct buf annot_buf = BUF_INITIALIZER;
+
+    syslog(LOG_DEBUG, "writing last alarm for mailbox %s uid %u",
+           mailbox->name, record->uid);
+
     if (data)
         buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
     const char *annotname = DAV_ANNOT_NS "lastalarm";
@@ -585,6 +595,9 @@ static int read_lastalarm(struct mailbox *mailbox,
 {
     int r = IMAP_NOTFOUND;
     memset(data, 0, sizeof(struct lastalarm_data));
+
+    syslog(LOG_DEBUG, "reading last alarm for mailbox %s uid %u",
+           mailbox->name, record->uid);
 
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     struct buf annot_buf = BUF_INITIALIZER;
@@ -823,6 +836,9 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (runtime > data.nextcheck) {
         /* Process VALARMs in iCalendar resource */
         char *userid = mboxname_to_userid(mailbox->name);
+
+        syslog(LOG_DEBUG, "processing alarms in resource");
+
         data.nextcheck = process_alarms(mailbox->name, record.uid, userid,
                                         floatingtz, ical, data.lastrun, runtime);
         free(userid);
@@ -830,6 +846,9 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         /* Process VALARMs in per-user-cal-data */
         struct process_alarms_rock prock =
             { mailbox->i.options, ical, &data, runtime };
+
+        syslog(LOG_DEBUG, "processing per-user alarms");
+
         mailbox_get_annotate_state(mailbox, record.uid, NULL);
         annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
                              /* modseq */ 0, &process_peruser_alarms_cb,
@@ -850,6 +869,8 @@ static void process_records(ptrarray_t *list, time_t runtime)
     int rc;
     int i;
     icaltimezone *floatingtz = NULL;
+
+    syslog(LOG_DEBUG, "processing records");
 
     for (i = 0; i < list->count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(list, i);
@@ -915,6 +936,8 @@ EXPORTED int caldav_alarm_process(time_t runtime)
         free(data);
     }
     ptrarray_fini(&list);
+
+    syslog(LOG_DEBUG, "done");
 
     return rc;
 }
