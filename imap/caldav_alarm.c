@@ -394,6 +394,7 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         /* alarms can't be more than a week either side of the event start, so if we're
          * past 2 months, then just check again in a month */
         if (check > data->now + 86400*60) {
+            syslog(LOG_DEBUG, "XXX  pushing off nextcheck");
             time_t next = data->now + 86400*30;
             if (!data->nextcheck || next < data->nextcheck)
                 data->nextcheck = next;
@@ -573,7 +574,8 @@ struct lastalarm_data {
     time_t nextcheck;
 };
 
-static int write_lastalarm(struct mailbox *mailbox, const struct index_record *record,
+static int write_lastalarm(struct mailbox *mailbox,
+                           const struct index_record *record,
                            struct lastalarm_data *data)
 {
     struct buf annot_buf = BUF_INITIALIZER;
@@ -581,10 +583,14 @@ static int write_lastalarm(struct mailbox *mailbox, const struct index_record *r
     syslog(LOG_DEBUG, "writing last alarm for mailbox %s uid %u",
            mailbox->name, record->uid);
 
-    if (data)
+    if (data) {
         buf_printf(&annot_buf, "%ld %ld", data->lastrun, data->nextcheck);
+    }
+    syslog(LOG_DEBUG, "data: %s", buf_cstring(&annot_buf));
+
     const char *annotname = DAV_ANNOT_NS "lastalarm";
-    int r = mailbox_annotation_write(mailbox, record->uid, annotname, "", &annot_buf);
+    int r = mailbox_annotation_write(mailbox, record->uid,
+                                     annotname, "", &annot_buf);
     buf_free(&annot_buf);
     return r;
 }
@@ -602,13 +608,12 @@ static int read_lastalarm(struct mailbox *mailbox,
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     struct buf annot_buf = BUF_INITIALIZER;
     mailbox_get_annotate_state(mailbox, record->uid, NULL);
-    annotatemore_msg_lookup(mailbox->name, record->uid, annotname, "", &annot_buf);
+    annotatemore_msg_lookup(mailbox->name, record->uid,
+                            annotname, "", &annot_buf);
 
-    if (annot_buf.len) {
-        char *base = (char *)buf_cstring(&annot_buf);
-        data->lastrun = strtoul(base, &base, 10);
-        if (*base == ' ') base++;
-        data->nextcheck = strtoul(base, &base, 10);
+    if (annot_buf.len &&
+        sscanf(buf_cstring(&annot_buf), "%ld %ld",
+               &data->lastrun, &data->nextcheck) == 2) {
         r = 0;
     }
 
@@ -806,7 +811,8 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
 
     rc = mailbox_map_record(mailbox, &record, &msg_buf);
     if (rc) {
-        /* XXX no message? index is wrong? yikes */
+        syslog(LOG_ERR, "error mapping mailbox %s uid %u",
+               mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
@@ -814,16 +820,17 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     ical = icalparser_parse_string(buf_cstring(&msg_buf) + record.header_size);
 
     if (!ical) {
-        /* XXX log error */
         syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
 
-    /* check for bogus lastalarm data on record which actually shouldn't have it */
+    /* check for bogus lastalarm data on record
+       which actually shouldn't have it */
     if (!has_alarms(ical, mailbox, imap_uid)) {
-        syslog(LOG_NOTICE, "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
+        syslog(LOG_NOTICE,
+               "removing bogus lastalarm check for mailbox %s uid %u which has no alarms",
                mailbox->name, imap_uid);
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
