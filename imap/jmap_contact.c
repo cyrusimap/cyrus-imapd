@@ -787,7 +787,7 @@ static int _add_othergroup_entries(struct jmap_req *req,
             struct vparse_entry *entry =
                 vparse_add_entry(card, NULL,
                                  "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
-            vparse_add_param(entry, "userid", key);
+            vparse_add_param(entry, "USERID", key);
             buf_reset(&buf);
         }
     }
@@ -2306,18 +2306,18 @@ static int _emails_to_card(struct vparse_card *card,
 
         /* Update card. */
         struct vparse_entry *entry =
-            vparse_add_entry(card, NULL, "email", value);
+            vparse_add_entry(card, NULL, "EMAIL", value);
 
         if (!strcmpsafe(type, "personal"))
             type = "home";
         if (strcmpsafe(type, "other"))
-            vparse_add_param(entry, "type", type);
+            vparse_add_param(entry, "TYPE", type);
 
         if (label)
-            vparse_add_param(entry, "label", label);
+            vparse_add_param(entry, "LABEL", label);
 
         if (jisDefault && json_is_true(jisDefault))
-            vparse_add_param(entry, "type", "pref");
+            vparse_add_param(entry, "TYPE", "pref");
 
         buf_reset(&buf);
     }
@@ -2358,15 +2358,15 @@ static int _phones_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", value);
+        struct vparse_entry *entry = vparse_add_entry(card, NULL, "TEL", value);
 
         if (!strcmp(type, "mobile"))
-            vparse_add_param(entry, "type", "cell");
+            vparse_add_param(entry, "TYPE", "CELL");
         else if (strcmp(type, "other"))
-            vparse_add_param(entry, "type", type);
+            vparse_add_param(entry, "TYPE", type);
 
         if (label)
-            vparse_add_param(entry, "label", label);
+            vparse_add_param(entry, "LABEL", label);
 
         buf_reset(&buf);
     }
@@ -2430,29 +2430,29 @@ static int _online_to_card(struct vparse_card *card,
         /* Update card. */
         if (!strcmp(type, "uri")) {
             struct vparse_entry *entry =
-                vparse_add_entry(card, NULL, "url", value);
+                vparse_add_entry(card, NULL, "URL", value);
             if (label)
-                vparse_add_param(entry, "label", label);
+                vparse_add_param(entry, "LABEL", label);
         }
         else if (!strcmp(type, "username")) {
             if (label && _is_im(label)) {
                 struct vparse_entry *entry =
-                    vparse_add_entry(card, NULL, "impp", value);
-                vparse_add_param(entry, "x-service-type", label);
+                    vparse_add_entry(card, NULL, "IMPP", value);
+                vparse_add_param(entry, "X-SERVICE-TYPE", label);
             }
             else {
                 struct vparse_entry *entry =
-                    vparse_add_entry(card, NULL, "x-social-profile", ""); // XXX - URL calculated, ick
+                    vparse_add_entry(card, NULL, "X-SOCIAL-PROFILE", ""); // XXX - URL calculated, ick
                 if (label)
-                    vparse_add_param(entry, "type", label);
-                vparse_add_param(entry, "x-user", value);
+                    vparse_add_param(entry, "TYPE", label);
+                vparse_add_param(entry, "X-USER", value);
             }
         }
         else if (!strcmp(type, "other")) {
             struct vparse_entry *entry =
-                vparse_add_entry(card, NULL, "x-fm-online-other", value);
+                vparse_add_entry(card, NULL, "X-FM-ONLINE-OTHER", value);
             if (label)
-                vparse_add_param(entry, "label", label);
+                vparse_add_param(entry, "LABEL", label);
         }
     }
     buf_free(&buf);
@@ -2504,13 +2504,13 @@ static int _addresses_to_card(struct vparse_card *card,
         }
 
         /* Update card. */
-        struct vparse_entry *entry = vparse_add_entry(card, NULL, "adr", NULL);
+        struct vparse_entry *entry = vparse_add_entry(card, NULL, "ADR", NULL);
 
         if (strcmpsafe(type, "other"))
-            vparse_add_param(entry, "type", type);
+            vparse_add_param(entry, "TYPE", type);
 
         if (label)
-            vparse_add_param(entry, "label", label);
+            vparse_add_param(entry, "LABEL", label);
 
         entry->multivaluesep = ';';
         entry->v.values = strarray_new();
@@ -2594,11 +2594,11 @@ static int _date_to_card(struct vparse_card *card,
 
     /* set all the round-trip flags, sigh */
     if (no_year)
-        vparse_add_param(entry, "x-apple-omit-year", "1604");
+        vparse_add_param(entry, "X-APPLE-OMIT-YEAR", "1604");
     if (no_month)
-        vparse_add_param(entry, "x-fm-no-month", "1");
+        vparse_add_param(entry, "X-FM-NO-MONTH", "1");
     if (no_day)
-        vparse_add_param(entry, "x-fm-no-day", "1");
+        vparse_add_param(entry, "X-FM-NO-DAY", "1");
 
     return 0;
 }
@@ -2616,7 +2616,7 @@ static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
 
 static void _make_fn(struct vparse_card *card)
 {
-    struct vparse_entry *n = vparse_get_entry(card, NULL, "n");
+    struct vparse_entry *n = vparse_get_entry(card, NULL, "N");
     strarray_t *name = strarray_new();
     const char *v;
 
@@ -2638,7 +2638,7 @@ static void _make_fn(struct vparse_card *card)
     }
 
     if (!strarray_size(name)) {
-        v = vparse_stringval(card, "nickname");
+        v = vparse_stringval(card, "NICKNAME");
         if (v && v[0]) strarray_append(name, v);
     }
 
@@ -2649,7 +2649,7 @@ static void _make_fn(struct vparse_card *card)
         fn = xstrdup(" ");
 
     strarray_free(name);
-    vparse_replace_entry(card, NULL, "fn", fn);
+    vparse_replace_entry(card, NULL, "FN", fn);
     free(fn);
 }
 
@@ -2661,7 +2661,7 @@ static int _json_to_card(const char *uid,
 {
     const char *key;
     json_t *jval;
-    struct vparse_entry *n = vparse_get_entry(card, NULL, "n");
+    struct vparse_entry *n = vparse_get_entry(card, NULL, "N");
     int name_is_dirty = 0;
     int record_is_dirty = 0;
 
@@ -2669,7 +2669,7 @@ static int _json_to_card(const char *uid,
      * at the top of the card */
     if (!n) {
         /* _card_multi repeats some work, but we don't care */
-        n = _card_multi(card, "n", ';');
+        n = _card_multi(card, "N", ';');
         record_is_dirty = 1;
     }
 
@@ -2753,13 +2753,13 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("nickname"));
                 return -1;
             }
-            struct vparse_entry *nick = _card_multi(card, "nickname", ',');
+            struct vparse_entry *nick = _card_multi(card, "NICKNAME", ',');
             strarray_truncate(nick->v.values, 0);
             if (*val) strarray_set(nick->v.values, 0, val);
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
-            int r = _date_to_card(card, "bday", jval);
+            int r = _date_to_card(card, "BDAY", jval);
             if (r) {
                 json_array_append_new(invalid, json_string("birthday"));
                 return r;
@@ -2767,7 +2767,7 @@ static int _json_to_card(const char *uid,
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "anniversary")) {
-            int r = _date_to_card(card, "anniversary", jval);
+            int r = _date_to_card(card, "ANNIVERSARY", jval);
             if (r) {
                 json_array_append_new(invalid, json_string("anniversary"));
                 return r;
@@ -2775,7 +2775,7 @@ static int _json_to_card(const char *uid,
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "jobTitle")) {
-            int r = _kv_to_card(card, "title", jval);
+            int r = _kv_to_card(card, "TITLE", jval);
             if (r) {
                 json_array_append_new(invalid, json_string("jobTitle"));
                 return r;
@@ -2788,7 +2788,7 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("company"));
                 return -1;
             }
-            struct vparse_entry *org = _card_multi(card, "org", ';');
+            struct vparse_entry *org = _card_multi(card, "ORG", ';');
             strarray_set(org->v.values, 0, val);
             record_is_dirty = 1;
         }
@@ -2798,7 +2798,7 @@ static int _json_to_card(const char *uid,
                 json_array_append_new(invalid, json_string("department"));
                 return -1;
             }
-            struct vparse_entry *org = _card_multi(card, "org", ';');
+            struct vparse_entry *org = _card_multi(card, "ORG", ';');
             strarray_set(org->v.values, 1, val);
             record_is_dirty = 1;
         }
@@ -2823,7 +2823,7 @@ static int _json_to_card(const char *uid,
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "notes")) {
-            int r = _kv_to_card(card, "note", jval);
+            int r = _kv_to_card(card, "NOTE", jval);
             if (r) {
                 json_array_append_new(invalid, json_string("notes"));
                 return r;
@@ -2839,7 +2839,7 @@ static int _json_to_card(const char *uid,
     }
 
 
-    if (name_is_dirty || !vparse_get_entry(card, NULL, "fn")) {
+    if (name_is_dirty || !vparse_get_entry(card, NULL, "FN")) {
         _make_fn(card);
         record_is_dirty = 1;
     }
