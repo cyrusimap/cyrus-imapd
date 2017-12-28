@@ -655,8 +655,8 @@ EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct i
 {
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
-        return update_alarmdb(mailbox, record->uid, /*remove*/0);
-    return update_alarmdb(mailbox, record->uid, data.nextcheck);
+        return update_alarmdb(mailbox->name, record->uid, /*remove*/0);
+    return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
 }
 
 /* delete all alarms matching the event */
