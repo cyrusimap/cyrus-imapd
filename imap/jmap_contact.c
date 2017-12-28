@@ -2684,17 +2684,17 @@ static int _json_to_card(const char *uid,
 {
     const char *key;
     json_t *jval;
-    struct vparse_entry *fn = vparse_get_entry(card, NULL, "fn");
+    struct vparse_entry *n = vparse_get_entry(card, NULL, "n");
     int name_is_dirty = 0;
     int record_is_dirty = 0;
+
     /* we'll be updating you later anyway... create early so that it's
      * at the top of the card */
-    if (!fn) {
-        fn = vparse_add_entry(card, NULL, "fn", "No Name");
-        name_is_dirty = 1;
+    if (!n) {
+        /* _card_multi repeats some work, but we don't care */
+        n = _card_multi(card, "n", ';');
+        record_is_dirty = 1;
     }
-    /* always need 'n' as well */
-    struct vparse_entry *n = _card_multi(card, "n", ';');
 
     json_object_foreach(arg, key, jval) {
         if (!strcmp(key, "isFlagged")) {
@@ -2861,7 +2861,8 @@ static int _json_to_card(const char *uid,
         }
     }
 
-    if (name_is_dirty) {
+
+    if (name_is_dirty || !vparse_get_entry(card, NULL, "fn")) {
         _make_fn(card);
         record_is_dirty = 1;
     }
