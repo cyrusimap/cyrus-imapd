@@ -854,31 +854,27 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (read_lastalarm(mailbox, &record, &data))
         data.lastrun = record.internaldate;
 
-    if (runtime > data.nextcheck) {
-        /* Process VALARMs in iCalendar resource */
-        char *userid = mboxname_to_userid(mailbox->name);
+    /* Process VALARMs in iCalendar resource */
+    char *userid = mboxname_to_userid(mailbox->name);
 
-        syslog(LOG_DEBUG, "processing alarms in resource");
+    syslog(LOG_DEBUG, "processing alarms in resource");
 
-        data.nextcheck = process_alarms(mailbox->name, record.uid, userid,
-                                        floatingtz, ical, data.lastrun, runtime);
-        free(userid);
+    data.nextcheck = process_alarms(mailbox->name, record.uid, userid,
+                                    floatingtz, ical, data.lastrun, runtime);
+    free(userid);
 
-        /* Process VALARMs in per-user-cal-data */
-        struct process_alarms_rock prock =
-            { mailbox->i.options, ical, &data, runtime };
+    /* Process VALARMs in per-user-cal-data */
+    struct process_alarms_rock prock =
+        { mailbox->i.options, ical, &data, runtime };
 
-        syslog(LOG_DEBUG, "processing per-user alarms");
+    syslog(LOG_DEBUG, "processing per-user alarms");
 
-        mailbox_get_annotate_state(mailbox, record.uid, NULL);
-        annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
-                             /* modseq */ 0, &process_peruser_alarms_cb,
-                             &prock, /* flags */ 0);
-    }
+    mailbox_get_annotate_state(mailbox, record.uid, NULL);
+    annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
+                         /* modseq */ 0, &process_peruser_alarms_cb,
+                         &prock, /* flags */ 0);
 
     data.lastrun = runtime;
-    /* don't check again if nextcheck is in the past */
-    if (data.nextcheck < runtime) data.nextcheck = 0;
     write_lastalarm(mailbox, &record, &data);
 
     update_alarmdb(mailbox->name, record.uid, data.nextcheck);
