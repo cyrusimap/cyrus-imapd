@@ -593,8 +593,6 @@ static int write_lastalarm(struct mailbox *mailbox,
                                      annotname, "", &annot_buf);
     buf_free(&annot_buf);
 
-    if (!r) update_alarmdb(mailbox->name, record->uid, data ? data->nextcheck : 0);
-
     return r;
 }
 
@@ -637,8 +635,8 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
     // regardless will always update the alarmdb
     if (record->silent) return 0;
 
-    if (has_alarms(ical, mailbox->name, record->uid))
-        return update_alarmdb(mailbox->name, record->uid, record->internaldate);
+    if (has_alarms(ical, mailbox, record->uid))
+        update_alarmdb(mailbox->name, record->uid, record->internaldate);
 
     return 0;
 }
@@ -647,20 +645,23 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record)
 {
     if (record->silent) return 0;
-    /* if there's no existing lastalarm, but there are alarms in annotations, then
-     * parse and check the message immediately */
-    struct lastalarm_data data;
-    if (read_lastalarm(mailbox, record, &data) && has_alarms(NULL, mailbox, record->uid))
+
+    /* if there are alarms in the annotations, we need to run a check immediately
+     * to see if the next alarm has become earlier */
+    if (has_alarms(NULL, mailbox, record->uid))
         return update_alarmdb(mailbox->name, record->uid, record->last_updated);
+
     return 0;
 }
 
 EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct index_record *record)
 {
     struct lastalarm_data data;
-    if (read_lastalarm(mailbox, record, &data))
-        return update_alarmdb(mailbox->name, record->uid, /*remove*/0);
-    return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+    if (!read_lastalarm(mailbox, record, &data))
+        return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+
+    /* if there's no lastalarm on the record, nuke any existing alarmdb entry */
+    return caldav_alarm_delete_record(mailbox->name, record->uid);
 }
 
 /* delete all alarms matching the event */
@@ -880,6 +881,8 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     if (data.nextcheck < runtime) data.nextcheck = 0;
     write_lastalarm(mailbox, &record, &data);
 
+    update_alarmdb(mailbox->name, record.uid, data.nextcheck);
+
 done_item:
     buf_free(&msg_buf);
     if (ical) icalcomponent_free(ical);
@@ -1029,6 +1032,7 @@ EXPORTED int caldav_alarm_upgrade()
 
                     struct lastalarm_data data = { runtime, nextcheck };
                     write_lastalarm(mailbox, record, &data);
+                    update_alarmdb(mailbox->name, record->uid, data.nextcheck);
                 }
                 icalcomponent_free(ical);
             }
