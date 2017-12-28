@@ -592,6 +592,9 @@ static int write_lastalarm(struct mailbox *mailbox,
     int r = mailbox_annotation_write(mailbox, record->uid,
                                      annotname, "", &annot_buf);
     buf_free(&annot_buf);
+
+    if (!r) update_alarmdb(mailbox->name, record->uid, data ? data->nextcheck : 0);
+
     return r;
 }
 
@@ -872,6 +875,8 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
 
     data.lastrun = runtime;
+    /* don't check again if nextcheck is in the past */
+    if (data.nextcheck < runtime) data.nextcheck = 0;
     write_lastalarm(mailbox, &record, &data);
 
 done_item:
