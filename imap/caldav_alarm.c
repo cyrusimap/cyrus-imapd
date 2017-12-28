@@ -643,10 +643,10 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record)
 {
     if (record->silent) return 0;
-    /* otherwise, if there's an existing lastalarm or has_alarms in annotations, make calalarmd
+    /* if there's no existing lastalarm, but there are alarms in annotations, then
      * parse and check the message immediately */
     struct lastalarm_data data;
-    if (!read_lastalarm(mailbox, record, &data) || has_alarms(NULL, mailbox, record->uid))
+    if (read_lastalarm(mailbox, record, &data) && has_alarms(NULL, mailbox, record->uid))
         return update_alarmdb(mailbox->name, record->uid, record->last_updated);
     return 0;
 }
