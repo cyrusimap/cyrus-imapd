@@ -1013,38 +1013,15 @@ static int setContactGroups(struct jmap_req *req)
                     free(resource);
                     continue;
                 }
-                /* both N and FN get the name */
-                struct vparse_entry *entry = vparse_get_entry(card, NULL, "N");
-                if (entry) {
-                    if (entry->multivaluesep) {
-                        strarray_free(entry->v.values);
-                        entry->v.values = NULL;
-                    } else {
-                        free(entry->v.value);
-                    }
-                    entry->v.value = xstrdup(name);
-                    entry->multivaluesep = '\0';
-                }
-                else {
-                    vparse_add_entry(card, NULL, "N", name);
-                }
-                entry = vparse_get_entry(card, NULL, "FN");
-                if (entry) {
-                    if (entry->multivaluesep) {
-                        /* FN isn't allowed to be a multi-value, but let's
-                         * rather check than deal with corrupt memory */
-                        strarray_free(entry->v.values);
-                        entry->v.values = NULL;
-                    } else {
-                        free(entry->v.value);
-                    }
-                    entry->v.value = xstrdup(name);
-                    entry->multivaluesep = '\0';
-                }
-                else {
-                    vparse_add_entry(card, NULL, "FN", name);
-                }
+
+                vparse_replace_entry(card, NULL, "FN", name);
+                vparse_replace_entry(card, NULL, "N", name);
             }
+            else if (!vparse_get_entry(card, NULL, "N")) {
+                struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
+                if (entry) vparse_replace_entry(card, NULL, "N", entry->v.value);
+            }
+
 
             json_t *invalid = json_pack("[]");
             json_t *members = json_object_get(arg, "contactIds");
