@@ -2673,6 +2673,12 @@ static int _json_to_card(const char *uid,
         record_is_dirty = 1;
     }
 
+    if (!vparse_get_entry(card, NULL, "FN")) {
+        /* adding first to get position near the top */
+        vparse_add_entry(card, NULL, "FN", "No Name");
+        name_is_dirty = 1;
+    }
+
     json_object_foreach(arg, key, jval) {
         if (!strcmp(key, "isFlagged")) {
             if (json_is_true(jval)) {
@@ -2838,8 +2844,7 @@ static int _json_to_card(const char *uid,
         }
     }
 
-
-    if (name_is_dirty || !vparse_get_entry(card, NULL, "FN")) {
+    if (name_is_dirty) {
         _make_fn(card);
         record_is_dirty = 1;
     }
