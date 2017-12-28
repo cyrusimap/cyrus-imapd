@@ -642,12 +642,21 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record)
 {
+    if (record->silent) return 0;
+    /* otherwise, if there's an existing lastalarm or has_alarms in annotations, make calalarmd
+     * parse and check the message immediately */
     struct lastalarm_data data;
-    if (!read_lastalarm(mailbox, record, &data))
-        return update_alarmdb(mailbox->name, record->uid, data.nextcheck);
-    else if (has_alarms(NULL, mailbox, record->uid))  /* per-user-cal-data */
+    if (!read_lastalarm(mailbox, record, &data) || has_alarms(NULL, mailbox, record->uid))
         return update_alarmdb(mailbox->name, record->uid, record->last_updated);
     return 0;
+}
+
+EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct index_record *record)
+{
+    struct lastalarm_data data;
+    if (read_lastalarm(mailbox, record, &data))
+        return update_alarmdb(mailbox, record->uid, /*remove*/0);
+    return update_alarmdb(mailbox, record->uid, data.nextcheck);
 }
 
 /* delete all alarms matching the event */

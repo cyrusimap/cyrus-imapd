@@ -63,6 +63,9 @@ int caldav_alarm_add_record(struct mailbox *mailbox, const struct index_record *
 /* make sure that the alarms match the annotation */
 int caldav_alarm_touch_record(struct mailbox *mailbox, const struct index_record *record);
 
+/* set the caldav_alarm db nextcheck field for the record (from sync_support) */
+int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct index_record *record);
+
 /* delete all alarms matching the event */
 int caldav_alarm_delete_record(const char *mboxname, uint32_t uid);
 

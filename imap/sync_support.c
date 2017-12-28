@@ -2161,7 +2161,7 @@ out:
             // database properly.  Instead, we don't set anything when we append
             // by checking for .silent, and instead update the database by touching
             // the alarm AFTER writing the record.
-            caldav_alarm_touch_record(mailbox, record);
+            caldav_alarm_sync_nextcheck(mailbox, record);
         }
 #endif
     }
