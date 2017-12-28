@@ -629,17 +629,18 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      icalcomponent *ical)
 {
-    if (!has_alarms(ical, mailbox, record->uid)) {
-        write_lastalarm(mailbox, record, NULL);
-        return 0;
-    }
+    write_lastalarm(mailbox, record, NULL);
+
     // we need to skip silent records (replication) because the lastalarm annotation won't be
     // set yet, so it will all break :(  Instead, we have an explicit touch on the record which
     // is done after the annotations are written, and processes the alarms if needed then, and
     // regardless will always update the alarmdb
     if (record->silent) return 0;
 
-    return update_alarmdb(mailbox->name, record->uid, record->internaldate);
+    if (has_alarms(ical, mailbox->name, record->uid))
+        return update_alarmdb(mailbox->name, record->uid, record->internaldate);
+
+    return 0;
 }
 
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
