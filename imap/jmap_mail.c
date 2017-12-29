@@ -8409,64 +8409,52 @@ static int validate_address(json_t *addr, const char *prefix, json_t *invalid)
     return is_valid;
 }
 
-static const char* address_to_smtp(json_t *addr, const char *cmd, struct buf *buf)
+static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
 {
+    smtpaddr->addr = xstrdup(json_string_value(json_object_get(addr, "email")));
+
     const char *key;
     json_t *val;
-
-    buf_reset(buf);
-    val = json_object_get(addr, "email");
-    buf_printf(buf, "%s:<%s>", cmd, json_string_value(val));
-
     json_object_foreach(json_object_get(addr, "parameters"), key, val) {
-        buf_appendcstr(buf, " ");
-        buf_appendcstr(buf, key);
-        if (JNOTNULL(val)) {
-            buf_appendcstr(buf, "=");
-            buf_appendcstr(buf, json_string_value(val));
-        }
-    }
-    buf_appendcstr(buf, "\r\n");
-
-    return buf_cstring(buf);
-}
-
-/* Filter any sensitive envelope parameters from JMAP Address addr */
-static json_t *filter_address(json_t *addr)
-{
-    json_t *myaddr = json_deep_copy(addr);
-    json_t *params = json_object_get(myaddr, "parameters");
-    json_t *val;
-    void *tmp;
-    const char *name;
-    json_object_foreach_safe(params, tmp, name, val) {
-        /* Remove AUTH, we'll never take it at face alue */
-        if (!strcasecmp(name, "AUTH")) {
-            json_object_del(params, name);
+        /* We never take AUTH at face value */
+        if (!strcasecmp(key, "AUTH")) {
             continue;
         }
+        smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));
+        param->key = xstrdup(key);
+        param->val = xstrdup(json_string_value(val));
+        ptrarray_append(&smtpaddr->params, param);
     }
-    return myaddr;
 }
 
-static int jmap_sendrecord(jmap_req_t *req,
-                           msgrecord_t *mr, json_t *envelope,
-                           char **msgsub_id)
+static void envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *env)
 {
-    FILE *f_msg = NULL;
+    address_to_smtp(&smtpenv->from, json_object_get(env, "mailFrom"));
+    size_t i;
+    json_t *val;
+    json_array_foreach(json_object_get(env, "rcptTo"), i, val) {
+        smtp_addr_t *smtpaddr = xzmalloc(sizeof(smtp_addr_t));
+        address_to_smtp(smtpaddr, val);
+        ptrarray_append(&smtpenv->rcpts, smtpaddr);
+    }
+}
+
+static int jmap_sendrecord(jmap_req_t *req, msgrecord_t *mr, json_t *envelope, char **msgsub_id)
+{
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
     struct mailbox *mbox = NULL;
     smtpclient_t *sm = NULL;
-    int have_auth = 0;
     int r = 0;
+    int fd_msg = -1;
 
     /* Open the message file */
     const char *fname;
     r = msgrecord_get_fname(mr, &fname);
     if (r) goto done;
-    f_msg = fopen(fname, "r");
-    if (!f_msg) {
+
+    fd_msg = open(fname, 0);
+    if (fd_msg == -1) {
         syslog(LOG_ERR, "jmap_sendrecord: can't open %s: %m", fname);
         r = IMAP_IOERROR;
         goto done;
@@ -8477,154 +8465,26 @@ static int jmap_sendrecord(jmap_req_t *req,
     if (r) goto done;
 
     /* Open the SMTP connection */
-    const char *backend = config_getstring(IMAPOPT_JMAP_SMTP_BACKEND);
-    if (!strcmp(backend, "sendmail")) {
-        r = smtpclient_open_sendmail(req->userid, &sm);
-    }
-    else if (!strcmp(backend, "host")) {
-        r = smtpclient_open_host(config_getstring(IMAPOPT_JMAP_SMTP_HOST), &sm);
-    }
-    else if (!strcmp(backend, "file")) {
-        r = smtpclient_open_file(config_getstring(IMAPOPT_JMAP_SMTP_FILE), &sm);
-    }
-    else {
-        syslog(LOG_ERR, "jmap_sendrecord: unknown backend: %s", backend);
-        r = IMAP_INTERNAL;
-    }
+    r = smtpclient_open(&sm);
+    if (r) goto done;
+    smtpclient_set_auth(sm, req->userid);
+
+    /* Prepare envelope */
+    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+    envelope_to_smtp(&smtpenv, envelope);
+
+    /* Write message */
+    struct protstream *data = prot_new(fd_msg, /*write*/0);
+    r = smtpclient_sendprot(sm, &smtpenv, data);
+    smtp_envelope_fini(&smtpenv);
+    prot_free(data);
     if (r) goto done;
 
-    /* Wait for welcome message */
-    r = smtpclient_expect(sm, 220, &buf);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Say EHLO */
-    buf_setcstr(&buf, "EHLO localhost\r\n");
-    r = smtpclient_writebuf(sm, &buf, 1);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Expect OK */
-    r = smtpclient_expect(sm, 250, &buf);
-    if (r) goto done;
-    /* Check if the AUTH extension is supported. */
-    /* XXX This check really should go into a nicer SMTP client API */
-    const char *s = strstr(buf_cstring(&buf), "250-AUTH");
-    if (s && isspace(*(s+strlen("250-AUTH")))) {
-        /* Check if the extension string either starts the
-         * buffer or a new line. */
-        have_auth = s == buf_base(&buf) || *(s-1) == '\n';
-    }
-    if (!have_auth) {
-        /* Check for the extension in the last line. We expect
-         * the AUTH parameter to support at least one auth
-         * mechanism, so there must be a space character after
-         * the end of the extension string. */
-        s = strstr(buf_base(&buf), "250 AUTH");
-        if (s && isspace(*(s+strlen("250 AUTH")))) {
-            have_auth = s == buf_base(&buf) || *(s-1) == '\n';
-        }
-    }
-    buf_reset(&buf);
-
-    /* Write MAIL FROM, overwriting out any sensitive parameters */
-    json_t *myaddr = filter_address(json_object_get(envelope, "mailFrom"));
-    if (have_auth) {
-        json_t *params = json_object_get(myaddr, "parameters");
-        if (!JNOTNULL(params)) {
-            params = json_pack("{}");
-            json_object_set_new(myaddr, "parameters", params);
-        }
-        json_object_set_new(params, "AUTH", json_string(req->userid));
-    }
-    address_to_smtp(myaddr, "MAIL FROM", &buf);
-    r = smtpclient_writebuf(sm, &buf, 1);
-    json_decref(myaddr);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Expect OK */
-    r = smtpclient_expect(sm, 250, &buf);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Write RCPT TO */
-    size_t i;
-    json_t *addr;
-    json_array_foreach(json_object_get(envelope, "rcptTo"), i, addr) {
-        myaddr = filter_address(addr);
-        address_to_smtp(myaddr, "RCPT TO", &buf);
-        r = smtpclient_writebuf(sm, &buf, 1);
-        json_decref(myaddr);
-        if (r) goto done;
-        buf_reset(&buf);
-
-        /* Expect OK */
-        r = smtpclient_expect(sm, 250, &buf);
-        if (r) goto done;
-        buf_reset(&buf);
-    }
-
-    /* Write DATA */
-    buf_setcstr(&buf, "DATA\r\n");
-    r = smtpclient_writebuf(sm, &buf, 1);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Expect Start Input */
-    r = smtpclient_expect(sm, 354, &buf);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Write message, escaping dot characters. */
-    buf_ensure(&buf, 4096);
-    int c;
-    int at_start = 1;
-    while ((c = fgetc(f_msg)) != EOF) {
-        if (c == '.' && at_start) {
-            ungetc(c, f_msg);
-            c = '.';
-            at_start = 0;
-        }
-        buf.s[buf.len++] = (unsigned char) c;
-        if (buf.len == 4096) {
-            r = smtpclient_writebuf(sm, &buf, 0);
-            if (r) goto done;
-            buf_reset(&buf);
-        }
-        if (c == '\n') {
-            at_start = 1;
-        }
-    }
-    r = smtpclient_writebuf(sm, &buf, 1);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Write dot */
-    buf_setcstr(&buf, ".\r\n");
-    r = smtpclient_writebuf(sm, &buf, 1);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* Expect OK */
-    r = smtpclient_expect(sm, 250, &buf);
-    if (r) goto done;
-    syslog(LOG_INFO, "jmap_sendrecord: sent message %s:%d %s",
-            mbox->name, uid, buf_cstring(&buf));
-    buf_reset(&buf);
-
-    /* Quit gracefully. */
-    buf_setcstr(&buf, "QUIT\r\n");
-    r = smtpclient_writebuf(sm, &buf, 1);
-    if (r) goto done;
-    buf_reset(&buf);
-
-    /* XXX extract message queue id from SMTP reply? */
     *msgsub_id = xstrdup(makeuuid());
 
 done:
     if (sm) smtpclient_close(&sm);
-    if (f_msg) fclose(f_msg);
+    if (fd_msg != -1) close(fd_msg);
     buf_free(&buf);
     return r;
 }

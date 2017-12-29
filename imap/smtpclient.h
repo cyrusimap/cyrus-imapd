@@ -46,14 +46,88 @@
 pid_t open_sendmail(const char *userid, const char *argv[], FILE **sm);
 char *sendmail_errstr(int sm_stat);
 
+/* New API */
 
+/* A parameter for SMTP envelope address, identified by key.
+ * The value val may be NULL. */
+typedef struct {
+    char *key;
+    char *val;
+} smtp_param_t;
+
+/* A SMTP envelope address with address addr. The params
+ * array contains the optional address parameters for the
+ * MAIL FROM and RCPT TO commands. */
+typedef struct {
+    char *addr;
+    ptrarray_t params; /* Array of smtp_param_t */
+} smtp_addr_t;
+
+/* A SMTP envelope with the MAIL FROM address and one
+ * or more RCPT TO recipient addresses. */
+typedef struct {
+    smtp_addr_t from;
+    ptrarray_t rcpts; /* Array of smtp_addr_t */
+} smtp_envelope_t;
+
+/* The empty SMTP envelope */
+#define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER }, PTRARRAY_INITIALIZER }
+
+/* Set the MAIL FROM address in env and return the new value.
+ * Any existing address is deallocated. */
+extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr);
+
+/* Add a RCPT TO address to the recipients of env and return the new value. */
+extern smtp_addr_t *smtp_envelope_add_rcpt(smtp_envelope_t *env, const char *addr);
+
+/* Free all memory of pointers and arrays in env */
+extern void smtp_envelope_fini(smtp_envelope_t *env);
+
+/* Opaque SMTP client type */
 typedef struct smtpclient smtpclient_t;
 
-extern int smtpclient_open_sendmail(const char *userid, smtpclient_t **smp);
+/* Open a SMTP client to the default SMTP backend */
+extern int smtpclient_open(smtpclient_t **smp);
+
+/* Open a SMTP client to the sendmail process */
+extern int smtpclient_open_sendmail(smtpclient_t **smp);
+
+/* Open a SMTP client to the host at addr, formatted as host[:port] */
 extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
-extern int smtpclient_open_file(const char *template, smtpclient_t **smp);
-extern int smtpclient_expect(smtpclient_t *sm, int code, struct buf *resp);
-extern int smtpclient_writebuf(smtpclient_t *sm, struct buf *buf, int flush);
+
+/* Send message data with SMTP envelope env. Data is dot-escaped
+ * before it is written to the SMTP backend. */
+extern int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data);
+extern int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data);
+
+/* Close the SMTP client and free its memory */
 extern int smtpclient_close(smtpclient_t **smp);
+
+/* Add the AUTH=userid parameter to MAIL FROM commands, if the
+ * SMTP backend advertised support for the RFC 4954 AUTH extension.
+ *
+ * An AUTH paremeter in the SMTP envelope of the smtpclient_send
+ * function overrides this value, regardless of advertised extensions.
+ *
+ * Setting this to NULL resets userid. */
+extern void smtpclient_set_auth(smtpclient_t *sm, const char *userid);
+
+/* Add the NOTIFY=value parameter to RCPT TO commands, if the
+ * SMTP backend advertised support for the RFC 3461 DSN extension.
+ *
+ * A NOTIFY paremeter in the SMTP envelope of the smtpclient_send
+ * function overrides this value, regardless of advertised extensions.
+ *
+ * Setting this to NULL resets the value. */
+extern void smtpclient_set_notify(smtpclient_t *sm, const char *value);
+
+/* Return the argument string of SMTP extension 'name' as returned
+ * in response to the EHLO command, excluding the extension name.
+ * This may be the empty string.
+ * Return NULL if the extension is not supported. */
+extern const char *smtpclient_has_ext(smtpclient_t *sm, const char *name);
+
+
+
 
 #endif
