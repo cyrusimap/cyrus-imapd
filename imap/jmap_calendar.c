@@ -1590,10 +1590,28 @@ static int setcalendarevents_create(jmap_req_t *req,
         return 0;
     }
 
-    /* Determine mailbox and resource name of calendar event. */
+    /* Determine mailbox and resource name of calendar event.
+     * We attempt to reuse the UID as DAV resource name; but
+     * only if it looks like a reasonable URL path segment. */
     struct buf buf = BUF_INITIALIZER;
     mboxname = caldav_mboxname(req->accountid, calendarId);
-    buf_printf(&buf, "%s.ics", uid);
+    const char *p;
+    for (p = uid; *p; p++) {
+        if ((*p >= '0' && *p <= '9') ||
+            (*p >= 'a' && *p <= 'z') ||
+            (*p >= 'A' && *p <= 'Z') ||
+            (*p == '@' || *p == '.') ||
+            (*p == '_' || *p == '-')) {
+            continue;
+        }
+        break;
+    }
+    if (*p == '\0' && p - uid >= 16 && p - uid <= 200) {
+        buf_setcstr(&buf, uid);
+    } else {
+        buf_setcstr(&buf, makeuuid());
+    }
+    buf_appendcstr(&buf, ".ics");
     resource = buf_newcstring(&buf);
     buf_free(&buf);
 
@@ -1666,7 +1684,10 @@ static int setcalendarevents_create(jmap_req_t *req,
     *uidptr = uid;
 
 done:
-    if (r) free(uid);
+    if (r) {
+        *uidptr = NULL;
+        free(uid);
+    }
     if (mbox) mailbox_close(&mbox);
     if (ical) icalcomponent_free(ical);
     free(schedule_address);
