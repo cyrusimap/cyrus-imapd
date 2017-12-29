@@ -48,6 +48,7 @@ use Mail::JMAPTalk 0.10;
 use Data::Dumper;
 use Storable 'dclone';
 use Cwd qw(abs_path);
+use File::Basename;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -3358,5 +3359,56 @@ sub test_misc_timezone_expansion
     my $rrulecount = () = $1 =~ /RRULE/gi;
     $self->assert_num_equals(2, $rrulecount);
 }
+
+sub test_calendarevent_set_uid
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    # An empty UID generates a random uid.
+    my $ret = $self->createandget_event($event);
+    my($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
+    $self->assert_not_null($ret->{id});
+    $self->assert_str_equals($ret->{id}, $ret->{uid});
+    $self->assert_str_equals($ret->{id}, $filename);
+
+    # A sane UID maps to both the JMAP id and the DAV resource.
+    $event->{uid} = "458912982-some_UID";
+    delete $event->{id};
+    $ret = $self->createandget_event($event);
+    ($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
+    $self->assert_str_equals($event->{uid}, $filename);
+    $self->assert_str_equals($event->{uid}, $ret->{id});
+
+    # A non-pathsafe UID maps to the JMAP id but not the DAV resource.
+    $event->{uid} = "a/bogus/path#uid";
+    delete $event->{id};
+    $ret = $self->createandget_event($event);
+    ($filename, $dirs, $suffix) = fileparse($ret->{"x-href"}, ".ics");
+    $self->assert_not_null($filename);
+    $self->assert_str_not_equals($event->{uid}, $filename);
+    $self->assert_str_equals($event->{uid}, $ret->{id});
+}
+
 
 1;
