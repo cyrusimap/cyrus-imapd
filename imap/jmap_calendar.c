@@ -2066,9 +2066,12 @@ static int setCalendarEvents(struct jmap_req *req)
             json_t *invalid = json_pack("[]");
             r = setcalendarevents_create(req, arg, db, &uid, invalid);
             if (r) {
-                json_decref(invalid);
+                json_t *err = json_pack("{s:s, s:o}",
+                        "type", "internalError", "message", error_message(r));
+                json_object_set_new(notCreated, key, err);
+                r = 0;
                 free(uid);
-                goto done;
+                continue;
             }
             if (json_array_size(invalid)) {
                 json_t *err = json_pack("{s:s, s:o}",
