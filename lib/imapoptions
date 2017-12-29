@@ -1584,8 +1584,8 @@ And the notification message will be available on \fIstdin\fR.
 /* The pathname of the partition \fIname\fR.  At least one partition
    pathname MUST be specified.  If the \fBdefaultpartition\fR option is
    used, then its pathname MUST be specified.  For example, if the
-   value of the \fBdefaultpartion\fR option is \fBdefault\fR, then the
-   \fBpartition-default\fR field is required. */
+   value of the \fBdefaultpartion\fR option is \fBpart1\fR, then the
+   \fBpartition-part1\fR field is required. */
 
 { "outbox_sendlater", 0, SWITCH }
 /* If enabled, any message with a \Draft flag will be sent at the time of its INTERNALDATE */
@@ -1992,7 +1992,7 @@ If all partitions are over that limit, this feature is not used anymore.
 .PP
    For example: if \fIdefaultpartition\fR is defined as part1 and
    \fIdefaultsearchtier\fR as tier1 then the configuration must contain
-   an entry \fItier1partitionname-part1\fR that defines the path where to
+   an entry \fItier1searchpartition-part1\fR that defines the path where to
    store this tier1's search index for the part1 partition.
 .PP
    This option MUST be specified for xapian search. */
@@ -2061,7 +2061,7 @@ If all backends are over that limit, this feature is not used anymore.
 { "serverinfo", "on", ENUM("off", "min", "on") }
 /* The server information to display in the greeting and capability
    responses. Information is displayed as follows:
-   
+
 .IP
    "off" = no server information in the greeting or capabilities
 .br
@@ -2545,7 +2545,7 @@ product version in the capabilities
 
 { "object_storage_dummy_spool", NULL, STRING }
 /* Dummy object storage spool; this is for test only.
-   Spool where user directory (container) will be created to store all emails 
+   Spool where user directory (container) will be created to store all emails
    in a flat structure  */
 
 { "openio_namespace", NULL, STRING }
@@ -2582,7 +2582,7 @@ product version in the capabilities
 { "caringo_hostname", NULL, STRING }
 /* The Caringo hostname used to store archived email messages. A hostname
    identifies the physical platform cyrus must contact. This directive is used
-   by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP) 
+   by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP)
    on HTTP 1.1 using a RESTful architecture  */
 
 { "caringo_port", 80, INT }

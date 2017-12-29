@@ -4,13 +4,10 @@
 Mail Spool Partitions
 =====================
 
-A mail spool is divided in partitions. The partition Cyrus IMAP ships
-with by default is called ``default``.
-
-Partitions can give you the opportunity to tier your storage, and/or use
-multiple filesystems to apply restrictions to information (contained
-within mailboxes), such as the absolute maximum quantity of storage
-used.
+A mail spool is divided in partitions. Partitions can give you the
+opportunity to tier your storage, and/or use multiple filesystems to
+apply restrictions to information (contained within mailboxes), such as
+the absolute maximum quantity of storage used.
 
 .. seealso::
 
