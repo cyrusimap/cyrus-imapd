@@ -1898,9 +1898,9 @@ If all partitions are over that limit, this feature is not used anymore.
    no stopwords will be taken into account during search indexing. Currently,
    the only supported and default stop word file is english.list. */
 
-# Commented out - there's no such thing as "searchtierpartition-name",
+# Commented out - there's no such thing as "searchpartition-name",
 # but we need this for the man page
-# { "searchtierpartition-name", NULL, STRING }
+# { "searchpartition-name", NULL, STRING }
 /* The pathname where to store the xapian search indexes of \fIsearchtier\fR
    for mailboxes of partition \fIname\fR. This must be configured for the
    \fIdefaultsearchtier\fR and any additional search tier (see squatter for
