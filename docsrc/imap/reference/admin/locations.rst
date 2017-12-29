@@ -159,7 +159,7 @@ settings for search tiers:
         :end-before: endblob defaultsearchtier
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob searchtierpartition-name
-        :end-before: endblob searchtierpartition-name
+        :start-after: startblob searchpartition-name
+        :end-before: endblob searchpartition-name
 
 Back to :ref:`imap-admin`
