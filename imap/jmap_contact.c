@@ -2663,6 +2663,7 @@ static int _json_to_card(const char *uid,
     json_t *jval;
     struct vparse_entry *n = vparse_get_entry(card, NULL, "N");
     int name_is_dirty = 0;
+    int has_noncontent = 0;
     int record_is_dirty = 0;
 
     /* we'll be updating you later anyway... create early so that it's
@@ -2681,6 +2682,7 @@ static int _json_to_card(const char *uid,
 
     json_object_foreach(arg, key, jval) {
         if (!strcmp(key, "isFlagged")) {
+            has_noncontent = 1;
             if (json_is_true(jval)) {
                 strarray_add_case(flags, "\\Flagged");
             } else if (json_is_false(jval)) {
@@ -2691,6 +2693,7 @@ static int _json_to_card(const char *uid,
             }
         }
         else if (!strcmp(key, "x-importance")) {
+            has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
             const char *attrib = "value.shared";
@@ -2849,7 +2852,7 @@ static int _json_to_card(const char *uid,
         record_is_dirty = 1;
     }
 
-    if (!record_is_dirty)
+    if (!record_is_dirty && has_noncontent)
         return 204;  /* no content */
 
     return 0;
