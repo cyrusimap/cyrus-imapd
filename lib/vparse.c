@@ -1022,7 +1022,7 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
         } else {
             free(entry->v.value);
         }
-        entry->v.value = xstrdupnull(name);
+        entry->v.value = xstrdupnull(value);
         entry->multivaluesep = '\0';
     }
     else {
