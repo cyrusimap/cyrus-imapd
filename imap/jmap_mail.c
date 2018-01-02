@@ -147,12 +147,12 @@ jmap_method_t jmap_mail_methods[] = {
 /* NULL terminated list of supported getEmailsList sort fields */
 static const char *msglist_sortfields[];
 
-int jmap_mail_init(ptrarray_t *methods, json_t *capabilities)
+int jmap_mail_init(hash_table *methods, json_t *capabilities)
 {
-	jmap_method_t *mp;
-	for (mp = jmap_mail_methods; mp->name; mp++) {
-		ptrarray_append(methods, mp);
-	}
+    jmap_method_t *mp;
+    for (mp = jmap_mail_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, methods);
+    }
 
     json_t *sortopts = json_array();
     const char **sp;

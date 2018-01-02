@@ -89,12 +89,12 @@ jmap_method_t jmap_contact_methods[] = {
     { NULL,                      NULL}
 };
 
-int jmap_contact_init(ptrarray_t *methods, json_t *capabilities __attribute__((unused)))
+int jmap_contact_init(hash_table *methods, json_t *capabilities __attribute__((unused)))
 {
-	jmap_method_t *mp;
-	for (mp = jmap_contact_methods; mp->name; mp++) {
-		ptrarray_append(methods, mp);
-	}
+    jmap_method_t *mp;
+    for (mp = jmap_contact_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, methods);
+    }
     return 0;
 }
 

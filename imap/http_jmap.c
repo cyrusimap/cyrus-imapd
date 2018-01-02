@@ -203,24 +203,11 @@ static int jmap_parse_path(struct transaction_t *txn)
     return 0;
 }
 
-static ptrarray_t jmap_methods = PTRARRAY_INITIALIZER;
+static hash_table jmap_methods = HASH_TABLE_INITIALIZER;
 
 static jmap_method_t *find_methodproc(const char *name)
 {
-    jmap_method_t *mp = NULL;
-    int i;
-
-    for (i = 0; i < jmap_methods.count; i++) {
-        mp = (jmap_method_t*) ptrarray_nth(&jmap_methods, i);
-        if (!strcmp(mp->name, name)) {
-            break;
-        }
-    }
-    if (i == jmap_methods.count) {
-        mp = NULL;
-    }
-
-    return mp;
+    return hash_lookup(name, &jmap_methods);
 }
 
 struct mymblist_rock {
@@ -312,6 +299,8 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
         "maxObjectsInSet", 0,
         "collationAlgorithms", json_array()
     );
+
+    construct_hash_table(&jmap_methods, 128, 0);
 
     jmap_mail_init(&jmap_methods, jmap_capabilities);
     jmap_contact_init(&jmap_methods, jmap_capabilities);

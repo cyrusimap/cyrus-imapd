@@ -88,9 +88,9 @@ typedef struct {
 } jmap_method_t;
 
 /* Protocol implementations */
-extern int jmap_mail_init(ptrarray_t *methods, json_t *capabilities);
-extern int jmap_contact_init(ptrarray_t *methods, json_t *capabilities);
-extern int jmap_calendar_init(ptrarray_t *methods, json_t *capabilities);
+extern int jmap_mail_init(hash_table *methods, json_t *capabilities);
+extern int jmap_contact_init(hash_table *methods, json_t *capabilities);
+extern int jmap_calendar_init(hash_table *methods, json_t *capabilities);
 
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,
