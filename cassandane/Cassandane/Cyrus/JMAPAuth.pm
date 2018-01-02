@@ -63,7 +63,7 @@ sub new
 }
 
 sub test_login
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -118,7 +118,7 @@ sub test_login
 }
 
 sub test_revoke
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -165,7 +165,7 @@ sub test_revoke
 }
 
 sub test_settings
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -202,7 +202,7 @@ sub test_settings
 }
 
 sub test_login_wrongpass
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
@@ -232,7 +232,7 @@ sub test_login_wrongpass
 }
 
 sub test_multiple_accounts
-    :JMAP :min_version_3_0
+    :JMAP :min_version_3_1
 {
     my ($self) = @_;
 
