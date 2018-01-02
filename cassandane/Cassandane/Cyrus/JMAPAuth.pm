@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.07;
+use Mail::JMAPTalk 0.10;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -130,7 +130,7 @@ sub test_revoke
     my $Response;
 
     xlog "send some JMAP request";
-    $Response = $jmap->Request([['Mailbox/get', {}, "R1"]]);
+    $Response = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_str_equals($Response->[0][0], 'Mailbox/get');
 
     xlog "revoke access token";
