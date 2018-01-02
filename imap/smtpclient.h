@@ -43,11 +43,6 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
-pid_t open_sendmail(const char *userid, const char *argv[], FILE **sm);
-char *sendmail_errstr(int sm_stat);
-
-/* New API */
-
 /* A parameter for SMTP envelope address, identified by key.
  * The value val may be NULL. */
 typedef struct {

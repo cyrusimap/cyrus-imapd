@@ -264,15 +264,14 @@ static int imip_send_sendmail(icalcomponent *ical,
     icalproperty_method meth;
     icalcomponent_kind kind;
     const char *uid, *summary, *location, *descrip, *status;
-    const char *argv[7], *msg_type, *filename;
+    const char *msg_type, *filename;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
     char *cp, when[2*RFC5322_DATETIME_MAX+4], datestr[RFC5322_DATETIME_MAX+1];
     char boundary[100], *mimebody, *ical_str;
     size_t outlen;
-    struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER;
-    FILE *sm;
-    pid_t sm_pid, p = getpid();
+    struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER, msgbuf = BUF_INITIALIZER;
+    pid_t p = getpid();
     time_t t = time(NULL);
     static unsigned send_count = 0;
     const char *day_of_week[] = {
@@ -326,23 +325,6 @@ static int imip_send_sendmail(icalcomponent *ical,
         }
     }
 
-    argv[0] = "sendmail";
-    argv[1] = "-f";
-    argv[2] = originator->addr;
-    argv[3] = "-t";             /* get recipients from body */
-    argv[4] = "-N";             /* notify on failure or delay */
-    argv[5] = "failure,delay";
-    argv[6] = NULL;
-
-    sm_pid = open_sendmail(httpd_userid, argv, &sm);
-
-    if (sm == NULL) {
-        syslog(LOG_ERR,
-               "imip_send_sendmail(%s): failed to fork sendmail", recipient);
-        r = HTTP_UNAVAILABLE;
-        goto done;
-    }
-
     /* Get other useful properties/values */
     summary = icalcomponent_get_summary(comp);
     location = icalcomponent_get_location(comp);
@@ -382,61 +364,61 @@ static int imip_send_sendmail(icalcomponent *ical,
     }
 
     /* Create multipart/mixed + multipart/alternative iMIP message */
-    fprintf(sm, "From: %s <%s>\r\n",
+    buf_printf(&msgbuf, "From: %s <%s>\r\n",
             originator->qpname ? originator->qpname : "", originator->addr);
 
     for (recip = recipients; recip; recip = recip->next) {
         if (strcmp(recip->addr, originator->addr) &&
             (!recipient || !strcasecmp(recip->addr, recipient))) {
-            fprintf(sm, "To: %s <%s>\r\n",
+            buf_printf(&msgbuf, "To: %s <%s>\r\n",
                     recip->qpname ? recip->qpname : "", recip->addr);
         }
     }
 
-    fprintf(sm, "Subject: %s: ", filename);
+    buf_printf(&msgbuf, "Subject: %s: ", filename);
     if (summary) {
         char *mimehdr = charset_encode_mimeheader(summary, 0);
-        fputs(mimehdr, sm);
+        buf_appendcstr(&msgbuf, mimehdr);
         free(mimehdr);
     }
     else {
-        fputs(icalcomponent_kind_to_string(kind), sm);
+        buf_appendcstr(&msgbuf, icalcomponent_kind_to_string(kind));
     }
-    fputs("\r\n", sm);
+    buf_appendcstr(&msgbuf, "\r\n");
 
     time_to_rfc5322(t, datestr, sizeof(datestr));
-    fprintf(sm, "Date: %s\r\n", datestr);
+    buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
-    fprintf(sm, "Message-ID: <cyrus-caldav-%u-%ld-%u@%s>\r\n",
+    buf_printf(&msgbuf, "Message-ID: <cyrus-caldav-%u-%ld-%u@%s>\r\n",
             p, t, send_count++, config_servername);
 
     /* Create multipart boundary */
     snprintf(boundary, sizeof(boundary), "%s=_%ld=_%ld=_%ld",
              config_servername, (long) p, (long) t, (long) rand());
 
-    fprintf(sm, "Content-Type: multipart/mixed;"
+    buf_printf(&msgbuf, "Content-Type: multipart/mixed;"
             "\r\n\tboundary=\"%s_M\"\r\n", boundary);
 
-    fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
+    buf_printf(&msgbuf, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
 
-    fputs("Auto-Submitted: auto-generated\r\n", sm);
-    fputs("MIME-Version: 1.0\r\n", sm);
-    fputs("\r\n", sm);
+    buf_appendcstr(&msgbuf, "Auto-Submitted: auto-generated\r\n");
+    buf_appendcstr(&msgbuf, "MIME-Version: 1.0\r\n");
+    buf_appendcstr(&msgbuf, "\r\n");
 
     /* preamble */
-    fputs("This is a message with multiple parts in MIME format.\r\n", sm);
+    buf_appendcstr(&msgbuf, "This is a message with multiple parts in MIME format.\r\n");
 
     /* multipart/alternative */
-    fprintf(sm, "\r\n--%s_M\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_M\r\n", boundary);
 
-    fprintf(sm, "Content-Type: multipart/alternative;"
+    buf_printf(&msgbuf, "Content-Type: multipart/alternative;"
             "\r\n\tboundary=\"%s_A\"\r\n", boundary);
 
     /* plain text part */
-    fprintf(sm, "\r\n--%s_A\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_A\r\n", boundary);
 
-    fputs("Content-Type: text/plain; charset=utf-8\r\n", sm);
-    fputs("Content-Disposition: inline\r\n", sm);
+    buf_appendcstr(&msgbuf, "Content-Type: text/plain; charset=utf-8\r\n");
+    buf_appendcstr(&msgbuf, "Content-Disposition: inline\r\n");
 
     buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
                originator->name ? originator->name : "", originator->addr);
@@ -478,22 +460,22 @@ static int imip_send_sendmail(icalcomponent *ical,
                                          buf_len(&plainbuf), &outlen);
 
     if (outlen > buf_len(&plainbuf)) {
-        fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
+        buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: quoted-printable\r\n");
     }
-    fputs("\r\n", sm);
+    buf_appendcstr(&msgbuf, "\r\n");
 
-    fwrite(mimebody, outlen, 1, sm);
+    buf_appendmap(&msgbuf, mimebody, outlen);
     free(mimebody);
     buf_free(&plainbuf);
 
     /* HTML part */
-    fprintf(sm, "\r\n--%s_A\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_A\r\n", boundary);
 
-    fprintf(sm, "Content-Type: text/html; charset=utf-8\r\n");
-    fputs("Content-Disposition: inline\r\n", sm);
-    fputs("\r\n", sm);
+    buf_printf(&msgbuf, "Content-Type: text/html; charset=utf-8\r\n");
+    buf_appendcstr(&msgbuf, "Content-Disposition: inline\r\n");
+    buf_appendcstr(&msgbuf, "\r\n");
 
-    fputs(HTML_DOCTYPE "\r\n<html><head><title></title></head><body>\r\n", sm);
+    buf_appendcstr(&msgbuf, HTML_DOCTYPE "\r\n<html><head><title></title></head><body>\r\n");
 
     if (originator->name) {
         HTMLencode(&tmpbuf, originator->name);
@@ -501,28 +483,28 @@ static int imip_send_sendmail(icalcomponent *ical,
     }
     else originator->name = originator->addr;
 
-    fprintf(sm, "<b>You have received %s from"
+    buf_printf(&msgbuf, "<b>You have received %s from"
             " <a href=\"mailto:%s\">%s</a></b><p>\r\n",
             msg_type, originator->addr, originator->name);
 
-    fputs("<table border cellpadding=5>\r\n", sm);
+    buf_appendcstr(&msgbuf, "<table border cellpadding=5>\r\n");
     if (summary) {
         HTMLencode(&tmpbuf, summary);
-        fprintf(sm, HTML_ROW, "Summary", buf_cstring(&tmpbuf));
+        buf_printf(&msgbuf, HTML_ROW, "Summary", buf_cstring(&tmpbuf));
     }
     if (location) {
         HTMLencode(&tmpbuf, location);
-        fprintf(sm, HTML_ROW, "Location", buf_cstring(&tmpbuf));
+        buf_printf(&msgbuf, HTML_ROW, "Location", buf_cstring(&tmpbuf));
     }
-    fprintf(sm, HTML_ROW, "When", when);
+    buf_printf(&msgbuf, HTML_ROW, "When", when);
     if (meth == ICAL_METHOD_REPLY) {
         if (originator->partstat)
-            fprintf(sm, HTML_ROW, "RSVP", originator->partstat);
+            buf_printf(&msgbuf, HTML_ROW, "RSVP", originator->partstat);
     }
     else {
-        if (status) fprintf(sm, HTML_ROW, "Status", status);
+        if (status) buf_printf(&msgbuf, HTML_ROW, "Status", status);
 
-        fputs("<tr><td><b>Attendees</b></td>", sm);
+        buf_appendcstr(&msgbuf, "<tr><td><b>Attendees</b></td>");
         for (cp = "<td>", recip = recipients; recip; recip = recip->next) {
             if (recip->name) {
                 HTMLencode(&tmpbuf, recip->name);
@@ -530,74 +512,98 @@ static int imip_send_sendmail(icalcomponent *ical,
             }
             else recip->name = recip->addr;
 
-            fprintf(sm, "%s&#8226; <a href=\"mailto:%s\">%s</a>",
+            buf_printf(&msgbuf, "%s&#8226; <a href=\"mailto:%s\">%s</a>",
                     cp, recip->addr, recip->name);
-            if (recip->role) fprintf(sm, " <i>(%s)</i>", recip->role);
+            if (recip->role) buf_printf(&msgbuf, " <i>(%s)</i>", recip->role);
 
             cp = "\n  <br>";
         }
-        fputs("</td></tr>\r\n", sm);
+        buf_appendcstr(&msgbuf, "</td></tr>\r\n");
 
         if (descrip) {
             HTMLencode(&tmpbuf, descrip);
-            fprintf(sm, HTML_ROW, "Description", buf_cstring(&tmpbuf));
+            buf_printf(&msgbuf, HTML_ROW, "Description", buf_cstring(&tmpbuf));
         }
     }
-    fprintf(sm, "</table></body></html>\r\n");
+    buf_printf(&msgbuf, "</table></body></html>\r\n");
 
     /* iCalendar part */
-    fprintf(sm, "\r\n--%s_A\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_A\r\n", boundary);
 
-    fprintf(sm, "Content-Type: text/calendar; charset=utf-8");
-    fprintf(sm, "; method=%s; component=%s \r\n",
+    buf_printf(&msgbuf, "Content-Type: text/calendar; charset=utf-8");
+    buf_printf(&msgbuf, "; method=%s; component=%s \r\n",
             icalproperty_method_to_string(meth),
             icalcomponent_kind_to_string(kind));
 
-    fprintf(sm, "Content-ID: <%s@%s>\r\n", uid, config_servername);
+    buf_printf(&msgbuf, "Content-ID: <%s@%s>\r\n", uid, config_servername);
 
     ical_str = icalcomponent_as_ical_string(ical);
     mimebody = charset_qpencode_mimebody(ical_str, strlen(ical_str), &outlen);
 
     if (outlen > strlen(ical_str)) {
-        fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
+        buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: quoted-printable\r\n");
     }
-    fputs("\r\n", sm);
+    buf_appendcstr(&msgbuf, "\r\n");
 
-    fwrite(mimebody, outlen, 1, sm);
+    buf_appendmap(&msgbuf, mimebody, outlen);
     free(mimebody);
 
     /* end boundary (alternative) */
-    fprintf(sm, "\r\n--%s_A--\r\n", boundary);
-
+    buf_printf(&msgbuf, "\r\n--%s_A--\r\n", boundary);
 
     /* application/ics part */
-    fprintf(sm, "\r\n--%s_M\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_M\r\n", boundary);
 
-    fprintf(sm,
+    buf_printf(&msgbuf,
             "Content-Type: application/ics; charset=utf-8; name=\"%s.ics\"\r\n",
             filename);
-    fprintf(sm, "Content-Disposition: attachment; filename=\"%s.ics\"\r\n",
+    buf_printf(&msgbuf, "Content-Disposition: attachment; filename=\"%s.ics\"\r\n",
             filename);
-    fputs("Content-Transfer-Encoding: base64\r\n", sm);
-    fputs("\r\n", sm);
+    buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: base64\r\n");
+    buf_appendcstr(&msgbuf, "\r\n");
 
     charset_encode_mimebody(NULL, strlen(ical_str), NULL, &outlen, NULL);
     buf_ensure(&tmpbuf, outlen);
     charset_encode_mimebody(ical_str, strlen(ical_str),
                             (char *) buf_base(&tmpbuf), &outlen, NULL);
-    fwrite(buf_base(&tmpbuf), outlen, 1, sm);
+    buf_appendmap(&msgbuf, buf_base(&tmpbuf), outlen);
 
     /* end boundary (mixed) and epilogue */
-    fprintf(sm, "\r\n--%s_M--\r\n\r\nEnd of MIME multipart body.\r\n", boundary);
+    buf_printf(&msgbuf, "\r\n--%s_M--\r\n\r\nEnd of MIME multipart body.\r\n", boundary);
 
-    fclose(sm);
+    /* Open SMTP connection */
+    smtpclient_t *sm = NULL;
+    r = smtpclient_open(&sm);
+    if (r) {
+        syslog(LOG_ERR,
+               "imip_send_sendmail(%s): failed to open SMTP client", recipient);
+        r = HTTP_UNAVAILABLE;
+        goto done;
+    }
+    smtpclient_set_auth(sm, httpd_userid);
+    smtpclient_set_notify(sm, "FAILURE,DELAY");
 
-    while (waitpid(sm_pid, &r, 0) < 0);
+    /* Set SMTP envelope */
+    smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
+    smtp_envelope_set_from(&sm_env, originator->addr);
+    for (recip = recipients; recip; recip = recip->next) {
+        if (strcmp(recip->addr, originator->addr) &&
+            (!recipient || !strcasecmp(recip->addr, recipient))) {
+            smtp_envelope_add_rcpt(&sm_env, recip->addr);
+        }
+    }
 
+    /* Send message */
+    r = smtpclient_send(sm, &sm_env, &msgbuf);
     syslog(LOG_INFO,
-           "imip_send_sendmail(%s): %s", recipient, sendmail_errstr(r));
+           "imip_send_sendmail(%s): %s", recipient, error_message(r));
+    smtp_envelope_fini(&sm_env);
+
+    int r2 = smtpclient_close(&sm);
+    if (!r) r = r2;
 
   done:
+    buf_free(&msgbuf);
     buf_free(&tmpbuf);
     free(originator->qpname);
     free(originator);

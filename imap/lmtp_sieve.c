@@ -398,27 +398,21 @@ static int send_rejection(const char *userid,
                           const char *reason,
                           struct protstream *file)
 {
-    FILE *sm;
-    const char *smbuf[10];
     char buf[8192], *namebuf;
-    int i, sm_stat;
+    int i, r = 0;
     time_t t;
     char datestr[RFC5322_DATETIME_MAX+1];
-    pid_t sm_pid, p;
+    pid_t p;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    struct buf msgbuf = BUF_INITIALIZER;
+    smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
+    smtpclient_t *sm = NULL;
 
-    smbuf[0] = "sendmail";
-    smbuf[1] = "-i";            /* ignore dots */
-    smbuf[2] = "-f";
-    smbuf[3] = "<>";
-    smbuf[4] = "--";
-    smbuf[5] = rejto;
-    smbuf[6] = NULL;
-    sm_pid = open_sendmail(userid, smbuf, &sm);
-    if (sm == NULL) {
-        return -1;
-    }
+    /* Initialize SMTP envelope */
+    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_add_rcpt(&sm_env, rejto);
 
+    /* Build message */
     t = time(NULL);
     p = getpid();
     snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", (int) p, (int) t,
@@ -433,60 +427,72 @@ static int send_rejection(const char *userid,
     dkey.date = datestr;
     duplicate_mark(&dkey, t, 0);
 
-    fprintf(sm, "Message-ID: %s\r\n", buf);
-    fprintf(sm, "Date: %s\r\n", datestr);
+    buf_printf(&msgbuf, "Message-ID: %s\r\n", buf);
+    buf_printf(&msgbuf, "Date: %s\r\n", datestr);
 
-    fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n",
+    buf_printf(&msgbuf, "X-Sieve: %s\r\n", SIEVE_VERSION);
+    buf_printf(&msgbuf, "From: Mail Sieve Subsystem <%s>\r\n",
             config_getstring(IMAPOPT_POSTMASTER));
-    fprintf(sm, "To: <%s>\r\n", rejto);
-    fprintf(sm, "MIME-Version: 1.0\r\n");
-    fprintf(sm, "Content-Type: "
+    buf_printf(&msgbuf, "To: <%s>\r\n", rejto);
+    buf_printf(&msgbuf, "MIME-Version: 1.0\r\n");
+    buf_printf(&msgbuf, "Content-Type: "
             "multipart/report; report-type=disposition-notification;"
             "\r\n\tboundary=\"%d/%s\"\r\n", (int) p, config_servername);
-    fprintf(sm, "Subject: Automatically rejected mail\r\n");
-    fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
-    fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
+    buf_printf(&msgbuf, "Subject: Automatically rejected mail\r\n");
+    buf_printf(&msgbuf, "Auto-Submitted: auto-replied (rejected)\r\n");
+    buf_printf(&msgbuf, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\r\n", (int) p, config_servername);
-    fprintf(sm, "Content-Type: text/plain; charset=utf-8\r\n");
-    fprintf(sm, "Content-Disposition: inline\r\n");
-    fprintf(sm, "Content-Transfer-Encoding: 8bit\r\n\r\n");
+    buf_printf(&msgbuf, "--%d/%s\r\n", (int) p, config_servername);
+    buf_printf(&msgbuf, "Content-Type: text/plain; charset=utf-8\r\n");
+    buf_printf(&msgbuf, "Content-Disposition: inline\r\n");
+    buf_printf(&msgbuf, "Content-Transfer-Encoding: 8bit\r\n\r\n");
 
-    fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
+    buf_printf(&msgbuf, "Your message was automatically rejected by Sieve, a mail\r\n"
             "filtering language.\r\n\r\n");
-    fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
+    buf_printf(&msgbuf, "The following reason was given:\r\n%s\r\n\r\n", reason);
 
     /* this is the MDN status report */
-    fprintf(sm, "--%d/%s\r\n"
+    buf_printf(&msgbuf, "--%d/%s\r\n"
             "Content-Type: message/disposition-notification\r\n\r\n",
             (int) p, config_servername);
-    fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
+    buf_printf(&msgbuf, "Reporting-UA: %s; Cyrus %s/%s\r\n",
             config_servername, CYRUS_VERSION, SIEVE_VERSION);
     if (origreceip)
-        fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
-    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+        buf_printf(&msgbuf, "Original-Recipient: rfc822; %s\r\n", origreceip);
+    buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", mailreceip);
     if (origid)
-        fprintf(sm, "Original-Message-ID: %s\r\n", origid);
-    fprintf(sm, "Disposition: "
+        buf_printf(&msgbuf, "Original-Message-ID: %s\r\n", origid);
+    buf_printf(&msgbuf, "Disposition: "
             "automatic-action/MDN-sent-automatically; deleted\r\n");
-    fprintf(sm, "\r\n");
+    buf_printf(&msgbuf, "\r\n");
 
     /* this is the original message */
-    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
+    buf_printf(&msgbuf, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
             (int) p, config_servername);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
-        fwrite(buf, i, 1, sm);
+        buf_appendmap(&msgbuf, buf, i);
     }
-    fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s--\r\n", (int) p, config_servername);
+    buf_printf(&msgbuf, "\r\n\r\n");
+    buf_printf(&msgbuf, "--%d/%s--\r\n", (int) p, config_servername);
 
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
+    /* Send the mail */
+    sm = NULL;
+    r = smtpclient_open(&sm);
+    if (!r) {
+        smtpclient_set_auth(sm, userid);
+        r = smtpclient_send(sm, &sm_env, &msgbuf);
+    }
+    if (r) {
+        syslog(LOG_ERR, "sieve: send_rejection: SMTP error: %s",
+                error_message(r));
+    }
+    smtpclient_close(&sm);
 
-    return sm_stat;     /* sendmail exit value */
+    smtp_envelope_fini(&sm_env);
+    buf_free(&msgbuf);
+    return r;
 }
 
 #ifdef USE_SRS
@@ -691,14 +697,14 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
 
 static int list_addresses(void *rock, struct carddav_data *cdata)
 {
-    strarray_t *smbuf = (strarray_t *) rock;
+    smtp_envelope_t *sm_env = rock;
     int i;
 
     /* XXX  Lookup up emails for vcard */
     if (!cdata->emails) return 0;
     for (i = 0; i < strarray_size(cdata->emails); i++) {
         /* Find preferred address */
-        strarray_append(smbuf, strarray_nth(cdata->emails, i));
+        smtp_envelope_add_rcpt(sm_env, strarray_nth(cdata->emails, i));
     }
 
     return 0;
@@ -710,25 +716,25 @@ static int send_forward(sieve_redirect_context_t *rc,
                         char *return_path,
                         struct protstream *file)
 {
-    FILE *sm;
-    strarray_t smbuf = STRARRAY_INITIALIZER;
-    int sm_stat;
+    int r = SIEVE_FAIL;
     char buf[1024];
-    pid_t sm_pid;
     int body = 0, skip;
     char *srs_return_path = NULL;
+    smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
+    struct buf msgbuf = BUF_INITIALIZER;
+    smtpclient_t *sm = NULL;
 
-    /* build argv[] for sendmail */
-    strarray_append(&smbuf, "sendmail");
-    strarray_append(&smbuf, "-i");            /* ignore dots */
-
-    strarray_append(&smbuf, "-f");
     srs_return_path = sieve_srs_forward(return_path);
-    if (srs_return_path) strarray_append(&smbuf, srs_return_path);
-    else if (return_path && *return_path) strarray_append(&smbuf, return_path);
-    else strarray_append(&smbuf, "<>");
+    if (srs_return_path) {
+        smtp_envelope_set_from(&sm_env, srs_return_path);
+    }
+    else if (return_path && *return_path) {
+        smtp_envelope_set_from(&sm_env, return_path);
+    }
+    else {
+        smtp_envelope_set_from(&sm_env, "<>");
+    }
 
-    strarray_append(&smbuf, "--");
     if (rc->is_ext_list) {
 #ifdef WITH_DAV
         char *abook = get_addrbook_mboxname(rc->addr, ctx->userid);
@@ -738,23 +744,21 @@ static int send_forward(sieve_redirect_context_t *rc,
             ctx->carddavdb = carddav_open_userid(ctx->userid);
         }
         if (!(abook && ctx->carddavdb)) {
-            strarray_fini(&smbuf);
-            return SIEVE_FAIL;
+            r = SIEVE_FAIL;
+            goto done;
         }
-        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &smbuf); 
+        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &sm_env); 
         free(abook);
 #endif
     }
-    else strarray_append(&smbuf, rc->addr);
-    strarray_appendm(&smbuf, NULL);
-
-    sm_pid = open_sendmail(ctx->userid, (const char **) smbuf.data, &sm);
-    strarray_fini(&smbuf);
+    else {
+        smtp_envelope_add_rcpt(&sm_env, rc->addr);
+    }
 
     if (srs_return_path) free(srs_return_path);
 
-    if (sm == NULL) {
-        return -1;
+    if (r) {
+        goto done;
     }
 
     prot_rewind(file);
@@ -773,15 +777,22 @@ static int send_forward(sieve_redirect_context_t *rc,
         }
 
         do {
-            if (!skip) fwrite(buf, strlen(buf), 1, sm);
+            if (!skip) buf_appendcstr(&msgbuf, buf);
         } while (buf[strlen(buf)-1] != '\n' &&
                  prot_fgets(buf, sizeof(buf), file));
     }
 
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
+    r = smtpclient_open(&sm);
+    if (r) goto done;
 
-    return sm_stat;     /* sendmail exit value */
+    smtpclient_set_auth(sm, ctx->userid);
+    r = smtpclient_send(sm, &sm_env, &msgbuf);
+    smtpclient_close(&sm);
+
+done:
+    smtp_envelope_fini(&sm_env);
+    buf_free(&msgbuf);
+    return r;
 }
 
 
@@ -839,7 +850,7 @@ static int sieve_redirect(void *ac, void *ic,
         if (res == -1) {
             *errmsg = "Could not spawn sendmail process";
         } else {
-            *errmsg = sendmail_errstr(res);
+            *errmsg = error_message(res);
         }
         return SIEVE_FAIL;
     }
@@ -953,7 +964,7 @@ static int sieve_reject(void *ac, void *ic,
         if (res == -1) {
             *errmsg = "Could not spawn sendmail process";
         } else {
-            *errmsg = sendmail_errstr(res);
+            *errmsg = error_message(res);
         }
         return SIEVE_FAIL;
     }
@@ -1320,32 +1331,23 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
 static int send_response(void *ac, void *ic,
                          void *sc, void *mc, const char **errmsg)
 {
-    FILE *sm;
-    const char *smbuf[10];
     char outmsgid[8192], *sievedb, *subj;
-    int i, sl, sm_stat, ret;
+    int i, sl, ret, r;
     time_t t;
     char datestr[RFC5322_DATETIME_MAX+1];
-    pid_t sm_pid, p;
+    pid_t p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((deliver_data_t *) mc)->m;
     script_data_t *sdata = (script_data_t *) sc;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     struct buf header = BUF_INITIALIZER, footer = BUF_INITIALIZER;
+    struct buf msgbuf = BUF_INITIALIZER;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
+    smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
+    smtpclient_t *sm = NULL;
 
-    smbuf[0] = "sendmail";
-    smbuf[1] = "-i";            /* ignore dots */
-    smbuf[2] = "-f";
-    smbuf[3] = "<>";
-    smbuf[4] = "--";
-    smbuf[5] = src->addr;
-    smbuf[6] = NULL;
-    sm_pid = open_sendmail(ctx->userid, smbuf, &sm);
-    if (sm == NULL) {
-        *errmsg = "Could not spawn sendmail process";
-        return -1;
-    }
+    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_add_rcpt(&sm_env, src->addr);
 
     t = time(NULL);
     p = getpid();
@@ -1395,13 +1397,18 @@ static int send_response(void *ac, void *ic,
         buf_printf(&footer, "\r\n--%d/%s--\r\n", (int) p, config_servername);
     }
 
-    fprintf(sm, "%s%s%s",
-            buf_cstring(&header), src->msg, buf_cstring(&footer));
+    buf_append(&msgbuf, &header);
+    buf_appendcstr(&msgbuf, src->msg);
+    buf_append(&msgbuf, &footer);
 
-    fclose(sm);
-    while (waitpid(sm_pid, &sm_stat, 0) < 0);
+    r = smtpclient_open(&sm);
+    if (!r) {
+        smtpclient_set_auth(sm, ctx->userid);
+        r = smtpclient_send(sm, &sm_env, &msgbuf);
+    }
+    smtpclient_close(&sm);
 
-    if (sm_stat == 0) { /* sendmail exit value */
+    if (r == 0) {
         sievedb = make_sieve_db(mbname_userid(sdata->mbname));
 
         dkey.id = outmsgid;
@@ -1418,12 +1425,14 @@ static int send_response(void *ac, void *ic,
 
         ret = SIEVE_OK;
     } else {
-        *errmsg = sendmail_errstr(sm_stat);
+        *errmsg = error_message(r);
         ret = SIEVE_FAIL;
     }
 
     buf_free(&header);
     buf_free(&footer);
+    buf_free(&msgbuf);
+    smtp_envelope_fini(&sm_env);
 
     return ret;
 }
