@@ -981,29 +981,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    the same has to be done (cyr_dbtool) for each subscription database
    See improved_mboxlist_sort.html.*/
 
-{ "jmapauth_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
-/* The cyrusdb backend to use for the JMAP authentication database. */
-
-{ "jmapauth_db_path", NULL, STRING }
-/* The absolute path to the JMAP authentication db file.  If not specified,
-   will be confdir/jmapauth.db */
-
-{ "jmapauth_allowsasl", 0, SWITCH }
-/* If enabled, JMAP requests may be authenticated with the enabled
-   SASL auth mechanisms (see sasl_mech_list), including HTTP Basic
-   Authentication (RFC 7617). The default is Bearer only. */
-
-{ "jmapauth_token_ttl", 0, INT }
-/* The maximum idle time of JMAP authentication access tokens in seconds
-   before they expire. Token usage timestamps are only measured within
-   minutes, so tokens are valid until ttl plus 60 seconds have passed.
-   If 0, access tokens never expire. */
-
-{ "jmapauth_loginid_ttl", 300, INT }
-/* The time to live of JMAP login id tokens in seconds. Login id expiry
-   times never refresh, so login attempts must complete successfully
-   within this parameter's time. */
-
 { "jmap_preview_annot", NULL, STRING }
 /* The name of the per-message annotation, if any, to store message
    previews. */

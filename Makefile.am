@@ -231,8 +231,7 @@ BUILT_SOURCES += \
 libexec_PROGRAMS += imap/httpd
 sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
-	imap/dav_reconstruct \
-	imap/ctl_jmapauth
+	imap/dav_reconstruct
 
 endif # HTTPD
 
@@ -637,7 +636,6 @@ cunit_TESTS = \
 	cunit/hash.testc \
 	cunit/imapurl.testc \
 	cunit/imparse.testc \
-	cunit/jmapauth.testc \
 	cunit/libconfig.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
@@ -848,9 +846,6 @@ imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_deliver_SOURCES = imap/cli_fatal.c imap/ctl_deliver.c imap/mutex_fake.c
 imap_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
-
-imap_ctl_jmapauth_SOURCES = imap/cli_fatal.c imap/ctl_jmapauth.c imap/mutex_fake.c
-imap_ctl_jmapauth_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
@@ -1100,8 +1095,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_util.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
-	imap/jmapauth.c \
-	imap/jmapauth.h \
 	imap/vcard_support.c \
 	imap/vcard_support.h \
 	imap/webdav_db.c \

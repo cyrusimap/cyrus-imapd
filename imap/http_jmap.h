@@ -52,8 +52,6 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 
-#include "jmapauth.h"
-
 extern struct namespace jmap_namespace;
 
 struct jmap_idmap {

@@ -72,7 +72,6 @@
 
 #define JMAP_ROOT          "/jmap"
 #define JMAP_BASE_URL      JMAP_ROOT "/"
-#define JMAP_AUTH_COL      "auth/"
 #define JMAP_UPLOAD_COL    "upload/"
 #define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
@@ -87,19 +86,13 @@ static json_t *jmap_capabilities = NULL;
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
-static int jmap_delete(struct transaction_t *txn, void *params);
 
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
-static int  jmap_checkurl(struct transaction_t *txn);
+static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
-static int  jmap_bearer(const char *bearer, char *userbuf, size_t buflen);
 
-/* Authentication handlers */
-static int jmap_authreq(struct transaction_t *txn);
-static int jmap_authdel(struct transaction_t *txn);
-static int jmap_settings(struct transaction_t *txn);
-
+static int  jmap_settings(struct transaction_t *txn);
 static int  jmap_initreq(jmap_req_t *req);
 static void jmap_finireq(jmap_req_t *req);
 
@@ -114,15 +107,15 @@ static int myrights_byname(struct auth_state *authstate,
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, JMAP_ROOT, "/.well-known/jmap",
-    jmap_checkurl, AUTH_BEARER,
+    jmap_need_auth, /*authschemes*/0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
-    &jmap_init, &jmap_auth, NULL, NULL, NULL, &jmap_bearer,
+    &jmap_init, &jmap_auth, NULL, NULL, NULL, /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
         { NULL,                 NULL },                 /* COPY         */
-        { &jmap_delete,         NULL },                 /* DELETE       */
+        { NULL,                 NULL },                 /* DELETE       */
         { &jmap_get,            NULL },                 /* GET          */
         { &jmap_get,            NULL },                 /* HEAD         */
         { NULL,                 NULL },                 /* LOCK         */
@@ -144,7 +137,6 @@ struct namespace_t namespace_jmap = {
 
 enum {
     JMAP_ENDPOINT_API,
-    JMAP_ENDPOINT_AUTH,
     JMAP_ENDPOINT_UPLOAD,
     JMAP_ENDPOINT_DOWNLOAD
 };
@@ -183,11 +175,7 @@ static int jmap_parse_path(struct transaction_t *txn)
         /* Get "collection" */
         tgt->collection = p;
 
-        if (!strcmp(tgt->collection, JMAP_AUTH_COL)) {
-            tgt->flags = JMAP_ENDPOINT_AUTH;
-            tgt->allow = ALLOW_READ | ALLOW_POST | ALLOW_DELETE;
-        }
-        else if (!strncmp(tgt->collection, JMAP_UPLOAD_COL,
+        if (!strncmp(tgt->collection, JMAP_UPLOAD_COL,
                           strlen(JMAP_UPLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_UPLOAD;
             tgt->allow = ALLOW_POST;
@@ -209,7 +197,7 @@ static int jmap_parse_path(struct transaction_t *txn)
     }
     else {
         tgt->flags = JMAP_ENDPOINT_API;
-        tgt->allow = ALLOW_POST;
+        tgt->allow = ALLOW_POST|ALLOW_READ;
     }
 
     return 0;
@@ -309,11 +297,6 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
 
-    jmapauth_init();
-
-    if (config_jmapauth_allowsasl)
-        namespace_jmap.auth_schemes = ~0;
-
     if (!namespace_jmap.enabled) return;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
@@ -344,19 +327,6 @@ static int jmap_auth(const char *userid __attribute__((unused)))
     return 0;
 }
 
-/* Perform a DELETE request */
-static int jmap_delete(struct transaction_t *txn,
-                       void *params __attribute__((unused)))
-{
-    int r = jmap_parse_path(txn);
-
-    if (r || !(txn->req_tgt.allow & ALLOW_DELETE)) {
-        return HTTP_NOT_ALLOWED;
-    }
-
-    return jmap_authdel(txn);
-}
-
 /* Perform a GET/HEAD request */
 static int jmap_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
@@ -367,7 +337,7 @@ static int jmap_get(struct transaction_t *txn,
         return HTTP_NOT_FOUND;
     }
 
-    if (txn->req_tgt.flags == JMAP_ENDPOINT_AUTH) {
+    if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         return jmap_settings(txn);
     }
 
@@ -656,10 +626,6 @@ static int jmap_post(struct transaction_t *txn,
     /* Handle uploads */
     if (txn->req_tgt.flags == JMAP_ENDPOINT_UPLOAD) {
         return jmap_upload(txn);
-    }
-    /* Handle POST to the authentication endpoint */
-    else if (txn->req_tgt.flags == JMAP_ENDPOINT_AUTH) {
-        return jmap_authreq(txn);
     }
 
     /* Regular JMAP POST request */
@@ -1640,38 +1606,10 @@ EXPORTED char *jmap_xhref(const char *mboxname, const char *resource)
     return buf_release(&buf);
 }
 
-static int jmap_checkurl(struct transaction_t *txn)
+static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
 {
-    if (!strcmp(txn->req_line.meth, "POST") && !jmap_parse_path(txn) &&
-        !strcmpnull(txn->req_tgt.collection, JMAP_AUTH_COL)) {
-        return 0;
-    }
+    /* All endpoints require authentication */
     return HTTP_UNAUTHORIZED;
-}
-
-static int check_password(const char *username, const char *password)
-{
-    assert(httpd_saslconn);
-
-    int r = SASL_BADAUTH;
-    char *user, *domain, *extra, *plus, *realuser;
-
-    /* Taken straight out of httpd.c Basic auth */
-    user = xstrdup(username);
-    domain = strchr(user, '@');
-    if (domain) *domain++ = '\0';
-    extra = strchr(user, '%');
-    if (extra) *extra++ = '\0';
-    plus = strchr(user, '+');
-    if (plus) *plus++ = '\0';
-    /* Verify the password */
-    realuser =
-        domain ? strconcat(user, "@", domain, (char *)NULL) : xstrdup(user);
-    r = sasl_checkpass(httpd_saslconn, realuser, strlen(realuser),
-                       password, strlen(password));
-    free(realuser);
-    free(user);
-    return r;
 }
 
 struct findaccounts_data {
@@ -1751,400 +1689,7 @@ static json_t *user_settings(const char *userid)
             "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL);
 }
 
-static int jmap_login(const char *login_id, const char *password,
-                      struct jmapauth_token **tokptr)
-{
-    struct db *db = NULL;
-    struct txn *tid = NULL;
-    int r, ret = 0;
-    struct jmapauth_token *login_tok = NULL;
-    struct jmapauth_token *access_tok = NULL;
-    char *data = NULL;
-    size_t datalen = 0;
-
-    /* Open the token database */
-    login_tok = NULL;
-    r = jmapauth_open(&db, CYRUSDB_CREATE | CYRUSDB_CONVERT, NULL);
-    if (r) {
-        ret = HTTP_GONE;
-        goto done;
-    }
-
-    /* Fetch the token. This fails for corrupt MACs */
-    r = jmapauth_fetch(db, login_id, &login_tok, JMAPAUTH_FETCH_LOCK, &tid);
-    switch (r) {
-        case CYRUSDB_OK:
-            /* Hurray! */
-            break;
-        case CYRUSDB_NOTFOUND:
-        case CYRUSDB_EXISTS:
-            ret = HTTP_GONE;
-            break;
-        default:
-            ret = HTTP_SERVER_ERROR;
-    }
-    if (ret) {
-        goto done;
-    }
-
-    /* Check expiry time */
-    if (jmapauth_is_expired(login_tok)) {
-        ret = HTTP_GONE;
-        goto done;
-    }
-
-    /* Check the password */
-    if (check_password(login_tok->userid, password) != SASL_OK) {
-        /* This *allows* enumeration of sessions! However, we'd rather
-         * allow legit users distinguish if they have submitted an
-         * invalid token or a wrong password. Rate-limit your servers. */
-        ret = HTTP_FORBIDDEN;
-        goto done;
-    }
-
-    /* Create and store the access token */
-    data = xmalloc(login_tok->datalen);
-    datalen = login_tok->datalen;
-    memcpy(data, login_tok->data, login_tok->datalen);
-    access_tok = jmapauth_token_new(login_tok->userid, JMAPAUTH_ACCESS_KIND,
-                                    data, datalen);
-    if (!access_tok) {
-        syslog(LOG_ERR, "JMAP auth: cannot create access token");
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-    r = jmapauth_store(db, access_tok, &tid);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot store access token: %s",
-                cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* Remove the login id */
-    r = jmapauth_delete(db, login_id, &tid);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot delete login id: %s",
-                cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* All done */
-    r = cyrusdb_commit(db, tid);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot commit access token: %s",
-                cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-    tid = NULL;
-
-done:
-    if (tid) cyrusdb_abort(db, tid);
-    r = jmapauth_close(db);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot close db: %s", cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-    }
-    if (!ret) {
-        *tokptr = access_tok;
-    } else {
-        jmapauth_token_free(access_tok);
-    }
-    jmapauth_token_free(login_tok);
-    free(data);
-    return ret;
-}
-
-/* Handle a JMAP auth request */
-static int jmap_authreq(struct transaction_t *txn)
-{
-    int ret = 0, r = 0;
-    json_t *req = NULL;
-
-    /* Parse the JSON request */
-    ret = parse_json_body(txn, &req);
-    if (ret) goto done;
-
-    if (json_object_get(req, "username")) {
-        const char *userid = json_string_value(json_object_get(req, "username"));
-        if (!userid || !strlen(userid)) {
-            txn->error.desc = "Missing username property";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-        const char *client = json_string_value(json_object_get(req, "clientName"));
-        if (!client || !strlen(client)) {
-            txn->error.desc = "Missing clientName property";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-        const char *device = json_string_value(json_object_get(req, "deviceName"));
-        if (!device || !strlen(device)) {
-            txn->error.desc = "Missing deviceName property";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-
-        /* We'll store the payload so make sure it isn't excessive */
-        if (txn->req_body.payload.len > 4096) {
-            ret = HTTP_PAYLOAD_TOO_LARGE;
-            goto done;
-        }
-
-        /* Create a loginId (also for unknown users) */
-        struct jmapauth_token *login_tok = jmapauth_token_new(userid,
-                JMAPAUTH_LOGINID_KIND,
-                txn->req_body.payload.s,
-                txn->req_body.payload.len);
-        if (!login_tok) {
-            syslog(LOG_ERR, "JMAP auth: cannot create login id");
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        /* Store the session (also for unknown users) */
-        struct db *db = NULL;
-        r = jmapauth_open(&db, CYRUSDB_CREATE | CYRUSDB_CONVERT, NULL);
-        if (!r) {
-            r = jmapauth_store(db, login_tok, NULL);
-            if (r) {
-                syslog(LOG_ERR, "JMAP auth: cannot store login id: %s",
-                        cyrusdb_strerror(r));
-                ret = HTTP_SERVER_ERROR;
-                jmapauth_close(db);
-                goto done;
-            }
-            r = jmapauth_close(db);
-            db = NULL;
-        }
-        if (r) {
-            syslog(LOG_ERR, "JMAP auth: cannot open/close db: %s",
-                    cyrusdb_strerror(r));
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        /* Create the response object */
-        char *login_id = jmapauth_tokenid(login_tok);
-        json_t *res = json_pack("{s:s s:[{s:s}] s:n}",
-                "loginId", login_id,
-                "methods", "type", "password",
-                "prompt");
-        free(login_id);
-        jmapauth_token_free(login_tok);
-
-        /* Write the JSON response */
-        char *sbuf = json_dumps(res, 0);
-        if (!sbuf) {
-            txn->error.desc = "Error dumping JSON response object";
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-        txn->resp_body.type = "application/json; charset=utf-8";
-        write_body(HTTP_OK, txn, sbuf, strlen(sbuf));
-        free(sbuf);
-        json_decref(res);
-    }
-    else if (json_object_get(req, "loginId")) {
-        /* Validate request */
-        txn->error.desc = NULL;
-        const char *login_id = json_string_value(json_object_get(req, "loginId"));
-        if (!login_id || !strlen(login_id)) {
-            txn->error.desc = "Missing loginId property";
-        }
-        const char *password = json_string_value(json_object_get(req, "password"));
-        if (!password || !strlen(password)) {
-            txn->error.desc = "Missing password property";
-        }
-        const char *type = json_string_value(json_object_get(req, "type"));
-        if (!type || !strlen(type)) {
-            txn->error.desc = "Missing type property";
-        }
-        if (txn->error.desc) {
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
-
-        /* Reject all but password authentication requests */
-        if (strcmp(type, "password")) {
-            txn->error.desc = "Unsupported auth method";
-            ret = HTTP_GONE;
-            goto done;
-        }
-
-        /* Login user */
-        struct jmapauth_token *access_tok;
-        ret = jmap_login(login_id, password, &access_tok);
-        if (ret) {
-            txn->error.desc = "Invalid loginId or password";
-            goto done;
-        }
-
-        /* Initialize the global namespace. Usually, that's done by
-         * jmap_auth after a successful login, but we are out of the
-         * regular authentication codepaths here. */
-        mboxname_init_namespace(&jmap_namespace, 0/*isadmin*/);
-
-        /* Create the response object */
-        json_t *res = user_settings(access_tok->userid);
-        if (!res) {
-            syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
-                    access_tok->userid);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-        char *access_id = jmapauth_tokenid(access_tok);
-        json_object_set_new(res, "accessToken", json_string(access_id));
-
-        /* Write the JSON response */
-        char *sbuf = json_dumps(res, 0);
-        if (!sbuf) {
-            txn->error.desc = "Error dumping JSON response object";
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-        txn->resp_body.type = "application/json; charset=utf-8";
-        write_body(HTTP_CREATED, txn, sbuf, strlen(sbuf));
-
-        jmapauth_token_free(access_tok);
-        free(access_id);
-        free(sbuf);
-        json_decref(res);
-    }
-    else {
-        txn->error.desc = "Unable to parse JSON request body";
-        ret = HTTP_BAD_REQUEST;
-    }
-
-done:
-    if (req) json_decref(req);
-    return ret;
-}
-
-static int jmap_authdel(struct transaction_t *txn)
-{
-    /* Get the access token. */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Authorization");
-    if (!hdr || strncmp("Bearer ", hdr[0], 7)) {
-        syslog(LOG_ERR, "JMAP auth: DELETE without Bearer token");
-        /* Request was successfully authenticated with another auth scheme */
-        txn->error.desc = "Need Bearer access token to revoke";
-        return HTTP_FORBIDDEN;
-    }
-    const char *tokenid = hdr[0] + 7;
-
-    /* Remove the token */
-    struct db *db = NULL;
-    int ret, r;
-
-    r = jmapauth_open(&db, /*db_flags*/0, NULL);
-    if (r || db == NULL) {
-        syslog(LOG_ERR, "JMAP auth: cannot open db: %s", cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-    r = jmapauth_delete(db, tokenid, NULL);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "JMAP auth: cannot delete access token: %s",
-                cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* All done */
-    ret = HTTP_NO_CONTENT;
-
-done:
-    r = jmapauth_close(db);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot close db: %s", cyrusdb_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-    return ret;
-}
-
-
-static int jmap_bearer(const char *bearer, char *userbuf, size_t userbuf_size)
-{
-    struct db *db = NULL;
-    int ret = SASL_BADAUTH;
-    time_t now = time(NULL);
-
-    assert(userbuf);
-    assert(userbuf_size);
-    assert(bearer);
-
-    /* Open the database */
-    struct jmapauth_token *access_tok = NULL;
-    int r = jmapauth_open(&db, /*db_flags*/0, NULL);
-    if (r || db == NULL) {
-        syslog(LOG_ERR, "JMAP auth: cannot open db: %s", cyrusdb_strerror(r));
-        goto done;
-    }
-
-    /* Lookup the token. */
-    r = jmapauth_fetch(db, bearer, &access_tok, 0, NULL);
-    if (r) {
-        syslog(LOG_INFO, "JMAP auth: access token lookup failed: %s",
-                cyrusdb_strerror(r));
-        goto done;
-    }
-
-    /* Cry loud for flagged tokens */
-    if (access_tok->flags)  {
-        /* FIXME httpd_remoteip might not be the one we're interested in */
-        syslog(LOG_ERR, "JMAP auth: flagged token received from %s",
-               httpd_remoteip);
-        goto done;
-    }
-
-    /* Validate expiration time */
-    if (jmapauth_is_expired(access_tok)) {
-        syslog(LOG_INFO, "JMAP auth: access token is expired");
-        r = jmapauth_delete(db, bearer, NULL);
-        if (r) {
-            syslog(LOG_ERR, "JMAP auth: cannot delete expired token: %s",
-                    cyrusdb_strerror(r));
-        }
-        goto done;
-    }
-
-    /* Update last usage time if significant time has passed */
-    if (now - access_tok->lastuse > JMAPAUTH_TOKEN_TTL_WINDOW) {
-        access_tok->lastuse = now;
-        r = jmapauth_store(db, access_tok, NULL);
-        if (r) {
-            syslog(LOG_ERR, "JMAP auth: cannot update token: %s",
-                    cyrusdb_strerror(r));
-            goto done;
-        }
-    }
-
-    /* Copy username */
-    size_t n = strlcpy(userbuf, access_tok->userid, userbuf_size - 1);
-    if (n < strlen(access_tok->userid)) {
-        syslog(LOG_ERR, "JMAP auth: excessively long username");
-        goto done;
-    }
-
-    /* It's a legit bearer token */
-    ret = SASL_OK;
-
-done:
-    r = jmapauth_close(db);
-    if (r) {
-        syslog(LOG_ERR, "JMAP auth: cannot close db: %s", cyrusdb_strerror(r));
-        ret = SASL_BADAUTH;
-        goto done;
-    }
-    jmapauth_token_free(access_tok);
-    return ret;
-}
-
-/* Handle a GET on the auth endpoint */
+/* Handle a GET on the settings endpoint */
 static int jmap_settings(struct transaction_t *txn)
 {
     assert(httpd_userid);
