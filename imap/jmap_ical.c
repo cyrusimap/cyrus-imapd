@@ -63,6 +63,7 @@
 #include "http_carddav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
+#include "http_jmap.h"
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "json_support.h"
@@ -1132,7 +1133,6 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
         if (excomp == comp) continue; /* skip toplevel promoted object */
 
-        struct buf buf = BUF_INITIALIZER;
         context_t *myctx;
         json_t *ex, *diff;
         struct icaltimetype recurid;
@@ -1147,6 +1147,8 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         if (!ex) {
             continue;
         }
+        json_object_del(ex, "updated");
+        json_object_del(ex, "created");
 
         /* Determine recurrence id */
         recurid = icalcomponent_get_recurrenceid(excomp);
@@ -1157,13 +1159,11 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
 
         /* Create override patch */
-        diff = json_pack("{}");
-        json_pointer_diff(diff, &buf, event, ex);
+        diff = jmap_patchobject_create(event, ex);
         json_decref(ex);
 
         /* Set override at recurrence id */
         json_object_set_new(exceptions, s, diff);
-        buf_free(&buf);
         free(s);
     }
 
@@ -3948,7 +3948,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             }
 
             /* Create overridden event from patch and master event */
-            if (!(ex = json_pointer_patch(master, override))) {
+            if (!(ex = jmap_patchobject_apply(master, override))) {
                 invalidprop(ctx, NULL);
                 endprop(ctx);
                 continue;
