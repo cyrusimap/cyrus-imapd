@@ -548,7 +548,7 @@ sub _jmap_setup
 	    host => $service->host(),
 	    port => $service->port(),
 	    scheme => 'http',
-	    url => '/jmap',
+	    url => '/jmap/',
 	);
     };
     if ($@) {
