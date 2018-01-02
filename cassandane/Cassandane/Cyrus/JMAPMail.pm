@@ -66,10 +66,6 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-
-    xlog "Requesting JMAP access token";
-    my $jmap = $self->{jmap};
-    $jmap->Login($jmap->{user}, $jmap->{password}) || die;
 }
 
 sub uniq {

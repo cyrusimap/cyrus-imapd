@@ -62,176 +62,7 @@ sub new
     return $class->SUPER::new({}, @args);
 }
 
-sub test_login
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    xlog "Request loginId";
-    my $data = $jmap->AuthRequest({
-       username => $jmap->{user},
-       clientName => "client",
-       clientVersion => "1",
-       deviceName => "casstest",
-    });
-    $self->assert_not_null($data->{loginId});
-    $self->assert_str_equals("password", $data->{methods}[0]->{type});
-
-    xlog "Request access token";
-    $data = $jmap->AuthRequest({
-       loginId => $data->{loginId},
-       type => "password",
-       password => $jmap->{password},
-    });
-    $self->assert_not_null($data->{accessToken});
-    $self->assert_str_equals($jmap->{user}, $data->{username});
-
-    xlog "Validate primary account";
-    my $acc = $data->{accounts}{$jmap->{user}};
-    $self->assert_not_null($acc);
-    $self->assert_not_null($acc->{name});
-    $self->assert_equals(JSON::true, $acc->{isPrimary});
-    $self->assert_equals(JSON::false, $acc->{isReadOnly});
-
-    xlog "Set API url to $data->{apiUrl}";
-    $jmap->{url} = $data->{apiUrl};
-
-    xlog "Send some authenticated JMAP request";
-    my $Request = {
-      headers => {
-        'Content-Type'  => "application/json",
-        'Authorization' => "Bearer " . $data->{accessToken},
-      },
-      content => encode_json({
-        using => [ "ietf:jmap", "ietf:jmapmail" ],
-        methodCalls => [['Mailbox/get', {}, "R1"]]
-      }),
-    };
-
-    my $Response = $jmap->ua->post($jmap->uri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('200', $Response->{status});
-}
-
-sub test_revoke
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-    xlog "log in";
-    $jmap->Login($jmap->{user}, $jmap->{password}) || die;
-
-    my $Request;
-    my $Response;
-
-    xlog "send some JMAP request";
-    $Response = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
-    $self->assert_str_equals($Response->[0][0], 'Mailbox/get');
-
-    xlog "revoke access token";
-    $Request = {
-        headers => {
-            'Authorization' => "Bearer " . $jmap->{token},
-        },
-        content => '',
-    };
-    $Response = $jmap->ua->delete($jmap->authuri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('204', $Response->{status});
-
-    xlog "send some JMAP request";
-    $Request = {
-      headers => {
-        'Content-Type'  => "application/json",
-        'Authorization' => "Bearer " . $jmap->{token},
-      },
-      content => encode_json({
-        using => [ "ietf:jmap", "ietf:jmapmail" ],
-        methodCalls => [['Mailbox/get', {}, "R1"]]
-      }),
-    };
-    $Response = $jmap->ua->post($jmap->uri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('401', $Response->{status});
-}
-
 sub test_settings
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-    xlog "log in";
-    $jmap->Login($jmap->{user}, $jmap->{password}) || die;
-
-    my $Request;
-    my $Response;
-
-    xlog "get settings";
-    $Request = {
-        headers => {
-            'Authorization' => "Bearer " . $jmap->{token},
-        },
-        content => '',
-    };
-    $Response = $jmap->ua->get($jmap->authuri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('201', $Response->{status});
-
-    my $jdata;
-    $jdata = eval { decode_json($Response->{content}) } if $Response->{success};
-
-    $self->assert_not_null($jdata->{username});
-    $self->assert_not_null($jdata->{accounts});
-    $self->assert_not_null($jdata->{apiUrl});
-    $self->assert_not_null($jdata->{downloadUrl});
-    $self->assert_not_null($jdata->{uploadUrl});
-    $self->assert(exists $jdata->{capabilities}->{"ietf:jmap"});
-    $self->assert(exists $jdata->{capabilities}->{"ietf:jmapmail"});
-}
-
-sub test_login_wrongpass
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    xlog "Request loginId";
-    my $data = $jmap->AuthRequest({
-       username => $jmap->{user},
-       clientName => "client",
-       clientVersion => "1",
-       deviceName => "casstest",
-    });
-    $self->assert_not_null($data->{loginId});
-
-    xlog "Request access token";
-    my $res = $jmap->ua->post($jmap->authuri(), {
-      headers => {
-        'Content-Type'  => "application/json",
-      },
-      content => encode_json({
-        loginId => $data->{loginId},
-        type => "password",
-        password => "bad",
-      }),
-    });
-    $self->assert_str_equals('403', $res->{status});
-}
-
-sub test_multiple_accounts
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -251,35 +82,39 @@ sub test_multiple_accounts
     $admintalk->create("user.baz.box2") or die;
     $admintalk->setacl("user.baz.box1", "cassandane", "lrswp") or die;
     $admintalk->setacl("user.baz.box2", "cassandane", "lr") or die;
-
     # no access to qux
     $self->{instance}->create_user("qux");
 
-    xlog "log in";
-    $jmap->Login($jmap->{user}, $jmap->{password}) || die;
-
-    # refetch account settings
     my $Request;
     my $Response;
 
     xlog "get settings";
     $Request = {
         headers => {
-            'Authorization' => "Bearer " . $jmap->{token},
+            'Authorization' => $jmap->auth_header(),
         },
         content => '',
     };
-    $Response = $jmap->ua->get($jmap->authuri(), $Request);
+    $Response = $jmap->ua->get($jmap->uri(), $Request);
     if ($ENV{DEBUGJMAP}) {
         warn "JMAP " . Dumper($Request, $Response);
     }
     $self->assert_str_equals('201', $Response->{status});
 
-    my $settings = eval { decode_json($Response->{content}) };
-    my $accounts =  $settings->{accounts};
-    $self->assert_num_equals(4, scalar keys %{$accounts});
+    my $settings;
+    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
+
+    $self->assert_not_null($settings->{username});
+    $self->assert_not_null($settings->{accounts});
+    $self->assert_not_null($settings->{apiUrl});
+    $self->assert_not_null($settings->{downloadUrl});
+    $self->assert_not_null($settings->{uploadUrl});
+    $self->assert(exists $settings->{capabilities}->{"ietf:jmap"});
+    $self->assert(exists $settings->{capabilities}->{"ietf:jmapmail"});
 
     my $acc;
+	my $accounts =  $settings->{accounts};
+    $self->assert_num_equals(4, scalar keys %{$accounts});
 
     $acc = $accounts->{cassandane};
     $self->assert_str_equals("cassandane", $acc->{name});
@@ -301,6 +136,5 @@ sub test_multiple_accounts
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
 }
-
 
 1;
