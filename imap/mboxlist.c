@@ -2374,6 +2374,7 @@ EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
 				  void *rock, int incdel)
 {
     char *inbox = mboxname_user_mbox(userid, 0);
+    if (!inbox) return CYRUSDB_NOTFOUND;
     size_t inboxlen = strlen(inbox);
     char *search = strconcat(inbox, ".", (char *)NULL);
     const char *data = NULL;
