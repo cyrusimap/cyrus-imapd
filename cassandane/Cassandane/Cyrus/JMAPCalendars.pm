@@ -769,7 +769,7 @@ sub assert_normalized_event_equals
 
 sub putandget_vevent
 {
-    my ($self, $id, $ical, @props) = @_;
+    my ($self, $id, $ical, $props) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
@@ -787,7 +787,7 @@ sub putandget_vevent
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
     xlog "get event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id], properties => @props}, "R1"]]);
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id], properties => $props}, "R1"]]);
 
     my $event = $res->[0][1]{list}[0];
     $self->assert_not_null($event);
