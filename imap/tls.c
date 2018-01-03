@@ -270,12 +270,14 @@ static DH *get_dh1024(void)
     return NULL;
 }
 
-static DH *load_dh_param(const char *keyfile, const char *certfile)
+static DH *load_dh_param(const char *dhfile, const char *keyfile, const char *certfile)
 {
     DH *ret=NULL;
     BIO *bio = NULL;
 
-    if (keyfile) bio = BIO_new_file(keyfile, "r");
+    if (dhfile) bio = BIO_new_file(dhfile, "r");
+
+    if ((bio == NULL) && keyfile) bio = BIO_new_file(keyfile, "r");
 
     if ((bio == NULL) && certfile) bio = BIO_new_file(certfile,"r");
 
@@ -702,6 +704,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
+    const char   *server_dhparam_file;
     const char   *server_key_file;
     const char   *crl_file_path;
     enum enum_value tls_client_certs;
@@ -836,6 +839,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
     server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
+    server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
 
     if (config_debug) {
@@ -903,7 +907,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
-    dh_params = load_dh_param(server_key_file, server_cert_file);
+    dh_params = load_dh_param(server_dhparam_file, server_key_file, server_cert_file);
     SSL_CTX_set_tmp_dh(s_ctx, dh_params);
 #endif
 
