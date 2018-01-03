@@ -604,6 +604,7 @@ static int jmap_post(struct transaction_t *txn,
     char *buf, *inboxname = NULL;
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
+    strarray_t methods = STRARRAY_INITIALIZER;
 
     ret = jmap_parse_path(txn);
 
@@ -653,6 +654,8 @@ static int jmap_post(struct transaction_t *txn,
         json_t *args = json_array_get(mc, 1), *arg;
         const char *tag = json_string_value(json_array_get(mc, 2));
         int r = 0;
+
+        strarray_append(&methods, name);
 
         /* Find the message processor */
         if (!(mp = find_methodproc(name))) {
@@ -738,6 +741,11 @@ static int jmap_post(struct transaction_t *txn,
         conversations_commit(&req.cstate);
     }
 
+    /* tell syslog which methods were called */
+    spool_cache_header(xstrdup(":jmap"),
+                       strarray_join(&methods, ","), txn->req_hdrs);
+
+
     /* Dump JSON object into a text buffer */
     json_t *res = json_pack("{s:O}", "methodResponses", resp);
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
@@ -767,6 +775,7 @@ static int jmap_post(struct transaction_t *txn,
     free(inboxname);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
+    strarray_fini(&methods);
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
     return ret;
