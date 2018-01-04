@@ -117,6 +117,7 @@ int caladdress_lookup(const char *addr,
 
     if (testuser && !strcasecmp(userid, testuser)) {
         param->isyou = 1;
+        if (param->userid) free(param->userid);
         param->userid = testuser;
         return 0; // myself is always local
     }
@@ -142,7 +143,10 @@ int caladdress_lookup(const char *addr,
         mbname_t *mbname = NULL;
 
         if (!found) return HTTP_NOT_FOUND;
-        else param->userid = xstrndup(userid, len); /* freed by sched_param_free */
+        else {
+            if (param->userid) free(param->userid);
+            param->userid = xstrndup(userid, len); /* freed by sched_param_free */
+        }
 
         /* Lookup user's cal-home-set to see if its on this server */
 
@@ -2038,11 +2042,11 @@ void sched_deliver(const char *recipient, void *data, void *rock)
         sched_data->status =
             sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
         /* Unknown user */
-        return;
+        goto done;
     }
 
     /* don't schedule to yourself */
-    if (sparam.isyou) return;
+    if (sparam.isyou) goto done;
 
     syslog(LOG_NOTICE, "iMIP scheduling delivery to %s", recipient);
 
@@ -2055,6 +2059,7 @@ void sched_deliver(const char *recipient, void *data, void *rock)
         sched_deliver_local(recipient, &sparam, sched_data, authstate);
     }
 
+done:
     sched_param_free(&sparam);
 }
 
