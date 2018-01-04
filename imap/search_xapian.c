@@ -3089,6 +3089,7 @@ out:
         xapiandb_namelock = NULL;
     }
 
+    free(namelock_fname);
     free(activename);
     free(mboxname);
 
