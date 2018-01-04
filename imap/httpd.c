@@ -1681,6 +1681,9 @@ static void cmdloop(struct http_connection *conn)
         txn.brotli = brotli_init();
     }
 
+    /* Enable command timer */
+    cmdtime_settimer(1);
+
     for (;;) {
         int ret = 0;
 
@@ -1714,6 +1717,9 @@ static void cmdloop(struct http_connection *conn)
                                     NULL, 0));
 
         
+        /* Start command timer */
+        cmdtime_starttimer();
+
         if (txn.conn->http2_ctx) {
             /* HTTP/2 input */
             http2_input(&txn);
@@ -2216,6 +2222,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     int i;
     time_t now;
     char datestr[30];
+    double cmdtime, nettime;
     const char **hdr, *sep;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -2740,6 +2747,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         sep = "; ";
     }
     if (*sep == ';') buf_appendcstr(&log, ")");
+
+    /* Add timing stats */
+    cmdtime_endtimer(&cmdtime, &nettime);
+    buf_printf(&log, " [timing: cmd=%f net=%f total=%f]",
+               cmdtime, nettime, cmdtime + nettime);
 
     syslog(LOG_INFO, "%s", buf_cstring(&log));
 }
