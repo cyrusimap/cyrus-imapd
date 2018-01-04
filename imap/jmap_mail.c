@@ -4946,11 +4946,9 @@ static int getEmailsListUpdates(jmap_req_t *req)
     if (pe > 0 && !atomodseq_t(since)) {
         json_array_append_new(invalid, json_string("sinceState"));
     }
-    window.sincemodseq = atomodseq_t(since);
 
     /* uptoEmailId */
     readprop(req->args, "uptoEmailId", 0, invalid, "s", &upto);
-    window.uptomsgid = upto;
 
     /* maxChanges */
     readprop(req->args, "maxChanges", 0, invalid, "I", &max);
@@ -4985,6 +4983,10 @@ static int getEmailsListUpdates(jmap_req_t *req)
     json_decref(unsupported_sort);
 
     /* XXX - add search_is_mutable tests */
+
+    /* Set up search window */
+    window.sincemodseq = atomodseq_t(since);
+    window.uptomsgid = upto;
 
     r = jmapmsg_search(req, filter, sort, &window, /*include_expunged*/1, &total, &total_threads,
                        &added, &removed, &threadids);
