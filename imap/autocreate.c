@@ -767,6 +767,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
             syslog(LOG_WARNING, "autocreateinbox: User %s, subfolder %s creation failed. %s",
                    userid, name, error_message(r));
             r = 0;
+            free(foldername);
             continue;
         }
 
@@ -786,6 +787,8 @@ int autocreate_user(struct namespace *namespace, const char *userid)
 
         /* set specialuse if requested */
         config_foreachoverflowstring(autocreate_specialuse_cb, &specialrock);
+
+        free(foldername);
     }
 
     if (numcrt)
