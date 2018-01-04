@@ -590,7 +590,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
-    json_t *req, *resp = NULL;
+    json_t *req = NULL, *resp = NULL;
     struct jmap_idmap idmap = {
         HASH_TABLE_INITIALIZER,
         HASH_TABLE_INITIALIZER,
