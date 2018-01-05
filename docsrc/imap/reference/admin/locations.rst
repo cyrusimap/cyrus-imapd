@@ -42,7 +42,6 @@ Cyrus supports several different types of partitions:
 
 *   Mail Spool Partitions
 *   Metadata Partitions
-*   Backup Partitions
 *   Archive Partitions
 *   Search Partitions
 
@@ -71,9 +70,6 @@ stipulate the following:
     # The Metadata Partitions
     metapartition-atom: /var/spool/cyrus/fast/meta/atom/
     metapartition-ntoz: /var/spool/cyrus/fast/meta/ntoz/
-
-    # Backup Partition
-    backuppartition-main: /var/spool/cyrus/slow/backup/
 
     # Archive Partitions
     archivepartition-atom: /var/spool/cyrus/slow/mail/atom/
@@ -122,15 +118,6 @@ headers, caches, indexes, etc.
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob metapartition_files
         :end-before: endblob metapartition_files
-
-Backup Partitions
------------------
-
-Cyrus Backups are a replication-based backup service for Cyrus IMAP servers.
-
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob backuppartition-name
-        :end-before: endblob backuppartition-name
 
 Archive Partitions
 ------------------
