@@ -161,6 +161,12 @@ process.
     list to the **Mupdate Master**).  This may only be done on the
     Master instance.
 
+.. Important::
+    It is critically important that all partitions existing on a master
+    server instance also be present on all replica instances.  Failure
+    to ensure this will result in crashes and could lead to lost data
+    on the replicas.
+
 1. :ref:`Configure a standalone server <installing>`.
 
 2. If using the deprecated sync_server scheme, add the following line
