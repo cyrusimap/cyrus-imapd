@@ -89,7 +89,13 @@ sub start_and_abort_idled
     xlog "pid of idled should be $pid";
 
     xlog "giving idled some time to start up";
-    sleep(1);
+    my $tries = 60;
+    my $idle_sock = $self->{instance}->{basedir} . "/conf/socket/idle";
+    while ($tries--) {
+        last if -S $idle_sock;
+        sleep 1;
+    }
+    $self->assert($tries > 0, "idled started successfully");
 
     xlog "bring idled's reign to an abrupt and brutal end";
     kill('KILL', $pid)
@@ -105,7 +111,6 @@ sub start_and_abort_idled
     # filesystem is still present.  In particular, the idle socket.
     # Let's check that our assumption is correct.
     xlog "check that idle left a socket lying around";
-    my $idle_sock = $self->{instance}->{basedir} . "/conf/socket/idle";
     $self->assert( -S $idle_sock, "$idle_sock exists and is a socket");
 }
 
