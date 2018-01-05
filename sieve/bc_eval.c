@@ -126,7 +126,7 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
                                   char *errmsg, size_t errsiz)
 {
     int ret;
-    regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
+    regex_t *reg = (regex_t *) xzmalloc(sizeof(regex_t));
 
 #ifdef HAVE_PCREPOSIX_H
     /* support UTF8 comparisons */
@@ -135,6 +135,7 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
     if ( (ret=regcomp(reg, s, ctag)) != 0)
     {
         (void) regerror(ret, reg, errmsg, errsiz);
+        regfree(reg);
         free(reg);
         return NULL;
     }
@@ -555,7 +556,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         int count=0;
         int isReg = (match==B_REGEX);
         int ctag = 0;
-        regex_t *reg;
         char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
@@ -684,8 +684,9 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                             }
 
                             if (isReg) {
-                                reg = bc_compile_regex(data_val, ctag,
-                                                       errbuf, sizeof(errbuf));
+                                regex_t *reg = bc_compile_regex(data_val, ctag,
+                                                                errbuf,
+                                                                sizeof(errbuf));
                                 if (!reg) {
                                     /* Oops */
                                     free(addr);
@@ -696,6 +697,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                                 res |= comp(addr, strlen(addr),
                                             (const char *)reg,
                                             match_vars, comprock);
+                                regfree(reg);
                                 free(reg);
                             } else {
 #if VERBOSE
@@ -787,7 +789,6 @@ envelope_err:
         int count=0;
         int isReg = (match==B_REGEX);
         int ctag = 0;
-        regex_t *reg;
         char errbuf[100]; /* Basically unused, regexps tested at compile */
         char *decoded_header;
 
@@ -869,8 +870,8 @@ envelope_err:
                         }
 
                         if (isReg) {
-                            reg= bc_compile_regex(data_val, ctag, errbuf,
-                                                  sizeof(errbuf));
+                            regex_t *reg = bc_compile_regex(data_val, ctag,
+                                                            errbuf, sizeof(errbuf));
                             if (!reg)
                             {
                                 /* Oops */
@@ -880,6 +881,8 @@ envelope_err:
 
                             res |= comp(decoded_header, strlen(decoded_header),
                                         (const char *)reg, match_vars, comprock);
+
+                            regfree(reg);
                             free(reg);
                         } else {
                             res |= comp(decoded_header, strlen(decoded_header),
@@ -941,7 +944,6 @@ envelope_err:
         int count=0;
         int isReg = (match==B_REGEX);
         int ctag = 0;
-        regex_t *reg;
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
@@ -1047,8 +1049,8 @@ envelope_err:
 
                     if (is_string) {
                         if (isReg) {
-                            reg = bc_compile_regex(this_needle, ctag, errbuf,
-                                                   sizeof(errbuf));
+                            regex_t *reg = bc_compile_regex(this_needle, ctag,
+                                                            errbuf, sizeof(errbuf));
                             if (!reg)
                                 {
                                     /* Oops */
@@ -1058,6 +1060,8 @@ envelope_err:
 
                             res |= comp(this_haystack, strlen(this_haystack),
                                         (const char *)reg, match_vars, comprock);
+
+                            regfree(reg);
                             free(reg);
                         } else {
                             res |= comp(this_haystack, strlen(this_haystack),
@@ -1073,8 +1077,8 @@ envelope_err:
                                 active_flag = this_var->data[y];
 
                                 if (isReg) {
-                                    reg= bc_compile_regex(this_needle, ctag, errbuf,
-                                                          sizeof(errbuf));
+                                    regex_t *reg = bc_compile_regex(this_needle, ctag,
+                                                                    errbuf, sizeof(errbuf));
                                     if (!reg)
                                         {
                                             /* Oops */
@@ -1085,6 +1089,8 @@ envelope_err:
                                     res |= comp(active_flag, strlen(active_flag),
                                                 (const char *)reg,
                                                 match_vars, comprock);
+
+                                    regfree(reg);
                                     free(reg);
                                 } else {
                                     res |= comp(active_flag, strlen(active_flag),
@@ -1132,7 +1138,6 @@ envelope_err:
         int count=0;
         int isReg = (match==B_REGEX);
         int ctag = 0;
-        regex_t *reg;
         char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
@@ -1201,8 +1206,8 @@ envelope_err:
                     }
 
                     if (isReg) {
-                        reg = bc_compile_regex(data_val, ctag,
-                                               errbuf, sizeof(errbuf));
+                        regex_t *reg = bc_compile_regex(data_val, ctag,
+                                                        errbuf, sizeof(errbuf));
                         if (!reg) {
                             /* should only get here due to a memory issue */
                             res = SIEVE_NOMEM;
@@ -1211,6 +1216,8 @@ envelope_err:
 
                         res |= comp(content, strlen(content), (const char *)reg,
                                     match_vars, comprock);
+
+                        regfree(reg);
                         free(reg);
                     } else {
                         res |= comp(content, strlen(content), data_val,
@@ -1609,7 +1616,6 @@ envelope_err:
         int comparator=ntohl(bc[i++].value);
         int isReg = (match==B_REGEX);
         int ctag = 0;
-        regex_t *reg;
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
@@ -1643,8 +1649,8 @@ envelope_err:
             i = unwrap_string(bc, i, &testval, NULL);
 
             if (isReg) {
-                reg = bc_compile_regex(testval, ctag,
-                                       errbuf, sizeof(errbuf));
+                regex_t *reg = bc_compile_regex(testval, ctag,
+                                                errbuf, sizeof(errbuf));
                 if (!reg) {
                     /* Oops */
                     free(val);
@@ -1654,6 +1660,8 @@ envelope_err:
 
                 res |= comp(val, strlen(val),
                             (const char *)reg, match_vars, comprock);
+
+                regfree(reg);
                 free(reg);
             } else {
 #if VERBOSE
@@ -2301,7 +2309,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             comparator_t *comp = NULL;
 
             const char *pattern;
-            regex_t *reg;
 
             const char *priority = NULL;
             void *comprock = NULL;
@@ -2360,14 +2367,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             {
                 char errmsg[1024]; /* Basically unused */
 
-                reg=bc_compile_regex(pattern,
-                                     REG_EXTENDED | REG_NOSUB | REG_ICASE,
-                                     errmsg, sizeof(errmsg));
+                regex_t *reg = bc_compile_regex(pattern,
+                                                REG_EXTENDED | REG_NOSUB | REG_ICASE,
+                                                errmsg, sizeof(errmsg));
                 if (!reg) {
                     res = SIEVE_RUN_ERROR;
                 } else {
                     res = do_denotify(notify_list, comp, reg,
                                       match_vars, comprock, priority);
+                    regfree(reg);
                     free(reg);
                 }
             } else {
