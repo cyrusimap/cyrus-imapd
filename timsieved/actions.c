@@ -335,7 +335,7 @@ int putscript(struct protstream *conn, const struct buf *name,
   char path[1024], p2[1024];
   char bc_path[1024], bc_p2[1024];
   int maxscripts;
-  sieve_script_t *s;
+  sieve_script_t *s = NULL;
 
   result = scriptname_valid(name);
   if (result!=TIMSIEVE_OK)
@@ -405,6 +405,7 @@ int putscript(struct protstream *conn, const struct buf *name,
       } else {
           prot_printf(conn, "NO \"parse failed\"\r\n");
       }
+      sieve_script_free(&s);
       buf_free(&errors);
       fclose(stream);
       unlink(path);
@@ -418,7 +419,7 @@ int putscript(struct protstream *conn, const struct buf *name,
 
   if (!verify_only) {
       int fd;
-      bytecode_info_t *bc;
+      bytecode_info_t *bc = NULL;
 
       /* Now, generate the bytecode */
       if(sieve_generate_bytecode(&bc, s) == -1) {

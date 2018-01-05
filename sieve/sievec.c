@@ -70,8 +70,8 @@ int main(int argc, char **argv)
 {
     FILE *instream;
     char *err = NULL;
-    sieve_script_t *s;
-    bytecode_info_t *bc;
+    sieve_script_t *s = NULL;
+    bytecode_info_t *bc = NULL;
     int c, fd, usage_error = 0;
     char *alt_config = NULL;
 
@@ -106,6 +106,7 @@ int main(int argc, char **argv)
         } else {
             fprintf(stderr, "Unable to parse script.\n");
         }
+        sieve_script_free(&s);
 
         exit(1);
     }
@@ -113,6 +114,8 @@ int main(int argc, char **argv)
     /* Now, generate the bytecode */
     if(sieve_generate_bytecode(&bc, s) == -1) {
         fprintf(stderr, "bytecode generate failed\n");
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
         exit(1);
     }
 
@@ -120,12 +123,16 @@ int main(int argc, char **argv)
     fd = open(argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if(fd < 0) {
         fprintf(stderr, "couldn't open bytecode output file\n");
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
         exit(1);
     }
 
     /* Now, emit the bytecode */
     if(sieve_emit_bytecode(fd, bc) == -1) {
         fprintf(stderr, "bytecode emit failed\n");
+        sieve_free_bytecode(&bc);
+        sieve_script_free(&s);
         exit(1);
     }
 

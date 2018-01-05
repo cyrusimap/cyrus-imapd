@@ -89,15 +89,12 @@ int script_require(sieve_script_t *s, const char *req)
 EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
                        void *script_context, sieve_script_t **ret)
 {
-    sieve_script_t *s;
-    int res = SIEVE_OK;
-
-    res = interp_verify(interp);
+    int res = interp_verify(interp);
     if (res != SIEVE_OK) {
         return res;
     }
 
-    s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
+    sieve_script_t *s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
     s->interp = *interp;
     s->script_context = script_context;
 
