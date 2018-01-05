@@ -83,15 +83,14 @@ int do_reject(action_list_t *a, int action, const char *msg)
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = action;
     a->cancel_keep = 1;
     a->u.rej.msg = msg;
     a->u.rej.is_extended = (action == ACTION_EREJECT);
+
     b->next = a;
-    a->next =  NULL;
+
     return 0;
 }
 
@@ -106,42 +105,40 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
+            strarray_free(imapflags);
             return SIEVE_RUN_ERROR;
+        }
+
         if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
+                strarray_free(imapflags);
                 return SIEVE_INTERNAL_ERROR;
             }
+
             /* cut this action out of the list */
             b->next = a->next;
             a->next = NULL;
-            /* find the end of the list */
-            while (b->next != NULL) {
-                b = b-> next;
-            }
-            /* add the action to the end of the list */
-            b->next = a;
-            break;
+            free_action_list(a);
+            a = b;
         }
+
         b = a;
         a = a->next;
     }
 
-    if (a == NULL) {
-        /* add to the action list */
-        a = new_action_list();
-        if (a == NULL)
-            return SIEVE_NOMEM;
-        b->next = a;
-    }
+    a = new_action_list();
     a->a = ACTION_FILEINTO;
     a->cancel_keep |= cancel_keep;
     a->u.fil.mailbox = mbox;
     a->u.fil.specialuse = specialuse;
     a->u.fil.imapflags = imapflags;
     a->u.fil.do_create = do_create;
+
+    b->next = a;
+
     return 0;
 }
 
@@ -158,22 +155,22 @@ int do_redirect(action_list_t *a, const char *addr,
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        b = a;
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
+
+        b = a;
         a = a->next;
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = ACTION_REDIRECT;
     a->cancel_keep = cancel_keep;
     a->u.red.addr = addr;
     a->u.red.is_ext_list = is_ext_list;
-    a->next = NULL;
+
     b->next = a;
+
     return 0;
 }
 
@@ -187,40 +184,36 @@ int do_keep(action_list_t *a, strarray_t *imapflags)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
             return SIEVE_RUN_ERROR;
+            strarray_free(imapflags);
+        }
+
         if (a->a == ACTION_KEEP) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
+                strarray_free(imapflags);
                 return SIEVE_INTERNAL_ERROR;
             }
             /* cut this action out of the list */
             b->next = a->next;
             a->next = NULL;
-            /* find the end of the list */
-            while (b->next != NULL) {
-                b = b-> next;
-            }
-            /* add the action to the end of the list */
-            b->next = a;
-            break;
+            free_action_list(a);
+            a = b;
         }
+
         b = a;
         a = a->next;
     }
 
-    if(a == NULL) {
-        /* add to the action list */
-        a = new_action_list();
-        if (a == NULL)
-            return SIEVE_NOMEM;
-        a->next = NULL;
-        b->next = a;
-    }
+    a = new_action_list();
     a->a = ACTION_KEEP;
     a->cancel_keep = 1;
     a->u.keep.imapflags = imapflags;
+
+    b->next = a;
+
     return 0;
 }
 
@@ -234,20 +227,20 @@ int do_discard(action_list_t *a)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        b = a;
         if (a->a == ACTION_DISCARD) /* don't bother doing twice */
             return 0;
+
+        b = a;
         a = a->next;
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = ACTION_DISCARD;
     a->cancel_keep = 1;
-    a->next = NULL;
+
     b->next = a;
+
     return 0;
 }
 
@@ -274,19 +267,17 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        b = a;
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT ||
             a->a == ACTION_VACATION) /* vacation can't be used twice */
             return SIEVE_RUN_ERROR;
+
+        b = a;
         a = a->next;
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = ACTION_VACATION;
-    a->cancel_keep = 0;
     a->u.vac.send.addr = addr;
     a->u.vac.send.fromaddr = fromaddr;
     a->u.vac.send.subj = subj;  /* user specified subject */
@@ -301,8 +292,9 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     else
         makehash(a->u.vac.autoresp.hash, addr, fromaddr, msg);
     a->u.vac.autoresp.seconds = seconds;
-    a->next = NULL;
+
     b->next = a;
+
     return 0;
 }
 
@@ -316,20 +308,19 @@ int do_mark(action_list_t *a)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        b = a;
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
+
+        b = a;
         a = a->next;
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = ACTION_MARK;
-    a->cancel_keep = 0;
+
     b->next = a;
-    a->next = NULL;
+
     return 0;
 }
 
@@ -342,22 +333,22 @@ int do_unmark(action_list_t *a)
 {
 
     action_list_t *b = NULL;
+
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        b = a;
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
             return SIEVE_RUN_ERROR;
+
+        b = a;
         a = a->next;
     }
 
     /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    a = new_action_list();
     a->a = ACTION_UNMARK;
-    a->cancel_keep = 0;
+
     b->next = a;
-    a->next = NULL;
+
     return 0;
 }
 
@@ -365,32 +356,30 @@ int do_unmark(action_list_t *a)
  *
  * incompatible with: none
  */
-int do_notify(notify_list_t *a, const char *id, const char *from,
+int do_notify(notify_list_t *n, const char *id, const char *from,
               const char *method, const char **options,
               const char *priority, const char *message)
 {
     notify_list_t *b = NULL;
 
     /* find the end of the notify list */
-    while (a != NULL) {
-        b = a;
-        a = a->next;
+    while (n != NULL) {
+        b = n;
+        n = n->next;
     }
 
     /* add to the notify list */
-    a = (notify_list_t *) xmalloc(sizeof(notify_list_t));
-    if (a == NULL)
-        return SIEVE_NOMEM;
+    n = new_notify_list();
+    n->isactive = 1;
+    n->id = id;
+    n->from = from;
+    n->method = method;
+    n->options = options;
+    n->priority = priority;
+    n->message = message;
 
-    b->next = a;
-    a->isactive = 1;
-    a->id = id;
-    a->from = from;
-    a->method = method;
-    a->options = options;
-    a->priority = priority;
-    a->message = message;
-    a->next = NULL;
+    b->next = n;
+
     return 0;
 }
 
@@ -425,31 +414,18 @@ int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc)
     }
 
     /* add to the duptrack list */
-    d = (duptrack_list_t *) xmalloc(sizeof(duptrack_list_t));
-    if (d == NULL)
-        return SIEVE_NOMEM;
-
-    b->next = d;
+    d = new_duptrack_list();
     d->id = dc->id;
     d->seconds = dc->seconds;
-    d->next = NULL;
+
+    b->next = d;
+
     return 0;
 }
 
 notify_list_t *new_notify_list(void)
 {
-    notify_list_t *ret = xmalloc(sizeof(notify_list_t));
-
-    if (ret != NULL) {
-        ret->isactive = 0;
-        ret->id       = NULL;
-        ret->method   = NULL;
-        ret->options  = NULL;
-        ret->priority = NULL;
-        ret->message  = NULL;
-        ret->next     = NULL;
-    }
-    return ret;
+    return (notify_list_t *) xzmalloc(sizeof(notify_list_t));
 }
 
 void free_notify_list(notify_list_t *n)
@@ -464,15 +440,7 @@ void free_notify_list(notify_list_t *n)
 
 action_list_t *new_action_list(void)
 {
-    action_list_t *ret = xmalloc(sizeof(action_list_t));
-
-    if (ret != NULL) {
-        ret->a = ACTION_NONE;
-        ret->param = NULL;
-        ret->next = NULL;
-        ret->cancel_keep = 0;
-    }
-    return ret;
+    return (action_list_t *) xzmalloc(sizeof(action_list_t));
 }
 
 void free_action_list(action_list_t *a)
@@ -507,14 +475,7 @@ void free_action_list(action_list_t *a)
 
 duptrack_list_t *new_duptrack_list(void)
 {
-    duptrack_list_t *ret = xzmalloc(sizeof(duptrack_list_t));
-
-    if (ret != NULL) {
-        ret->id       = NULL;
-        ret->seconds  = 0;
-        ret->next     = NULL;
-    }
-    return ret;
+    return (duptrack_list_t *) xzmalloc(sizeof(duptrack_list_t));
 }
 
 void free_duptrack_list(duptrack_list_t *d)
