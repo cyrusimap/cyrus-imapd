@@ -330,15 +330,11 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
 {
     message_data_t *m;
 
-    m = xmalloc(sizeof(message_data_t));
+    m = xzmalloc(sizeof(message_data_t));
     m->data = msg;
     m->size = size;
     m->name = xstrdup(name);
-    m->content.base = NULL;
-    m->content.len = 0;
-    m->content.body = NULL;
     construct_hash_table(&m->cache, 1000, 0);
-    m->cache_full = 0;
 
     return m;
 }
