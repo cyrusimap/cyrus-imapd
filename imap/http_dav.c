@@ -493,8 +493,8 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
         return HTTP_FORBIDDEN;
     }
 
-    /* Skip namespace */
-    p += len;
+    /* Skip past namespace (and any extra '/') */
+    for (p += len; p[1] == '/'; p++);
     if (!*p || !*++p) {
         /* Make sure collection is terminated with '/' */
         if (p[-1] != '/') *p++ = '/';
@@ -504,7 +504,8 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     /* Check if we're in user space */
     len = strcspn(p, "/");
     if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
-        p += len;
+        /* Skip past user prefix (and any extra '/') */
+        for (p += len; p[1] == '/'; p++);
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
             if (p[-1] != '/') *p++ = '/';
@@ -521,7 +522,8 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
                 *at = 0;
         }
 
-        p += len;
+        /* Skip past userid (and any extra '/') */
+        for (p += len; p[1] == '/'; p++);
         if (!*p || !*++p) return 0;
     }
     else if (!strncmp(p, SERVER_INFO, len)) {
@@ -593,8 +595,8 @@ EXPORTED int calcarddav_parse_path(const char *path,
     /* Default to bare-bones Allow bits */
     tgt->allow &= ALLOW_READ_MASK;
 
-    /* Skip namespace */
-    p += len;
+    /* Skip past namespace (and any extra '/') */
+    for (p += len; p[1] == '/'; p++);
     if (!*p || !*++p) return 0;
 
     /* Check if we're in user space */
@@ -605,14 +607,16 @@ EXPORTED int calcarddav_parse_path(const char *path,
         if (!strncmp(p, "zzzz", len))
             tgt->flags |= TGT_USER_ZZZZ;
 
-        p += len;
+        /* Skip past user prefix (and any extra '/') */
+        for (p += len; p[1] == '/'; p++);
         if (!*p || !*++p) return 0;
 
         /* Get user id */
         len = strcspn(p, "/");
         tgt->userid = xstrndup(p, len);
 
-        p += len;
+        /* Skip past userid (and any extra '/') */
+        for (p += len; p[1] == '/'; p++);
         if (!*p || !*++p) {
             /* Make sure home-set is terminated with '/' */
             if (p[-1] != '/') *p++ = '/';
@@ -626,7 +630,8 @@ EXPORTED int calcarddav_parse_path(const char *path,
     tgt->collection = p;
     tgt->collen = len;
 
-    p += len;
+    /* Skip past collection (and any extra '/') */
+    for (p += len; p[1] == '/'; p++);
     if (!*p || !*++p) {
         /* Make sure collection is terminated with '/' */
         if (p[-1] != '/') *p++ = '/';
