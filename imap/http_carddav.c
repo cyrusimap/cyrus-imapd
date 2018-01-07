@@ -1250,6 +1250,8 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     size_t datalen = 0;
 
     if (propstat) {
+        if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+
         if (!fctx->record) return HTTP_NOT_FOUND;
 
         if (!fctx->msg_buf.len)

@@ -5479,6 +5479,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     if (propstat) {
         icalcomponent *ical = NULL;
 
+        if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+
         if (!fctx->record) return HTTP_NOT_FOUND;
 
         if (!fctx->msg_buf.len)
