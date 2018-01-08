@@ -35,6 +35,51 @@ In general, Cyrus allows one to maintain several separate partitions for
 each of these data types, and to establish rules governing distribution
 of data within each pool.
 
+Types of Partitions
+-------------------
+
+Cyrus supports several different types of partitions:
+
+*   Mail Spool Partitions
+*   Metadata Partitions
+*   Archive Partitions
+*   Search Partitions
+
+Each of these are discussed in their own sections of the documentation.
+All share in common a few aspects in how they are configured.  For each
+partition defined, you must tell Cyrus where the partition is rooted in
+the filesystem.  This is accomplished via a "*partition*-*name*:" directive
+for each partition, where "*partition*" specifies the partition type and
+"*name*" is the actual name of the partition.
+
+Here are some sample declarations of each different type of partition
+supported within Cyrus.  For the purposes of this example, we'll
+stipulate the following:
+
+*   There are two main storage pools, "fast" and "slow," which are on
+    SSDs and traditional disks, respectively.
+*   The mailboxes are divided alphabetically, with A to M in one group
+    and N to Z in the other.
+
+.. parsed-literal::
+
+    # The Mail Spool Partitions
+    partition-atom: /var/spool/cyrus/fast/mail/atom/
+    partition-ntoz: /var/spool/cyrus/fast/mail/ntoz/
+
+    # The Metadata Partitions
+    metapartition-atom: /var/spool/cyrus/fast/meta/atom/
+    metapartition-ntoz: /var/spool/cyrus/fast/meta/ntoz/
+
+    # Archive Partitions
+    archivepartition-atom: /var/spool/cyrus/slow/mail/atom/
+    archivepartition-ntoz: /var/spool/cyrus/slow/mail/ntoz/
+
+    # Search Partitions
+    defaultsearchtier: tier1
+    tier1searchpartition-atom: /var/spool/cyrus/slow/search/atom/
+    tier1searchpartition-ntoz: /var/spool/cyrus/slow/search/ntoz/
+
 Working With Partitions
 =======================
 
@@ -74,15 +119,6 @@ headers, caches, indexes, etc.
         :start-after: startblob metapartition_files
         :end-before: endblob metapartition_files
 
-Backup Partitions
------------------
-
-Cyrus Backups are a replication-based backup service for Cyrus IMAP servers.
-
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob backuppartition-name
-        :end-before: endblob backuppartition-name
-
 Archive Partitions
 ------------------
 
@@ -96,5 +132,21 @@ media.
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archivepartition-name
         :end-before: endblob archivepartition-name
+
+Search Partitions
+-----------------
+
+Modern Cyrus uses the Xapian search engine to index messages for
+server-side search support.  Index data are stored in search "tiers"
+which are themselves related to search partitions.  There are two key
+settings for search tiers:
+
+.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob defaultsearchtier
+        :end-before: endblob defaultsearchtier
+
+.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob searchpartition-name
+        :end-before: endblob searchpartition-name
 
 Back to :ref:`imap-admin`
