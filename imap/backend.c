@@ -1099,7 +1099,10 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
-    if (do_tls) r = backend_starttls(ret, NULL, NULL, NULL);
+    if (do_tls) {
+        r = backend_starttls(ret, NULL, NULL, NULL);
+        if (r) goto error;
+    }
 
     /* Login to the server */
     if (prot->type == TYPE_SPEC)
