@@ -744,10 +744,12 @@ int meth_unlock(struct transaction_t *txn, void *params);
 
 
 /* PROPFIND callbacks */
+
 int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
                      struct propfind_ctx *fctx,
                      xmlNodePtr prop, struct propstat propstat[],
-                     struct mime_type_t *mime_types, int precond,
+                     struct mime_type_t *mime_types,
+                     struct mime_type_t **out_type,
                      const char *data, unsigned long datalen);
 int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
                     struct propfind_ctx *fctx,

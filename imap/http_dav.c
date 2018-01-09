@@ -1540,6 +1540,16 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
                 }
                 break;
 
+            case HTTP_BAD_MEDIATYPE:
+                /* CALDAV:calendar-data/timezone/availability and
+                   CARDDAV:address-data ONLY.
+                   'e->rock' contains supported data precondition code.
+                */
+                xml_add_prop(HTTP_FORBIDDEN, fctx->ns[NS_DAV],
+                             &propstat[PROPSTAT_FORBID],
+                             e->name, e->ns, NULL, (uintptr_t) e->rock);
+                break;
+
             default:
                 xml_add_prop(r, fctx->ns[NS_DAV], &propstat[PROPSTAT_ERROR],
                              e->name, e->ns, NULL, 0);
@@ -1605,38 +1615,39 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
 int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
                      struct propfind_ctx *fctx,
                      xmlNodePtr prop, struct propstat propstat[],
-                     struct mime_type_t *mime_types, int precond,
+                     struct mime_type_t *mime_types,
+                     struct mime_type_t **out_type,
                      const char *data, unsigned long datalen)
 {
     int ret = 0;
-    xmlChar *type, *ver = NULL;
-    struct mime_type_t *mime;
-
-    type = xmlGetProp(prop, BAD_CAST "content-type");
-    if (type) ver = xmlGetProp(prop, BAD_CAST "version");
-
-    /* Check/find requested MIME type */
-    for (mime = mime_types; type && mime->content_type; mime++) {
-        if (is_mediatype((const char *) type, mime->content_type)) {
-            if (ver &&
-                (!mime->version || xmlStrcmp(ver, BAD_CAST mime->version))) {
-                continue;
-            }
-            break;
-        }
-    }
 
     if (!propstat) {
         /* Prescreen "property" request */
-        if (!mime->content_type) {
-            fctx->txn->error.precond = precond;
-            ret = *fctx->ret = HTTP_FORBIDDEN;
+        xmlChar *type, *ver = NULL;
+        struct mime_type_t *mime;
+
+        type = xmlGetProp(prop, BAD_CAST "content-type");
+        if (type) ver = xmlGetProp(prop, BAD_CAST "version");
+
+        /* Check/find requested MIME type */
+        for (mime = mime_types; type && mime->content_type; mime++) {
+            if (is_mediatype((const char *) type, mime->content_type)) {
+                if (ver &&
+                    (!mime->version || xmlStrcmp(ver, BAD_CAST mime->version))) {
+                    continue;
+                }
+                break;
+            }
         }
 
-        fctx->flags.fetcheddata = 1;
+        if (type) xmlFree(type);
+        if (ver) xmlFree(ver);
+
+        *out_type = mime;
     }
     else {
         /* Add "property" */
+        struct mime_type_t *mime = *out_type;
         char *freeme = NULL;
 
         prop = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
@@ -1656,11 +1667,11 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
             datalen = buf_len(outbuf);
             data = freeme = buf_release(outbuf);
             buf_destroy(outbuf);
-        }
 
-        if (type) {
-            xmlSetProp(prop, BAD_CAST "content-type", type);
-            if (ver) xmlSetProp(prop, BAD_CAST "version", ver);
+            xmlSetProp(prop,
+                       BAD_CAST "content-type", BAD_CAST mime->content_type);
+            if (mime->version)
+                xmlSetProp(prop, BAD_CAST "version", BAD_CAST mime->version);
         }
 
         xmlAddChild(prop,
@@ -1670,9 +1681,6 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 
         if (freeme) free(freeme);
     }
-
-    if (type) xmlFree(type);
-    if (ver) xmlFree(ver);
 
     return ret;
 }

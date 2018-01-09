@@ -95,8 +95,6 @@ static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
 
-static strarray_t partial_addrdata;
-
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                               const char **resultstr);
 
@@ -273,7 +271,7 @@ static const struct prop_entry carddav_props[] = {
     /* CardDAV (RFC 6352) properties */
     { "address-data", NS_CARDDAV,
       PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
-      propfind_addrdata, NULL, &partial_addrdata },
+      propfind_addrdata, NULL, (void *) CARDDAV_SUPP_DATA },
     { "addressbook-description", NS_CARDDAV,
       PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
@@ -1243,14 +1241,18 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
                              xmlNodePtr prop,
                              xmlNodePtr resp __attribute__((unused)),
                              struct propstat propstat[],
-                             void *rock)
+                             void *rock __attribute__((unused)))
 {
-    strarray_t *partial = (strarray_t *) rock;
+    static struct mime_type_t *out_type = carddav_mime_types;
+    static strarray_t partial_addrdata = STRARRAY_INITIALIZER;
+    strarray_t *partial = &partial_addrdata;
     const char *data = NULL;
     size_t datalen = 0;
 
     if (propstat) {
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+
+        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -1303,7 +1305,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     }
 
     return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
-                            CARDDAV_SUPP_DATA, data, datalen);
+                            &out_type, data, datalen);
 }
 
 

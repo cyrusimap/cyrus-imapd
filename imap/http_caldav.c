@@ -138,11 +138,11 @@ struct partial_comp_t {
     struct partial_comp_t *child;
 };
 
-static struct partial_caldata_t {
+struct partial_caldata_t {
     unsigned expand : 1;
     struct icalperiodtype range;
     struct partial_comp_t *comp;
-} partial_caldata;
+};
 
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
@@ -455,7 +455,7 @@ static const struct prop_entry caldav_props[] = {
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV,
       PROP_RESOURCE | PROP_PRESCREEN | PROP_CLEANUP,
-      propfind_caldata, NULL, &partial_caldata },
+      propfind_caldata, NULL, (void *) CALDAV_SUPP_DATA },
     { "schedule-user-address", NS_CYRUS,
       PROP_RESOURCE,
       propfind_scheduser, NULL, NULL },
@@ -464,7 +464,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN,
-      propfind_timezone, proppatch_timezone, NULL },
+      propfind_timezone, proppatch_timezone, (void *) CALDAV_SUPP_DATA },
     { "supported-calendar-component-set", NS_CALDAV,
       PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
@@ -501,12 +501,12 @@ static const struct prop_entry caldav_props[] = {
     /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN,
-      propfind_availability, proppatch_availability, NULL },
+      propfind_availability, proppatch_availability, (void *) CALDAV_SUPP_DATA },
 
     /* Backwards compatibility with Apple VAVAILABILITY clients */
     { "calendar-availability", NS_CS,
       PROP_COLLECTION | PROP_PRESCREEN,
-      propfind_availability, proppatch_availability, NULL },
+      propfind_availability, proppatch_availability, (void *) CALDAV_SUPP_DATA },
 
     /* Time Zones by Reference (RFC 7809) properties */
     { "timezone-service-set", NS_CALDAV,
@@ -5467,9 +5467,11 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             xmlNodePtr prop,
                             xmlNodePtr resp __attribute__((unused)),
                             struct propstat propstat[],
-                            void *rock)
+                            void *rock __attribute__((unused)))
 {
-    struct partial_caldata_t *partial = (struct partial_caldata_t *) rock;
+    static struct mime_type_t *out_type = caldav_mime_types;
+    static struct partial_caldata_t partial_caldata = { .comp = NULL };
+    struct partial_caldata_t *partial = &partial_caldata;
     struct caldav_data *cdata = (struct caldav_data *) fctx->data;
     static unsigned need_tz = 0;
     const char *data = NULL;
@@ -5480,6 +5482,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         icalcomponent *ical = NULL;
 
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+
+        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
 
         if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -5611,11 +5615,13 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             } while ((pcomp = sibling));
         }
 
+        partial->comp = NULL;
+
         return 0;
     }
 
     r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
-                         CALDAV_SUPP_DATA, data, datalen);
+                         &out_type, data, datalen);
 
     return r;
 }
@@ -6078,6 +6084,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                              struct propstat propstat[],
                              void *rock __attribute__((unused)))
 {
+    static struct mime_type_t *out_type = caldav_mime_types;
     struct buf attrib = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
@@ -6086,6 +6093,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
     if (propstat) {
         const char *prop_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
 
         if (fctx->mailbox && !fctx->record) {
             r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
@@ -6134,7 +6143,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
-                                 caldav_mime_types, CALDAV_SUPP_DATA,
+                                 caldav_mime_types, &out_type,
                                  data, datalen);
 
     buf_free(&attrib);
@@ -6259,12 +6268,15 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
                                  struct propstat propstat[],
                                  void *rock __attribute__((unused)))
 {
+    static struct mime_type_t *out_type = caldav_mime_types;
     struct buf attrib = BUF_INITIALIZER;
     const char *data = NULL;
     unsigned long datalen = 0;
     int r = 0;
 
     if (propstat) {
+        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
+
         buf_reset(&fctx->buf);
         buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                    (const char *) ns->href, name);
@@ -6296,7 +6308,7 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
-                                 caldav_mime_types, CALDAV_SUPP_DATA,
+                                 caldav_mime_types, &out_type,
                                  data, datalen);
     buf_free(&attrib);
 
