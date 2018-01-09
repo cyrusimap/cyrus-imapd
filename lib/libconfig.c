@@ -208,8 +208,8 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_WARNING, "requested meta partition directory for unknown partition '%s'",
-                            partition);
+        syslog(LOG_DEBUG, "requested meta partition directory for unknown partition '%s'",
+                          partition);
 
     return dir;
 }
@@ -225,8 +225,8 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_WARNING, "requested archive partition directory for unknown partition '%s'",
-                            partition);
+        syslog(LOG_DEBUG, "requested archive partition directory for unknown partition '%s'",
+                          partition);
 
     return dir;
 }
