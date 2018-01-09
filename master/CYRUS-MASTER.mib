@@ -1,7 +1,7 @@
 CYRUS-MASTER-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    MODULE-IDENTITY, OBJECT-TYPE, Counter32
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32, TimeTicks, Gauge32
         FROM SNMPv2-SMI
     DisplayString
         FROM SNMPv2-TC
@@ -9,20 +9,22 @@ IMPORTS
         FROM CMU-MIB;
 
 cyrusMasterMIB MODULE-IDENTITY
-    LAST-UPDATED "1704070437Z"          -- 2017 April 7
+    LAST-UPDATED "201801090840Z"        -- 2018 January 9
     ORGANIZATION "CMU Project Cyrus"
     CONTACT-INFO
                 "       WWW: https://github.com/cyrusimap/cyrus-imapd/
 
-		        Project Cyrus
+                        Project Cyrus
                         Computing Services
                         Carnegie Mellon University
                         Pittsburgh PA. 15213
                 "
     DESCRIPTION "A simple MIB for application status of the Cyrus
-	         master process.
-		"
-	::= { cmuCyrus 1 }
+                 master process.
+                "
+    REVISION    "201801090840Z"
+    DESCRIPTION "Running smilint on the module"
+        ::= { cmuCyrus 1 }
            -- cmuCyrus = .1.3.6.1.4.1.3.6
            -- cyrusMasterMIB = .1.3.6.1.4.1.3.6.1
 
@@ -32,161 +34,161 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
   -- version information
 
-   cyrusMasterInfoDescr  OBJECT-TYPE 
+   cyrusMasterInfoDescr  OBJECT-TYPE
 
-                         SYNTAX     DisplayString (SIZE (0..255)) 
+                         SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         DESCRIPTION   "A general textual description 
+                         DESCRIPTION   "A general textual description
 
-                                        of the Cyrus server." 
+                                        of the Cyrus server."
 
                          ::= { cyrusMasterInfo 1 }
 
-   cyrusMasterInfoVers   OBJECT-TYPE 
+   cyrusMasterInfoVers   OBJECT-TYPE
 
-                         SYNTAX     DisplayString (SIZE (0..255)) 
+                         SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
                          DESCRIPTION  "The version of the Cyrus server."
 
-                         ::= { cyrusMasterInfo 2 } 
+                         ::= { cyrusMasterInfo 2 }
 
    cyrusMasterInfoUptime OBJECT-TYPE
 
-                         SYNTAX	    TimeTicks
+                         SYNTAX     TimeTicks
 
-			 ACCESS	    read-only
-			 
-			 STATUS	    current
+                         MAX-ACCESS read-only
 
-			 DESCRIPTION "The amount of time since the master
-			              process was last started."
+                         STATUS     current
 
-			 ::= { cyrusMasterInfo 3 }
+                         DESCRIPTION "The amount of time since the master
+                                      process was last started."
+
+                         ::= { cyrusMasterInfo 3 }
 
    -- service table
 
-   serviceTable          OBJECT-TYPE 
+   serviceTable          OBJECT-TYPE
 
-                         SYNTAX     SEQUENCE OF serviceEntry
+                         SYNTAX     SEQUENCE OF ServiceEntry
 
-                         ACCESS     not-accessible 
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory 
+                         STATUS     current
 
                          ::= { cyrusMasterMIB 2 }
 
 
-   serviceEntry          OBJECT-TYPE 
+   serviceEntry          OBJECT-TYPE
 
-                         SYNTAX     ServiceEntry 
+                         SYNTAX     ServiceEntry
 
-                         ACCESS     not-accessible 
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         INDEX     { serviceId } 
+                         INDEX     { serviceId }
 
-                         ::= { serviceTable 1 } 
+                         ::= { serviceTable 1 }
 
 
-   ServiceEntry      ::= SEQUENCE { 
+   ServiceEntry      ::= SEQUENCE {
 
-                         serviceForks		Counter32,
+                         serviceForks           Counter32,
 
-			 serviceActive		Gauge32,
+                         serviceActive          Gauge32,
 
-			 serviceName		DisplayString (SIZE (0..255)),
+                         serviceName            DisplayString (SIZE (0..255)),
 
-			 serviceId		INTEGER,
+                         serviceId              INTEGER,
 
                          serviceConnections     Counter32
 
-                         } 		   
+                         }
 
       -- forks since startup
-      serviceForks       OBJECT-TYPE 
+      serviceForks       OBJECT-TYPE
 
-                         SYNTAX     Counter32 
+                         SYNTAX     Counter32
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         DESCRIPTION  "The total number of forks for this 
-			               service since initialization." 
+                         DESCRIPTION  "The total number of forks for this
+                                       service since initialization."
 
-                         ::= { serviceEntry 1 } 
+                         ::= { serviceEntry 1 }
 
-             
+
 
       -- active children
-      serviceActive      OBJECT-TYPE 
+      serviceActive      OBJECT-TYPE
 
-                         SYNTAX     Gauge32 
+                         SYNTAX     Gauge32
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         DESCRIPTION  "The total number of children currently 
+                         DESCRIPTION  "The total number of children currently
 
-                                       active." 
+                                       active."
 
-                         ::= { serviceEntry 2 } 
+                         ::= { serviceEntry 2 }
 
 
-      serviceName        OBJECT-TYPE 
+      serviceName        OBJECT-TYPE
 
                          SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
                          DESCRIPTION  "The name of this service."
 
-                         ::= { serviceEntry 3 } 
+                         ::= { serviceEntry 3 }
 
-      serviceId          OBJECT-TYPE 
+      serviceId          OBJECT-TYPE
 
-                         SYNTAX     INTEGER 
+                         SYNTAX     INTEGER
 
-                         ACCESS     not-accessible
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         DESCRIPTION  "The id of the service as configured." 
+                         DESCRIPTION  "The id of the service as configured."
 
                          ::= { serviceEntry 4 }
 
       -- connections since startup
-      serviceConnections  OBJECT-TYPE 
+      serviceConnections  OBJECT-TYPE
 
-                         SYNTAX     Counter32 
+                         SYNTAX     Counter32
 
-                         ACCESS     read-only 
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory 
+                         STATUS     current
 
-                         DESCRIPTION  "The total number of connections for this 
-			               service since initialization." 
+                         DESCRIPTION  "The total number of connections for this
+                                       service since initialization."
 
-                         ::= { serviceEntry 5 } 
+                         ::= { serviceEntry 5 }
 
 -- event table
 
---   eventTable            OBJECT-TYPE 
+--   eventTable            OBJECT-TYPE
 --                         SYNTAX     SEQUENCE OF eventEntry
---                         ACCESS     not-accessible 
---                         STATUS     mandatory 
+--                         ACCESS     not-accessible
+--                         STATUS     mandatory
 --                         ::= { cyrusMasterMIB 3 }
 
 END
