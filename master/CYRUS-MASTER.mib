@@ -1,7 +1,7 @@
 CYRUS-MASTER-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    MODULE-IDENTITY, OBJECT-TYPE, Counter32
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32, TimeTicks, Gauge32
         FROM SNMPv2-SMI
     DisplayString
         FROM SNMPv2-TC
@@ -9,7 +9,7 @@ IMPORTS
         FROM CMU-MIB;
 
 cyrusMasterMIB MODULE-IDENTITY
-    LAST-UPDATED "1704070437Z"          -- 2017 April 7
+    LAST-UPDATED "201801090840Z"        -- 2018 January 9
     ORGANIZATION "CMU Project Cyrus"
     CONTACT-INFO
                 "       WWW: https://github.com/cyrusimap/cyrus-imapd/
@@ -22,6 +22,8 @@ cyrusMasterMIB MODULE-IDENTITY
     DESCRIPTION "A simple MIB for application status of the Cyrus
                  master process.
                 "
+    REVISION    "201801090840Z"
+    DESCRIPTION "Running smilint on the module"
         ::= { cmuCyrus 1 }
            -- cmuCyrus = .1.3.6.1.4.1.3.6
            -- cyrusMasterMIB = .1.3.6.1.4.1.3.6.1
@@ -36,9 +38,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION   "A general textual description
 
@@ -50,9 +52,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The version of the Cyrus server."
 
@@ -62,7 +64,7 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     TimeTicks
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
                          STATUS     current
 
@@ -75,11 +77,11 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
    serviceTable          OBJECT-TYPE
 
-                         SYNTAX     SEQUENCE OF serviceEntry
+                         SYNTAX     SEQUENCE OF ServiceEntry
 
-                         ACCESS     not-accessible
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          ::= { cyrusMasterMIB 2 }
 
@@ -88,9 +90,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     ServiceEntry
 
-                         ACCESS     not-accessible
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          INDEX     { serviceId }
 
@@ -116,9 +118,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     Counter32
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The total number of forks for this
                                        service since initialization."
@@ -132,9 +134,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     Gauge32
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The total number of children currently
 
@@ -147,9 +149,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     DisplayString (SIZE (0..255))
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The name of this service."
 
@@ -159,9 +161,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     INTEGER
 
-                         ACCESS     not-accessible
+                         MAX-ACCESS not-accessible
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The id of the service as configured."
 
@@ -172,9 +174,9 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     Counter32
 
-                         ACCESS     read-only
+                         MAX-ACCESS read-only
 
-                         STATUS     mandatory
+                         STATUS     current
 
                          DESCRIPTION  "The total number of connections for this
                                        service since initialization."
