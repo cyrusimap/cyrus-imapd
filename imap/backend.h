@@ -96,6 +96,13 @@ struct backend *backend_connect(struct backend *cache, const char *server,
                                 struct protocol_t *prot, const char *userid,
                                 sasl_callback_t *cb, const char **auth_status,
                                 int logfd);
+
+/* returns a new struct backend, where the infd and outfd file descriptors
+ * are used to open the backend's 'in' and 'out' protstreams. Note that piped
+ * backends do not support authentication */
+struct backend *backend_connect_pipe(int infd, int outfd, struct protocol_t *prot,
+                                     int do_tls, int logfd);
+
 int backend_starttls(   struct backend *s,
                         struct tls_cmd_t *tls_cmd,
                         const char *c_cert_file,
