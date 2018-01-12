@@ -8675,6 +8675,8 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     json_object_set_new(msgsub, "id", json_string(msgsub_id));
     free(msgsub_id);
     if (r) {
+        syslog(LOG_ERR, "jmap: can't create message submission: %s",
+                error_message(r));
         *err = json_pack("{s:s}", "type", "smtpProtocolError");
         goto done;
     }
@@ -8838,10 +8840,12 @@ static int setEmailSubmissions(jmap_req_t *req)
             r = jmap_msgsubmission_create(req, msgsub, invalid, &err);
             if (err) {
                 json_object_set_new(notCreated, key, err);
+                json_decref(invalid);
                 r = 0;
                 continue;
             }
             else if (r) {
+                json_decref(invalid);
                 goto done;
             }
             else if (err) {
