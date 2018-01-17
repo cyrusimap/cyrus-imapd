@@ -33,7 +33,7 @@ Install and configure Cassandane
         sudo apt-get install libtest-unit-perl libconfig-inifiles-perl \
             libdatetime-perl libbsd-resource-perl libxml-generator-perl \
             libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
-            libfile-chdir-perl libnet-server-perl libunix-syslog-perl \
+            libfile-chdir-perl libfile-libmagic-perl libnet-server-perl libunix-syslog-perl \
             libdata-uuid-perl libjson-xs-perl libdata-ical-perl libjson-perl \
             libdatetime-format-ical-perl libtext-levenshteinxs-perl \
             libmime-types-perl libdatetime-format-iso8601-perl libcal-dav-perl \
