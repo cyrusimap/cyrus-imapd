@@ -2329,6 +2329,10 @@ Search engine:
 Hardware support:
    SSE4.2:             $cyrus_cv_sse42
 
+Documentation dependencies:
+   sphinx-build:       $SPHINX_BUILD
+   Pod::POM::View::Restructured:  $have_ppvr
+
 Installation directories:
    prefix:             $prefix
    sysconfdir:         $sysconfdir
