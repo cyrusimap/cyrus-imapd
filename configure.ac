@@ -2021,7 +2021,7 @@ if test "$cyrus_cv_sse42" = "yes" ; then
 fi
 AC_MSG_RESULT($cyrus_cv_sse42)
 
-dnl documentation generation (sphinx, perl2rst)
+dnl documentation generation (sphinx, perl2rst, gitpython)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
             AS_HELP_STRING([--with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
@@ -2034,10 +2034,18 @@ AS_CASE([$with_sphinx_build],
 AS_IF([test -z "$SPHINX_BUILD"],
       [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
 AC_SUBST([SPHINX_BUILD])
+
 AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                      [have_ppvr=yes],
                      [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])])
-AM_CONDITIONAL([HAVE_SPHINX_BUILD], [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes])
+
+AX_PYTHON_MODULE([git], [], [python2])
+AS_CASE([$HAVE_PYMOD_GIT],
+        [yes],  [],
+        [*],    [AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+
+AM_CONDITIONAL([HAVE_SPHINX_BUILD],
+    [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes -a x"$HAVE_PYMOD_GIT" = xyes])
 
 AH_TOP([
 /*
@@ -2332,6 +2340,7 @@ Hardware support:
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
    Pod::POM::View::Restructured:  $have_ppvr
+   GitPython:          $HAVE_PYMOD_GIT
 
 Installation directories:
    prefix:             $prefix
