@@ -21,7 +21,7 @@ Synopsis
     i.e.:
     **squatter** [ **-C** *config-file* ] [**-v**]
     **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  *mailbox*...
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]   **-u** *user*...
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  **-u** *user*...
     **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
     **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
     **squatter** [ **-C** *config-file* ] **-I** *file*
@@ -32,16 +32,20 @@ Synopsis
 Description
 ===========
 
+.. Note::
+    The name "**squatter**" once referred both to the SQUAT indexing
+    engine and to the command used to create indexes.  Now that Cyrus
+    supports more than one index type -- SQUAT and Xapian, as of this
+    writing -- the name "**squatter**" refers to the command used to
+    control index creation.  The terms "SQUAT" or "SQUAT index(es)"
+    refers to the indexes used by the older SQUAT indexing engine.
+    Post v3 the *search_engine* setting in *imapd.conf* determines
+    which search engine is used.
+
 **squatter** creates a new text index for one or more IMAP mailboxes.
 The index is a unified index of all of the header and body text
 of each message in a given mailbox.  This index is used to significantly
 reduce IMAP SEARCH times on a mailbox.
-
-.. Note::
-    The name **squatter** is a historical (pre v3) relic from the days
-    when the only indexing engine supported by Cyrus was SQUAT.  Post v3
-    the *search_engine* setting in *imapd.conf* determines which
-    search engine is used.
 
 By default, **squatter** creates  an index of ALL messages in the
 mailbox, not just those since the last time that it was run.  The
@@ -62,17 +66,17 @@ may optionally specify **-r** to recurse from the specified start, or
 **-a** to limit action only to mailboxes which have the shared
 */vendor/cmu/cyrus-imapd/squat* annotation set to "true".
 
-In the fourth synopsis, **squatter** runs in rolling mode.  In this mode
-**squatter** backgrounds itself and runs as a daemon (unless **-d** is
-set), listening to a sync log channel (chosen using **-n** option, and
-set up using the *sync_log_channels* setting in
-:cyrusman:`imapd.conf(5)`).  Very soon after messages are delivered or
+In the fourth synopsis, **squatter** runs in rolling mode.  In this
+mode **squatter** backgrounds itself and runs as a daemon (unless
+**-d** is set), listening to a sync log channel chosen using the **-n**
+option, and set up using the *sync_log_channels* setting in
+:cyrusman:`imapd.conf(5)`.  Very soon after messages are delivered or
 uploaded to mailboxes **squatter** will incrementally index the
-affected mailbox.
+affected mailbox (see notes, below).
 
 In the fifth synopsis, **squatter** reads a single sync log file and
-performs incremental indexing on the mailboxes listed therein.  This is
-sometimes useful for cleaning up after problems with rolling mode.
+performs incremental indexing on the mailbox(es) listed therein.  This
+is sometimes useful for cleaning up after problems with rolling mode.
 
 In the sixth synopsis, **squatter** reads *file* containing *mailbox*
 *uid* tuples and performs indexing on the specified messages.
@@ -187,9 +191,9 @@ Options
 
 .. option:: -S seconds
 
-    After processing each mailbox, sleep for "seconds" before continuing.
-    Can be used to provide some load balancing.  Accepts fractional amounts.
-    |v3-new-feature|
+    After processing each mailbox, sleep for "seconds" before
+    continuing. Can be used to provide some load balancing.  Accepts
+    fractional amounts. |v3-new-feature|
 
 .. option:: -T directory
 
@@ -223,9 +227,9 @@ Options
 
 .. option:: -X
 
-    Reindex all the messages before compacting.  This mode reads all the
-    lists of messages indexed by the listed tiers, and re-indexes them into
-    a temporary database before compacting that into place.
+    Reindex all the messages before compacting.  This mode reads all
+    the lists of messages indexed by the listed tiers, and re-indexes
+    them into a temporary database before compacting that into place.
 
 .. option:: -z desttier
 
@@ -237,23 +241,62 @@ Options
 
     When indexing messages, use the Xapian internal cyrusid rather than
     referencing the ranges of already indexed messages to know if a
-    particular message is indexed.  Useful if the ranges get out of sync
-    with the actual messages (e.g. if files on a tier are lost)
+    particular message is indexed.  Useful if the ranges get out of
+    sync with the actual messages (e.g. if files on a tier are lost)
     |v3-new-feature|
 
 Examples
 ========
+
+**squatter** is typically deployed via entries in
+:cyrusman:`cyrus.conf(5)`, in either the START or EVENTS sections.
+
+For the older SQUAT search engine, which offers poor performance in
+rolling mode (-R) we recommend triggering periodic runs via entries in
+the EVENTS section, as follows:
 
 Sample entries from the EVENTS section of :cyrusman:`cyrus.conf(5)` for
 periodic **squatter** runs:
 
     ::
 
-        # reindex changed mailboxes (fulltext) approximately every three hours
-        squatter1	cmd="/usr/bin/ionice -c idle /usr/lib/cyrus/bin/squatter -s" period=180
+        EVENTS {
+            # reindex changed mailboxes (fulltext) approximately every three hours
+            squatter1   cmd="/usr/bin/ionice -c idle /usr/lib/cyrus/bin/squatter -i" period=180
 
-        # reindex all mailboxes (fulltext) daily
-        squattera	cmd="/usr/lib/cyrus/bin/squatter" at=0117
+            # reindex all mailboxes (fulltext) daily
+            squattera   cmd="/usr/lib/cyrus/bin/squatter" at=0117
+        }
+
+For the newer Xapian search engine, and with sufficiently fast storage,
+the rolling mode (-R) offers advantages.  Use of rolling mode requires
+that **squatter** be invoked in the START section.
+
+Sample entries for the START section of :cyrusman:`cyrus.conf(5)` for
+rolling **squatter** operation:
+
+    ::
+
+        START {
+          # run a rolling squatter using the default sync_log channel "squatter"
+          squatter cmd="squatter -R"
+
+          # run a rolling squatter using a specific sync_log channel
+          squatter cmd="squatter -R -n indexer"
+        }
+
+..  Note::
+
+    When using the *-R* rolling mode, you MUST enable sync_log operation
+    in :cyrusman:`imapd.conf(5)` via the `sync_log: on` setting, and
+    MUST define a sync_log channel via the `sync_log_channels:`
+    setting.
+
+..  Note::
+
+    When using the Xapian search engine, you must define various
+    settings in :cyrusman:`imapd.conf(5)`.  Please read all relevant
+    Xapian documentation in this release before using Xapian.
 
 [NB: More examples needed]
 
