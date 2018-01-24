@@ -215,6 +215,12 @@ Options
 
     Increase the verbosity of progress/status messages.
 
+.. option:: -X
+
+    Reindex all the messages before compacting.  This mode reads all the
+    lists of messages indexed by the listed tiers, and re-indexes them into
+    a temporary database before compacting that into place.
+
 .. option:: -z desttier
 
     In compact mode, the destination tier for the compacted indices.
