@@ -490,6 +490,12 @@ rst_prolog += """
 .. |v3-new-command| replace:: This command was introduced in version 3.0.
 """
 
+# New feature version disclaimer for master branch
+rst_prolog += """
+.. |master-new-feature| replace:: This feature is only available on the master branch.
+.. |master-new-command| replace:: This command is only available on the master branch.
+"""
+
 rst_prolog += """
 .. |AMS| replace:: :abbr:`AMS (Andrew Mail System)`
 .. |CMU| replace:: :abbr:`CMU (Carnegie Mellon University)`
