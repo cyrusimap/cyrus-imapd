@@ -55,7 +55,6 @@ Install and configure Cassandane
         sudo cpan -i Net::DAVTalk
         sudo cpan -i Net::CardDAVTalk
         sudo cpan -i Net::CalDAVTalk
-        sudo cpan -i Mail::JMAPTalk
         sudo cpan -i Math::Int64
 
 3. Install Cassandane

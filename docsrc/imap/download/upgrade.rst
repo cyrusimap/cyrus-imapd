@@ -285,8 +285,7 @@ To upgrade all the mailboxes to the latest version. This will take hours, possib
 
     reconstruct -V max
 
-New configuration: if turning on conversations, you need to create conversations.db for each user.
-(This is required for jmap).::
+New configuration: if turning on conversations, you need to create conversations.db for each user.::
 
      ctl_conversationsdb -b -r
 
@@ -306,7 +305,6 @@ databases need to be reconstructed due to format changes.::
 Here are some which may interest you. Check the :ref:`3.0 release notes <imap-release-notes-3.0>`
 for the full list.
 
-* :ref:`JMAP <developer-jmap>`
 * :ref:`Backups <cyrus-backups>`
 * :ref:`Xapian for searching <imapinstall-xapian>`
 * Cross-domain support. See ``crossdomains`` in :cyrusman:`imapd.conf(5)`

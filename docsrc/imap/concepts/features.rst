@@ -25,9 +25,6 @@ concurrent read/write connections to the same mailbox are permitted.
 The server supports access control lists on mailboxes and storage
 quotas on mailbox hierarchies.
 
-Cyrus IMAP provisionally supports the emerging JMAP protocol standards,
-when built for such.
-
 The following documents show the full power of each feature that is
 included with Cyrus IMAP.
 

@@ -117,22 +117,11 @@ details and other recent changes.
 
     *   Server-side threading with reduced protocol chatter for mobile
         or other high-latency clients.
-    *   Required for JMAP support.
     *   See the ``conversations`` options in :cyrusman:`imapd.conf(5)`
-
-*   JMAP
-
-    *   JSON Mail Access Protocol
-    *   Follow-on successor to IMAP ("J comes after I") with a special
-        focus on mobile and other clients with high-latency or
-        unreliable connectivity.
-    *   Includes Calendaring, Contacts, Conversations, message delivery.
-    *   See ``httpmodules`` in :cyrusman:`imapd.conf(5)`
 
 *   Xapian
 
     *   Higher quality full-text search support.
-    *   Required for JMAP support.
     *   See the ``search_engine`` option in :cyrusman:`imapd.conf(5)`
         and ``doc/README.xapian`` in the source distribution.
 
