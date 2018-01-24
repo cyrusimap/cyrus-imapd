@@ -219,7 +219,7 @@ Options
 .. option:: -U
 
     In compact mode, only compact if re-indexing.
-    |v3-new-feature|
+    |master-new-feature|
 
 .. option:: -v
 
@@ -243,7 +243,7 @@ Options
     referencing the ranges of already indexed messages to know if a
     particular message is indexed.  Useful if the ranges get out of
     sync with the actual messages (e.g. if files on a tier are lost)
-    |v3-new-feature|
+    |master-new-feature|
 
 Examples
 ========
