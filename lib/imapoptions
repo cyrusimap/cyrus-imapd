@@ -1030,42 +1030,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    into textBody, including placeholders for inlined images. Any
    text bodies (plain or HTML) are rendered into htmlBody. */
 
-{ "jmap_smtp_backend", "file", STRINGLIST("host", "sendmail", "file") }
-/* The SMTP backend to use for JMAP message submissions.
-
-   The \"host\" backend sends message submissions via
-   a TCP socket to the SMTP host defined in the config
-   option jmap_smtphost.
-
-   The \"sendmail\" backend forks the Cyrus process into
-   the executable defined in the config option sendmail.
-   The executable must accept \"-bs\" as command line
-   argument, read from stdin and must implement the minimum
-   SMTP protocol as defined in section 4.5.1 of RFC 5321.
-
-   The \"file\" backend persists the complete SMTP commands
-   sent by the Cyrus SMTP client in a file created with
-   mkstemp(3). The file name template is specified in the
-   config option jmap_smtpfile. This backend is mostly
-   useful for testing.
-
-   If the SMTP EHLO command reports AUTH (RFC 4954) as a
-   supported extension, then the MAIL FROM command contains
-   the AUTH parameter set to the authenticated JMAP user.
-   */
-
-{ "jmap_smtp_host", "localhost:25", STRING }
-/* The SMTP host to use for JMAP message submissions. The
-   value of this option must the name or IP address of a
-   TCP host, followed optionally by a colon and the port
-   or service to use. The default port is 25. */
-
-{ "jmap_smtp_file", "/tmp/cyrus-imapd.msgsub.XXXXXX", STRING }
-/* The file template to use to persist JMAP message submissions
-   in files. The template must be valid according to the rules
-   specified for the mkstemp(3) function.
- */
-
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
@@ -2132,6 +2096,50 @@ product version in the capabilities
 { "skiplist_unsafe", 0, SWITCH }
 /* If enabled, this option forces the skiplist cyrusdb backend to
    not sync writes to the disk.  Enabling this option is NOT RECOMMENDED. */
+
+
+{ "smtp_backend", "sendmail", STRINGLIST("host", "sendmail") }
+/* The SMTP backend to use for sending email.
+
+   The \"host\" backend sends message submissions via
+   a TCP socket to the SMTP host defined in the config
+   option smtp_host.
+
+   The \"sendmail\" backend forks the Cyrus process into
+   the executable defined in the config option sendmail.
+   The executable must accept \"-bs\" as command line
+   argument, read from stdin and must implement the minimum
+   SMTP protocol as defined in section 4.5.1 of RFC 5321.
+
+   If the SMTP EHLO command reports AUTH (RFC 4954) as a
+   supported extension, then the MAIL FROM command includes
+   the AUTH parameter, with its value set to the name of any
+   authenticated user which triggered the email. The AUTH
+   parameter is omitted if the user is unknown to the calling
+   process.
+   */
+
+{ "smtp_host", "localhost:587", STRING }
+/* The SMTP host to use for sending mail (also see the
+   smpt_backend option). The value of this option must
+   the name or IP address of a TCP host, followed optionally
+   by a colon and the port or service to use. The default
+   port is 587. TLS may be activated by appending \"/tls\"
+   to the value. Authentication is enabled if smtp_auth_authname
+   is set. Authentication can be explicitly disabled by appending
+   \"/noauth\" to the host address. */
+
+{ "smtp_auth_authname", NULL, STRING }
+/* The authentication name to use when authenticating to the SMTP
+   server defined in smtp_host. */
+
+{ "smtp_auth_password", NULL, STRING }
+/* The password to use when authenticating to the SMTP server defined
+   in smtp_host. */
+
+{ "smtp_auth_realm", NULL, STRING }
+/* The authentication SASL realm to use when authenticating to a SMTP
+   server. */
 
 { "soft_noauth", 1, SWITCH }
 /* If enabled, lmtpd returns temporary failures if the client does not

@@ -930,6 +930,54 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
     return r;
 }
 
+EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
+                                              struct protocol_t *prot,
+                                              int do_tls, int logfd)
+
+{
+    struct backend *ret = xzmalloc(sizeof(struct backend));
+    int r;
+
+    ret->in = prot_new(infd, 0);
+    ret->out = prot_new(outfd, 1);
+    ret->sock = -1;
+    prot_settimeout(ret->in, config_getint(IMAPOPT_CLIENT_TIMEOUT));
+    prot_setflushonread(ret->in, ret->out);
+    ret->prot = prot;
+
+    /* use literal+ to send literals */
+    prot_setisclient(ret->in, 1);
+    prot_setisclient(ret->out, 1);
+
+    /* Start TLS if required */
+    if (do_tls) {
+        r = backend_starttls(ret, NULL, NULL, NULL);
+        if (r) goto error;
+    }
+
+    /* Login to the server. Not really, but let's handshake. */
+    if (prot->type == TYPE_SPEC)
+        r = prot->u.spec.login(ret, NULL, NULL, NULL, /*noauth*/1);
+    else
+        r = backend_login(ret, NULL, NULL, NULL, /*noauth*/1);
+
+    if (r) goto error;
+
+    /* Set up logging */
+    if (logfd >= 0) {
+        prot_setlog(ret->in, logfd);
+        prot_setlog(ret->out, logfd);
+    }
+    else prot_settimeout(ret->in, 0);
+
+    return ret;
+
+error:
+    ret->sock = -1;
+    free(ret);
+    return NULL;
+}
+
 EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
                                 struct protocol_t *prot, const char *userid,
                                 sasl_callback_t *cb, const char **auth_status,
@@ -1161,7 +1209,7 @@ EXPORTED int backend_ping(struct backend *s, const char *userid)
 
 EXPORTED void backend_disconnect(struct backend *s)
 {
-    if (!s || s->sock == -1) return;
+    if (!s) return;
 
     if (!prot_error(s->in)) {
        if (s->prot->type == TYPE_SPEC) s->prot->u.spec.logout(s);
@@ -1205,7 +1253,7 @@ EXPORTED void backend_disconnect(struct backend *s)
 #endif /* HAVE_SSL */
 
     /* close/free socket & prot layer */
-    cyrus_close_sock(s->sock);
+    if (s->sock != -1) cyrus_close_sock(s->sock);
     s->sock = -1;
 
     prot_free(s->in);
