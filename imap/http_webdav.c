@@ -264,6 +264,7 @@ struct namespace_t namespace_drive = {
     {
         { &meth_acl,            &webdav_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */
+        { NULL,                 NULL },                /* CONNECT      */
         { &meth_copy_move,      &webdav_params },      /* COPY         */
         { &meth_delete,         &webdav_params },      /* DELETE       */
         { &meth_get_head,       &webdav_params },      /* GET          */

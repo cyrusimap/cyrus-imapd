@@ -94,6 +94,7 @@ enum {
 enum {
     METH_ACL = 0,
     METH_BIND,
+    METH_CONNECT,
     METH_COPY,
     METH_DELETE,
     METH_GET,

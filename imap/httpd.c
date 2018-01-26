@@ -403,6 +403,7 @@ static struct sasl_callback mysasl_cb[] = {
 const struct known_meth_t http_methods[] = {
     { "ACL",            0,              CYRUS_HTTP_ACL_TOTAL },
     { "BIND",           0,              CYRUS_HTTP_BIND_TOTAL },
+    { "CONNECT",        METH_NOBODY,    CYRUS_HTTP_CONNECT_TOTAL },
     { "COPY",           METH_NOBODY,    CYRUS_HTTP_COPY_TOTAL },
     { "DELETE",         METH_NOBODY,    CYRUS_HTTP_DELETE_TOTAL },
     { "GET",            METH_NOBODY,    CYRUS_HTTP_GET_TOTAL },
@@ -434,6 +435,7 @@ struct namespace_t namespace_default = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
+        { NULL,                 NULL },                 /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */

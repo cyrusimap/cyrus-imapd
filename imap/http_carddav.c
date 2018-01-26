@@ -349,6 +349,7 @@ struct namespace_t namespace_addressbook = {
     {
         { &meth_acl,            &carddav_params },      /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
+        { NULL,                 NULL },                 /* CONNECT      */
         { &meth_copy_move,      &carddav_params },      /* COPY         */
         { &meth_delete,         &carddav_params },      /* DELETE       */
         { &meth_get_head,       &carddav_params },      /* GET          */

@@ -306,6 +306,7 @@ struct namespace_t namespace_principal = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
+        { NULL,                 NULL },                 /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get_head,       &princ_params },        /* GET          */
@@ -9221,6 +9222,7 @@ struct namespace_t namespace_notify = {
     {
         { &meth_acl,            &notify_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */
+        { NULL,                 NULL },                /* CONNECT      */
         { NULL,                 NULL },                /* COPY         */
         { &meth_delete,         &notify_params },      /* DELETE       */
         { &meth_get_head,       &notify_params },      /* GET          */

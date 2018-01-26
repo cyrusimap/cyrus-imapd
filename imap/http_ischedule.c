@@ -125,6 +125,7 @@ struct namespace_t namespace_ischedule = {
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
+        { NULL,                 NULL }, /* CONNECT      */
         { NULL,                 NULL }, /* COPY         */
         { NULL,                 NULL }, /* DELETE       */
         { &meth_get_isched,     NULL }, /* GET          */
@@ -155,6 +156,7 @@ struct namespace_t namespace_domainkey = {
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
+        { NULL,                 NULL }, /* CONNECT      */
         { NULL,                 NULL }, /* COPY         */
         { NULL,                 NULL }, /* DELETE       */
         { &meth_get_domainkey,  NULL }, /* GET          */
