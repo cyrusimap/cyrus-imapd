@@ -8439,56 +8439,6 @@ static void envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *env)
     }
 }
 
-static int jmap_sendrecord(jmap_req_t *req, msgrecord_t *mr, json_t *envelope, char **msgsub_id)
-{
-    struct buf buf = BUF_INITIALIZER;
-    uint32_t uid = 0;
-    struct mailbox *mbox = NULL;
-    smtpclient_t *sm = NULL;
-    int r = 0;
-    int fd_msg = -1;
-
-    /* Open the message file */
-    const char *fname;
-    r = msgrecord_get_fname(mr, &fname);
-    if (r) goto done;
-
-    fd_msg = open(fname, 0);
-    if (fd_msg == -1) {
-        syslog(LOG_ERR, "jmap_sendrecord: can't open %s: %m", fname);
-        r = IMAP_IOERROR;
-        goto done;
-    }
-    r = msgrecord_get_uid(mr, &uid);
-    if (r) goto done;
-    r = msgrecord_get_mailbox(mr, &mbox);
-    if (r) goto done;
-
-    /* Open the SMTP connection */
-    r = smtpclient_open(&sm);
-    if (r) goto done;
-    smtpclient_set_auth(sm, req->userid);
-
-    /* Prepare envelope */
-    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
-    envelope_to_smtp(&smtpenv, envelope);
-
-    /* Write message */
-    struct protstream *data = prot_new(fd_msg, /*write*/0);
-    r = smtpclient_sendprot(sm, &smtpenv, data);
-    smtp_envelope_fini(&smtpenv);
-    prot_free(data);
-    if (r) goto done;
-
-    *msgsub_id = xstrdup(makeuuid());
-
-done:
-    if (sm) smtpclient_close(&sm);
-    if (fd_msg != -1) close(fd_msg);
-    buf_free(&buf);
-    return r;
-}
-
 static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
                                      json_t *invalid, json_t **err)
 {
@@ -8576,6 +8526,7 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     msgrecord_t *mr = NULL;
     json_t *msg = NULL;
     int r = 0;
+    int fd_msg = -1;
 
     /* Lookup the message */
     r = jmapmsg_find(req, msgid, &mboxname, &uid);
@@ -8669,20 +8620,56 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
         goto done;
     }
 
-    /* Send the message submission */
-    char *msgsub_id = NULL;
-    r = jmap_sendrecord(req, mr, envelope, &msgsub_id);
-    json_object_set_new(msgsub, "id", json_string(msgsub_id));
-    free(msgsub_id);
+    /* Open the message file */
+    const char *fname;
+    r = msgrecord_get_fname(mr, &fname);
+    if (r) goto done;
+
+    fd_msg = open(fname, 0);
+    if (fd_msg == -1) {
+        syslog(LOG_ERR, "jmap_sendrecord: can't open %s: %m", fname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* Close the message record and mailbox. There's a race
+     * with us still keeping the file descriptor to the
+     * message open. But we don't want to long-lock the
+     * mailbox while sending the mail over to a SMTP host */
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+
+    /* Open the SMTP connection */
+    smtpclient_t *sm = NULL;
+    r = smtpclient_open(&sm);
+    if (r) goto done;
+    smtpclient_set_auth(sm, req->userid);
+
+    /* Prepare envelope */
+    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+    envelope_to_smtp(&smtpenv, envelope);
+
+    /* Send message */
+    struct protstream *data = prot_new(fd_msg, /*write*/0);
+    r = smtpclient_sendprot(sm, &smtpenv, data);
+    smtp_envelope_fini(&smtpenv);
+    prot_free(data);
+    smtpclient_close(&sm);
     if (r) {
         syslog(LOG_ERR, "jmap: can't create message submission: %s",
                 error_message(r));
         *err = json_pack("{s:s}", "type", "smtpProtocolError");
         goto done;
     }
+
     /* All done */
+    char *msgsub_id = NULL;
+    msgsub_id = xstrdup(makeuuid());
+    json_object_set_new(msgsub, "id", json_string(msgsub_id));
+    free(msgsub_id);
 
 done:
+    if (fd_msg != -1) close(fd_msg);
     if (msg) json_decref(msg);
     if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
