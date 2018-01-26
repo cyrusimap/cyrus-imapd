@@ -39,3 +39,12 @@ licence, based on the Cyrus IMAPD licence.
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+--
+
+The source code for the Net::XmtpServer Perl module located at
+Net/XmtpServer.pm is covered by the following copyright and license:
+
+Copyright (C) 2003-2017 by FastMail Pty Ltd
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.

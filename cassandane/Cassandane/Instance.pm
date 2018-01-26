@@ -69,6 +69,8 @@ use Cassandane::Daemon;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
+use Cassandane::PortManager;
+use Cassandane::Net::SMTPServer;
 require Cyrus::DList;
 
 my $__cached_rootdir;
@@ -625,6 +627,8 @@ sub _generate_imapd_conf
 	$self->{config}->set(
 	    imipnotifier => 'imip',
 	    event_groups => 'mailbox message flags calendar',
+	    smtp_backend => 'host',
+	    smtp_host => $self->{smtphost},
 	);
     }
     else {
@@ -1010,6 +1014,42 @@ sub create_user
     }
 }
 
+sub _start_smtpd {
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $port = Cassandane::PortManager::alloc();
+
+    my $smtppid = fork();
+    unless ($smtppid) {
+        # Child process.
+        $SIG{TERM} = sub { die "killed" };
+
+        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+
+        my $smtpd = Cassandane::Net::SMTPServer->new({
+            cass_verbose => 1,
+            xmtp_personality => 'smtp',
+            host => $host,
+            port => $port,
+        });
+        $smtpd->run() or die;
+        exit 0; # Never reached
+    }
+
+    # Parent process.
+    $self->{smtphost} = $host . ':' . $port;
+
+    xlog "started smtpd as $smtppid";
+    push @{$self->{_shutdowncallbacks}}, sub {
+        my $self = shift;
+        xlog "killing smtpd $smtppid";
+        kill(15, $smtppid);
+        waitpid($smtppid, 0);
+    }
+}
+
 sub start
 {
     my ($self) = @_;
@@ -1019,6 +1059,10 @@ sub start
     $self->_init_basedir_and_name();
 
     xlog "start $self->{description}: basedir $self->{basedir}";
+
+    # Start SMTP server before generating imapd config, we need to
+    # to set smtp_host to the auto-assigned TCP port it listens on.
+    $self->_start_smtpd();
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {

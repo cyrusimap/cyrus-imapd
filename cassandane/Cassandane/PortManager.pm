@@ -42,7 +42,7 @@ use strict;
 use warnings;
 
 my $base_port;
-my $max_ports = 10;
+my $max_ports = 20;
 my $next_port = 0;
 my %allocated;
 
