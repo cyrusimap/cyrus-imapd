@@ -4538,10 +4538,13 @@ EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *us
  */
 unsigned mailbox_count_unseen(struct mailbox *mailbox)
 {
+    assert(mailbox_index_islocked(mailbox, 0));
+
+    if (mailbox->i.minor_version > 13)
+        return mailbox->i.unseen;
+
     const message_t *msg;
     unsigned count = 0;
-
-    assert(mailbox_index_islocked(mailbox, 0));
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
