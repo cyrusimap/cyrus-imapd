@@ -338,6 +338,13 @@ struct mailbox_iter {
 /* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
  * value which counts the total size of all files included expunged
  * files.  This will need a header size change, hence putting it off */
+#define OFFSET_SPARE0 128
+#define OFFSET_SPARE1 132
+#define OFFSET_SPARE2 136
+#define OFFSET_SPARE3 140
+#define OFFSET_SPARE4 144
+#define OFFSET_SPARE5 148
+#define OFFSET_SPARE6 152
 #define OFFSET_HEADER_CRC 156 /* includes all zero for the spares! */
 
 /* Offsets of index_record fields in index/expunge file
