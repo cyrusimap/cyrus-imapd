@@ -3834,6 +3834,10 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         repack->i.start_offset = 128;
         repack->i.record_size = 104;
         break;
+    case 14:
+        repack->i.start_offset = 160;
+        repack->i.record_size = 104;
+        break;
     default:
         fatal("index version not supported", EC_SOFTWARE);
     }
@@ -3886,6 +3890,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     repack->i.answered = 0;
     repack->i.deleted = 0;
     repack->i.flagged = 0;
+    repack->i.unseen = 0;
     repack->i.exists = 0;
     repack->i.first_expunged = 0;
     repack->i.leaked_cache_records = 0;
