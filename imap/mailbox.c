@@ -2947,6 +2947,7 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.answered = 0;
     mailbox->i.flagged = 0;
     mailbox->i.deleted = 0;
+    mailbox->i.unseen = 0;
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
     mailbox->i.quota_annot_used = 0;
