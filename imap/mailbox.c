@@ -1510,7 +1510,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
 {
     uint32_t crc;
     bit32 qannot;
-    size_t minlen;
+    size_t headerlen;
 
     if (len < OFFSET_MINOR_VERSION+4)
         return IMAP_MAILBOX_BADFORMAT;
@@ -1523,24 +1523,28 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     switch (i->minor_version) {
     case 6:
     case 7:
-        minlen = 76;
+        headerlen = 76;
         break;
     case 8:
-        minlen = 92;
+        headerlen = 92;
         break;
     case 9:
     case 10:
-        minlen = 96;
+        headerlen = 96;
         break;
     case 12:
     case 13:
-        minlen = 128;
+        headerlen = 128;
+        break;
+    case 14:
+        headerlen = 160;
         break;
     default:
         return IMAP_MAILBOX_BADFORMAT;
     }
-    if (len < minlen)
+    if (len < headerlen)
         return IMAP_MAILBOX_BADFORMAT;
+
     i->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
     i->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
     i->num_records = ntohl(*((bit32 *)(buf+OFFSET_NUM_RECORDS)));
@@ -1555,8 +1559,10 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     i->options = ntohl(*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)));
     i->leaked_cache_records = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE)));
     if (i->minor_version < 8) goto done;
+
     i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ);
     if (i->minor_version < 12) goto done;
+
     i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ);
     i->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
     i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
@@ -1566,17 +1572,23 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
     i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
 
-    if (i->minor_version > 12) {
-        i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
-        qannot = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)));
-        /* this field is stored as a 32b unsigned on disk but 64b signed
-         * in memory, so we need to be careful about sign extension */
-        i->quota_annot_used = (quota_t)((unsigned long long)qannot);
-        i->synccrcs.annot = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)));
-    }
+    if (i->minor_version < 13) goto crc;
 
-    crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_CRC)));
-    if (crc != crc32_map(buf, OFFSET_HEADER_CRC))
+    i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+    qannot = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)));
+    /* this field is stored as a 32b unsigned on disk but 64b signed
+     * in memory, so we need to be careful about sign extension */
+    i->quota_annot_used = (quota_t)((unsigned long long)qannot);
+    i->synccrcs.annot = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)));
+
+    if (i->minor_version < 14) goto crc;
+
+    i->unseen = ntohl(*((bit32 *)(buf+OFFSET_UNSEEN)));
+
+crc:
+    /* CRC is always the last 4 bytes */
+    crc = ntohl(*((bit32 *)(buf+headerlen-4)));
+    if (crc != crc32_map(buf, headerlen-4))
         return IMAP_MAILBOX_CHECKSUM;
 
 done:
@@ -2348,6 +2360,7 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
 {
     bit32 crc;
     bit32 options = i->options & MAILBOX_OPT_VALID;
+    size_t headerlen = INDEX_HEADER_SIZE;
 
     memset(buf, 0, INDEX_HEADER_SIZE); /* buffer is always this big, and aligned */
 
@@ -2411,9 +2424,17 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
         *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
     }
 
+    if (i->minor_version > 13) {
+        *((bit32 *)(buf+OFFSET_UNSEEN)) = htonl(i->unseen);
+    }
+    else {
+        /* we expanded the file size in version 14 */
+        headerlen = 128;
+    }
+
     /* Update checksum */
-    crc = htonl(crc32_map((char *)buf, OFFSET_HEADER_CRC));
-    *((bit32 *)(buf+OFFSET_HEADER_CRC)) = crc;
+    crc = htonl(crc32_map((char *)buf, headerlen-4));
+    *((bit32 *)(buf+headerlen-4)) = crc;
 
     return crc;
 }

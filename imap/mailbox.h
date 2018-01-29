@@ -74,7 +74,7 @@
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
-#define MAILBOX_MINOR_VERSION   13
+#define MAILBOX_MINOR_VERSION   14
 #define MAILBOX_CACHE_MINOR_VERSION 6
 
 #define FNAME_HEADER "/cyrus.header"
@@ -188,6 +188,7 @@ struct index_header {
     uint32_t deleted;
     uint32_t answered;
     uint32_t flagged;
+    uint32_t unseen;
 
     uint32_t options;
     uint32_t leaked_cache_records;
@@ -333,10 +334,11 @@ struct mailbox_iter {
                           /* Spares - only use these if the index */
                           /*  record size remains the same */
 #define OFFSET_SYNCCRCS_ANNOT 120 /* SYNC_CRC of the annotations */
-#define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
+#define OFFSET_UNSEEN 124         /* total number of UNSEEN messages (owner) */
 /* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
  * value which counts the total size of all files included expunged
  * files.  This will need a header size change, hence putting it off */
+#define OFFSET_HEADER_CRC 156 /* includes all zero for the spares! */
 
 /* Offsets of index_record fields in index/expunge file
  *
