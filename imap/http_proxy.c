@@ -291,7 +291,7 @@ static int login(struct backend *s, const char *userid,
                 /* Default handling of success data */
                 serverin = hdr[0];
             }
-            else if ((scheme->flags & AUTH_SUCCESS_WWW) &&
+            else if (scheme && (scheme->flags & AUTH_SUCCESS_WWW) &&
                      (hdr = spool_getheader(hdrs, "WWW-Authenticate"))) {
                 /* Special handling of success data for this scheme */
                 serverin = strchr(hdr[0], ' ');
