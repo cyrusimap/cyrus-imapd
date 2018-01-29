@@ -337,7 +337,8 @@ struct mailbox_iter {
 #define OFFSET_UNSEEN 124         /* total number of UNSEEN messages (owner) */
 /* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
  * value which counts the total size of all files included expunged
- * files.  This will need a header size change, hence putting it off */
+ * files. We've created the header space now, but will also need code
+ * changes, so holding off */
 #define OFFSET_SPARE0 128
 #define OFFSET_SPARE1 132
 #define OFFSET_SPARE2 136
