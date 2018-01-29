@@ -2689,6 +2689,9 @@ static void header_update_counts(struct index_header *i,
     if (record->system_flags & FLAG_DELETED)
         i->deleted += num;
 
+    if (!(record->system_flags & FLAG_SEEN))
+        i->unseen += num;
+
     if (is_add) {
         i->exists++;
         i->quota_mailbox_used += record->size;
