@@ -105,6 +105,7 @@
 #include "statuscache.h"
 #include "strarray.h"
 #include "sync_log.h"
+#include "vcard_support.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"

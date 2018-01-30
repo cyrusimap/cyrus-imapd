@@ -53,4 +53,7 @@ extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                  struct caldav_db *caldavdb, unsigned flags,
                                  const char *schedule_userid);
 
+/* defined in http_tzdist.c */
+extern void icalcomponent_add_required_timezones(icalcomponent *ical);
+
 #endif /* HTTP_CALDAV_H */

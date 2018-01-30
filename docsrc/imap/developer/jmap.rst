@@ -6,6 +6,14 @@ JMAP support
 
 `JMAP <http://jmap.io/>`_ is an alternate mechanism for synchronising a mail client with a mail server, intended as a replacement for IMAP. It is a transport-agnostic, stateless JSON-based API, aiming to be compatible with the IMAP data model, but with reduced data usage and more efficient synchronisation.
 
+.. warning::
+
+    Cyrus versions 3.0 to 3.0.5 included experimental JMAP support, based on a snapshot of the then current JMAP specification draft. However, since the code-freeze of the Cyrus IMAPd 3.0 release, the JMAP specification at the `IETF JMAP working group <https://datatracker.ietf.org/wg/jmap/about/>` has evolved rapidly. Backporting the latest JMAP specification to Cyrus version 3.0 was unfeasible. Version 3.0.5 removed the outdated JMAP implementation draft from the 3.0 stable branch. Future Cyrus stable releases will implement JMAP once the speficiation is standardized.
+
+    Installations currently using JMAP are highly encouraged to upgrade to the latest Cyrus IMAPd development snapshot which implements the latest specification draft.
+
+    The remainder of this section is only relevant for versions 3.0 to 3.0.5.
+
 Cyrus administration
 ====================
 

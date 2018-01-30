@@ -691,9 +691,6 @@ struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
-#ifdef WITH_JMAP
-    &namespace_jmap,
-#endif
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
 #ifdef WITH_DAV
     &namespace_calendar,

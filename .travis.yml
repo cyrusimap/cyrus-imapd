@@ -52,7 +52,7 @@ before_script:
 - autoreconf -i -s
 - ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC"
   --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http
-  --enable-jmap --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes
+  --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes
   --enable-murder --enable-idled --enable-sieve
 - make
 script:

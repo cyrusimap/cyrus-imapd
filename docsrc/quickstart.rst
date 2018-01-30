@@ -195,7 +195,6 @@ Cyrus Server configured components
     * replication        : yes
     * sieve              : yes
     * calalarmd          : no
-    * jmap               : yes
     * objectstore        : no
     * backup             : no
 

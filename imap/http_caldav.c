@@ -76,7 +76,6 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
-#include "jmap_ical.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "map.h"
@@ -291,13 +290,6 @@ static struct mime_type_t caldav_mime_types[] = {
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
-#ifdef WITH_JMAP
-    { "application/event+json; charset=utf-8", NULL, "jevent",
-      (struct buf* (*)(void *)) &icalcomponent_as_jevent_string,
-      (void * (*)(const struct buf*)) &jevent_string_as_icalcomponent,
-      NULL, NULL, NULL
-    },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -2031,7 +2023,7 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
         goto fail;
     }
 
-    tt.is_utc = 1;
+    icaltime_set_utc(&tt, 1);
     return tt;
 
   fail:

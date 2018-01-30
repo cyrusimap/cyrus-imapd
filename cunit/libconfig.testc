@@ -226,14 +226,13 @@ static void test_bitfield_value(void)
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "httpmodules: carddav freebusy jmap\n"
+        "httpmodules: carddav freebusy\n"
     );
 
     httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
     CU_ASSERT_EQUAL(httpmodules,
                     IMAP_ENUM_HTTPMODULES_CARDDAV |
-                    IMAP_ENUM_HTTPMODULES_FREEBUSY |
-                    IMAP_ENUM_HTTPMODULES_JMAP);
+                    IMAP_ENUM_HTTPMODULES_FREEBUSY);
 }
 
 static void test_bitfield_default(void)

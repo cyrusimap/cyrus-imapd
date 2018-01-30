@@ -25,7 +25,6 @@ Features
 * Supports antivirus and antispam toolkits
 * Handles deliverability: SPF, DKIM, DMARC
 * Extensive authentication options, through Cyrus SASL
-* JMAP support
 * Long list of supported standards
 
 Read more in our full :ref:`list of features <imap-features>`.
