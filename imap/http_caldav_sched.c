@@ -172,7 +172,6 @@ int caladdress_lookup(const char *addr,
     param->userid = xstrdupnull(userid); /* freed by sched_param_free */
     param->flags |= SCHEDTYPE_REMOTE;
 
-#ifdef WITH_DKIM
     /* Do iSchedule DNS SRV lookup */
 
     /* XXX  If success, set server, port,
@@ -190,13 +189,11 @@ int caladdress_lookup(const char *addr,
         param->flags |= SCHEDTYPE_ISCHEDULE;
     }
     else if (!strcmp(p, "bedework.org")) {
-        param->server = xstrdrup("www.bedework.org");
+        param->server = xstrdup("www.bedework.org");
         param->port = 80;
         param->flags |= SCHEDTYPE_ISCHEDULE;
     }
 #endif /* IOPTEST */
-
-#endif /* WITH_DKIM */
 
     return 0;
 }
@@ -2054,14 +2051,18 @@ void sched_deliver(const char *recipient, void *data, void *rock)
     /* don't schedule to yourself */
     if (sparam.isyou) goto done;
 
-    syslog(LOG_NOTICE, "iMIP scheduling delivery to %s", recipient);
-
     if (sparam.flags) {
         /* Remote recipient */
+        syslog(LOG_NOTICE, "%s scheduling delivery to %s",
+               (sparam.flags & SCHEDTYPE_ISCHEDULE) ? "iSchedule" : "iMIP",
+               recipient);
+
         sched_deliver_remote(recipient, &sparam, sched_data);
     }
     else {
         /* Local recipient */
+        syslog(LOG_NOTICE, "CalDAV scheduling delivery to %s", recipient);
+
         sched_deliver_local(recipient, &sparam, sched_data, authstate);
     }
 
@@ -2305,6 +2306,8 @@ static int check_changes_any(icalcomponent *old,
     else if (propcmp(old, comp, ICAL_LOCATION_PROPERTY))
         is_changed = 1;
     else if (propcmp(old, comp, ICAL_DESCRIPTION_PROPERTY))
+        is_changed = 1;
+    else if (propcmp(old, comp, ICAL_POLLWINNER_PROPERTY))
         is_changed = 1;
     else if (partstat_changed(old, comp, get_organizer(comp)))
         is_changed = 1;
@@ -2741,7 +2744,7 @@ void sched_request(const char *userid, const char *organizer,
     int i;
     for (i = 0; i < strarray_size(&attendees); i++) {
         const char *attendee = strarray_nth(&attendees, i);
-        syslog(LOG_NOTICE, "iMIP scheduling request from %s to %s",
+        syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
         schedule_one_attendee(attendee, oldical, newical);
     }
@@ -3021,6 +3024,8 @@ static void schedule_full_reply(const char *attendee,
                                 struct reply_data *reply)
 {
     icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
+    icalcomponent_kind kind;
+
     if (!mastercomp) {
         schedule_full_decline(attendee, oldical, newical, reply);
         return;
@@ -3028,6 +3033,8 @@ static void schedule_full_reply(const char *attendee,
 
     reply->organizer = get_organizer(mastercomp);
     if (!reply->organizer) return;
+
+    kind = icalcomponent_isa(mastercomp);
 
     reply->force_send =
         get_forcesend(icalcomponent_get_first_property(mastercomp,
@@ -3039,19 +3046,27 @@ static void schedule_full_reply(const char *attendee,
     if (reply->force_send != ICAL_SCHEDULEFORCESEND_NONE)
         reply->do_send = 1;
 
-    /* or it's different */
-    icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
-    if (partstat_changed(oldmaster, mastercomp, attendee))
+    /* or it's a VPOLL */
+    else if (kind == ICAL_VPOLL_COMPONENT)
         reply->do_send = 1;
 
-    /* or it includes new EXDATEs */
-    icalproperty *prop =
-        icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
-    for (; prop; prop = icalcomponent_get_next_property(mastercomp,
-                                                        ICAL_EXDATE_PROPERTY)) {
-        struct icaltimetype exdate = icalproperty_get_exdate(prop);
-        if (!has_exdate(oldmaster, exdate))
+    else {
+        /* or it's different */
+        icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
+        if (partstat_changed(oldmaster, mastercomp, attendee))
             reply->do_send = 1;
+
+        /* or it includes new EXDATEs */
+        else {
+            icalproperty *prop =
+                icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
+            for (; prop; prop = icalcomponent_get_next_property(mastercomp,
+                                                                ICAL_EXDATE_PROPERTY)) {
+                struct icaltimetype exdate = icalproperty_get_exdate(prop);
+                if (!has_exdate(oldmaster, exdate))
+                    reply->do_send = 1;
+            }
+        }
     }
 
     if (reply->do_send) {
@@ -3060,7 +3075,7 @@ static void schedule_full_reply(const char *attendee,
         /* add the master */
         icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
         trim_attendees(mastercopy, attendee);
-        if (icalcomponent_isa(mastercomp) == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
+        if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
         clean_component(mastercopy);
         icalcomponent_add_component(reply->itip, mastercopy);
 
@@ -3109,7 +3124,7 @@ void sched_reply(const char *userid, const char *attendee,
     schedule_sub_replies(attendee, oldical, newical, &reply);
     schedule_sub_declines(attendee, oldical, newical, &reply);
 
-    syslog(LOG_NOTICE, "iMIP scheduling reply from %s to %s",
+    syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
            attendee, reply.organizer ? reply.organizer : "<unknown>");
     if (reply.do_send) {
         struct sched_data sched = { 0, 1, 0, reply.itip, reply.force_send, NULL };
