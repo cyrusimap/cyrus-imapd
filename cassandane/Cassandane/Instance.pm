@@ -1017,6 +1017,8 @@ sub create_user
 sub _start_smtpd {
     my ($self) = @_;
 
+    my $basedir = $self->{basedir};
+
     my $host = 'localhost';
 
     my $port = Cassandane::PortManager::alloc();
@@ -1027,6 +1029,8 @@ sub _start_smtpd {
         $SIG{TERM} = sub { die "killed" };
 
         POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+
+        $0 = "cassandane smtpd: $basedir";
 
         my $smtpd = Cassandane::Net::SMTPServer->new({
             cass_verbose => 1,
