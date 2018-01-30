@@ -8,7 +8,7 @@ JMAP support
 
 .. warning::
 
-    Cyrus versions 3.0 to 3.0.5 included experimental JMAP support, based on a snapshot of the then current JMAP specification draft. However, since the code-freeze of the Cyrus IMAPd 3.0 release, the JMAP specification at the `IETF JMAP working group <https://datatracker.ietf.org/wg/jmap/about/>` has evolved rapidly. Backporting the latest JMAP specification to Cyrus version 3.0 was unfeasible. Version 3.0.5 removed the outdated JMAP implementation draft from the 3.0 stable branch. Future Cyrus stable releases will implement JMAP once the speficiation is standardized.
+    Cyrus versions 3.0 to 3.0.5 included experimental JMAP support, based on a snapshot of the then current JMAP specification draft. However, since the code-freeze of the Cyrus IMAPd 3.0 release, the JMAP specification at the `IETF JMAP working group <https://datatracker.ietf.org/wg/jmap/about/>` has evolved rapidly. Backporting the latest JMAP specification to Cyrus version 3.0 was unfeasible. Version 3.0.6 removed the outdated JMAP implementation draft from the 3.0 stable branch. Future Cyrus stable releases will implement JMAP once the speficiation is standardized.
 
     Installations currently using JMAP are highly encouraged to upgrade to the latest Cyrus IMAPd development snapshot which implements the latest specification draft.
 
