@@ -51,6 +51,7 @@
 
 #include <libical/ical.h>
 
+#include "exitcodes.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
@@ -467,7 +468,8 @@ static int meth_post_isched(struct transaction_t *txn,
         authd = 1;
     }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
-        txn->error.desc = "No signature";
+        if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) authd = 1;
+        else txn->error.desc = "No signature";
     }
     else {
         authd = dkim_auth(txn);
@@ -613,6 +615,7 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     icalproperty *prop;
     unsigned code;
     struct transaction_t txn;
+    struct http_connection conn;
 
     *xml = NULL;
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -632,6 +635,11 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, httpd_userid,
                           &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
+
+    /* Setup HTTP connection for reading response */
+    memset(&conn, 0, sizeof(struct http_connection));
+    conn.pin = be->in;
+    txn.conn = &conn;
 
     /* Create iSchedule request body */
     body = icalcomponent_as_ical_string(ical);
@@ -764,7 +772,13 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     if (!r) {
         switch (code) {
         case 200:  /* Successful */
+            /* Create XML parser context */
+            if (!(conn.xml = xmlNewParserCtxt())) {
+                fatal("Unable to create XML parser", EC_TEMPFAIL);
+            }
+
             r = parse_xml_body(&txn, xml, NULL);
+            xmlFreeParserCtxt(conn.xml);
             break;
 
         case 301:
@@ -978,6 +992,8 @@ static int dkim_auth(struct transaction_t *txn)
 #else
 static int dkim_auth(struct transaction_t *txn __attribute__((unused)))
 {
+    if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) return 1;
+
     syslog(LOG_WARNING, "DKIM-Signature provided, but DKIM isn't supported");
 
     return 0;
@@ -1066,12 +1082,12 @@ static void isched_init(struct buf *serverinfo)
         namespace_ischedule.enabled = -1;
         buf_cstring(serverinfo);  // squash compiler warning when #undef WITH_DKIM
     }
-#ifdef WITH_DKIM
     else {
         namespace_ischedule.enabled =
             config_httpmodules & IMAP_ENUM_HTTPMODULES_ISCHEDULE;
     }
 
+#ifdef WITH_DKIM
     /* Add OpenDKIM version to serverinfo string */
     uint32_t ver = dkim_libversion();
     buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
