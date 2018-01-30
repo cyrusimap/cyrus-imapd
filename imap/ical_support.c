@@ -477,7 +477,10 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
         buf_reset(&buf);
         if (!message_get_field(m, "x-schedule-user-address",
                                MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
-            if (buf.len) *schedule_userid = buf_release(&buf);
+            if (buf.len) {
+                buf_replace_all(&buf, "mailto:", "");
+                *schedule_userid = buf_release(&buf);
+            }
         }
     }
 
