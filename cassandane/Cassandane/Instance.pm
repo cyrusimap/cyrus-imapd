@@ -1037,6 +1037,7 @@ sub _start_smtpd {
             xmtp_personality => 'smtp',
             host => $host,
             port => $port,
+            max_servers => 2, # default is 50, yikes
         });
         $smtpd->run() or die;
         exit 0; # Never reached
