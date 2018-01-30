@@ -744,6 +744,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ischedule_dkim_key_file", NULL, STRING }
 /* File containing the private key for iSchedule DKIM signing. */
 
+{ "ischedule_dkim_required", 1, SWITCH }
+/* A DKIM signature is required on received iSchedule requests. */
+
 { "ischedule_dkim_selector", NULL, STRING }
 /* Name of the selector subdividing the domain namespace.  This
    specifies the actual key used for iSchedule DKIM signing within the
