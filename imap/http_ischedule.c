@@ -704,6 +704,9 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
         buf_printf(&hdrs, "\r\n");
     }
 
+    /* Don't send body until told to */
+    buf_appendcstr(&hdrs, "Expect: 100-continue\r\n");
+
     if (sparam->flags & SCHEDTYPE_REMOTE) {
 #ifdef WITH_DKIM
         DKIM *dkim = NULL;
@@ -758,11 +761,11 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     /* Send request line */
     prot_printf(be->out, "POST %s %s\r\n", uri, HTTP_VERSION);
 
-    /* Send request headers and body */
+    /* Send request headers */
     prot_putbuf(be->out, &hdrs);
     prot_puts(be->out, "\r\n");
-    prot_write(be->out, body, bodylen);
 
+  response:
     /* Read response (req_hdr and req_body are actually the response) */
     txn.req_body.flags = BODY_DECODE;
     r = http_read_response(be, METH_POST, &code,
@@ -772,6 +775,17 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 
     if (!r) {
         switch (code) {
+        case 100:  /* Continue */
+            /* Send request body (only ONCE for a given request) */
+            prot_write(be->out, body, bodylen);
+            bodylen = 0;
+
+            GCC_FALLTHROUGH
+            
+        case 102:
+        case 103:  /* Provisional */
+            goto response;
+
         case 200:  /* Successful */
             /* Create XML parser context */
             if (!(conn.xml = xmlNewParserCtxt())) {
@@ -797,6 +811,8 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
                     break;
                 }
             }
+
+            if (!bodylen) bodylen = strlen(body);  /* Need to send body again */
             goto redirect;
 
         default:
