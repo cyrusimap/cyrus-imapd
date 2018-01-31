@@ -1735,7 +1735,7 @@ static void sched_deliver_local(const char *recipient,
     const char *userid = sparam->userid, *attendee = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
-    const char *mailboxname = NULL;
+    char *mailboxname = NULL;
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -1783,6 +1783,7 @@ static void sched_deliver_local(const char *recipient,
             sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
         goto done;
     }
+    free(mailboxname);
 
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(sched_data->itip);
@@ -1799,7 +1800,7 @@ static void sched_deliver_local(const char *recipient,
                       icalcomponent_get_uid(sched_data->itip), &cdata);
 
     if (cdata->dav.mailbox) {
-        mailboxname = cdata->dav.mailbox;
+        mailboxname = xstrdup(cdata->dav.mailbox);
         buf_setcstr(&resource, cdata->dav.resource);
     }
     else if (sched_data->is_reply) {
@@ -2004,6 +2005,7 @@ static void sched_deliver_local(const char *recipient,
     if (caldavdb) caldav_close(caldavdb);
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
+    free(mailboxname);
 }
 
 
