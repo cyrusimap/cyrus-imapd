@@ -120,8 +120,7 @@ static const char *callback_getdata(sasl_conn_t *conn,
 #define BASE64_BUF_SIZE 21848   /* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 
 static int login(struct backend *s, const char *userid,
-                 sasl_callback_t *cb, const char **status,
-                 int noauth __attribute__((unused)))
+                 sasl_callback_t *cb, const char **status, int noauth)
 {
     int r = 0;
     socklen_t addrsize;
@@ -137,6 +136,8 @@ static int login(struct backend *s, const char *userid,
     char *sid = NULL;
 
     if (status) *status = NULL;
+
+    if (noauth) return 0;
 
     /* set the IP addresses */
     addrsize = sizeof(struct sockaddr_storage);
