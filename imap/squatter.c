@@ -669,6 +669,10 @@ static int do_synclogfile(const char *synclogfile)
 
     /* have some due items in the queue, try to index them */
     rx = search_begin_update(verbose);
+    if (NULL == rx) {
+        r = 1;
+        goto out;
+    }
     for (i = 0; i < folders->count; i++) {
         const char *mboxname = strarray_nth(folders, i);
         if (verbose > 1)
@@ -728,6 +732,10 @@ static void do_rolling(const char *channel)
         if (folders->count) {
             /* have some due items in the queue, try to index them */
             rx = search_begin_update(verbose);
+            if (NULL == rx) {
+                /* XXX if xapian, probably don't have conversations enabled? */
+                fatal("could not construct search text receiver", EC_CONFIG);
+            }
             for (i = 0; i < folders->count; i++) {
                 const char *mboxname = strarray_nth(folders, i);
                 if (verbose > 1)
