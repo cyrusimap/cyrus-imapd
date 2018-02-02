@@ -54,11 +54,18 @@ my $basedir;
 my $binary;
 my $testdir;
 my %suppressed;
-my $cyrus_major_version;
+
+sub cyrus_version_supports_jmap
+{
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    return 0 if ($maj < 3);  # not supported before 3.x
+    return 0 if ($maj == 3 && $min == 0); # not supported in 3.0.x
+    return 1; # supported in everything newer
+}
 
 sub init
 {
-    ($cyrus_major_version) = Cassandane::Instance->get_version();
 
     my $cassini = Cassandane::Cassini->instance();
     $basedir = $cassini->val('jmaptester', 'basedir');
@@ -83,8 +90,8 @@ sub new
     $config->set(httpallowcompress => 'no');
     $config->set(conversations => 'yes');
 
-    if ($cyrus_major_version >= 3) {
-	$config->set(httpmodules => 'jmap');
+    if (cyrus_version_supports_jmap()) {
+        $config->set(httpmodules => 'jmap');
     }
 
     return $class->SUPER::new({
@@ -110,14 +117,14 @@ sub list_tests
 {
     my @tests;
 
+    if (!cyrus_version_supports_jmap())
+    {
+        return ( 'test_jmaptest_disabled' );
+    }
+
     if (!defined $basedir)
     {
         return ( 'test_warning_jmaptester_is_not_installed' );
-    }
-
-    if ($cyrus_major_version < 3)
-    {
-	return ( 'test_jmaptest_disabled' );
     }
 
     opendir TESTS, $testdir
@@ -147,11 +154,11 @@ sub run_test
         return;
     }
 
-    if ($cyrus_major_version < 3)
+    if (!cyrus_version_supports_jmap())
     {
-	xlog "The version of Cyrus being tested does not support JMAP";
-	xlog "JMAP-TestSuite tests skipped";
-	return;
+        xlog "The version of Cyrus being tested does not support JMAP";
+        xlog "JMAP-TestSuite tests skipped";
+        return;
     }
 
     my $name = $self->name();
