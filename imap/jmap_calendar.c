@@ -2392,7 +2392,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     json_object_set(eventUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("CalendarEvent/Changes"));
+    json_array_append_new(item, json_string("CalendarEvent/changes"));
     json_array_append_new(item, eventUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
