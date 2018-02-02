@@ -165,6 +165,11 @@ static int jmap_calendar_isspecial(mbname_t *mbname) {
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *lastname = strarray_nth(boxes, boxes->count - 1);
 
+    /* Don't return user.foo.#calendars */
+    if (!strcmp(lastname, config_getstring(IMAPOPT_CALENDARPREFIX))) {
+        return 1;
+    }
+
     /* SCHED_INBOX  and SCHED_OUTBOX end in "/", so trim them */
     if (!strncmp(lastname, SCHED_INBOX, strlen(SCHED_INBOX)-1)) return 1;
     if (!strncmp(lastname, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1)) return 1;
