@@ -3348,7 +3348,7 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
     if (name[0] == ':') return;
 
     buf_printf(buf, "%c%s: ", toupper(name[0]), name+1);
-    if (!strcmp(name, "authorization")) {
+    if (!strcasecmp(name, "authorization")) {
         /* Replace authorization credentials with an ellipsis */
         const char *creds = strchr(contents, ' ') + 1;
         buf_printf(buf, "%.*s%-*s\r\n", (int) (creds - contents), contents,
