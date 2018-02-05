@@ -598,6 +598,7 @@ sub _build_skeleton
 	'data',
 	'meta',
 	'run',
+	'tmp',
     );
     foreach my $sd (@subdirs)
     {
