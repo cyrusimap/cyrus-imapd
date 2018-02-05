@@ -49,6 +49,28 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
+my $MELBOURNE = <<EOF;
+BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
 sub new
 {
     my $class = shift;
@@ -1142,6 +1164,35 @@ sub test_freebusy
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    $CalDAV->NewEvent($CalendarId, {
+        start => '2015-01-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall',
+    });
+
+    $CalDAV->NewEvent($CalendarId, {
+        start => '2015-02-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall2',
+    });
+
+    my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
+
+    $self->assert_equals('2015-01-01T12:00:00', $data->[0]{start});
+    $self->assert_equals('2015-02-01T12:00:00', $data->[1]{start});
+    $self->assert_num_equals(2, scalar @$data);
+}
+
+sub test_freebusy_floating
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $MELBOURNE});
     $self->assert_not_null($CalendarId);
 
     $CalDAV->NewEvent($CalendarId, {
