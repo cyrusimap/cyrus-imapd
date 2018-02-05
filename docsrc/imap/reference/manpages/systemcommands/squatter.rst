@@ -249,7 +249,7 @@ Examples
 ========
 
 **squatter** is typically deployed via entries in
-:cyrusman:`cyrus.conf(5)`, in either the START or EVENTS sections.
+:cyrusman:`cyrus.conf(5)`, in either the DAEMON or EVENTS sections.
 
 For the older SQUAT search engine, which offers poor performance in
 rolling mode (-R) we recommend triggering periodic runs via entries in
@@ -270,14 +270,14 @@ periodic **squatter** runs:
 
 For the newer Xapian search engine, and with sufficiently fast storage,
 the rolling mode (-R) offers advantages.  Use of rolling mode requires
-that **squatter** be invoked in the START section.
+that **squatter** be invoked in the DAEMON section.
 
-Sample entries for the START section of :cyrusman:`cyrus.conf(5)` for
+Sample entries for the DAEMON section of :cyrusman:`cyrus.conf(5)` for
 rolling **squatter** operation:
 
     ::
 
-        START {
+        DAEMON {
           # run a rolling squatter using the default sync_log channel "squatter"
           squatter cmd="squatter -R"
 
@@ -291,6 +291,15 @@ rolling **squatter** operation:
     in :cyrusman:`imapd.conf(5)` via the `sync_log: on` setting, and
     MUST define a sync_log channel via the `sync_log_channels:`
     setting.
+
+..  Note::
+
+    When configuring rolling search indexing on a **replica**, one must
+    consider whether sync_logs will be written at all.  In this case,
+    please consider the setting `sync_log_unsuppressable_channels` to
+    ensure that the sync_log channel upon which one's squatter instance
+    depends will continue to be written.  See :cyrusman:`imapd.conf(5)`
+    for details.
 
 ..  Note::
 
