@@ -4163,7 +4163,11 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
     return this;
 }
 
-static void validate_msgfilter(json_t *filter, const char *prefix, json_t *invalid, json_t *unsupported)
+static void validate_msgfilter(jmap_req_t *req,
+                               json_t *filter,
+                               const char *prefix,
+                               json_t *invalid,
+                               json_t *unsupported)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *arg, *val;
@@ -4191,7 +4195,7 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
         }
         json_array_foreach(arg, i, val) {
             buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            validate_msgfilter(val, buf_cstring(&buf), invalid, unsupported);
+            validate_msgfilter(req, val, buf_cstring(&buf), invalid, unsupported);
             buf_reset(&buf);
         }
 
@@ -4216,7 +4220,15 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
             }
         }
 
-        readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s);
+        if (readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s) > 0) {
+            char *n = jmapmbox_find_uniqueid(req, s);
+            if (!n) {
+                buf_printf(&buf, "%s.inMailbox", prefix);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+            free(n);
+        }
         readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
         readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
         readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
@@ -4230,11 +4242,16 @@ static void validate_msgfilter(json_t *filter, const char *prefix, json_t *inval
         readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
 
         json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
-            if (!json_is_string(val)) {
+            char *n = NULL;
+            if ((s = json_string_value(val))) {
+                n = jmapmbox_find_uniqueid(req, s);
+            }
+            if (!n) {
                 buf_printf(&buf, "%s.inMailboxOtherThan[%zu]", prefix, i);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
+            free(n);
         }
 
         if (readprop_full(filter, prefix, "allInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
@@ -4811,7 +4828,7 @@ static int getEmailsList(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
     }
 
     /* sort */
@@ -4926,7 +4943,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
     }
 
     /* sort */
@@ -5454,7 +5471,7 @@ static int getSearchSnippets(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgfilter(filter, "filter", invalid, unsupported_filter);
+        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
     }
 
     /* messageIds */
