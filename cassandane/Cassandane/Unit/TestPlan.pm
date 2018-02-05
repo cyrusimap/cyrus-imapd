@@ -677,13 +677,14 @@ sub _setup_logfile
 	$template =~ s/::/./g;
 	($logfh, $logfile) = tempfile($template,
 				      DIR => $self->{log_directory},
-				      SUFFIX => '.log');
+				      SUFFIX => '.log',
+				      UNLINK => 0);
 	chmod(0644, $logfile);
     }
     else
     {
 	# Create a per-test temporary logfile
-	($logfh, $logfile) = tempfile();
+	($logfh, $logfile) = tempfile(UNLINK => 0);
     }
 
     # Redirect both STDOUT and STDERR to the log file
