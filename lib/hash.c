@@ -255,6 +255,8 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       unsigned i;
       bucket *ptr, *temp;
 
+      if (!table) return;
+
       /* If we have a function to free the data, apply it everywhere */
       /* We also need to traverse this anyway if we aren't using a memory
        * pool */
