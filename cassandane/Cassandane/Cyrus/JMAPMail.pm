@@ -5086,6 +5086,30 @@ sub test_email_query_acl
     $self->assert_str_equals($id, $res->[0][1]->{ids}[0]);
 }
 
+sub test_email_query_unknown_mailbox
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "filter inMailbox with unknown mailbox";
+    $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => "foo" } }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('filter.inMailbox', $res->[0][1]{arguments}[0]);
+
+    xlog "filter inMailboxOtherThan with unknown mailbox";
+    $res = $jmap->CallMethods([['Email/query', { filter => { inMailboxOtherThan => ["foo"] } }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('filter.inMailboxOtherThan[0]', $res->[0][1]{arguments}[0]);
+}
+
+
 sub test_searchsnippet_get
     :JMAP :min_version_3_1
 {
