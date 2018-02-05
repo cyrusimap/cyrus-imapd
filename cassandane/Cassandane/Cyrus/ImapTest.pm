@@ -88,6 +88,8 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+
+    $self->{instance}->create_user('user2', subdirs => ['imaptest']);
 }
 
 sub tear_down
@@ -156,6 +158,7 @@ sub run_test
         "host=" . $params->{host},
         "port=" . $params->{port},
         "user=" . $params->{username},
+        "user2=" . "user2",
         "pass=" . $params->{password},
         "rawlog",
         "test=$testdir/$name");
