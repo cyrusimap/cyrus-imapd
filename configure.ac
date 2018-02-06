@@ -123,6 +123,7 @@ AC_ARG_WITH(cyrus-group,
         [AS_HELP_STRING([--with-cyrus-group=GROUPID], [use GROUPID cyrus group])],
         cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
+AC_DEFINE_UNQUOTED(CYRUS_GROUP, "$cyrus_group",[What group will we run as?])
 
 dnl allow users to override $sysconfdir, but retain old default (/etc)
 dnl if not specified
