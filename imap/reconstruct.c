@@ -127,6 +127,7 @@ extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static int reconstruct_flags = RECONSTRUCT_MAKE_CHANGES | RECONSTRUCT_DO_STAT;
 static int setversion = 0;
+static int updateuniqueids = 0;
 
 int main(int argc, char **argv)
 {
@@ -145,7 +146,7 @@ int main(int argc, char **argv)
 
     construct_hash_table(&unqid_table, 2047, 1);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUMoOnV:u")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUMIoOnV:u")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -217,6 +218,10 @@ int main(int argc, char **argv)
 
         case 'M':
             reconstruct_flags |= RECONSTRUCT_PREFER_MBOXLIST;
+            break;
+
+        case 'I':
+            updateuniqueids = 1;
             break;
 
         case 'V':
@@ -463,10 +468,22 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 
     other = hash_lookup(mailbox->uniqueid, &unqid_table);
     if (other) {
-        syslog (LOG_ERR, "uniqueid clash with %s for %s - changing %s",
-                other, mailbox->uniqueid, mailbox->name);
-        /* uniqueid change required! */
-        mailbox_make_uniqueid(mailbox);
+        mbentry_t *oldmbentry = NULL;
+        /* check that the old one still exists! */
+        r = mboxlist_lookup(other, &oldmbentry, NULL);
+        if (!r && !strcmpsafe(oldmbentry->uniqueid, mailbox->uniqueid)) {
+            /* uniqueid change required! */
+            if (updateuniqueids) {
+                mailbox_make_uniqueid(mailbox);
+                syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
+                        other, mailbox->name, oldmbentry->uniqueid, mailbox->uniqueid);
+            }
+            else {
+                syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
+                        other, mailbox->name, mailbox->uniqueid);
+            }
+        }
+        mboxlist_entry_free(&oldmbentry);
     }
 
     hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
