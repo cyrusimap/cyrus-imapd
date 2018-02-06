@@ -2255,11 +2255,12 @@ product version in the capabilities
 
 { "sync_log_channels", NULL, STRING }
 /* If specified, log all events to multiple log files in directories
-   specified by each "channel".  To run these log files, you need to pass
-   the -n option to sync_client -r with the channel name.  Use this for
-   a mesh style replication layout - every machine replicating to every
-   other machine. You can use "" (the two-character string U+22 U+22)
-   to mean the default sync channel. */
+   specified by each "channel".  Each channel can then be processed
+   separately, such as by multiple sync_client(8)s in a mesh replication
+   scheme, or by squatter(8) for rolling search index updates.
+   .PP
+   You can use "" (the two-character string U+22 U+22) to mean the
+   default sync channel. */
 
 { "sync_log_unsuppressable_channels", "squatter", STRING }
 /* If specified, the named channels are exempt from the effect of setting
