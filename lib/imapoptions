@@ -613,6 +613,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* only show the domain for users in other domains than your own (for
    backwards compatibility if you're already sharing */
 
+{ "cyrus_group", NULL, STRING }
+/* The name of the group Cyrus services will run as.  If not configured, the
+   primary group of cyrus_user will be used. Can be further overridden by
+   setting the $CYRUS_GROUP environment variable. */
+
 { "cyrus_user", NULL, STRING }
 /* The username to use as the 'cyrus' user.  If not configured, the compile
    time default will be used. Can be further overridden by setting the
