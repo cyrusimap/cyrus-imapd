@@ -201,6 +201,7 @@ static int reservefile(struct protstream *in, const char *part,
             break;
         }
         size -= n;
+        if (!file) continue;
         if (fwrite(buf, 1, n, file) != n) {
             syslog(LOG_ERR, "IOERROR: writing to file '%s': %m", *fname);
             r = IMAP_IOERROR;
