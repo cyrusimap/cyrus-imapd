@@ -103,6 +103,13 @@ Options
     correctness). Reconstruct with -G should fix all possible
     individual message issues, including corrupted data files.
 
+.. option:: -I
+
+    If two mailboxes exist with the same UNIQUEID and reconstruct visits
+    both of them, -I will cause the second mailbox to have a new UNIQUEID
+    created for it.  If you don't specify -I, you will just get a syslog
+    entry telling you of the clash.
+
 .. option:: -R
 
     Perform a UID upgrade operation on GUID mismatch files.  Use this
