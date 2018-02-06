@@ -81,7 +81,8 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
-    NULL
+    NULL,
+    NULL,
 };
 
 static const struct search_engine *engine(void)
@@ -311,6 +312,12 @@ EXPORTED int search_deluser(const char *userid)
 {
     const struct search_engine *se = engine();
     return (se->deluser ? se->deluser(userid) : 0);
+}
+
+EXPORTED int search_check_config(char **errstr)
+{
+    const struct search_engine *se = engine();
+    return (se->check_config ? se->check_config(errstr) : 0);
 }
 
 const char *search_op_as_string(int op)
