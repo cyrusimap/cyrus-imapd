@@ -100,7 +100,6 @@ static int batch_mode = 0;
 static int xapindexed_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
-static int running_daemon = 0;
 static int sleepmicroseconds = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
@@ -765,37 +764,8 @@ static void do_rolling(const char *channel)
     sync_log_reader_free(slr);
 }
 
-/*
- * Run a search daemon in such a way that the natural shutdown
- * mechanism for Cyrus (sending a SIGTERM to the master process)
- * will cleanly shut down the search daemon too.
- */
-static void do_run_daemon(void)
-{
-    int r;
-
-    /* We start the daemon before forking.  This eliminates a
-     * race condition */
-    r = search_start_daemon(verbose);
-    if (r) exit(EC_TEMPFAIL);
-
-    /* tell shut_down() to shut down the searchd too */
-    running_daemon = 1;
-
-    become_daemon();
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers(0);
-
-    for (;;) {
-        signals_poll();         /* will call shut_down() after SIGTERM */
-        poll(NULL, 0, -1);      /* sleeps until signalled */
-    }
-}
-
 static void shut_down(int code)
 {
-    if (running_daemon)
-        search_stop_daemon(verbose);
     seen_done();
 
     cyrus_done();
@@ -822,11 +792,11 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
-           START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
+           COMPACT } mode = UNKNOWN;
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RUXZT:S:Fc:de:f:mn:riavz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RUXZT:S:Fde:f:mn:riavz:t:ouh")) != EOF) {
         switch (opt) {
         case 'C':               /* alt config file */
             alt_config = optarg;
@@ -870,19 +840,6 @@ int main(int argc, char **argv)
 
         case 'T':               /* temporary root directory for search */
             temp_root_dir = optarg;
-            break;
-
-        /* This option is deliberately undocumented, for testing only */
-        case 'c':               /* daemon control mode */
-            if (mode != UNKNOWN) usage(argv[0]);
-            if (!strcmp(optarg, "start"))
-                mode = START_DAEMON;
-            else if (!strcmp(optarg, "stop"))
-                mode = STOP_DAEMON;
-            else if (!strcmp(optarg, "run"))
-                mode = RUN_DAEMON;
-            else
-                usage(argv[0]);
             break;
 
         case 'd':               /* foreground (with -R) */
@@ -1021,18 +978,6 @@ int main(int argc, char **argv)
         break;
     case SYNCLOG:
         r = do_synclogfile(synclogfile);
-        break;
-    case START_DAEMON:
-        if (optind != argc) usage("squatter");
-        search_start_daemon(verbose);
-        break;
-    case STOP_DAEMON:
-        if (optind != argc) usage("squatter");
-        search_stop_daemon(verbose);
-        break;
-    case RUN_DAEMON:
-        if (optind != argc) usage("squatter");
-        do_run_daemon();
         break;
     case COMPACT:
         if (recursive_flag && optind == argc) usage(argv[0]);

@@ -81,8 +81,6 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
 };
 
 static const struct search_engine *engine(void)
@@ -277,18 +275,6 @@ EXPORTED void search_free_internalised(void *internalised)
 {
     const struct search_engine *se = engine();
     if (se->free_internalised) se->free_internalised(internalised);
-}
-
-EXPORTED int search_start_daemon(int verbose)
-{
-    const struct search_engine *se = engine();
-    return (se->start_daemon ? se->start_daemon(verbose) : 0);
-}
-
-EXPORTED int search_stop_daemon(int verbose)
-{
-    const struct search_engine *se = engine();
-    return (se->stop_daemon ? se->stop_daemon(verbose) : 0);
 }
 
 EXPORTED int search_list_files(const char *userid,
