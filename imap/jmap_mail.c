@@ -160,9 +160,19 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
         json_array_append_new(sortopts, json_string(*sp));
     }
 
+    long max_size_attachments_per_email =
+        config_getint(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL);
+
+    max_size_attachments_per_email *= 1024;
+    if (max_size_attachments_per_email <= 0) {
+        syslog(LOG_ERR, "jmap: invalid property value: %s",
+                imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].optname);
+        max_size_attachments_per_email = 0;
+    }
+
     json_t *my_capabilities = json_pack("{s:o? s:i s:i s:O s:O}",
             "maxMailboxesPerEmail", json_null(),
-            "maxSizeAttachmentsPerEmail", 0,
+            "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
             "maxDelayedSend", 0,
             "emailsListSortOptions", sortopts,
             "submissionExtensions", json_object());

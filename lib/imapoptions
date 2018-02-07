@@ -1074,6 +1074,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    Returned as the maxObjectsInSet property value of the
    JMAP \"ietf:jmap\" capabilities object. */
 
+{ "jmap_mail_max_size_attachments_per_email", 10240, INT }
+/* The value (in kilobytes) to return for the maxSizeAttachmentsPerEmail
+   property of the JMAP \"ietf:jmapmail\" capabilities object. The Cyrus
+   JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
