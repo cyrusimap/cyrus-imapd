@@ -1,0 +1,63 @@
+language: perl
+sudo: required
+dist: trusty
+group: edge
+addons:
+  apt:
+    packages:
+        libmagic-dev
+cache:
+  apt: true
+os: linux
+compiler: gcc
+install:
+- cpanm --notest experimental
+- cpanm --notest AnyEvent
+- cpanm --notest BSD::Resource
+- cpanm --notest Clone
+- cpanm --notest Config::IniFiles
+- cpanm --notest Convert::Base64
+- cpanm --notest Data::ICal
+- cpanm --notest Data::ICal::TimeZone
+- cpanm --notest Data::UUID
+- cpanm --notest DateTime
+- cpanm --notest DateTime::Format::ICal
+- cpanm --notest DateTime::Format::ISO8601
+- cpanm --notest Encode::IMAPUTF7
+- cpanm --notest File::LibMagic
+- cpanm --notest File::Slurp
+- cpanm --notest File::chdir
+- cpanm --notest IO::Socket::INET6
+- cpanm --notest IO::Stringy
+- cpanm --notest JSON
+- cpanm --notest JSON::XS
+- cpanm --notest List::Pairwise
+- cpanm --notest MIME::Types
+- cpanm --notest Mail::IMAPTalk
+- cpanm --notest Math::Int64
+- cpanm --notest Net::Server
+- cpanm --notest News::NNTPClient
+- cpanm --notest String::CRC32
+- cpanm --notest Test::Unit
+- cpanm --notest Text::LevenshteinXS
+- cpanm --notest Text::VCardFast
+- cpanm --notest Tie::DataUUID
+- cpanm --notest Unix::Syslog
+- cpanm --notest XML::DOM
+- cpanm --notest XML::Fast
+- cpanm --notest XML::Generator
+- cpanm --notest XML::Spice
+- cpanm --notest https://github.com/cyrusimap/Mail-JMAPTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-DAVTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-CalDAVTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-CardDAVTalk.git
+script:
+- make
+branches:
+  only:
+  - master
+#notifications:
+#  slack:
+#    on_pull_requests: false
+#    on_success: change
+#    on_failure: always
