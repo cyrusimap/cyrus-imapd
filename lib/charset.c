@@ -2066,9 +2066,9 @@ EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
     return ret;
 }
 
-EXPORTED char *charset_utf8_normalize(const char *src, size_t len)
+EXPORTED char *charset_utf8_normalize(const char *src)
 {
-    int32_t srclen = len;
+    int32_t srclen = strlen(src);
     UChar *uni = NULL;
     int32_t unilen = 0;
     UChar *nfc = NULL;
@@ -2082,14 +2082,10 @@ EXPORTED char *charset_utf8_normalize(const char *src, size_t len)
      * unaffected by all of the Normalization Forms."
      * See http://www.unicode.org/reports/tr15/#Description_Norm
      * */
-    const char *top = src + len;
     const char *p;
-    for (p = src; p < top; p++) {
-        if (!isascii(*p))
-            break;
-    }
-    if (p == top) {
-        return xstrdupnull(src);
+    for (p = src; *p && isascii(*p); p++) {}
+    if (*p == '\0') {
+        return xstrdup(src);
     }
 
     /* Convert the UTF-8 string to UChar */

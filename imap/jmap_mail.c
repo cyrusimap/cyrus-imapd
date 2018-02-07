@@ -1553,7 +1553,7 @@ static void setmailboxes_read_args(jmap_req_t *req,
     const char *s;
     pe = readprop(jargs, "name", is_create, invalid, "s", &s);
     if (pe > 0) {
-        char *name = charset_utf8_normalize(s, strlen(s));
+        char *name = charset_utf8_normalize(s);
         size_t len = strlen(name);
         int is_valid = 0;
         size_t i;

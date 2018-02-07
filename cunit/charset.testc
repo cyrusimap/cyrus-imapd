@@ -1131,7 +1131,7 @@ static void test_utf8_normalize(void)
 #define TESTCASE(in, want) \
     { \
         char *s; \
-        s = charset_utf8_normalize(in, strlen(in)); \
+        s = charset_utf8_normalize(in); \
         if (want) { \
             CU_ASSERT_PTR_NOT_NULL(s); \
             CU_ASSERT_STRING_EQUAL(s, want); \

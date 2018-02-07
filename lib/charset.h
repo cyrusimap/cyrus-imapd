@@ -87,13 +87,14 @@ extern char *charset_parse_mimexvalue(const char *s, struct buf *language);
 extern char *charset_encode_mimexvalue(const char *s,const char *language);
 extern char *charset_utf8_to_searchform(const char *s, int flags);
 
-/* Normalize the UTF-8 string s to Unicode NFC normalization form.
+/* Normalize the zero-terminted UTF-8 string s to Unicode NFC
+ * normal form.
  *
  * Does not enforce CR LF line ending or omission of control
  * characters as defined in RFC 5198.
  *
  * Also see http://www.unicode.org/reports/tr15/ and RFC 5198 */
-extern char *charset_utf8_normalize(const char *s, size_t len);
+extern char *charset_utf8_normalize(const char *s);
 
 extern charset_t charset_lookupname(const char *name);
 extern charset_t charset_lookupnumid(int id);
