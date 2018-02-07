@@ -1518,7 +1518,7 @@ static int jmapmbox_isparent(const char *mboxname)
 
 struct setmailboxes_args {
     const char *id;
-    const char *name;
+    char *name;
     char *parentid;
     const char *role;
     const char *specialuse;
@@ -1528,6 +1528,7 @@ struct setmailboxes_args {
 static void setmailboxes_free_args(struct setmailboxes_args *args)
 {
     free(args->parentid);
+    free(args->name);
 }
 
 static void setmailboxes_read_args(jmap_req_t *req,
@@ -1549,9 +1550,29 @@ static void setmailboxes_read_args(jmap_req_t *req,
     }
 
     /* name */
-    pe = readprop(jargs, "name", is_create, invalid, "s", &args->name);
-    if (pe > 0 && !(*(args->name))) {
-        json_array_append_new(invalid, json_string("name"));
+    const char *s;
+    pe = readprop(jargs, "name", is_create, invalid, "s", &s);
+    if (pe > 0) {
+        char *name = charset_utf8_normalize(s, strlen(s));
+        size_t len = strlen(name);
+        int is_valid = 0;
+        size_t i;
+        for (i = 0; i < len; i++) {
+            if (iscntrl(name[i])) {
+                is_valid = 0;
+                break;
+            }
+            else if (!isspace(name[i])) {
+                is_valid = 1;
+            }
+        }
+        if (is_valid) {
+            args->name = name;
+        }
+        else {
+            /* Empty string, bogus characters or just whitespace */
+            json_array_append_new(invalid, json_string("name"));
+        }
     }
 
     /* parentId */
