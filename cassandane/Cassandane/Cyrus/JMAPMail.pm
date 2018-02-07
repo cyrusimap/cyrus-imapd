@@ -731,6 +731,38 @@ sub test_mailbox_set_name_interop
     $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "IFeel\N{WHITE SMILING FACE}");
 }
 
+sub test_mailbox_set_name_unicode_nfc
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get inbox";
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    my $name = "\N{ANGSTROM SIGN}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m";
+    my $want = "\N{LATIN CAPITAL LETTER A WITH RING ABOVE}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m";
+
+    xlog "create mailboxes with name not conforming to Net Unicode (NFC)";
+    $res = $jmap->CallMethods([['Mailbox/set', { create => { "1" => {
+        name => "\N{ANGSTROM SIGN}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m",
+        parentId => $inbox->{id},
+        role => undef
+    }}}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    my $id = $res->[0][1]{created}{1}{id};
+
+    xlog "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($want, $res->[0][1]{list}[0]->{name});
+}
+
+
 sub test_mailbox_set_role
     :JMAP :min_version_3_1
 {
