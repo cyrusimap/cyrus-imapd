@@ -1033,6 +1033,47 @@ Blank lines and lines beginning with ``#'' are ignored.
    into textBody, including placeholders for inlined images. Any
    text bodies (plain or HTML) are rendered into htmlBody. */
 
+{ "jmap_max_size_upload", 1048576, INT }
+/* The maximum size (in kilobytes) that the JMAP API accepts
+   for blob uploads. Returned as the maxSizeUpload property
+   value of the JMAP \"ietf:jmap\" capabilities object.
+   Default is 1Gb. */
+
+{ "jmap_max_concurrent_upload", 5, INT }
+/* The value to return for the maxConcurrentUpload property of
+   the JMAP \"ietf:jmap\" capabilities object. The Cyrus JMAP
+   implementation does not enforce this rate-limit. */
+
+{ "jmap_max_size_request", 10240, INT }
+/* The maximum size (in kilobytes) that the JMAP API accepts
+   for requests at the API endpoint. Returned as the
+   maxSizeRequest property value of the JMAP \"ietf:jmap\"
+   capabilities object. Default is 10Mb. */
+
+{ "jmap_max_concurrent_requests", 5, INT }
+/* The value to return for the maxConcurrentRequests property of
+   the JMAP \"ietf:jmap\" capabilities object. The Cyrus JMAP
+   implementation does not enforce this rate-limit. */
+
+{ "jmap_max_calls_in_request", 50, INT }
+/* The maximum number of calls per JMAP request object.
+   Returned as the maxCallsInRequest property value of the
+   JMAP \"ietf:jmap\" capabilities object. */
+
+{ "jmap_max_objects_in_get", 4096, INT }
+/* The maximum number of ids that a JMAP client may request in
+   a single \"/get\" type method call. The actual number
+   of returned objects in the response may exceed this number
+   if the JMAP object type supports unbounded \"/get\" calls.
+   Returned as the maxObjectsInGet property value of the
+   JMAP \"ietf:jmap\" capabilities object. */
+
+{ "jmap_max_objects_in_set", 4096, INT }
+/* The maximum number of objects a JMAP client may send to create,
+   update or destroy in a single /set type method call.
+   Returned as the maxObjectsInSet property value of the
+   JMAP \"ietf:jmap\" capabilities object. */
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 

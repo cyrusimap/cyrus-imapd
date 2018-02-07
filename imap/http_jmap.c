@@ -279,6 +279,14 @@ EXPORTED int jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock)
                     req->mboxrights, proc, rock, 1/*all*/);
 }
 
+static long jmap_max_size_upload = 0;
+static long jmap_max_concurrent_upload = 0;
+static long jmap_max_size_request = 0;
+static long jmap_max_concurrent_requests = 0;
+static long jmap_max_calls_in_request = 0;
+static long jmap_max_objects_in_get = 0;
+static long jmap_max_objects_in_set = 0;
+
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_jmap.enabled =
@@ -288,15 +296,33 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
+#define _read_opt(val, optkey) \
+    val = config_getint(optkey); \
+    if (val <= 0) { \
+        syslog(LOG_ERR, "jmap: invalid property value: %s", \
+                imapopts[optkey].optname); \
+        val = 0; \
+    }
+    _read_opt(jmap_max_size_upload, IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
+    jmap_max_size_upload *= 1024;
+    _read_opt(jmap_max_concurrent_upload, IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
+    _read_opt(jmap_max_size_request, IMAPOPT_JMAP_MAX_SIZE_REQUEST);
+    jmap_max_size_request *= 1024;
+    _read_opt(jmap_max_concurrent_requests, IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
+    _read_opt(jmap_max_calls_in_request, IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
+    _read_opt(jmap_max_objects_in_get, IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
+    _read_opt(jmap_max_objects_in_set, IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
+#undef _read_opt
+
     jmap_capabilities = json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
         "ietf:jmap",
-        "maxSizeUpload", 0,
-        "maxConcurrentUpload", 0,
-        "maxSizeRequest", 0,
-        "maxConcurrentRequests", 0,
-        "maxCallsInRequest", 0, /* FIXME this MUST be >= 32 but why even limit? */
-        "maxObjectsInGet", 0,
-        "maxObjectsInSet", 0,
+        "maxSizeUpload", jmap_max_size_upload,
+        "maxConcurrentUpload", jmap_max_concurrent_upload,
+        "maxSizeRequest", jmap_max_size_request,
+        "maxConcurrentRequests", jmap_max_concurrent_requests,
+        "maxCallsInRequest",jmap_max_calls_in_request,
+        "maxObjectsInGet", jmap_max_objects_in_get,
+        "maxObjectsInSet", jmap_max_objects_in_set,
         "collationAlgorithms", json_array()
     );
 
@@ -559,6 +585,17 @@ static int validate_request(struct transaction_t *txn, json_t *req)
         return HTTP_BAD_REQUEST;
     }
 
+    /*
+     * XXX the following maximums are not enforced:
+     * maxConcurrentUpload
+     * maxConcurrentRequests
+     */
+
+    if (txn->req_body.len > (size_t) jmap_max_size_request) {
+        txn->error.desc = "JSON request byte size exceeds maxSizeRequest";
+        return HTTP_PAYLOAD_TOO_LARGE;
+    }
+
     size_t i;
     json_t *val;
     json_array_foreach(calls, i, val) {
@@ -568,6 +605,31 @@ static int validate_request(struct transaction_t *txn, json_t *req)
                 !json_is_string(json_array_get(val, 2))) {
             txn->error.desc = "JSON request body is not a JMAP Request object";
             return HTTP_BAD_REQUEST;
+        }
+        if (i >= (size_t) jmap_max_calls_in_request) {
+            txn->error.desc = "JSON request calls exceeds maxCallsInRequest";
+            return HTTP_BAD_REQUEST;
+        }
+        const char *mname = json_string_value(json_array_get(val, 0));
+        mname = strchr(mname, '/');
+        if (!mname) continue;
+
+        if (!strcmp(mname, "get")) {
+            json_t *ids = json_object_get(json_array_get(val, 1), "ids");
+            if (json_array_size(ids) > (size_t) jmap_max_objects_in_get) {
+                txn->error.desc = "JSON request calls exceeds maxObjectsInGet";
+                return HTTP_BAD_REQUEST;
+            }
+        }
+        else if (!strcmp(mname, "set")) {
+            json_t *args = json_array_get(val, 1);
+            size_t size = json_object_size(json_object_get(args, "create"));
+            size += json_object_size(json_object_get(args, "update"));
+            size += json_array_size(json_object_get(args, "destroy"));
+            if (size > (size_t) jmap_max_objects_in_set) {
+                txn->error.desc = "JSON request calls exceeds maxObjectsInSet";
+                return HTTP_BAD_REQUEST;
+            }
         }
     }
 
@@ -1281,6 +1343,11 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
 
     const char *data = buf_base(&txn->req_body.payload);
     size_t datalen = buf_len(&txn->req_body.payload);
+
+    if (datalen > (size_t) jmap_max_size_upload) {
+        txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
+        return HTTP_PAYLOAD_TOO_LARGE;
+    }
 
     /* Resource must be {accountId}/ with no trailing path */
     char *accountid = xstrdup(txn->req_tgt.resource);
