@@ -6953,4 +6953,34 @@ sub test_email_set_patch
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 }
 
+sub test_capability
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $Request;
+    my $Response;
+
+    xlog "get settings";
+    $Request = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    $Response = $jmap->ua->get($jmap->uri(), $Request);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($Request, $Response);
+    }
+    $self->assert_str_equals('201', $Response->{status});
+
+    my $settings;
+    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
+
+    my $cap = $settings->{capabilities}->{"ietf:jmapmail"};
+    $self->assert($cap->{maxSizeAttachmentsPerEmail} > 0);
+}
+
 1;
