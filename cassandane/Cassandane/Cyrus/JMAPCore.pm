@@ -112,6 +112,15 @@ sub test_settings
     $self->assert(exists $settings->{capabilities}->{"ietf:jmap"});
     $self->assert(exists $settings->{capabilities}->{"ietf:jmapmail"});
 
+    my $cap = $settings->{capabilities}->{"ietf:jmap"};
+    $self->assert($cap->{maxSizeUpload} > 0);
+    $self->assert($cap->{maxConcurrentUpload} > 0);
+    $self->assert($cap->{maxSizeRequest} > 0);
+    $self->assert($cap->{maxConcurrentRequests} > 0);
+    $self->assert($cap->{maxCallsInRequest} > 0);
+    $self->assert($cap->{maxObjectsInGet} > 0);
+    $self->assert($cap->{maxObjectsInSet} > 0);
+
     my $acc;
 	my $accounts =  $settings->{accounts};
     $self->assert_num_equals(4, scalar keys %{$accounts});
