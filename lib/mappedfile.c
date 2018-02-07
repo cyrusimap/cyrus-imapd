@@ -555,6 +555,11 @@ EXPORTED int mappedfile_iswritable(const struct mappedfile *mf)
     return !!mf->is_rw;
 }
 
+EXPORTED int mappedfile_isdirty(const struct mappedfile *mf)
+{
+    return !!mf->dirty;
+}
+
 EXPORTED const char *mappedfile_base(const struct mappedfile *mf)
 {
     /* XXX - require locked? */
