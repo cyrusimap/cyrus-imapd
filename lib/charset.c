@@ -52,6 +52,9 @@
 #include "htmlchar.h"
 #include "util.h"
 
+#include <unicode/ustring.h>
+#include <unicode/unorm2.h>
+
 #define U_REPLACEMENT   0xfffd
 
 #define unicode_isvalid(c) \
@@ -2005,7 +2008,7 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
     /* Initialize character set mapping */
     if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
 
-    /* check for trivial search */
+    /* check for trivial case */
     if (len == 0)
         return xstrdup("");
 
@@ -2060,6 +2063,97 @@ EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
     charset_t utf8 = charset_lookupname("utf-8");
     char *ret = charset_convert(s, utf8, flags);
     charset_free(&utf8);
+    return ret;
+}
+
+EXPORTED char *charset_utf8_normalize(const char *src, size_t len)
+{
+    int32_t srclen = len;
+    UChar *uni = NULL;
+    int32_t unilen = 0;
+    UChar *nfc = NULL;
+    int32_t nfclen = 0;
+    char *ret = NULL;
+    int32_t retlen = 0;
+
+    /* Fast-path for ASCII.
+     * Unicode Standard Annex #15, section 1.3: "Text exclusively
+     * containing ASCII characters (U+0000..U+007F) is left
+     * unaffected by all of the Normalization Forms."
+     * See http://www.unicode.org/reports/tr15/#Description_Norm
+     * */
+    const char *top = src + len;
+    const char *p;
+    for (p = src; p < top; p++) {
+        if (!isascii(*p))
+            break;
+    }
+    if (p == top) {
+        return xstrdupnull(src);
+    }
+
+    /* Convert the UTF-8 string to UChar */
+    UErrorCode err = U_ZERO_ERROR;
+    u_strFromUTF8(uni, unilen, &unilen, src, srclen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+    unilen++;
+    uni = xzmalloc(unilen * sizeof(UChar));
+    u_strFromUTF8(uni, unilen, &unilen, src, srclen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+
+    /* Normalize the UChars to NFC */
+    err = U_ZERO_ERROR;
+    const UNormalizer2 *norm = unorm2_getNFCInstance(&err);
+    if (!norm || U_FAILURE(err)) {
+        goto done;
+    }
+    /* Quick-check if the Unicode string requires normalization.
+     * Skip normalization only if libicu is certain not to need
+     * to do anything. */
+    if (unorm2_quickCheck(norm, uni, unilen, &err) == UNORM_YES) {
+        nfc = uni;
+        nfclen = unilen;
+        uni = NULL;
+    }
+    else {
+        err = U_ZERO_ERROR;
+        nfclen = unorm2_normalize(norm, uni, unilen, nfc, 0, &err) + 1;
+        if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+            goto done;
+        }
+        err = U_ZERO_ERROR;
+        nfclen++;
+        nfc = xzmalloc(nfclen * sizeof(UChar));
+        unorm2_normalize(norm, uni, unilen, nfc, nfclen, &err);
+        if (U_FAILURE(err)) {
+            goto done;
+        }
+        free(uni);
+        uni = NULL;
+    }
+
+    /* Convert the NFC UChars back to UTF-8 */
+    err = U_ZERO_ERROR;
+    u_strToUTF8(ret, 0, &retlen, nfc, nfclen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+    retlen++;
+    ret = xzmalloc(retlen);
+    u_strToUTF8(ret, retlen, &retlen, nfc, nfclen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+
+done:
+    free(uni);
+    free(nfc);
     return ret;
 }
 
