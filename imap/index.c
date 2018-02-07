@@ -287,12 +287,12 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     index_release(state);
 
-    free(state->map);
-    free(state->mboxname);
-    free(state->userid);
+    xfree(state->map);
+    xfree(state->mboxname);
+    xfree(state->userid);
     for (i = 0; i < MAX_USER_FLAGS; i++)
-        free(state->flagname[i]);
-    free(state);
+        xfree(state->flagname[i]);
+    xfree(state);
 
     *stateptr = NULL;
 }
@@ -355,9 +355,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     return 0;
 
 fail:
-    free(state->mboxname);
-    free(state->userid);
-    free(state);
+    xfree(state->mboxname);
+    xfree(state->userid);
+    xfree(state);
     return r;
 }
 

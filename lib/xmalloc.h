@@ -58,6 +58,10 @@ extern char *xstrdupsafe (const char *str);
 extern char *xstrndup (const char *str, size_t len);
 extern void *xmemdup (const void *ptr, size_t size);
 
+#define xfree(ptr) do { \
+  if (ptr) { free(ptr); ptr = NULL; } \
+} while (0)
+
 /* Functions using xmalloc.h must provide a function called fatal() conforming
    to the following: */
 extern void fatal(const char *fatal_message, int fatal_code)
