@@ -136,8 +136,8 @@ static void prometheus_init(void)
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
-                        "actually wrote %d",
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
+                        SIZE_T_FMT " bytes, actually wrote %d",
                         sizeof(stats), r);
         goto error;
     }
@@ -155,8 +155,14 @@ static void prometheus_init(void)
 error:
     if (handle) {
         if (handle->mf) {
-            mappedfile_unlock(handle->mf);
-            mappedfile_close(&handle->mf);
+            if (mappedfile_isdirty(handle->mf)) {
+                /* failed mid-write somewhere, throw it all away, it's junk now */
+                mappedfile_discard(&handle->mf);
+            }
+            else {
+                mappedfile_unlock(handle->mf);
+                mappedfile_close(&handle->mf);
+            }
         }
         free(handle);
     }

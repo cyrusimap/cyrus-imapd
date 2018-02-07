@@ -201,6 +201,55 @@ EXPORTED int mappedfile_close(struct mappedfile **mfp)
     return r;
 }
 
+/* function of last resort: a write has failed (maybe due to
+ * full disk), the data in the file is in unknown state
+ * (probably junk), and we have no reasonable expectation of
+ * a subsequent write succeeding.  just throw it all away.
+ */
+EXPORTED void mappedfile_discard(struct mappedfile **mfp)
+{
+    struct mappedfile *mf = *mfp;
+
+    /* make this safe to call multiple times */
+    if (!mf) return;
+
+    /* makes no sense to be here unless the map is writeable */
+    assert(mf->is_rw);
+
+    /* destroy the abomination */
+    if (mf->fname)
+        unlink(mf->fname);
+
+    /* still complain about long locks, it might be useful */
+    if (mf->lock_status != MF_UNLOCKED) {
+        struct timeval endtime;
+        double timediff;
+        int r;
+
+        r = lock_unlock(mf->fd, mf->fname);
+        if (r < 0) {
+            syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", mf->fname);
+        }
+
+        mf->lock_status = MF_UNLOCKED;
+        gettimeofday(&endtime, 0);
+        timediff = timesub(&mf->starttime, &endtime);
+        if (timediff > 1.0) {
+            syslog(LOG_NOTICE, "mappedfile: longlock %s for %0.1f seconds",
+                mf->fname, timediff);
+        }
+    }
+
+    if (mf->fd >= 0)
+        close(mf->fd);
+
+    buf_free(&mf->map_buf);
+    free(mf->fname);
+    free(mf);
+
+    *mfp = NULL;
+}
+
 EXPORTED int mappedfile_readlock(struct mappedfile *mf)
 {
     struct stat sbuf, sbuffile;
@@ -504,6 +553,11 @@ EXPORTED int mappedfile_iswritelocked(const struct mappedfile *mf)
 EXPORTED int mappedfile_iswritable(const struct mappedfile *mf)
 {
     return !!mf->is_rw;
+}
+
+EXPORTED int mappedfile_isdirty(const struct mappedfile *mf)
+{
+    return !!mf->dirty;
 }
 
 EXPORTED const char *mappedfile_base(const struct mappedfile *mf)
