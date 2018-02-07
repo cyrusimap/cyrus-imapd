@@ -93,6 +93,10 @@ ec HTTP_MULTI_STATUS,
 ec HTTP_DUPLICATE,
    "208 Already Reported"
 
+# Delta Encoding in HTTP (RFC 3229)
+ec HTTP_IM_USED,
+   "226 IM Used"
+
 
 # Redirection 3xx (Further action must be taken to complete the request)
 
