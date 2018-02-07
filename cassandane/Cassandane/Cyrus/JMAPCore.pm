@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::JMAPAuth;
+package Cassandane::Cyrus::JMAPCore;
 use strict;
 use warnings;
 use DateTime;
