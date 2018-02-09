@@ -2215,8 +2215,13 @@ static int folder_key_rename(struct conversations_state *state,
         return conversation_setstatus(state, from_name, NULL);
     }
 
-    /* you can't delete a folder until the messages are cleared */
-    assert(!status.exists);
+    /* in theory there shouldn't be any EXISTS left because you've deleted the messages,
+     * but DB corruption could mean this wasn't cleared - better to allow the rename to
+     * succeed and clean up later */
+    if (status.exists) {
+        syslog(LOG_ERR, "IOERROR: conversationsdb corruption %s still had %d messages in folder key on delete",
+               from_name, status.exists);
+    }
 
     return 0;
 }
