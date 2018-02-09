@@ -664,6 +664,7 @@ sub _setup_logfile
 
     my $logfh;
     my $logfile;
+    srand;   # XXX does this fix the tempfile() issue (#42)?
     if (defined $self->{log_directory})
     {
 	# Log directory specified so create the log file
