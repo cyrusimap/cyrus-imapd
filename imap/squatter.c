@@ -1013,7 +1013,7 @@ int main(int argc, char **argv)
         r = do_search(query, !multi_folder, &mboxnames);
         break;
     case ROLLING:
-        if (background)
+        if (background && !getenv("CYRUS_ISDAEMON"))
             become_daemon();
         do_rolling(channel);
         /* never returns */
