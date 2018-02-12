@@ -3040,7 +3040,7 @@ sub test_misc_upload
     $self->assert_not_null($msgresp->[0][1]{created});
 }
 
-sub test_misc_upload__multiaccount
+sub test_misc_upload_multiaccount
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -3187,6 +3187,82 @@ sub test_misc_download
 
     $res = $jmap->Download('cassandane', $blobid1);
     $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
+}
+
+sub download
+{
+    my ($self, $accountid, $blobid) = @_;
+    my $jmap = $self->{jmap};
+
+    my $uri = $jmap->downloaduri($accountid, $blobid);
+    my %Headers;
+    $Headers{'Authorization'} = $jmap->auth_header();
+    my %getopts = (headers => \%Headers);
+    my $res = $jmap->ua->get($uri, \%getopts);
+    xlog "JMAP DOWNLOAD @_ " . Dumper($res);
+    return $res;
+}
+
+sub test_blob_copy
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # FIXME how to share just #jmap folder?
+    xlog "create user foo and share inbox";
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lrkintex") or die;
+
+    xlog "upload blob in main account";
+    my $data = $jmap->Upload('somedata', "text/plain");
+    $self->assert_not_null($data);
+
+    xlog "attempt to download from shared account (should fail)";
+    my $res = $self->download('foo', $data->{blobId});
+    $self->assert_str_equals('404', $res->{status});
+
+    xlog "copy blob to shared account";
+    $res = $jmap->CallMethods([['Blob/copy', {
+        fromAccountId => 'cassandane',
+        toAccountId => 'foo',
+        blobIds => [ $data->{blobId} ],
+    }, 'R1']]);
+
+    xlog "download from shared account";
+    $res = $self->download('foo', $data->{blobId});
+    $self->assert_str_equals('200', $res->{status});
+
+    xlog "generate an email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog "get email blob id";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'blobId' ],
+        }, 'R2']
+    ]);
+    my $msgblobId = $res->[1][1]->{list}[0]{blobId};
+
+    xlog "copy Email blob to shared account";
+    $res = $jmap->CallMethods([['Blob/copy', {
+        fromAccountId => 'cassandane',
+        toAccountId => 'foo',
+        blobIds => [ $msgblobId ],
+    }, 'R1']]);
+
+    xlog "download Email blob from shared account";
+    $res = $self->download('foo', $msgblobId);
+    $self->assert_str_equals('200', $res->{status});
 }
 
 sub test_email_set_attachments
