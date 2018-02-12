@@ -51,6 +51,8 @@
 #include <openssl/rand.h>
 #endif /* HAVE_SSL */
 
+#include <errno.h>
+
 #include "append.h"
 #include "cyrusdb.h"
 #include "hash.h"
@@ -95,6 +97,8 @@ static int  jmap_auth(const char *userid);
 static int  jmap_settings(struct transaction_t *txn);
 static int  jmap_initreq(jmap_req_t *req);
 static void jmap_finireq(jmap_req_t *req);
+
+static int jmap_blob_copy(jmap_req_t *req);
 
 static int myrights(struct auth_state *authstate,
                     const mbentry_t *mbentry,
@@ -331,6 +335,9 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     jmap_mail_init(&jmap_methods, jmap_capabilities);
     jmap_contact_init(&jmap_methods, jmap_capabilities);
     jmap_calendar_init(&jmap_methods, jmap_capabilities);
+
+    static jmap_method_t blobcopy = { "Blob/copy", &jmap_blob_copy };
+    hash_insert(blobcopy.name, &blobcopy, &jmap_methods);
 }
 
 
@@ -954,6 +961,8 @@ EXPORTED char *jmap_blobid(const struct message_guid *guid)
 
 struct findblob_data {
     jmap_req_t *req;
+    const char *accountid;
+    int is_shared_account;
     struct mailbox *mbox;
     msgrecord_t *mr;
     char *part_id;
@@ -964,6 +973,29 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     struct findblob_data *d = (struct findblob_data*) rock;
     jmap_req_t *req = d->req;
     int r = 0;
+
+    /* Ignore blobs that don't belong to the current accountId */
+    mbname_t *mbname = mbname_from_intname(rec->mboxname);
+    int is_accountid_mbox =
+        (mbname && !strcmp(mbname_userid(mbname), d->accountid));
+    mbname_free(&mbname);
+    if (!is_accountid_mbox)
+        return 0;
+
+    /* Check ACL */
+    if (d->is_shared_account) {
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+        if (r) {
+            syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", rec->mboxname);
+            return r;
+        }
+        int rights = jmap_myrights(req, mbentry);
+        mboxlist_entry_free(&mbentry);
+        if ((rights & (ACL_LOOKUP|ACL_READ)) != (ACL_LOOKUP|ACL_READ)) {
+            return 0;
+        }
+    }
 
     r = jmap_openmbox(req, rec->mboxname, &d->mbox, 0);
     if (r) return r;
@@ -979,12 +1011,20 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
-
-EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
-                           struct mailbox **mbox, msgrecord_t **mr,
-                           struct body **body, const struct body **part)
+static int _findblob(jmap_req_t *req, const char *blobid,
+                     const char *accountid,
+                     struct mailbox **mbox, msgrecord_t **mr,
+                     struct body **body, const struct body **part)
 {
-    struct findblob_data data = { req, NULL, NULL, NULL };
+
+    struct findblob_data data = {
+        req, /* req */
+        accountid, /* accountid */
+        strcmp(req->userid, accountid), /* is_shared_account */
+        NULL, /* mbox */
+        NULL, /* mr */
+        NULL  /* part_id */
+    };
     struct body *mybody = NULL;
     const struct body *mypart = NULL;
     int i, r;
@@ -1042,6 +1082,14 @@ done:
 }
 
 
+EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
+                           struct mailbox **mbox, msgrecord_t **mr,
+                           struct body **body, const struct body **part)
+{
+    return _findblob(req, blobid, req->accountid, mbox, mr, body, part);
+}
+
+
 EXPORTED int jmap_download(struct transaction_t *txn)
 {
     const char *userid = txn->req_tgt.resource;
@@ -1050,6 +1098,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         /* XXX - error, needs AccountId */
         return HTTP_NOT_FOUND;
     }
+
 #if 0
     size_t userlen = slash - userid;
 
@@ -1082,19 +1131,21 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     const char *name = slash + 1;
 
-    struct conversations_state *cstate = NULL;
-    int r = conversations_open_user(httpd_userid, &cstate);
-    if (r) {
-        txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
-    }
-
     /* now we're allocating memory, so don't return from here! */
 
     char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+    char *accountid = xstrndup(userid, strchr(userid, '/') - userid);
+
+    struct conversations_state *cstate = NULL;
+    int r = conversations_open_user(accountid, &cstate);
+    if (r) {
+        txn->error.desc = error_message(r);
+        goto done;
+    }
 
     struct jmap_req req;
     req.userid = httpd_userid;
+    req.accountid = accountid;
     req.inboxname = inboxname;
     req.cstate = cstate;
     req.authstate = httpd_authstate;
@@ -1103,6 +1154,13 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     req.tag = NULL;
     req.idmap = NULL;
     req.txn = txn;
+    req.is_shared_account = strcmp(req.accountid, req.userid);
+
+
+    /* Initialize ACL mailbox cache for findblob */
+    hash_table mboxrights = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&mboxrights, 64, 0);
+    req.mboxrights = &mboxrights;
 
     jmap_initreq(&req);
 
@@ -1119,7 +1177,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     int res = 0;
 
     /* Find part containing blob */
-    r = jmap_findblob(&req, blobid, &mbox, &mr, &body, &part);
+    r = _findblob(&req, blobid, accountid, &mbox, &mr, &body, &part);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to find blob by id";
@@ -1174,6 +1232,8 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     write_body(HTTP_OK, txn, base, len);
 
  done:
+    free_hash_table(&mboxrights, free);
+    free(accountid);
     free(decbuf);
     free(ctype);
     strarray_fini(&headers);
@@ -1248,7 +1308,6 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 
   done:
     mbname_free(&mbname);
-
     return r;
 }
 
@@ -1275,8 +1334,8 @@ static int create_upload_collection(const char *accountid,
         }
 
         r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, accountid, NULL,
-                                   0, 0, 0, 0, mailbox);
+                                   NULL, 1 /* admin */, accountid,
+                                   httpd_authstate, 0, 0, 0, 0, mailbox);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
@@ -1365,7 +1424,6 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
         ret = HTTP_NOT_FOUND;
         goto done;
     }
-
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -1543,6 +1601,225 @@ static int JNOTNULL(json_t *item)
    if (!item) return 0;
    if (json_is_null(item)) return 0;
    return 1;
+}
+
+static int jmap_copyblob(jmap_req_t *req,
+                         const char *blobid,
+                         const char *from_accountid,
+                         struct mailbox *to_mbox)
+{
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
+    FILE *fp = NULL;
+    FILE *to_fp = NULL;
+    struct stagemsg *stage = NULL;
+
+    int r = _findblob(req, blobid, from_accountid, &mbox, &mr, &body, &part);
+    if (r) return r;
+
+    if (!part)
+        part = body;
+
+    /* Open source file */
+    const char *fname = NULL;
+    r = msgrecord_get_fname(mr, &fname);
+    if (r) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): msgrecord_get_fname: %s",
+                blobid, error_message(r));
+        goto done;
+    }
+    fp = fopen(fname, "r");
+    if (!fp) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): fopen(%s): %s",
+                blobid, fname, strerror(errno));
+        goto done;
+    }
+
+    /* Create staging file */
+    time_t internaldate = time(NULL);
+    if (!(to_fp = append_newstage(to_mbox->name, internaldate, 0, &stage))) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): append_newstage(%s) failed",
+                blobid, mbox->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Copy blob. Keep the original MIME headers, we wouldn't really
+     * know which ones are safe to rewrite for arbitrary blobs. */
+    size_t nread = 0;
+    char cbuf[4096];
+    fseek(fp, part->header_offset, SEEK_SET);
+    while (nread < part->header_size + part->content_size) {
+        nread += fread(cbuf, 1, 4096, fp);
+        fwrite(cbuf, 1, nread, to_fp);
+        if (ferror(fp) || ferror(to_fp)) {
+            syslog(LOG_ERR, "jmap_copyblob(%s): fromfp=%s tofp=%s: %s",
+                    blobid, fname, append_stagefname(stage), strerror(errno));
+            r = IMAP_IOERROR;
+            goto done;
+        }
+    }
+    fclose(fp);
+    fp = NULL;
+    fclose(to_fp);
+    to_fp = NULL;
+
+    /* Append blob to mailbox */
+    struct body *to_body = NULL;
+    struct appendstate as;
+    r = append_setup_mbox(&as, to_mbox, httpd_userid, httpd_authstate,
+            0, /*quota*/NULL, 0, 0, /*event*/0);
+    if (r) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): append_setup_mbox: %s",
+                blobid, error_message(r));
+        goto done;
+    }
+    strarray_t flags = STRARRAY_INITIALIZER;
+    strarray_append(&flags, "\\Deleted");
+    strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
+	r = append_fromstage(&as, &to_body, stage, internaldate, &flags, 0, NULL);
+    strarray_fini(&flags);
+	if (r) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): append_fromstage: %s",
+                blobid, error_message(r));
+		append_abort(&as);
+		goto done;
+	}
+	message_free_body(to_body);
+	free(to_body);
+	r = append_commit(&as);
+	if (r) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): append_commit: %s",
+                blobid, error_message(r));
+        goto done;
+    }
+
+done:
+    if (stage) append_removestage(stage);
+    if (fp) fclose(fp);
+    if (to_fp) fclose(to_fp);
+    message_free_body(body);
+    free(body);
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    return r;
+}
+
+static int jmap_blob_copy(jmap_req_t *req)
+{
+    json_t *args = req->args;
+    const char *from_accountid = NULL;
+    const char *to_accountid = NULL;
+    json_t *val, *blobids, *invalid = json_array();
+    size_t i = 0;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Parse request */
+    val = json_object_get(args, "fromAccountId");
+    if (JNOTNULL(val) && !json_is_string(val)) {
+        json_array_append_new(invalid, json_string("fromAccountId"));
+    }
+    from_accountid = json_string_value(val);
+    if (from_accountid == NULL) {
+        from_accountid = req->userid;
+    }
+    val = json_object_get(args, "toAccountId");
+    if (JNOTNULL(val) && !json_is_string(val)) {
+        json_array_append_new(invalid, json_string("toAccountId"));
+    }
+    to_accountid = json_string_value(val);
+    if (to_accountid == NULL) {
+        to_accountid = req->userid;
+    }
+    blobids = json_object_get(args, "blobIds");
+    if (!json_is_array(blobids)) {
+        json_array_append_new(invalid, json_string("blobIds"));
+    }
+    json_array_foreach(blobids, i, val) {
+        if (!json_is_string(val)) {
+            buf_printf(&buf, "blobIds[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    if (json_array_size(invalid)) {
+        json_t *err = json_pack("{s:s, s:o}",
+                "type", "invalidArguments", "arguments", invalid);
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "error", err, req->tag));
+        return 0;
+    }
+    json_decref(invalid);
+
+    /* No return from here on */
+    struct mailbox *to_mbox = NULL;
+    json_t *not_copied = json_object();
+    json_t *copied = json_object();
+
+    /* Check if we can upload to toAccountId */
+    int r = create_upload_collection(to_accountid, &to_mbox);
+    if (r == IMAP_PERMISSION_DENIED) {
+        json_array_foreach(blobids, i, val) {
+            json_object_set(not_copied, json_string_value(val),
+                    json_pack("{s:s}", "type", "toAccountNotFound"));
+        }
+        r = 0;
+        goto done;
+    } else if (r) {
+        syslog(LOG_ERR, "jmap_blob_copy: create_upload_collection(%s): %s",
+                to_accountid, error_message(r));
+        goto done;
+    }
+
+    /* Check if we can access any mailbox of fromAccountId */
+    r = mymblist(httpd_userid, from_accountid, httpd_authstate,
+            req->mboxrights, is_accessible, NULL, 0/*all*/);
+    if (r != IMAP_OK_COMPLETED) {
+        json_array_foreach(blobids, i, val) {
+            json_object_set(not_copied, json_string_value(val),
+                    json_pack("{s:s}", "type", "fromAccountNotFound"));
+        }
+        r = 0;
+        goto done;
+    }
+    r = 0;
+
+    /* Copy blobs one by one. XXX should we batch copy here? */
+    json_array_foreach(blobids, i, val) {
+        const char *blobid = json_string_value(val);
+        r = jmap_copyblob(req, blobid, from_accountid, to_mbox);
+        if (r == IMAP_NOTFOUND) {
+            json_object_set_new(not_copied, blobid,
+                    json_pack("{s:s}", "type", "blobNotFound"));
+            r = 0;
+            continue;
+        }
+        else if (r) goto done;
+        json_object_set_new(copied, blobid, json_string(blobid));
+    }
+
+done:
+    if (!r) {
+        /* Build response */
+        if (!json_object_size(copied)) {
+            json_decref(copied);
+            copied = json_null();
+        }
+        if (!json_object_size(not_copied)) {
+            json_decref(not_copied);
+            not_copied = json_null();
+        }
+        json_t *res = json_pack("{s:O s:O s:o s:o}",
+                "fromAccountId", json_object_get(args, "fromAccountId"),
+                "toAccountId", json_object_get(args, "toAccountId"),
+                "copied", copied, "notCopied", not_copied);
+        json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "Blob/copy", res, req->tag));
+    }
+    mailbox_close(&to_mbox);
+    return r;
 }
 
 EXPORTED int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
