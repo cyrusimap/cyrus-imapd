@@ -1137,7 +1137,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         if (len != 3)
             goto failed;
 
-        /* The weekday is foll wed by a ',', consume that. */
+        /* The weekday is followed by a ',', consume that. */
         if (get_current_char(buf) == ',')
             get_next_char(buf);
         else
@@ -1159,9 +1159,12 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (tm->tm_mday == -9999)
         goto failed;
 
-    /* month name */
-    get_next_char(buf);     /* Consume a character, either a '-' or ' ' */
+    /* the separator here is either '-' or FWS */
+    c = get_next_char(buf);
+    if (rfc5322_special[c])
+        skip_ws(buf, 0);
 
+    /* month name */
     if (!get_next_token(buf, &str_token, &len) ||
         len != 3 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Alpha))
@@ -1179,9 +1182,12 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (i == 12)
         goto failed;
 
-    /* year 2, 4 or >4 digits */
-    get_next_char(buf);     /* Consume a character, either a '-' or ' ' */
+    /* the separator here is either '-' or FWS */
+    c = get_next_char(buf);
+    if (rfc5322_special[c])
+        skip_ws(buf, 0);
 
+    /* year 2, 4 or >4 digits */
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 

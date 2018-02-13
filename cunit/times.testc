@@ -508,6 +508,12 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 1497912578);
 
+    /* https://github.com/cyrusimap/cyrus-imapd/issues/2247 */
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322("Tue, 20  Jun  2017 00:49:38 +0000", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 33);
+    CU_ASSERT_EQUAL(t, 1497919778);
+
     /* Timezone tests - same time different timezones*/
     t = UNINIT_TIMET;
     r = time_from_rfc5322("FRI, 26 NOV 2010 14:22:02 +1100", &t, DATETIME_FULL); /* MEL */
@@ -573,7 +579,6 @@ test_rfc5322(void)
     t = UNINIT_TIMET;
     r = time_from_rfc5322("0100200200300400502989587984579845", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, -1);
-
 }
 
 static void
