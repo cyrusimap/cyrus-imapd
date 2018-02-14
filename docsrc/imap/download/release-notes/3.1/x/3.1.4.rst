@@ -27,6 +27,7 @@ Major changes since the 3.0.x series
 * Improvements to Annotations handling.
 * DRAC support has been deprecated.
 * Support for Prometheus stats.
+* new cyrus.index format v14 included in 3.1.4 - adds unseen count to index header
 
 Updates to default configuration
 ================================
