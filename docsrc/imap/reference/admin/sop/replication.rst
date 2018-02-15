@@ -226,6 +226,12 @@ it in :cyrusman:`imapd.conf(5)` using these options:
     See :ref:`replication-channels`, below, for details on how to use
     these settings to control syncing to multiple replicas.
 
+.. Important::
+    If using sync_log_channels for any other purpose, such as
+    specifying the sync_log used by :cyrusman:`squatter(8)` command,
+    you must *also* either specify a sync_log channel for replication,
+    or specify the default "" (the two-character string U+22 U+22).
+
 Add invocation specifications to :cyrusman:`cyrus.conf(5)` to spawn
 :cyrusman:`sync_client(8)` as desired (for each channel used) as
 described below in Rolling Replication or Periodic Replication.

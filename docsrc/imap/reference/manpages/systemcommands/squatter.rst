@@ -287,10 +287,14 @@ rolling **squatter** operation:
 
 ..  Note::
 
-    When using the *-R* rolling mode, you MUST enable sync_log operation
-    in :cyrusman:`imapd.conf(5)` via the `sync_log: on` setting, and
-    MUST define a sync_log channel via the `sync_log_channels:`
-    setting.
+    When using the *-R* rolling mode, you MUST enable sync_log
+    operation in :cyrusman:`imapd.conf(5)` via the `sync_log: on`
+    setting, and MUST define a sync_log channel via the
+    `sync_log_channels:` setting.  If also using replication, you must
+    either explicitly specify your replication sync_log channel via the
+    `sync_log_channels` directive with a name, or specify the default
+    empty name with "" (the two-character string U+22 U+22).  [Please
+    see :cyrusman:`imapd.conf(5)` for details].
 
 ..  Note::
 
