@@ -74,6 +74,16 @@ sub set_up
         $self->{instance}->{buildinfo}->{search}->{xapian_flavor} || "none";
 
     xlog "Xapian flavor '$self->{xapian_flavor}' detected.\n";
+
+    use experimental 'smartmatch';
+    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
+    if (not defined $skipdiacrit) {
+        $skipdiacrit = 1;
+    }
+    if ($skipdiacrit ~~ ['no', 'off', 'f', 'false', '0']) {
+        $skipdiacrit = 0;
+    }
+    $self->{skipdiacrit} = $skipdiacrit;
 }
 
 sub tear_down
@@ -379,8 +389,7 @@ sub test_normalize_snippets
     }
 
     # Assert that search without diacritics matches
-    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
-    if ($skipdiacrit && !($skipdiacrit eq "false")) {
+    if ($self->{skipdiacrit}) {
         my $term = "naive";
         xlog "XSNIPPETS for FUZZY text \"$term\"";
         $r = $talk->xsnippets(
@@ -388,6 +397,58 @@ sub test_normalize_snippets
             ['fuzzy', 'text', { Quote => $term }]
         ) || die;
         $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>naïve</b>"), -1);
+    }
+}
+
+sub test_skipdiacrit
+    :min_version_3_0
+{
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    # Set up test messages
+    my $body = "Die Trauben gären.";
+    xlog "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("1", %params) || die;
+    $body = "Gemüse schonend garen.";
+    %params = (
+        mime_charset => "utf-8",
+        body => $body
+    );
+    $self->make_message("2", %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    xlog 'Search for "garen"';
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", ["text", { Quote => "garen" }],
+    ) || die;
+    if ($self->{skipdiacrit}) {
+        $self->assert_num_equals(2, scalar @$r);
+    } else {
+        $self->assert_num_equals(1, scalar @$r);
+    }
+
+    xlog 'Search for "gären"';
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", ["text", { Quote => "gären" }],
+    ) || die;
+    if ($self->{skipdiacrit}) {
+        $self->assert_num_equals(2, scalar @$r);
+    } else {
+        $self->assert_num_equals(1, scalar @$r);
     }
 }
 
@@ -584,8 +645,7 @@ sub test_subject_isutf8
     # my $term = "réunion critères";
     my %searches;
 
-    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
-    if (!($skipdiacrit eq "false")) {
+    if ($self->{skipdiacrit}) {
         # Diacritics are stripped before indexing and search. That's a sane
         # choice as long as there is no language-specific stemming applied
         # during indexing and search.
