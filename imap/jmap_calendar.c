@@ -466,7 +466,7 @@ struct calendarupdates_rock {
     jmap_req_t *req;
     modseq_t oldmodseq;
     json_t *changed;
-    json_t *removed;
+    json_t *destroyed;
 };
 
 static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
@@ -513,11 +513,11 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *id = strarray_nth(boxes, boxes->count-1);
 
-    /* Report this calendar as changed or removed. */
+    /* Report this calendar as changed or destroyed. */
     if (mbentry->mbtype & MBTYPE_CALENDAR) {
         json_array_append_new(rock->changed, json_string(id));
     } else if (mbentry->mbtype & MBTYPE_DELETED) {
-        json_array_append_new(rock->removed, json_string(id));
+        json_array_append_new(rock->destroyed, json_string(id));
     }
 
 done:
@@ -579,7 +579,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
         json_array_append_new(req->response,
                               json_pack("[s,o,s]", "error", err, req->tag));
         json_decref(rock.changed);
-        json_decref(rock.removed);
+        json_decref(rock.destroyed);
         goto done;
     }
 
@@ -592,7 +592,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
                         jmap_getstate(req, MBTYPE_CALENDAR));
 
     json_object_set_new(calendarUpdates, "changed", rock.changed);
-    json_object_set_new(calendarUpdates, "removed", rock.removed);
+    json_object_set_new(calendarUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("Calendar/changes"));
@@ -2254,7 +2254,7 @@ done:
 struct geteventupdates_rock {
     jmap_req_t *req;
     json_t *changed;
-    json_t *removed;
+    json_t *destroyed;
     size_t seen_records;
     size_t max_records;
     modseq_t highestmodseq;
@@ -2269,14 +2269,14 @@ static void strip_spurious_deletes(struct geteventupdates_rock *urock)
      * of a hash will cost more */
     unsigned i, j;
 
-    for (i = 0; i < json_array_size(urock->removed); i++) {
-        const char *del = json_string_value(json_array_get(urock->removed, i));
+    for (i = 0; i < json_array_size(urock->destroyed); i++) {
+        const char *del = json_string_value(json_array_get(urock->destroyed, i));
 
         for (j = 0; j < json_array_size(urock->changed); j++) {
             const char *up =
                 json_string_value(json_array_get(urock->changed, j));
             if (!strcmpsafe(del, up)) {
-                json_array_remove(urock->removed, i--);
+                json_array_remove(urock->destroyed, i--);
                 break;
             }
         }
@@ -2298,11 +2298,11 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
     if (!(rights & DACL_READ))
         return 0;
 
-    /* Report item as updated or removed. */
+    /* Report item as updated or destroyed. */
     if (cdata->dav.alive) {
         json_array_append_new(rock->changed, json_string(cdata->ical_uid));
     } else {
-        json_array_append_new(rock->removed, json_string(cdata->ical_uid));
+        json_array_append_new(rock->destroyed, json_string(cdata->ical_uid));
     }
 
     if (cdata->dav.modseq > rock->highestmodseq) {
@@ -2359,7 +2359,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     struct geteventupdates_rock rock = {
         req,
         json_array() /*changed*/,
-        json_array() /*removed*/,
+        json_array() /*destroyed*/,
         0            /*seen_records*/,
         maxChanges   /*max_records*/,
         0            /*highestmodseq*/,
@@ -2392,7 +2392,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
 
     json_object_set_new(eventUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(eventUpdates, "changed", rock.changed);
-    json_object_set(eventUpdates, "removed", rock.removed);
+    json_object_set(eventUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("CalendarEvent/changes"));
@@ -2414,7 +2414,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
   done:
     buf_free(&buf);
     if (rock.changed) json_decref(rock.changed);
-    if (rock.removed) json_decref(rock.removed);
+    if (rock.destroyed) json_decref(rock.destroyed);
     if (rock.mboxrights) {
         free_hash_table(rock.mboxrights, free);
         free(rock.mboxrights);
