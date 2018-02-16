@@ -889,6 +889,7 @@ typedef struct {
     ptrarray_t result;  /* Result records (mboxsearch_record_t) */
 
     int _need_name;
+    int _need_utf8mboxname;
     int _need_sort_order;
     int _need_role;
 } mboxsearch_t;
@@ -896,6 +897,7 @@ typedef struct {
 typedef struct {
     char *id;
     char *mboxname;
+    char *utf8mboxname;
     char *jmapname;
     int sort_order;
 } mboxsearch_record_t;
@@ -929,6 +931,7 @@ static void mboxsearch_free(mboxsearch_t **qptr)
         mboxsearch_record_t *rec = ptrarray_nth(&q->result, i);
         free(rec->id);
         free(rec->mboxname);
+        free(rec->utf8mboxname);
         free(rec->jmapname);
         free(rec);
     }
@@ -970,6 +973,8 @@ static int mboxsearch_compar(const void **a, const void **b, void *rock)
             cmp = strcmp(pa->jmapname, pb->jmapname) * sign;
         else if (!strcmp(crit->field, "sortOrder"))
             cmp = (pa->sort_order - pb->sort_order) * sign;
+        else if (!strcmp(crit->field, "parent/name"))
+            cmp = strcmp(pa->utf8mboxname, pb->utf8mboxname) * sign;
 
         if (cmp) return cmp;
     }
@@ -986,7 +991,7 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
     mbname_t *mbname = mbname_from_intname(mbentry->name);
 
     /* Apply filters */
-    int i;
+    int i, r = 0;
     for (i = 0; i < q->filter.count; i++) {
         mboxsearch_filter_t *filter = ptrarray_nth(&q->filter, i);
         if (!strcmp(filter->field, "hasRole")) {
@@ -1013,6 +1018,26 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
         rec->mboxname = xstrdup(mbentry->name);
         rec->jmapname = jmapmbox_name(q->req, mbname);
     }
+    if (q->_need_utf8mboxname) {
+        charset_t cs = charset_lookupname("imap-mailbox-name");
+        if (!cs) {
+            syslog(LOG_ERR, "mboxsearch_cb: no imap-mailbox-name charset");
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+        /* XXX this is best we can get without resorting to replicating the
+         * mailbox tree in-memory. If mailbox siblings are not being allowed
+         * to share the same name and IMAP mailboxes always resemble the
+         * IMAP UTF-7 encoded hierarchical name, we are safe to compare the
+         * UTF-8 decoded IMAP mailbox names. */
+        rec->utf8mboxname =
+            charset_to_utf8(mbentry->name, strlen(mbentry->name), cs, 0);
+        if (!rec->utf8mboxname) {
+            /* XXX should never happen */
+            rec->utf8mboxname = xstrdup(mbentry->name);
+        }
+        charset_free(&cs);
+    }
     if (q->_need_sort_order) {
         rec->sort_order = jmapmbox_sort_order(q->req, mbname);
     }
@@ -1020,7 +1045,7 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
 
 done:
     mbname_free(&mbname);
-    return 0;
+    return r;
 }
 
 static int mboxsearch_run(mboxsearch_t *query)
@@ -1035,6 +1060,9 @@ static int mboxsearch_run(mboxsearch_t *query)
         }
         else if (!strcmp(crit->field, "sortOrder")) {
             query->_need_sort_order = 1;
+        }
+        else if (!strcmp(crit->field, "parent/name")) {
+            query->_need_utf8mboxname = 1;
         }
     }
     for (i = 0; i < query->filter.count; i++) {
@@ -1188,7 +1216,8 @@ static int is_supported_mboxlist_sort(const jmap_comparator_t *comp)
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
-        strcmp(comp->property, "name")) {
+        strcmp(comp->property, "name") &&
+        strcmp(comp->property, "parent/name")) {
         return 0;
     }
     /* Reject any collation */
