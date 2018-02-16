@@ -495,7 +495,7 @@ sub test_calendar_changes
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_str_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{destroyed}});
 
     xlog "update name of calendar $id1, destroy calendar $id2";
     $res = $jmap->CallMethods([
@@ -516,8 +516,8 @@ sub test_calendar_changes
     $self->assert_str_equals("R1", $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($id2, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
@@ -532,7 +532,7 @@ sub test_calendar_changes
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
@@ -547,7 +547,7 @@ sub test_calendar_changes
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state,
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
     $state = $res->[0][1]{newState};
@@ -556,7 +556,7 @@ sub test_calendar_changes
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
@@ -2220,7 +2220,7 @@ sub test_calendarevent_changes
     xlog "get zero calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
@@ -2276,8 +2276,8 @@ sub test_calendarevent_changes
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($id2, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
@@ -2286,7 +2286,7 @@ sub test_calendarevent_changes
     xlog "get zero calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
@@ -2306,7 +2306,7 @@ sub test_calendarevent_changes
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($id1, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
@@ -2327,8 +2327,8 @@ sub test_calendarevent_changes
     xlog "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{changed}});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($id1, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
@@ -3026,8 +3026,8 @@ sub test_calendarevent_set_caldav
 
     xlog "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($id, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]{newState};
 
     $id = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
