@@ -2316,7 +2316,7 @@ done:
 
 struct jmapmbox_getupdates_data {
     json_t *changed;        /* maps mailbox ids to {id:foldermodseq} */
-    json_t *removed;        /* maps mailbox ids to {id:foldermodseq} */
+    json_t *destroyed;      /* maps mailbox ids to {id:foldermodseq} */
     modseq_t sincemodseq;
     int *only_counts_changed;
     jmap_req_t *req;
@@ -2351,10 +2351,10 @@ static int jmapmbox_getupdates_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Is this a more recent update for an id that we have already seen? */
-    if ((update = json_object_get(data->removed, mbentry->uniqueid))) {
+    if ((update = json_object_get(data->destroyed, mbentry->uniqueid))) {
         modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
         if (modseq <= mbmodseq) {
-            json_object_del(data->removed, mbentry->uniqueid);
+            json_object_del(data->destroyed, mbentry->uniqueid);
         } else {
             return 0;
         }
@@ -2378,7 +2378,7 @@ static int jmapmbox_getupdates_cb(const mbentry_t *mbentry, void *rock)
     update = json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq);
     int rights = jmap_myrights(req, mbentry);
     if ((mbentry->mbtype & MBTYPE_DELETED) || !(rights & ACL_LOOKUP)) {
-        updates = data->removed;
+        updates = data->destroyed;
     } else {
         updates = data->changed;
     }
@@ -2404,7 +2404,7 @@ static int jmapmbox_getupdates_cmp(const void **pa, const void **pb)
 
 static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
                                size_t limit,
-                              json_t **changed, json_t **removed,
+                              json_t **changed, json_t **destroyed,
                                int *has_more, json_t **newstate,
                                int *only_counts_changed)
 {
@@ -2432,14 +2432,14 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
     json_object_foreach(data.changed, id, val) {
         ptrarray_add(&updates, val);
     }
-    json_object_foreach(data.removed, id, val) {
+    json_object_foreach(data.destroyed, id, val) {
         ptrarray_add(&updates, val);
     }
     ptrarray_sort(&updates, jmapmbox_getupdates_cmp);
 
     /* Build result */
     *changed = json_pack("[]");
-    *removed = json_pack("[]");
+    *destroyed = json_pack("[]");
     *has_more = 0;
     windowmodseq = 0;
     for (i = 0; i < updates.count; i++) {
@@ -2458,11 +2458,11 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
         if (json_object_get(data.changed, id)) {
             json_array_append_new(*changed, json_string(id));
         } else {
-            json_array_append_new(*removed, json_string(id));
+            json_array_append_new(*destroyed, json_string(id));
         }
     }
 
-    if (!json_array_size(*changed) && !json_array_size(*removed)) {
+    if (!json_array_size(*changed) && !json_array_size(*destroyed)) {
         *only_counts_changed = 0;
     }
     *newstate = jmap_fmtstate(*has_more ? windowmodseq : jmap_highestmodseq(req, 0/*mbtype*/));
@@ -2471,14 +2471,14 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
         json_decref(*changed);
         *changed = json_null();
     }
-    if (!json_array_size(*removed)) {
-        json_decref(*removed);
-        *removed = json_null();
+    if (!json_array_size(*destroyed)) {
+        json_decref(*destroyed);
+        *destroyed = json_null();
     }
 
 done:
     if (data.changed) json_decref(data.changed);
-    if (data.removed) json_decref(data.removed);
+    if (data.destroyed) json_decref(data.destroyed);
     ptrarray_fini(&updates);
     return r;
 }
@@ -2487,7 +2487,7 @@ static int getMailboxesUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     int has_more = 0, only_counts_changed = 0;
-    json_t *changed, *removed, *invalid, *item, *res;
+    json_t *changed, *destroyed, *invalid, *item, *res;
     json_int_t max_changes = 0;
     json_t *oldstate, *newstate;
     const char *since;
@@ -2517,7 +2517,7 @@ static int getMailboxesUpdates(jmap_req_t *req)
 
     /* Search for updates */
     r = jmapmbox_getupdates(req, atomodseq_t(since), max_changes,
-                            &changed, &removed, &has_more, &newstate,
+                            &changed, &destroyed, &has_more, &newstate,
                             &only_counts_changed);
     if (r) goto done;
     oldstate = json_string(since);
@@ -2529,7 +2529,7 @@ static int getMailboxesUpdates(jmap_req_t *req)
     json_object_set_new(res, "newState", newstate);
     json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
     json_object_set_new(res, "changed", changed);
-    json_object_set_new(res, "removed", removed);
+    json_object_set_new(res, "destroyed", destroyed);
     json_object_set_new(res, "changedProperties", only_counts_changed ?
             json_pack("[s,s,s,s]", "totalEmails", "unreadEmails",
                                    "totalThreads", "unreadThreads") :
@@ -4486,7 +4486,7 @@ static void update_added(json_t *target, const char *msgid, int index)
     json_array_append_new(target, item);
 }
 
-static void update_removed(json_t *target, const char *msgid)
+static void update_destroyed(json_t *target, const char *msgid)
 {
     json_array_append_new(target, json_string(msgid));
 }
@@ -4609,7 +4609,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (is_expunged) {
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodseq) goto doneloop;
-                    update_removed(*expungedids, msgid);
+                    update_destroyed(*expungedids, msgid);
                 }
                 else {
                     (*total)++;
@@ -4631,9 +4631,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              * The "exemplar" is the first message that matches the current sort/search
              * for a given conversation.  For getEmailsList this is fairly simple,
              * just show the first message you find with a given cid, but for
-             * getEmailsListUpdates, you need to say "removed" for every message
+             * getEmailsListUpdates, you need to say "destroyed" for every message
              * which MIGHT have been the previous exemplar, because it will be in the
-             * client cache, and you need to say both "removed" and "added" for the
+             * client cache, and you need to say both "destroyed" and "added" for the
              * new exemplar unless you can be sure it was also the old exemplar.
              *
              * Of particular interest is the exposed old exemplar case.  Imagine
@@ -4649,7 +4649,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              * the old exemplar, there is no change to show between 1000 and 1001.
              *
              * We then delete 'D'.  Now, 'C' was changed at 1001, so asking for changes
-             * since 1001 we get removed: ['D', 'A'], added: ['A'] - because 'D' is now
+             * since 1001 we get destroyed: ['D', 'A'], added: ['A'] - because 'D' is now
              * gone, and 'A' is now the exemplar - but we aren't sure if it was also the
              * previous exemplay because we don't know if D was also deleted earlier and
              * touched again for some unreleated reason.
@@ -4669,12 +4669,12 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (!is_expunged) {
                     /* this may have been the old exemplar but is not the new exemplar */
                     if (ciddata & 1) {
-                        update_removed(*expungedids, msgid);
+                        update_destroyed(*expungedids, msgid);
                     }
                     else if (ciddata & 4) {
                         /* we need to remove and re-add this record just in case we
                          * got unmasked by the previous */
-                        update_removed(*expungedids, msgid);
+                        update_destroyed(*expungedids, msgid);
                         update_added(*messageids, msgid, *total-1);
                     }
                     /* nothing later could be the old exemplar */
@@ -4686,7 +4686,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             /* OK, so this message has changed since last time */
 
             /* we don't know that we weren't the old exemplar, so we always tell a removal */
-            update_removed(*expungedids, msgid);
+            update_destroyed(*expungedids, msgid);
 
             /* not the new exemplar because expunged */
             if (is_expunged) {
@@ -4989,7 +4989,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
 {
     int r;
     json_t *filter, *sort;
-    json_t *added = NULL, *removed = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
+    json_t *added = NULL, *destroyed = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
     int pe;
     const char *since = NULL, *upto = NULL;
     int max = 0;
@@ -5067,7 +5067,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
     window.uptomsgid = upto;
 
     r = jmapmsg_search(req, filter, sort, &window, /*include_expunged*/1, &total, &total_threads,
-                       &added, &removed, &threadids);
+                       &added, &destroyed, &threadids);
     if (r == IMAP_SEARCH_MUTABLE) {
         json_t *err = json_pack("{s:s,s:s}", "type", "cannotCalculateChanges", "error", "Search is mutable");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
@@ -5082,7 +5082,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
     }
     else if (r) goto done;
 
-    if (max && json_array_size(added) + json_array_size(removed) > (unsigned)max) {
+    if (max && json_array_size(added) + json_array_size(destroyed) > (unsigned)max) {
         json_t *err = json_pack("{s:s}", "type", "tooManyChanges");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
         r = 0;
@@ -5102,7 +5102,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
     json_object_set_new(res, "oldState", oldstate);
     json_object_set_new(res, "newState", jmap_getstate(req, 0/*mbtype*/));
     json_object_set(res, "added", added);
-    json_object_set(res, "removed", removed);
+    json_object_set(res, "destroyed", destroyed);
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
     json_object_set_new(res, "uptoEmailId", json_string(upto));
@@ -5116,7 +5116,7 @@ static int getEmailsListUpdates(jmap_req_t *req)
 
 done:
     if (added) json_decref(added);
-    if (removed) json_decref(removed);
+    if (destroyed) json_decref(destroyed);
     if (threadids) json_decref(threadids);
     return r;
 }
@@ -5125,7 +5125,7 @@ static int getEmailsUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter = NULL, *sort = NULL;
-    json_t *changed = NULL, *removed = NULL, *invalid = NULL, *item = NULL, *res = NULL, *threads = NULL;
+    json_t *changed = NULL, *destroyed = NULL, *invalid = NULL, *item = NULL, *res = NULL, *threads = NULL;
     json_int_t max = 0;
     size_t total, total_threads;
     int has_more = 0;
@@ -5162,7 +5162,7 @@ static int getEmailsUpdates(jmap_req_t *req)
     sort = json_pack("[{s:s}]", "property", "emailState");
 
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
-                       &total, &total_threads, &changed, &removed, &threads);
+                       &total, &total_threads, &changed, &destroyed, &threads);
     if (r == IMAP_NOTFOUND) {
         json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
         json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
@@ -5171,9 +5171,9 @@ static int getEmailsUpdates(jmap_req_t *req)
     }
     else if (r) goto done;
 
-    has_more = (json_array_size(changed) + json_array_size(removed)) < total;
+    has_more = (json_array_size(changed) + json_array_size(destroyed)) < total;
     oldstate = json_string(since);
-    if (has_more || json_array_size(changed) || json_array_size(removed)) {
+    if (has_more || json_array_size(changed) || json_array_size(destroyed)) {
         newstate = jmap_fmtstate(window.highestmodseq);
     }
     else {
@@ -5187,7 +5187,7 @@ static int getEmailsUpdates(jmap_req_t *req)
     json_object_set_new(res, "newState", newstate);
     json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
     json_object_set(res, "changed", changed);
-    json_object_set(res, "removed", removed);
+    json_object_set(res, "destroyed", destroyed);
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("Email/changes"));
@@ -5200,7 +5200,7 @@ done:
     if (filter) json_decref(filter);
     if (threads) json_decref(threads);
     if (changed) json_decref(changed);
-    if (removed) json_decref(removed);
+    if (destroyed) json_decref(destroyed);
     return r;
 }
 
@@ -5210,7 +5210,7 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_int_t max = 0;
     json_t *invalid, *item, *res, *oldstate, *newstate;
     json_t *changed = NULL;
-    json_t *removed = NULL;
+    json_t *destroyed = NULL;
     json_t *threads = NULL;
     json_t *val;
     size_t total, total_threads, i;
@@ -5246,7 +5246,7 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     window.collapse = 1;
     r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
-                       &total, &total_threads, &changed, &removed, &threads);
+                       &total, &total_threads, &changed, &destroyed, &threads);
     json_decref(filter);
     json_decref(sort);
     if (r == IMAP_NOTFOUND) {
@@ -5257,12 +5257,12 @@ static int getThreadsUpdates(jmap_req_t *req)
     }
     else if (r) goto done;
 
-    /* Split the collapsed threads into changed and removed - the values from
+    /* Split the collapsed threads into changed and destroyed - the values from
        jmapmsg_search will be msgids */
     if (changed) json_decref(changed);
-    if (removed) json_decref(removed);
+    if (destroyed) json_decref(destroyed);
     changed = json_pack("[]");
-    removed = json_pack("[]");
+    destroyed = json_pack("[]");
 
     json_array_foreach(threads, i, val) {
         const char *threadid = json_string_value(val);
@@ -5279,13 +5279,13 @@ static int getThreadsUpdates(jmap_req_t *req)
             }
         }
 
-        json_array_append(conv->thread ? changed : removed, val);
+        json_array_append(conv->thread ? changed : destroyed, val);
 
         conversation_free(conv);
         conv = NULL;
     }
 
-    has_more = (json_array_size(changed) + json_array_size(removed)) < total_threads;
+    has_more = (json_array_size(changed) + json_array_size(destroyed)) < total_threads;
 
     if (has_more) {
         newstate = jmap_fmtstate(window.highestmodseq);
@@ -5298,9 +5298,9 @@ static int getThreadsUpdates(jmap_req_t *req)
         json_decref(changed);
         changed = json_null();
     }
-    if (!json_array_size(removed)) {
-        json_decref(removed);
-        removed = json_null();
+    if (!json_array_size(destroyed)) {
+        json_decref(destroyed);
+        destroyed = json_null();
     }
 
     /* Prepare response. */
@@ -5310,7 +5310,7 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_object_set_new(res, "newState", newstate);
     json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
     json_object_set(res, "changed", changed);
-    json_object_set(res, "removed", removed);
+    json_object_set(res, "destroyed", destroyed);
 
     item = json_pack("[]");
     json_array_append_new(item, json_string("Thread/changes"));
@@ -5321,7 +5321,7 @@ static int getThreadsUpdates(jmap_req_t *req)
 done:
     if (conv) conversation_free(conv);
     if (changed) json_decref(changed);
-    if (removed) json_decref(removed);
+    if (destroyed) json_decref(destroyed);
     if (threads) json_decref(threads);
     return r;
 }
@@ -9098,7 +9098,7 @@ static int getEmailSubmissionsUpdates(jmap_req_t *req)
     json_object_set_new(res, "newState", newstate);
     json_object_set_new(res, "hasMoreUpdates", json_false());
     json_object_set_new(res, "changed", json_null());
-    json_object_set_new(res, "removed", json_null());
+    json_object_set_new(res, "destroyed", json_null());
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("EmailSubmission/changes"));
@@ -9266,7 +9266,7 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
 {
     int r = 0, pe;
     json_t *filter, *sort;
-    json_t *added = NULL, *removed = NULL, *oldstate = NULL, *newstate = NULL;
+    json_t *added = NULL, *destroyed = NULL, *oldstate = NULL, *newstate = NULL;
     json_int_t max = 0;
     const char *since;
 
@@ -9326,7 +9326,7 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
 
     /* Trivially find no message submission list updates at all. */
     added = json_pack("[]");
-    removed = json_pack("[]");
+    destroyed = json_pack("[]");
     oldstate = json_string(since);
     newstate = jmap_getstate(req, 0/*mbtype*/);
 
@@ -9338,7 +9338,7 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
     json_object_set_new(res, "total", json_integer(0));
 
     json_object_set(res, "added", added);
-    json_object_set(res, "removed", removed);
+    json_object_set(res, "destroyed", destroyed);
     json_object_set(res, "filter", filter);
     json_object_set(res, "sort", sort);
 
@@ -9350,6 +9350,6 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
 
 done:
     if (added) json_decref(added);
-    if (removed) json_decref(removed);
+    if (destroyed) json_decref(destroyed);
     return r;
 }
