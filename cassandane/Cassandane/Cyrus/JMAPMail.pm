@@ -1311,7 +1311,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
 
     xlog "create mailbox via IMAP";
@@ -1331,7 +1331,7 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1353,7 +1353,7 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1373,7 +1373,7 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1399,8 +1399,8 @@ sub test_mailbox_changes
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($foo, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1411,7 +1411,7 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -1421,7 +1421,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
 }
 
@@ -1582,8 +1582,8 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{removed}});
-    $self->assert_str_equals($box1, $res->[0][1]->{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
+    $self->assert_str_equals($box1, $res->[0][1]->{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 
     xlog "create mailbox box2 via IMAP";
@@ -1606,8 +1606,8 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{removed}});
-    $self->assert_str_equals($box2, $res->[0][1]->{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
+    $self->assert_str_equals($box2, $res->[0][1]->{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 }
 
@@ -3664,7 +3664,7 @@ sub test_emailsubmission_changes
         sinceState => $state,
     }, "R1" ] ] );
     $self->assert_null($res->[0][1]->{changed});
-    $self->assert_null($res->[0][1]->{removed});
+    $self->assert_null($res->[0][1]->{destroyed});
 
     xlog "Generate a email via IMAP";
     $self->make_message("foo", body => "a email") or die;
@@ -3689,9 +3689,9 @@ sub test_emailsubmission_changes
         sinceState => $state,
     }, "R1" ] ] );
     $self->assert(exists $res->[0][1]->{changed});
-    $self->assert(exists $res->[0][1]->{removed});
+    $self->assert(exists $res->[0][1]->{destroyed});
     $self->assert_null($res->[0][1]->{changed});
-    $self->assert_null($res->[0][1]->{removed});
+    $self->assert_null($res->[0][1]->{destroyed});
 }
 
 sub test_emailsubmission_query
@@ -3735,9 +3735,9 @@ sub test_emailsubmission_querychanges
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_num_equals(0, $res->[0][1]{total});
     $self->assert(exists $res->[0][1]->{added});
-    $self->assert(exists $res->[0][1]->{removed});
+    $self->assert(exists $res->[0][1]->{destroyed});
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{added}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{removed}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{destroyed}});
 }
 
 sub test_email_set_move
@@ -5865,7 +5865,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "Generate a email in INBOX via IMAP";
     $self->make_message("Email A") || die;
@@ -5882,7 +5882,7 @@ sub test_email_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "get email updates (expect no changes)";
@@ -5891,7 +5891,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "update email $ida";
     $res = $jmap->CallMethods([['Email/set', {
@@ -5906,7 +5906,7 @@ sub test_email_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "delete email $ida";
@@ -5919,8 +5919,8 @@ sub test_email_changes
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 
     xlog "get email updates (expect no changes)";
@@ -5929,7 +5929,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "create email B";
     $res = $jmap->CallMethods(
@@ -5964,7 +5964,7 @@ sub test_email_changes
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idb, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "get max 1 email updates";
@@ -5974,7 +5974,7 @@ sub test_email_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idc, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "get email updates (expect no changes)";
@@ -5983,7 +5983,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 }
 
 sub test_email_querychanges
@@ -6109,8 +6109,8 @@ sub test_email_querychanges_thread
     $state = $res->[0][1]{newState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
-    # assert that IDA got removed
-    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
+    # assert that IDA got destroyed
+    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{destroyed}});
     # and not recreated
     $self->assert_null(grep { $_ eq $ida } map { $_->{id} } @{$res->[0][1]->{created}});
 
@@ -6123,7 +6123,7 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_null($res->[0][1]{added});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
@@ -6132,11 +6132,11 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));
-    $self->assert_num_equals(2, scalar(@{$res->[0][1]{removed}}));
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{destroyed}}));
 
     # same thread, back to ida
     $self->assert_str_equals($ida, $res->[0][1]{added}[0]{id});
-    #$self->assert_str_equals($res->[0][1]{added}[0]{threadId}, $res->[0][1]{removed}[0]{threadId});
+    #$self->assert_str_equals($res->[0][1]{added}[0]{threadId}, $res->[0][1]{destroyed}[0]{threadId});
 }
 
 sub test_email_querychanges_order
@@ -6228,7 +6228,7 @@ sub test_email_changes_shared
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "Generate a email in shared account INBOX via IMAP";
     $self->{adminstore}->set_folder('user.foo');
@@ -6240,7 +6240,7 @@ sub test_email_changes_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
     my $ida = $res->[0][1]{changed}[0];
 
@@ -6254,7 +6254,7 @@ sub test_email_changes_shared
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "share private mailbox box1";
     $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
@@ -6265,7 +6265,7 @@ sub test_email_changes_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "delete email $ida";
@@ -6278,8 +6278,8 @@ sub test_email_changes_shared
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($ida, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 }
 
@@ -6643,7 +6643,7 @@ sub test_thread_get_updates
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "generating email A";
     $dt = DateTime->now();
@@ -6657,7 +6657,7 @@ sub test_thread_get_updates
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
     $threadA = $res->[0][1]{changed}[0];
 
@@ -6674,7 +6674,7 @@ sub test_thread_get_updates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "get thread updates (expect no changes)";
@@ -6683,7 +6683,7 @@ sub test_thread_get_updates
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 
     xlog "generating email B";
     $exp{B} = $self->make_message("Email B", body => "b");
@@ -6708,7 +6708,7 @@ sub test_thread_get_updates
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_not_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
     $threadB = $res->[0][1]{changed}[0];
 
@@ -6719,7 +6719,7 @@ sub test_thread_get_updates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog "fetch emails";
@@ -6755,8 +6755,8 @@ sub test_thread_get_updates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($threadB, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($threadB, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 
     xlog "destroy emails c and e";
@@ -6775,7 +6775,7 @@ sub test_thread_get_updates
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     $self->assert_str_equals('Thread/get', $res->[1][0]);
@@ -6794,8 +6794,8 @@ sub test_thread_get_updates
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
-    $self->assert_str_equals($threadA, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]->{newState};
 
     xlog "get thread updates (expect no changes)";
@@ -6804,7 +6804,7 @@ sub test_thread_get_updates
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
     $self->assert_null($res->[0][1]{changed});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert_null($res->[0][1]{destroyed});
 }
 
 sub test_email_import
