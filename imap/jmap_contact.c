@@ -117,7 +117,7 @@ static int JNOTNULL(json_t *item)
 struct updates_rock {
     jmap_req_t *req;
     json_t *changed;
-    json_t *removed;
+    json_t *destroyed;
 
     size_t seen_records;
     size_t max_records;
@@ -132,14 +132,14 @@ static void strip_spurious_deletes(struct updates_rock *urock)
      * of a hash will cost more */
     unsigned i, j;
 
-    for (i = 0; i < json_array_size(urock->removed); i++) {
-        const char *del = json_string_value(json_array_get(urock->removed, i));
+    for (i = 0; i < json_array_size(urock->destroyed); i++) {
+        const char *del = json_string_value(json_array_get(urock->destroyed, i));
 
         for (j = 0; j < json_array_size(urock->changed); j++) {
             const char *up =
                 json_string_value(json_array_get(urock->changed, j));
             if (!strcmpsafe(del, up)) {
-                json_array_remove(urock->removed, i--);
+                json_array_remove(urock->destroyed, i--);
                 break;
             }
         }
@@ -158,11 +158,11 @@ static void updates_rock_update(struct updates_rock *rock,
         return;
     }
 
-    /* Report item as updated or removed. */
+    /* Report item as updated or destroyed. */
     if (dav.alive) {
         json_array_append_new(rock->changed, json_string(uid));
     } else {
-        json_array_append_new(rock->removed, json_string(uid));
+        json_array_append_new(rock->destroyed, json_string(uid));
     }
 
     /* Fetch record to determine modseq. */
@@ -693,7 +693,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     json_object_set_new(contactGroupUpdates, "hasMoreUpdates",
                         json_boolean(more));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
-    json_object_set(contactGroupUpdates, "removed", rock.removed);
+    json_object_set(contactGroupUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("ContactGroup/changes"));
@@ -716,7 +716,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     }
 
     json_decref(rock.changed);
-    json_decref(rock.removed);
+    json_decref(rock.destroyed);
 
   done:
     buf_free(&buf);
@@ -1775,7 +1775,7 @@ static int getContactsUpdates(struct jmap_req *req)
     json_object_set_new(contactUpdates, "oldState", json_string(since));
     json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
     json_object_set(contactUpdates, "changed", rock.changed);
-    json_object_set(contactUpdates, "removed", rock.removed);
+    json_object_set(contactUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("Contact/changes"));
@@ -1800,7 +1800,7 @@ static int getContactsUpdates(struct jmap_req *req)
     }
 
     json_decref(rock.changed);
-    json_decref(rock.removed);
+    json_decref(rock.destroyed);
 
   done:
     carddav_close(db);
