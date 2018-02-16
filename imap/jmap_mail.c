@@ -568,6 +568,7 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
     int is_inbox = 0, parent_is_inbox = 0;
     int r;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
+    mbentry_t *parent = NULL;
 
     json_t *obj = NULL;
 
@@ -587,6 +588,11 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
     }
 
     char *role = jmapmbox_role(req, mbname);
+
+    if (_wantprop(props, "myRights") || _wantprop(props, "parentId")) {
+        /* Need to lookup parent mailbox */
+        mboxlist_findparent(mbname_intname(mbname), &parent);
+    }
 
     /* Lookup status. */
     r = status_lookup(mbname_intname(mbname), req->userid, statusitems, &sdata);
@@ -610,21 +616,34 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
             json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
     }
 
-    if (_wantprop(props, "mayReadItems")) {
-        json_object_set_new(obj, "mayReadItems",
-                            json_boolean(rights & ACL_READ));
+    if (_wantprop(props, "parentId")) {
+        json_object_set_new(obj, "parentId",
+                (is_inbox || parent_is_inbox || !parent) ?
+                json_null() : json_string(parent->uniqueid));
     }
-    if (_wantprop(props, "mayAddItems")) {
-        json_object_set_new(obj, "mayAddItems",
-                            json_boolean(rights & ACL_INSERT));
-    }
-    if (_wantprop(props, "mayRemoveItems")) {
-        json_object_set_new(obj, "mayRemoveItems",
-                            json_boolean(rights & ACL_DELETEMSG));
-    }
-    if (_wantprop(props, "mayCreateChild")) {
-        json_object_set_new(obj, "mayCreateChild",
-                            json_boolean(rights & ACL_CREATE));
+
+
+    if (_wantprop(props, "myRights")) {
+        json_t *jrights = json_object();
+        json_object_set_new(jrights, "mayReadItems",
+                json_boolean(rights & ACL_READ));
+        json_object_set_new(jrights, "mayAddItems",
+                json_boolean(rights & ACL_INSERT));
+        json_object_set_new(jrights, "mayRemoveItems",
+                json_boolean(rights & ACL_DELETEMSG));
+        json_object_set_new(jrights, "mayCreateChild",
+                json_boolean(rights & ACL_CREATE));
+        json_object_set_new(jrights, "mayDelete",
+                json_boolean((rights & ACL_DELETEMBOX) && !is_inbox));
+
+        int mayRename = 0;
+        if (!is_inbox && (rights & ACL_DELETEMBOX)) {
+            int parent_rights = jmap_myrights(req, parent);
+            mayRename = parent_rights & ACL_CREATE;
+        }
+        json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
+
+        json_object_set_new(obj, "myRights", jrights);
     }
 
     if (_wantprop(props, "totalEmails")) {
@@ -649,28 +668,6 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
             json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
         }
     }
-    if (_wantprop(props, "mayRename") || _wantprop(props, "parentId")) {
-        mbentry_t *parent = NULL;
-        mboxlist_findparent(mbname_intname(mbname), &parent);
-        if (_wantprop(props, "parentId")) {
-            json_object_set_new(obj, "parentId",
-                                (is_inbox || parent_is_inbox || !parent) ?
-                                json_null() : json_string(parent->uniqueid));
-        }
-        if (_wantprop(props, "mayRename")) {
-            int mayRename = 0;
-            if (!is_inbox && (rights & ACL_DELETEMBOX)) {
-                int parent_rights = jmap_myrights(req, parent);
-                mayRename = parent_rights & ACL_CREATE;
-            }
-            json_object_set_new(obj, "mayRename", json_boolean(mayRename));
-        }
-        mboxlist_entry_free(&parent);
-    }
-    if (_wantprop(props, "mayDelete")) {
-        int mayDelete = (rights & ACL_DELETEMBOX) && !is_inbox;
-        json_object_set_new(obj, "mayDelete", json_boolean(mayDelete));
-    }
     if (_wantprop(props, "role")) {
         if (role && !hash_lookup(role, roles)) {
             /* In JMAP, only one mailbox have a role. First one wins. */
@@ -690,6 +687,7 @@ done:
         syslog(LOG_ERR, "jmapmbox_from_mbentry: %s", error_message(r));
     }
     free(role);
+    mboxlist_entry_free(&parent);
     mbname_free(&mbname);
     return obj;
 }
@@ -1650,20 +1648,23 @@ static void setmailboxes_read_args(jmap_req_t *req,
     if (json_object_get(jargs, "mustBeOnlyMailbox") && is_create) {
         json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
     }
-    if (json_object_get(jargs, "mayReadItems") && is_create) {
-        json_array_append_new(invalid, json_string("mayReadItems"));
-    }
-    if (json_object_get(jargs, "mayAddItems") && is_create) {
-        json_array_append_new(invalid, json_string("mayAddItems"));
-    }
-    if (json_object_get(jargs, "mayRemoveItems") && is_create) {
-        json_array_append_new(invalid, json_string("mayRemoveItems"));
-    }
-    if (json_object_get(jargs, "mayRename") && is_create) {
-        json_array_append_new(invalid, json_string("mayRename"));
-    }
-    if (json_object_get(jargs, "mayDelete") && is_create) {
-        json_array_append_new(invalid, json_string("mayDelete"));
+    json_t *jrights = json_object_get(jargs, "myRights");
+    if (JNOTNULL(jrights)) {
+        if (json_object_get(jrights, "mayReadItems") && is_create) {
+            json_array_append_new(invalid, json_string("myRights/mayReadItems"));
+        }
+        if (json_object_get(jrights, "mayAddItems") && is_create) {
+            json_array_append_new(invalid, json_string("myRights/mayAddItems"));
+        }
+        if (json_object_get(jrights, "mayRemoveItems") && is_create) {
+            json_array_append_new(invalid, json_string("myRights/mayRemoveItems"));
+        }
+        if (json_object_get(jrights, "mayRename") && is_create) {
+            json_array_append_new(invalid, json_string("myRights/mayRename"));
+        }
+        if (json_object_get(jrights, "mayDelete") && is_create) {
+            json_array_append_new(invalid, json_string("myRights/mayDelete"));
+        }
     }
     if (json_object_get(jargs, "totalEmails") && is_create) {
         json_array_append_new(invalid, json_string("totalEmails"));
