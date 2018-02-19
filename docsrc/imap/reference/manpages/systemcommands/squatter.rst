@@ -19,13 +19,13 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [**mode**] [**options**] [**source**]
 
     i.e.:
-    **squatter** [ **-C** *config-file* ] [**-v**]
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  *mailbox*...
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  **-u** *user*...
-    **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
-    **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
-    **squatter** [ **-C** *config-file* ] **-I** *file*
-    **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ]
+    **squatter** [ **-C** *config-file* ] [**-v**] [ **-Z** ]
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ] [ **-Z** ] *mailbox*...
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ] [ **-Z** ] **-u** *user*...
+    **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ] [**-S** *seconds*] [ **-Z** ]
+    **squatter** [ **-C** *config-file* ] **-f** *synclogfile* [**-S** *seconds*] [ **-Z** ]
+    **squatter** [ **-C** *config-file* ] **-I** *file* [**-S** *seconds*] [ **-Z** ]
+    **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-U** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ] [ **-u** *user*... ] [**-S** *seconds*]
 
 
 
@@ -47,12 +47,13 @@ The index is a unified index of all of the header and body text
 of each message in a given mailbox.  This index is used to significantly
 reduce IMAP SEARCH times on a mailbox.
 
-By default, **squatter** creates  an index of ALL messages in the
+By default, **squatter** creates an index of ALL messages in the
 mailbox, not just those since the last time that it was run.  The
 **-i** option is used to select incremental updates.  Any messages
 appended to the mailbox after **squatter** is run, will NOT be included
 in the index.  To include new messages in the index, **squatter** must
-be run again.
+be run again, or on a regular basis via crontab, an entry in the EVENTS
+section of :cyrusman:`cyrus.conf(5)` or use *rolling* mode (**-R**).
 
 In the first synopsis, **squatter** indexes all mailboxes.
 
@@ -86,11 +87,18 @@ In the seventh synopsis, **squatter** will compact indices from
 expunged records (**-F**) in the process.  The optional **-T** flag may
 be used to specify a directory to use for temporary files.  The **-o**
 flag may be used to direct that a single index be copied, rather than
-compressed, from *srctier* to *desttier*.  The **-U** flag may be used
-to only compact if re-indexing.
+compacted, from *srctier* to *desttier*.  The **-U** flag may be used
+to only compact if re-indexing.  The **--u** flag may be used to
+restrict operation to the specified user.
 
 For all modes, the **-S** option may be specified, causing squatter to
 pause *seconds* seconds after each mailbox, to smooth loads.
+
+When using the Xapian engine the **-Z** option may be specified, for
+the indexing modes.  This tells **squatter** to consult the Xapian
+internally indexed GUIDs, rather than relying on what's stored in
+`cyrus.indexed.db`, allowing for recovery from broken
+`cyrus.indexed.db` at the sacrifice of efficiency.
 
 .. Note::
     Incremental updates are very inefficient with the SQUAT search
@@ -202,12 +210,14 @@ Options
     some very fast filesystem, like an SSD or tmpfs.  This option may
     not work with all search engines, but it's only effect is to speed
     up initial indexing.
+    Xapian only.
     |v3-new-feature|
 
 .. option:: -t srctier...
 
     In compact mode, the source tier(s) for the compacted indices.
     At least one source tier must be specified in compact mode.
+    Xapian only.
     |v3-new-feature|
 
 .. option:: -u
@@ -219,6 +229,7 @@ Options
 .. option:: -U
 
     In compact mode, only compact if re-indexing.
+    Xapian only.
     |master-new-feature|
 
 .. option:: -v
@@ -230,11 +241,13 @@ Options
     Reindex all the messages before compacting.  This mode reads all
     the lists of messages indexed by the listed tiers, and re-indexes
     them into a temporary database before compacting that into place.
+    Xapian only.
 
 .. option:: -z desttier
 
     In compact mode, the destination tier for the compacted indices.
     This must be specified in compact mode.
+    Xapian only.
     |v3-new-feature|
 
 .. option:: -Z
@@ -243,6 +256,7 @@ Options
     referencing the ranges of already indexed messages to know if a
     particular message is indexed.  Useful if the ranges get out of
     sync with the actual messages (e.g. if files on a tier are lost)
+    Xapian only.
     |master-new-feature|
 
 Examples
@@ -340,3 +354,7 @@ See Also
 ========
 
 :cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`
+
+.. only:: html
+
+    :ref:`configuring-xapian`
