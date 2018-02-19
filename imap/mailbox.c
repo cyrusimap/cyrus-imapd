@@ -3713,7 +3713,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                            "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
                            session_id(), mailbox->name, mailbox->uniqueid,
-                           record->uid, &flagstr);
+                           record->uid, flagstr);
                 }
             }
         }
