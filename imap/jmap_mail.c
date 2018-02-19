@@ -261,6 +261,46 @@ static void validate_string_array(json_t *arg, const char *prefix, json_t *inval
     buf_free(&buf);
 }
 
+static void validate_filter(json_t *filter, struct buf *path, json_t *invalid,
+                            void (*validate)(json_t *filter, struct buf *path, json_t *invalid, void *rock),
+                            void *rock)
+{
+    json_t *arg, *val;
+    const char *s;
+    size_t i;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        json_array_append_new(invalid, json_string(buf_cstring(path)));
+        return;
+    }
+
+    const char *prefix = buf_cstring(path);
+    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
+        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".operator");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+
+        arg = json_object_get(filter, "conditions");
+        if (!json_array_size(arg)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".conditions");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+        json_array_foreach(arg, i, val) {
+            size_t l = buf_len(path);
+            buf_printf(path, ".conditions[%zu]", i);
+            validate_filter(val, path, invalid, validate, rock);
+            buf_truncate(path, l);
+        }
+    } else {
+        validate(filter, path, invalid, rock);
+    }
+}
+
 typedef struct {
     const char *property;
     short is_ascending;
@@ -4224,13 +4264,19 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
     return this;
 }
 
-static void validate_msgfilter(jmap_req_t *req,
-                               json_t *filter,
-                               const char *prefix,
-                               json_t *invalid,
-                               json_t *unsupported)
+struct msgfilter_rock {
+    jmap_req_t *req;
+    json_t *unsupported;
+};
+
+static void validate_msgfilter_cb(json_t *filter, struct buf *path,
+                                  json_t *invalid, void *_rock)
 {
-    struct buf buf = BUF_INITIALIZER;
+    const char *prefix = buf_cstring(path);
+    struct msgfilter_rock *rock = _rock;
+    json_t *unsupported = rock->unsupported;
+    jmap_req_t *req = rock->req;
+
     json_t *arg, *val;
     const char *s;
     json_int_t num;
@@ -4239,157 +4285,162 @@ static void validate_msgfilter(jmap_req_t *req,
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
         json_array_append_new(invalid, json_string(prefix));
+        return;
     }
 
-    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
-        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
-            buf_printf(&buf, "%s.%s", prefix, "operator");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+    if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
+        struct tm tm;
+        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        if (!p || *p) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".before");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
+    }
 
-        arg = json_object_get(filter, "conditions");
-        if (!json_array_size(arg)) {
-            buf_printf(&buf, "%s.conditions", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+    if (readprop_full(filter, prefix, "after", 0, invalid, "s", &s) > 0) {
+        struct tm tm;
+        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        if (!p || *p) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".after");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
-        json_array_foreach(arg, i, val) {
-            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            validate_msgfilter(req, val, buf_cstring(&buf), invalid, unsupported);
-            buf_reset(&buf);
-        }
+    }
 
-    } else {
-        if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
-            struct tm tm;
-            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-            if (!p || *p) {
-                buf_printf(&buf, "%s.before", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
+    if (readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s) > 0) {
+        char *n = jmapmbox_find_uniqueid(req, s);
+        if (!n) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".inMailbox");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
+        free(n);
+    }
+    readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
+    readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
+    readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
+    readprop_full(filter, prefix, "attachmentName", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "text", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "from", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "to", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "cc", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "bcc", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "subject", 0, invalid, "s", &s);
+    readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
 
-        if (readprop_full(filter, prefix, "after", 0, invalid, "s", &s) > 0) {
-            struct tm tm;
-            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-            if (!p || *p) {
-                buf_printf(&buf, "%s.after", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
+    json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
+        char *n = NULL;
+        if ((s = json_string_value(val))) {
+            n = jmapmbox_find_uniqueid(req, s);
         }
-
-        if (readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s) > 0) {
-            char *n = jmapmbox_find_uniqueid(req, s);
-            if (!n) {
-                buf_printf(&buf, "%s.inMailbox", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-            free(n);
+        if (!n) {
+            size_t l = buf_len(path);
+            buf_printf(path, ".inMailboxOtherThan[%zu]", i);
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
-        readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
-        readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
-        readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
-        readprop_full(filter, prefix, "attachmentName", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "text", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "from", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "to", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "cc", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "bcc", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "subject", 0, invalid, "s", &s);
-        readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
+        free(n);
+    }
 
-        json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
-            char *n = NULL;
-            if ((s = json_string_value(val))) {
-                n = jmapmbox_find_uniqueid(req, s);
-            }
-            if (!n) {
-                buf_printf(&buf, "%s.inMailboxOtherThan[%zu]", prefix, i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-            free(n);
+    if (readprop_full(filter, prefix, "allInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+        if (!is_valid_keyword(s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".allInThreadHaveKeyword");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
-
-        if (readprop_full(filter, prefix, "allInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
-            if (!is_valid_keyword(s)) {
-                buf_printf(&buf, "%s.allInThreadHaveKeyword", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-            /* XXX currently can't support this filter */
+        /* XXX currently can't support this filter */
+        json_array_append_new(unsupported, json_pack("{s:s}",
+                    "allInThreadHaveKeyword", s));
+    }
+    if (readprop_full(filter, prefix, "someInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+        if (!is_valid_keyword(s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".someInThreadHaveKeyword");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+        if (!is_supported_convkeyword(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
-                        "allInThreadHaveKeyword", s));
+                        "someInThreadHaveKeyword", s));
         }
-        if (readprop_full(filter, prefix, "someInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
-            if (!is_valid_keyword(s)) {
-                buf_printf(&buf, "%s.someInThreadHaveKeyword", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-            if (!is_supported_convkeyword(s)) {
-                json_array_append_new(unsupported, json_pack("{s:s}",
-                            "someInThreadHaveKeyword", s));
-            }
+    }
+    if (readprop_full(filter, prefix, "noneInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+        if (!is_valid_keyword(s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".noneInThreadHaveKeyword");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
-        if (readprop_full(filter, prefix, "noneInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
-            if (!is_valid_keyword(s)) {
-                buf_printf(&buf, "%s.noneInThreadHaveKeyword", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-            if (!is_supported_convkeyword(s)) {
-                json_array_append_new(unsupported, json_pack("{s:s}",
-                            "someInThreadHaveKeyword", s));
-            }
-        }
-
-        if (readprop_full(filter, prefix, "hasKeyword", 0, invalid, "s", &s) > 0) {
-            if (!is_valid_keyword(s)) {
-                buf_printf(&buf, "%s.hasKeyword", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-        if (readprop_full(filter, prefix, "notHasKeyword", 0, invalid, "s", &s) > 0) {
-            if (!is_valid_keyword(s)) {
-                buf_printf(&buf, "%s.notHasKeyword", prefix);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-        }
-
-        arg = json_object_get(filter, "header");
-        if (JNOTNULL(arg)) {
-            switch (json_array_size(arg)) {
-                case 2:
-                    s = json_string_value(json_array_get(arg, 1));
-                    if (!s || !strlen(s)) {
-                        buf_printf(&buf, "%s.header[1]", prefix);
-                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                        buf_reset(&buf);
-                    }
-                    /* fallthrough */
-                case 1:
-                    s = json_string_value(json_array_get(arg, 0));
-                    if (!s || !strlen(s)) {
-                        buf_printf(&buf, "%s.header[0]", prefix);
-                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                        buf_reset(&buf);
-                    }
-                    break;
-                default:
-                    buf_printf(&buf, "%s.header", prefix);
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-            }
+        if (!is_supported_convkeyword(s)) {
+            json_array_append_new(unsupported, json_pack("{s:s}",
+                        "someInThreadHaveKeyword", s));
         }
     }
 
+    if (readprop_full(filter, prefix, "hasKeyword", 0, invalid, "s", &s) > 0) {
+        if (!is_valid_keyword(s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".hasKeyword");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+    }
+    if (readprop_full(filter, prefix, "notHasKeyword", 0, invalid, "s", &s) > 0) {
+        if (!is_valid_keyword(s)) {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".notHasKeyword");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+    }
+
+    arg = json_object_get(filter, "header");
+    if (JNOTNULL(arg)) {
+        switch (json_array_size(arg)) {
+            case 2:
+                s = json_string_value(json_array_get(arg, 1));
+                if (!s || !strlen(s)) {
+                    size_t l = buf_len(path);
+                    buf_appendcstr(path, ".header[1]");
+                    json_array_append_new(invalid, json_string(buf_cstring(path)));
+                    buf_truncate(path, l);
+                }
+                /* fallthrough */
+            case 1:
+                s = json_string_value(json_array_get(arg, 0));
+                if (!s || !strlen(s)) {
+                    size_t l = buf_len(path);
+                    buf_appendcstr(path, ".header[0]");
+                    json_array_append_new(invalid, json_string(buf_cstring(path)));
+                    buf_truncate(path, l);
+                }
+                break;
+            default:
+                {
+                    size_t l = buf_len(path);
+                    buf_appendcstr(path, ".header");
+                    json_array_append_new(invalid, json_string(buf_cstring(path)));
+                    buf_truncate(path, l);
+                }
+        }
+    }
+}
+
+static void validate_msgfilter(jmap_req_t *req,
+                               json_t *filter,
+                               const char *prefix,
+                               json_t *invalid,
+                               json_t *unsupported)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, prefix);
+    struct msgfilter_rock rock = { req, unsupported };
+    validate_filter(filter, &buf, invalid, validate_msgfilter_cb, &rock);
     buf_free(&buf);
 }
 
@@ -9110,11 +9161,12 @@ done:
     return 0;
 }
 
-static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *invalid)
+static void validate_msgsubfilter_cb(json_t *filter, struct buf *path, json_t *invalid,
+                                     void *rock __attribute__((unused)))
 {
-    struct buf buf = BUF_INITIALIZER;
     json_t *arg;
     const char *s;
+    const char *prefix = buf_cstring(path);
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
         json_array_append_new(invalid, json_string(prefix));
@@ -9124,9 +9176,10 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
         struct tm tm;
         const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
         if (!p || *p) {
-            buf_printf(&buf, "%s.before", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".before");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
     }
 
@@ -9134,28 +9187,32 @@ static void validate_msgsub_filter(json_t *filter, const char *prefix, json_t *i
         struct tm tm;
         const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
         if (!p || *p) {
-            buf_printf(&buf, "%s.after", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".after");
+            json_array_append_new(invalid, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
         }
     }
 
+    size_t l;
+
     arg = json_object_get(filter, "emailIds");
-    buf_printf(&buf, "%s.messageIds", prefix);
-    validate_string_array(arg, buf_cstring(&buf), invalid);
-    buf_reset(&buf);
+    l = buf_len(path);
+    buf_appendcstr(path, ".messageIds");
+    validate_string_array(arg, buf_cstring(path), invalid);
+    buf_truncate(path, l);
 
     arg = json_object_get(filter, "threadIds");
-    buf_printf(&buf, "%s.threadIds", prefix);
-    validate_string_array(arg, buf_cstring(&buf), invalid);
-    buf_reset(&buf);
+    l = buf_len(path);
+    buf_appendcstr(path, ".threadIds");
+    validate_string_array(arg, buf_cstring(path), invalid);
+    buf_truncate(path, l);
 
     arg = json_object_get(filter, "emailSubmissionIds");
-    buf_printf(&buf, "%s.messageSubmissionIds", prefix);
-    validate_string_array(arg, buf_cstring(&buf), invalid);
-    buf_reset(&buf);
-
-    buf_free(&buf);
+    l = buf_len(path);
+    buf_appendcstr(path, ".messageSubmissionIds");
+    validate_string_array(arg, buf_cstring(path), invalid);
+    buf_truncate(path, l);
 }
 
 static int is_supported_msgsub_sort(const jmap_comparator_t *comp)
@@ -9186,7 +9243,10 @@ static int getEmailSubmissionsList(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgsub_filter(filter, "filter", invalid);
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "filter");
+        validate_filter(filter, &buf, invalid, validate_msgsubfilter_cb, NULL);
+        buf_free(&buf);
     }
 
     /* sort */
@@ -9278,7 +9338,10 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgsub_filter(filter, "filter", invalid);
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "filter");
+        validate_filter(filter, &buf, invalid, validate_msgsubfilter_cb, NULL);
+        buf_free(&buf);
     }
 
     /* sort */
