@@ -20,6 +20,7 @@ addons:
     - doxygen
     - help2man
     - python-docutils
+    - python-pygments
     - libmagic-dev
     - pkg-config
 env:
