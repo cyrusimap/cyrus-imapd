@@ -174,19 +174,18 @@ static int mailbox_abort_dav(struct mailbox *mailbox);
 static int mailbox_delete_dav(struct mailbox *mailbox);
 #endif
 
-static const char *flags_to_str(MsgFlags flag)
+static void flags_to_str(MsgFlags flags, char *flagstr)
 {
     size_t i, len = 0;
     size_t map_size;
-    static char flagstr[FLAGMAPSTR_MAXLEN];
     char *p;
 
-    memset(flagstr, 0, FLAGMAPSTR_MAXLEN);
     p = flagstr;
+    memset(p, 0, FLAGMAPSTR_MAXLEN);
     map_size = sizeof(msgflagmap) / sizeof(struct MsgFlagMap);
 
     for (i = 0; i <  map_size && len < FLAGMAPSTR_MAXLEN; i++) {
-        if (flag & msgflagmap[i].flag) {
+        if (flags & msgflagmap[i].flag) {
             if (p != flagstr) {
                 *p++ = '|';
                 len++;
@@ -197,8 +196,6 @@ static const char *flags_to_str(MsgFlags flag)
             len += 2;
         }
     }
-
-    return flagstr;
 }
 
 static struct mailboxlist *create_listitem(const char *name)
@@ -1817,12 +1814,14 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
     /* audit logging */
     if (config_auditlog) {
+        char flagstr[FLAGMAPSTR_MAXLEN];
+        flags_to_str(record->system_flags, flagstr);
         if (change->flags & CHANGE_ISAPPEND)
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
-                   record->modseq, flags_to_str(record->system_flags),
+                   record->modseq, flagstr,
                    message_guid_encode(&record->guid));
 
         if ((record->system_flags & FLAG_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
@@ -1830,7 +1829,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
-                   record->modseq, flags_to_str(record->system_flags),
+                   record->modseq, flagstr,
                    message_guid_encode(&record->guid));
 
         if ((record->system_flags & FLAG_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
@@ -1838,7 +1837,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
-                   record->modseq, flags_to_str(record->system_flags),
+                   record->modseq, flagstr,
                    message_guid_encode(&record->guid));
     }
 
@@ -3556,15 +3555,18 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     r = _store_change(mailbox, record, changeflags);
     if (r) return r;
 
-    if (config_auditlog)
+    if (config_auditlog) {
+        char oldflags[FLAGMAPSTR_MAXLEN], sysflags[FLAGMAPSTR_MAXLEN];
+        flags_to_str(oldrecord.system_flags, oldflags);
+        flags_to_str(record->system_flags, sysflags);
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
                session_id(), mailbox->name, mailbox->uniqueid,
                record->uid, message_guid_encode(&record->guid),
                conversation_id_encode(record->cid), record->modseq,
-               flags_to_str(oldrecord.system_flags),
-               flags_to_str(record->system_flags));
+               oldflags, sysflags);
+    }
 
     /* expunged tracking */
     if (record->system_flags & FLAG_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
@@ -3693,20 +3695,26 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         /* try to delete both */
 
         if (unlink(spoolfname) == 0) {
-            if (config_auditlog)
+            if (config_auditlog) {
+                char flagstr[FLAGMAPSTR_MAXLEN];
+                flags_to_str(record->system_flags, flagstr);
                 syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
                        session_id(), mailbox->name, mailbox->uniqueid,
-                       record->uid, flags_to_str(record->system_flags));
+                       record->uid, flagstr);
+            }
         }
 
         if (strcmp(spoolfname, archivefname)) {
             if (unlink(archivefname) == 0) {
-                if (config_auditlog)
+                if (config_auditlog) {
+                    char flagstr[FLAGMAPSTR_MAXLEN];
+                    flags_to_str(record->system_flags, flagstr);
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                            "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
                            session_id(), mailbox->name, mailbox->uniqueid,
-                           record->uid, flags_to_str(record->system_flags));
+                           record->uid, &flagstr);
+                }
             }
         }
 
@@ -4352,13 +4360,15 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             continue;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
-        if (config_auditlog)
+        if (config_auditlog) {
+            char flagstr[FLAGMAPSTR_MAXLEN];
+            flags_to_str(copyrecord.system_flags, flagstr);
             syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> "
                    "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
                    action, session_id(), mailbox->name, mailbox->uniqueid,
                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
-                   conversation_id_encode(copyrecord.cid),
-                   flags_to_str(copyrecord.system_flags));
+                   conversation_id_encode(copyrecord.cid), flagstr);
+        }
     }
     mailbox_iter_done(&iter);
 
