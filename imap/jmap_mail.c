@@ -921,8 +921,26 @@ done:
 }
 
 typedef struct {
+    /* op indicates the filter type:
+     * - SEOP_AND/OR/NOT/TRUE/FALSE: if the filter is a filter operator
+     * - SEOP_UNKNOWN: if the filter is a filter condition
+     */
+    enum search_op op;
+    /* Arguments for the filter operator or condition. */
+    ptrarray_t args;
+} mboxsearch_filter_t;
+
+typedef struct {
+    char *name;
+    union {
+        char *s;
+        short b;
+    } val;
+} mboxsearch_field_t;
+
+typedef struct {
     jmap_req_t *req;
-    ptrarray_t filter;  /* Filters (mboxsearch_filter_t) */
+    mboxsearch_filter_t *filter;
     ptrarray_t sort;    /* Sort criteria (mboxsearch_sort_t) */
     ptrarray_t result;  /* Result records (mboxsearch_record_t) */
 
@@ -945,19 +963,32 @@ typedef struct {
     int desc;
 } mboxsearch_sort_t;
 
-typedef struct {
-    char *field;
-    union {
-        char *s;
-        short b;
-    } val;
-} mboxsearch_filter_t;
-
 static mboxsearch_t *mboxsearch_new(jmap_req_t *req)
 {
     mboxsearch_t *q = xzmalloc(sizeof(mboxsearch_t));
     q->req = req;
     return q;
+}
+
+static void mboxsearch_filter_free(mboxsearch_filter_t *filter)
+{
+    if (!filter) return;
+
+    int i;
+    for (i = 0; i < filter->args.count; i++) {
+        if (filter->op == SEOP_UNKNOWN) {
+            mboxsearch_field_t *field = ptrarray_nth(&filter->args, i);
+            if (!strcmp(field->name, "parentId"))
+                free(field->val.s);
+            free(field->name);
+            free(field);
+        }
+        else {
+            mboxsearch_filter_free(ptrarray_nth(&filter->args, i));
+        }
+    }
+    ptrarray_fini(&filter->args);
+    free(filter);
 }
 
 static void mboxsearch_free(mboxsearch_t **qptr)
@@ -975,14 +1006,7 @@ static void mboxsearch_free(mboxsearch_t **qptr)
     }
     ptrarray_fini(&q->result);
 
-    for (i = 0; i < q->filter.count; i++) {
-        mboxsearch_filter_t *filter = ptrarray_nth(&q->filter, i);
-        if (!strcmp(filter->field, "parentId"))
-            free(filter->val.s);
-        free(filter->field);
-        free(filter);
-    }
-    ptrarray_fini(&q->filter);
+    mboxsearch_filter_free(q->filter);
 
     for (i = 0; i < q->sort.count; i++) {
         mboxsearch_sort_t *crit = ptrarray_nth(&q->sort, i);
@@ -993,6 +1017,93 @@ static void mboxsearch_free(mboxsearch_t **qptr)
 
     free(q);
     *qptr = NULL;
+}
+
+static int mboxsearch_eval_filter(mboxsearch_t *query,
+                                  mboxsearch_filter_t *filter,
+                                  const mbentry_t *mbentry)
+{
+    if (filter->op == SEOP_TRUE)
+        return 1;
+    if (filter->op == SEOP_FALSE)
+        return 0;
+
+    int i;
+    if (filter->op != SEOP_UNKNOWN) {
+        for (i = 0; i < filter->args.count; i++) {
+            mboxsearch_filter_t *arg = ptrarray_nth(&filter->args, i);
+            int m = mboxsearch_eval_filter(query, arg, mbentry);
+            if (m && filter->op == SEOP_OR)
+                return 1;
+            else if (m && filter->op == SEOP_NOT)
+                return 0;
+            else if (!m && filter->op == SEOP_AND)
+                return 0;
+        }
+        return filter->op == SEOP_AND || filter->op == SEOP_NOT;
+    }
+    else {
+        for (i = 0; i < filter->args.count; i++) {
+            mboxsearch_field_t *field = ptrarray_nth(&filter->args, i);
+            if (!strcmp(field->name, "hasRole")) {
+                mbname_t *mbname = mbname_from_intname(mbentry->name);
+                char *role = jmapmbox_role(query->req, mbname);
+                int has_role = role != NULL;
+                free(role);
+                mbname_free(&mbname);
+                if (!has_role) return 0;
+            }
+            if (!strcmp(field->name, "parentId")) {
+                mbentry_t *mbparent = NULL;
+                int matches_parentid = 0;
+                if (!mboxlist_findparent(mbentry->name, &mbparent)) {
+                    matches_parentid = !strcmp(mbparent->uniqueid, field->val.s);
+                }
+                mboxlist_entry_free(&mbparent);
+                if (!matches_parentid) return 0;
+            }
+        }
+        return 1;
+    }
+}
+
+
+static mboxsearch_filter_t *mboxsearch_build_filter(mboxsearch_t *query, json_t *jfilter)
+{
+    mboxsearch_filter_t *filter = xzmalloc(sizeof(mboxsearch_filter_t));
+    filter->op = SEOP_TRUE;
+
+    const char *s = json_string_value(json_object_get(jfilter, "operator"));
+    if (s) {
+        if (!strcmp(s, "AND"))
+            filter->op = SEOP_AND;
+        else if (!strcmp(s, "OR"))
+            filter->op = SEOP_OR;
+        else if (!strcmp(s, "NOT"))
+            filter->op = SEOP_NOT;
+        size_t i;
+        json_t *val;
+        json_array_foreach(json_object_get(jfilter, "conditions"), i, val) {
+            ptrarray_append(&filter->args, mboxsearch_build_filter(query, val));
+        }
+    }
+    else {
+        json_t *val;
+        filter->op = SEOP_UNKNOWN;
+        if ((val = json_object_get(jfilter, "parentId"))) {
+            mboxsearch_field_t *field = xzmalloc(sizeof(mboxsearch_field_t));
+            field->name = xstrdup("parentId");
+            field->val.s = xstrdup(json_string_value(val));
+            ptrarray_append(&filter->args, field);
+        }
+        if ((val = json_object_get(jfilter, "hasRole"))) {
+            mboxsearch_field_t *field = xzmalloc(sizeof(mboxsearch_field_t));
+            field->name = xstrdup("hasRole");
+            ptrarray_append(&filter->args, field);
+            query->_need_role = 1;
+        }
+    }
+    return filter;
 }
 
 static int mboxsearch_compar(const void **a, const void **b, void *rock)
@@ -1028,26 +1139,14 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
     mboxsearch_t *q = rock;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
 
+    int r = 0;
+
     /* Apply filters */
-    int i, r = 0;
-    for (i = 0; i < q->filter.count; i++) {
-        mboxsearch_filter_t *filter = ptrarray_nth(&q->filter, i);
-        if (!strcmp(filter->field, "hasRole")) {
-            char *role = jmapmbox_role(q->req, mbname);
-            int has_role = role != NULL;
-            free(role);
-            if (!has_role) goto done;
-        }
-        if (!strcmp(filter->field, "parentId")) {
-            mbentry_t *mbparent = NULL;
-            int matches_parentid = 0;
-            if (!mboxlist_findparent(mbentry->name, &mbparent)) {
-                matches_parentid = !strcmp(mbparent->uniqueid, filter->val.s);
-            }
-            mboxlist_entry_free(&mbparent);
-            if (!matches_parentid) goto done;
-        }
+    int matches = 1;
+    if (q->filter) {
+        matches = mboxsearch_eval_filter(q, q->filter, mbentry);
     }
+    if (!matches) goto done;
 
     /* Found a matching reccord. Add it to the result list. */
     mboxsearch_record_t *rec = xzmalloc(sizeof(mboxsearch_record_t));
@@ -1103,12 +1202,6 @@ static int mboxsearch_run(mboxsearch_t *query)
             query->_need_utf8mboxname = 1;
         }
     }
-    for (i = 0; i < query->filter.count; i++) {
-        mboxsearch_filter_t *filter = ptrarray_nth(&query->filter, i);
-        if (!strcmp(filter->field, "hasRole")) {
-            query->_need_role = 1;
-        }
-    }
 
     /* Lookup all mailboxes */
     int r = jmap_mboxlist(query->req, mboxsearch_cb, query);
@@ -1158,18 +1251,7 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
     }
 
     /* Prepare filter */
-    if ((val = json_object_get(filter, "parentId"))) {
-        /* XXX JMAP mailboxList filter 'null' means: no mailbox filter? */
-        mboxsearch_filter_t *filter = xzmalloc(sizeof(mboxsearch_filter_t));
-        filter->field = xstrdup("parentId");
-        filter->val.s = xstrdup(json_string_value(val));
-        ptrarray_append(&query->filter, filter);
-    }
-    if ((val = json_object_get(filter, "hasRole"))) {
-        mboxsearch_filter_t *filter = xzmalloc(sizeof(mboxsearch_filter_t));
-        filter->field = xstrdup("hasRole");
-        ptrarray_append(&query->filter, filter);
-    }
+    query->filter = mboxsearch_build_filter(query, filter);
 
     /* Run the query */
     r = mboxsearch_run(query);
@@ -1271,6 +1353,49 @@ typedef struct {
     getmboxlist_window_t window;
 } getmboxlist_args_t;
 
+struct validate_mboxfilter_rock {
+    json_t *unsupported_filter;
+};
+
+static void validate_mboxfilter_cb(json_t *filter, struct buf *path, json_t *invalid, void *_rock)
+{
+    struct validate_mboxfilter_rock *rock = _rock;
+    json_t *unsupported_filter = rock->unsupported_filter;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        json_array_append_new(invalid, json_string(buf_cstring(path)));
+        return;
+    }
+
+    json_t *val;
+    const char *field;
+    json_object_foreach(filter, field, val) {
+        if (!strcmp(field, "parentId")) {
+            if (val != json_null() && !json_is_string(val)) {
+                size_t l = buf_len(path);
+                buf_appendcstr(path, ".parentId");
+                json_array_append_new(invalid, json_string(buf_cstring(path)));
+                buf_truncate(path, l);
+            }
+        }
+        else if (!strcmp(field, "hasRole")) {
+            if (!json_is_boolean(val)) {
+                size_t l = buf_len(path);
+                buf_appendcstr(path, ".hasRole");
+                json_array_append_new(invalid, json_string(buf_cstring(path)));
+                buf_truncate(path, l);
+            }
+        }
+        else {
+            size_t l = buf_len(path);
+            buf_appendcstr(path, ".");
+            buf_appendcstr(path, field);
+            json_array_append_new(unsupported_filter, json_string(buf_cstring(path)));
+            buf_truncate(path, l);
+        }
+    }
+}
+
 static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
                                  json_t *jargs,
                                  getmboxlist_args_t *args,
@@ -1285,26 +1410,11 @@ static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
     /* Validate filter */
     arg = json_object_get(jargs, "filter");
     if (JNOTNULL(arg)) {
-        json_t *val;
-        const char *field;
-        json_object_foreach(arg, field, val) {
-            if (!strcmp(field, "parentId")) {
-                if (val != json_null() && !json_is_string(val)) {
-                    json_array_append_new(invalid, json_string(field));
-                }
-            }
-            else if (!strcmp(field, "hasRole")) {
-                if (!json_is_boolean(val)) {
-                    json_array_append_new(invalid, json_string(field));
-                }
-            }
-            else {
-                json_array_append_new(unsupported_filter, json_string(field));
-            }
-        }
-        if (!json_is_object(arg)) {
-            json_array_append_new(unsupported_filter, json_string("filter"));
-        }
+        struct buf buf = BUF_INITIALIZER;
+        struct validate_mboxfilter_rock rock = { unsupported_filter };
+        buf_setcstr(&buf, "filter");
+        validate_filter(arg, &buf, invalid, validate_mboxfilter_cb, &rock);
+        buf_free(&buf);
         args->filter = arg;
     }
 
