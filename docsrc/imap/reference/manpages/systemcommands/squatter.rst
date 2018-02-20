@@ -19,7 +19,7 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [**mode**] [**options**] [**source**]
 
     i.e.:
-    **squatter** [ **-C** *config-file* ] [**-v**] [ **-Z** ]
+    **squatter** [ **-C** *config-file* ] [**-v**] [**-S** *seconds*] [ **-Z** ]
     **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ] [ **-Z** ] *mailbox*...
     **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ] [ **-Z** ] **-u** *user*...
     **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ] [**-S** *seconds*] [ **-Z** ]
