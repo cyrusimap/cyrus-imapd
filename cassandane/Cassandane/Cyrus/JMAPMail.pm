@@ -504,7 +504,7 @@ sub test_mailbox_query_parentname
 
     xlog "create mailbox tree";
     $imaptalk->create("INBOX.Ham") || die;
-    $imaptalk->create("INBOX.Spam") || die;
+    $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
     $imaptalk->create("INBOX.Ham.Zonk") || die;
     $imaptalk->create("INBOX.Ham.Bonk") || die;
 
@@ -535,6 +535,81 @@ sub test_mailbox_query_parentname
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[1]);
+}
+
+sub test_mailbox_query_filteroperator
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    return;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "create mailbox tree";
+    $imaptalk->create("INBOX.Ham") || die;
+    $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
+    $imaptalk->create("INBOX.Ham.Zonk") || die;
+    $imaptalk->create("INBOX.Ham.Bonk") || die;
+
+    xlog "(re)fetch mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
+    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+    $self->assert(exists $mboxids{'Inbox'});
+
+    xlog "list mailboxes filtered by parentId OR role";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            operator => "OR",
+            conditions => [{
+                parentId => $mboxids{'Ham'},
+            }, {
+                hasRole => JSON::true,
+            }],
+        },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[2]);
+
+    xlog "list mailboxes filtered by parentId AND hasRole false";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            operator => "AND",
+            conditions => [{
+                parentId => $mboxids{'Inbox'},
+            }, {
+                hasRole => JSON::false,
+            }],
+        },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Ham'}, $res->[0][1]{ids}[0]);
+
+    xlog "list mailboxes filtered by NOT (parentId AND role)";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            operator => "NOT",
+            conditions => [
+                operator => "AND",
+                conditions => [{
+                    parentId => $mboxids{'Inbox'},
+                }, {
+                    hasRole => JSON::true,
+                }],
+            ],
+        },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
 }
 
 sub test_mailbox_querychanges
