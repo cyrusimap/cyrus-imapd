@@ -55,6 +55,13 @@ processes listed in **START** are expected to end and clean up after
 themselves, while those in **DAEMON** will be shutdown by
 :cyrusman:`master(8)`.
 
+.. Note::
+
+    If :cyrusman:`master(8)` is started in debugging mode (**-D**) the
+    behavior of **DAEMON** will be altered, as :cyrusman:`master(8)`
+    will no longer be backgrounded.  Thus, processes started under
+    DAEMON may not be terminated by :cyrusman:`master(8)`.
+
 Arguments can appear in any order. Some arguments have no default
 value, these are listed with \`\`<no default>''.  For string arguments,
 the value MUST be enclosed in double quotes.
