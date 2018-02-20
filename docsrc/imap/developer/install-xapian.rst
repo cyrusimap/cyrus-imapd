@@ -61,10 +61,10 @@ You also need (at least one) search tier. Add this to :cyrusman:`imapd.conf(5)`.
     search_engine: xapian
     search_index_headers: no
     search_batchsize: 8192
-    defaultpartition: default
+    defaultpartition: base
     defaultsearchtier: t1
-    partition-default: /var/cyrus/spool
-    t1searchpartition-default: /var/cyrus/search
+    partition-base: /var/cyrus/spool
+    t1searchpartition-base: /var/cyrus/search
 
 If you want to do more complex search tiers and repacking, you'll want to read:
 

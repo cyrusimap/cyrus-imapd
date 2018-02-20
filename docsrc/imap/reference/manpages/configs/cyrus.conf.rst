@@ -225,8 +225,10 @@ DAEMON
 ------
 
 This section lists long running daemons to start before any
-**SERVICES** are spawned.  They will be shutdown when
-:cyrusman:`master(8)` is exiting.
+**SERVICES** are spawned.  :cyrusman:`master(8)`  will ensure that
+these processes are running, restarting any process which dies or
+forks. All listed processes will be shutdown when :cyrusman:`master(8)`
+is exiting.
 
 .. parsed-literal::
 

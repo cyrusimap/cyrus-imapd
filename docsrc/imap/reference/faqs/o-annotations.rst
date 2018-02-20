@@ -49,4 +49,4 @@ Cyrus annotations are based on a draft (http://tools.ietf.org/html/draft-daboo-i
 
 * **/vendor/cmu/cyrus-imapd/size** - Undocumented.
 
-* **/vendor/cmu/cyrus-imapd/squat** - Indicates that the mailbox should have a squat index created for it. (See :cyrusman:`squatter(8)`)
+* **/vendor/cmu/cyrus-imapd/squat** - Indicates that the mailbox should be indexed. (See :cyrusman:`squatter(8)`)

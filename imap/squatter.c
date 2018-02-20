@@ -127,6 +127,7 @@ static int usage(const char *name)
             "  -i          index incrementally\n"
             "  -N name     index mailbox names starting with name\n"
             "  -S seconds  sleep seconds between indexing mailboxes\n"
+            "  -Z          Xapian: use internal index rather than cyrus.indexed.db\n"
             "\n"
             "Index sources:\n"
             "  none        all mailboxes (default)\n"
