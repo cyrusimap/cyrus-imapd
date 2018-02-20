@@ -965,7 +965,7 @@ int main(int argc, char **argv)
         mode = INDEXER;
 
     /* fork and close fds if required */
-    if (mode == ROLLING && background) {
+    if (mode == ROLLING && background && !getenv("CYRUS_ISDAEMON")) {
         become_daemon();
         init_flags &= ~CYRUSINIT_PERROR;
     }
