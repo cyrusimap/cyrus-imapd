@@ -472,6 +472,12 @@ static void service_create(struct service *s)
 		EX_SOFTWARE);
 
     if (s->listen[0] == '/') { /* unix socket */
+	if (strlen(s->listen) >= sizeof(sunsock.sun_path)) {
+	    syslog(LOG_ERR, "invalid listen '%s' (too long), disabling %s",
+		   s->listen, s->name);
+	    service_forget_exec(s);
+	    return;
+	}
 	res0_is_local = 1;
 	res0 = (struct addrinfo *)xzmalloc(sizeof(struct addrinfo));
 	res0->ai_flags = AI_PASSIVE;
@@ -489,7 +495,14 @@ static void service_create(struct service *s)
 	sunsock.sun_len = res0->ai_addrlen;
 #endif
 	sunsock.sun_family = AF_UNIX;
-	strcpy(sunsock.sun_path, s->listen);
+
+	int r = snprintf(sunsock.sun_path, sizeof(sunsock.sun_path), "%s", s->listen);
+	if (r < 0 || (size_t) r >= sizeof(sunsock.sun_path)) {
+	    /* belt and suspenders */
+	    fatal("Serious software bug found: "
+		  "over-long listen path not detected earlier!",
+		  EX_SOFTWARE);
+	}
 	unlink(s->listen);
     } else { /* inet socket */
 	char *port;
