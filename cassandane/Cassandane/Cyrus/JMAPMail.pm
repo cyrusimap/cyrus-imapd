@@ -7061,6 +7061,43 @@ sub test_misc_refobjects_simple
     $self->assert_str_equals($res->[0][1]{changed}[0], $res->[1][1]{list}[0]{id});
 }
 
+sub test_email_import_no_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    my $mboxid = $self->getinbox()->{id};
+
+    my $req = ['Email/import', {
+                emails => {
+                    "1" => {
+                        blobId => $blobid,
+                        mailboxIds => {$mboxid =>  JSON::true},
+                    },
+                },
+            }, "R1"
+    ];
+    xlog "import email from blob $blobid";
+    my $res = eval { $jmap->CallMethods([$req]) };
+    $self->assert(exists $res->[0][1]->{created}{"1"});
+}
+
 sub test_misc_refobjects_extended
     :JMAP :min_version_3_1
 {
