@@ -6858,7 +6858,7 @@ static void validate_createmsg(json_t *msg, json_t *invalid, int is_attached)
     }
 
     if (!is_attached) {
-        pe = readprop(msg, "keywords", 1, invalid, "o", &prop);
+        pe = readprop(msg, "keywords", 0, invalid, "o", &prop);
         if (pe > 0) {
             const char *keyword;
             json_t *jval;
@@ -8390,8 +8390,8 @@ static int importEmails(jmap_req_t *req)
         buf_printf(&buf, "emails[%s]", id);
         prefix = buf_cstring(&buf);
 
-        json_t *keywords;
-        if (readprop_full(msg, prefix, "keywords", 1, invalid, "o", &keywords) > 0) {
+        json_t *keywords = NULL;
+        if (readprop_full(msg, prefix, "keywords", 0, invalid, "o", &keywords) > 0) {
             json_array_foreach(keywords, i, val) {
                 const char *kw = json_string_value(val);
                 if (val != json_true() || !kw || !is_valid_keyword(kw)) {
