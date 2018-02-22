@@ -44,9 +44,12 @@
 # Cassandane infrastructure
 [cassandane]
 # Directory under which all the instance directories will be created.
-# It's wise to keep this short.  Tests will run quite a bit faster if
-# this is on a tmpfs filesystem (though note that you will lose your
-# old instance directories across reboots if you do this).
+# It's wise to keep this short: UNIX domain sockets will be created
+# under here, and most systems impose a limit of 100 or so characters
+# on paths used for these.
+# Tests will run quite a bit faster if this is on a tmpfs filesystem
+# (though note that you will lose your old instance directories across
+# reboots if you do this).
 ##rootdir = /var/tmp/cass
 # Which SASL password checking method to use:
 # alwaystrue
