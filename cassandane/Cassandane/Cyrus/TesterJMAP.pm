@@ -44,6 +44,7 @@ use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
 use JSON::XS qw(encode_json);
+use File::Find;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -53,6 +54,7 @@ use Cassandane::Cassini;
 my $basedir;
 my $binary;
 my $testdir;
+my $authortestdir;
 my %suppressed;
 
 sub cyrus_version_supports_jmap
@@ -76,6 +78,7 @@ sub init
     map { $suppressed{$_} = 1; } split(/\s+/, $supp);
 
     $testdir = "$basedir/t";
+    $authortestdir = "$basedir/xt";
 }
 init;
 
@@ -113,6 +116,29 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub find_tests
+{
+    my ($dir) = @_;
+
+    my @tests;
+
+    find(
+        sub {
+            my $file = $File::Find::name;
+
+            return unless $file =~ s/\.t$//;
+            return unless -f "$file.t";
+            $file =~ s/^$basedir\/?//;
+            $file =~ s{/}{:}g;
+            return if $suppressed{$file};
+            push @tests, "test_$file";
+        },
+        $dir,
+    );
+
+    return @tests;
+}
+
 sub list_tests
 {
     my @tests;
@@ -127,16 +153,11 @@ sub list_tests
         return ( 'test_warning_jmaptester_is_not_installed' );
     }
 
-    opendir TESTS, $testdir
-        or die "Cannot open directory $testdir: $!";
-    while (my $e = readdir TESTS)
-    {
-        next unless $e =~ s/\.t$//;
-        next if $suppressed{$e};
-        next if ( ! -f "$testdir/$e.t" );
-        push(@tests, "test_$e");
+    @tests = find_tests($testdir);
+
+    if ($ENV{AUTHOR_TESTING}) {
+        push @tests, find_tests($authortestdir);
     }
-    closedir TESTS;
 
     return @tests;
 }
@@ -191,6 +212,8 @@ sub run_test
 
     mkdir($logdir);
 
+    $name =~ s{:}{/}g;
+
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
             workingdir => $logdir,
@@ -200,7 +223,7 @@ sub run_test
             },
         },
         "perl", '-I' => "$basedir/lib",
-         "$testdir/$name.t",
+         "$basedir/$name.t",
     );
 
     if ((!$status || get_verbose)) {
