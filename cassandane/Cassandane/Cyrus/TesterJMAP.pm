@@ -191,20 +191,27 @@ sub run_test
     my $logdir = $self->{instance}->{basedir} .  "/logdir";
 
     my $service = $self->{instance}->get_service("http");
+    my $imap = $self->{instance}->get_service("imap");
 
     local $ENV{JMAP_SERVER_ADAPTER_FILE} = $configfile;
 
     open(FH, ">$configfile");
 
     print FH encode_json({
-        adapter => 'Cyrus',
-        base_uri => 'http://' . $service->host() . ':' . $service->port() . '/',
-        credentials => [
+        adapter          => 'Cyrus',
+        base_uri         => 'http://' . $service->host() . ':' . $service->port() . '/',
+        cyrus_host       => $imap->host(),
+        cyrus_port       => $imap->port(),
+        cyrus_admin_user => 'admin',
+        cyrus_admin_pass => 'testpw',
+        no_sasl          => 1,
+        credentials      => [
             {
                 username => 'cassandane',
                 password => 'pass',
             },
         ],
+        cyrus_hierarchy_separator => '.',
     });
     close(FH);
 
