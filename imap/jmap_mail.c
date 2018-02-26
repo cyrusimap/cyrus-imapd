@@ -1256,6 +1256,7 @@ typedef struct {
 
 typedef struct {
     char *id;
+    mbname_t *mbname;
     char *mboxname;
     char *utf8mboxname;
     char *jmapname;
@@ -1303,6 +1304,7 @@ static void mboxsearch_free(mboxsearch_t **qptr)
     for (i = 0; i < q->result.count; i++) {
         mboxsearch_record_t *rec = ptrarray_nth(&q->result, i);
         free(rec->id);
+        mbname_free(&rec->mbname);
         free(rec->mboxname);
         free(rec->utf8mboxname);
         free(rec->jmapname);
@@ -1325,7 +1327,8 @@ static void mboxsearch_free(mboxsearch_t **qptr)
 
 static int mboxsearch_eval_filter(mboxsearch_t *query,
                                   mboxsearch_filter_t *filter,
-                                  const mbentry_t *mbentry)
+                                  const mbentry_t *mbentry,
+                                  const mbname_t *mbname)
 {
     if (filter->op == SEOP_TRUE)
         return 1;
@@ -1336,7 +1339,7 @@ static int mboxsearch_eval_filter(mboxsearch_t *query,
     if (filter->op != SEOP_UNKNOWN) {
         for (i = 0; i < filter->args.count; i++) {
             mboxsearch_filter_t *arg = ptrarray_nth(&filter->args, i);
-            int m = mboxsearch_eval_filter(query, arg, mbentry);
+            int m = mboxsearch_eval_filter(query, arg, mbentry, mbname);
             if (m && filter->op == SEOP_OR)
                 return 1;
             else if (m && filter->op == SEOP_NOT)
@@ -1358,19 +1361,23 @@ static int mboxsearch_eval_filter(mboxsearch_t *query,
                 if (!has_role) return 0;
             }
             if (!strcmp(field->name, "parentId")) {
-                mbentry_t *mbparent = NULL;
                 int matches_parentid = 0;
-                if (!mboxlist_findparent(mbentry->name, &mbparent)) {
-                    matches_parentid = !strcmp(mbparent->uniqueid, field->val.s);
+                if (field->val.s) {
+                    mbentry_t *mbparent = NULL;
+                    if (!mboxlist_findparent(mbentry->name, &mbparent)) {
+                        matches_parentid = !strcmp(mbparent->uniqueid, field->val.s);
+                    }
+                    mboxlist_entry_free(&mbparent);
+                } else {
+                    /* parentId is null */
+                    matches_parentid = strarray_size(mbname_boxes(mbname)) < 2;
                 }
-                mboxlist_entry_free(&mbparent);
                 if (!matches_parentid) return 0;
             }
         }
         return 1;
     }
 }
-
 
 static mboxsearch_filter_t *mboxsearch_build_filter(mboxsearch_t *query, json_t *jfilter)
 {
@@ -1397,7 +1404,8 @@ static mboxsearch_filter_t *mboxsearch_build_filter(mboxsearch_t *query, json_t 
         if ((val = json_object_get(jfilter, "parentId"))) {
             mboxsearch_field_t *field = xzmalloc(sizeof(mboxsearch_field_t));
             field->name = xstrdup("parentId");
-            field->val.s = xstrdup(json_string_value(val));
+            /* parentId may be null for top-level mailbox queries */
+            field->val.s = xstrdupnull(json_string_value(val));
             ptrarray_append(&filter->args, field);
         }
         if ((val = json_object_get(jfilter, "hasRole"))) {
@@ -1441,23 +1449,26 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
         return 0;
 
     mboxsearch_t *q = rock;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    mbname_t *_mbname = mbname_from_intname(mbentry->name);
 
     int r = 0;
 
     /* Apply filters */
     int matches = 1;
     if (q->filter) {
-        matches = mboxsearch_eval_filter(q, q->filter, mbentry);
+        matches = mboxsearch_eval_filter(q, q->filter, mbentry, _mbname);
     }
     if (!matches) goto done;
 
     /* Found a matching reccord. Add it to the result list. */
     mboxsearch_record_t *rec = xzmalloc(sizeof(mboxsearch_record_t));
     rec->id = xstrdup(mbentry->uniqueid);
+    rec->mbname = _mbname;
+    _mbname = NULL; /* rec takes ownership for _mbname */
+
     if (q->_need_name) {
         rec->mboxname = xstrdup(mbentry->name);
-        rec->jmapname = jmapmbox_name(q->req, mbname);
+        rec->jmapname = jmapmbox_name(q->req, rec->mbname);
     }
     if (q->_need_utf8mboxname) {
         charset_t cs = charset_lookupname("imap-mailbox-name");
@@ -1480,12 +1491,12 @@ static int mboxsearch_cb(const mbentry_t *mbentry, void *rock)
         charset_free(&cs);
     }
     if (q->_need_sort_order) {
-        rec->sort_order = jmapmbox_sort_order(q->req, mbname);
+        rec->sort_order = jmapmbox_sort_order(q->req, rec->mbname);
     }
     ptrarray_append(&q->result, rec);
 
 done:
-    mbname_free(&mbname);
+    if (_mbname) mbname_free(&_mbname);
     return r;
 }
 
