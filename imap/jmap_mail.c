@@ -2439,9 +2439,10 @@ static int setMailboxes(jmap_req_t *req)
                         "error", "type", "stateMismatch", req->tag));
             goto done;
         }
+        json_incref(state);
     }
     set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state);
+    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
 
     create = json_object_get(req->args, "create");
     if (create) {
@@ -8121,9 +8122,10 @@ static int setEmails(jmap_req_t *req)
                         "error", "type", "stateMismatch", req->tag));
             goto done;
         }
+        json_incref(state);
     }
     set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state);
+    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
 
     create = json_object_get(req->args, "create");
     if (create) {
@@ -9110,10 +9112,11 @@ static int setEmailSubmissions(jmap_req_t *req)
 
     /* ifInState */
     state = json_object_get(req->args, "ifInState");
+    if (state) json_incref(state);
 
     /* ifInState never fails for message submission random states */
     set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state);
+    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
 
     /* onSuccessUpdateEmail */
     json_t *invalid = json_pack("[]");
