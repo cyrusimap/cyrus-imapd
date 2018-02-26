@@ -352,13 +352,14 @@ static void parse_sort(json_t *jsort, struct jmap_parser *parser,
 
 /* Foo/query */
 
-static json_t *jmap_query_parse(json_t *jargs,
-                            struct jmap_parser *parser,
-                            struct jmap_query *query,
-                            parse_filter_cb filter_cb,
-                            void *filter_rock,
-                            parse_comp_cb comp_cb,
-                            void *sort_rock)
+static void jmap_query_parse(json_t *jargs,
+                             struct jmap_parser *parser,
+                             parse_filter_cb filter_cb,
+                             void *filter_rock,
+                             parse_comp_cb comp_cb,
+                             void *sort_rock,
+                             struct jmap_query *query,
+                             json_t **err)
 {
     json_t *arg, *val;
     size_t i;
@@ -426,23 +427,21 @@ static json_t *jmap_query_parse(json_t *jargs,
         jmap_parser_invalid(parser, "limit");
     }
 
-    json_t *err = NULL;
     if (json_array_size(parser->invalid)) {
-        err = json_pack("{s:s}", "type", "invalidArguments");
-        json_object_set(err, "arguments", parser->invalid);
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
     }
 	else if (json_array_size(unsupported_filter)) {
-		err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+		*err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
                 "filters", unsupported_filter);
 	}
 	else if (json_array_size(unsupported_sort)) {
-		err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+		*err = json_pack("{s:s s:O}", "type", "unsupportedSort",
                 "sort", unsupported_sort);
 	}
 
     json_decref(unsupported_filter);
     json_decref(unsupported_sort);
-    return err;
 }
 
 static void jmap_query_fini(struct jmap_query *query)
@@ -473,13 +472,14 @@ static json_t* jmap_query_reply(struct jmap_query *query)
 
 /* Foo/queryChanges */
 
-static json_t* jmap_querychanges_parse(json_t *jargs,
+static void jmap_querychanges_parse(json_t *jargs,
                                    struct jmap_parser *parser,
-                                   struct jmap_querychanges *query,
                                    parse_filter_cb filter_cb,
                                    void *filter_rock,
                                    parse_comp_cb comp_cb,
-                                   void *sort_rock)
+                                   void *sort_rock,
+                                   struct jmap_querychanges *query,
+                                   json_t **err)
 {
     json_t *arg, *val;
     size_t i;
@@ -543,23 +543,21 @@ static json_t* jmap_querychanges_parse(json_t *jargs,
         jmap_parser_invalid(parser, "upToId");
     }
 
-    json_t *err = NULL;
     if (json_array_size(parser->invalid)) {
-        err = json_pack("{s:s}", "type", "invalidArguments");
-        json_object_set(err, "arguments", parser->invalid);
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
     }
 	else if (json_array_size(unsupported_filter)) {
-		err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+		*err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
                 "filters", unsupported_filter);
 	}
 	else if (json_array_size(unsupported_sort)) {
-		err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+		*err = json_pack("{s:s s:O}", "type", "unsupportedSort",
                 "sort", unsupported_sort);
 	}
 
     json_decref(unsupported_filter);
     json_decref(unsupported_sort);
-    return err;
 }
 
 static void jmap_querychanges_fini(struct jmap_querychanges *query)
@@ -1685,9 +1683,11 @@ static int getMailboxesList(jmap_req_t *req)
     struct jmap_query query;
 
     /* Parse request */
-    json_t *err = jmap_query_parse(req->args, &parser, &query,
+    json_t *err = NULL;
+    jmap_query_parse(req->args, &parser,
             parse_mboxfilter_cb, NULL,
-            parse_mboxsort_cb, NULL);
+            parse_mboxsort_cb, NULL,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1718,8 +1718,11 @@ static int getMailboxesListUpdates(jmap_req_t *req)
     struct jmap_querychanges query;
 
     /* Parse arguments */
-    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
-            parse_mboxfilter_cb, NULL, parse_mboxsort_cb, NULL);
+    json_t *err = NULL;
+    jmap_querychanges_parse(req->args, &parser,
+            parse_mboxfilter_cb, NULL,
+            parse_mboxsort_cb, NULL,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5254,9 +5257,11 @@ static int getEmailsList(jmap_req_t *req)
     int collapse_threads = 0;
 
     /* Parse request */
-    json_t *err = jmap_query_parse(req->args, &parser, &query,
+    json_t *err = NULL;
+    jmap_query_parse(req->args, &parser,
             parse_msgfilter_cb, req,
-            parse_msgsort_cb, req);
+            parse_msgsort_cb, req,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5329,8 +5334,11 @@ static int getEmailsListUpdates(jmap_req_t *req)
     int collapse_threads = 0;
 
     /* Parse arguments */
-    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
-            parse_msgfilter_cb, NULL, parse_msgsort_cb, NULL);
+    json_t *err = NULL;
+    jmap_querychanges_parse(req->args, &parser,
+            parse_msgfilter_cb, NULL,
+            parse_msgsort_cb, NULL,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -9476,8 +9484,11 @@ static int getEmailSubmissionsList(jmap_req_t *req)
     struct jmap_query query;
 
     /* Parse request */
-    json_t *err = jmap_query_parse(req->args, &parser, &query,
-            parse_msgsubfilter_cb, NULL, parse_msgsubsort_cb, NULL);
+    json_t *err = NULL;
+    jmap_query_parse(req->args, &parser,
+            parse_msgsubfilter_cb, NULL,
+            parse_msgsubsort_cb, NULL,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -9504,8 +9515,11 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req)
     struct jmap_querychanges query;
 
     /* Parse arguments */
-    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
-            parse_msgsubfilter_cb, NULL, parse_msgsubsort_cb, NULL);
+    json_t *err = NULL;
+    jmap_querychanges_parse(req->args, &parser,
+            parse_msgsubfilter_cb, NULL,
+            parse_msgsubsort_cb, NULL,
+            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
