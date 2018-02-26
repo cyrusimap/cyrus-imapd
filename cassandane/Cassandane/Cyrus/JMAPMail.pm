@@ -624,7 +624,7 @@ sub test_mailbox_querychanges
     my $res = $jmap->CallMethods([['Mailbox/query', { }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
-    $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateChanges});
 
     xlog "get mailbox list updates";
     $res = $jmap->CallMethods([['Mailbox/queryChanges', {
@@ -1985,115 +1985,6 @@ sub test_email_get_fetchemails
     });
     $self->assert_null($hdrs->{'Message-ID'});
     $self->assert_str_equals('foo bar baz', $hdrs->{'x-tra'});
-}
-
-sub test_email_get_threads
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-
-    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my $inboxid = $res->[0][1]{list}[0]{id};
-
-    my $body = "";
-    $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
-    $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
-
-    my $maildate = DateTime->now();
-    $maildate->add(DateTime::Duration->new(seconds => -10));
-
-    xlog "Generate a email in INBOX via IMAP";
-    my %exp_inbox;
-    my %params = (
-        date => $maildate,
-        from => Cassandane::Address->new(
-            name => "Sally Sender",
-            localpart => "sally",
-            domain => "local"
-        ),
-        to => Cassandane::Address->new(
-            name => "Tom To",
-            localpart => 'tom',
-            domain => 'local'
-        ),
-        cc => Cassandane::Address->new(
-            name => "Cindy CeeCee",
-            localpart => 'cindy',
-            domain => 'local'
-        ),
-        bcc => Cassandane::Address->new(
-            name => "Benny CarbonCopy",
-            localpart => 'benny',
-            domain => 'local'
-        ),
-        messageid => 'fake.123456789@local',
-        extra_headers => [
-            ['x-tra', "foo bar\r\n baz"],
-            ['sender', "Bla <blu\@local>"],
-        ],
-        body => $body
-    );
-    $self->make_message("Email A", %params) || die;
-
-    xlog "get email list";
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, "R1"],
-        ['Thread/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/threadIds' }}, 'R2' ],
-        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }}, 'R3' ],
-    ]);
-    $self->assert_num_equals(scalar @{$res}, 3);
-    $self->assert_str_equals($res->[0][0], "Email/query");
-    $self->assert_str_equals($res->[1][0], 'Thread/get');
-    $self->assert_str_equals($res->[2][0], "Email/get");
-    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
-    $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
-    $self->assert_num_equals(scalar @{$res->[2][1]->{list}}, 1);
-
-    my $thread = $res->[1][1]->{list}[0];
-
-    $self->assert_num_equals(scalar @{$thread->{emailIds}}, 1);
-
-    my $msg = $res->[2][1]->{list}[0];
-
-    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
-    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
-
-    my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
-    $self->assert_deep_equals($msg->{from}[0], {
-            name => "Sally Sender",
-            email => "sally\@local"
-    });
-    $self->assert_deep_equals($msg->{to}[0], {
-            name => "Tom To",
-            email => "tom\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{to}}, 1);
-    $self->assert_deep_equals($msg->{cc}[0], {
-            name => "Cindy CeeCee",
-            email => "cindy\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{cc}}, 1);
-    $self->assert_deep_equals($msg->{bcc}[0], {
-            name => "Benny CarbonCopy",
-            email => "benny\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
-    $self->assert_null($msg->{replyTo});
-    $self->assert_deep_equals($msg->{sender}, {
-            name => "Bla",
-            email => "blu\@local"
-    });
-    $self->assert_str_equals($msg->{subject}, "Email A");
-
-    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($datestr, $msg->{receivedAt});
-    $self->assert_not_null($msg->{size});
 }
 
 sub test_email_get_multimailboxes
@@ -3641,7 +3532,6 @@ sub test_emailsubmission_set
     xlog "get email id";
     $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
     my $emailid = $res->[0][1]->{ids}[0];
-    my $threadid = $res->[0][1]->{threadIds}[0];
 
     xlog "create email submission";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
@@ -3694,7 +3584,6 @@ sub test_emailsubmission_set_with_envelope
     xlog "get email id";
     $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
     my $emailid = $res->[0][1]->{ids}[0];
-    my $threadid = $res->[0][1]->{threadIds}[0];
 
     xlog "create email submission";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
@@ -3747,7 +3636,6 @@ sub test_emailsubmission_changes
     xlog "get email id";
     $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
     my $emailid = $res->[0][1]->{ids}[0];
-    my $threadid = $res->[0][1]->{threadIds}[0];
 
     xlog "create email submission but don't update state";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
@@ -3780,12 +3668,14 @@ sub test_emailsubmission_query
     $self->assert_null($res->[0][1]{filter});
     $self->assert_null($res->[0][1]{sort});
     $self->assert_not_null($res->[0][1]{state});
-    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
     $self->assert_num_equals(0, $res->[0][1]{position});
     $self->assert_num_equals(0, $res->[0][1]{total});
     $self->assert_not_null($res->[0][1]{ids});
-    $self->assert_not_null($res->[0][1]{threadIds});
-    $self->assert_not_null($res->[0][1]{emailIds});
+
+    xlog "get email submission list (error arguments)";
+    $res = $jmap->CallMethods([['EmailSubmission/query', { filter => 1 }, "R1"]]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
 }
 
 sub test_emailsubmission_querychanges
@@ -3804,15 +3694,9 @@ sub test_emailsubmission_querychanges
         filter => {},
         sinceState => $state,
     }, "R1"]]);
-    $self->assert_not_null($res->[0][1]{filter});
-    $self->assert_null($res->[0][1]{sort});
-    $self->assert_str_equals($state, $res->[0][1]{oldState});
-    $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_num_equals(0, $res->[0][1]{total});
-    $self->assert(exists $res->[0][1]->{added});
-    $self->assert(exists $res->[0][1]->{destroyed});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{added}});
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{destroyed}});
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
 }
 
 sub test_email_set_move
@@ -4001,7 +3885,7 @@ sub test_email_set_destroy
 
     xlog "Get emails";
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 }
 
 sub test_email_query
@@ -4186,7 +4070,7 @@ sub test_email_query
                         ],
                     },
                 }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "filter not in mailbox A";
     $res = $jmap->CallMethods([['Email/query', {
@@ -4232,7 +4116,7 @@ sub test_email_query
                         before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
                     },
                 }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "filter by minSize";
     $res = $jmap->CallMethods([['Email/query', {
@@ -4271,7 +4155,7 @@ sub test_email_query
                         header => [ "x-tra", "bam" ],
                     },
                 }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "sort by ascending receivedAt";
     $res = $jmap->CallMethods([['Email/query', {
@@ -4538,7 +4422,7 @@ sub test_email_query_shared
                             ],
                         },
                     }, "R1"]]);
-        $self->assert_null($res->[0][1]->{ids});
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
         xlog "filter not in mailbox A";
         $res = $jmap->CallMethods([['Email/query', {
@@ -4584,7 +4468,7 @@ sub test_email_query_shared
                             before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
                         },
                     }, "R1"]]);
-        $self->assert_null($res->[0][1]->{ids});
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
         xlog "filter by minSize";
         $res = $jmap->CallMethods([['Email/query', {
@@ -4623,7 +4507,7 @@ sub test_email_query_shared
                             header => [ "x-tra", "bam" ],
                         },
                     }, "R1"]]);
-        $self->assert_null($res->[0][1]->{ids});
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
         xlog "sort by ascending receivedAt";
         $res = $jmap->CallMethods([['Email/query', {
@@ -4716,7 +4600,7 @@ sub test_email_query_keywords
             hasKeyword => '$Flagged',
         }
     }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "fetch emails without \$Flagged flag";
     $res = $jmap->CallMethods([['Email/query', {
@@ -4750,7 +4634,7 @@ sub test_email_query_keywords
             notHasKeyword => '$Flagged',
         }
     }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "create email";
     $res = $self->make_message("bar") || die;
@@ -4922,7 +4806,7 @@ sub test_email_query_threadkeywords
             },
             collapseThreads => JSON::true,
         }, "R1"]]);
-        $self->assert_null($res->[0][1]->{threadIds});
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
         xlog "set $flag flag on email email A";
         $res = $jmap->CallMethods([['Email/set', {
@@ -4934,14 +4818,19 @@ sub test_email_query_threadkeywords
         }, "R1"]]);
 
         xlog "fetch collapsed threads with some $flag flag";
-        $res = $jmap->CallMethods([['Email/query', {
-            filter => {
-                someInThreadHaveKeyword => $flag,
-            },
-            collapseThreads => JSON::true,
-        }, "R1"]]);
-        $self->assert_num_equals(1, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[0]);
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    someInThreadHaveKeyword => $flag,
+                },
+                collapseThreads => JSON::true,
+            }, "R1"],
+        ]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[0]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[0])
+        );
 
         xlog "fetch collapsed threads with no $flag flag";
         $res = $jmap->CallMethods([['Email/query', {
@@ -4950,26 +4839,32 @@ sub test_email_query_threadkeywords
             },
             collapseThreads => JSON::true,
         }, "R1"]]);
-        $self->assert_num_equals(1, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_str_equals($msgb->{threadId}, $res->[0][1]->{threadIds}[0]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[0]);
 
         xlog "fetch collapsed threads sorted ascending by $flag";
         $res = $jmap->CallMethods([['Email/query', {
             sort => [{ property => "someInThreadHaveKeyword:$flag" }],
             collapseThreads => JSON::true,
         }, "R1"]]);
-        $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_str_equals($msgb->{threadId}, $res->[0][1]->{threadIds}[0]);
-        $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[1]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[0]);
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[1]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[1])
+        );
 
         xlog "fetch collapsed threads sorted descending by $flag";
         $res = $jmap->CallMethods([['Email/query', {
             sort => [{ property => "someInThreadHaveKeyword:$flag", isAscending => JSON::false }],
             collapseThreads => JSON::true,
         }, "R1"]]);
-        $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_str_equals($msga->{threadId}, $res->[0][1]->{threadIds}[0]);
-        $self->assert_str_equals($msgb->{threadId}, $res->[0][1]->{threadIds}[1]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[0]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[0])
+        );
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[1]);
 
         xlog 'reset keywords on email email A';
         $res = $jmap->CallMethods([['Email/set', {
@@ -4979,7 +4874,6 @@ sub test_email_query_threadkeywords
                 },
             }
         }, "R1"]]);
-
     }
 
     # Regression #1: test that 'allInThreadHaveKeyword' filters fail
@@ -5020,6 +4914,19 @@ sub test_email_query_threadkeywords
     }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
+}
+
+sub test_email_query_empty
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2266
+
+    my $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
+    $self->assert(exists $res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 }
 
 sub test_email_query_collapse
@@ -5068,14 +4975,28 @@ sub test_email_query_collapse
         xlog "list uncollapsed threads";
         $res = $jmap->CallMethods([['Email/query', { accountId => $account }, "R1"]]);
         $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
-        $self->assert_num_equals(3, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
 
         $res = $jmap->CallMethods([['Email/query', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
-        $self->assert_num_equals(2, scalar @{$res->[0][1]->{threadIds}});
-        $self->assert_num_equals(2, scalar uniq @{$res->[0][1]->{threadIds}});
     }
+}
+
+sub test_email_query_inmailbox_null
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating email A";
+    $self->make_message("Email A") or die;
+
+    xlog "call Email/query with null inMailbox";
+    my $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => undef } }, "R1"]]);
+    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
 }
 
 sub test_misc_collapsethreads_issue2024
@@ -5164,7 +5085,7 @@ sub test_email_query_window
 
     xlog "list emails from position 4";
     $res = $jmap->CallMethods([['Email/query', { position => 4 }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(4, $res->[0][1]->{total});
 
     xlog "limit emails from position 1 to one email";
@@ -5270,7 +5191,7 @@ sub test_email_query_acl
 
     xlog "get email list";
     my $res = $jmap->CallMethods([['Email/query', { accountId => 'foo' }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "Create email in shared account";
     $self->{adminstore}->set_folder('user.foo');
@@ -5278,7 +5199,7 @@ sub test_email_query_acl
 
     xlog "get email list in main account";
     $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
-    $self->assert_null($res->[0][1]->{ids});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
     xlog "get email list in shared account";
     $res = $jmap->CallMethods([['Email/query', { accountId => 'foo' }, "R1"]]);
@@ -6133,8 +6054,7 @@ sub test_email_querychanges_zerosince
 
     xlog "get email list updates with threads collapsed";
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => "0", collapseThreads => JSON::true }, "R1"]]);
-
-    $self->assert_equals($res->[0][0], 'error');
+    $self->assert_equals('error', $res->[0][0]);
 }
 
 
@@ -6185,7 +6105,7 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     # assert that IDA got destroyed
-    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{destroyed}});
+    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
     # and not recreated
     $self->assert_null(grep { $_ eq $ida } map { $_->{id} } @{$res->[0][1]->{created}});
 
@@ -6198,7 +6118,7 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_null($res->[0][1]{added});
-    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{removed});
 
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
@@ -6207,7 +6127,7 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));
-    $self->assert_num_equals(2, scalar(@{$res->[0][1]{destroyed}}));
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{removed}}));
 
     # same thread, back to ida
     $self->assert_str_equals($ida, $res->[0][1]{added}[0]{id});
