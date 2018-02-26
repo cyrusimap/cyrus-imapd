@@ -143,6 +143,17 @@ static int JNOTNULL(json_t *item)
    return 1;
 }
 
+struct jmap_get {
+    /* Request arguments */
+    json_t *ids;
+    json_t *properties;
+    hash_table *props;
+    /* Response fields */
+    char *state;
+    json_t *list;
+    json_t *not_found;
+};
+
 struct jmap_query {
     /* Request arguments */
     json_t *filter;
@@ -349,6 +360,111 @@ static void parse_sort(json_t *jsort, struct jmap_parser *parser,
     }
 }
 
+/* Foo/get */
+
+static void jmap_get_parse(json_t *jargs,
+                           struct jmap_parser *parser,
+                           hash_table *creation_ids,
+                           struct jmap_get *get,
+                           json_t **err)
+{
+    json_t *arg, *val;
+    size_t i;
+
+    memset(get, 0, sizeof(struct jmap_get));
+
+    get->list = json_array();
+    get->not_found = json_array();
+
+    arg = json_object_get(jargs, "ids");
+    if (json_is_array(arg)) {
+        get->ids = json_array();
+        /* JMAP spec requires: "If an identical id is included more than once
+         * in the request, the server MUST only include it once in either the
+         * list or notFound argument of the response."
+         * So let's weed out duplicate ids here. */
+        hash_table _dedup = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&_dedup, json_array_size(arg) + 1, 0);
+        json_array_foreach(arg, i, val) {
+            const char *id = json_string_value(val);
+            if (!id) {
+                jmap_parser_push_index(parser, "ids", i);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            /* Weed out unknown creation ids and add the ids of known
+             * creation ids to the requested ids list. XXX THis might
+             * cause a race if the Foo object pointed to by creation
+             * id is deleted between parsing the request and answering
+             * it. But re-checking creation ids for their existence
+             * later in the control flow just shifts the problem */
+            if (*id == '#') {
+                const char *id2 = hash_lookup(id, creation_ids);
+                if (!id2) {
+                    json_array_append_new(get->not_found, json_string(id));
+                    continue;
+                }
+                id = id2;
+            }
+            if (hash_lookup(id, &_dedup)) {
+                continue;
+            }
+            json_array_append_new(get->ids, json_string(id));
+        }
+        free_hash_table(&_dedup, NULL);
+    }
+    /* XXX regression: we should reject an omitted 'ids' argument
+     * as invalid (e.g. client must set it to 'null'. But for sake
+     * of backwards compatibility, we won't */
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "ids");
+    }
+
+    arg = json_object_get(jargs, "properties");
+    if (json_is_array(arg)) {
+        get->props = xzmalloc(sizeof(hash_table));
+        construct_hash_table(get->props, json_array_size(arg) + 1, 0);
+        json_array_foreach(arg, i, val) {
+            const char *s = json_string_value(val);
+            if (!s) {
+                jmap_parser_push_index(parser, "properties", i);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            hash_insert(s, (void*)1, get->props);
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "properties");
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+static void jmap_get_fini(struct jmap_get *get)
+{
+    free_hash_table(get->props, NULL);
+    free(get->props);
+    free(get->state);
+    json_decref(get->ids);
+    json_decref(get->list);
+    json_decref(get->not_found);
+}
+
+static json_t *jmap_get_reply(struct jmap_get *get)
+{
+    json_t *res = json_object();
+    json_object_set_new(res, "state", json_string(get->state));
+    json_object_set(res, "list", get->list);
+    json_object_set(res, "notFound", json_array_size(get->not_found) ?
+            get->not_found : json_null());
+    return res;
+}
 
 /* Foo/query */
 
@@ -1050,21 +1166,18 @@ static json_t *jmap_fmtstate(modseq_t modseq)
     return state;
 }
 
-struct getmailboxes_cb_data {
+struct getmailboxes_cb_rock {
     jmap_req_t *req;
-    json_t *list;
+    struct jmap_get *get;
     hash_table *roles;
-    hash_table *props;
-    hash_table *ids;
     hash_table *want;
-    size_t seen;
 };
 
-static int getmailboxes_cb(const mbentry_t *mbentry, void *rock)
+static int getmailboxes_cb(const mbentry_t *mbentry, void *_rock)
 {
-    struct getmailboxes_cb_data *data = (struct getmailboxes_cb_data *) rock;
-    json_t *list = (json_t *) data->list, *obj;
-    jmap_req_t *req = data->req;
+    struct getmailboxes_cb_rock *rock = _rock;
+    jmap_req_t *req = rock->req;
+    json_t *list = (json_t *) rock->get->list, *obj;
     int r = 0, rights;
 
     /* Don't list special-purpose mailboxes. */
@@ -1076,15 +1189,12 @@ static int getmailboxes_cb(const mbentry_t *mbentry, void *rock)
         goto done;
     }
 
-    /* It's a legit mailbox, so count it */
-    data->seen++;
-
     /* Do we need to process this mailbox? */
-    if (data->want && !hash_lookup(mbentry->uniqueid, data->want))
+    if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
         return 0;
 
     /* Are we done with looking up mailboxes by id? */
-    if (data->want && !hash_numrecords(data->want))
+    if (rock->want && !hash_numrecords(rock->want))
         return IMAP_OK_COMPLETED;
 
     /* Check ACL on mailbox for current user */
@@ -1094,7 +1204,7 @@ static int getmailboxes_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Convert mbox to JMAP object. */
-    obj = jmapmbox_from_mbentry(req, mbentry, data->roles, data->props);
+    obj = jmapmbox_from_mbentry(req, mbentry, rock->roles, rock->get->props);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
         r = IMAP_INTERNAL;
@@ -1103,8 +1213,8 @@ static int getmailboxes_cb(const mbentry_t *mbentry, void *rock)
     json_array_append_new(list, obj);
 
     /* Move this mailbox of the lookup list */
-    if (data->want) {
-        hash_del(mbentry->uniqueid, data->want);
+    if (rock->want) {
+        hash_del(mbentry->uniqueid, rock->want);
     }
 
   done:
@@ -1115,116 +1225,67 @@ static void getmailboxes_notfound(const char *id,
                                   void *data __attribute__((unused)),
                                   void *rock)
 {
-    json_t **listptr = rock;
-    if (*listptr == json_null())
-        *listptr = json_pack("[]");
-    json_array_append_new(*listptr, json_string(id));
+    json_array_append_new((json_t*) rock, json_string(id));
 }
 
 static int getMailboxes(jmap_req_t *req)
 {
-    json_t *found = json_pack("[]"), *notfound = json_null();
-    struct getmailboxes_cb_data data = {
-        req,
-        found, /* list */
-        (hash_table *) xmalloc(sizeof(hash_table)), /* roles */
-        NULL, /* props */
-        NULL, /* ids */
-        NULL, /* want */
-        0     /* seen */
-    };
-    construct_hash_table(data.roles, 8, 0);
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
 
-    /* Determine which properties to fetch. */
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties && json_array_size(properties)) {
-        int i;
-        int size = json_array_size(properties);
+    /* Build callback data */
+    struct getmailboxes_cb_rock rock = { req, &get, NULL, NULL };
+    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
+    construct_hash_table(rock.roles, 8, 0);
 
-        data.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(data.props, size + 1, 0);
-        for (i = 0; i < size; i++) {
-            const char *pn = json_string_value(json_array_get(properties, i));
-            if (pn == NULL) {
-                json_t *err = json_pack("{s:s, s:[s]}",
-                        "type", "invalidArguments", "arguments", "properties");
-                json_array_append_new(req->response, json_pack("[s,o,s]",
-                            "error", err, req->tag));
-                goto done;
-            }
-            hash_insert(pn, (void*)1, data.props);
-        }
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, &req->idmap->mailboxes, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
     }
 
     /* Does the client request specific mailboxes? */
-    json_t *want = json_object_get(req->args, "ids");
-    if (JNOTNULL(want)) {
-        /* Keep note of which mailboxes the client is interested in, but
-         * don't look them up by id within the loop. We are better off to
-         * use the same code as if the client didn't ask for any specific
-         * mailboxes. As soon as there's no more work to do, getmailboxes_cb
-         * will end traversal. */
+    if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *val;
-        data.want = (hash_table *) xmalloc(sizeof(hash_table));
-        construct_hash_table(data.want, json_array_size(want) + 1, 0);
-        json_array_foreach(want, i, val) {
-            const char *id = json_string_value(val);
-            if (id == NULL) {
-                json_t *err = json_pack("{s:s, s:[s]}",
-                        "type", "invalidArguments", "arguments", "ids");
-                json_array_append_new(req->response, json_pack("[s,o,s]",
-                            "error", err, req->tag));
-                goto done;
-            }
-            if (id[0] == '#') {
-                const char *newid = hash_lookup(id + 1, &req->idmap->mailboxes);
-                if (!newid) {
-                    if (notfound == json_null()) {
-                        notfound = json_pack("[]");
-                    }
-                    json_array_append_new(notfound, json_string(id));
-                    continue;
-                }
-                id = newid;
-            }
-            hash_insert(id, (void*) 1, data.want);
+        /* Make a set of request ids to know when to stop mboxlist*/
+        rock.want = (hash_table *) xmalloc(sizeof(hash_table));
+        construct_hash_table(rock.want, json_array_size(get.ids) + 1, 0);
+        json_array_foreach(get.ids, i, val) {
+            hash_insert(json_string_value(val), (void*)1, rock.want);
         }
     }
 
-    /* Lookup and process the mailboxes */
-    jmap_mboxlist(req, getmailboxes_cb, &data);
+    /* Lookup and process the mailboxes. Irrespective if the client
+     * defined a subset of mailbox ids to fetch, we traverse the
+     * complete mailbox list, until we either reach the end of the
+     * list or have found all requested ids. This is probably more
+     * performant than looking up each mailbox by unique id separately
+     * but will degrade if clients just fetch a small subset of
+     * all mailbox ids. XXX Optimise this codepath if the ids[] array
+     * length is small */
+    jmap_mboxlist(req, getmailboxes_cb, &rock);
 
-   /* Report if any requested mailbox has not been found */
-    if (data.want) {
-        hash_enumerate(data.want, getmailboxes_notfound, &notfound);
+    /* Report if any requested mailbox has not been found */
+    if (rock.want) {
+        hash_enumerate(rock.want, getmailboxes_notfound, get.not_found);
     }
 
     /* Build response */
-    json_t *item = json_pack("[s {s:s s:O s:O s:o} s]",
-                     "Mailbox/get",
-                     "accountId", req->accountid,
-                     "list", found,
-                     "notFound", notfound,
-                     "state", jmap_getstate(req, 0/*mbtype*/),
-                     req->tag);
-    json_array_append_new(req->response, item);
+    json_t *jstate = jmap_getstate(req, 0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    json_decref(found);
-    json_decref(notfound);
-    if (data.roles) {
-        free_hash_table(data.roles, NULL);
-        free(data.roles);
-    }
-    if (data.props) {
-        free_hash_table(data.props, NULL);
-        free(data.props);
-    }
-    if (data.want) {
-        free_hash_table(data.want, NULL);
-        free(data.want);
-    }
+    free_hash_table(rock.want, NULL);
+    free(rock.want);
+    free_hash_table(rock.roles, NULL);
+    free(rock.roles);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
     return 0;
 }
 
