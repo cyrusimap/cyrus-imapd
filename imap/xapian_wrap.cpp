@@ -259,7 +259,7 @@ static int stem_version_get(Xapian::Database *database)
     return version;
 }
 
-static int stem_version_set(Xapian::WritableDatabase *database, int version)
+static void stem_version_set(Xapian::WritableDatabase *database, int version)
 {
     std::ostringstream convert;
     convert << version;
