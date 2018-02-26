@@ -7199,8 +7199,23 @@ sub test_misc_set_oldstate
         keywords => { '$Draft' => JSON::true },
     };
 
-    xlog "Create a draft";
+    xlog "create a draft";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{oldState});
+    my $msgid = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+
+    xlog "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $msgid,
+            }
+       }
+    }, "R1" ] ] );
     $self->assert(exists $res->[0][1]{oldState});
 }
 
