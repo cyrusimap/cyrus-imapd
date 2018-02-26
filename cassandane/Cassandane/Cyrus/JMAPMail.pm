@@ -7166,4 +7166,43 @@ sub test_capability
     $self->assert($cap->{maxSizeAttachmentsPerEmail} > 0);
 }
 
+sub test_misc_set_oldstate
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Assert that /set returns oldState (null, or a string)
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2260
+
+    xlog "create drafts mailbox and email";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                create => { "1" => {
+                    name => "drafts",
+                    parentId => undef,
+                    role => "drafts"
+                }}
+            }, "R1"],
+    ]);
+    $self->assert(exists $res->[0][1]{oldState});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $draft =  {
+        mailboxIds => { $draftsmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "foo",
+        textBody => "bar",
+        keywords => { '$Draft' => JSON::true },
+    };
+
+    xlog "Create a draft";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{oldState});
+}
+
+
 1;
