@@ -719,15 +719,15 @@ static int jmap_post(struct transaction_t *txn,
     json_t *mc;
     json_array_foreach(json_object_get(req, "methodCalls"), i, mc) {
         const jmap_method_t *mp;
-        const char *name = json_string_value(json_array_get(mc, 0));
+        const char *mname = json_string_value(json_array_get(mc, 0));
         json_t *args = json_array_get(mc, 1), *arg;
         const char *tag = json_string_value(json_array_get(mc, 2));
         int r = 0;
 
-        strarray_append(&methods, name);
+        strarray_append(&methods, mname);
 
         /* Find the message processor */
-        if (!(mp = find_methodproc(name))) {
+        if (!(mp = find_methodproc(mname))) {
             json_array_append(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             continue;
@@ -775,6 +775,7 @@ static int jmap_post(struct transaction_t *txn,
         }
 
         struct jmap_req req;
+        req.method = mname;
         req.userid = httpd_userid;
         req.accountid = accountid;
         req.inboxname = inboxname;

@@ -112,14 +112,6 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req);
  * - Email/report
  */
 
-/*
- * TODO now with JMAP methods all following the core protocol,
- * we might want to refactor the existing codebase to make use
- * of it. As a minimum, we should use a generic approach for
- * validation as we are doing for example in validate_sort,
- * but the search window handling is also a good candidate.
- */
-
 jmap_method_t jmap_mail_methods[] = {
     { "Mailbox/get",                  &getMailboxes },
     { "Mailbox/set",                  &setMailboxes },
@@ -143,6 +135,454 @@ jmap_method_t jmap_mail_methods[] = {
     { "EmailSubmission/queryChanges", &getEmailSubmissionsListUpdates },
     { NULL,                           NULL}
 };
+
+static int JNOTNULL(json_t *item)
+{
+   if (!item) return 0;
+   if (json_is_null(item)) return 0;
+   return 1;
+}
+
+struct jmap_query {
+    /* Request arguments */
+    json_t *filter;
+    json_t *sort;
+    ssize_t position;
+    const char *anchor;
+    ssize_t anchor_offset;
+    size_t limit;
+    /* Response fields */
+    char *state;
+    int can_calculate_changes;
+    size_t result_position;
+    size_t total;
+    json_t *ids;
+};
+
+struct jmap_querychanges {
+    /* Request arguments */
+    json_t *filter;
+    json_t *sort;
+    const char *since_state;
+    size_t max_changes;
+    const char *up_to_id;
+    /* Response fields */
+    char *new_state;
+    size_t total;
+    json_t *removed;
+    json_t *added;
+};
+
+
+struct jmap_parser {
+    struct buf buf;
+    strarray_t path;
+    json_t *invalid;
+};
+
+#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
+
+static void jmap_parser_fini(struct jmap_parser *parser)
+{
+    strarray_fini(&parser->path);
+    json_decref(parser->invalid);
+    buf_free(&parser->buf);
+}
+
+static void jmap_parser_push(struct jmap_parser *parser, const char *prop)
+{
+    strarray_push(&parser->path, prop);
+}
+
+static void jmap_parser_push_index(struct jmap_parser *parser,
+                                   const char *prop,
+                                   size_t index)
+{
+    /* XXX make this more clever: won't need to printf most of the time */
+    buf_printf(&parser->buf, "%s[%zu]", prop, index);
+    strarray_push(&parser->path, buf_cstring(&parser->buf));
+    buf_reset(&parser->buf);
+}
+
+static void jmap_parser_pop(struct jmap_parser *parser)
+{
+    free(strarray_pop(&parser->path));
+}
+
+static const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
+{
+    int i;
+    buf_reset(buf);
+
+    for (i = 0; i < parser->path.count; i++) {
+        const char *p = strarray_nth(&parser->path, i);
+        if (json_pointer_needsencode(p)) {
+            char *tmp = json_pointer_encode(p);
+            buf_appendcstr(buf, tmp);
+            free(tmp);
+        } else {
+            buf_appendcstr(buf, p);
+        }
+        if ((i + 1) < parser->path.count) {
+            /* XXX legacy - should use / to encode JSON pointer */
+            buf_appendcstr(buf, ".");
+        }
+    }
+
+    return buf_cstring(buf);
+}
+
+static void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
+{
+    if (prop)
+        jmap_parser_push(parser, prop);
+
+    json_array_append_new(parser->invalid,
+            json_string(jmap_parser_path(parser, &parser->buf)));
+
+    if (prop)
+        jmap_parser_pop(parser);
+}
+
+static void jmap_ok(jmap_req_t *req, json_t *res)
+{
+    json_object_set_new(res, "accountId", json_string(req->accountid));
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string(req->method));
+    json_array_append_new(item, res);
+    json_array_append_new(item, json_string(req->tag));
+    json_array_append_new(req->response, item);
+}
+
+static void jmap_error(jmap_req_t *req, json_t *err)
+{
+    json_array_append_new(req->response,
+            json_pack("[s,o,s]", "error", err, req->tag));
+}
+
+typedef void parse_filter_cb(json_t *f, struct jmap_parser *p, json_t *unsupported, void *rock);
+
+static void parse_filter(json_t *filter, struct jmap_parser *parser,
+                         parse_filter_cb parse_condition,
+                         json_t *unsupported,
+                         void *rock)
+{
+    json_t *arg, *val;
+    const char *s;
+    size_t i;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        jmap_parser_invalid(parser, NULL);
+        return;
+    }
+    arg = json_object_get(filter, "operator");
+    if ((s = json_string_value(arg))) {
+        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
+            jmap_parser_invalid(parser, "operator");
+        }
+        arg = json_object_get(filter, "conditions");
+        if (!json_array_size(arg)) {
+            jmap_parser_invalid(parser, "conditions");
+        }
+        json_array_foreach(arg, i, val) {
+            jmap_parser_push_index(parser, "conditions", i);
+            parse_filter(val, parser, parse_condition, unsupported, rock);
+            jmap_parser_pop(parser);
+        }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "operator");
+    } else {
+        parse_condition(filter, parser, unsupported, rock);
+    }
+}
+
+struct sort_comparator {
+    const char *property;
+    short is_ascending;
+    const char *collation;
+};
+
+typedef int parse_comp_cb(struct sort_comparator *comp, void *rock);
+
+static void parse_sort(json_t *jsort, struct jmap_parser *parser,
+                       parse_comp_cb comp_cb, json_t *unsupported,
+                       void *rock)
+{
+    if (!json_is_object(jsort)) {
+        jmap_parser_invalid(parser, NULL);
+        return;
+    }
+
+    struct sort_comparator comp = { NULL, 0, NULL };
+
+    /* property */
+    json_t *val = json_object_get(jsort, "property");
+    comp.property = json_string_value(val);
+    if (!comp.property) {
+        jmap_parser_invalid(parser, "property");
+    }
+
+    /* isAscending */
+    comp.is_ascending = 1;
+    val = json_object_get(jsort, "isAscending");
+    if (JNOTNULL(val)) {
+        if (!json_is_boolean(val)) {
+            jmap_parser_invalid(parser, "isAscending");
+        }
+        comp.is_ascending = json_boolean_value(val);
+    }
+
+    /* collation */
+    val = json_object_get(jsort, "collation");
+    if (JNOTNULL(val) && !json_is_string(val)) {
+        jmap_parser_invalid(parser, "collation");
+    }
+    comp.collation = json_string_value(val);
+
+
+    if (comp.property && !comp_cb(&comp, rock)) {
+        struct buf buf = BUF_INITIALIZER;
+        json_array_append_new(unsupported,
+                json_string(jmap_parser_path(parser, &buf)));
+        buf_free(&buf);
+    }
+}
+
+
+/* Foo/query */
+
+static json_t *jmap_query_parse(json_t *jargs,
+                            struct jmap_parser *parser,
+                            struct jmap_query *query,
+                            parse_filter_cb filter_cb,
+                            void *filter_rock,
+                            parse_comp_cb comp_cb,
+                            void *sort_rock)
+{
+    json_t *arg, *val;
+    size_t i;
+
+    memset(query, 0, sizeof(struct jmap_query));
+    query->ids = json_array();
+
+    json_t *unsupported_filter = json_array();
+    json_t *unsupported_sort = json_array();
+
+    /* filter */
+    arg = json_object_get(jargs, "filter");
+    if (json_is_object(arg)) {
+        jmap_parser_push(parser, "filter");
+        parse_filter(arg, parser, filter_cb, unsupported_filter, filter_rock);
+        jmap_parser_pop(parser);
+        query->filter = arg;
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "filter");
+    }
+
+    /* sort */
+    arg = json_object_get(jargs, "sort");
+    if (json_is_array(arg)) {
+        json_array_foreach(arg, i, val) {
+            jmap_parser_push_index(parser, "sort", i);
+            parse_sort(val, parser, comp_cb, unsupported_sort, sort_rock);
+            jmap_parser_pop(parser);
+        }
+        if (json_array_size(arg)) {
+            query->sort = arg;
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "sort");
+    }
+
+    arg = json_object_get(jargs, "position");
+    if (json_is_integer(arg)) {
+        query->position = json_integer_value(arg);
+    }
+    else if (arg) {
+        jmap_parser_invalid(parser, "position");
+    }
+
+    arg = json_object_get(jargs, "anchor");
+    if (json_is_string(arg)) {
+        query->anchor = json_string_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "anchor");
+    }
+
+    arg = json_object_get(jargs, "anchorOffset");
+    if (json_is_integer(arg)) {
+        query->anchor_offset = json_integer_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "anchorOffset");
+    }
+
+    arg = json_object_get(jargs, "limit");
+    if (json_is_integer(arg)) {
+        query->limit = json_integer_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "limit");
+    }
+
+    json_t *err = NULL;
+    if (json_array_size(parser->invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser->invalid);
+    }
+	else if (json_array_size(unsupported_filter)) {
+		err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+                "filters", unsupported_filter);
+	}
+	else if (json_array_size(unsupported_sort)) {
+		err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+                "sort", unsupported_sort);
+	}
+
+    json_decref(unsupported_filter);
+    json_decref(unsupported_sort);
+    return err;
+}
+
+static void jmap_query_fini(struct jmap_query *query)
+{
+    free(query->state);
+    json_decref(query->ids);
+}
+
+static json_t* jmap_query_reply(struct jmap_query *query)
+{
+
+    json_t *res = json_object();
+    json_object_set(res, "filter", query->filter);
+    json_object_set(res, "sort", query->sort);
+    json_object_set_new(res, "state", json_string(query->state));
+    json_object_set_new(res, "canCalculateChanges", json_boolean(query->can_calculate_changes));
+    json_object_set_new(res, "position", json_integer(query->position));
+    json_object_set_new(res, "total", json_integer(query->total));
+    if (query->position > 0 && query->total < SSIZE_MAX) {
+        if (query->position > (ssize_t) query->total) {
+            json_decref(query->ids);
+            query->ids = json_array();
+        }
+    }
+    json_object_set(res, "ids", query->ids);
+    return res;
+}
+
+/* Foo/queryChanges */
+
+static json_t* jmap_querychanges_parse(json_t *jargs,
+                                   struct jmap_parser *parser,
+                                   struct jmap_querychanges *query,
+                                   parse_filter_cb filter_cb,
+                                   void *filter_rock,
+                                   parse_comp_cb comp_cb,
+                                   void *sort_rock)
+{
+    json_t *arg, *val;
+    size_t i;
+
+    memset(query, 0, sizeof(struct jmap_querychanges));
+    query->removed = json_array();
+    query->added = json_array();
+
+    json_t *unsupported_filter = json_array();
+    json_t *unsupported_sort = json_array();
+
+    /* filter */
+    arg = json_object_get(jargs, "filter");
+    if (json_is_object(arg)) {
+        jmap_parser_push(parser, "filter");
+        parse_filter(arg, parser, filter_cb, unsupported_filter, filter_rock);
+        jmap_parser_pop(parser);
+        query->filter = arg;
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "filter");
+    }
+
+    /* sort */
+    arg = json_object_get(jargs, "sort");
+    if (json_is_array(arg)) {
+        json_array_foreach(arg, i, val) {
+            jmap_parser_push_index(parser, "sort", i);
+            parse_sort(val, parser, comp_cb, unsupported_sort, sort_rock);
+            jmap_parser_pop(parser);
+        }
+        if (json_array_size(arg)) {
+            query->sort = arg;
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "sort");
+    }
+
+    /* sinceState */
+    arg = json_object_get(jargs, "sinceState");
+    if (json_is_string(arg)) {
+        query->since_state = json_string_value(arg);
+    } else {
+        jmap_parser_invalid(parser, "sinceState");
+    }
+
+    /* maxChanges */
+    arg = json_object_get(jargs, "maxChanges");
+    if (json_is_integer(arg)) {
+        query->max_changes = json_integer_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "maxChanges");
+    }
+
+    /* upToId */
+    arg = json_object_get(jargs, "upToId");
+    if (json_is_string(arg)) {
+        query->up_to_id = json_string_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "upToId");
+    }
+
+    json_t *err = NULL;
+    if (json_array_size(parser->invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser->invalid);
+    }
+	else if (json_array_size(unsupported_filter)) {
+		err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+                "filters", unsupported_filter);
+	}
+	else if (json_array_size(unsupported_sort)) {
+		err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+                "sort", unsupported_sort);
+	}
+
+    json_decref(unsupported_filter);
+    json_decref(unsupported_sort);
+    return err;
+}
+
+static void jmap_querychanges_fini(struct jmap_querychanges *query)
+{
+    free(query->new_state);
+    json_decref(query->removed);
+    json_decref(query->added);
+}
+
+static json_t* jmap_querychanges_reply(struct jmap_querychanges *query)
+{
+    json_t *res = json_object();
+    json_object_set(res, "filter", query->filter);
+    json_object_set(res, "sort", query->sort);
+    json_object_set_new(res, "oldState", json_string(query->since_state));
+    json_object_set_new(res, "newState", json_string(query->new_state));
+    json_object_set_new(res, "upToId", query->up_to_id ?
+            json_string(query->up_to_id) : json_null());
+    json_object_set(res, "removed", query->removed);
+    json_object_set(res, "added", query->added);
+    json_object_set_new(res, "total", json_integer(query->total));
+    return res;
+}
 
 /* NULL terminated list of supported getEmailsList sort fields */
 static const char *msglist_sortfields[];
@@ -194,13 +634,6 @@ static int _wantprop(hash_table *props, const char *name)
     return hash_lookup(name, props) != NULL;
 }
 
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 static int readprop_full(json_t *root, const char *prefix, const char *name,
                          int mandatory, json_t *invalid, const char *fmt,
                          void *dst)
@@ -236,149 +669,20 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
 #define readprop(root, name,  mandatory, invalid, fmt, dst) \
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
 
-static void validate_string_array(json_t *arg, const char *prefix, json_t *invalid) {
-    /* FIXME probably use in getEmailsList */
-    if (!JNOTNULL(arg)) {
-        return;
-    }
+static void validate_string_array(json_t *arg, struct jmap_parser *parser, const char *prop) {
     if (!json_is_array(arg)) {
-        json_array_append_new(invalid, json_string(prefix));
+        jmap_parser_invalid(parser, prop);
         return;
     }
-
     size_t i;
     json_t *val;
-    struct buf buf = BUF_INITIALIZER;
-
     json_array_foreach(arg, i, val) {
         if (!json_is_string(val)) {
-            buf_printf(&buf, "%s[%zu]", prefix, i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+            jmap_parser_push_index(parser, prop, i);
+            jmap_parser_invalid(parser, NULL);
+            jmap_parser_pop(parser);
         }
     }
-
-    buf_free(&buf);
-}
-
-static void validate_filter(json_t *filter, struct buf *path, json_t *invalid,
-                            void (*validate)(json_t *filter, struct buf *path, json_t *invalid, void *rock),
-                            void *rock)
-{
-    json_t *arg, *val;
-    const char *s;
-    size_t i;
-
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string(buf_cstring(path)));
-        return;
-    }
-
-    const char *prefix = buf_cstring(path);
-    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
-        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".operator");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
-        }
-
-        arg = json_object_get(filter, "conditions");
-        if (!json_array_size(arg)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".conditions");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
-        }
-        json_array_foreach(arg, i, val) {
-            size_t l = buf_len(path);
-            buf_printf(path, ".conditions[%zu]", i);
-            validate_filter(val, path, invalid, validate, rock);
-            buf_truncate(path, l);
-        }
-    } else {
-        validate(filter, path, invalid, rock);
-    }
-}
-
-typedef struct {
-    const char *property;
-    short is_ascending;
-    const char *collation;
-} jmap_comparator_t;
-
-static void validate_sort(json_t *sort, json_t *invalid, json_t *unsupported,
-                          int (*is_supported)(const jmap_comparator_t *comp))
-{
-    struct buf buf = BUF_INITIALIZER;
-    struct buf prop = BUF_INITIALIZER;
-    jmap_comparator_t comp;
-    json_t *jcomp;
-    size_t i;
-
-    if (!JNOTNULL(sort)) {
-        return;
-    }
-
-    if (!json_array_size(sort)) {
-        json_array_append_new(invalid, json_string("sort"));
-        return;
-    }
-
-    json_array_foreach(sort, i, jcomp) {
-        /* Reset comparator */
-        memset(&comp, 0, sizeof(jmap_comparator_t));
-
-        /* Validate sort */
-        if (!json_is_object(jcomp)) {
-            buf_printf(&buf, "sort[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-            continue;
-        }
-
-        /* property */
-        json_t *val = json_object_get(jcomp, "property");
-        comp.property = json_string_value(val);
-        if (!comp.property) {
-            buf_printf(&buf, "sort[%zu].property", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-            continue;
-        }
-
-        /* isAscending */
-        comp.is_ascending = 1;
-        val = json_object_get(jcomp, "isAscending");
-        if (JNOTNULL(val)) {
-            if (!json_is_boolean(val)) {
-                buf_printf(&buf, "sort[%zu].isAscending", i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-                continue;
-            }
-            comp.is_ascending = json_boolean_value(val);
-        }
-
-        /* collation */
-        val = json_object_get(jcomp, "collation");
-        if (JNOTNULL(val) && !json_is_string(val)) {
-            buf_printf(&buf, "sort[%zu].collation", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-            continue;
-        }
-        comp.collation = json_string_value(val);
-
-        if (!is_supported(&comp)) {
-            buf_printf(&buf, "sort[%zu]", i);
-            json_array_append_new(unsupported, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-
-    buf_free(&buf);
-    buf_free(&prop);
 }
 
 /*
@@ -1216,17 +1520,7 @@ done:
     return r;
 }
 
-typedef struct {
-    ssize_t position;
-    const char *anchor;
-    int anchor_off;
-    size_t limit;
-    int cancalcupdates;
-} getmboxlist_window_t;
-
-static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                           getmboxlist_window_t *window,
-                           size_t *total, json_t **ids)
+static int jmapmbox_search(jmap_req_t *req, struct jmap_query *jquery)
 {
     int r = 0;
     size_t j;
@@ -1234,15 +1528,15 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
     /* Reject any attempt to calculcate updates for getMailboxesListUpdates.
      * All of the filter and sort criteria are mutable. That only leaves
-     * an unsorted and unfiltered mailbox list which we internally sort
+     * an unsorted and unfiltere mailbox list which we internally sort
      * by mailbox ids, which isn't any better than getMailboxesUpdates. */
-    window->cancalcupdates = 0;
+    jquery->can_calculate_changes = 0;
 
     /* Prepare query */
     mboxsearch_t *query = mboxsearch_new(req);
 
     /* Prepare sort */
-    json_array_foreach(sort, j, val) {
+    json_array_foreach(jquery->sort, j, val) {
         mboxsearch_sort_t *crit = xzmalloc(sizeof(mboxsearch_sort_t));
         const char *prop = json_string_value(json_object_get(val, "property"));
         crit->field = xstrdup(prop);
@@ -1251,28 +1545,27 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
     }
 
     /* Prepare filter */
-    query->filter = mboxsearch_build_filter(query, filter);
+    query->filter = mboxsearch_build_filter(query, jquery->filter);
 
     /* Run the query */
     r = mboxsearch_run(query);
     if (r) goto done;
 
-    *ids = json_array();
-    *total = query->result.count;
+    jquery->total = query->result.count;
 
-    /* Apply window */
+    /* Apply jquery */
     ssize_t i, frompos = 0;
     int seen_anchor = 0;
     ssize_t skip_anchor = 0;
     ssize_t result_pos = -1;
 
     /* Set position of first result */
-    if (!window->anchor) {
-        if (window->position > 0) {
-            frompos = window->position;
+    if (!jquery->anchor) {
+        if (jquery->position > 0) {
+            frompos = jquery->position;
         }
-        else if (window->position < 0) {
-            frompos = query->result.count + window->position ;
+        else if (jquery->position < 0) {
+            frompos = query->result.count + jquery->position ;
             if (frompos < 0) frompos = 0;
         }
     }
@@ -1281,34 +1574,34 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
         mboxsearch_record_t *rec = ptrarray_nth(&query->result, i);
 
         /* Check anchor */
-        if (window->anchor && !seen_anchor) {
-            seen_anchor = !strcmp(rec->id, window->anchor);
+        if (jquery->anchor && !seen_anchor) {
+            seen_anchor = !strcmp(rec->id, jquery->anchor);
             if (!seen_anchor) {
                 continue;
             }
             /* Found the anchor! Now apply anchor offsets */
-            if (window->anchor_off < 0) {
-                skip_anchor = -window->anchor_off;
+            if (jquery->anchor_offset < 0) {
+                skip_anchor = -jquery->anchor_offset;
                 continue;
             }
-            else if (window->anchor_off > 0) {
+            else if (jquery->anchor_offset > 0) {
                 /* Prefill result list with all, but the current record */
-                size_t lo = window->anchor_off < i ? i - window->anchor_off : 0;
-                size_t hi = window->limit ? lo + window->limit : (size_t) i;
+                size_t lo = jquery->anchor_offset < i ? i - jquery->anchor_offset : 0;
+                size_t hi = jquery->limit ? lo + jquery->limit : (size_t) i;
                 result_pos = lo;
                 while (lo < hi && lo < (size_t) i) {
                     mboxsearch_record_t *p = ptrarray_nth(&query->result, lo);
-                    json_array_append_new(*ids, json_string(p->id));
+                    json_array_append_new(jquery->ids, json_string(p->id));
                     lo++;
                 }
             }
         }
-        else if (window->anchor && skip_anchor) {
+        else if (jquery->anchor && skip_anchor) {
             if (--skip_anchor) continue;
         }
 
         /* Check limit. */
-        if (window->limit && window->limit <= json_array_size(*ids)) {
+        if (jquery->limit && jquery->limit <= json_array_size(jquery->ids)) {
             break;
         }
 
@@ -1316,23 +1609,22 @@ static int jmapmbox_search(jmap_req_t *req, json_t *filter, json_t *sort,
         if (result_pos == -1) {
             result_pos = i;
         }
-        json_array_append_new(*ids, json_string(rec->id));
+        json_array_append_new(jquery->ids, json_string(rec->id));
     }
-    if (window->anchor && !seen_anchor) {
-        json_decref(*ids);
-        *ids = json_array();
+    if (jquery->anchor && !seen_anchor) {
+        json_decref(jquery->ids);
+        jquery->ids = json_array();
     }
     if (result_pos >= 0) {
-        window->position = result_pos;
+        jquery->position = result_pos;
     }
 
 done:
     mboxsearch_free(&query);
-    if (r) json_decref(*ids);
     return r;
 }
 
-static int is_supported_mboxlist_sort(const jmap_comparator_t *comp)
+static int parse_mboxsort_cb(struct sort_comparator *comp, void *rock __attribute__((unused)))
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
@@ -1347,190 +1639,88 @@ static int is_supported_mboxlist_sort(const jmap_comparator_t *comp)
     return 1;
 }
 
-typedef struct {
-    json_t *filter;
-    json_t *sort;
-    getmboxlist_window_t window;
-} getmboxlist_args_t;
-
-struct validate_mboxfilter_rock {
-    json_t *unsupported_filter;
-};
-
-static void validate_mboxfilter_cb(json_t *filter, struct buf *path, json_t *invalid, void *_rock)
+static void parse_mboxfilter_cb(json_t *filter, struct jmap_parser *parser,
+                                json_t *unsupported,
+                                void *rock __attribute__((unused)))
 {
-    struct validate_mboxfilter_rock *rock = _rock;
-    json_t *unsupported_filter = rock->unsupported_filter;
-
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string(buf_cstring(path)));
-        return;
-    }
-
     json_t *val;
     const char *field;
+    struct buf path = BUF_INITIALIZER;
     json_object_foreach(filter, field, val) {
         if (!strcmp(field, "parentId")) {
             if (val != json_null() && !json_is_string(val)) {
-                size_t l = buf_len(path);
-                buf_appendcstr(path, ".parentId");
-                json_array_append_new(invalid, json_string(buf_cstring(path)));
-                buf_truncate(path, l);
+                jmap_parser_invalid(parser, "parentId");
             }
         }
         else if (!strcmp(field, "hasRole")) {
             if (!json_is_boolean(val)) {
-                size_t l = buf_len(path);
-                buf_appendcstr(path, ".hasRole");
-                json_array_append_new(invalid, json_string(buf_cstring(path)));
-                buf_truncate(path, l);
+                jmap_parser_invalid(parser, "hasRole");
             }
         }
         else {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".");
-            buf_appendcstr(path, field);
-            json_array_append_new(unsupported_filter, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_push(parser, field);
+            jmap_parser_path(parser, &path);
+            json_array_append_new(unsupported, json_string(buf_cstring(&path)));
+            buf_reset(&path);
         }
     }
+    buf_free(&path);
 }
 
-static void getmboxlist_read_args(jmap_req_t *req __attribute__((unused)),
-                                 json_t *jargs,
-                                 getmboxlist_args_t *args,
-                                 json_t *invalid,
-                                 json_t *unsupported_filter,
-                                 json_t *unsupported_sort)
-{
-    json_t *arg;
-	json_int_t jint = 0;
-    memset(args, 0, sizeof(getmboxlist_args_t));
-
-    /* Validate filter */
-    arg = json_object_get(jargs, "filter");
-    if (JNOTNULL(arg)) {
-        struct buf buf = BUF_INITIALIZER;
-        struct validate_mboxfilter_rock rock = { unsupported_filter };
-        buf_setcstr(&buf, "filter");
-        validate_filter(arg, &buf, invalid, validate_mboxfilter_cb, &rock);
-        buf_free(&buf);
-        args->filter = arg;
-    }
-
-    /* sort */
-    arg = json_object_get(jargs, "sort");
-    if (JNOTNULL(arg)) {
-        validate_sort(arg, invalid, unsupported_sort, is_supported_mboxlist_sort);
-        args->sort = arg;
-    }
-
-    /* windowing */
-    readprop(jargs, "anchor", 0, invalid, "s", &args->window.anchor);
-    readprop(jargs, "anchorOffset", 0, invalid, "i", &args->window.anchor_off);
-    if (readprop(jargs, "position", 0, invalid, "I", &jint) > 0) {
-        args->window.position = jint;
-    }
-    if (readprop(jargs, "limit", 0, invalid, "I", &jint) > 0) {
-        if (jint < 0) json_array_append_new(invalid, json_string("limit"));
-        args->window.limit = jint;
-    }
-}
 
 static int getMailboxesList(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *ids = NULL, *item, *res;
-    size_t total = 0;
-    getmboxlist_args_t args;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-    getmboxlist_read_args(req, req->args, &args, invalid, unsupported_filter, unsupported_sort);
-
-    /* Bail out for argument errors */
-    json_t *err = NULL;
-    if (json_array_size(invalid)) {
-        err = json_pack("{s:s, s:O}", "type", "invalidArguments", "arguments", invalid);
-    }
-    else if (json_array_size(unsupported_filter)) {
-        err = json_pack("{s:s, s:O}", "type", "unsupportedFilter", "filters", unsupported_filter);
-    }
-    else if (json_array_size(unsupported_sort)) {
-        err = json_pack("{s:s, s:O}", "type", "unsupportedSort", "sort", unsupported_sort);
-    }
+    /* Parse request */
+    json_t *err = jmap_query_parse(req->args, &parser, &query,
+            parse_mboxfilter_cb, NULL,
+            parse_mboxsort_cb, NULL);
     if (err) {
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        jmap_error(req, err);
         goto done;
     }
 
     /* Search for the mailboxes */
-    r = jmapmbox_search(req, args.filter, args.sort, &args.window, &total, &ids);
-    if (r) goto done;
+    int r = jmapmbox_search(req, &query);
+    if (r) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        goto done;
+    }
+    json_t *jstate = jmap_getstate(req, 0/*mbtype*/);
+    query.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "canCalculateUpdates", json_boolean(args.window.cancalcupdates));
-    json_object_set_new(res, "position", json_integer(args.window.position));
-    json_object_set_new(res, "total", json_integer(total));
-    json_object_set(res, "filter", args.filter);
-    json_object_set(res, "sort", args.sort);
-    json_object_set(res, "ids", ids);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Mailbox/query"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Build response */
+    jmap_ok(req, jmap_query_reply(&query));
 
 done:
-    json_decref(invalid);
-    json_decref(unsupported_filter);
-    json_decref(unsupported_sort);
-    json_decref(ids);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_query_fini(&query);
+    return 0;
 }
 
 static int getMailboxesListUpdates(jmap_req_t *req)
 {
-    int r = 0;
-    getmboxlist_args_t args;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-    getmboxlist_read_args(req, req->args, &args, invalid, unsupported_filter, unsupported_sort);
-
-    /* Bail out for argument errors */
-    json_t *err = NULL;
-    if (json_array_size(invalid)) {
-        err = json_pack("{s:s, s:O}", "type", "invalidArguments", "arguments", invalid);
-    }
-    else if (json_array_size(unsupported_filter)) {
-        err = json_pack("{s:s, s:O}", "type", "unsupportedFilter", "filters", unsupported_filter);
-    }
-    else if (json_array_size(unsupported_sort)) {
-        err = json_pack("{s:s, s:O}", "type", "unsupportedSort", "sort", unsupported_sort);
-    }
+    /* Parse arguments */
+    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
+            parse_mboxfilter_cb, NULL, parse_mboxsort_cb, NULL);
     if (err) {
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+        jmap_error(req, err);
         goto done;
     }
 
     /* Refuse all attempts to calculcate list updates */
-    json_array_append_new(req->response, json_pack("[s,{s:s},s]",
-                "error", "type", "cannotCalculateChanges", req->tag));
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
 
 done:
-    json_decref(invalid);
-    json_decref(unsupported_filter);
-    json_decref(unsupported_sort);
-    return r;
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 struct jmapmbox_newname_data {
@@ -4379,68 +4569,94 @@ struct msgfilter_rock {
     json_t *unsupported;
 };
 
-static void validate_msgfilter_cb(json_t *filter, struct buf *path,
-                                  json_t *invalid, void *_rock)
+static void parse_msgfilter_cb(json_t *filter, struct jmap_parser *parser,
+                               json_t *unsupported, void *rock)
 {
-    const char *prefix = buf_cstring(path);
-    struct msgfilter_rock *rock = _rock;
-    json_t *unsupported = rock->unsupported;
-    jmap_req_t *req = rock->req;
-
+    jmap_req_t *req = rock;
     json_t *arg, *val;
     const char *s;
-    json_int_t num;
-    int b;
     size_t i;
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string(prefix));
+        jmap_parser_invalid(parser, NULL);
         return;
     }
-
-    if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".before");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
-        }
-    }
-
-    if (readprop_full(filter, prefix, "after", 0, invalid, "s", &s) > 0) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".after");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
-        }
-    }
-
-    if (readprop_full(filter, prefix, "inMailbox", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "inMailbox");
+    if ((s = json_string_value(arg))) {
         char *n = jmapmbox_find_uniqueid(req, s);
         if (!n) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".inMailbox");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "inMailbox");
         }
         free(n);
+    } else if (arg) {
+        jmap_parser_invalid(parser, "inMailbox");
     }
-    readprop_full(filter, prefix, "minSize", 0, invalid, "I", &num);
-    readprop_full(filter, prefix, "maxSize", 0, invalid, "I", &num);
-    readprop_full(filter, prefix, "hasAttachment", 0, invalid, "b", &b);
-    readprop_full(filter, prefix, "attachmentName", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "text", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "from", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "to", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "cc", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "bcc", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "subject", 0, invalid, "s", &s);
-    readprop_full(filter, prefix, "body", 0, invalid, "s", &s);
+
+    arg = json_object_get(filter, "before");
+    if ((s = json_string_value(arg))) {
+        struct tm tm;
+        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        if (!p || *p) {
+            jmap_parser_invalid(parser, "before");
+        }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "before");
+    }
+    arg = json_object_get(filter, "after");
+    if ((s = json_string_value(arg))) {
+        struct tm tm;
+        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        if (!p || *p) {
+            jmap_parser_invalid(parser, "after");
+        }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "after");
+    }
+
+    arg = json_object_get(filter, "minSize");
+    if (arg && !json_is_integer(arg)) {
+        jmap_parser_invalid(parser, "minSize");
+    }
+    arg = json_object_get(filter, "maxSize");
+    if (arg && !json_is_integer(arg)) {
+        jmap_parser_invalid(parser, "maxSize");
+    }
+    arg = json_object_get(filter, "hasAttachment");
+    if (arg && !json_is_boolean(arg)) {
+        jmap_parser_invalid(parser, "hasAttachment");
+    }
+    arg = json_object_get(filter, "attachmentName");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "attachmentName");
+    }
+    arg = json_object_get(filter, "text");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "text");
+    }
+    arg = json_object_get(filter, "from");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "from");
+    }
+    arg = json_object_get(filter, "to");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "to");
+    }
+    arg = json_object_get(filter, "cc");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "cc");
+    }
+    arg = json_object_get(filter, "bcc");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "bcc");
+    }
+    arg = json_object_get(filter, "subject");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "subject");
+    }
+    arg = json_object_get(filter, "body");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "body");
+    }
 
     json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
         char *n = NULL;
@@ -4448,65 +4664,67 @@ static void validate_msgfilter_cb(json_t *filter, struct buf *path,
             n = jmapmbox_find_uniqueid(req, s);
         }
         if (!n) {
-            size_t l = buf_len(path);
-            buf_printf(path, ".inMailboxOtherThan[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_push_index(parser, "inMailboxOtherThan", i);
+            jmap_parser_invalid(parser, NULL);
+            jmap_parser_pop(parser);
         }
         free(n);
     }
 
-    if (readprop_full(filter, prefix, "allInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "allInThreadHaveKeyword");
+    if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".allInThreadHaveKeyword");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "allInThreadHaveKeyword");
         }
-        /* XXX currently can't support this filter */
-        json_array_append_new(unsupported, json_pack("{s:s}",
-                    "allInThreadHaveKeyword", s));
+        else {
+            /* XXX currently can't support this filter */
+            json_array_append_new(unsupported, json_pack("{s:s}",
+                        "allInThreadHaveKeyword", s));
+        }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "allInThreadHaveKeyword");
     }
-    if (readprop_full(filter, prefix, "someInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "someInThreadHaveKeyword");
+    if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".someInThreadHaveKeyword");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "someInThreadHaveKeyword");
         }
         if (!is_supported_convkeyword(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
                         "someInThreadHaveKeyword", s));
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "someInThreadHaveKeyword");
     }
-    if (readprop_full(filter, prefix, "noneInThreadHaveKeyword", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "noneInThreadHaveKeyword");
+    if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".noneInThreadHaveKeyword");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "noneInThreadHaveKeyword");
         }
         if (!is_supported_convkeyword(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
-                        "someInThreadHaveKeyword", s));
+                        "noneInThreadHaveKeyword", s));
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "noneInThreadHaveKeyword");
     }
 
-    if (readprop_full(filter, prefix, "hasKeyword", 0, invalid, "s", &s) > 0) {
+
+    arg = json_object_get(filter, "hasKeyword");
+    if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".hasKeyword");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "hasKeyword");
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "hasKeyword");
     }
-    if (readprop_full(filter, prefix, "notHasKeyword", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "notHasKeyword");
+    if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".notHasKeyword");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "notHasKeyword");
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "notHasKeyword");
     }
 
     arg = json_object_get(filter, "header");
@@ -4515,43 +4733,23 @@ static void validate_msgfilter_cb(json_t *filter, struct buf *path,
             case 2:
                 s = json_string_value(json_array_get(arg, 1));
                 if (!s || !strlen(s)) {
-                    size_t l = buf_len(path);
-                    buf_appendcstr(path, ".header[1]");
-                    json_array_append_new(invalid, json_string(buf_cstring(path)));
-                    buf_truncate(path, l);
+                    jmap_parser_push_index(parser, "header", 1);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
                 }
                 /* fallthrough */
             case 1:
                 s = json_string_value(json_array_get(arg, 0));
                 if (!s || !strlen(s)) {
-                    size_t l = buf_len(path);
-                    buf_appendcstr(path, ".header[0]");
-                    json_array_append_new(invalid, json_string(buf_cstring(path)));
-                    buf_truncate(path, l);
+                    jmap_parser_push_index(parser, "header", 0);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
                 }
                 break;
             default:
-                {
-                    size_t l = buf_len(path);
-                    buf_appendcstr(path, ".header");
-                    json_array_append_new(invalid, json_string(buf_cstring(path)));
-                    buf_truncate(path, l);
-                }
+                jmap_parser_invalid(parser, "header");
         }
     }
-}
-
-static void validate_msgfilter(jmap_req_t *req,
-                               json_t *filter,
-                               const char *prefix,
-                               json_t *invalid,
-                               json_t *unsupported)
-{
-    struct buf buf = BUF_INITIALIZER;
-    buf_setcstr(&buf, prefix);
-    struct msgfilter_rock rock = { req, unsupported };
-    validate_filter(filter, &buf, invalid, validate_msgfilter_cb, &rock);
-    buf_free(&buf);
 }
 
 static struct sortcrit *buildsort(json_t *sort)
@@ -4624,11 +4822,11 @@ static struct sortcrit *buildsort(json_t *sort)
 
 struct getmsglist_window {
     /* input arguments */
-    int collapse;
     ssize_t position;
     const char *anchor;
     int anchor_off;
     size_t limit;
+    int collapse;
     modseq_t sincemodseq;
     const char *uptomsgid;
 
@@ -4669,6 +4867,10 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     char *msgid = NULL;
     int i, r;
 
+	/* TODO JMAP spec kicked out threadIds from the Email/query response
+     * somewhen late 2017. Now we should cache emailId -> threadId on the
+     * request context to save lookups on conversations.db */
+
     /* FIXME JMAP spec introduced negative positions for search results, and
      * this is what breaks the camel's neck for the mess jmapmsg_search got.
      * This function requires a massive refactor before we can add any new
@@ -4679,9 +4881,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     assert(!want_expunged || expungedids);
 
     *total = 0;
-    *messageids = json_pack("[]");
-    *threadids = json_pack("[]");
-    if (want_expunged) *expungedids = json_pack("[]");
+    if (*messageids == NULL) *messageids = json_pack("[]");
+    if (*threadids == NULL) *threadids = json_pack("[]");
+    if (want_expunged && *expungedids == NULL) *expungedids = json_pack("[]");
 
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
@@ -5001,7 +5203,7 @@ static const char *msglist_sortfields[] = {
     NULL
 };
 
-static int is_supported_msglist_sort(const jmap_comparator_t *comp)
+static int parse_msgsort_cb(struct sort_comparator *comp, void *rock __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -5035,251 +5237,160 @@ static int is_supported_msglist_sort(const jmap_comparator_t *comp)
 
 static int getEmailsList(jmap_req_t *req)
 {
-    int r;
-    json_t *filter, *sort;
-    json_t *messageids = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+    int collapse_threads = 0;
+
+    /* Parse request */
+    json_t *err = jmap_query_parse(req->args, &parser, &query,
+            parse_msgfilter_cb, req,
+            parse_msgsort_cb, req);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    if (query.position < 0) {
+        /* we currently don't support negative positions */
+        jmap_parser_invalid(&parser, "position");
+    }
+    json_t *arg = json_object_get(req->args, "collapseThreads");
+    if (json_is_boolean(arg)) {
+        collapse_threads = json_boolean_value(arg);
+    } else if (arg) {
+        jmap_parser_invalid(&parser, "collapseThreads");
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* XXX Guess, we don't need total_threads anymore */
+    size_t total_threads = 0;
+    json_t *threadids = NULL;
+    /* XXX - getmsglist_window is a legacy and should go away */
     struct getmsglist_window window;
-    json_int_t i = 0;
-    size_t total, total_threads;
-
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
-    }
-
-    /* sort */
-    sort = json_object_get(req->args, "sort");
-    if (JNOTNULL(sort)) {
-        validate_sort(sort, invalid, unsupported_sort, is_supported_msglist_sort);
-    }
-
-    /* windowing */
     memset(&window, 0, sizeof(struct getmsglist_window));
-    if ((collapse = json_object_get(req->args, "collapseThreads"))) {
-        readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
-    }
-    readprop(req->args, "anchor", 0, invalid, "s", &window.anchor);
-    readprop(req->args, "anchorOffset", 0, invalid, "i", &window.anchor_off);
-
-    if (readprop(req->args, "position", 0, invalid, "I", &i) > 0) {
-        /* FIXME we should, but currently don't support negative
-         * positions, because jmapmsg_search is a mess */
-        if (i < 0) json_array_append_new(invalid, json_string("position"));
-        window.position = i;
-    }
-
-    if (readprop(req->args, "limit", 0, invalid, "I", &i) > 0) {
-        if (i < 0) json_array_append_new(invalid, json_string("limit"));
-        window.limit = i;
-    }
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_filter);
-        json_decref(unsupported_sort);
-        r = 0;
+    window.position = query.position;
+    window.anchor = query.anchor;
+    window.anchor_off = query.anchor_offset;
+    window.limit = query.limit;
+    window.collapse = collapse_threads;
+    int r = jmapmsg_search(req, query.filter, query.sort, &window, 0,
+            &query.total, &total_threads, &query.ids, NULL, &threadids);
+    /* FIXME jmapmsg_search is a stinkin' mess. It tries to cover all of
+     * /query, /queryChanges and /changes, making *any* attempt to change
+     * its code an egg dance */
+    if (query.ids == NULL) query.ids = json_array();
+    json_decref(threadids); /* XXX threadIds is legacy */
+    if (r) {
+        json_t *err = r == IMAP_NOTFOUND ?
+            json_pack("{s:s}", "type", "unsupportedFilter") :
+            json_pack("{s:s}", "type", "serverError");
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    query.can_calculate_changes = window.cancalcupdates;
+    query.position = window.position;
 
-    /* Report unsupported filters and sorts */
-    if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_sort);
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_filter);
-    if (json_array_size(unsupported_sort)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported_sort);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_sort);
+    json_t *jstate = jmap_getstate(req, 0);
+    query.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    r = jmapmsg_search(req, filter, sort, &window, 0, &total, &total_threads,
-                       &messageids, /*expungedids*/NULL, &threadids);
-    if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    else if (r) goto done;
-
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    if (JNOTNULL(collapse)) {
-        json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
-    } else {
-        json_object_set_new(res, "collapseThreads", json_null());
-    }
-    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "canCalculateUpdates", window.cancalcupdates ? json_true() : json_false());
-    json_object_set_new(res, "position", json_integer(window.position));
-    json_object_set_new(res, "total", json_integer(total));
-    json_object_set(res, "filter", filter);
-    json_object_set(res, "sort", sort);
-    json_object_set(res, "ids", messageids);
-    json_object_set(res, "threadIds", threadids);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/query"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Build response */
+    json_t *res = jmap_query_reply(&query);
+    json_object_set(res, "collapseThreads",
+            json_object_get(req->args, "collapseThreads"));
+    jmap_ok(req, res);
 
 done:
-    if (messageids) json_decref(messageids);
-    if (threadids) json_decref(threadids);
-    return r;
+    jmap_query_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int getEmailsListUpdates(jmap_req_t *req)
 {
-    int r;
-    json_t *filter, *sort;
-    json_t *added = NULL, *destroyed = NULL, *threadids = NULL, *collapse = NULL, *item, *res;
-    int pe;
-    const char *since = NULL, *upto = NULL;
-    int max = 0;
-    struct getmsglist_window window;
-    size_t total, total_threads;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
+    int collapse_threads = 0;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
-    }
-
-    /* sort */
-    sort = json_object_get(req->args, "sort");
-    if (JNOTNULL(sort)) {
-        validate_sort(sort, invalid, unsupported_sort, is_supported_msglist_sort);
-    }
-
-    /* windowing */
-    memset(&window, 0, sizeof(struct getmsglist_window));
-    if ((collapse = json_object_get(req->args, "collapseThreads"))) {
-        readprop(req->args, "collapseThreads", 0, invalid, "b", &window.collapse);
-    }
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
-    }
-
-    /* uptoEmailId */
-    readprop(req->args, "uptoEmailId", 0, invalid, "s", &upto);
-
-    /* maxChanges */
-    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
-    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_filter);
-        json_decref(unsupported_sort);
-        r = 0;
+    /* Parse arguments */
+    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
+            parse_msgfilter_cb, NULL, parse_msgsort_cb, NULL);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
-
-    /* Report unsupported filters and sorts */
-    if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_sort);
-        r = 0;
-        goto done;
+    json_t *arg = json_object_get(req->args, "collapseThreads");
+    if (json_is_boolean(arg)) {
+        collapse_threads = json_boolean_value(arg);
+    } else if (arg) {
+        jmap_parser_invalid(&parser, "collapseThreads");
     }
-    json_decref(unsupported_filter);
-    if (json_array_size(unsupported_sort)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported_sort);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+	if (json_array_size(parser.invalid)) {
+		err = json_pack("{s:s}", "type", "invalidArguments");
+		json_object_set(err, "arguments", parser.invalid);
+		jmap_error(req, err);
         goto done;
-    }
-    json_decref(unsupported_sort);
+	}
 
     /* XXX - add search_is_mutable tests */
 
+    /* XXX Guess, we don't need total_threads anymore */
+    size_t total_threads = 0;
+    json_t *threadids = NULL;
     /* Set up search window */
-    window.sincemodseq = atomodseq_t(since);
-    window.uptomsgid = upto;
-
-    r = jmapmsg_search(req, filter, sort, &window, /*include_expunged*/1, &total, &total_threads,
-                       &added, &destroyed, &threadids);
+    struct getmsglist_window window;
+    memset(&window, 0, sizeof(struct getmsglist_window));
+    window.sincemodseq = atomodseq_t(query.since_state);
+    if (window.sincemodseq == 0) {
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        goto done;
+    }
+    window.uptomsgid = query.up_to_id;
+    window.collapse = collapse_threads;
+    int r = jmapmsg_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
+            &query.total, &total_threads, &query.added, &query.removed, &threadids);
+    /* FIXME - jmapmsg_search API deserves some serious rewrite */
+    if (query.added == NULL) query.added = json_array();
+    if (query.removed == NULL) query.removed = json_array();
+    json_decref(threadids); /* XXX threadIds is legacy */
     if (r == IMAP_SEARCH_MUTABLE) {
-        json_t *err = json_pack("{s:s,s:s}", "type", "cannotCalculateChanges", "error", "Search is mutable");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+        jmap_error(req, json_pack("{s:s,s:s}", "type", "cannotCalculateChanges",
+                    "error", "Search is mutable"));
         goto done;
     }
-    if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    else if (r == IMAP_NOTFOUND) {
+        jmap_error(req, json_pack("{s:s}", "type", "unsupportedFilter"));
         goto done;
     }
-    else if (r) goto done;
-
-    if (max && json_array_size(added) + json_array_size(destroyed) > (unsigned)max) {
-        json_t *err = json_pack("{s:s}", "type", "tooManyChanges");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    else if (r) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-
-    json_t *oldstate = json_string(since);
-
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    if (JNOTNULL(collapse)) {
-        json_object_set_new(res, "collapseThreads", json_boolean(window.collapse));
-    } else {
-        json_object_set_new(res, "collapseThreads", json_null());
+    if (query.max_changes) {
+        size_t nchanges = json_array_size(query.added) + json_array_size(query.removed);
+        if (nchanges > query.max_changes) {
+            jmap_error(req, json_pack("{s:s}", "type", "tooManyChanges"));
+            goto done;
+        }
     }
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set(res, "added", added);
-    json_object_set(res, "destroyed", destroyed);
-    json_object_set(res, "filter", filter);
-    json_object_set(res, "sort", sort);
-    json_object_set_new(res, "uptoEmailId", json_string(upto));
-    json_object_set_new(res, "total", json_integer(total));
+    json_t *jstate = jmap_getstate(req, 0);
+    query.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/queryChanges"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Build response */
+    json_t *res = jmap_querychanges_reply(&query);
+    json_object_set(res, "collapseThreads",
+            json_object_get(req->args, "collapseThreads"));
+    jmap_ok(req, res);
 
 done:
-    if (added) json_decref(added);
-    if (destroyed) json_decref(destroyed);
-    if (threadids) json_decref(threadids);
-    return r;
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int getEmailsUpdates(jmap_req_t *req)
@@ -5682,48 +5793,42 @@ static int getSearchSnippets(jmap_req_t *req)
 {
     int r = 0;
     json_t *filter, *messageids, *val, *snippets, *notfound, *res, *item;
-    const char *s;
     struct buf buf = BUF_INITIALIZER;
     size_t i;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
     json_t *unsupported_filter = json_pack("[]");
 
     /* filter */
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        validate_msgfilter(req, filter, "filter", invalid, unsupported_filter);
+        jmap_parser_push(&parser, "filter");
+        parse_filter(filter, &parser, parse_msgfilter_cb, unsupported_filter, req);
+        jmap_parser_pop(&parser);
     }
 
     /* messageIds */
     messageids = json_object_get(req->args, "emailIds");
-    json_array_foreach(messageids, i, val) {
-        if (!(s = json_string_value(val)) || !strlen(s)) {
-            buf_printf(&buf, "emailIds[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
+    if (json_array_size(messageids)) {
+        validate_string_array(messageids, &parser, "emailIds");
     }
-    if (!json_is_array(messageids)) {
-        json_array_append_new(invalid, json_string("emailIds"));
+    else if (!json_is_array(messageids)) {
+        jmap_parser_invalid(&parser, "emailIds");
     }
 
     /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+    if (json_array_size(parser.invalid)) {
+        jmap_error(req, json_pack("{s:s, s:O}", "type", "invalidArguments",
+                    "arguments", parser.invalid));
         json_decref(unsupported_filter);
-        r = 0;
         goto done;
     }
-    json_decref(invalid);
 
     /* Report unsupported filters */
     if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+        jmap_error(req, json_pack("{s:s, s:o}", "type", "unsupportedFilter",
+                    "filters", unsupported_filter));
         goto done;
     }
     json_decref(unsupported_filter);
@@ -5758,6 +5863,7 @@ static int getSearchSnippets(jmap_req_t *req)
     json_array_append_new(req->response, item);
 
 done:
+    jmap_parser_fini(&parser);
     buf_free(&buf);
     return r;
 }
@@ -9029,8 +9135,18 @@ static int setEmailSubmissions(jmap_req_t *req)
     }
     /* onSuccessDestroyEmail */
     onsuccess_destroy = json_object_get(req->args, "onSuccessDestroyEmail");
-    if (JNOTNULL(onsuccess_destroy)) {
-        validate_string_array(onsuccess_destroy, "onSuccessDestroyEmail", invalid);
+    if (json_is_array(onsuccess_destroy)) {
+        size_t i;
+        json_t *val;
+        json_array_foreach(onsuccess_destroy, i, val) {
+            if (!json_is_string(val)) {
+                buf_printf(&buf, "onSuccessDestroyEmail[%zu]", i);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+    } else if (JNOTNULL(onsuccess_destroy)) {
+        json_array_append_new(invalid, json_string("onSuccessDestroyEmail"));
     }
 
     /* Return early for argument errors */
@@ -9271,61 +9387,63 @@ done:
     return 0;
 }
 
-static void validate_msgsubfilter_cb(json_t *filter, struct buf *path, json_t *invalid,
-                                     void *rock __attribute__((unused)))
+static void parse_msgsubfilter_cb(json_t *filter, struct jmap_parser *parser,
+                                  json_t *unsupported __attribute__((unused)),
+                                  void *rock __attribute__((unused)))
 {
     json_t *arg;
     const char *s;
-    const char *prefix = buf_cstring(path);
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string(prefix));
+        jmap_parser_invalid(parser, NULL);
+        return;
     }
 
-    if (readprop_full(filter, prefix, "before", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "before");
+    if ((s = json_string_value(arg))) {
         struct tm tm;
         const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
         if (!p || *p) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".before");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "before");
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "before");
     }
-
-    if (readprop_full(filter, prefix, "after", 0, invalid, "s", &s) > 0) {
+    arg = json_object_get(filter, "after");
+    if ((s = json_string_value(arg))) {
         struct tm tm;
         const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
         if (!p || *p) {
-            size_t l = buf_len(path);
-            buf_appendcstr(path, ".after");
-            json_array_append_new(invalid, json_string(buf_cstring(path)));
-            buf_truncate(path, l);
+            jmap_parser_invalid(parser, "after");
         }
+    } else if (arg) {
+        jmap_parser_invalid(parser, "after");
     }
-
-    size_t l;
 
     arg = json_object_get(filter, "emailIds");
-    l = buf_len(path);
-    buf_appendcstr(path, ".messageIds");
-    validate_string_array(arg, buf_cstring(path), invalid);
-    buf_truncate(path, l);
+    if (json_is_array(arg)) {
+        validate_string_array(arg, parser, "emailIds");
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "emailIds");
+    }
 
     arg = json_object_get(filter, "threadIds");
-    l = buf_len(path);
-    buf_appendcstr(path, ".threadIds");
-    validate_string_array(arg, buf_cstring(path), invalid);
-    buf_truncate(path, l);
+    if (json_is_array(arg)) {
+        validate_string_array(arg, parser, "threadIds");
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "threadIds");
+    }
 
     arg = json_object_get(filter, "emailSubmissionIds");
-    l = buf_len(path);
-    buf_appendcstr(path, ".messageSubmissionIds");
-    validate_string_array(arg, buf_cstring(path), invalid);
-    buf_truncate(path, l);
+    if (json_is_array(arg)) {
+        validate_string_array(arg, parser, "emailSubmissionIds");
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "emailSubmissionIds");
+    }
 }
 
-static int is_supported_msgsub_sort(const jmap_comparator_t *comp)
+
+static int parse_msgsubsort_cb(struct sort_comparator *comp, void *rock __attribute__((unused)))
 {
     if (comp->collation) {
         return 0;
@@ -9340,189 +9458,51 @@ static int is_supported_msgsub_sort(const jmap_comparator_t *comp)
 
 static int getEmailSubmissionsList(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *filter, *sort;
-    json_t *messageids = NULL, *threadids = NULL, *msgsubids = NULL;
-    json_int_t i = 0;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, "filter");
-        validate_filter(filter, &buf, invalid, validate_msgsubfilter_cb, NULL);
-        buf_free(&buf);
-    }
-
-    /* sort */
-    sort = json_object_get(req->args, "sort");
-    if (JNOTNULL(sort)) {
-        validate_sort(sort, invalid, unsupported_sort, is_supported_msgsub_sort);
-    }
-
-    if (readprop(req->args, "position", 0, invalid, "I", &i) > 0) {
-        if (i < 0) json_array_append_new(invalid, json_string("position"));
-    }
-
-    if (readprop(req->args, "limit", 0, invalid, "I", &i) > 0) {
-        if (i < 0) json_array_append_new(invalid, json_string("limit"));
-    }
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_filter);
-        json_decref(unsupported_sort);
-        r = 0;
+    /* Parse request */
+    json_t *err = jmap_query_parse(req->args, &parser, &query,
+            parse_msgsubfilter_cb, NULL, parse_msgsubsort_cb, NULL);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
-    /* Report unsupported filters and sorts */
-    if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_sort);
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_filter);
-    if (json_array_size(unsupported_sort)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported_sort);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_sort);
-
-    /* Trivially find no message submissions at all. */
-    threadids = json_pack("[]");
-    messageids = json_pack("[]");
-    msgsubids = json_pack("[]");
-
-    /* Prepare response. */
-    json_t *res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "canCalculateUpdates", json_false());
-    json_object_set_new(res, "position", json_integer(0));
-    json_object_set_new(res, "total", json_integer(0));
-    json_object_set(res, "filter", filter);
-    json_object_set(res, "sort", sort);
-    json_object_set(res, "ids", msgsubids);
-    json_object_set(res, "emailIds", messageids);
-    json_object_set(res, "threadIds", threadids);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("EmailSubmission/query"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* We don't store EmailSubmissions */
+    json_t *jstate = jmap_getstate(req, 0);
+    query.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    query.position = 0;
+    query.total = 0;
+    query.can_calculate_changes = 0;
+    jmap_ok(req, jmap_query_reply(&query));
 
 done:
-    if (messageids) json_decref(messageids);
-    if (threadids) json_decref(threadids);
-    if (msgsubids) json_decref(msgsubids);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_query_fini(&query);
+    return 0;
 }
 
 static int getEmailSubmissionsListUpdates(jmap_req_t *req)
 {
-    int r = 0, pe;
-    json_t *filter, *sort;
-    json_t *added = NULL, *destroyed = NULL, *oldstate = NULL, *newstate = NULL;
-    json_int_t max = 0;
-    const char *since;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-    json_t *unsupported_filter = json_pack("[]");
-    json_t *unsupported_sort = json_pack("[]");
-
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, "filter");
-        validate_filter(filter, &buf, invalid, validate_msgsubfilter_cb, NULL);
-        buf_free(&buf);
-    }
-
-    /* sort */
-    sort = json_object_get(req->args, "sort");
-    if (JNOTNULL(sort)) {
-        validate_sort(sort, invalid, unsupported_sort, is_supported_msgsub_sort);
-    }
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
-    }
-    /* maxChanges */
-    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
-    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_filter);
-        json_decref(unsupported_sort);
-        r = 0;
+    /* Parse arguments */
+    json_t *err = jmap_querychanges_parse(req->args, &parser, &query,
+            parse_msgsubfilter_cb, NULL, parse_msgsubsort_cb, NULL);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
-    /* Report unsupported filters and sorts */
-    if (json_array_size(unsupported_filter)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedFilter", "filters", unsupported_filter);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(unsupported_sort);
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_filter);
-    if (json_array_size(unsupported_sort)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "unsupportedSort", "sort", unsupported_sort);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    json_decref(unsupported_sort);
-
-    /* Trivially find no message submission list updates at all. */
-    added = json_pack("[]");
-    destroyed = json_pack("[]");
-    oldstate = json_string(since);
-    newstate = jmap_getstate(req, 0/*mbtype*/);
-
-    /* Prepare response. */
-    json_t *res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "total", json_integer(0));
-
-    json_object_set(res, "added", added);
-    json_object_set(res, "destroyed", destroyed);
-    json_object_set(res, "filter", filter);
-    json_object_set(res, "sort", sort);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("EmailSubmissions/queryChanges"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Refuse all attempts to calculcate list updates */
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
 
 done:
-    if (added) json_decref(added);
-    if (destroyed) json_decref(destroyed);
-    return r;
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
+
 }

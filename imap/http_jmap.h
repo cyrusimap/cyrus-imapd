@@ -64,6 +64,7 @@ struct jmap_idmap {
 };
 
 typedef struct jmap_req {
+    const char           *method;
     const char           *userid;
     const char           *accountid;
     const char           *inboxname;
