@@ -127,6 +127,9 @@ sub test_mailbox_get
     $self->assert_equals($inbox->{myRights}->{mayCreateChild}, JSON::true);
     $self->assert_equals($inbox->{myRights}->{mayRename}, JSON::false);
     $self->assert_equals($inbox->{myRights}->{mayDelete}, JSON::false);
+    $self->assert_equals($inbox->{myRights}->{maySetSeen}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{maySetKeywords}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{maySubmit}, JSON::true);
     $self->assert_num_equals($inbox->{totalEmails}, 0);
     $self->assert_num_equals($inbox->{unreadEmails}, 0);
     $self->assert_num_equals($inbox->{totalThreads}, 0);
@@ -2875,7 +2878,7 @@ sub test_email_set_shared
 
     xlog "Create user and share mailbox";
     $self->{instance}->create_user("foo");
-    $admintalk->setacl("user.foo", "cassandane", "lrntex") or die;
+    $admintalk->setacl("user.foo", "cassandane", "lrswntex") or die;
 
     xlog "Create email in shared account via IMAP";
     $self->{adminstore}->set_folder('user.foo');
