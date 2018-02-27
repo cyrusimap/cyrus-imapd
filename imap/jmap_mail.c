@@ -5305,7 +5305,7 @@ static int getEmailsList(jmap_req_t *req)
     /* FIXME jmapmsg_search is a stinkin' mess. It tries to cover all of
      * /query, /queryChanges and /changes, making *any* attempt to change
      * its code an egg dance */
-    if (query.ids == NULL) query.ids = json_array();
+    if (!JNOTNULL(query.ids)) query.ids = json_array();
     json_decref(threadids); /* XXX threadIds is legacy */
     if (r) {
         json_t *err = r == IMAP_NOTFOUND ?
@@ -5380,8 +5380,8 @@ static int getEmailsListUpdates(jmap_req_t *req)
     int r = jmapmsg_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
             &query.total, &total_threads, &query.added, &query.removed, &threadids);
     /* FIXME - jmapmsg_search API deserves some serious rewrite */
-    if (query.added == NULL) query.added = json_array();
-    if (query.removed == NULL) query.removed = json_array();
+    if (!JNOTNULL(query.added)) query.added = json_array();
+    if (!JNOTNULL(query.removed)) query.removed = json_array();
     json_decref(threadids); /* XXX threadIds is legacy */
     if (r == IMAP_SEARCH_MUTABLE) {
         jmap_error(req, json_pack("{s:s,s:s}", "type", "cannotCalculateChanges",
