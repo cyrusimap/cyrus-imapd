@@ -4961,7 +4961,7 @@ sub test_email_query_empty
     # See https://github.com/cyrusimap/cyrus-imapd/issues/2266
 
     my $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
-    $self->assert(exists $res->[0][1]->{ids});
+    $self->assert(ref($res->[0][1]->{ids}) eq 'ARRAY');
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 }
 
@@ -6153,8 +6153,10 @@ sub test_email_querychanges_thread
     $state = $res->[0][1]{newState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_null($res->[0][1]{added});
-    $self->assert_null($res->[0][1]{removed});
+    $self->assert(ref($res->[0][1]{added}) eq 'ARRAY');
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{added}});
+    $self->assert(ref($res->[0][1]{removed}) eq 'ARRAY');
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
