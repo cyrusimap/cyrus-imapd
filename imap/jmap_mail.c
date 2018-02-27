@@ -977,6 +977,12 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
                 json_boolean(rights & ACL_CREATE));
         json_object_set_new(jrights, "mayDelete",
                 json_boolean((rights & ACL_DELETEMBOX) && !is_inbox));
+        json_object_set_new(jrights, "maySubmit",
+                json_boolean(rights & ACL_POST));
+        json_object_set_new(jrights, "maySetSeen",
+                json_boolean(rights & ACL_SETSEEN));
+        json_object_set_new(jrights, "maySetKeywords",
+                json_boolean(rights & ACL_WRITE));
 
         int mayRename = 0;
         if (!is_inbox && (rights & ACL_DELETEMBOX)) {
@@ -7747,26 +7753,34 @@ struct msgupdate_checkacl_rock {
     json_t *newmailboxes;
     json_t *delmailboxes;
     json_t *oldmailboxes;
+    int set_keywords;
+    int set_seen;
 };
 
 static int msgupdate_checkacl_cb(const mbentry_t *mbentry, void *xrock)
 {
     struct msgupdate_checkacl_rock *rock = xrock;
-    int need_rights = 0, got_rights;
     const char *id = mbentry->uniqueid;
     jmap_req_t *req = rock->req;
 
+    /* Determine required ACL rights, if any */
+    int need_rights = 0;
     if (json_object_get(rock->newmailboxes, id))
-        need_rights |= ACL_INSERT|ACL_ANNOTATEMSG;
+        need_rights = ACL_INSERT|ACL_ANNOTATEMSG;
     else if (json_object_get(rock->delmailboxes, id))
-        need_rights |= ACL_DELETEMSG;
+        need_rights = ACL_DELETEMSG;
     else if (json_object_get(rock->oldmailboxes, id))
-        need_rights |= ACL_ANNOTATEMSG;
+        need_rights = ACL_ANNOTATEMSG;
 
     if (!need_rights)
         return 0;
 
-    got_rights = jmap_myrights(req, mbentry);
+    if (need_rights != ACL_DELETEMSG) {
+        if (rock->set_keywords) need_rights |= ACL_WRITE;
+        if (rock->set_seen) need_rights |= ACL_SETSEEN;
+    }
+
+    int got_rights = jmap_myrights(req, mbentry);
     if ((need_rights & got_rights) != need_rights)
         return IMAP_PERMISSION_DENIED;
 
@@ -8001,10 +8015,17 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         json_object_del(oldmailboxes, id);
     }
 
+
     /* Check mailbox ACL for shared accounts */
     if (strcmp(req->accountid, req->userid)) {
+        int set_seen =
+            (old_systemflags & FLAG_SEEN) != (new_systemflags & FLAG_SEEN);
+        int set_keywords =
+            ((old_systemflags & !FLAG_SEEN) != (new_systemflags & !FLAG_SEEN)) |
+            (user_flagnames.count != 0);
+
         struct msgupdate_checkacl_rock rock = {
-            req, newmailboxes, delmailboxes, oldmailboxes
+            req, newmailboxes, delmailboxes, oldmailboxes, set_seen, set_keywords
         };
         r = jmap_mboxlist(req, msgupdate_checkacl_cb, &rock);
         if (r) goto done;
