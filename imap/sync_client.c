@@ -379,9 +379,8 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
             report_verbose("  Deferred: QUOTA %s\n", action->name);
         }
         else if (r) {
-            /* XXX - bogus handling, should be user */
-            sync_action_list_add(mailbox_list, action->name, NULL);
-            report_verbose("  Promoting: QUOTA %s -> MAILBOX %s\n",
+            sync_action_list_add(user_list, action->name, NULL);
+            report_verbose("  Promoting: QUOTA %s -> USER %s\n",
                            action->name, action->name);
         }
     }
@@ -401,9 +400,8 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
             report_verbose("  Deferred: ANNOTATION %s\n", action->name);
         }
         else if (r) {
-            /* XXX - bogus handling, should be ... er, something */
-            sync_action_list_add(mailbox_list, action->name, NULL);
-            report_verbose("  Promoting: ANNOTATION %s -> MAILBOX %s\n",
+            sync_action_list_add(user_list, action->name, NULL);
+            report_verbose("  Promoting: ANNOTATION %s -> USER %s\n",
                            action->name, action->name);
         }
     }
