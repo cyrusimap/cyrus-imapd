@@ -83,6 +83,7 @@
 #include "xstrlcat.h"
 #include "signals.h"
 #include "cyrusdb.h"
+#include "hash.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -287,6 +288,50 @@ static int do_restart()
     return sync_parse_response("RESTART", sync_in, NULL);
 }
 
+struct split_user_mailboxes_rock {
+    struct sync_name_list *mboxname_list;
+    struct sync_action_list *user_list;
+    char **channelp;
+    unsigned flags;
+    int r;
+};
+
+static void split_user_mailboxes(const char *key __attribute__((unused)),
+                                 void *data,
+                                 void *rock)
+{
+    struct split_user_mailboxes_rock *smrock =
+        (struct split_user_mailboxes_rock *) rock;
+    struct sync_action_list *mailbox_list = (struct sync_action_list *) data;
+    struct sync_action *action;
+
+    for (action = mailbox_list->head; action; action = action->next) {
+        if (!action->active)
+            continue;
+
+        sync_name_list_add(smrock->mboxname_list, action->name);
+    }
+
+    if (smrock->mboxname_list->count >= 1000) {
+        syslog(LOG_NOTICE, "sync_mailboxes: doing %lu",
+                           smrock->mboxname_list->count);
+        smrock->r = do_sync_mailboxes(smrock->mboxname_list, smrock->user_list,
+                              (const char **) smrock->channelp, smrock->flags);
+        if (smrock->r) return;
+        smrock->r = do_restart();
+        if (smrock->r) return;
+        sync_name_list_free(&smrock->mboxname_list);
+        smrock->mboxname_list = sync_name_list_create();
+    }
+}
+
+/* need this lil wrapper for free_hash_table callback */
+static void sync_action_list_free_wrapper(void *p)
+{
+    struct sync_action_list *l = (struct sync_action_list *) p;
+    sync_action_list_free(&l);
+}
+
 /*
  *   channelp = NULL    => we're not processing a channel
  *   *channelp = NULL   => we're processing the default channel
@@ -297,16 +342,17 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
     struct sync_action_list *user_list = sync_action_list_create();
     struct sync_action_list *unuser_list = sync_action_list_create();
     struct sync_action_list *meta_list = sync_action_list_create();
-    struct sync_action_list *mailbox_list = sync_action_list_create();
     struct sync_action_list *unmailbox_list = sync_action_list_create();
     struct sync_action_list *quota_list = sync_action_list_create();
     struct sync_action_list *annot_list = sync_action_list_create();
     struct sync_action_list *seen_list = sync_action_list_create();
     struct sync_action_list *sub_list = sync_action_list_create();
-    struct sync_name_list *mboxname_list = sync_name_list_create();
+    hash_table user_mailboxes = HASH_TABLE_INITIALIZER;
     const char *args[3];
     struct sync_action *action;
     int r = 0;
+
+    construct_hash_table(&user_mailboxes, 1024 /* XXX */, 0);
 
     while (1) {
         r = sync_log_reader_getitem(slr, args);
@@ -320,10 +366,18 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
             sync_action_list_add(meta_list, NULL, args[1]);
         else if (!strcmp(args[0], "SIEVE"))
             sync_action_list_add(meta_list, NULL, args[1]);
-        else if (!strcmp(args[0], "APPEND")) /* just a mailbox event */
+        else if ((!strcmp(args[0], "APPEND")) /* just a mailbox event */
+                 || (!strcmp(args[0], "MAILBOX"))) {
+            char *userid = mboxname_to_userid(args[1]);
+            if (!userid) userid = ""; /* treat non-user mboxes as a single cohort */
+            struct sync_action_list *mailbox_list;
+            mailbox_list = hash_lookup(userid, &user_mailboxes);
+            if (!mailbox_list) {
+                mailbox_list = sync_action_list_create();
+                hash_insert(userid, mailbox_list, &user_mailboxes);
+            }
             sync_action_list_add(mailbox_list, args[1], NULL);
-        else if (!strcmp(args[0], "MAILBOX"))
-            sync_action_list_add(mailbox_list, args[1], NULL);
+        }
         else if (!strcmp(args[0], "UNMAILBOX"))
             sync_action_list_add(unmailbox_list, args[1], NULL);
         else if (!strcmp(args[0], "QUOTA"))
@@ -448,30 +502,28 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
         }
     }
 
-    /* XXX - need to process this in sets of users at a time, such that we never split
-     * on a user boundary.  This will require a data structure change to carry the list
-     * of mailboxes in per-user sets */
-    for (action = mailbox_list->head; action; action = action->next) {
-        if (!action->active)
-            continue;
+    if (hash_numrecords(&user_mailboxes)) {
+        struct split_user_mailboxes_rock smrock;
+        smrock.mboxname_list = sync_name_list_create();
+        smrock.user_list = user_list;
+        smrock.channelp = (char **) channelp; /* n.b. casting away constness bc struct */
+        smrock.flags = flags;
+        smrock.r = 0;
 
-        sync_name_list_add(mboxname_list, action->name);
-        /* only do up to 1000 mailboxes at a time */
-        if (mboxname_list->count > 1000) {
-            syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
-            r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
-            if (r) goto cleanup;
+        /* process user_mailboxes in sets of ~1000, splitting only on
+         * user boundaries */
+        hash_enumerate(&user_mailboxes, split_user_mailboxes, &smrock);
+        r = smrock.r;
+
+        /* process any stragglers (<1000 remaining) */
+        if (!r)
+            r = do_sync_mailboxes(smrock.mboxname_list, user_list, channelp, flags);
+        if (!r)
             r = do_restart();
-            if (r) goto cleanup;
-            sync_name_list_free(&mboxname_list);
-            mboxname_list = sync_name_list_create();
-        }
-    }
 
-    r = do_sync_mailboxes(mboxname_list, user_list, channelp, flags);
-    if (r) goto cleanup;
-    r = do_restart();
-    if (r) goto cleanup;
+        sync_name_list_free(&smrock.mboxname_list);
+        if (r) goto cleanup;
+    }
 
     /* XXX - is unmailbox used much anyway - we need to see if it's logged for a rename,
      * e.g.
@@ -547,13 +599,12 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
     sync_action_list_free(&user_list);
     sync_action_list_free(&unuser_list);
     sync_action_list_free(&meta_list);
-    sync_action_list_free(&mailbox_list);
     sync_action_list_free(&unmailbox_list);
     sync_action_list_free(&quota_list);
     sync_action_list_free(&annot_list);
     sync_action_list_free(&seen_list);
     sync_action_list_free(&sub_list);
-    sync_name_list_free(&mboxname_list);
+    free_hash_table(&user_mailboxes, sync_action_list_free_wrapper);
 
     return r;
 }
