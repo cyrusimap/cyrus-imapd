@@ -203,6 +203,7 @@ static int do_unmailbox(const char *mboxname, struct backend *sync_be,
     struct mailbox *mailbox = NULL;
     int r;
 
+    /* XXX - this should be looking for an explicit tombstone record locally */
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = sync_folder_delete(mboxname, sync_be, flags);
@@ -447,6 +448,9 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
         }
     }
 
+    /* XXX - need to process this in sets of users at a time, such that we never split
+     * on a user boundary.  This will require a data structure change to carry the list
+     * of mailboxes in per-user sets */
     for (action = mailbox_list->head; action; action = action->next) {
         if (!action->active)
             continue;
@@ -469,6 +473,15 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
     r = do_restart();
     if (r) goto cleanup;
 
+    /* XXX - is unmailbox used much anyway - we need to see if it's logged for a rename,
+     * e.g.
+     * RENAME A B:
+     *  MAILBOX A
+     *  MAILBOX B
+     *  UNMAILBOX A
+     *
+     * suggestion: PROMOTE ALL UNMAILBOX on user accounts to USER foo
+     */
     for (action = unmailbox_list->head; action; action = action->next) {
         if (!action->active)
             continue;

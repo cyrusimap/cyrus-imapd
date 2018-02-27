@@ -5659,6 +5659,9 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
         }
     }
 
+    /* XXX - sync_log_channel_user on any issue here rather than trying to solve,
+     * and remove all entries related to that user from both lists */
+
     /* Delete folders on server which no longer exist on client */
     if (flags & SYNC_FLAG_DELETE_REMOTE) {
         for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
