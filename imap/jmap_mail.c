@@ -5406,8 +5406,8 @@ static int getEmailsListUpdates(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            parse_msgfilter_cb, NULL,
-            parse_msgsort_cb, NULL,
+            parse_msgfilter_cb, req,
+            parse_msgsort_cb, req,
             &query, &err);
     if (err) {
         jmap_error(req, err);
