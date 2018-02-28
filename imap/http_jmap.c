@@ -1136,11 +1136,15 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     char *accountid = xstrndup(userid, strchr(userid, '/') - userid);
+    char *blobid = NULL;
+    char *ctype = NULL;
+    int res = 0;
 
     struct conversations_state *cstate = NULL;
     int r = conversations_open_user(accountid, &cstate);
     if (r) {
         txn->error.desc = error_message(r);
+        res = (r == IMAP_MAILBOX_BADNAME) ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR;
         goto done;
     }
 
@@ -1165,7 +1169,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     jmap_initreq(&req);
 
-    char *blobid = xstrndup(blobbase, bloblen);
+    blobid = xstrndup(blobbase, bloblen);
 
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
@@ -1173,9 +1177,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     char *decbuf = NULL;
-    char *ctype = NULL;
     strarray_t headers = STRARRAY_INITIALIZER;
-    int res = 0;
 
     /* Find part containing blob */
     r = _findblob(&req, blobid, accountid, &mbox, &mr, &body, &part);
