@@ -7814,7 +7814,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         /* Check if keywords are patched */
         int patch_keywords = 0;
         json_object_foreach(msg, field, val) {
-            if (strncmp(field, "/keywords/", 10)) {
+            if (strncmp(field, "keywords/", 9)) {
                 continue;
             }
             patch_keywords = 1;
@@ -7836,14 +7836,14 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
 
             /* Patch keywords */
             json_object_foreach(msg, field, val) {
-                if (strncmp(field, "/keywords/", 10)) {
+                if (strncmp(field, "keywords/", 9)) {
                     continue;
                 }
                 if (val == json_null()) {
-                    json_object_del(keywords, field + 10);
+                    json_object_del(keywords, field + 9);
                 }
                 else if (val == json_true()) {
-                    json_object_set(keywords, field + 10, json_true());
+                    json_object_set(keywords, field + 9, json_true());
                 }
                 else {
                     json_array_append_new(invalid, json_string(field));
@@ -7904,7 +7904,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         /* Check if mailboxIds are patched */
         int patch_mailboxids = 0;
         json_object_foreach(msg, field, val) {
-            if (strncmp(field, "/mailboxIds/", 12)) {
+            if (strncmp(field, "mailboxIds/", 11)) {
                 continue;
             }
             patch_mailboxids = 1;
@@ -7918,14 +7918,14 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
             }
             /* Patch mailboxIds */
             json_object_foreach(msg, field, val) {
-                if (strncmp(field, "/mailboxIds/", 12)) {
+                if (strncmp(field, "mailboxIds/", 11)) {
                     continue;
                 }
                 if (val == json_true()) {
-                    json_object_set(mailboxids, field + 12, json_true());
+                    json_object_set(mailboxids, field + 11, json_true());
                 }
                 else if (val == json_null()) {
-                    json_object_del(mailboxids, field + 12);
+                    json_object_del(mailboxids, field + 11);
                 }
                 else {
                     json_array_append_new(invalid, json_string(field));
