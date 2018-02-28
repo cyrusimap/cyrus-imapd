@@ -2055,12 +2055,42 @@ static void setmailboxes_read_args(jmap_req_t *req,
     /* role */
     if (JNOTNULL(json_object_get(jargs, "role"))) {
         pe = readprop(jargs, "role", is_create, invalid, "s", &args->role);
-        if (pe > 0 && (!is_create || !strcmp(args->role, "inbox"))) {
-            /* Roles are immutable and inbox must not be created */
-            json_array_append_new(invalid, json_string("role"));
+        if (pe > 0) {
+            int is_valid = 1;
+            if (!strcmp(args->role, "inbox")) {
+                /* inbox role is server-set */
+                is_valid = 0;
+            } else if (!strcmp(args->role, "archive")) {
+                args->specialuse = "\\Archive";
+            } else if (!strcmp(args->role, "drafts")) {
+                args->specialuse = "\\Drafts";
+            } else if (!strcmp(args->role, "spam")) {
+                args->specialuse = "\\Junk";
+            } else if (!strcmp(args->role, "sent")) {
+                args->specialuse = "\\Sent";
+            } else if (!strcmp(args->role, "trash")) {
+                args->specialuse = "\\Trash";
+            } else if (strncmp(args->role, "x-", 2)) {
+                /* Does it start with an "x-"? If not, reject it. */
+                is_valid = 0;
+            }
+            if (is_valid) {
+                char *exists = NULL;
+                if (args->specialuse) {
+                    /* Check that no such IMAP specialuse mailbox already exists. */
+                    exists = jmapmbox_find_specialuse(req, args->specialuse);
+                } else {
+                    /* Check that no mailbox with this x-role exists. */
+                    exists = jmapmbox_findxrole(req, args->role);
+                }
+                is_valid = exists == NULL;
+                free(exists);
+            }
+            if (!is_valid) {
+                json_array_append_new(invalid, json_string("role"));
+            }
         }
     }
-
     /* sortOrder */
     if (readprop(jargs, "sortOrder", 0, invalid, "i", &args->sortorder) > 0) {
         if (args->sortorder < 0 || args->sortorder >= INT_MAX) {
@@ -2192,41 +2222,6 @@ static int jmapmbox_create(jmap_req_t *req,
     rights = jmap_myrights(req, mbparent);
     if (!(rights & ACL_CREATE)) {
         json_array_append_new(invalid, json_string("parentId"));
-        goto done;
-    }
-
-    /* Sanity-check arguments */
-    if (args->role) {
-        /* Is it one of the known special use mailboxes? */
-        if (!strcmp(args->role, "archive")) {
-            args->specialuse = "\\Archive";
-        } else if (!strcmp(args->role, "drafts")) {
-            args->specialuse = "\\Drafts";
-        } else if (!strcmp(args->role, "spam")) {
-            args->specialuse = "\\Junk";
-        } else if (!strcmp(args->role, "sent")) {
-            args->specialuse = "\\Sent";
-        } else if (!strcmp(args->role, "trash")) {
-            args->specialuse = "\\Trash";
-        } else if (strncmp(args->role, "x-", 2)) {
-            /* Does it start with an "x-"? If not, reject it. */
-            json_array_append_new(invalid, json_string("role"));
-        }
-        char *exists = NULL;
-        if (args->specialuse) {
-            /* Check that no such IMAP specialuse mailbox already exists. */
-            exists = jmapmbox_find_specialuse(req, args->specialuse);
-        } else if (!json_array_size(invalid)) {
-            /* Check that no mailbox with this x-role exists. */
-            exists = jmapmbox_findxrole(req, args->role);
-        }
-        if (exists) {
-            json_array_append_new(invalid, json_string("role"));
-        }
-        free(exists);
-    }
-    if (json_array_size(invalid)) {
-        r = 0;
         goto done;
     }
 
