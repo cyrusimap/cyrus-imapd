@@ -5585,7 +5585,7 @@ static int getEmailsUpdates(jmap_req_t *req)
     json_object_set_new(res, "accountId", json_string(req->accountid));
     json_object_set_new(res, "oldState", oldstate);
     json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
+    json_object_set_new(res, "hasMoreChanges", json_boolean(has_more));
     json_object_set(res, "changed", changed);
     json_object_set(res, "destroyed", destroyed);
 
@@ -5708,7 +5708,7 @@ static int getThreadsUpdates(jmap_req_t *req)
     json_object_set_new(res, "accountId", json_string(req->accountid));
     json_object_set_new(res, "oldState", oldstate);
     json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
+    json_object_set_new(res, "hasMoreChanges", json_boolean(has_more));
     json_object_set(res, "changed", changed);
     json_object_set(res, "destroyed", destroyed);
 
@@ -9334,7 +9334,7 @@ static int getEmailSubmissionsUpdates(jmap_req_t *req)
     json_object_set_new(res, "accountId", json_string(req->accountid));
     json_object_set_new(res, "oldState", oldstate);
     json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreUpdates", json_false());
+    json_object_set_new(res, "hasMoreChanges", json_false());
     json_object_set_new(res, "changed", json_null());
     json_object_set_new(res, "destroyed", json_null());
 
