@@ -1771,6 +1771,19 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
     change->record = *record;
     change->flags = flags;
 
+    if (mailbox_cacherecord(mailbox, record)) {
+        /* failed to load cache record */
+        change->msgid = xstrdup("unknown");
+    }
+    else {
+        char *c_env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
+                               cacheitem_size(record, CACHE_ENVELOPE) - 2);
+        char *envtokens[NUMENVTOKENS];
+        parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
+        change->msgid = xstrdup(envtokens[ENV_MSGID]);
+        free(c_env);
+    }
+
     annotate_state_t *astate = NULL;
     int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
     if (r) return r;
@@ -1817,12 +1830,13 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         char flagstr[FLAGMAPSTR_MAXLEN];
         flags_to_str(record->system_flags, flagstr);
         if (change->flags & CHANGE_ISAPPEND)
+            /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
-                   "sysflags=<%s> guid=<%s>",
+                   "sysflags=<%s> guid=<%s> messageid=%s",
                    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
                    record->modseq, flagstr,
-                   message_guid_encode(&record->guid));
+                   message_guid_encode(&record->guid), change->msgid);
 
         if ((record->system_flags & FLAG_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
@@ -1846,6 +1860,10 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
 static void _cleanup_changes(struct mailbox *mailbox)
 {
+    uint32_t i;
+    for (i = 0; i < mailbox->index_change_count; i++) {
+        free(mailbox->index_changes[i].msgid);
+    }
     free(mailbox->index_changes);
     mailbox->index_changes = NULL;
     mailbox->index_change_count = 0;

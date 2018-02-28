@@ -214,6 +214,7 @@ struct index_header {
 
 struct index_change {
     struct index_record record;
+    char *msgid;
     uint32_t mapnext;
     uint32_t flags;
 };
