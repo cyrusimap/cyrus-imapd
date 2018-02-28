@@ -1421,7 +1421,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
@@ -1440,7 +1440,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -1462,7 +1462,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -1482,7 +1482,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -1509,7 +1509,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
@@ -1520,7 +1520,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -1531,7 +1531,7 @@ sub test_mailbox_changes
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
@@ -5935,7 +5935,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -5951,7 +5951,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -5961,7 +5961,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -5975,7 +5975,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -5989,7 +5989,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
@@ -5999,7 +5999,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -6033,7 +6033,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idb, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6043,7 +6043,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($idc, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6053,7 +6053,7 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 }
@@ -6299,7 +6299,7 @@ sub test_email_changes_shared
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -6311,7 +6311,7 @@ sub test_email_changes_shared
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
@@ -6325,7 +6325,7 @@ sub test_email_changes_shared
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -6336,7 +6336,7 @@ sub test_email_changes_shared
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
@@ -6349,7 +6349,7 @@ sub test_email_changes_shared
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
@@ -6675,7 +6675,7 @@ EOF
 
     xlog "get thread updates";
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, fetchRecords => $JSON::true }, "R1"]]);
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
 }
 
 sub test_thread_get_updates
@@ -6714,7 +6714,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -6728,7 +6728,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_null($res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
@@ -6744,7 +6744,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6754,7 +6754,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 
@@ -6778,7 +6778,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_not_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6789,7 +6789,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, maxChanges => 2 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6825,7 +6825,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
@@ -6845,7 +6845,7 @@ sub test_thread_get_updates
     ]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_null($res->[0][1]{destroyed});
@@ -6865,7 +6865,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($threadA, $res->[0][1]{destroyed}[0]);
@@ -6875,7 +6875,7 @@ sub test_thread_get_updates
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
-    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreUpdates});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_null($res->[0][1]{changed});
     $self->assert_null($res->[0][1]{destroyed});
 }
