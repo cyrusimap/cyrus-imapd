@@ -400,7 +400,7 @@ static void jmap_get_parse(json_t *jargs,
              * it. But re-checking creation ids for their existence
              * later in the control flow just shifts the problem */
             if (*id == '#') {
-                const char *id2 = hash_lookup(id, creation_ids);
+                const char *id2 = hash_lookup(id+1, creation_ids);
                 if (!id2) {
                     json_array_append_new(get->not_found, json_string(id));
                     continue;
@@ -6070,121 +6070,68 @@ done:
 
 static int getEmails(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *list = json_pack("[]");
-    json_t *notfound = json_pack("[]");
-    json_t *invalid = json_pack("[]");
-    size_t i;
-    json_t *ids, *val, *properties, *res, *item;
-    hash_table *props = NULL;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
 
-    /* ids */
-    ids = json_object_get(req->args, "ids");
-    json_array_foreach(ids, i, val) {
-        if (json_typeof(val) != JSON_STRING) {
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "ids[%llu]", (unsigned long long) i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-            continue;
-        }
-    }
-    if (!json_is_array(ids)) {
-        json_array_append_new(invalid, json_string("ids"));
-    }
-
-    /* properties */
-    properties = json_object_get(req->args, "properties");
-    if (properties && json_array_size(properties)) {
-        props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(props, json_array_size(properties) + 1, 0);
-        json_array_foreach(properties, i, val) {
-            if (json_string_value(val)) {
-                hash_insert(json_string_value(val), (void*)1, props);
-            }
-        }
-    }
-
-    /* Bail out for any property errors. */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, &req->idmap->messages, &get, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
-    /* Lookup and convert ids */
-    json_array_foreach(ids, i, val) {
+    /* Refuse to fetch *all* Email */
+    if (!JNOTNULL(get.ids)) {
+        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
+        goto done;
+    }
+
+    size_t i;
+    json_t *val;
+    json_array_foreach(get.ids, i, val) {
         const char *id = json_string_value(val);
         char *mboxname = NULL;
         msgrecord_t *mr = NULL;
-        uint32_t uid;
         json_t *msg = NULL;
         struct mailbox *mbox = NULL;
 
-        if (id[0] == '#') {
-            const char *newid = hash_lookup(id + 1, &req->idmap->messages);
-            if (!newid) {
-                r = IMAP_NOTFOUND;
-                goto doneloop;
+        uint32_t uid;
+        int r = jmapmsg_find(req, id, &mboxname, &uid);
+        if (!r) {
+            r = jmap_openmbox(req, mboxname, &mbox, 0);
+            if (!r) {
+                r = msgrecord_find(mbox, uid, &mr);
+                if (!r) {
+                    r = jmapmsg_from_record(req, get.props, mr, &msg);
+                }
+                jmap_closembox(req, &mbox);
             }
-            id = newid;
+        }
+        if (!r && msg) {
+            json_array_append_new(get.list, msg);
+        }
+        else {
+            json_array_append_new(get.not_found, json_string(id));
+        }
+        if (r) {
+            syslog(LOG_ERR, "Email/get(%s): %s", id, error_message(r));
         }
 
-        r = jmapmsg_find(req, id, &mboxname, &uid);
-        if (r) goto doneloop;
-
-        r = jmap_openmbox(req, mboxname, &mbox, 0);
-        if (r) goto done;
-
-        r = msgrecord_find(mbox, uid, &mr);
-        if (!r) jmapmsg_from_record(req, props, mr, &msg);
-
-        jmap_closembox(req, &mbox);
-
-doneloop:
-        if (r == IMAP_NOTFOUND) {
-            json_array_append_new(notfound, json_string(id));
-            r = 0;
-            continue;
-        }
-        if (mboxname) free(mboxname);
-        if (msg) {
-            json_array_append_new(list, msg);
-        } else {
-            json_array_append_new(notfound, json_string(id));
-        }
-        if (mr) msgrecord_unref(&mr);
-        if (r) goto done;
+        free(mboxname);
+        msgrecord_unref(&mr);
     }
 
-    if (!json_array_size(notfound)) {
-        json_decref(notfound);
-        notfound = json_null();
-    }
+    json_t *jstate = jmap_getstate(req, 0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    res = json_pack("{}");
-    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set(res, "list", list);
-    json_object_set(res, "notFound", notfound);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/get"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    if (props) {
-        free_hash_table(props, NULL);
-        free(props);
-    }
-    json_decref(list);
-    json_decref(notfound);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
 }
 
 static int validate_emailer(json_t *emailer,
