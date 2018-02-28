@@ -75,14 +75,14 @@ sub uniq {
 
 sub getinbox
 {
-    my ($self, %args) = @_;
+    my ($self, $args) = @_;
 
-    %args = {} unless %args;
+    $args = {} unless $args;
 
     my $jmap = $self->{jmap};
 
     xlog "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', \%args, "R1"]]);
+    my $res = $jmap->CallMethods([['Mailbox/get', $args, "R1"]]);
     $self->assert_not_null($res);
 
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
@@ -238,12 +238,12 @@ sub test_mailbox_get_properties
     xlog "get mailboxes with erroneous property";
     $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name", 123]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
 
     my $err = $res->[0][1];
-    $self->assert_str_equals($err->{type}, "invalidArguments");
-    $self->assert_str_equals($err->{arguments}[0], "properties");
+    $self->assert_str_equals("invalidArguments", $err->{type});
+    $self->assert_str_equals("properties[1]", $err->{arguments}[0]);
 }
 
 sub test_mailbox_get_ids
@@ -276,12 +276,12 @@ sub test_mailbox_get_ids
     xlog "get mailbox with erroneous id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [123]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'error');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
 
     my $err = $res->[0][1];
-    $self->assert_str_equals($err->{type}, "invalidArguments");
-    $self->assert_str_equals($err->{arguments}[0], "ids");
+    $self->assert_str_equals('invalidArguments', $err->{type});
+    $self->assert_str_equals('ids[0]', $err->{arguments}[0]);
 }
 
 sub test_mailbox_get_nocalendars
@@ -6965,7 +6965,7 @@ EOF
     my $data = $jmap->Upload($email, "message/rfc822", "foo");
     my $blobid = $data->{blobId};
 
-    my $mboxid = $self->getinbox(accountId => 'foo')->{id};
+    my $mboxid = $self->getinbox({accountId => 'foo'})->{id};
 
     my $req = ['Email/import', {
                 accountId => 'foo',
