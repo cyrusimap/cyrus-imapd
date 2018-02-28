@@ -3849,6 +3849,45 @@ sub test_email_set_update
     $self->assert_deep_equals($draft->{keywords}, $msg->{keywords});
 }
 
+sub test_email_set_seen
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2270
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Add message";
+    $self->make_message('Message A');
+
+    xlog "Query email";
+    my $inbox = $self->getinbox();
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { inMailbox => $inbox->{id} }
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+        }, 'R2' ]
+    ]);
+
+    my $keywords = { };
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_deep_equals($keywords, $msg->{keywords});
+
+    $keywords->{'$Seen'} = JSON::true;
+    $res = $jmap->CallMethods([
+        ['Email/set', { update => { $msg->{id} => { 'keywords/$Seen' => JSON::true } } }, 'R1'],
+        ['Email/get', { ids => [ $msg->{id} ] }, 'R2'],
+    ]);
+    $msg = $res->[1][1]->{list}[0];
+    $self->assert_deep_equals($keywords, $msg->{keywords});
+}
+
 sub test_email_set_destroy
     :JMAP :min_version_3_1
 {
@@ -7139,8 +7178,8 @@ sub test_email_set_patch
         ['Email/set', {
             update => {
                 $id => {
-                    "/keywords/foo" => undef,
-                    "/keywords/bar" => JSON::true,
+                    "keywords/foo" => undef,
+                    "keywords/bar" => JSON::true,
                 }
             }
         }, "R1"],
@@ -7162,8 +7201,8 @@ sub test_email_set_patch
         ['Email/set', {
             update => {
                 $id => {
-                    "/mailboxIds/$inboxid" => undef,
-                    "/mailboxIds/$mboxid" => JSON::true,
+                    "mailboxIds/$inboxid" => undef,
+                    "mailboxIds/$mboxid" => JSON::true,
                 }
             }
         }, "R1"],
