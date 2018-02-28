@@ -400,7 +400,10 @@ static void jmap_get_parse(json_t *jargs,
              * it. But re-checking creation ids for their existence
              * later in the control flow just shifts the problem */
             if (*id == '#') {
-                const char *id2 = hash_lookup(id+1, creation_ids);
+                const char *id2 = NULL;
+                if (creation_ids)  {
+                    id2 = hash_lookup(id+1, creation_ids);
+                }
                 if (!id2) {
                     json_array_append_new(get->not_found, json_string(id));
                     continue;
@@ -5955,18 +5958,15 @@ done:
     return r;
 }
 
-static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
-                           json_t **threads, json_t **notfound)
+static int jmapmsg_threads(jmap_req_t *req, json_t *ids,
+                           json_t *list, json_t *not_found)
 {
     conversation_t *conv = NULL;
     json_t *val;
     size_t i;
     int r = 0;
 
-    *threads = json_pack("[]");
-    *notfound = json_pack("[]");
-
-    json_array_foreach(threadids, i, val) {
+    json_array_foreach(ids, i, val) {
         conversation_id_t cid = 0;
         conv_thread_t *thread;
 
@@ -5976,7 +5976,7 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         if (cid) r = conversation_load(req->cstate, cid, &conv);
         if (r) goto done;
         if (!conv) {
-            json_array_append_new(*notfound, json_string(threadid));
+            json_array_append_new(not_found, json_string(threadid));
             continue;
         }
 
@@ -5988,84 +5988,54 @@ static int jmapmsg_threads(jmap_req_t *req, json_t *threadids,
         }
 
         json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "emailIds", ids);
-        json_array_append_new(*threads, jthread);
+        json_array_append_new(list, jthread);
 
         conversation_free(conv);
         conv = NULL;
-    }
-
-    if (!json_array_size(*notfound)) {
-        json_decref(*notfound);
-        *notfound = json_null();
     }
 
     r = 0;
 
 done:
     if (conv) conversation_free(conv);
-    if (r) {
-        json_decref(*threads);
-        *threads = NULL;
-        json_decref(*notfound);
-        *notfound = NULL;
-    }
-
     return r;
 }
 
 static int getThreads(jmap_req_t *req)
 {
-    int r;
-    json_t *res, *item, *val, *threadids, *threads, *notfound;
-    const char *s;
-    struct buf buf = BUF_INITIALIZER;
-    size_t i;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-
-    /* ids */
-    threadids = json_object_get(req->args, "ids");
-    json_array_foreach(threadids, i, val) {
-        if (!(s = json_string_value(val)) || !strlen(s)) {
-            buf_printf(&buf, "ids[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-    if (JNOTNULL(threadids) && !json_is_array(threadids)) {
-        json_array_append_new(invalid, json_string("ids"));
-    }
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    /* Refuse to fetch *all* Threads */
+    if (!JNOTNULL(get.ids)) {
+        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
+        goto done;
+    }
 
     /* Find threads */
-    r = jmapmsg_threads(req, threadids, &threads, &notfound);
-    if (r) goto done;
+    int r = jmapmsg_threads(req, get.ids, get.list, get.not_found);
+    if (r) {
+        syslog(LOG_ERR, "jmap: Thread/get: %s", error_message(r));
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        goto done;
+    }
 
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "state", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "list", threads);
-    json_object_set_new(res, "notFound", notfound);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Thread/get"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    json_t *jstate = jmap_getstate(req, 0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    buf_free(&buf);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
 }
 
 static int getEmails(jmap_req_t *req)
@@ -6115,7 +6085,7 @@ static int getEmails(jmap_req_t *req)
             json_array_append_new(get.not_found, json_string(id));
         }
         if (r) {
-            syslog(LOG_ERR, "Email/get(%s): %s", id, error_message(r));
+            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
         }
 
         free(mboxname);
