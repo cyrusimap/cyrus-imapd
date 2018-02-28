@@ -8486,174 +8486,148 @@ done:
 
 static int importEmails(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *res, *item, *msgs, *msg, *created, *notcreated;
-    json_t *invalid, *invalidmbox;
-    struct buf buf = BUF_INITIALIZER;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *created = json_pack("{}");
+    json_t *not_created = json_pack("{}");
+
+    json_t *emails = json_object_get(req->args, "emails");
     const char *id;
+    json_t *eimp;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-    invalidmbox = json_pack("[]");
-
-    /* Import messages */
-    created = json_pack("{}");
-    notcreated = json_pack("{}");
-
-    /* messages */
-    msgs = json_object_get(req->args, "emails");
-    json_object_foreach(msgs, id, msg) {
-        const char *prefix;
-        size_t i;
+    /* Parse request */
+    json_object_foreach(emails, id, eimp) {
         json_t *val;
         const char *s;
 
-        buf_printf(&buf, "emails[%s]", id);
-        prefix = buf_cstring(&buf);
+        jmap_parser_push(&parser, "emails");
 
-        json_t *keywords = NULL;
-        if (readprop_full(msg, prefix, "keywords", 0, invalid, "o", &keywords) > 0) {
-            json_array_foreach(keywords, i, val) {
-                const char *kw = json_string_value(val);
-                if (val != json_true() || !kw || !is_valid_keyword(kw)) {
-                    buf_printf(&buf, "keywords[%s]", kw);
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
+        /* blobId */
+        s = json_string_value(json_object_get(eimp, "blobId"));
+        if (!s) {
+            jmap_parser_invalid(&parser, "blobId");
+        }
+
+        /* keywords */
+        json_t *keywords = json_object_get(eimp, "keywords");
+        if (json_is_object(keywords)) {
+            json_t *val;
+            jmap_parser_push(&parser, "keywords");
+            json_object_foreach(keywords, s, val) {
+                if (val != json_true() || !is_valid_keyword(s)) {
+                    jmap_parser_invalid(&parser, s);
                 }
             }
+            jmap_parser_pop(&parser);
+        }
+        else if (JNOTNULL(keywords)) {
+            jmap_parser_invalid(&parser, "keywords");
         }
 
-        int pe = readprop_full(msg, prefix, "receivedAt", 0, invalid, "s", &s);
-        if (pe > 0) {
+        /* receivedAt */
+        json_t *jrecv = json_object_get(eimp, "receivedAt");
+        if (json_is_string(jrecv)) {
             struct tm date;
-            const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &date);
-            if (!p || *p) {
-                char *tmp = strconcat(prefix, ".date", (char *)NULL);
-                json_array_append_new(invalid, json_string(tmp));
-                free(tmp);
+            s = strptime(json_string_value(jrecv), "%Y-%m-%dT%H:%M:%SZ", &date);
+            if (!s || *s) {
+                jmap_parser_invalid(&parser, "receivedAt");
             }
         }
-        json_object_foreach(json_object_get(msg, "mailboxIds"), id, val) {
-            char *name = NULL;
-            const char *mboxid = id;
-            if (mboxid && *mboxid == '#') {
-                mboxid = hash_lookup(mboxid + 1, &req->idmap->mailboxes);
-            }
-            if (!mboxid || !(name = jmapmbox_find_uniqueid(req, mboxid))) {
-                buf_printf(&buf, ".mailboxIds{%s}", id);
-                json_array_append_new(invalidmbox, json_string(buf_cstring(&buf)));
-            }
-            free(name);
-        }
-        if (json_object_size(json_object_get(msg, "mailboxIds")) == 0) {
-            buf_printf(&buf, ".mailboxIds");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        else if (JNOTNULL(jrecv)) {
+            jmap_parser_invalid(&parser, "receivedAt");
         }
 
-        buf_reset(&buf);
+        json_t *mboxids = json_object_get(eimp, "mailboxIds");
+        if (json_object_size(mboxids)) {
+            jmap_parser_push(&parser, "mailboxIds");
+            json_object_foreach(mboxids, s, val) {
+                const char *mboxid = s;
+                if (*mboxid == '#') {
+                    mboxid = hash_lookup(mboxid + 1, &req->idmap->mailboxes);
+                }
+                char *mboxname = jmapmbox_find_uniqueid(req, mboxid);
+                if (!mboxid || !mboxname || val != json_true()) {
+                    jmap_parser_invalid(&parser, s);
+                }
+                free(mboxname);
+            }
+            jmap_parser_pop(&parser);
+        }
+        else {
+            jmap_parser_invalid(&parser, "mailboxIds");
+        }
+
+        jmap_parser_pop(&parser); /* emails */
     }
-    if (!json_object_size(msgs)) {
-        json_array_append_new(invalid, json_string("emails"));
+    if (!json_is_object(emails)) {
+        jmap_parser_invalid(&parser, "emails");
     }
 
-    /* Bail out for argument */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Bail out for argument errors */
+    if (json_array_size(parser.invalid)) {
+        jmap_error(req, json_pack("{s:s, s:O}",
+                "type", "invalidArguments", "arguments", parser.invalid));
         goto done;
     }
-    json_decref(invalid);
 
-    /* Bail out for mailbox errors */
-    if (json_array_size(invalidmbox)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                "type", "invalidMailboxes", "mailboxes", invalidmbox);
-        json_array_append_new(req->response,
-                json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    json_decref(invalidmbox);
-
-    json_object_foreach(msgs, id, msg) {
-        json_t *mymsg;
-
-        r = jmapmsg_import(req, msg, &mymsg);
+    /* Process request */
+    json_object_foreach(emails, id, eimp) {
+        json_t *email;
+        int r = jmapmsg_import(req, eimp, &email);
         if (r) {
-            /* Try to handle the error gracefully */
-            const char *err = NULL;
+            const char *errtyp = NULL;
             switch (r) {
                 case IMAP_NOTFOUND:
-                    err = "attachmentNotFound";
+                    errtyp = "attachmentNotFound";
                     break;
                 case IMAP_PERMISSION_DENIED:
-                    err = "forbidden";
+                    errtyp = "forbidden";
                     break;
                 case IMAP_MAILBOX_EXISTS:
-                    err = "emailExists";
+                    errtyp = "emailExists";
                     break;
                 case IMAP_QUOTA_EXCEEDED:
-                    err = "maxQuotaReached";
+                    errtyp = "maxQuotaReached";
                     break;
                 case IMAP_MESSAGE_CONTAINSNULL:
-                    err = "emailContainsNulByte";
+                    errtyp = "emailContainsNulByte";
                     break;
                 case IMAP_MESSAGE_CONTAINSNL:
-                    err = "emailContainsBareNewlines";
+                    errtyp = "emailContainsBareNewlines";
                     break;
                 case IMAP_MESSAGE_CONTAINS8BIT:
-                    err = "emailContainsNonASCIIHeader";
+                    errtyp = "emailContainsNonASCIIHeader";
                     break;
                 case IMAP_MESSAGE_BADHEADER:
-                    err = "emailContainsInvalidHeader";
+                    errtyp = "emailContainsInvalidHeader";
                     break;
                 case IMAP_MESSAGE_NOBLANKLINE:
-                    err = "emailHasNoHeaderBodySeparator";
+                    errtyp = "emailHasNoHeaderBodySeparator";
                     break;
+                default:
+                    errtyp = "serverError";
             }
-            if (err) {
-                json_object_set_new(notcreated, id, json_pack("{s:s}", "type", err));
-                r = 0;
-                continue;
-            }
-            /* Any other error is fatal */
-            goto done;
+            syslog(LOG_ERR, "jmap: Email/import(%s): %s", id, error_message(r));
+            json_object_set_new(not_created,
+                    id, json_pack("{s:s}", "type", errtyp));
+            continue;
         }
-        json_object_set_new(created, id, mymsg);
+        json_object_set_new(created, id, email);
 
-        char *mymsgid = xstrdupnull(json_string_value(json_object_get(mymsg, "id")));
-        hash_insert(id, mymsgid, &req->idmap->messages); /* idmap takes ownership */
+        const char *newmsgid = json_string_value(json_object_get(email, "id"));
+        hash_insert(id, xstrdup(newmsgid), &req->idmap->messages);
     }
 
-    if (!json_object_size(created)) {
-        json_decref(created);
-        created = json_null();
-    }
-    if (!json_object_size(notcreated)) {
-        json_decref(notcreated);
-        notcreated = json_null();
-    }
-
-    /* Prepare the response */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set(res, "created", created);
-    json_object_set(res, "notCreated", notcreated);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/import"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Reply */
+    jmap_ok(req, json_pack("{s:s s:O s:O}",
+                "accountId", req->accountid,
+                "created", created,
+                "notCreated", not_created));
 
 done:
+    jmap_parser_fini(&parser);
     json_decref(created);
-    json_decref(notcreated);
-    buf_free(&buf);
-    return r;
+    json_decref(not_created);
+    return 0;
 }
 
 static int getIdentities(jmap_req_t *req)
