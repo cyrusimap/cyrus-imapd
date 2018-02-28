@@ -8658,40 +8658,19 @@ done:
 
 static int getIdentities(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *res, *item, *val, *ids, *notfound, *identities, *me;
-    struct buf buf = BUF_INITIALIZER;
-    const char *s;
-    size_t i;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-
-    /* ids */
-    ids = json_object_get(req->args, "ids");
-    json_array_foreach(ids, i, val) {
-        if (!(s = json_string_value(val)) || !strlen(s)) {
-            buf_printf(&buf, "ids[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-    }
-    if (JNOTNULL(ids) && !json_is_array(ids)) {
-        json_array_append_new(invalid, json_string("ids"));
-    }
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
-    notfound = json_pack("[]");
-    identities = json_pack("[]");
-
-    me = json_pack("{s:s s:s s:s s:b}",
+    /* Build response */
+    json_t *me = json_pack("{s:s s:s s:s s:b}",
             "id", req->userid,
             "name", "",
             "email", req->userid,
@@ -8699,38 +8678,29 @@ static int getIdentities(jmap_req_t *req)
     if (!strchr(req->userid, '@')) {
         json_object_set_new(me, "email", json_string(""));
     }
-
-    /* Build the identities */
-    if (json_array_size(ids)) {
-        json_array_foreach(ids, i, val) {
+    if (json_array_size(get.ids)) {
+        size_t i;
+        json_t *val;
+        json_array_foreach(get.ids, i, val) {
             if (strcmp(json_string_value(val), req->userid)) {
-                json_array_append(notfound, val);
+                json_array_append(get.not_found, val);
             }
             else {
-                json_array_append(identities, me);
+                json_array_append(get.list, me);
             }
         }
-    } else if (!JNOTNULL(ids)) {
-        json_array_append(identities, me);
+    } else if (!JNOTNULL(get.ids)) {
+        json_array_append(get.list, me);
     }
     json_decref(me);
 
-    /* Prepare the response */
-    res = json_pack("{}");
-    json_object_set_new(res, "state", json_string("0"));
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "list", identities);
-    json_object_set_new(res, "notFound", notfound);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Identity/get"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Reply */
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    buf_free(&buf);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
 }
 
 static int validate_address(json_t *addr, const char *prefix, json_t *invalid)
