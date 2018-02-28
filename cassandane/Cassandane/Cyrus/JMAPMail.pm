@@ -999,23 +999,24 @@ sub test_mailbox_set_role
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "x-bam");
 
-    xlog "update of a mailbox role is always an error";
+    xlog "update of mailbox role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { update => { "$id" => {
                             role => "x-baz"
              }}}, "R1"]
     ]);
-    $errType = $res->[0][1]{notUpdated}{$id}{type};
-    $errProp = $res->[0][1]{notUpdated}{$id}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
-    $self->assert_deep_equals($errProp, [ "role" ]);
+    $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "try to create another mailbox with the x-bam role";
+    xlog "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "x-baz");
+
+    xlog "try to create another mailbox with the x-baz role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "bar",
                             parentId => $inbox->{id},
-                            role => "x-bam"
+                            role => "x-baz"
              }}}, "R1"]
     ]);
     $errType = $res->[0][1]{notCreated}{"1"}{type};
