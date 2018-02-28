@@ -154,6 +154,17 @@ struct jmap_get {
     json_t *not_found;
 };
 
+struct jmap_changes {
+    /* Request arguments */
+    const char *since_state;
+    size_t max_changes;
+    /* Response fields */
+    char *new_state;
+    short has_more_changes;
+    json_t *changed;
+    json_t *destroyed;
+};
+
 struct jmap_query {
     /* Request arguments */
     json_t *filter;
@@ -469,6 +480,61 @@ static json_t *jmap_get_reply(struct jmap_get *get)
     return res;
 }
 
+/* Foo/changes */
+
+static void jmap_changes_parse(json_t *jargs,
+                               struct jmap_parser *parser,
+                               struct jmap_changes *changes,
+                               json_t **err)
+{
+    memset(changes, 0, sizeof(struct jmap_changes));
+    changes->changed = json_array();
+    changes->destroyed = json_array();
+
+    /* sinceState */
+    json_t *arg = json_object_get(jargs, "sinceState");
+    if (json_is_string(arg)) {
+        changes->since_state = json_string_value(arg);
+    } else {
+        jmap_parser_invalid(parser, "sinceState");
+    }
+
+    /* maxChanges */
+    arg = json_object_get(jargs, "maxChanges");
+    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+        changes->max_changes = json_integer_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "maxChanges");
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+static void jmap_changes_fini(struct jmap_changes *changes)
+{
+    free(changes->new_state);
+    json_decref(changes->changed);
+    json_decref(changes->destroyed);
+}
+
+static json_t* jmap_changes_reply(struct jmap_changes *changes)
+{
+    json_t *res = json_object();
+    json_object_set_new(res, "oldState", json_string(changes->since_state));
+    json_object_set_new(res, "newState", json_string(changes->new_state));
+    json_object_set_new(res, "hasMoreChanges",
+            json_boolean(changes->has_more_changes));
+    json_object_set(res, "changed", json_array_size(changes->changed) ?
+            changes->changed : json_null());
+    json_object_set(res, "destroyed", json_array_size(changes->destroyed) ?
+            changes->destroyed : json_null());
+    return res;
+}
+
+
 /* Foo/query */
 
 static void jmap_query_parse(json_t *jargs,
@@ -648,7 +714,7 @@ static void jmap_querychanges_parse(json_t *jargs,
 
     /* maxChanges */
     arg = json_object_get(jargs, "maxChanges");
-    if (json_is_integer(arg)) {
+    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
         query->max_changes = json_integer_value(arg);
     } else if (JNOTNULL(arg)) {
         jmap_parser_invalid(parser, "maxChanges");
@@ -2737,7 +2803,7 @@ done:
 struct jmapmbox_getupdates_data {
     json_t *changed;        /* maps mailbox ids to {id:foldermodseq} */
     json_t *destroyed;      /* maps mailbox ids to {id:foldermodseq} */
-    modseq_t sincemodseq;
+    modseq_t since_modseq;
     int *only_counts_changed;
     jmap_req_t *req;
 };
@@ -2766,7 +2832,7 @@ static int jmapmbox_getupdates_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Ignore old changes */
-    if (mbmodseq <= data->sincemodseq) {
+    if (mbmodseq <= data->since_modseq) {
         return 0;
     }
 
@@ -2789,7 +2855,7 @@ static int jmapmbox_getupdates_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Did any of the mailbox metadata change? */
-    if (mbentry->foldermodseq > data->sincemodseq) {
+    if (mbentry->foldermodseq > data->since_modseq) {
         *(data->only_counts_changed) = 0;
     }
 
@@ -2822,10 +2888,9 @@ static int jmapmbox_getupdates_cmp(const void **pa, const void **pb)
     return 0;
 }
 
-static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
-                               size_t limit,
-                              json_t **changed, json_t **destroyed,
-                               int *has_more, json_t **newstate,
+static int jmapmbox_getupdates(jmap_req_t *req,
+                               modseq_t since_modseq,
+                               struct jmap_changes *changes,
                                int *only_counts_changed)
 {
     *only_counts_changed = 1;
@@ -2834,7 +2899,7 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
     struct jmapmbox_getupdates_data data = {
         json_pack("{}"),
         json_pack("{}"),
-        sincemodseq,
+        since_modseq,
         only_counts_changed,
         req
     };
@@ -2858,17 +2923,15 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
     ptrarray_sort(&updates, jmapmbox_getupdates_cmp);
 
     /* Build result */
-    *changed = json_pack("[]");
-    *destroyed = json_pack("[]");
-    *has_more = 0;
+    changes->has_more_changes = 0;
     windowmodseq = 0;
     for (i = 0; i < updates.count; i++) {
         json_t *update = ptrarray_nth(&updates, i);
         const char *id = json_string_value(json_object_get(update, "id"));
         modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
 
-        if (limit && ((size_t) i) >= limit) {
-            *has_more = 1;
+        if (changes->max_changes && ((size_t) i) >= changes->max_changes) {
+            changes->has_more_changes = 1;
             break;
         }
 
@@ -2876,25 +2939,21 @@ static int jmapmbox_getupdates(jmap_req_t *req, modseq_t sincemodseq,
             windowmodseq = modseq;
 
         if (json_object_get(data.changed, id)) {
-            json_array_append_new(*changed, json_string(id));
+            json_array_append_new(changes->changed, json_string(id));
         } else {
-            json_array_append_new(*destroyed, json_string(id));
+            json_array_append_new(changes->destroyed, json_string(id));
         }
     }
 
-    if (!json_array_size(*changed) && !json_array_size(*destroyed)) {
+    if (!json_array_size(changes->changed) && !json_array_size(changes->destroyed)) {
         *only_counts_changed = 0;
     }
-    *newstate = jmap_fmtstate(*has_more ? windowmodseq : jmap_highestmodseq(req, 0/*mbtype*/));
 
-    if (!json_array_size(*changed)) {
-        json_decref(*changed);
-        *changed = json_null();
-    }
-    if (!json_array_size(*destroyed)) {
-        json_decref(*destroyed);
-        *destroyed = json_null();
-    }
+    modseq_t next_modseq = changes->has_more_changes ?
+        windowmodseq : jmap_highestmodseq(req, 0);
+    json_t *jstate = jmap_fmtstate(next_modseq);
+    changes->new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
 done:
     if (data.changed) json_decref(data.changed);
@@ -2905,63 +2964,47 @@ done:
 
 static int getMailboxesUpdates(jmap_req_t *req)
 {
-    int r = 0, pe;
-    int has_more = 0, only_counts_changed = 0;
-    json_t *changed, *destroyed, *invalid, *item, *res;
-    json_int_t max_changes = 0;
-    json_t *oldstate, *newstate;
-    const char *since;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    json_t *err = NULL;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
-    }
-    /* maxChanges */
-    pe = readprop(req->args, "maxChanges", 0, invalid, "I", &max_changes);
-    if (pe > 0 && max_changes < 0) {
-        json_array_append_new(invalid, json_string("maxChanges"));
-    }
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    modseq_t since_modseq = atomodseq_t(changes.since_state);
+    if (!since_modseq) {
+        jmap_error(req, json_pack("{s:s s:[s]}",
+                    "type", "invalidArguments",
+                    "arguments", "sinceState"));
+        goto done;
+    }
 
     /* Search for updates */
-    r = jmapmbox_getupdates(req, atomodseq_t(since), max_changes,
-                            &changed, &destroyed, &has_more, &newstate,
-                            &only_counts_changed);
-    if (r) goto done;
-    oldstate = json_string(since);
+    int only_counts_changed = 0;
+    int r = jmapmbox_getupdates(req, since_modseq, &changes, &only_counts_changed);
+    if (r) {
+        syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        goto done;
+    }
 
-    /* Prepare response */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreUpdates", json_boolean(has_more));
-    json_object_set_new(res, "changed", changed);
-    json_object_set_new(res, "destroyed", destroyed);
-    json_object_set_new(res, "changedProperties", only_counts_changed ?
-            json_pack("[s,s,s,s]", "totalEmails", "unreadEmails",
-                                   "totalThreads", "unreadThreads") :
-            json_null());
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Mailbox/changes"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    /* Build response */
+    json_t *res = jmap_changes_reply(&changes);
+    json_t *changed_props = json_null();
+    if (only_counts_changed) {
+        changed_props = json_pack("[s,s,s,s]",
+                "totalEmails", "unreadEmails", "totalThreads", "unreadThreads");
+    }
+    json_object_set_new(res, "changedProperties", changed_props);
+    jmap_ok(req, res);
 
 done:
-    return r;
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 /*
