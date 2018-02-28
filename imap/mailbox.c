@@ -1880,8 +1880,8 @@ static int _commit_changes(struct mailbox *mailbox)
     qsort(mailbox->index_changes, mailbox->index_change_count,
           sizeof(struct index_change), change_compar);
 
-    for (i = 1; i <= mailbox->index_change_count; i++) {
-        r = _commit_one(mailbox, &mailbox->index_changes[i-1]);
+    for (i = 0; i < mailbox->index_change_count; i++) {
+        r = _commit_one(mailbox, &mailbox->index_changes[i]);
         if (r) return r; /* DAMN, we're screwed */
     }
 
