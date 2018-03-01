@@ -2291,15 +2291,16 @@ static int _emails_to_card(struct vparse_card *card,
         const char *type = NULL;
         const char *label = NULL;
         const char *value = NULL;
-        int pe; /* parse error */
 
-        pe = readprop_full(item, prefix, "type", 1, invalid, "s", &type);
-        pe = readprop_full(item, prefix, "value", 1, invalid, "s", &value);
-        pe = readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        if (JNOTNULL(json_object_get(item, "label"))) {
+            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
+        }
         json_t *jisDefault = json_object_get(item, "isDefault");
 
         /* Bail out for any property errors. */
-        if (!type || !value || pe < 0) {
+        if (!type || !value || json_array_size(invalid)) {
             buf_free(&buf);
             return -1;
         }
@@ -2343,16 +2344,15 @@ static int _phones_to_card(struct vparse_card *card,
         const char *type = NULL;
         const char *label = NULL;
         const char *value = NULL;
-        int pe; /* parse error */
 
-        pe = readprop_full(item, prefix, "type", 1, invalid, "s", &type);
-        pe = readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
-            pe = readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
         }
 
         /* Bail out for any property errors. */
-        if (!type || !value || pe < 0) {
+        if (!type || !value || json_array_size(invalid)) {
             buf_free(&buf);
             return -1;
         }
@@ -2413,16 +2413,15 @@ static int _online_to_card(struct vparse_card *card,
         const char *type = NULL;
         const char *label = NULL;
         const char *value = NULL;
-        int pe; /* parse error */
 
-        pe = readprop_full(item, prefix, "type", 1, invalid, "s", &type);
-        pe = readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
-            pe = readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
         }
 
         /* Bail out for any property errors. */
-        if (!type || !value || pe < 0) {
+        if (!type || !value || json_array_size(invalid)) {
             buf_free(&buf);
             return -1;
         }
