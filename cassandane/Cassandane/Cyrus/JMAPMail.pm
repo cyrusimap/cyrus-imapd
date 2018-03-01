@@ -4679,44 +4679,44 @@ sub test_email_query_keywords
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $fooid = $res->[0][1]->{ids}[0];
 
-    xlog "fetch emails with \$Flagged flag";
+    xlog "fetch emails with \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            hasKeyword => '$Flagged',
+            hasKeyword => '$Seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 
-    xlog "fetch emails without \$Flagged flag";
+    xlog "fetch emails without \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notHasKeyword => '$Flagged',
+            notKeyword => '$Seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog 'set $Flagged flag on email';
+    xlog 'set $Seen flag on email';
     $res = $jmap->CallMethods([['Email/set', {
         update => {
             $fooid => {
-                keywords => { '$Flagged' => JSON::true },
+                keywords => { '$Seen' => JSON::true },
             },
         }
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$fooid});
 
-    xlog "fetch emails with \$Flagged flag";
+    xlog "fetch emails with \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            hasKeyword => '$Flagged',
+            hasKeyword => '$Seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
-    xlog "fetch emails without \$Flagged flag";
+    xlog "fetch emails without \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notHasKeyword => '$Flagged',
+            notKeyword => '$Seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
@@ -4724,27 +4724,27 @@ sub test_email_query_keywords
     xlog "create email";
     $res = $self->make_message("bar") || die;
 
-    xlog "fetch emails without \$Flagged flag";
+    xlog "fetch emails without \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notHasKeyword => '$Flagged',
+            notKeyword => '$Seen',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $barid = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($barid, $fooid);
 
-    xlog "fetch emails sorted ascending by \$Flagged flag";
+    xlog "fetch emails sorted ascending by \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:$Flagged' }],
+        sort => [{ property => 'hasKeyword:$Seen' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[1]);
 
-    xlog "fetch emails sorted descending by \$Flagged flag";
+    xlog "fetch emails sorted descending by \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:$Flagged', isAscending => JSON::false }],
+        sort => [{ property => 'hasKeyword:$Seen', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4796,7 +4796,7 @@ sub test_email_query_userkeywords
     xlog "fetch emails without foo flag";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
-            notHasKeyword => 'foo',
+            notKeyword => 'foo',
         }
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
