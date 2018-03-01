@@ -1780,7 +1780,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
                                cacheitem_size(record, CACHE_ENVELOPE) - 2);
         char *envtokens[NUMENVTOKENS];
         parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
-        change->msgid = xstrdup(envtokens[ENV_MSGID]);
+        change->msgid = xstrdup(envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "unknown");
         free(c_env);
     }
 
