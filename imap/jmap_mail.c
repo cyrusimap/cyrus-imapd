@@ -1492,7 +1492,7 @@ static int mboxsearch_eval_filter(mboxsearch_t *query,
                 int has_role = role != NULL;
                 free(role);
                 mbname_free(&mbname);
-                if (!has_role) return 0;
+                if ((has_role == 0) != (field->val.b == 0)) return 0;
             }
             if (!strcmp(field->name, "parentId")) {
                 int matches_parentid = 0;
@@ -1545,6 +1545,7 @@ static mboxsearch_filter_t *mboxsearch_build_filter(mboxsearch_t *query, json_t 
         if ((val = json_object_get(jfilter, "hasRole"))) {
             mboxsearch_field_t *field = xzmalloc(sizeof(mboxsearch_field_t));
             field->name = xstrdup("hasRole");
+            field->val.b = json_boolean_value(val);
             ptrarray_append(&filter->args, field);
             query->_need_role = 1;
         }
