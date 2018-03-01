@@ -4653,7 +4653,7 @@ static search_expr_t *buildsearch(jmap_req_t *req, json_t *filter,
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
             match_keyword(this, json_string_value(val));
         }
-        if (JNOTNULL((val = json_object_get(filter, "notHasKeyword")))) {
+        if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
             match_keyword(e, json_string_value(val));
         }
@@ -4842,13 +4842,13 @@ static void parse_msgfilter_cb(json_t *filter, struct jmap_parser *parser,
     } else if (arg) {
         jmap_parser_invalid(parser, "hasKeyword");
     }
-    arg = json_object_get(filter, "notHasKeyword");
+    arg = json_object_get(filter, "notKeyword");
     if ((s = json_string_value(arg))) {
         if (!is_valid_keyword(s)) {
-            jmap_parser_invalid(parser, "notHasKeyword");
+            jmap_parser_invalid(parser, "notKeyword");
         }
     } else if (arg) {
-        jmap_parser_invalid(parser, "notHasKeyword");
+        jmap_parser_invalid(parser, "notKeyword");
     }
 
     arg = json_object_get(filter, "header");
