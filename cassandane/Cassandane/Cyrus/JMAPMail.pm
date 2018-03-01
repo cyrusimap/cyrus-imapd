@@ -405,10 +405,19 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[2]);
 
-    xlog "filter mailboxes by role";
+    xlog "filter mailboxes by hasRole == true";
     $res = $jmap->CallMethods([['Mailbox/query', {filter => {hasRole => JSON::true}}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+
+    xlog "filter mailboxes by hasRole == false";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {hasRole => JSON::false},
+        sort => [{ property => "name"}],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
 
     xlog "create mailbox underneath A";
     $imaptalk->create("INBOX.A.AA") || die;
