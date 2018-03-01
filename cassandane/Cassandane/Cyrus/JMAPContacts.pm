@@ -1497,6 +1497,56 @@ sub test_contact_set
     $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
 }
 
+sub test_contact_set_emaillabel
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2273
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last",
+        emails => [{
+            type => "other",
+            label => "foo",
+            value => "foo\@local",
+            isDefault => JSON::true
+        }]
+    };
+
+    xlog "create contact";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => $contact }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    xlog "get contact $id";
+    $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{emails}[0]{label});
+
+    xlog "update contact";
+    $res = $jmap->CallMethods([['Contact/set', {
+        update => {
+            $id => {
+                emails => [{
+                    type => "personal",
+                    label => undef,
+                    value => "bar\@local",
+                    isDefault => JSON::true
+                }]
+            }
+        }
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog "get contact $id";
+    $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
+    $self->assert_str_equals('personal', $res->[0][1]{list}[0]{emails}[0]{type});
+    $self->assert_null($res->[0][1]{list}[0]{emails}[0]{label});
+}
+
 
 sub test_contact_set_state
     :JMAP :min_version_3_1
