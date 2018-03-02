@@ -1874,76 +1874,14 @@ done:
     return 0;
 }
 
-struct jmapmbox_newname_data {
-    const char *mboxname;
-    int highest;
-    size_t len;
-};
-
-static int jmapmbox_newname_cb(const mbentry_t *mbentry, void *rock) {
-    struct jmapmbox_newname_data *data = (struct jmapmbox_newname_data *) rock;
-    const char *s, *lo, *hi;
-    int n;
-
-    if (!data->len) {
-        data->len = strlen(data->mboxname);
-        assert(data->len > 0);
-    }
-    if (strncmp(mbentry->name, data->mboxname, data->len)) {
-        return 0;
-    }
-
-    /* Skip any grand-children. */
-    s = mbentry->name + data->len;
-    if (strchr(s, jmap_namespace.hier_sep)) {
-        return 0;
-    }
-
-    /* Does this mailbox match exactly our mboxname? */
-    if (*s == 0) {
-        data->highest = 1;
-        return 0;
-    }
-
-    /* If it doesn't end with pattern "_\d+", skip it. */
-    if (*s++ != '_') {
-        return 0;
-    }
-
-    /* Parse _\d+$ pattern */
-    hi = lo = s;
-    while (isdigit(*s++)) {
-        hi++;
-    }
-    if (lo == hi || *hi != 0){
-        return 0;
-    }
-
-    if ((n = atoi(lo)) && n > data->highest) {
-        data->highest = n;
-    }
-
-    return 0;
-}
-
 /* Combine the UTF-8 encoded JMAP mailbox name and its parent IMAP mailbox
- * name to a unique IMAP mailbox name.
- *
- * Parentname must already be encoded in IMAP UTF-7. A parent by this name
- * must already exist. If a mailbox with the combined mailbox name already
- * exists, the new mailbox name is made unique to avoid IMAP name collisions.
- *
- * For example, if the name has been determined to be x and a mailbox with
- * this name already exists, then look for all mailboxes named x_\d+. The
- * new mailbox name will be x_<max+1> with max being he highest number found
- * for any such named mailbox.
+ * name to a IMAP mailbox name. Does not check for uniqueness.
  *
  * Return the malloced, combined name, or NULL on error. */
 char *jmapmbox_newname(const char *name, const char *parentname)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
-    int r;
 
     cs = charset_lookupname("utf-8");
     if (cs == CHARSET_UNKNOWN_CHARSET) {
@@ -1963,27 +1901,6 @@ char *jmapmbox_newname(const char *name, const char *parentname)
     free(s);
     mboxname = xstrdup(mbname_intname(mbname));
     mbname_free(&mbname);
-
-    /* Avoid any name collisions */
-    struct jmapmbox_newname_data rock;
-    memset(&rock, 0, sizeof(struct jmapmbox_newname_data));
-    rock.mboxname = mboxname;
-    r = mboxlist_mboxtree(parentname, &jmapmbox_newname_cb, &rock,
-                          MBOXTREE_SKIP_ROOT);
-    if (r) {
-        syslog(LOG_ERR, "mboxlist_mboxtree(%s): %s",
-                parentname, error_message(r));
-        free(mboxname);
-        mboxname = NULL;
-        goto done;
-    }
-    if (rock.highest) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s_%d", mboxname, rock.highest + 1);
-        free(mboxname);
-        mboxname = buf_newcstring(&buf);
-        buf_free(&buf);
-    }
 
 done:
     charset_free(&cs);
@@ -2299,6 +2216,15 @@ static int jmapmbox_create(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
+    mbentry_t *mbexists = NULL;
+    r = mboxlist_lookup(mboxname, &mbexists, NULL);
+    mboxlist_entry_free(&mbexists);
+    if (r != IMAP_MAILBOX_NONEXISTENT) {
+        syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
+        json_array_append_new(invalid, json_string("name"));
+        r = 0;
+        goto done;
+    }
 
     /* Create mailbox using parent ACL */
     r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
@@ -2339,7 +2265,7 @@ static int jmapmbox_update(jmap_req_t *req,
                            const char *mboxid,
                            json_t **err)
 {
-    char *mboxname = NULL, *parentname = NULL;
+    char *mboxname = NULL, *parentname = NULL, *oldname = NULL, *name = NULL;
     int r = 0, rights = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL, *mbparent = NULL;
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
@@ -2423,9 +2349,9 @@ static int jmapmbox_update(jmap_req_t *req,
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
     if ((args->name || force_rename) && strcmpsafe(mboxname, mbinbox->name)) {
         mbname_t *mbname = mbname_from_intname(mboxname);
-        char *oldname = jmapmbox_name(req, mbname);
+        oldname = jmapmbox_name(req, mbname);
         mbname_free(&mbname);
-        char *name = xstrdup(args->name ? args->name : oldname);
+        name = xstrdup(args->name ? args->name : oldname);
 
         /* Do old and new mailbox names differ? */
         if (force_rename || strcmpsafe(oldname, name)) {
@@ -2439,6 +2365,16 @@ static int jmapmbox_update(jmap_req_t *req,
                 free(oldname);
                 goto done;
             }
+            mbentry_t *mbexists = NULL;
+			r = mboxlist_lookup(newmboxname, &mbexists, NULL);
+            mboxlist_entry_free(&mbexists);
+			if (r != IMAP_MAILBOX_NONEXISTENT) {
+				syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
+				json_array_append_new(invalid, json_string("name"));
+                free(newmboxname);
+				r = 0;
+				goto done;
+			}
             oldmboxname = mboxname;
 
             /* Rename the mailbox. */
@@ -2459,8 +2395,6 @@ static int jmapmbox_update(jmap_req_t *req,
             free(oldmboxname);
             mboxname = newmboxname;
         }
-        free(oldname);
-        free(name);
     }
 
     /* Write annotations */
@@ -2468,6 +2402,8 @@ static int jmapmbox_update(jmap_req_t *req,
     if (r) goto done;
 
 done:
+    free(oldname);
+    free(name);
     free(mboxname);
     free(parentname);
     mboxlist_entry_free(&mbentry);
