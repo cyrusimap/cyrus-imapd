@@ -2265,7 +2265,8 @@ static int jmapmbox_update(jmap_req_t *req,
                            const char *mboxid,
                            json_t **err)
 {
-    char *mboxname = NULL, *parentname = NULL, *oldname = NULL, *name = NULL;
+    /* So many names... manage them in our own string pool */
+    ptrarray_t strpool = PTRARRAY_INITIALIZER;
     int r = 0, rights = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL, *mbparent = NULL;
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
@@ -2277,6 +2278,8 @@ static int jmapmbox_update(jmap_req_t *req,
     if (json_array_size(invalid)) return 0;
 
     /* Determine current mailbox and parent names */
+    char *mboxname = NULL;
+    char *parentname = NULL;
     if (strcmp(mboxid, mbinbox->uniqueid)) {
         mboxname = jmapmbox_find_uniqueid(req, mboxid);
         if (!mboxname) {
@@ -2295,6 +2298,8 @@ static int jmapmbox_update(jmap_req_t *req,
         mboxname = xstrdup(mbinbox->name);
         mboxlist_lookup(mboxname, &mbparent, NULL);
     }
+    ptrarray_append(&strpool, mboxname);
+    ptrarray_append(&strpool, parentname);
     mboxlist_lookup(mboxname, &mbentry, NULL);
 
     /* Check ACL */
@@ -2319,6 +2324,7 @@ static int jmapmbox_update(jmap_req_t *req,
             json_array_append_new(invalid, json_string("parentId"));
             goto done;
         }
+        ptrarray_append(&strpool, newparentname);
 
         /* Is this a move ot a new parent? */
         if (strcmpsafe(parentname, newparentname)) {
@@ -2329,7 +2335,6 @@ static int jmapmbox_update(jmap_req_t *req,
             }
 
             /* Reset pointers to parent */
-            free(parentname);
             mboxlist_entry_free(&mbparent);
             parentname = newparentname;
             mboxlist_lookup(mboxname, &mbparent, NULL);
@@ -2341,41 +2346,41 @@ static int jmapmbox_update(jmap_req_t *req,
                 json_array_append_new(invalid, json_string("parentId"));
                 goto done;
             }
-        } else {
-            free(newparentname);
         }
     }
 
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
     if ((args->name || force_rename) && strcmpsafe(mboxname, mbinbox->name)) {
         mbname_t *mbname = mbname_from_intname(mboxname);
-        oldname = jmapmbox_name(req, mbname);
+        char *oldname = jmapmbox_name(req, mbname);
+        ptrarray_append(&strpool, oldname);
         mbname_free(&mbname);
-        name = xstrdup(args->name ? args->name : oldname);
+        char *name = xstrdup(args->name ? args->name : oldname);
+        ptrarray_append(&strpool, name);
 
         /* Do old and new mailbox names differ? */
         if (force_rename || strcmpsafe(oldname, name)) {
-            char *newmboxname, *oldmboxname;
 
             /* Determine the unique IMAP mailbox name. */
-            newmboxname = jmapmbox_newname(name, parentname);
+            char *newmboxname = jmapmbox_newname(name, parentname);
             if (!newmboxname) {
                 syslog(LOG_ERR, "jmapmbox_newname returns NULL: can't rename %s", mboxname);
                 r = IMAP_INTERNAL;
                 free(oldname);
                 goto done;
             }
+            ptrarray_append(&strpool, newmboxname);
+
             mbentry_t *mbexists = NULL;
 			r = mboxlist_lookup(newmboxname, &mbexists, NULL);
             mboxlist_entry_free(&mbexists);
 			if (r != IMAP_MAILBOX_NONEXISTENT) {
 				syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
 				json_array_append_new(invalid, json_string("name"));
-                free(newmboxname);
 				r = 0;
 				goto done;
 			}
-            oldmboxname = mboxname;
+            const char *oldmboxname = mboxname;
 
             /* Rename the mailbox. */
             struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
@@ -2388,11 +2393,8 @@ static int jmapmbox_update(jmap_req_t *req,
             if (r) {
                 syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
                         oldmboxname, newmboxname, error_message(r));
-                free(newmboxname);
-                free(oldname);
                 goto done;
             }
-            free(oldmboxname);
             mboxname = newmboxname;
         }
     }
@@ -2402,10 +2404,8 @@ static int jmapmbox_update(jmap_req_t *req,
     if (r) goto done;
 
 done:
-    free(oldname);
-    free(name);
-    free(mboxname);
-    free(parentname);
+    while (strpool.count) free(ptrarray_pop(&strpool));
+    ptrarray_fini(&strpool);
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbparent);
