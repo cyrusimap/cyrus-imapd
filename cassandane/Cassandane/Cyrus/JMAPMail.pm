@@ -778,64 +778,93 @@ sub test_mailbox_set_name_collision
 
     my $state = $res->[0][1]{state};
 
-    xlog "create three mailboxes named foo";
+    xlog "create three mailboxes named foo (two will fail)";
     $res = $jmap->CallMethods([
-            ['Mailbox/set', { create =>
-                    { "1" => {
-                            name => "foo",
-                            parentId => $inbox->{id},
-                            role => undef
-                        },
-                        "2" => {
-                            name => "foo",
-                            parentId => $inbox->{id},
-                            role => undef
-                        },
-                        "3" => {
-                            name => "foo",
-                            parentId => $inbox->{id},
-                            role => undef
-                        }}}, "R1"]
+        ['Mailbox/set', { create => {
+            "1" => {
+                name => "foo",
+                parentId => $inbox->{id},
+                role => undef
+            },
+            "2" => {
+                name => "foo",
+                parentId => $inbox->{id},
+                role => undef
+            },
+            "3" => {
+                name => "foo",
+                parentId => $inbox->{id},
+                role => undef
+            }
+        }}, "R1"]
     ]);
-    $self->assert_not_null($res->[0][1]{created});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{created}});
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{notCreated}});
 
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
-    my $id3 = $res->[0][1]{created}{"3"}{id};
+    my $fooid = $res->[0][1]{created}{(keys %{$res->[0][1]{created}})[0]}{id};
+    $self->assert_not_null($fooid);
 
-    xlog "get mailbox $id1";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
-
-    xlog "get mailbox $id2";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
-
-    xlog "get mailbox $id3";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "foo");
-
-    xlog "rename all three mailboxes to bar";
+    xlog "create mailbox bar";
     $res = $jmap->CallMethods([
-            ['Mailbox/set', { update =>
-                    { $id1 => { name => "bar" },
-                      $id2 => { name => "bar" },
-                      $id3 => { name => "bar" }
-                  }}, "R1"]
+        ['Mailbox/set', { create => {
+            "1" => {
+                name => "bar",
+                parentId => $inbox->{id},
+                role => undef
+            }
+        }}, 'R1'],
     ]);
-    $self->assert_not_null($res->[0][1]{updated});
+    my $barid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($barid);
 
-    xlog "get mailbox $id1";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+    # This MUST work per spec, but Cyrus /set does not support
+    # invalid interim states...
+    xlog "rename bar to foo and foo to bar (should fail)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => {
+            $fooid => {
+                name => "bar",
+            },
+            $barid => {
+                name => "foo",
+            },
+        }}, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{notUpdated}});
 
-    xlog "get mailbox $id2";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+    # ... so clients have to come up with their own sequence of renames.
+    xlog "rename bar to foo and foo to bar (should fail)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => {
+            $fooid => {
+                name => "bam",
+            },
+        }}, 'R1'],
+        ['Mailbox/set', { update => {
+            $barid => {
+                name => "foo",
+            },
+        }}, 'R2'],
+        ['Mailbox/set', { update => {
+            $fooid => {
+                name => "bar",
+            },
+        }}, 'R3'],
+    ]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{updated}});
+    $self->assert_num_equals(1, scalar keys %{$res->[2][1]{updated}});
 
-    xlog "get mailbox $id3";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{name}, "bar");
+    xlog "get mailboxes";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$fooid, $barid] }, "R1"]]);
+
+    # foo is bar
+    $self->assert_str_equals($fooid, $res->[0][1]{list}[0]->{id});
+    $self->assert_str_equals("bar", $res->[0][1]{list}[0]->{name});
+
+    # and bar is foo
+    $self->assert_str_equals($barid, $res->[0][1]{list}[1]->{id});
+    $self->assert_str_equals("foo", $res->[0][1]{list}[1]->{name});
 }
 
 sub test_mailbox_set_name_interop
