@@ -379,7 +379,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             if (!span_compare_range(&recur_span, &range_span)) {
                 rrule_itr = icalrecur_iterator_new(recur, dtstart);
 #ifdef HAVE_RECUR_ITERATOR_START
-                if (icaltime_compare(range.start, dtstart) > 0) {
+                if (rrule_itr && (recur.count > 0)) {
                     icalrecur_iterator_set_start(rrule_itr, range.start);
                 }
 #endif
