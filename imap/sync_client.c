@@ -377,6 +377,13 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
                 hash_insert(userid, mailbox_list, &user_mailboxes);
             }
             sync_action_list_add(mailbox_list, args[1], NULL);
+            if (args[2]) {
+                /* if there's a second MAILBOX recorded (i.e. a rename), add
+                 * it to the same user's mailbox_list (even if it's a diff
+                 * user), so that the rename order doesn't get lost.
+                 */
+                sync_action_list_add(mailbox_list, args[2], NULL);
+            }
         }
         else if (!strcmp(args[0], "UNMAILBOX"))
             sync_action_list_add(unmailbox_list, args[1], NULL);
