@@ -3084,7 +3084,7 @@ int main(int argc, char **argv)
             /* try to get the capabilities from the banner */
             mechlist = ask_capability(protocol, servername,
                                       &capabilities, AUTO_BANNER);
-            if (!mechlist && !(capabilities & CAPA_STARTTLS)) {
+            if ((!mechlist || !buf_len(mechlist)) && !(capabilities & CAPA_STARTTLS)) {
                 /* found no capabilities in banner -> get them explicitly */
                 protocol->banner.is_capa = 0;
             }
