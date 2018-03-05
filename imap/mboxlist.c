@@ -2456,7 +2456,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
              * we never nuke the mailbox from the replica before realising
              * that it has been renamed.  This can be moved later again when
              * we sync mailboxes by uniqueid rather than name... */
-            sync_log_mailbox_double(oldname, newname);
+            sync_log_rename(oldname, newname);
 
             mailbox_rename_cleanup(&oldmailbox, isusermbox);
 

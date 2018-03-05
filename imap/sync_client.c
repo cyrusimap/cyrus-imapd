@@ -377,11 +377,31 @@ static int do_sync(sync_log_reader_t *slr, const char **channelp)
                 hash_insert(userid, mailbox_list, &user_mailboxes);
             }
             sync_action_list_add(mailbox_list, args[1], NULL);
-            if (args[2]) {
-                /* if there's a second MAILBOX recorded (i.e. a rename), add
-                 * it to the same user's mailbox_list (even if it's a diff
-                 * user), so that the rename order doesn't get lost.
-                 */
+        }
+        else if (!strcmp(args[0], "RENAME")) {
+            char *userid1 = mboxname_to_userid(args[1]);
+            if (!userid1) userid1 = "";
+            char *userid2 = mboxname_to_userid(args[2]);
+            if (!userid2) userid2 = "";
+            struct sync_action_list *mailbox_list;
+
+            /* add both mboxnames to the list for the first one's user */
+            mailbox_list = hash_lookup(userid1, &user_mailboxes);
+            if (!mailbox_list) {
+                mailbox_list = sync_action_list_create();
+                hash_insert(userid1, mailbox_list, &user_mailboxes);
+            }
+            sync_action_list_add(mailbox_list, args[1], NULL);
+            sync_action_list_add(mailbox_list, args[2], NULL);
+
+            /* if the second mboxname's user is different, add both names there too */
+            if (strcmp(userid1, userid2) != 0) {
+                mailbox_list = hash_lookup(userid2, &user_mailboxes);
+                if (!mailbox_list) {
+                    mailbox_list = sync_action_list_create();
+                    hash_insert(userid2, mailbox_list, &user_mailboxes);
+                }
+                sync_action_list_add(mailbox_list, args[1], NULL);
                 sync_action_list_add(mailbox_list, args[2], NULL);
             }
         }
