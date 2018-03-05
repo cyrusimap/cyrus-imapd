@@ -502,6 +502,8 @@ sub test_deliver_fileinto_dot
 
     xlog "Testing a sieve script which does a 'fileinto' a mailbox";
     xlog "when the user has a dot in their name.  Bug 3664";
+    # NOTE: The commit https://github.com/cyrusimap/cyrus-imapd/commit/73af8e19546f235f6286cc9147a3ea74bde19ebb
+    # in Cyrus-imapd changes this behaviour where in we don't do a '.' -> '^' anymore.
 
     xlog "Create the dotted user";
     my $user = 'betty.boop';
@@ -526,7 +528,7 @@ sub test_deliver_fileinto_dot
 require ["fileinto"];
 fileinto "$target";
 EOF
-    , username => 'betty^boop');
+    , username => 'betty.boop');
 
     xlog "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
