@@ -832,13 +832,6 @@ sieve_interp_t *setup_sieve(void)
     return interp;
 }
 
-static void _rm_dots(char *p)
-{
-    for (; *p; p++) {
-        if (*p == '.') *p = '^';
-    }
-}
-
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
@@ -875,10 +868,7 @@ static int sieve_find_script(const char *user, const char *domain,
         }
         else {
             char hash = (char) dir_hash_c(user, config_fulldirhash);
-            char *usercopy = xstrdup(user);  // stupid hashing of names, we SHOULD just allow dots on disk
-            _rm_dots(usercopy);
-            len += snprintf(fname+len, size-len, "/%c/%s/", hash, usercopy);
-            free(usercopy);
+            len += snprintf(fname+len, size-len, "/%c/%s/", hash, user);
 
             if (!script) { /* default script */
                 char *bc_fname;
