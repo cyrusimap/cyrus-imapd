@@ -206,14 +206,28 @@ static int do_unmailbox(const char *mboxname, struct backend *sync_be,
     struct mailbox *mailbox = NULL;
     int r;
 
-    /* XXX - this should be looking for an explicit tombstone record locally */
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        r = sync_folder_delete(mboxname, sync_be, flags);
+        /* make sure there's an explicit local tombstone */
+        /* XXX but, what if the tombstone expired out before replication ran? */
+        mbentry_t *tombstone = NULL;
+        r = mboxlist_lookup_allow_all(mboxname, &tombstone, NULL);
         if (r) {
-            syslog(LOG_ERR, "folder_delete(): failed: %s '%s'",
-                   mboxname, error_message(r));
+            syslog(LOG_ERR, "%s: mboxlist_lookup() failed: %s '%s'",
+                            __func__, mboxname, error_message(r));
         }
+        else if ((tombstone->mbtype & MBTYPE_DELETED) == 0) {
+            syslog(LOG_ERR, "attempt to UNMAILBOX non-tombstone: \"%s\"",
+                            mboxname);
+        }
+        else {
+            r = sync_folder_delete(mboxname, sync_be, flags);
+            if (r) {
+                syslog(LOG_ERR, "%s: sync_folder_delete(): failed: %s '%s'",
+                                __func__, mboxname, error_message(r));
+            }
+        }
+        mboxlist_entry_free(&tombstone);
     }
     mailbox_close(&mailbox);
 
