@@ -934,7 +934,58 @@ static int ptsmodule_get_dn(
         if (rc != PTSM_OK)
             return rc;
 
-        if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') != NULL)) {
+        if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') == NULL)) {
+            syslog(LOG_DEBUG, "collecting all domains from %s", ptsm->domain_base_dn);
+
+            snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, "*");
+
+            syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
+
+            rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
+
+            if (rc != LDAP_SUCCESS) {
+                if (rc == LDAP_SERVER_DOWN) {
+                    syslog(LOG_ERR, "LDAP not available: %s", ldap_err2string(rc));
+                    ldap_unbind(ptsm->ld);
+                    ptsm->ld = NULL;
+                    return PTSM_RETRY;
+                }
+
+                syslog(LOG_ERR, "LDAP search for domain failed: %s", ldap_err2string(rc));
+                return PTSM_FAIL;
+            }
+            if (ldap_count_entries(ptsm->ld, res) < 1) {
+                syslog(LOG_ERR, "No domain found");
+                return PTSM_FAIL;
+            } else if (ldap_count_entries(ptsm->ld, res) >= 1) {
+                int count_matches = 0;
+                char *temp_base = NULL;
+                LDAPMessage *res2;
+                for (entry = ldap_first_entry(ptsm->ld, res); entry != NULL; entry = ldap_next_entry(ptsm->ld, entry)) {
+                    if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
+                        syslog(LOG_DEBUG, "we have a domain %s", vals[0]);
+                        ptsmodule_standard_root_dn(vals[0], &temp_base);
+                        rc = ldap_search_st(ptsm->ld, temp_base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res2);
+                        if (rc == LDAP_SUCCESS && ldap_count_entries(ptsm->ld, res2) == 1) {
+                            syslog(LOG_DEBUG, "Found %s in %s", canon_id, temp_base);
+                            base = temp_base;
+                            count_matches++;
+                        }
+                    }
+                }
+
+                if (count_matches > 1) {
+                    syslog(LOG_ERR, "LDAP search for %s failed because it matches multiple accounts.", canon_id);
+                    return PTSM_FAIL;
+                } else if (count_matches == 0) {
+                    syslog(LOG_ERR, "LDAP search for %s failed because it does not match any account in all domains.", canon_id);
+                    return PTSM_FAIL;
+                }
+
+                syslog(LOG_DEBUG, "we have found %s in %s", canon_id, base);
+            }
+        }
+        else if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') != NULL)) {
             syslog(LOG_DEBUG, "Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
 
             /* Get the base dn to search from domain_base_dn searched on domain_scope with
