@@ -76,7 +76,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Cyrus IMAP'
-copyright = u'1993-2017, The Cyrus Team'
+copyright = u'1993-2018, The Cyrus Team'
 
 
 # The version info for the project you're documenting, acts as replacement for
