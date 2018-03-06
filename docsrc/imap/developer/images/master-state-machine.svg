@@ -1,0 +1,523 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: fig2dev Version 3.2 Patchlevel 5e -->
+<!-- CreationDate: Tue Mar  6 14:12:27 2018 -->
+<!-- Magnification: 1.000 -->
+<svg	xmlns="http://www.w3.org/2000/svg"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	width="10.9in" height="7.9in"
+	viewBox="288 453 13042 9534">
+<g style="stroke-width:.025in; fill:none">
+<!-- Line -->
+<polyline points="11175,9225
+11850,9225
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Line -->
+<polyline points="11175,9525
+11850,9525
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Line -->
+<polyline points="11175,9825
+11850,9825
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:10 30;"/>
+<!-- Line: box -->
+<rect x="5175" y="1125" width="2025" height="1200" rx="105" 
+style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Line: box -->
+<rect x="825" y="4500" width="2025" height="1200" rx="105" 
+style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Line: box -->
+<rect x="10050" y="4575" width="2025" height="1200" rx="105" 
+style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Line: box -->
+<rect x="5175" y="8025" width="2025" height="1200" rx="105" 
+style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Line -->
+<polyline points="5175,1275
+1515,4422
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 5175 1275 - 1413 4509-->
+<polygon points="1496 4397
+1425 4498
+1535 4442
+1496 4397
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5175,8325
+2412,5780
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 5175 8325 - 2313 5689-->
+<polygon points="2433 5759
+2325 5700
+2392 5803
+2433 5759
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5175,8850
+1887,5781
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 5175 8850 - 1789 5689-->
+<polygon points="1909 5759
+1801 5700
+1868 5803
+1909 5759
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="10050,4800
+2969,4800
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 10050 4800 - 2835 4800-->
+<polygon points="2971 4770
+2851 4800
+2971 4830
+2971 4770
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="1350,5700
+1350,6300
+525,6300
+525,5325
+705,5325
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 525 5325 - 840 5325-->
+<polygon points="704 5355
+824 5325
+704 5295
+704 5355
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="975,2250
+975,4380
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:10 30;"/>
+<!-- Arrowhead on XXXpoint 975 2250 - 975 4515-->
+<polygon points="945 4379
+975 4499
+1005 4379
+945 4379
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="1575,5700
+1575,6675
+300,6675
+300,5100
+705,5100
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 300 5100 - 840 5100-->
+<polygon points="704 5130
+824 5100
+704 5070
+704 5130
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7200,2025
+10257,4499
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7200 2025 - 10361 4584-->
+<polygon points="10235 4521
+10348 4574
+10273 4475
+10235 4521
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7275,1575
+10783,4498
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7275 1575 - 10886 4584-->
+<polygon points="10762 4520
+10874 4574
+10801 4474
+10762 4520
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5175,1875
+2338,4420
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 5175 1875 - 2238 4510-->
+<polygon points="2319 4396
+2250 4499
+2359 4441
+2319 4396
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="10050,5400
+2969,5400
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:40 40;"/>
+<!-- Arrowhead on XXXpoint 10050 5400 - 2835 5400-->
+<polygon points="2971 5370
+2851 5400
+2971 5430
+2971 5370
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="10200,5775
+7290,8247
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 10200 5775 - 7188 8334-->
+<polygon points="7272 8223
+7200 8324
+7310 8269
+7272 8223
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7200,8400
+7200,8625
+10409,5852
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7200 8625 - 10511 5765-->
+<polygon points="10427 5877
+10499 5776
+10388 5831
+10427 5877
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7200,8775
+10425,8775
+10929,5892
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 10425 8775 - 10952 5760-->
+<polygon points="10957 5899
+10949 5776
+10898 5889
+10957 5899
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5700,9225
+5700,9975
+3975,9975
+3975,9000
+5055,9000
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 3975 9000 - 5190 9000-->
+<polygon points="5054 9030
+5174 9000
+5054 8970
+5054 9030
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5850,9225
+5850,9975
+7575,9975
+7575,9075
+7319,9075
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7575 9075 - 7185 9075-->
+<polygon points="7321 9045
+7201 9075
+7321 9105
+7321 9045
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="3975,750
+5475,750
+5475,1005
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:10 30;"/>
+<!-- Arrowhead on XXXpoint 5475 750 - 5475 1140-->
+<polygon points="5445 1004
+5475 1124
+5505 1004
+5445 1004
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="6300,750
+5775,750
+5775,1005
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:10 30;"/>
+<!-- Arrowhead on XXXpoint 5775 750 - 5775 1140-->
+<polygon points="5745 1004
+5775 1124
+5805 1004
+5745 1004
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="11400,4575
+11400,3900
+13050,3900
+13050,4875
+12194,4875
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 13050 4875 - 12060 4875-->
+<polygon points="12196 4845
+12076 4875
+12196 4905
+12196 4845
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="11175,5775
+10725,8925
+7319,8925
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 10725 8925 - 7185 8925-->
+<polygon points="7321 8895
+7201 8925
+7321 8955
+7321 8895
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="11325,5775
+11325,6450
+13050,6450
+13050,5550
+12194,5550
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 13050 5550 - 12060 5550-->
+<polygon points="12196 5520
+12076 5550
+12196 5580
+12196 5520
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="10800,2700
+10800,4125
+11165,4490
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+stroke-dasharray:10 30;"/>
+<!-- Arrowhead on XXXpoint 10800 4125 - 11260 4585-->
+<polygon points="11142 4510
+11249 4574
+11185 4467
+11142 4510
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="5550,2325
+5550,7905
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 5550 2325 - 5550 8040-->
+<polygon points="5520 7904
+5550 8024
+5580 7904
+5520 7904
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="6600,2325
+6600,7905
+" style="stroke:#000000;stroke-width:7;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 6600 2325 - 6600 8040-->
+<polygon points="6570 7904
+6600 8024
+6630 7904
+6570 7904
+
+" style="stroke:#000000;stroke-width:7;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Text -->
+<g transform="translate(3516,3741) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(service)</text>
+</g><!-- Text -->
+<g transform="translate(3675,3900) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nactive--</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="4050" y="9675" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Connection</text>
+<!-- Text -->
+<text xml:space="preserve" x="4050" y="9900" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++</text>
+<!-- Text -->
+<g transform="translate(2797,7041) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(service)</text>
+</g><!-- Text -->
+<g transform="translate(2638,7200) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nactive--</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="2100" y="600" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Child in illegal state detected</text>
+<!-- Text -->
+<text xml:space="preserve" x="2100" y="825" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">(via message handling)</text>
+<!-- Text -->
+<text xml:space="preserve" x="11100" y="3600" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">ConnectionMulti(service)</text>
+<!-- Text -->
+<text xml:space="preserve" x="11100" y="3825" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++</text>
+<!-- Text -->
+<g transform="translate(8210,7116) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Unavailable(service)</text>
+</g><!-- Text -->
+<g transform="translate(8369,7275) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">readyworkers--</text>
+</g><!-- Text -->
+<g transform="translate(9055,7470) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Available(service)</text>
+</g><!-- Text -->
+<g transform="translate(9214,7630) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">readyworkers++</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="8100" y="8400" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">ConnectionMulti(service)</text>
+<!-- Text -->
+<text xml:space="preserve" x="8100" y="8625" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++ readyworkers++</text>
+<!-- Text -->
+<g transform="translate(8484,2016) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">ConnectionMulti(service)</text>
+</g><!-- Text -->
+<g transform="translate(8325,2175) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="11925" y="9825" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Initial States</text>
+<!-- Text -->
+<text xml:space="preserve" x="11925" y="9525" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Messages</text>
+<!-- Text -->
+<text xml:space="preserve" x="11925" y="9225" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Signals</text>
+<!-- Text -->
+<text xml:space="preserve" x="9750" y="750" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="432" text-anchor="start">Cyrus Master</text>
+<!-- Text -->
+<text xml:space="preserve" x="9750" y="1350" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="432" text-anchor="start">State Machine</text>
+<!-- Text -->
+<text xml:space="preserve" x="8100" y="9225" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Connection(service)</text>
+<!-- Text -->
+<text xml:space="preserve" x="8100" y="9450" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++ readyworkers--</text>
+<!-- Text -->
+<text xml:space="preserve" x="10050" y="2550" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">New Service (nactive++)</text>
+<!-- Text -->
+<text xml:space="preserve" x="10050" y="2775" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">or Event</text>
+<!-- Text -->
+<text xml:space="preserve" x="3446" y="4628" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nactive-- readyworkers--</text>
+<!-- Text -->
+<text xml:space="preserve" x="3446" y="4403" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(service)</text>
+<!-- Text -->
+<g transform="translate(6900,4050) rotate(-90.00021046)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Connection(service)</text>
+</g><!-- Text -->
+<g transform="translate(7125,4050) rotate(-90.00021046)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">nconn++</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="1350" y="5250" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="288" text-anchor="start">Dead</text>
+<!-- Text -->
+<text xml:space="preserve" x="5475" y="1875" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="288" text-anchor="start">Unknown</text>
+<!-- Text -->
+<text xml:space="preserve" x="5775" y="8775" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="288" text-anchor="start">Busy</text>
+<!-- Text -->
+<text xml:space="preserve" x="10500" y="5325" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="288" text-anchor="start">Ready</text>
+<!-- Text -->
+<text xml:space="preserve" x="675" y="6150" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">(Any)</text>
+<!-- Text -->
+<text xml:space="preserve" x="450" y="1875" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Unregistered Child</text>
+<!-- Text -->
+<text xml:space="preserve" x="675" y="2100" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD</text>
+<!-- Text -->
+<text xml:space="preserve" x="375" y="6900" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD</text>
+<!-- Text -->
+<g transform="translate(2850,3225) rotate(-45.00010523)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(!service)</text>
+</g><!-- Text -->
+<g transform="translate(3300,6450) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(!service)</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="6075" y="9900" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Unavailable</text>
+<!-- Text -->
+<text xml:space="preserve" x="6375" y="825" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Message from unknown child</text>
+<!-- Text -->
+<text xml:space="preserve" x="11550" y="6300" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Available(service)</text>
+<!-- Text -->
+<g transform="translate(7950,3000) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Available(service)</text>
+</g><!-- Text -->
+<text xml:space="preserve" x="9900" y="1650" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">based on a sketch by hmh@debian.org</text>
+<!-- Text -->
+<text xml:space="preserve" x="3450" y="5700" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">SIGCHLD(!service)</text>
+<!-- Text -->
+<g transform="translate(5775,4050) rotate(-90.00021046)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="144" text-anchor="start">Unavailable(service)</text>
+</g></g>
+</svg>
