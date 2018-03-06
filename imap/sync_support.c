@@ -6021,11 +6021,23 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
     if (flags & SYNC_FLAG_DELETE_REMOTE) {
         for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
             if (rfolder->mark) continue;
-            r = sync_folder_delete(rfolder->name, sync_be, flags);
-            if (r) {
-                syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
-                       rfolder->name, error_message(r));
-                goto bail;
+
+            mbentry_t *tombstone = NULL;
+            r = mboxlist_lookup_allow_all(rfolder->name, &tombstone, NULL);
+
+            if (r == 0 && (tombstone->mbtype & MBTYPE_DELETED) == MBTYPE_DELETED) {
+                r = sync_folder_delete(rfolder->name, sync_be, flags);
+                if (r) {
+                    syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
+                                    rfolder->name, error_message(r));
+                    goto bail;
+                }
+            }
+            else {
+                syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
+                                __func__, rfolder->name, error_message(r));
+
+                /* XXX copy the missing local mailbox back from the replica? */
             }
         }
     }
