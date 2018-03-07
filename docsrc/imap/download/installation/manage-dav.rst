@@ -96,7 +96,6 @@ Module-specific information
 ===========================
 
 .. toctree::
-    :glob:
     :maxdepth: 2
 
     http/caldav

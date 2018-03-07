@@ -5,7 +5,6 @@ Developers
 
 .. toctree::
     :maxdepth: 2
-    :glob:
 
     contribute
     Contribute docs <imap/developer/documentation>
