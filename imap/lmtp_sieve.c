@@ -716,7 +716,7 @@ static int send_forward(sieve_redirect_context_t *rc,
                         char *return_path,
                         struct protstream *file)
 {
-    int r = SIEVE_FAIL;
+    int r = 0;
     char buf[1024];
     int body = 0, skip;
     char *srs_return_path = NULL;
@@ -745,9 +745,10 @@ static int send_forward(sieve_redirect_context_t *rc,
         }
         if (!(abook && ctx->carddavdb)) {
             r = SIEVE_FAIL;
+            free(abook);
             goto done;
         }
-        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &sm_env); 
+        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &sm_env);
         free(abook);
 #endif
     }
@@ -756,10 +757,6 @@ static int send_forward(sieve_redirect_context_t *rc,
     }
 
     if (srs_return_path) free(srs_return_path);
-
-    if (r) {
-        goto done;
-    }
 
     prot_rewind(file);
     while (prot_fgets(buf, sizeof(buf), file)) {
