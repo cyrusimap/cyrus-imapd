@@ -191,7 +191,7 @@ The tables below show how the access controls are used by the CalDAV module.
         <td>9 - freebusy</td>
         <td colspan=2>CALDAV:read-free-busy</td>
         <td>REPORT <small>(CALDAV:free-busy-query ONLY)</small>
-          <br>GET/HEAD <small>(<a href="#Freebusy">Freebusy URLs</a> ONLY)</small></td>
+          <br>GET/HEAD <small>(<a href="#freebusy-url">Freebusy URLs</a> ONLY)</small></td>
       </tr>
       <tr>
         <td colspan=4><i>Scheduling Outbox ONLY &#151;
