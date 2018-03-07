@@ -1713,7 +1713,7 @@ snapshot::
 
 docsrc/imap/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@
+	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
 docsrc/imap/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
@@ -1725,7 +1725,7 @@ doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(t
 
 docsrc/imap/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@
+	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
@@ -1751,16 +1751,13 @@ clean-sphinx-cache:
 	@$(RM) -r $(SPHINX_CACHE)
 
 if HAVE_SPHINX_BUILD
-GENERATED_RSTS = docsrc/imap/reference/manpages/configs/imapd.conf.rst \
-                 docsrc/imap/reference/manpages/systemcommands/cyradm.rst \
-                 docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp:
+docsrc/.sphinx-build.stamp: docsrc/imap/reference/manpages/configs/imapd.conf.rst docsrc/imap/reference/manpages/systemcommands/cyradm.rst docsrc/imap/reference/manpages/usercommands/sieveshell.rst
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@
@@ -1770,7 +1767,7 @@ clean-docsrc:
 		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
+man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b cyrman $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
@@ -1778,12 +1775,12 @@ clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/html/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
+doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/text/.sphinx-build.stamp: $(GENERATED_RSTS) docsrc/.sphinx-build.stamp
+doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 else
