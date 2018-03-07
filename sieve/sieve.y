@@ -1740,14 +1740,14 @@ static int verify_header(sieve_script_t *sscript, char *hdr)
 static int verify_addrheader(sieve_script_t *sscript, char *hdr)
 {
     const char **h, *hdrs[] = {
-        "from", "sender", "reply-to",   /* RFC2822 originator fields */
-        "to", "cc", "bcc",              /* RFC2822 destination fields */
-        "resent-from", "resent-sender", /* RFC2822 resent fields */
+        "from", "sender", "reply-to",   /* RFC5322 originator fields */
+        "to", "cc", "bcc",              /* RFC5322 destination fields */
+        "resent-from", "resent-sender", /* RFC5322 resent fields */
         "resent-to", "resent-cc", "resent-bcc",
-        "return-path",                  /* RFC2822 trace fields */
-        "disposition-notification-to",  /* RFC2298 MDN request fields */
+        "return-path",                  /* RFC5322 trace fields */
+        "disposition-notification-to",  /* RFC8098 MDN request fields */
+        "approved",                     /* RFC5536 moderator/control fields */
         "delivered-to",                 /* non-standard (loop detection) */
-        "approved",                     /* RFC1036 moderator/control fields */
         NULL
     };
 
