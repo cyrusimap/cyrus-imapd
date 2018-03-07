@@ -93,12 +93,3 @@ Series 2: 2.0 - 2.3
     2.1/2.1.x
     2.2/2.2.x
     2.3/index
-
-
-.. toctree::
-    :hidden:
-
-    2.4/index
-    2.4-dav/index
-    2.5/index
-    3.0/index
