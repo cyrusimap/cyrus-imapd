@@ -99,8 +99,8 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
         if (r < 0)
             syslog(LOG_ERR, "IOERROR: unable to write to telemetry log %s: %m", buf);
 
-        prot_setlog(pin, fd);
-        prot_setlog(pout, fd);
+        if (pin) prot_setlog(pin, fd);
+        if (pout) prot_setlog(pout, fd);
     }
 
     return fd;

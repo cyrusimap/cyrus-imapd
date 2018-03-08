@@ -56,6 +56,7 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "smtpclient.h"
+#include "telemetry.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -68,6 +69,9 @@ struct smtpclient {
     /* Client implementations can free their context
      * stored in backend->context. */
     int (*free_context)(struct backend *backend);
+
+    /* Telemetry log */
+    int logfd;
 
     /* Internal state */
     hash_table *have_exts;
@@ -99,7 +103,7 @@ static struct protocol_t smtp_protocol =
 
 static int smtpclient_new(smtpclient_t **smp,
                           struct backend *backend,
-                          int (*closebk)(struct backend *));
+                          int (*closebk)(struct backend *), int logfd);
 
 /* SMTP protocol implementation */
 
@@ -156,6 +160,12 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     }
     free(sm->backend);
     sm->backend = NULL;
+
+    /* Close log */
+    if (sm->logfd != -1) {
+        close(sm->logfd);
+    }
+    sm->logfd = -1;
 
     /* Free internal state */
     if (sm->have_exts) {
@@ -539,11 +549,12 @@ EXPORTED void smtpclient_set_notify(smtpclient_t *sm, const char *value)
 
 static int smtpclient_new(smtpclient_t **smp,
                           struct backend *backend,
-                          int (*freectx)(struct backend *))
+                          int (*freectx)(struct backend *), int logfd)
 {
     smtpclient_t *sm = xzmalloc(sizeof(smtpclient_t));
     sm->backend = backend;
     sm->free_context = freectx;
+    sm->logfd = logfd;
     *smp = sm;
     return 0;
 }
@@ -572,6 +583,7 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     struct backend *bk = NULL;
     int r = 0;
     char *myaddr = NULL;
+    int logfd = -1;
 
     /* Setup SASL for authentication, if any */
     sasl_callback_t *sasl_cb = NULL;
@@ -584,16 +596,19 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
         myaddr = strconcat(addr, "/noauth", NULL);
     }
 
+    logfd = telemetry_log("smtpclient.host", NULL, NULL, 0);
+
     /* Connect to backend */
     const char *host = myaddr ? myaddr : addr;
     syslog(LOG_DEBUG, "smtpclient_open: connecting to host: %s", host);
-    bk = backend_connect(NULL, host, &smtp_protocol, NULL, sasl_cb, NULL, -1);
+    bk = backend_connect(NULL, host, &smtp_protocol, NULL, sasl_cb, NULL, logfd);
     if (!bk) {
         syslog(LOG_ERR, "smptclient_open: can't connect to host: %s", host);
+        if (logfd != -1) close(logfd);
         r = IMAP_INTERNAL;
         goto done;
     }
-    r = smtpclient_new(smp, bk, /*freectx*/NULL);
+    r = smtpclient_new(smp, bk, /*freectx*/NULL, logfd);
 
 done:
     free(myaddr);
@@ -650,6 +665,7 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     int r = 0;
     int p_child[2];
     int p_parent[2];
+    int logfd = -1;
     int *fds = xzmalloc(sizeof(int) * 2);
     fds[0] = -1;
     fds[1] = -1;
@@ -695,16 +711,19 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     fds[0] = p_parent[0]; /* reader */
     fds[1] = p_child[1];  /* writer */
 
+    logfd = telemetry_log("smtpclient.sendmail", NULL, NULL, 0);
+
 
     /* Create backend and setup context */
-    bk = backend_connect_pipe(fds[0], fds[1], &smtp_protocol, 0, -1);
+    bk = backend_connect_pipe(fds[0], fds[1], &smtp_protocol, 0, logfd);
     if (!bk) {
         syslog(LOG_ERR, "smptclient_open: can't open sendmail backend");
         r = IMAP_INTERNAL;
+        if (logfd != -1) close(logfd);
         goto done;
     }
     bk->context = fds;
-    r = smtpclient_new(smp, bk, smtpclient_sendmail_freectx);
+    r = smtpclient_new(smp, bk, smtpclient_sendmail_freectx, logfd);
 
 done:
     return r;
