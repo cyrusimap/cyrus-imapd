@@ -3683,6 +3683,69 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
+sub test_emailsubmission_set_issue2285
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "Create email";
+    $res = $jmap->CallMethods([
+    [ 'Email/set', {
+        create => {
+            'k40' => {
+                'bcc' => undef,
+                'cc' => undef,
+                'attachments' => undef,
+                'subject' => 'zlskdjgh',
+                'identityId' => 'test1@robmtest.vm',
+                'keywords' => {
+                    '$Seen' => JSON::true,
+                    '$Draft' => JSON::true
+                },
+                'textBody' => 'lsdkgjh',
+                'to' => [
+                    {
+                        'email' => 'foo@bar.com',
+                        'name' => ''
+                    }
+                ],
+                'from' => [
+                    {
+                        'email' => 'fooalias1@robmtest.vm',
+                        'name' => 'some name'
+                    }
+                ],
+                'receivedAt' => '2018-03-06T03:49:04Z',
+                'mailboxIds' => {
+                    $inboxid => JSON::true,
+                },
+                'headers' => {}
+            }
+        }
+    }, "R1" ],
+    [ 'EmailSubmission/set', {
+        create => {
+            'k41' => {
+                identityId => $identityid,
+                emailId  => '#k40',
+                envelope => undef,
+            },
+        },
+        onSuccessDestroyEmail => [ '#k41' ],
+    }, "R2" ] ] );
+    $self->assert_str_equals('EmailSubmission/set', $res->[1][0]);
+    $self->assert_not_null($res->[1][1]->{created}{'k41'}{id});
+    $self->assert_str_equals('R2', $res->[1][2]);
+    $self->assert_str_equals('Email/set', $res->[2][0]);
+    $self->assert_not_null($res->[2][1]->{destroyed}[0]);
+    $self->assert_str_equals('R2', $res->[2][2]);
+}
+
 sub test_emailsubmission_changes
     :JMAP :min_version_3_1
 {
