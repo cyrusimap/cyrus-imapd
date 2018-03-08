@@ -8772,6 +8772,8 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
         else {
             json_array_append_new(invalid, json_string("envelope.rcptTo"));
         }
+    } else {
+        envelope = NULL;
     }
 
     /* Reject read-only properties */
