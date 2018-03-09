@@ -170,3 +170,13 @@
 # in Cyrus or which are very Apple specific
 ## suppress-caldav =
 ## suppress-carddav =
+
+# This section describes how Cassandane interacts with the JMAP::TestSuite
+# test suite, which is a test suite for JMAP services available from
+# https://github.com/fastmail/JMAP-TestSuite
+[jmaptester]
+# The base directory of a git checkout of JMAP::TestSuite.  If empty, no
+# JMAP tests will be found or run
+## basedir =
+# A list of tests which will be suppressed
+## suppress =
