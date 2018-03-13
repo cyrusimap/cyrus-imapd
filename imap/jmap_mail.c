@@ -527,10 +527,8 @@ static json_t* jmap_changes_reply(struct jmap_changes *changes)
     json_object_set_new(res, "newState", json_string(changes->new_state));
     json_object_set_new(res, "hasMoreChanges",
             json_boolean(changes->has_more_changes));
-    json_object_set(res, "changed", json_array_size(changes->changed) ?
-            changes->changed : json_null());
-    json_object_set(res, "destroyed", json_array_size(changes->destroyed) ?
-            changes->destroyed : json_null());
+    json_object_set(res, "changed", changes->changed);
+    json_object_set(res, "destroyed", changes->destroyed);
     return res;
 }
 
