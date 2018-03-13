@@ -5443,147 +5443,120 @@ done:
 
 static int getEmailsUpdates(jmap_req_t *req)
 {
-    int r = 0, pe;
-    json_t *filter = NULL, *sort = NULL;
-    json_t *changed = NULL, *destroyed = NULL, *invalid = NULL, *item = NULL, *res = NULL, *threads = NULL;
-    json_int_t max = 0;
-    size_t total, total_threads;
-    int has_more = 0;
-    json_t *oldstate, *newstate;
-    struct getmsglist_window window;
-    const char *since;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+	int collapse_threads = 0;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
-    }
-    /* maxChanges */
-    memset(&window, 0, sizeof(struct getmsglist_window));
-    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
-    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-    window.limit = max;
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-
-    json_decref(invalid);
+    modseq_t since_modseq = atomodseq_t(changes.since_state);
+    if (!since_modseq) {
+        jmap_parser_invalid(&parser, "sinceState");
+    }
+	json_t *arg = json_object_get(req->args, "collapseThreads");
+	if (json_is_boolean(arg)) {
+		collapse_threads = json_boolean_value(arg);
+	} else if (arg) {
+		jmap_parser_invalid(&parser, "collapseThreads");
+	}
+	if (json_array_size(parser.invalid)) {
+		err = json_pack("{s:s}", "type", "invalidArguments");
+		json_object_set(err, "arguments", parser.invalid);
+		jmap_error(req, err);
+		goto done;
+	}
 
     /* Search for updates */
-    filter = json_pack("{s:s}", "sinceEmailState", since);
-    sort = json_pack("[{s:s}]", "property", "emailState");
-
-    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
-                       &total, &total_threads, &changed, &destroyed, &threads);
-    if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
+    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
+    struct getmsglist_window window;
+    memset(&window, 0, sizeof(struct getmsglist_window));
+    window.collapse = collapse_threads;
+    window.limit = changes.max_changes;
+    size_t total = 0, total_threads = 0;
+    json_t *threads = json_array();
+    int r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
+            &total, &total_threads,
+            &changes.changed, &changes.destroyed, &threads);
+    json_decref(filter);
+    json_decref(sort);
+    json_decref(threads);
+    if (r) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-    else if (r) goto done;
 
-    has_more = (json_array_size(changed) + json_array_size(destroyed)) < total;
-    oldstate = json_string(since);
-    if (has_more || json_array_size(changed) || json_array_size(destroyed)) {
-        newstate = jmap_fmtstate(window.highestmodseq);
+    changes.has_more_changes =
+        (json_array_size(changes.changed) + json_array_size(changes.destroyed)) < total;
+    if (changes.has_more_changes ||
+        json_array_size(changes.changed) > 0 ||
+        json_array_size(changes.destroyed) > 0) {
+        /* Determine new state */
+        json_t *val = jmap_fmtstate(window.highestmodseq);
+        changes.new_state = xstrdup(json_string_value(val));
+        json_decref(val);
     }
     else {
-        newstate = json_incref(oldstate);
+        changes.new_state = xstrdup(changes.since_state);
     }
 
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreChanges", json_boolean(has_more));
-    json_object_set(res, "changed", changed);
-    json_object_set(res, "destroyed", destroyed);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/changes"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
-    if (sort) json_decref(sort);
-    if (filter) json_decref(filter);
-    if (threads) json_decref(threads);
-    if (changed) json_decref(changed);
-    if (destroyed) json_decref(destroyed);
-    return r;
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int getThreadsUpdates(jmap_req_t *req)
 {
-    int pe, has_more = 0, r = 0;
-    json_int_t max = 0;
-    json_t *invalid, *item, *res, *oldstate, *newstate;
-    json_t *changed = NULL;
-    json_t *destroyed = NULL;
-    json_t *threads = NULL;
-    json_t *val;
-    size_t total, total_threads, i;
-    struct getmsglist_window window;
-    const char *since;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
     conversation_t *conv = NULL;
+    json_t *threads = json_array();
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
-    }
-    /* maxChanges */
-    memset(&window, 0, sizeof(struct getmsglist_window));
-    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
-    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-    window.limit = max;
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    modseq_t since_modseq = atomodseq_t(changes.since_state);
+    if (!since_modseq) {
+        jmap_parser_invalid(&parser, "sinceState");
+    }
 
-    /* Search for message updates and collapse threads */
-    json_t *filter = json_pack("{s:s}", "sinceEmailState", since);
+    /* Search for updates */
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
+    struct getmsglist_window window;
+    memset(&window, 0, sizeof(struct getmsglist_window));
     window.collapse = 1;
-    r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
-                       &total, &total_threads, &changed, &destroyed, &threads);
+    window.limit = changes.max_changes;
+    size_t total = 0, total_threads = 0;
+    json_t *changed = json_array();
+    json_t *destroyed = json_array();
+    int r = jmapmsg_search(req, filter, sort, &window, /*want_expunge*/1,
+            &total, &total_threads, &changed, &destroyed, &threads);
     json_decref(filter);
     json_decref(sort);
-    if (r == IMAP_NOTFOUND) {
-        json_t *err = json_pack("{s:s}", "type", "unsupportedFilter");
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    json_decref(changed);
+    json_decref(destroyed);
+    if (r) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-    else if (r) goto done;
 
-    /* Split the collapsed threads into changed and destroyed - the values from
-       jmapmsg_search will be msgids */
-    if (changed) json_decref(changed);
-    if (destroyed) json_decref(destroyed);
-    changed = json_pack("[]");
-    destroyed = json_pack("[]");
-
+    /* Split the collapsed threads into changed and destroyed -
+     * the values from jmapmsg_search are msgids */
+    size_t i;
+    json_t *val;
     json_array_foreach(threads, i, val) {
         const char *threadid = json_string_value(val);
         conversation_id_t cid = jmap_decode_thrid(threadid);
@@ -5591,59 +5564,39 @@ static int getThreadsUpdates(jmap_req_t *req)
 
         r = conversation_load(req->cstate, cid, &conv);
         if (!conv) continue;
-        if (r) {
-            if (r == CYRUSDB_NOTFOUND) {
-                continue;
-            } else {
-                goto done;
-            }
+        if (r == CYRUSDB_NOTFOUND)
+            continue;
+        else if (r) {
+            jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+            goto done;
         }
 
-        json_array_append(conv->thread ? changed : destroyed, val);
-
+        json_array_append(conv->thread ? changes.changed : changes.destroyed, val);
         conversation_free(conv);
         conv = NULL;
     }
 
-    has_more = (json_array_size(changed) + json_array_size(destroyed)) < total_threads;
+    changes.has_more_changes =
+        (json_array_size(changes.changed) + json_array_size(changes.destroyed)) < total_threads;
 
-    if (has_more) {
-        newstate = jmap_fmtstate(window.highestmodseq);
+    if (changes.has_more_changes) {
+        json_t *val = jmap_fmtstate(window.highestmodseq);
+        changes.new_state = xstrdup(json_string_value(val));
+        json_decref(val);
     } else {
-        newstate = jmap_fmtstate(jmap_highestmodseq(req, 0/*mbtype*/));
-    }
-    oldstate = json_string(since);
-
-    if (!json_array_size(changed)) {
-        json_decref(changed);
-        changed = json_null();
-    }
-    if (!json_array_size(destroyed)) {
-        json_decref(destroyed);
-        destroyed = json_null();
+        json_t *val = jmap_fmtstate(jmap_highestmodseq(req, 0/*mbtype*/));
+        changes.new_state = xstrdup(json_string_value(val));
+        json_decref(val);
     }
 
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreChanges", json_boolean(has_more));
-    json_object_set(res, "changed", changed);
-    json_object_set(res, "destroyed", destroyed);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Thread/changes"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
-    if (conv) conversation_free(conv);
-    if (changed) json_decref(changed);
-    if (destroyed) json_decref(destroyed);
-    if (threads) json_decref(threads);
-    return r;
+    conversation_free(conv);
+    json_decref(threads);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int makesnippet(struct mailbox *mbox __attribute__((unused)),
