@@ -3474,16 +3474,16 @@ static int is_valid_keyword(const char *keyword)
 static const char *jmap_keyword_from_imap(const char *flag)
 {
     if (!strcmp(flag, "\\Seen")) {
-        return "$Seen";
+        return "$seen";
     }
     else if (!strcmp(flag, "\\Flagged")) {
-        return "$Flagged";
+        return "$flagged";
     }
     else if (!strcmp(flag, "\\Answered")) {
-        return "$Answered";
+        return "$answered";
     }
     else if (!strcmp(flag, "\\Draft")) {
-        return "$Draft";
+        return "$draft";
     }
     else if (*flag != '\\') {
         return flag;
@@ -3493,16 +3493,16 @@ static const char *jmap_keyword_from_imap(const char *flag)
 
 static const char *jmap_keyword_to_imap(const char *keyword)
 {
-    if (!strcmp(keyword, "$Seen")) {
+    if (!strcasecmp(keyword, "$Seen")) {
         return "\\Seen";
     }
-    else if (!strcmp(keyword, "$Flagged")) {
+    else if (!strcasecmp(keyword, "$Flagged")) {
         return "\\Flagged";
     }
-    else if (!strcmp(keyword, "$Answered")) {
+    else if (!strcasecmp(keyword, "$Answered")) {
         return "\\Answered";
     }
-    else if (!strcmp(keyword, "$Draft")) {
+    else if (!strcasecmp(keyword, "$Draft")) {
         return "\\Draft";
     }
     else if (is_valid_keyword(keyword)) {
@@ -4410,22 +4410,22 @@ static void match_mailbox(jmap_req_t *req, search_expr_t *parent,
 static void match_keyword(search_expr_t *parent, const char *keyword)
 {
     search_expr_t *e;
-    if (!strcmp(keyword, "$Seen")) {
+    if (!strcasecmp(keyword, "$Seen")) {
         e = search_expr_new(parent, SEOP_MATCH);
         e->attr = search_attr_find("indexflags");
         e->value.u = MESSAGE_SEEN;
     }
-    else if (!strcmp(keyword, "$Draft")) {
+    else if (!strcasecmp(keyword, "$Draft")) {
         e = search_expr_new(parent, SEOP_MATCH);
         e->attr = search_attr_find("systemflags");
         e->value.u = FLAG_DRAFT;
     }
-    else if (!strcmp(keyword, "$Flagged")) {
+    else if (!strcasecmp(keyword, "$Flagged")) {
         e = search_expr_new(parent, SEOP_MATCH);
         e->attr = search_attr_find("systemflags");
         e->value.u = FLAG_FLAGGED;
     }
-    else if (!strcmp(keyword, "$Answered")) {
+    else if (!strcasecmp(keyword, "$Answered")) {
         e = search_expr_new(parent, SEOP_MATCH);
         e->attr = search_attr_find("systemflags");
         e->value.u = FLAG_ANSWERED;
@@ -7445,16 +7445,16 @@ static int jmapmsg_append(jmap_req_t *req,
 
     for (j = 0; j < keywords->count; j++) {
         const char *flag = strarray_nth(keywords, j);
-        if (!strcmp(flag, "$Flagged")) {
+        if (!strcasecmp(flag, "$Flagged")) {
             system_flags |= FLAG_FLAGGED;
         }
-        else if (!strcmp(flag, "$Answered")) {
+        else if (!strcasecmp(flag, "$Answered")) {
             system_flags |= FLAG_ANSWERED;
         }
-        else if (!strcmp(flag, "$Seen")) {
+        else if (!strcasecmp(flag, "$Seen")) {
             system_flags |= FLAG_SEEN;
         }
-        else if (!strcmp(flag, "$Draft")) {
+        else if (!strcasecmp(flag, "$Draft")) {
             system_flags |= FLAG_DRAFT;
         }
         else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
@@ -7843,16 +7843,16 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
                 buf_reset(&buf);
                 continue;
             }
-            if (!strcmp(keyword, "$Flagged")) {
+            if (!strcasecmp(keyword, "$Flagged")) {
                 new_systemflags |= FLAG_FLAGGED;
             }
-            else if (!strcmp(keyword, "$Answered")) {
+            else if (!strcasecmp(keyword, "$Answered")) {
                 new_systemflags |= FLAG_ANSWERED;
             }
-            else if (!strcmp(keyword, "$Seen")) {
+            else if (!strcasecmp(keyword, "$Seen")) {
                 new_systemflags |= FLAG_SEEN;
             }
-            else if (!strcmp(keyword, "$Draft")) {
+            else if (!strcasecmp(keyword, "$Draft")) {
                 new_systemflags |= FLAG_DRAFT;
             }
             else if (strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
