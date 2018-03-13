@@ -5213,21 +5213,6 @@ doneloop:
         if (msg) json_decref(msg);
     }
 
-    if (!json_array_size(*messageids)) {
-        json_decref(*messageids);
-        *messageids = json_null();
-    }
-    if (!json_array_size(*threadids)) {
-        json_decref(*threadids);
-        *threadids = json_null();
-    }
-    if (want_expunged) {
-        if (!json_array_size(*expungedids)) {
-            json_decref(*expungedids);
-            *expungedids = json_null();
-        }
-    }
-
 done:
     free(msgid);
     free_hash_table(&ids, NULL);
