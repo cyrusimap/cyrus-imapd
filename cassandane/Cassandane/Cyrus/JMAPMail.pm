@@ -2782,7 +2782,7 @@ sub test_email_set_draft
     $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
     $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
     $self->assert_str_equals($msg->{headers}->{foo}, $draft->{headers}->{foo});
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
 }
 
@@ -2809,7 +2809,7 @@ sub test_email_set_inreplyto
     my $orig_msg = $res->[1][1]->{list}[0];
     my $orig_id= $orig_msg->{id};
     my $orig_msgid = $orig_msg->{headers}{"message-id"};
-    $self->assert(not exists $orig_msg->{keywords}->{'$Answered'});
+    $self->assert(not exists $orig_msg->{keywords}->{'$answered'});
 
     xlog "create drafts mailbox";
     $res = $jmap->CallMethods([
@@ -2842,7 +2842,7 @@ sub test_email_set_inreplyto
 
     $res = $jmap->CallMethods([['Email/get', { ids => [$orig_id] }, "R1"]]);
     $orig_msg = $res->[0][1]->{list}[0];
-    $self->assert_equals(JSON::true, $orig_msg->{keywords}->{'$Answered'});
+    $self->assert_equals(JSON::true, $orig_msg->{keywords}->{'$answered'});
 }
 
 sub test_email_set_attachedemails
@@ -3008,7 +3008,7 @@ sub test_email_set_userkeywords
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
 
@@ -3028,7 +3028,7 @@ sub test_email_set_userkeywords
     xlog "Get draft $id";
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, JSON::true, $msg->{keywords}->{'$draft'}); # case-insensitive!
     $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'bar'});
     $self->assert_num_equals(3, scalar keys %{$msg->{keywords}});
@@ -3504,7 +3504,7 @@ sub test_email_set_flagged
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Flagged'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$flagged'});
 }
 
 
@@ -3938,10 +3938,10 @@ sub test_email_set_update
 
     xlog "Update draft $id";
     $draft->{keywords} = {
-        '$Draft' => JSON::true,
-        '$Flagged' => JSON::true,
-        '$Seen' => JSON::true,
-        '$Answered' => JSON::true,
+        '$draft' => JSON::true,
+        '$flagged' => JSON::true,
+        '$seen' => JSON::true,
+        '$answered' => JSON::true,
     };
     $res = $jmap->CallMethods([['Email/set', { update => { $id => $draft }}, "R1"]]);
 
@@ -3981,9 +3981,9 @@ sub test_email_set_seen
     my $msg = $res->[1][1]->{list}[0];
     $self->assert_deep_equals($keywords, $msg->{keywords});
 
-    $keywords->{'$Seen'} = JSON::true;
+    $keywords->{'$seen'} = JSON::true;
     $res = $jmap->CallMethods([
-        ['Email/set', { update => { $msg->{id} => { 'keywords/$Seen' => JSON::true } } }, 'R1'],
+        ['Email/set', { update => { $msg->{id} => { 'keywords/$seen' => JSON::true } } }, 'R1'],
         ['Email/get', { ids => [ $msg->{id} ] }, 'R2'],
     ]);
     $msg = $res->[1][1]->{list}[0];
@@ -7269,7 +7269,7 @@ sub test_email_set_patch
         ['Email/get', { 'ids' => [$id] }, 'R2' ]
     ]);
     my $msg = $res->[0][1]->{list}[0];
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'foo'});
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
     $self->assert_equals(JSON::true, $msg->{mailboxIds}->{$inboxid});
@@ -7289,7 +7289,7 @@ sub test_email_set_patch
     ]);
 
     $msg = $res->[1][1]->{list}[0];
-    $self->assert_equals(JSON::true, $msg->{keywords}->{'$Draft'});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'bar'});
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
 
