@@ -517,7 +517,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
 
     json_t *want = json_object_get(req->args, "ids");
     json_t *notFound = json_array();
-    if (want) {
+    if (JNOTNULL(want)) {
         int i;
         int size = json_array_size(want);
         for (i = 0; i < size; i++) {
