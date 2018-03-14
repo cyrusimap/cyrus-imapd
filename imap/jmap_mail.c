@@ -6759,13 +6759,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
 
     /* Set User-Agent header */
     if (!d.mua) {
-        /* Cyrus server-info is great but way to expressive. Cut of
-         * anything after after the main server info */
-        char *p;
-        d.mua = buf_newcstring(&serverinfo);
-        for (p = d.mua; *p; p++) {
-            if (isspace(*p)) { *p = '\0'; break; }
-        }
+        d.mua = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
     }
 
     /* Build raw message */
