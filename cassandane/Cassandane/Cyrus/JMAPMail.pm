@@ -657,6 +657,20 @@ sub test_mailbox_query_filteroperator
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
 }
 
+sub test_mailbox_query_issue2286
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "list mailboxes without filter";
+    my $res = $jmap->CallMethods([['Mailbox/query', { limit => -5 }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+}
+
 sub test_mailbox_querychanges
     :JMAP :min_version_3_1
 {
