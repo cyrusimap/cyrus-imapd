@@ -212,6 +212,7 @@ sub run_test
             },
         ],
         cyrus_hierarchy_separator => '.',
+        cyrus_prefix => $self->{instance}->{cyrus_prefix}
     });
     close(FH);
 
