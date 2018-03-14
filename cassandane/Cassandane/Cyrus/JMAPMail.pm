@@ -6463,6 +6463,113 @@ sub test_email_querychanges_order
     $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
 }
 
+sub test_email_querychanges_issue2294
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate twos email via IMAP";
+    $self->make_message("EmailA") || die;
+    $self->make_message("EmailB") || die;
+
+    # The JMAP implementation in Cyrus has both a fast-path
+    # and regular codepath for queryChanges, where the fast
+    # implementation is used if collapseThreads is false.
+    # Let's get state tokens for both cases.
+
+    xlog "Get email ids and state";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [
+                { isAscending => JSON::true, property => 'subject' }
+            ],
+            collapseThreads => JSON::false,
+        }, "R1"],
+        ['Email/query', {
+            sort => [
+                { isAscending => JSON::true, property => 'subject' }
+            ],
+            collapseThreads => JSON::true,
+        }, "R2"],
+    ]);
+    my $msgidA = $res->[0][1]->{ids}[0];
+    my $msgidB = $res->[0][1]->{ids}[1];
+    $self->assert_not_null($msgidA);
+    $self->assert_not_null($msgidB);
+    my $state_not_collapsed = $res->[0][1]->{state};
+    my $state_collapsed = $res->[1][1]->{state};
+    $self->assert_not_null($state_not_collapsed);
+    $self->assert_not_null($state_collapsed);
+
+	xlog "update email B";
+	$res = $jmap->CallMethods([['Email/set', {
+		update => { $msgidB => {
+			'keywords/$Seen' => JSON::true }
+		},
+	}, "R1"]]);
+    $self->assert(exists $res->[0][1]->{updated}{$msgidB});
+
+    xlog "Create a new email via IMAP";
+    $self->make_message("EmailC") || die;
+
+    xlog "Get email ids";
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ isAscending => JSON::true, property => 'subject' }],
+    }, "R1"]]);
+    my $msgidC = $res->[0][1]->{ids}[2];
+    $self->assert_not_null($msgidC);
+    $self->assert_str_not_equals($msgidA, $msgidC);
+    $self->assert_str_not_equals($msgidB, $msgidC);
+
+    xlog "Query changes";
+    $res = $jmap->CallMethods([
+        ['Email/queryChanges', {
+            sort => [
+                { isAscending => JSON::true, property => 'subject' }
+            ],
+            sinceState => $state_not_collapsed,
+            collapseThreads => JSON::false,
+        }, "R1"],
+        ['Email/queryChanges', {
+            sort => [
+                { isAscending => JSON::true, property => 'subject' }
+            ],
+            sinceState => $state_collapsed,
+            collapseThreads => JSON::true,
+        }, "R2"],
+    ]);
+
+    # This should be
+    #
+    #    { removed => [], added => [{id => $msgidC, index => 2}] }
+    #
+    # but neither the fast-path (aka. collapseThreads == false) nor
+    # the regular codepath in Cyrus currently are capable to
+    # identify if a message is new in the result list or just got
+    # its modseq bumped. For now they report newly created and updated
+    # messages in-order in both 'removed' and 'added'.
+
+    # fast-path
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($msgidB, $res->[0][1]{added}[0]{id});
+    $self->assert_num_equals(1, $res->[0][1]{added}[0]{index});
+    $self->assert_str_equals($msgidC, $res->[0][1]{added}[1]{id});
+    $self->assert_num_equals(2, $res->[0][1]{added}[1]{index});
+    $self->assert_deep_equals([$msgidB, $msgidC], $res->[0][1]{removed});
+
+    # regular path - currently equal to fast-path
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{added}});
+    $self->assert_str_equals($msgidB, $res->[1][1]{added}[0]{id});
+    $self->assert_num_equals(1, $res->[1][1]{added}[0]{index});
+    $self->assert_str_equals($msgidC, $res->[1][1]{added}[1]{id});
+    $self->assert_num_equals(2, $res->[1][1]{added}[1]{index});
+    $self->assert_deep_equals([$msgidB, $msgidC], $res->[1][1]{removed});
+}
+
 sub test_email_changes_shared
     :JMAP :min_version_3_1
 {
