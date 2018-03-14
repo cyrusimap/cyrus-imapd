@@ -604,7 +604,7 @@ static void jmap_query_parse(json_t *jargs,
     }
 
     arg = json_object_get(jargs, "limit");
-    if (json_is_integer(arg)) {
+    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
         query->limit = json_integer_value(arg);
     } else if (JNOTNULL(arg)) {
         jmap_parser_invalid(parser, "limit");
