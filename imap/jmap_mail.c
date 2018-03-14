@@ -6675,7 +6675,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the From header */
     if ((prop = json_object_get(msg, "from"))) {
         json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ",\r\n\t");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         d.from = buf_newcstring(&buf);
@@ -6693,7 +6693,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the To header */
     if ((prop = json_object_get(msg, "to"))) {
         json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ",\r\n\t");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         d.to = buf_newcstring(&buf);
@@ -6703,7 +6703,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the Cc header */
     if ((prop = json_object_get(msg, "cc"))) {
         json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ",\r\n\t");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         d.cc = buf_newcstring(&buf);
@@ -6713,7 +6713,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the Bcc header */
     if ((prop = json_object_get(msg, "bcc"))) {
         json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ",\r\n\t");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         d.bcc = buf_newcstring(&buf);
@@ -6723,7 +6723,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the Reply-To header */
     if ((prop = json_object_get(msg, "replyTo"))) {
         json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ", ");
+            if (i) buf_appendcstr(&buf, ",\r\n\t");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
         d.replyto = buf_newcstring(&buf);
