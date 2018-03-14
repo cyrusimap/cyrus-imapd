@@ -1872,4 +1872,58 @@ EOF
 
 }
 
+sub test_contact_get_issue2292
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contact";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {
+        "1" => { firstName => "foo", lastName => "last1" },
+    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"});
+
+    xlog "get contact with no ids";
+    $res = $jmap->CallMethods([['Contact/get', { }, "R3"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    xlog "get contact with empty ids";
+    $res = $jmap->CallMethods([['Contact/get', { ids => [] }, "R3"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    xlog "get contact with null ids";
+    $res = $jmap->CallMethods([['Contact/get', { ids => undef }, "R3"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+}
+
+sub test_contactgroup_get_issue2292
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contact group";
+    my $res = $jmap->CallMethods([['ContactGroup/set', {create => {
+        "1" => {name => "group1"}
+    }}, "R2"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"});
+
+    xlog "get contact group with no ids";
+    $res = $jmap->CallMethods([['ContactGroup/get', { }, "R3"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    xlog "get contact group with empty ids";
+    $res = $jmap->CallMethods([['ContactGroup/get', { ids => [] }, "R3"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    xlog "get contact group with null ids";
+    $res = $jmap->CallMethods([['ContactGroup/get', { ids => undef }, "R3"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+}
+
+
+
 1;
