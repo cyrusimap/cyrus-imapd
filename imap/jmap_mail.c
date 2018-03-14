@@ -195,7 +195,6 @@ struct jmap_querychanges {
     json_t *added;
 };
 
-
 struct jmap_parser {
     struct buf buf;
     strarray_t path;
@@ -5036,6 +5035,30 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                     (*total)++;
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodseq) goto doneloop;
+                    /* The modseq of this message is higher than the last
+                     * client-seen state.
+                     *
+                     * The JMAP spec requires us to report
+                     * "every foo that has been added to the results since the
+                     * old state AND every foo in the current results that was
+                     * included in the removed array (due to a filter or sort
+                     * based upon a mutable property)"
+                     *
+                     * The latter case is a non-issue, because we reject
+                     * mutable searches with "cannotCalculateChanges".
+                     * But for the former case, we can't tell if the message
+                     * is a truly new search result by looking at its modseq
+                     * or index record. It might just have been an already
+                     * seen result that got its modseq bumped. We could
+                     * try to be clever by comparing the index record
+                     * internaldate and last_updated timestamps, but that
+                     * comes with all the edge cases of clock-based
+                     * versioning and makes testing brittle.
+                     *
+                     * To be safe, report candiates both in removed AND added,
+                     * as it's done in the codepath for collapsed threads.
+                     */
+                    update_destroyed(*expungedids, msgid);
                     update_added(*messageids, msgid, *total-1);
                 }
                 goto doneloop;
