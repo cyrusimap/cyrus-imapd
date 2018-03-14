@@ -6604,11 +6604,17 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     struct jmapmsgdata {
         char *subject;
         char *to;
+        char *to_header;
         char *cc;
+        char *cc_header;
         char *bcc;
+        char *bcc_header;
         char *replyto;
+        char *replyto_header;
         char *sender;
+        char *sender_header;
         char *from;
+        char *from_header;
         char *date;
         char *messageid;
         char *mua;
@@ -6632,9 +6638,9 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
         if (!s) {
             continue;
         } else if (!strcasecmp(key, "Bcc")) {
-            d.bcc = xstrdup(s);
+            d.bcc_header = xstrdup(s);
         } else if (!strcasecmp(key, "Cc")) {
-            d.cc = xstrdup(s);
+            d.cc_header = xstrdup(s);
         } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
             /* Ignore */
         } else if (!strcasecmp(key, "Content-Type")) {
@@ -6642,7 +6648,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
         } else if (!strcasecmp(key, "Date")) {
             d.date = xstrdup(s);
         } else if (!strcasecmp(key, "From")) {
-            d.from = xstrdup(s);
+            d.from_header = xstrdup(s);
         } else if (!strcasecmp(key, "In-Reply-To")) {
             d.inreplyto = xstrdup(s);
         } else if (!strcasecmp(key, "Message-ID")) {
@@ -6652,13 +6658,13 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
         } else if (!strcasecmp(key, "References")) {
             d.references = xstrdup(s);
         } else if (!strcasecmp(key, "Reply-To")) {
-            d.replyto = xstrdup(s);
+            d.replyto_header = xstrdup(s);
         } else if (!strcasecmp(key, "Sender")) {
-            d.sender = xstrdup(s);
+            d.sender_header = xstrdup(s);
         } else if (!strcasecmp(key, "Subject")) {
             d.subject = xstrdup(s);
         } else if (!strcasecmp(key, "To")) {
-            d.to = xstrdup(s);
+            d.to_header = xstrdup(s);
         } else if (!strcasecmp(key, "User-Agent")) {
             d.mua = xstrdup(s);
         } else {
@@ -6672,7 +6678,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
             if (i) buf_appendcstr(&buf, ", ");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
-        if (d.from) free(d.from);
         d.from = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6681,7 +6686,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     /* Override the Sender header */
     if ((prop = json_object_get(msg, "sender"))) {
         JMAPMSG_EMAILER_TO_MIME(&buf, prop);
-        if (d.sender) free(d.sender);
         d.sender = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6692,7 +6696,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
             if (i) buf_appendcstr(&buf, ", ");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
-        if (d.to) free(d.to);
         d.to = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6703,7 +6706,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
             if (i) buf_appendcstr(&buf, ", ");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
-        if (d.cc) free(d.cc);
         d.cc = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6714,7 +6716,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
             if (i) buf_appendcstr(&buf, ", ");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
-        if (d.bcc) free(d.bcc);
         d.bcc = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6725,7 +6726,6 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
             if (i) buf_appendcstr(&buf, ", ");
             JMAPMSG_EMAILER_TO_MIME(&buf, val);
         }
-        if (d.replyto) free(d.replyto);
         d.replyto = buf_newcstring(&buf);
         buf_reset(&buf);
     }
@@ -6775,12 +6775,29 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     JMAPMSG_HEADER_TO_MIME("From", d.from);
     JMAPMSG_HEADER_TO_MIME("Date", d.date);
 
-    /* Common headers */
-    if (d.to)      JMAPMSG_HEADER_TO_MIME("To", d.to);
-    if (d.cc)      JMAPMSG_HEADER_TO_MIME("Cc", d.cc);
-    if (d.bcc)     JMAPMSG_HEADER_TO_MIME("Bcc", d.bcc);
-    if (d.sender)  JMAPMSG_HEADER_TO_MIME("Sender", d.sender);
-    if (d.replyto) JMAPMSG_HEADER_TO_MIME("Reply-To", d.replyto);
+    /* Emailer type fields have precendence over header */
+    if (d.to)
+        fprintf(out, "To: %s\r\n", d.to);
+    else if (d.to_header)
+        JMAPMSG_HEADER_TO_MIME("To", d.to_header);
+    if (d.cc)
+        fprintf(out, "Cc: %s\r\n", d.cc);
+    else if (d.cc_header)
+        JMAPMSG_HEADER_TO_MIME("Cc", d.cc_header);
+    if (d.bcc)
+        fprintf(out, "Bcc: %s\r\n", d.bcc);
+    else if (d.bcc_header)
+        JMAPMSG_HEADER_TO_MIME("Bcc", d.bcc_header);
+    if (d.sender)
+        fprintf(out, "Sender: %s\r\n", d.sender);
+    else if (d.sender_header)
+        JMAPMSG_HEADER_TO_MIME("Sender", d.sender_header);
+    if (d.replyto)
+        fprintf(out, "Reply-To: %s\r\n", d.replyto);
+    else if (d.replyto_header)
+        JMAPMSG_HEADER_TO_MIME("Reply-To", d.replyto_header);
+
+    /* Subject */
     if (d.subject) JMAPMSG_HEADER_TO_MIME("Subject", d.subject);
 
     /* References, In-Reply-To and the custom X-JMAP header */
@@ -6826,19 +6843,24 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     r = jmapmsg_to_mimebody(req, mymsg, NULL, out);
     json_decref(mymsg);
 
-    if (d.from) free(d.from);
-    if (d.sender) free(d.sender);
-    if (d.date) free(d.date);
-    if (d.to) free(d.to);
-    if (d.cc) free(d.cc);
-    if (d.bcc) free(d.bcc);
-    if (d.replyto) free(d.replyto);
-    if (d.subject) free(d.subject);
-    if (d.messageid) free(d.messageid);
-    if (d.references) free(d.references);
-    if (d.inreplyto) free(d.inreplyto);
-    if (d.mua) free(d.mua);
-    if (d.headers) json_decref(d.headers);
+    free(d.from);
+    free(d.from_header);
+    free(d.sender);
+    free(d.date);
+    free(d.to);
+    free(d.to_header);
+    free(d.cc);
+    free(d.cc_header);
+    free(d.bcc);
+    free(d.bcc_header);
+    free(d.replyto);
+    free(d.replyto_header);
+    free(d.subject);
+    free(d.messageid);
+    free(d.references);
+    free(d.inreplyto);
+    free(d.mua);
+    json_decref(d.headers);
     buf_free(&buf);
     if (r) r = HTTP_SERVER_ERROR;
     return r;
