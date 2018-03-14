@@ -5057,6 +5057,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                      *
                      * To be safe, report candiates both in removed AND added,
                      * as it's done in the codepath for collapsed threads.
+                     *
+                     * TODO only return new messages in 'added'
                      */
                     update_destroyed(*expungedids, msgid);
                     update_added(*messageids, msgid, *total-1);
