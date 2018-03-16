@@ -2710,7 +2710,9 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
         }
         /* this is text/html data, so we can make ourselves useful by
          * stripping html tags, css and js. */
-        input = striphtml_init(input);
+        if (!(flags & CHARSET_KEEPHTML)) {
+            input = striphtml_init(input);
+        }
     }
 
     input = convert_init(charset, 1/*to_uni*/, input);
