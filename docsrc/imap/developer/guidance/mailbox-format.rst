@@ -288,7 +288,7 @@ Detail of ``cyrus.index`` header
 
 The index header contains the following information, in order:
 
- Generation Number (4 bytes)
+Generation Number (4 bytes)
     A number that is basically the "revision number" of the mailbox. It
     must match between the cache and index files. This is to ensure that
     if we fail to sync both the cache and index files and a crash

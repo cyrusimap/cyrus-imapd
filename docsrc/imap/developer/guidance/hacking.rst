@@ -79,7 +79,7 @@ map_refresh and map_free
     to open the file descriptors O_RDWR, especially if the file
     descriptors could possibly be used for writing elsewhere in the
     code. Some operating systems REQUIRE file descriptors that are
-    ``mmap()``ed to be opened O_RDWR, so just do it.
+    ``mmap()``-ed to be opened O_RDWR, so just do it.
 
 Network Functions
 -----------------
