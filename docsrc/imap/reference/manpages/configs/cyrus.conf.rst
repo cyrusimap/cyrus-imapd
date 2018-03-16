@@ -51,8 +51,8 @@ section are described, and each argument's default value is shown.
 An important distinction exists between **SERVICES** and **DAEMON** ;
 the former have sockets which :cyrusman:`master(8)` will listen on
 (either IP or Unix domain) while the latter do not.  Similarly,
-processes listed in **START** are expected to end and clean up after
-themselves, while those in **DAEMON** will be shutdown by
+processes listed in **START** will be run to completion before any
+**SERVICES** are started, while those in **DAEMON** will be managed by
 :cyrusman:`master(8)`.
 
 .. Note::
@@ -71,8 +71,8 @@ START
 
 This section lists the processes to run before any **SERVICES** are
 spawned.  This section is typically used to initialize databases.
-Master itself will not startup until all tasks in **START** have either
-completed or backgrounded themselves, so put no blocking commands here.
+Master itself will not startup until all tasks in **START** have
+completed, so put no blocking commands here.
 
 .. parsed-literal::
 
@@ -82,6 +82,14 @@ completed or backgrounded themselves, so put no blocking commands here.
 
     The command (with options) to spawn as a child process.  This
     string argument is required.
+
+.. Note::
+
+    Prior to v3, non-service daemons like ``idled`` were started from
+    **START** but would background themselves, thus not blocking.  Post
+    v3 these are better managed through the **DAEMON** section, under
+    which master will provide life-cycle management (i.e. restarting
+    dead processes).
 
 SERVICES
 --------
