@@ -62,6 +62,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "http_ws.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
@@ -85,6 +86,8 @@
 #define JMAP_DOWNLOAD_COL  "download/"
 #define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}?accept={type}"
 
+#define JMAP_WS_PROTOCOL   "jmap"
+
 struct namespace jmap_namespace;
 
 static time_t compile_time;
@@ -94,6 +97,9 @@ static json_t *jmap_capabilities = NULL;
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
+
+static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
 
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
@@ -435,6 +441,10 @@ static int jmap_get(struct transaction_t *txn,
     }
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
+        /* Upgrade to WebSockets on API endpoint, if requested */
+        r = ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+        if (r) return r;
+
         return jmap_settings(txn);
     }
 
@@ -755,8 +765,7 @@ static void _make_created_ids(const char *creation_id, void *val, void *rock)
 }
 
 /* Perform a POST request */
-static int jmap_post(struct transaction_t *txn,
-                     void *params __attribute__((unused)))
+static int _jmap_post(struct transaction_t *txn, json_t **res)
 {
     json_t *jreq = NULL, *resp = NULL;
     size_t i;
@@ -767,18 +776,6 @@ static int jmap_post(struct transaction_t *txn,
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
-
-    ret = jmap_parse_path(txn);
-
-    if (ret) return ret;
-    if (!(txn->req_tgt.allow & ALLOW_POST)) {
-        return HTTP_NOT_ALLOWED;
-    }
-
-    /* Handle uploads */
-    if (txn->req_tgt.flags == JMAP_ENDPOINT_UPLOAD) {
-        return jmap_upload(txn);
-    }
 
     /* Regular JMAP POST request */
     ret = parse_json_body(txn, &jreq);
@@ -943,20 +940,17 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* tell syslog which methods were called */
-    spool_cache_header(xstrdup(":jmap"),
-                       strarray_join(&methods, ","), txn->req_hdrs);
+    spool_replace_header(xstrdup(":jmap"),
+                         strarray_join(&methods, ","), txn->req_hdrs);
 
 
     /* Build responses */
-    json_t *res = json_pack("{s:O}", "methodResponses", resp);
+    *res = json_pack("{s:O}", "methodResponses", resp);
     if (client_creation_ids) {
         json_t *jcreatedIds = json_object();
         hash_enumerate(new_creation_ids, _make_created_ids, jcreatedIds);
         json_object_set_new(res, "createdIds", jcreatedIds);
     }
-
-    /* Output the JSON object */
-    ret = json_response(HTTP_OK, txn, res);
 
   done:
     free_hash_table(client_creation_ids, free);
@@ -969,6 +963,35 @@ static int jmap_post(struct transaction_t *txn,
     json_decref(jreq);
     json_decref(resp);
     strarray_fini(&methods);
+
+    return ret;
+}
+
+static int jmap_post(struct transaction_t *txn,
+                     void *params __attribute__((unused)))
+{
+    int ret;
+    json_t *res = NULL;
+
+    ret = jmap_parse_path(txn);
+
+    if (ret) return ret;
+    if (!(txn->req_tgt.allow & ALLOW_POST)) {
+        return HTTP_NOT_ALLOWED;
+    }
+
+    /* Handle uploads */
+    if (txn->req_tgt.flags == JMAP_ENDPOINT_UPLOAD) {
+        return jmap_upload(txn);
+    }
+
+    /* Regular JMAP POST request */
+    ret = _jmap_post(txn, &res);
+
+    if (!ret) {
+        /* Output the JSON object */
+        ret = json_response(HTTP_OK, txn, res);
+    }
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
     return ret;
@@ -997,6 +1020,70 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
         construct_hash_table(req->new_creation_ids, 128, 0);
     }
     hash_insert(creation_id, xstrdup(id), req->new_creation_ids);
+}
+
+/* Perform WebSocket request (JMAP API) */
+static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock)
+{
+    struct transaction_t **txnp = (struct transaction_t **) rock;
+    struct transaction_t *txn = *txnp;
+    json_t *res = NULL;
+    int ret;
+
+    if (!txn) {
+        /* Create a transaction rock to use for API requests */
+        txn = *txnp = xzmalloc(sizeof(struct transaction_t));
+        txn->req_body.flags = BODY_DONE;
+
+        /* Create header cache */
+        txn->req_hdrs = spool_new_hdrcache();
+        if (!txn->req_hdrs) {
+            free(txn);
+            return HTTP_SERVER_ERROR;
+        }
+
+        /* Set Content-Type of request payload */
+        spool_cache_header(xstrdup("Content-Type"),
+                           xstrdup("application/json"), txn->req_hdrs);
+    }
+    else if (!inbuf) {
+        /* Free transaction rock */
+        transaction_free(txn);
+        free(txn);
+        return 0;
+    }
+
+    /* Set request payload */
+    buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
+
+    /* Process the API request */
+    ret = _jmap_post(txn, &res);
+
+    /* Free request payload */
+    buf_free(&txn->req_body.payload);
+
+    if (logbuf) {
+        /* Log JMAP methods */
+        const char **hdr = spool_getheader(txn->req_hdrs, ":jmap");
+
+        if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
+    }
+
+    if (!ret) {
+        /* Return the JSON object */
+        size_t flags = JSON_PRESERVE_ORDER;
+        char *buf;
+
+        /* Dump JSON object into a text buffer */
+        flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+        buf = json_dumps(res, flags);
+        json_decref(res);
+
+        buf_initm(outbuf, buf, strlen(buf));
+    }
+
+    return ret;
 }
 
 struct _mboxcache_rec {

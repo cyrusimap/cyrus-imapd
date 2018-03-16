@@ -67,7 +67,9 @@ extern int ws_enabled();
 
 extern void ws_done();
 
-extern int ws_start_channel(struct transaction_t *txn);
+extern int ws_start_channel(struct transaction_t *txn, const char *sub_prot,
+                            int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
+                                           struct buf *logbuf, void **rock));
 
 extern void ws_add_resp_hdrs(struct transaction_t *txn);
 

@@ -86,6 +86,11 @@ static struct ws_extension {
 /* WebSocket channel context */
 struct ws_context {
     wslay_event_context_ptr event;
+    char accept[WS_AKEY_LEN+1];
+    const char *protocol;
+    int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
+    void *cb_rock;
     struct buf log;
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
@@ -241,9 +246,12 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
-    struct buf inbuf = BUF_INITIALIZER;
-    const char *msg;
-    int r;
+    struct buf inbuf = BUF_INITIALIZER, outbuf = BUF_INITIALIZER;
+    struct wslay_event_msg msgarg = { arg->opcode, NULL, 0 };
+    uint8_t rsv = WSLAY_RSV_NONE;
+    double cmdtime, nettime;
+    const char *err_msg;
+    int r, err_code = 0;
 
     /* Place client request into a buf */
     buf_init_ro(&inbuf, (const char *) arg->msg, arg->msg_length);
@@ -257,11 +265,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         if (r) {
             syslog(LOG_ERR, "on_msg_recv_cb(): zlib_decompress() failed");
 
-            syslog(LOG_DEBUG, "wslay_event_queue_close()");
-            wslay_event_queue_close(ev, WSLAY_CODE_PROTOCOL_ERROR,
-                                    (uint8_t *) DECOMP_FAILED_ERR,
-                                    strlen(DECOMP_FAILED_ERR));
-            goto done;
+            err_code = WSLAY_CODE_PROTOCOL_ERROR;
+            err_msg = DECOMP_FAILED_ERR;
+            goto err;
         }
 
         buf_move(&inbuf, &txn->zbuf);
@@ -269,85 +275,84 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
-    buf_printf(&ctx->log, " Recv(opcode=%s, rsv=0x%x, length=%ld",
+    buf_printf(&ctx->log, " (opcode=%s; rsv=0x%x; length=%ld",
                wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
-
-    msg = buf_cstring(&inbuf);
 
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
-        buf_printf(&ctx->log, ", status=%d", arg->status_code);
-        if (buf_len(&inbuf)) msg += 2;
-
-        GCC_FALLTHROUGH
+        buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
+                   buf_len(&inbuf) ? buf_cstring(&inbuf)+2 : "");
+        break;
 
     case WSLAY_TEXT_FRAME:
-        buf_printf(&ctx->log, ", msg='%s'", msg);
-        break;
+    case WSLAY_BINARY_FRAME:
+        /* Process the request */
+        r = ctx->data_cb(&inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
+        if (r) {
 
-    default:
-        msg = NULL;
-        break;
-    }
-    buf_putc(&ctx->log, ')');
-
-
-    /* XXX  Do actual work here.
-     *
-     * For now, just echo back non-control messages.
-     * Can be tested with:
-     *   http://demos.kaazing.com/echo/
-     *   https://github.com/websockets/wscat
-     */
-    if (!wslay_is_ctrl_frame(arg->opcode)) {
-        struct wslay_event_msg msgarg = { arg->opcode, NULL, 0 };
-        uint8_t rsv = WSLAY_RSV_NONE;
-        char *freeme = NULL;
-        struct buf *outbuf = &inbuf;
+            err_code = (r == HTTP_SERVER_ERROR ?
+                        WSLAY_CODE_INTERNAL_SERVER_ERROR :
+                        WSLAY_CODE_INVALID_FRAME_PAYLOAD_DATA);
+            err_msg = error_message(r);
+            goto err;
+        }
 
         /* Compress the server response, if supported by the client */
         if (ctx->ext & EXT_PMCE_DEFLATE) {
-            /* Make a copy of the uncompressed text */
-            if (msg) msg = freeme = xstrdup(msg);
-
             r = zlib_compress(txn,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
-                              buf_base(&inbuf), buf_len(&inbuf));
+                              buf_base(&outbuf), buf_len(&outbuf));
             if (r) {
                 syslog(LOG_ERR, "on_msg_recv_cb(): zlib_compress() failed");
 
-                syslog(LOG_DEBUG, "wslay_event_queue_close()");
-                wslay_event_queue_close(ev, WSLAY_CODE_INTERNAL_SERVER_ERROR,
-                                        (uint8_t *) COMP_FAILED_ERR,
-                                        strlen(COMP_FAILED_ERR));
-                goto done;
+                err_code = WSLAY_CODE_INTERNAL_SERVER_ERROR;
+                err_msg = COMP_FAILED_ERR;
+                goto err;
             }
 
             /* Trim the trailing 4 bytes */
             buf_truncate(&txn->zbuf, buf_len(&txn->zbuf) - 4);
-            outbuf = &txn->zbuf;
+            buf_move(&outbuf, &txn->zbuf);
 
             rsv |= WSLAY_RSV1_BIT;
         }
 
         /* Queue the server response */
-        msgarg.msg = (const uint8_t *) buf_base(outbuf);
-        msgarg.msg_length = buf_len(outbuf);
+        msgarg.msg = (const uint8_t *) buf_base(&outbuf);
+        msgarg.msg_length = buf_len(&outbuf);
         wslay_event_queue_msg_ex(ev, &msgarg, rsv);
 
-        /* Log the server response (uncompressed text) */
-        buf_printf(&ctx->log, " => Send(opcode=%s, rsv=0x%x, length=%ld",
+        /* Log the server response */
+        buf_printf(&ctx->log,
+                   ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
                    wslay_str_opcode(msgarg.opcode), rsv, msgarg.msg_length);
-        if (msg) buf_printf(&ctx->log, ", msg='%s'", msg);
-        buf_putc(&ctx->log, ')');
-
-        free(freeme);
+        break;
     }
+
+  err:
+    if (err_code) {
+        size_t err_msg_len = strlen(err_msg);
+
+        syslog(LOG_DEBUG, "wslay_event_queue_close()");
+        wslay_event_queue_close(ev, err_code, (uint8_t *) err_msg, err_msg_len);
+
+        /* Log the server response */
+        buf_printf(&ctx->log,
+                   ") => \"Fail\" (opcode=%s; rsv=0x%x; length=%ld"
+                   "; status=%d; msg='%s'",
+                   wslay_str_opcode(WSLAY_CONNECTION_CLOSE), rsv, err_msg_len,
+                   err_code, err_msg);
+    }
+
+    /* Add timing stats */
+    cmdtime_endtimer(&cmdtime, &nettime);
+    buf_printf(&ctx->log, ") [timing: cmd=%f net=%f total=%f]",
+               cmdtime, nettime, cmdtime + nettime);
 
     syslog(LOG_INFO, "%s", buf_cstring(&ctx->log));
 
-  done:
     buf_free(&inbuf);
+    buf_free(&outbuf);
 }
 
 
@@ -367,7 +372,6 @@ HIDDEN void ws_done()
 {
     return;
 }
-
 
 /* Parse Sec-WebSocket-Extensions header(s) for interesting extensions */
 static void parse_extensions(struct transaction_t *txn)
@@ -461,10 +465,12 @@ static void parse_extensions(struct transaction_t *txn)
 }
 
 
-HIDDEN int ws_start_channel(struct transaction_t *txn)
+HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
+                            int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
+                                           struct buf *logbuf, void **rock))
 {
-    int r, ret = 0;
-    const char **hdr;
+    int r;
+    const char **hdr, *clientkey = NULL;
     unsigned char sha1buf[SHA1_DIGEST_LENGTH];
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
@@ -479,47 +485,100 @@ HIDDEN int ws_start_channel(struct transaction_t *txn)
     };
 
     /* Check for proper request method */
-    if (txn->meth != METH_GET) goto err;
+    if (txn->meth != METH_GET) return 0;
+
+    /* Check for WebSocket upgrade */
+    else if (!(txn->flags.upgrade & UPGRADE_WS)) {
+        if (ws_enabled()) {
+            txn->flags.upgrade |= UPGRADE_WS;
+            txn->flags.conn |= CONN_UPGRADE;
+        }
+        return 0;
+    }
 
     /* Check for supported WebSocket version */
     hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Version");
-    if (!hdr || hdr[1] || strcmp(hdr[0], WS_VERSION)) goto err;
+    if (!hdr) {
+        txn->error.desc = "Missing WebSocket version";
+        return HTTP_BAD_REQUEST;
+    }
+    else if (hdr[1]) {
+        txn->error.desc = "Multiple WebSocket versions";
+        return HTTP_BAD_REQUEST;
+    }
+    else if (strcmp(hdr[0], WS_VERSION)) {
+        txn->error.desc = "Unsupported WebSocket version";
+        return HTTP_UPGRADE;
+    }
 
-    /* Check for supported WebSocket subprotocol */
-    hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Protocol");
-    /* XXX  TODO - based on CalConnect work */
+    if (protocol) {
+        /* Check for supported WebSocket subprotocol */
+        int i, found = 0;
+
+        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Protocol");
+        if (!hdr) {
+          txn->error.desc = "Missing WebSocket protocol";
+          return HTTP_BAD_REQUEST;
+        }
+
+        for (i = 0; !found && hdr[i]; i++) {
+            tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            char *token;
+
+            while ((token = tok_next(&tok))) {
+                if (!strcmp(token, protocol)) {
+                    found = 1;
+                    break;
+                }
+            }
+            tok_fini(&tok);
+        }
+        if (!found) {
+            txn->error.desc = "Unsupported WebSocket protocol";
+            return HTTP_BAD_REQUEST;
+        }
+    }
 
     /* Check for WebSocket client key */
     hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
-    if (!hdr || hdr[1] || strlen(hdr[0]) != WS_CKEY_LEN) goto err;
-
-    /* Create our accept key */
-    buf_setcstr(&txn->buf, hdr[0]);
-    buf_appendcstr(&txn->buf, WS_GUID);
-    xsha1((unsigned char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
-
-    r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
-                      (char *) buf_base(&txn->buf), WS_AKEY_LEN+1, NULL);
-    if (r != SASL_OK) {
-        syslog(LOG_WARNING, "sasl_encode64 failed: %s",
-               sasl_errstring(r, NULL, NULL));
-        ret = HTTP_SERVER_ERROR;
-        goto err;
+    if (!hdr) {
+        txn->error.desc = "Missing WebSocket client key";
+        return HTTP_BAD_REQUEST;
     }
-    buf_truncate(&txn->buf, WS_AKEY_LEN);
+    else if (hdr[1]) {
+        txn->error.desc = "Multiple WebSocket client keys";
+        return HTTP_BAD_REQUEST;
+    }
+    else if (strlen(hdr[0]) != WS_CKEY_LEN) {
+        txn->error.desc = "Invalid WebSocket client key";
+        return HTTP_BAD_REQUEST;
+    }
+    clientkey = hdr[0];
 
+    /* Create server context */
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
     if (r) {
         syslog(LOG_WARNING,
                "wslay_event_context_init: %s", wslay_strerror(r));
-        ret = HTTP_SERVER_ERROR;
-        goto err;
+        return HTTP_SERVER_ERROR;
     }
 
     /* Create channel context */
     ctx = xzmalloc(sizeof(struct ws_context));
     ctx->event = ev;
+    ctx->protocol = protocol;
+    ctx->data_cb = data_cb;
     txn->ws_ctx = ctx;
+
+    if (clientkey) {
+        /* Create WebSocket accept key */
+        buf_setcstr(&txn->buf, clientkey);
+        buf_appendcstr(&txn->buf, WS_GUID);
+        xsha1((u_char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
+
+        r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
+                          ctx->accept, WS_AKEY_LEN+1, NULL);
+    }
 
     /* Check for supported WebSocket extensions */
     parse_extensions(txn);
@@ -538,16 +597,12 @@ HIDDEN int ws_start_channel(struct transaction_t *txn)
     }
 
     /* Add request-line */
-    buf_printf(&ctx->log, "; \"%s %s %s/%s\"",
-               txn->req_line.meth, txn->req_line.uri, WS_TOKEN, WS_VERSION);
+    buf_printf(&ctx->log, "; \"WebSocket/%s via %s\"",
+               protocol ? protocol : "echo" , txn->req_line.ver);
     ctx->log_tail = buf_len(&ctx->log);
 
     /* Tell client to start WebSocket upgrade (RFC 6455) */
     return HTTP_SWITCH_PROT;
-
-  err:
-    txn->flags.conn = CONN_CLOSE;
-    return ret ? ret : HTTP_BAD_REQUEST;
 }
 
 
@@ -555,9 +610,15 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
 
+    simple_hdr(txn, "Sec-WebSocket-Version", WS_VERSION);
+
     if (!ctx) return;
 
-    simple_hdr(txn, "Sec-WebSocket-Accept", buf_cstring(&txn->buf));
+    simple_hdr(txn, "Sec-WebSocket-Accept", ctx->accept);
+
+    if (ctx->protocol) {
+        simple_hdr(txn, "Sec-WebSocket-Protocol", ctx->protocol);
+    }
 
     if (ctx->ext & EXT_PMCE_DEFLATE) {
         simple_hdr(txn, "Sec-WebSocket-Extensions",
@@ -577,6 +638,8 @@ HIDDEN void ws_end_channel(void *ws_ctx)
     
     wslay_event_context_free(ctx->event);
     buf_free(&ctx->log);
+
+    if (ctx->cb_rock) ctx->data_cb(NULL, NULL, NULL, &ctx->cb_rock);
 
     if (ctx->pmce.deflate.zstrm) {
         inflateEnd(ctx->pmce.deflate.zstrm);
@@ -677,19 +740,23 @@ HIDDEN int ws_enabled()
     return 0;
 }
 
-HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
-{
-}
-
 HIDDEN void ws_done() {}
 
-HIDDEN int ws_start_channel(struct http_connection *conn __attribute__((unused)),
-                            struct transaction_t *txn __attribute__((unused)))
+HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
+                            const char *protocol __attribute__((unused)),
+                            int (*data_cb)(struct buf *inbuf,
+                                           struct buf *outbuf,
+                                           struct buf *logbuf,
+                                           void **rock) __attribute__((unused)))
 {
     fatal("ws_start() called, but no Wslay", EC_SOFTWARE);
 }
 
-HIDDEN void ws_end_channel(struct transaction_t *txn __attribute__((unused))) {}
+HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
+{
+}
+
+HIDDEN void ws_end_channel(void *ws_ctx __attribute__((unused))) {}
 
 HIDDEN void ws_output(struct transaction_t *txn __attribute__((unused)))
 {

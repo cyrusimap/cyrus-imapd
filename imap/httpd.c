@@ -1285,6 +1285,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
+            txn->flags.upgrade &= ~UPGRADE_TLS;
         }
 
         syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
@@ -1294,13 +1295,8 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
+            txn->flags.upgrade = 0;
         }
-        else if (txn->flags.upgrade & UPGRADE_WS) {
-            return ws_start_channel(txn);
-        }
-
-        txn->flags.conn &= ~CONN_UPGRADE;
-        txn->flags.upgrade = 0;
     }
     else if (!txn->conn->tls_ctx && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
@@ -1309,10 +1305,10 @@ EXPORTED int examine_request(struct transaction_t *txn)
             txn->flags.upgrade |= UPGRADE_TLS;
         }
         if (http2_enabled()) txn->flags.upgrade |= UPGRADE_HTTP2;
-        if (ws_enabled()) txn->flags.upgrade |= UPGRADE_WS;
-
-        if (txn->flags.upgrade) txn->flags.conn |= CONN_UPGRADE;
     }
+
+    if (txn->flags.upgrade) txn->flags.conn |= CONN_UPGRADE;
+    else txn->flags.conn &= ~CONN_UPGRADE;
 
     query = URI_QUERY(txn->req_uri);
 
@@ -2318,7 +2314,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 /* Construct Upgrade header */
                 comma_list_hdr(txn, "Upgrade", upgrd_tokens, txn->flags.upgrade);
 
-                if (txn->ws_ctx) {
+                if (txn->flags.upgrade & UPGRADE_WS) {
                     /* Add WebSocket headers */
                     ws_add_resp_hdrs(txn);
                 }
@@ -4143,6 +4139,23 @@ static int list_well_known(struct transaction_t *txn)
 }
 
 
+/*
+ * Just echo back non-control messages.
+ * Can be tested with:
+ *   https://github.com/websockets/wscat
+ *   https://demos.kaazing.com/echo/
+ *   https://addons.mozilla.org/en-US/firefox/addon/simple-websocket-client/
+ */
+static int ws_echo(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf __attribute__((unused)),
+                   void **rock __attribute__((unused)))
+{
+    buf_init_ro(outbuf, buf_base(inbuf), buf_len(inbuf));
+
+    return 0;
+}
+
+
 #define WELL_KNOWN_PREFIX "/.well-known"
 
 /* Perform a GET/HEAD request */
@@ -4156,6 +4169,12 @@ static int meth_get(struct transaction_t *txn,
     const char *msg_base = NULL;
     size_t msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
+
+    if (!strcmp(txn->req_uri->path, "/")) {
+        /* Upgrade to WebSockets on root, if requested */
+        ret = ws_start_channel(txn, NULL, &ws_echo);
+        if (ret) return ret;
+    }
 
     /* Check if this is a request for /.well-known/ listing */
     len = strlen(WELL_KNOWN_PREFIX);
