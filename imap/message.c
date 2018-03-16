@@ -117,7 +117,7 @@ static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
                                   int *encoding, charset_t *charset);
 static void message_parse_header(const char *hdr, struct buf *buf);
-static void message_parse_type(const char *hdr, struct body *body);
+static void message_parse_bodytype(const char *hdr, struct body *body);
 static void message_parse_disposition(const char *hdr, struct body *body);
 static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
@@ -145,8 +145,6 @@ static void message_write_searchaddr(struct buf *buf,
                                      const struct address *addrlist);
 static int message_need(const message_t *m, unsigned int need);
 static void message_yield(message_t *m, unsigned int yield);
-
-static void param_free(struct param **paramp);
 
 /*
  * Convert a string to uppercase.  Returns the string.
@@ -679,7 +677,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
         if (sawboundary) {
             memset(body->subpart, 0, sizeof(struct body));
-            message_parse_type(DEFAULT_CONTENT_TYPE, body->subpart);
+            message_parse_bodytype(DEFAULT_CONTENT_TYPE, body->subpart);
         }
         else {
             message_parse_body(msg, body->subpart,
@@ -825,7 +823,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 }
                 break;
             case RFC822_CONTENT_TYPE:
-                message_parse_type(value, body);
+                message_parse_bodytype(value, body);
                 break;
             case RFC822_DATE:
                 message_parse_string(value, &body->date);
@@ -872,7 +870,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
     /* If didn't find Content-Type: header, use the passed-in default type */
     if (!body->type) {
-        message_parse_type(defaultContentType, body);
+        message_parse_bodytype(defaultContentType, body);
     }
     buf_free(&headers);
     return sawboundary;
@@ -1092,20 +1090,12 @@ message_parse_header(const char *hdr, struct buf *buf)
 /*
  * Parse a Content-Type from a header.
  */
-static void message_parse_type(const char *hdr, struct body *body)
+EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp)
 {
     const char *type;
     int typelen;
     const char *subtype;
     int subtypelen;
-
-    /* If we saw this header already, discard the earlier value */
-    if (body->type) {
-        free(body->type);
-        free(body->subtype);
-        body->type = body->subtype = NULL;
-        param_free(&body->params);
-    }
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
@@ -1143,14 +1133,27 @@ static void message_parse_type(const char *hdr, struct body *body)
     if (hdr && *hdr != ';') return;
 
     /* Save content type & subtype */
-    body->type = message_ucase(xstrndup(type, typelen));
-    body->subtype = message_ucase(xstrndup(subtype, subtypelen));
+    *typep = message_ucase(xstrndup(type, typelen));
+    *subtypep = message_ucase(xstrndup(subtype, subtypelen));
 
     /* Parse parameter list */
     if (hdr) {
-        message_parse_params(hdr+1, &body->params);
-        message_fold_params(&body->params);
+        message_parse_params(hdr+1, paramp);
+        message_fold_params(paramp);
     }
+}
+
+static void message_parse_bodytype(const char *hdr, struct body *body)
+{
+    /* If we saw this header already, discard the earlier value */
+    if (body->type) {
+        free(body->type);
+        free(body->subtype);
+        body->type = body->subtype = NULL;
+        param_free(&body->params);
+    }
+
+    message_parse_type(hdr, &body->type, &body->subtype, &body->params);
 }
 
 /*
@@ -1963,7 +1966,7 @@ EXPORTED void message_write_body(struct buf *buf, const struct body *body,
             static struct body zerotextbody;
 
             if (!zerotextbody.type) {
-                message_parse_type(DEFAULT_CONTENT_TYPE, &zerotextbody);
+                message_parse_bodytype(DEFAULT_CONTENT_TYPE, &zerotextbody);
             }
             message_write_body(buf, &zerotextbody, newformat);
             return;
@@ -2458,7 +2461,7 @@ static void message_write_searchaddr(struct buf *buf,
     }
 }
 
-static void param_free(struct param **paramp)
+EXPORTED void param_free(struct param **paramp)
 {
     struct param *param, *nextparam;
 

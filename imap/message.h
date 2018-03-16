@@ -139,6 +139,8 @@ struct param {
     char *attribute;
     char *value;
 };
+extern void param_free(struct param **paramp);
+
 extern int message_copy_strict P((struct protstream *from, FILE *to,
                                   unsigned size, int allow_null));
 
@@ -181,6 +183,8 @@ extern int message_write_cache P((struct index_record *record, const struct body
 extern int message_create_record P((struct index_record *message_index,
                                     const struct body *body));
 extern void message_free_body P((struct body *body));
+
+extern void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp);
 
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);
