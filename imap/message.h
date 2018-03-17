@@ -185,6 +185,7 @@ extern int message_create_record P((struct index_record *message_index,
 extern void message_free_body P((struct body *body));
 
 extern void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp);
+extern void message_parse_disposition(const char *hdr, char **hdpr, struct param **paramp);
 
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);

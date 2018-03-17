@@ -118,7 +118,7 @@ static void message_parse_charset(const struct body *body,
                                   int *encoding, charset_t *charset);
 static void message_parse_header(const char *hdr, struct buf *buf);
 static void message_parse_bodytype(const char *hdr, struct body *body);
-static void message_parse_disposition(const char *hdr, struct body *body);
+static void message_parse_bodydisposition(const char *hdr, struct body *body);
 static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
 static void message_parse_language(const char *hdr, struct param **paramp);
@@ -794,7 +794,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 message_parse_string(value, &body->description);
                 break;
             case RFC822_CONTENT_DISPOSITION:
-                message_parse_disposition(value, body);
+                message_parse_bodydisposition(value, body);
                 break;
             case RFC822_CONTENT_ID:
                 message_parse_string(value, &body->id);
@@ -1159,17 +1159,10 @@ static void message_parse_bodytype(const char *hdr, struct body *body)
 /*
  * Parse a Content-Disposition from a header.
  */
-static void message_parse_disposition(const char *hdr, struct body *body)
+EXPORTED void message_parse_disposition(const char *hdr, char **hdrp, struct param **paramp)
 {
     const char *disposition;
     int dispositionlen;
-
-    /* If we saw this header already, discard the earlier value */
-    if (body->disposition) {
-        free(body->disposition);
-        body->disposition = NULL;
-        param_free(&body->disposition_params);
-    }
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
@@ -1189,13 +1182,28 @@ static void message_parse_disposition(const char *hdr, struct body *body)
     if (hdr && *hdr != ';') return;
 
     /* Save content disposition */
-    body->disposition = message_ucase(xstrndup(disposition, dispositionlen));
+    *hdrp = message_ucase(xstrndup(disposition, dispositionlen));
 
     /* Parse parameter list */
     if (hdr) {
-        message_parse_params(hdr+1, &body->disposition_params);
-        message_fold_params(&body->disposition_params);
+        message_parse_params(hdr+1, paramp);
+        message_fold_params(paramp);
     }
+}
+
+/*
+ * Parse a Content-Disposition from a header.
+ */
+static void message_parse_bodydisposition(const char *hdr, struct body *body)
+{
+    /* If we saw this header already, discard the earlier value */
+    if (body->disposition) {
+        free(body->disposition);
+        body->disposition = NULL;
+        param_free(&body->disposition_params);
+    }
+
+    message_parse_disposition(hdr, &body->disposition, &body->disposition_params);
 }
 
 /*
