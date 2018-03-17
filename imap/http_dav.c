@@ -697,7 +697,7 @@ EXPORTED int calcarddav_parse_path(const char *path,
     mboxname = mbname_intname(mbname);
 
     /* Check for FastMail legacy sharing URLs and redirect */
-    if (!config_getswitch(IMAPOPT_FASTMAILSHARING) &&
+    if (httpd_userid && !config_getswitch(IMAPOPT_FASTMAILSHARING) &&
         tgt->flags != TGT_DAV_SHARED &&
         !mboxname_userownsmailbox(httpd_userid, mboxname)) {
         buf_reset(&redirect_buf);
