@@ -1634,6 +1634,10 @@ sub test_calendarevent_set_locations
         locD => {
             "coordinates" => "geo:48.208304,16.371602",
         },
+        locE => {
+            name => "location E",
+            linkIds => [ 'link1', 'link2' ],
+        },
     };
 
     my $event =  {
@@ -1646,6 +1650,10 @@ sub test_calendarevent_set_locations
         "isAllDay"=> JSON::false,
         "freeBusyStatus"=> "free",
         "locations" => $locations,
+        "links" => {
+            link1 => { href => 'https://foo.local' },
+            link2 => { href => 'https://bar.local' },
+        },
     };
 
     my $ret = $self->createandget_event($event);
