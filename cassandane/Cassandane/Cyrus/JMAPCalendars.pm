@@ -1619,20 +1619,21 @@ sub test_calendarevent_set_locations
     my $calid = "Default";
 
     my $locations = {
-	    locA => {
-		    "name" => "location A",
-	    },
-	    locB => {
-		    "name" => "location B",
-		    "uri" => "skype:username",
-	    },
-	    locC => {
-		    "coordinates" => "geo:48.208304,16.371602",
-		    "name" => "a place in Vienna",
-	    },
-	    locD => {
-		    "coordinates" => "geo:48.208304,16.371602",
-	    },
+        locA => {
+            "name" => "location A",
+            "description" => "my great description",
+        },
+        locB => {
+            "name" => "location B",
+            "uri" => "skype:username",
+        },
+        locC => {
+            "coordinates" => "geo:48.208304,16.371602",
+            "name" => "a place in Vienna",
+        },
+        locD => {
+            "coordinates" => "geo:48.208304,16.371602",
+        },
     };
 
     my $event =  {
