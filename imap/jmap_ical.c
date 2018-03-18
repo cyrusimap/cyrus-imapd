@@ -2082,7 +2082,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         ctx->wantprops = NULL;
     }
 
-    event = json_pack("{}");
+    event = json_pack("{s:s}", "@type", "jsevent");
     if (wantprop(ctx, "localizations") && !ctx->localizations) {
         ctx->localizations = json_pack("{}");
     }
@@ -4032,6 +4032,16 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     /* uid */
     icalcomponent_set_uid(comp, ctx->uid);
+
+    json_t *jtype = json_object_get(event, "@type");
+    if (JNOTNULL(jtype) && json_is_string(jtype)) {
+        if (strcmp(json_string_value(jtype), "jsevent")) {
+            invalidprop(ctx, "@type");
+        }
+    }
+    else if (JNOTNULL(jtype)) {
+        invalidprop(ctx, "@type");
+    }
 
     /* isAllDay */
     readprop(ctx, event, "isAllDay", is_create, "b", &ctx->is_allday);
