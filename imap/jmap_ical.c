@@ -3629,7 +3629,6 @@ static int
 validate_location(context_t *ctx, json_t *loc)
 {
     const char *val = NULL;
-    json_t *address = NULL;
     size_t invalid_cnt = invalid_prop_count(ctx);
     short isempty = 1;
     int pe;
@@ -3654,18 +3653,6 @@ validate_location(context_t *ctx, json_t *loc)
         } else {
             invalidprop(ctx, "timeZone");
         }
-    }
-    /* address */
-    pe = readprop(ctx, loc, "address", 0, "o", &address);
-    if (pe > 0) {
-        beginprop(ctx, "address");
-        readprop(ctx, loc, "street", 0, "s", &val);
-        readprop(ctx, loc, "locality", 0, "s", &val);
-        readprop(ctx, loc, "region", 0, "s", &val);
-        readprop(ctx, loc, "postcode", 0, "s", &val);
-        readprop(ctx, loc, "country", 0, "s", &val);
-        endprop(ctx);
-        isempty = 0;
     }
     /* coordinates */
     pe = readprop(ctx, loc, "coordinates", 0, "s", &val);
