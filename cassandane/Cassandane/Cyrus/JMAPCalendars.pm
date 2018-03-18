@@ -704,6 +704,9 @@ sub normalize_event
 {
     my ($event) = @_;
 
+    if (not exists $event->{q{@type}}) {
+        $event->{q{@type}} = 'jsevent';
+    }
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
     }
@@ -818,6 +821,7 @@ sub test_calendarevent_get_simple
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
+    $self->assert_str_equals('jsevent', $event->{q{@type}});
     $self->assert_str_equals($id, $event->{uid});
     $self->assert_null($event->{relatedTo});
     $self->assert_str_equals("yo", $event->{title});
@@ -860,7 +864,7 @@ sub test_calendarevent_get_properties
     $self->assert_not_null($event->{uid});
     $self->assert_not_null($event->{"x-href"});
     $self->assert_not_null($event->{calendarId});
-    $self->assert_num_equals(scalar keys %$event, 4);
+    $self->assert_num_equals(scalar keys %$event, 5);
 }
 
 sub test_calendarevent_get_relatedto
@@ -1269,6 +1273,51 @@ sub createcalendar
     ]);
     $self->assert_not_null($res->[0][1]{created});
     return $res->[0][1]{created}{"1"}{id};
+}
+
+sub test_calendarevent_set_type
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    # Setting no type is OK, we'll just assume jsevent
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => $event,
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"});
+
+    # Setting any type other jsevent type is NOT OK
+    $event->{q{@type}} = 'jstask';
+    $event->{uid} = '58ADE31-custom-UID-2';
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => $event,
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notCreated}{"1"});
 }
 
 
