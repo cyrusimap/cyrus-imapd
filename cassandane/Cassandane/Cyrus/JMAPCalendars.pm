@@ -1621,13 +1621,6 @@ sub test_calendarevent_set_locations
     my $locations = {
 	    locA => {
 		    "name" => "location A",
-		    "address" => {
-			    "street" => "107 a street",
-			    "locality" => "a town",
-			    "region" => "",
-			    "postcode" => "4321",
-			    "country" => "republic of a",
-		    },
 	    },
 	    locB => {
 		    "name" => "location B",
