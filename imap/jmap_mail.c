@@ -103,6 +103,19 @@ static int getEmailSubmissionsList(jmap_req_t *req);
 static int getEmailSubmissionsListUpdates(jmap_req_t *req);
 
 /*
+ * TODO This code is a McMansion where the last 2-3 years of the
+ * evolvoing JMAP spec shine through. It truly deserves either heavy
+ * polishing, or a rewrite. Last time I (rsto) tried in Q1/2018,
+ * that turned out to be still too early: there's the stable
+ * branch requiring bug fixes, and there's the experimental branch
+ * that's following the latest JMAP spec changes, producing more
+ * churn. A rewrite in parallel to these two branches turned out
+ * to produce an unmanageable load of merge conflicts.
+ * When the JMAP spec is stable, this file is ripe to get ripped
+ * apart.
+ */
+
+/*
  * Possibly to be implemented:
  * - Email/copy
  * - VacationResponse/get
@@ -4885,10 +4898,12 @@ struct getmsglist_window {
     size_t limit;
     int collapse;
     modseq_t sincemodseq;
+    uint32_t sinceuid; /* for queryChanges */
     const char *uptomsgid;
 
     /* output arguments */
     modseq_t highestmodseq;
+    uint32_t highestuid; /* for queryChanges */
     int cancalcupdates;
 
     /* internal state */
@@ -4990,6 +5005,18 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
     *total_threads = 0;
 
+    /* Special case: if threads are not collapsed and filter narrows
+     * search down to a single mailbox, then we can unambiguously
+     * identify in queryChanges if records need to be reported in
+     * 'added', e.g. we don't have to report them in both 'added'
+     * and 'removed'. */
+    int one_mailbox_only = 0;
+    if (!window->collapse) {
+        if (json_is_string(json_object_get(filter, "inMailbox"))) {
+            one_mailbox_only = 1;
+        }
+    }
+
     for (i = 0 ; i < query->merged_msgdata.count ; i++) {
         MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
         search_folder_t *folder = md->folder;
@@ -5020,6 +5047,8 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* we're doing getEmailsListUpdates - we use the results differently */
         if (window->sincemodseq) {
+            if (foundupto) goto doneloop;
+
             /* Keep track of the highest modseq */
             if (window->highestmodseq < md->modseq)
                 window->highestmodseq = md->modseq;
@@ -5049,19 +5078,24 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                      * But for the former case, we can't tell if the message
                      * is a truly new search result by looking at its modseq
                      * or index record. It might just have been an already
-                     * seen result that got its modseq bumped. We could
-                     * try to be clever by comparing the index record
-                     * internaldate and last_updated timestamps, but that
-                     * comes with all the edge cases of clock-based
-                     * versioning and makes testing brittle.
+                     * seen result that got its modseq bumped. If all results
+                     * are in the same mailbox, we can unambigously decide
+                     * what to do based on the UID.
                      *
-                     * To be safe, report candiates both in removed AND added,
-                     * as it's done in the codepath for collapsed threads.
-                     *
-                     * TODO only return new messages in 'added'
+                     * If search isn't narrowed to a single mailbox, we'll
+                     * report candiates both in removed AND added, as it's done
+                     * in the codepath for collapsed threads.
                      */
-                    update_destroyed(*expungedids, msgid);
-                    update_added(*messageids, msgid, *total-1);
+                    if (one_mailbox_only) {
+                        if (md->uid <= window->sinceuid) goto doneloop;
+                        update_added(*messageids, msgid, *total-1);
+                        /* Keep track of the highest uid */
+                        if (window->highestuid < md->uid)
+                            window->highestuid = md->uid;
+                    } else {
+                        update_destroyed(*expungedids, msgid);
+                        update_added(*messageids, msgid, *total-1);
+                    }
                 }
                 goto doneloop;
             }
@@ -5212,6 +5246,12 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Keep track of the highest modseq */
         if (window->highestmodseq < md->modseq)
             window->highestmodseq = md->modseq;
+
+        if (one_mailbox_only) {
+            /* Keep track of the highest uid */
+            if (window->highestuid < md->uid)
+                window->highestuid = md->uid;
+        }
 
         /* Check if the message is expunged in all mailboxes */
         r = jmapmsg_isexpunged(req, msgid, &is_expunged);
@@ -5364,8 +5404,11 @@ static int getEmailsList(jmap_req_t *req)
     query.can_calculate_changes = window.cancalcupdates;
     query.position = window.position;
 
+    /* State token is current modseq ':' highestuid - because queryChanges... */
     json_t *jstate = jmap_getstate(req, 0);
-    query.state = xstrdup(json_string_value(jstate));
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%s:%u", json_string_value(jstate), window.highestuid);
+    query.state = buf_release(&buf);
     json_decref(jstate);
 
     /* Build response */
@@ -5409,16 +5452,17 @@ static int getEmailsListUpdates(jmap_req_t *req)
         goto done;
 	}
 
-    /* XXX - add search_is_mutable tests */
-
     /* XXX Guess, we don't need total_threads anymore */
     size_t total_threads = 0;
     json_t *threadids = NULL;
     /* Set up search window */
     struct getmsglist_window window;
     memset(&window, 0, sizeof(struct getmsglist_window));
-    window.sincemodseq = atomodseq_t(query.since_state);
-    if (window.sincemodseq == 0) {
+
+    /* State token is current modseq ':' highestuid - because queryChanges... */
+    int nscan = sscanf(query.since_state, MODSEQ_FMT ":%u",
+                       &window.sincemodseq, &window.sinceuid);
+    if (nscan != 2) {
         jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
         goto done;
     }
@@ -5450,9 +5494,11 @@ static int getEmailsListUpdates(jmap_req_t *req)
             goto done;
         }
     }
-    json_t *jstate = jmap_getstate(req, 0);
-    query.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+
+    /* State token is current modseq ':' highestuid - because queryChanges... */
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT ":%u", window.highestmodseq, window.highestuid);
+    query.new_state = buf_release(&buf);
 
     /* Build response */
     json_t *res = jmap_querychanges_reply(&query);
