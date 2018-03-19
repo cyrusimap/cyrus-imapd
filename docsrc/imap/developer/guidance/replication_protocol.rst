@@ -1,4 +1,4 @@
-.. _imap-developer-guidance-replication-protocol
+.. _imap-developer-guidance-replication-protocol:
 
 ..  Note: This document was converted from the original by Nic Bernstein
     (Onlight).  Any formatting mistakes are my fault and not the
