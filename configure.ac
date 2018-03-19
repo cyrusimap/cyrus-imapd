@@ -955,6 +955,7 @@ if test "x$enable_afs" = "xyes"; then
       AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])
     ])
 
+    SAVE_CFLAGS="$CFLAGS"
     CFLAGS="${CFLAGS} -I${with_afs_incdir}"
     AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
     if test -f ${with_afs_libdir}/afs/liblwp.a; then
@@ -1005,6 +1006,7 @@ if test "x$enable_afs" = "xyes"; then
       AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
     fi
     LIBS="$SAVE_LIBS"
+    CFLAGS="$SAVE_CFLAGS"
     AC_SUBST(AFS_LDFLAGS)
     AC_SUBST(AFS_LIBS)
 fi
