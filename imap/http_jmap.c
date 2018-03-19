@@ -95,6 +95,7 @@ static time_t compile_time;
 static json_t *jmap_capabilities = NULL;
 
 /* HTTP method handlers */
+static int jmap_connect(struct transaction_t *txn, void *params);
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
 
@@ -127,7 +128,7 @@ struct namespace_t namespace_jmap = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
+        { &jmap_connect,        NULL },                 /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &jmap_get,            NULL },                 /* GET          */
@@ -430,6 +431,20 @@ static int jmap_auth(const char *userid __attribute__((unused)))
     return 0;
 }
 
+static int jmap_connect(struct transaction_t *txn,
+                        void *params __attribute__((unused)))
+{
+    /* Upgrade to WebSockets over HTTP/2 on API endpoint, if requested */
+    if (txn->flags.ver != VER_2) return HTTP_NOT_IMPLEMENTED;
+
+    if (jmap_parse_path(txn) || (txn->req_tgt.flags != JMAP_ENDPOINT_API)) {
+        return HTTP_NOT_ALLOWED;
+    }
+
+    return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+}
+
+
 /* Perform a GET/HEAD request */
 static int jmap_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
@@ -441,9 +456,11 @@ static int jmap_get(struct transaction_t *txn,
     }
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
-        /* Upgrade to WebSockets on API endpoint, if requested */
-        r = ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
-        if (r) return r;
+        /* Upgrade to WebSockets over HTTP/1.1 on API endpoint, if requested */
+        if (txn->flags.ver == VER_1_1) {
+            r = ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+            if (r) return r;
+        }
 
         return jmap_settings(txn);
     }

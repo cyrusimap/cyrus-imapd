@@ -386,6 +386,7 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static int auth_success(struct transaction_t *txn, const char *userid);
 static int http_auth(const char *creds, struct transaction_t *txn);
 
+static int meth_connect(struct transaction_t *txn, void *params);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
@@ -435,7 +436,7 @@ struct namespace_t namespace_default = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
+        { &meth_connect,        NULL },                 /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -2439,6 +2440,13 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     switch (code) {
     case HTTP_OK:
         switch (txn->meth) {
+        case METH_CONNECT:
+            if (txn->ws_ctx) {
+                /* Add WebSocket headers */
+                ws_add_resp_hdrs(txn);
+            }
+            break;
+
         case METH_GET:
         case METH_HEAD:
             /* Construct Accept-Ranges header for GET and HEAD responses */
@@ -2616,8 +2624,20 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 comma_list_hdr(txn, "Trailer", trailer_hdrs, txn->flags.trailer);
             }
         }
-        else if (resp_body->len || txn->meth != METH_HEAD) {
-            simple_hdr(txn, "Content-Length", "%lu", resp_body->len);
+        else {
+            switch (txn->meth) {
+            case METH_CONNECT:
+                break;
+
+            case METH_HEAD:
+                if (!resp_body->len) break;
+
+                GCC_FALLTHROUGH
+
+            default:
+                simple_hdr(txn, "Content-Length", "%lu", resp_body->len);
+                break;
+            }
         }
     }
 
@@ -4156,6 +4176,18 @@ static int ws_echo(struct buf *inbuf, struct buf *outbuf,
 }
 
 
+static int meth_connect(struct transaction_t *txn,
+                        void *params __attribute__((unused)))
+{
+    /* Upgrade to WebSockets over HTTP/2 on root, if requested */
+    if (txn->flags.ver != VER_2) return HTTP_NOT_IMPLEMENTED;
+
+    if (strcmp(txn->req_uri->path, "/")) return HTTP_NOT_ALLOWED;
+
+    return ws_start_channel(txn, NULL, &ws_echo);
+}
+
+
 #define WELL_KNOWN_PREFIX "/.well-known"
 
 /* Perform a GET/HEAD request */
@@ -4170,8 +4202,8 @@ static int meth_get(struct transaction_t *txn,
     size_t msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
 
-    if (!strcmp(txn->req_uri->path, "/")) {
-        /* Upgrade to WebSockets on root, if requested */
+    /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
+    if ((txn->flags.ver == VER_1_1) && !strcmp(txn->req_uri->path, "/")) {
         ret = ws_start_channel(txn, NULL, &ws_echo);
         if (ret) return ret;
     }

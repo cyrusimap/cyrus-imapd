@@ -161,7 +161,14 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     struct transaction_t *txn = (struct transaction_t *) user_data;
     int r;
 
-    r = prot_write(txn->conn->pout, (const char *) data, len);
+    if (txn->conn->http2_ctx) {
+        /* Treat as chunked data */
+        txn->flags.te = TE_CHUNKED;
+        r = http2_data_chunk(txn, (char *) data, len, 0, NULL /* md5ctx */);
+    }
+    else {
+        r = prot_write(txn->conn->pout, (const char *) data, len);
+    }
 
     syslog(LOG_DEBUG, "ws_send_cb(%zu): %d", len, r);
 
@@ -182,9 +189,15 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     struct protstream *pin = txn->conn->pin;
     ssize_t n;
 
+    if (txn->conn->http2_ctx) {
+        /* Data has been read as request body */
+        pin = prot_readmap(buf_base(&txn->req_body.payload),
+                           buf_len(&txn->req_body.payload));
+    }
+
     prot_NONBLOCK(pin);
 
-    n = prot_read(txn->conn->pin, (char *) buf, len);
+    n = prot_read(pin, (char *) buf, len);
     if (!n) {
         /* No data */
         if (pin->eof)
@@ -200,6 +213,8 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     syslog(LOG_DEBUG,
            "ws_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
            len, n, pin->eof, pin->error ? pin->error : "");
+
+    if (txn->conn->http2_ctx) prot_free(pin);
 
     return n;
 }
@@ -275,7 +290,12 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
-    buf_printf(&ctx->log, " (opcode=%s; rsv=0x%x; length=%ld",
+    buf_appendcstr(&ctx->log, " (");
+    if (txn->http2_strm) {
+        buf_printf(&ctx->log, "stream-id=%d; ",
+                   http2_get_streamid(txn->http2_strm));
+    }
+    buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
                wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
 
     switch (arg->opcode) {
@@ -469,7 +489,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                             int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
                                            struct buf *logbuf, void **rock))
 {
-    int r;
+    int r, success;
     const char **hdr, *clientkey = NULL;
     unsigned char sha1buf[SHA1_DIGEST_LENGTH];
     wslay_event_context_ptr ev;
@@ -484,16 +504,48 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         on_msg_recv_cb
     };
 
-    /* Check for proper request method */
-    if (txn->meth != METH_GET) return 0;
+    if (txn->flags.ver == VER_2) {
+        /* Check for proper request method */
+        if (txn->meth != METH_CONNECT) return 0;
 
-    /* Check for WebSocket upgrade */
-    else if (!(txn->flags.upgrade & UPGRADE_WS)) {
-        if (ws_enabled()) {
-            txn->flags.upgrade |= UPGRADE_WS;
-            txn->flags.conn |= CONN_UPGRADE;
+        /* Check for WebSocket upgrade */
+        else if (!(hdr = spool_getheader(txn->req_hdrs, ":protocol")) ||
+                 strcmp(hdr[0], WS_TOKEN)) {
+            return HTTP_NOT_ALLOWED;
         }
-        return 0;
+
+        success = HTTP_OK;
+    }
+    else {
+        /* Check for proper request method */
+        if (txn->meth != METH_GET) return 0;
+
+        /* Check for WebSocket upgrade */
+        else if (!(txn->flags.upgrade & UPGRADE_WS)) {
+            if (ws_enabled()) {
+                txn->flags.upgrade |= UPGRADE_WS;
+                txn->flags.conn |= CONN_UPGRADE;
+            }
+            return 0;
+        }
+
+        /* Check for WebSocket client key */
+        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
+        if (!hdr) {
+            txn->error.desc = "Missing WebSocket client key";
+            return HTTP_BAD_REQUEST;
+        }
+        else if (hdr[1]) {
+            txn->error.desc = "Multiple WebSocket client keys";
+            return HTTP_BAD_REQUEST;
+        }
+        else if (strlen(hdr[0]) != WS_CKEY_LEN) {
+            txn->error.desc = "Invalid WebSocket client key";
+            return HTTP_BAD_REQUEST;
+        }
+        clientkey = hdr[0];
+
+        success = HTTP_SWITCH_PROT;
     }
 
     /* Check for supported WebSocket version */
@@ -538,22 +590,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
             return HTTP_BAD_REQUEST;
         }
     }
-
-    /* Check for WebSocket client key */
-    hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
-    if (!hdr) {
-        txn->error.desc = "Missing WebSocket client key";
-        return HTTP_BAD_REQUEST;
-    }
-    else if (hdr[1]) {
-        txn->error.desc = "Multiple WebSocket client keys";
-        return HTTP_BAD_REQUEST;
-    }
-    else if (strlen(hdr[0]) != WS_CKEY_LEN) {
-        txn->error.desc = "Invalid WebSocket client key";
-        return HTTP_BAD_REQUEST;
-    }
-    clientkey = hdr[0];
 
     /* Create server context */
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
@@ -601,8 +637,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                protocol ? protocol : "echo" , txn->req_line.ver);
     ctx->log_tail = buf_len(&ctx->log);
 
-    /* Tell client to start WebSocket upgrade (RFC 6455) */
-    return HTTP_SWITCH_PROT;
+    /* Tell client that WebSocket negotiation has succeeded */
+    return success;
 }
 
 
@@ -614,7 +650,9 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 
     if (!ctx) return;
 
-    simple_hdr(txn, "Sec-WebSocket-Accept", ctx->accept);
+    if (txn->flags.ver != VER_2) {
+        simple_hdr(txn, "Sec-WebSocket-Accept", ctx->accept);
+    }
 
     if (ctx->protocol) {
         simple_hdr(txn, "Sec-WebSocket-Protocol", ctx->protocol);

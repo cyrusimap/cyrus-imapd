@@ -62,6 +62,7 @@ int (*alpn_select_cb)(SSL *ssl,
 #include <sasl/saslutil.h>
 
 #include "http_h2.h"
+#include "http_ws.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -333,6 +334,12 @@ static int frame_recv_cb(nghttp2_session *session,
         GCC_FALLTHROUGH
 
     case NGHTTP2_DATA:
+        if (txn->ws_ctx) {
+            /* WebSocket input */
+            ws_input(txn);
+            break;
+        }
+
         /* Check that the client request has finished */
         if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
 
@@ -475,7 +482,11 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 HIDDEN int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn)
 {
-    nghttp2_settings_entry iv = { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
+    nghttp2_settings_entry iv[] = {
+        { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 },
+        { NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, 1 }  /* MUST be last */
+    };
+    size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled();
     struct http2_context *ctx = xzmalloc(sizeof(struct http2_context));
     int r;
 
@@ -544,7 +555,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
     tcp_disable_nagle(1); /* output fd */
 
-    r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, &iv, 1);
+    r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, iv, niv);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_settings: %s", nghttp2_strerror(r));
         return HTTP_SERVER_ERROR;
@@ -569,6 +580,14 @@ HIDDEN void http2_end_session(void *http2_ctx)
 HIDDEN void http2_output(struct transaction_t *txn)
 {
     struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
+    int32_t stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
+    struct transaction_t *strm_txn =
+        nghttp2_session_get_stream_user_data(ctx->session, stream_id);
+
+    if (strm_txn->ws_ctx) {
+        /* WebSocket output */
+        ws_output(strm_txn);
+    }
 
     if (nghttp2_session_want_write(ctx->session)) {
         /* Send queued frame(s) */
