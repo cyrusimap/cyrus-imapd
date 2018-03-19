@@ -110,6 +110,9 @@ on certain Internet/UNIX sockets.
         interface, and *port* is either a port number or service name
         (as listed in ``/etc/services``).
 
+    Note that on most systems UNIX socket paths are limited to around
+    100 characters.  See your system documentation for specifics.
+
 .. parsed-literal::
 
     **proto=**\ tcp
