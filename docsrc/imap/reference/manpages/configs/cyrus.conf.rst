@@ -141,6 +141,9 @@ on certain Internet/UNIX sockets.
     localhost or 127.0.0.1 to restict access, i.e. when a proxy
     on the same host is front-ending Cyrus.
 
+    Note that on most systems UNIX socket paths are limited to around
+    100 characters.  See your system documentation for specifics.
+
 .. parsed-literal::
 
     **proto=**\ tcp
