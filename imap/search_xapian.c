@@ -3111,8 +3111,6 @@ const struct search_engine xapian_search_engine = {
     end_snippets,
     describe_internalised,
     free_internalised,
-    /*start_daemon*/NULL,
-    /*stop_daemon*/NULL,
     list_files,
     compact_dbs,
     delete_user,  /* XXX: fixme */

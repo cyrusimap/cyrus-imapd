@@ -139,8 +139,6 @@ struct search_engine {
     int (*end_snippets)(search_text_receiver_t *);
     char *(*describe_internalised)(void *);
     void (*free_internalised)(void *);
-    int (*start_daemon)(int verbose);
-    int (*stop_daemon)(int verbose);
     int (*list_files)(const char *userid, strarray_t *);
     int (*compact)(const char *userid, const char *tempdir,
                    const strarray_t *srctiers, const char *desttier,
@@ -178,8 +176,6 @@ int search_end_snippets(search_text_receiver_t *rx);
  * be free()d by the caller.  Only useful for whitebox testing.  */
 char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
-int search_start_daemon(int verbose);
-int search_stop_daemon(int verbose);
 int search_list_files(const char *userid, strarray_t *);
 int search_compact(const char *userid, const char *tempdir,
                    const strarray_t *srctiers, const char *desttier, int verbose);
