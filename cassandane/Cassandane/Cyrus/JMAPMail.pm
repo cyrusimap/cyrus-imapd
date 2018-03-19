@@ -2798,6 +2798,15 @@ sub test_email_set_draft
     $self->assert_str_equals($msg->{headers}->{foo}, $draft->{headers}->{foo});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
+
+    # Now change the draft keyword, which is allowed since approx ~Q1/2018.
+    xlog "Update a draft";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $id => { 'keywords/$draft' => undef } },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
 }
 
 sub test_email_set_issue2293
