@@ -562,7 +562,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
                     /* Don't allow scheduling with remote users via iSchedule */
                     if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;
-                    sched_param_free(&sparam);
+                    sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
                     else sched_deliver(recipient, &sched_data, authstate);

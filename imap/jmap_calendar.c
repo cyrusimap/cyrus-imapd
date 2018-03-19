@@ -1342,13 +1342,13 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 
             bzero(&sparam, sizeof(struct caldav_sched_param));
             if (caladdress_lookup(addr, &sparam, userid) || !sparam.isyou) {
-                sched_param_free(&sparam);
+                sched_param_fini(&sparam);
                 continue;
             }
 
             /* First participant that matches isyou wins */
             json_object_set_new(obj, "participantId", json_string(id));
-            sched_param_free(&sparam);
+            sched_param_fini(&sparam);
             break;
         }
 

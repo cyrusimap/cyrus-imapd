@@ -145,7 +145,7 @@ int caladdress_lookup(const char *addr,
         if (!found) return HTTP_NOT_FOUND;
         else {
             if (param->userid) free(param->userid);
-            param->userid = xstrndup(userid, len); /* freed by sched_param_free */
+            param->userid = xstrndup(userid, len); /* freed by sched_param_fini */
         }
 
         /* Lookup user's cal-home-set to see if its on this server */
@@ -158,7 +158,7 @@ int caladdress_lookup(const char *addr,
         mbname_free(&mbname);
 
         if (!r) {
-            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_free */
+            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
             mboxlist_entry_free(&mbentry);
             if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
             return 0;
@@ -169,7 +169,7 @@ int caladdress_lookup(const char *addr,
     /* User is outside of our domain(s) -
        Do remote scheduling (default = iMIP) */
     if (param->userid) free(param->userid);
-    param->userid = xstrdupnull(userid); /* freed by sched_param_free */
+    param->userid = xstrdupnull(userid); /* freed by sched_param_fini */
     param->flags |= SCHEDTYPE_REMOTE;
 
     /* Do iSchedule DNS SRV lookup */
@@ -768,18 +768,13 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
 }
 
 
-static void free_sched_param_props(void *data)
+static void sched_param_cleanup(void *data)
 {
-    struct caldav_sched_param *sched_param = (struct caldav_sched_param *) data;
+    struct caldav_sched_param *sparam = (struct caldav_sched_param *) data;
 
-    if (sched_param) {
-        struct proplist *prop, *next;
-
-        for (prop = sched_param->props; prop; prop = next) {
-            next = prop->next;
-            free(prop);
-        }
-        free(sched_param);
+    if (sparam) {
+        sched_param_fini(sparam);
+        free(sparam);
     }
 }
 
@@ -998,7 +993,7 @@ int sched_busytime_query(struct transaction_t *txn,
         struct remote_rock rrock = { txn, ical, root, ns };
         hash_enumerate(&remote_table, busytime_query_remote, &rrock);
     }
-    free_hash_table(&remote_table, free_sched_param_props);
+    free_hash_table(&remote_table, sched_param_cleanup);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_OK, txn, root->doc);
@@ -2069,7 +2064,7 @@ void sched_deliver(const char *recipient, void *data, void *rock)
     }
 
 done:
-    sched_param_free(&sparam);
+    sched_param_fini(&sparam);
 }
 
 /*
@@ -3138,11 +3133,16 @@ void sched_reply(const char *userid, const char *attendee,
     if (reply.itip) icalcomponent_free(reply.itip);
 }
 
-void sched_param_free(struct caldav_sched_param *sparam) {
-    if (sparam->userid) free(sparam->userid);
-    if (sparam->server) free(sparam->server);
-    if (sparam->props) {
-        free_sched_param_props(sparam->props);
+void sched_param_fini(struct caldav_sched_param *sparam)
+{
+    free(sparam->userid);
+    free(sparam->server);
+
+    struct proplist *prop, *next;
+    for (prop = sparam->props; prop; prop = next) {
+        next = prop->next;
+        free(prop);
     }
+
     memset(sparam, 0, sizeof(struct caldav_sched_param));
 }

@@ -3199,12 +3199,12 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
         goto done;
     }
     if (!sparam.isyou) {
-        sched_param_free(&sparam);
+        sched_param_fini(&sparam);
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
         goto done;
     }
-    sched_param_free(&sparam);
+    sched_param_fini(&sparam);
 
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:

@@ -96,7 +96,7 @@ struct proplist {
 };
 
 /* Each calendar user address has the following scheduling protocol params */
-/* All memory must be freed with sched_param_free. */
+/* All memory must be freed with sched_param_fini. */
 struct caldav_sched_param {
     char *userid;       /* Userid corresponding to calendar address */
     char *server;       /* Remote server user lives on */
@@ -106,7 +106,7 @@ struct caldav_sched_param {
     struct proplist *props; /* List of attendee iCal properties */
 };
 
-extern void sched_param_free(struct caldav_sched_param *sparam);
+extern void sched_param_fini(struct caldav_sched_param *sparam);
 
 struct freebusy {
     struct icalperiodtype per;
