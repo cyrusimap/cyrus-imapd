@@ -7883,13 +7883,6 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
                 strarray_append(&user_flagnames, keyword);
             }
         }
-
-        /* Reject any attempt to change the $Draft flag */
-        if ((old_systemflags & FLAG_DRAFT) != (new_systemflags & FLAG_DRAFT)) {
-            buf_printf(&buf, "keywords[$Draft]");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
     }
     if (json_object_size(keywords) > MAX_USER_FLAGS) {
         r = IMAP_USERFLAG_EXHAUSTED;
