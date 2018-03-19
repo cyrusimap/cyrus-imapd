@@ -334,8 +334,14 @@ int main(int argc, char **argv)
 
     for (;;) {
         int n;
+        int sig;
 
-        signals_poll();
+        sig = signals_poll();
+        if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
+            /* XXX maybe don't restart if we have clients? */
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            shut_down(0);
+        }
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {

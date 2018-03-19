@@ -361,7 +361,13 @@ int main(int argc, char **argv)
     if (r) fatal("couldn't open report file", EC_IOERR);
 
     for (;;) {
-        signals_poll();
+        int sig;
+
+        sig = signals_poll();
+        if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            shut_down(0);
+        }
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {

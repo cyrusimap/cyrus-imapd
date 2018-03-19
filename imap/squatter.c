@@ -720,7 +720,14 @@ static void do_rolling(const char *channel)
     slr = sync_log_reader_create_with_channel(channel);
 
     for (;;) {
-        signals_poll();
+        int sig = signals_poll();
+
+        if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            sync_log_reader_end(slr);
+            shut_down(0);
+        }
+
         if (shutdown_file(NULL, 0))
             shut_down(EC_TEMPFAIL);
 
