@@ -194,7 +194,7 @@ sub test_mailbox_get_specialuse
     my $inbox = $m{"Inbox"};
     my $archive = $m{"Archive"};
     my $drafts = $m{"Drafts"};
-    my $spam = $m{"Spam"};
+    my $junk = $m{"Spam"};
     my $sent = $m{"Sent"};
     my $trash = $m{"Trash"};
 
@@ -205,9 +205,9 @@ sub test_mailbox_get_specialuse
     $self->assert_null($drafts->{parentId});
     $self->assert_str_equals($drafts->{role}, "drafts");
 
-    $self->assert_str_equals($spam->{name}, "Spam");
-    $self->assert_null($spam->{parentId});
-    $self->assert_str_equals($spam->{role}, "spam");
+    $self->assert_str_equals($junk->{name}, "Spam");
+    $self->assert_null($junk->{parentId});
+    $self->assert_str_equals($junk->{role}, "junk");
 
     $self->assert_str_equals($sent->{name}, "Sent");
     $self->assert_null($sent->{parentId});
