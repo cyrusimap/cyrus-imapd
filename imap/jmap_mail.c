@@ -186,6 +186,7 @@ struct jmap_query {
     const char *anchor;
     ssize_t anchor_offset;
     size_t limit;
+    int have_limit;
     /* Response fields */
     char *state;
     int can_calculate_changes;
@@ -616,8 +617,9 @@ static void jmap_query_parse(json_t *jargs,
     }
 
     arg = json_object_get(jargs, "limit");
-    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+    if (json_is_integer(arg) && json_integer_value(arg) >= 0) {
         query->limit = json_integer_value(arg);
+        query->have_limit = 1;
     } else if (JNOTNULL(arg)) {
         jmap_parser_invalid(parser, "limit");
     }
@@ -1840,11 +1842,13 @@ static int getMailboxesList(jmap_req_t *req)
         goto done;
     }
 
-    /* Search for the mailboxes */
-    int r = jmapmbox_search(req, &query);
-    if (r) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
-        goto done;
+    if (query.limit || !query.have_limit) {
+        /* Search for the mailboxes */
+        int r = jmapmbox_search(req, &query);
+        if (r) {
+            jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+            goto done;
+        }
     }
     json_t *jstate = jmap_getstate(req, 0/*mbtype*/);
     query.state = xstrdup(json_string_value(jstate));
@@ -5376,38 +5380,42 @@ static int getEmailsList(jmap_req_t *req)
         goto done;
     }
 
-    /* XXX Guess, we don't need total_threads anymore */
-    size_t total_threads = 0;
-    json_t *threadids = NULL;
-    /* XXX - getmsglist_window is a legacy and should go away */
-    struct getmsglist_window window;
-    memset(&window, 0, sizeof(struct getmsglist_window));
-    window.position = query.position;
-    window.anchor = query.anchor;
-    window.anchor_off = query.anchor_offset;
-    window.limit = query.limit;
-    window.collapse = collapse_threads;
-    int r = jmapmsg_search(req, query.filter, query.sort, &window, 0,
-            &query.total, &total_threads, &query.ids, NULL, &threadids);
-    /* FIXME jmapmsg_search is a stinkin' mess. It tries to cover all of
-     * /query, /queryChanges and /changes, making *any* attempt to change
-     * its code an egg dance */
-    if (!JNOTNULL(query.ids)) query.ids = json_array();
-    json_decref(threadids); /* XXX threadIds is legacy */
-    if (r) {
-        json_t *err = r == IMAP_NOTFOUND ?
-            json_pack("{s:s}", "type", "unsupportedFilter") :
-            json_pack("{s:s}", "type", "serverError");
-        jmap_error(req, err);
-        goto done;
+    uint32_t highestuid = 0;
+    if (query.limit || !query.have_limit) {
+        /* XXX Guess, we don't need total_threads anymore */
+        size_t total_threads = 0;
+        json_t *threadids = NULL;
+        /* XXX - getmsglist_window is a legacy and should go away */
+        struct getmsglist_window window;
+        memset(&window, 0, sizeof(struct getmsglist_window));
+        window.position = query.position;
+        window.anchor = query.anchor;
+        window.anchor_off = query.anchor_offset;
+        window.limit = query.limit;
+        window.collapse = collapse_threads;
+        int r = jmapmsg_search(req, query.filter, query.sort, &window, 0,
+                &query.total, &total_threads, &query.ids, NULL, &threadids);
+        /* FIXME jmapmsg_search is a stinkin' mess. It tries to cover all of
+         * /query, /queryChanges and /changes, making *any* attempt to change
+         * its code an egg dance */
+        if (!JNOTNULL(query.ids)) query.ids = json_array();
+        json_decref(threadids); /* XXX threadIds is legacy */
+        if (r) {
+            json_t *err = r == IMAP_NOTFOUND ?
+                json_pack("{s:s}", "type", "unsupportedFilter") :
+                json_pack("{s:s}", "type", "serverError");
+            jmap_error(req, err);
+            goto done;
+        }
+        query.can_calculate_changes = window.cancalcupdates;
+        query.position = window.position;
+        highestuid = window.highestuid;
     }
-    query.can_calculate_changes = window.cancalcupdates;
-    query.position = window.position;
 
     /* State token is current modseq ':' highestuid - because queryChanges... */
     json_t *jstate = jmap_getstate(req, 0);
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%s:%u", json_string_value(jstate), window.highestuid);
+    buf_printf(&buf, "%s:%u", json_string_value(jstate), highestuid);
     query.state = buf_release(&buf);
     json_decref(jstate);
 
