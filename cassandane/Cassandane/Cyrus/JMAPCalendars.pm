@@ -709,6 +709,33 @@ sub normalize_event
     }
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
+    } elsif (defined $event->{locations}) {
+        foreach my $loc (values %{$event->{locations}}) {
+            if (not exists $loc->{rel}) {
+                $loc->{rel} = "unknown";
+            }
+            if (not exists $loc->{name}) {
+                $loc->{name} = ''
+            }
+            if (not exists $loc->{description}) {
+                $loc->{description} = undef;
+            }
+            if (not exists $loc->{coordinates}) {
+                $loc->{coordinates} = undef;
+            }
+            if (not exists $loc->{features}) {
+                $loc->{features} = undef;
+            }
+            if (not exists $loc->{linkIds}) {
+                $loc->{linkIds} = undef;
+            }
+            if (not exists $loc->{timeZone}) {
+                $loc->{timeZone} = undef;
+            }
+            if (not exists $loc->{uri}) {
+                $loc->{uri} = undef;
+            }
+        }
     }
     if (not exists $event->{localizations}) {
         $event->{localizations} = undef;
@@ -1162,6 +1189,33 @@ sub test_calendarevent_get_locations_apple
     $self->assert_num_equals(1, scalar @locations);
     $self->assert_str_equals("a place in Vienna", $locations[0]{name});
     $self->assert_str_equals("geo:48.208304,16.371602", $locations[0]{coordinates});
+}
+
+sub test_calendarevent_get_locations_conference
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('locations-conference');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $locations = $event->{locations};
+    $self->assert_num_equals(2, scalar (values %{$locations}));
+
+    my $loc1 = $locations->{loc1};
+    $self->assert_str_equals('Moderator dial-in', $loc1->{name});
+    $self->assert_str_equals('tel:+123451', $loc1->{uri});
+    $self->assert_str_equals('virtual', $loc1->{rel});
+    $self->assert_str_equals('phone', $loc1->{features}[0]);
+    $self->assert_num_equals(2, scalar @{$loc1->{features}});
+    $self->assert_str_equals('moderator', $loc1->{features}[1]);
+
+    my $loc2 = $locations->{loc2};
+    $self->assert_str_equals('Chat room', $loc2->{name});
+    $self->assert_str_equals('xmpp:chat123@conference.example.com', $loc2->{uri});
+    $self->assert_str_equals('virtual', $loc2->{rel});
+    $self->assert_num_equals(1, scalar @{$loc2->{features}});
+    $self->assert_str_equals('chat', $loc2->{features}[0]);
 }
 
 sub test_calendarevent_get_localizations
@@ -1619,6 +1673,7 @@ sub test_calendarevent_set_locations
     my $calid = "Default";
 
     my $locations = {
+        # A couple of sparse locations
         locA => {
             "name" => "location A",
             "description" => "my great description",
@@ -1633,10 +1688,78 @@ sub test_calendarevent_set_locations
         },
         locD => {
             "coordinates" => "geo:48.208304,16.371602",
+            name => "",
         },
         locE => {
             name => "location E",
             linkIds => [ 'link1', 'link2' ],
+        },
+        # A full-blown location that will become a CONFERENCE,
+        # if the JSON parser isn't unfortunate to pick this
+        # as the first location to generate.
+        locF => {
+            name => "location F",
+            description => "a description",
+            rel => "virtual",
+            features => [ "screen", "video" ],
+            timeZone => "Europe/Vienna",
+            coordinates => "geo:48.2010,16.3695,183",
+            uri => "https://somewhere.local",
+            linkIds =>  [ 'link1', 'link2' ],
+        },
+        # A full-blown location that will become a LOCATION
+        locG => {
+            name => "location G",
+            description => "a description",
+            features => [ "screen", "video" ],
+            timeZone => "Europe/Vienna",
+            coordinates => "geo:48.2010,16.3695,183",
+            uri => "https://somewhere.local",
+            linkIds =>  [ 'link1', 'link2' ],
+        },
+    };
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "freeBusyStatus"=> "free",
+        "locations" => $locations,
+        "links" => {
+            link1 => { href => 'https://foo.local' },
+            link2 => { href => 'https://bar.local' },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarId} = $ret->{calendarId};
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_calendarevent_set_locations_single
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $locations = {
+        # A full-blown location that will become a LOCATION
+        locF => {
+            name => "location F",
+            rel => "unknown",
+            description => "a description",
+            features => [ "screen", "video" ],
+            timeZone => "Europe/Vienna",
+            coordinates => "geo:48.2010,16.3695,183",
+            uri => "https://somewhere.local",
+            linkIds =>  [ 'link1', 'link2' ],
         },
     };
 
@@ -2993,9 +3116,9 @@ sub test_calendarevent_query_text
                             "text" => $propval,
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals($res->[0][1]{total}, 1);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
-        $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
 
         # Sanity check catch-all text search
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
