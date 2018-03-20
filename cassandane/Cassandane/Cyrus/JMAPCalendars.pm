@@ -707,6 +707,12 @@ sub normalize_event
     if (not exists $event->{q{@type}}) {
         $event->{q{@type}} = 'jsevent';
     }
+    if (not exists $event->{freeBusyStatus}) {
+        $event->{freeBusyStatus} = 'busy';
+    }
+    if (not exists $event->{description}) {
+        $event->{description} = '';
+    }
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
     } elsif (defined $event->{locations}) {
@@ -739,6 +745,9 @@ sub normalize_event
     }
     if (not exists $event->{localizations}) {
         $event->{localizations} = undef;
+    }
+    if (not exists $event->{keywords}) {
+        $event->{keywords} = undef;
     }
     if (not exists $event->{locale}) {
         $event->{locale} = undef;
@@ -991,6 +1000,20 @@ sub test_calendarevent_get_endtimezone
     $self->assert_num_equals(1, scalar @locations);
     $self->assert_str_equals("Europe/Vienna", $locations[0]{timeZone});
     $self->assert_str_equals("end", $locations[0]{rel});
+}
+
+sub test_calendarevent_get_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('keywords');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_num_equals(3, scalar @{$event->{keywords}});
+    $self->assert_str_equals('foo', $event->{keywords}[0]);
+    $self->assert_str_equals('bar', $event->{keywords}[1]);
+    $self->assert_str_equals('baz', $event->{keywords}[2]);
 }
 
 sub test_calendarevent_get_participants
@@ -1535,6 +1558,30 @@ sub test_calendarevent_set_endtimezone
     });
 
     $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_calendarevent_set_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "keywords" => [ 'foo', 'bar', 'baz' ],
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
 }
 
 sub test_calendarevent_set_endtimezone_recurrence
