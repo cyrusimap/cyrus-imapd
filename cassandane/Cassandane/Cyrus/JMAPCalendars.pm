@@ -875,6 +875,7 @@ sub test_calendarevent_get_simple
     $self->assert_str_equals("yo", $event->{title});
     $self->assert_str_equals("-//Apple Inc.//Mac OS X 10.9.5//EN", $event->{prodId});
     $self->assert_str_equals("en", $event->{locale});
+    $self->assert_str_equals("turquoise", $event->{color});
     $self->assert_str_equals("double yo", $event->{description});
     $self->assert_equals($event->{freeBusyStatus}, "free");
     $self->assert_equals($event->{isAllDay}, JSON::false);
@@ -1414,6 +1415,7 @@ sub test_calendarevent_set_simple
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
         "locale" => "en",
+        "color" => "turquoise",
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
