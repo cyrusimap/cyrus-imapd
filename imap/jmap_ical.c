@@ -2313,6 +2313,15 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
                 json_integer(icalcomponent_get_sequence(comp)));
     }
 
+    /* priority */
+    if (wantprop(ctx, "priority")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_PRIORITY_PROPERTY);
+        if (prop) {
+            json_object_set_new(event, "priority",
+                    json_integer(icalproperty_get_priority(prop)));
+        }
+    }
+
     /* title */
     if (wantprop(ctx, "title") || wantprop(ctx, "localizations")) {
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
@@ -4355,6 +4364,14 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     /* sequence */
     if (is_create) {
         icalcomponent_set_sequence(comp, 0);
+    }
+
+    json_t *jprio = json_object_get(event, "priority");
+    if (json_integer_value(jprio) >= 0 || json_integer_value(jprio) <= 9) {
+        prop = icalproperty_new_priority(json_integer_value(jprio));
+        icalcomponent_add_property(comp, prop);
+    } else if (JNOTNULL(jprio)) {
+        invalidprop(ctx, "priority");
     }
 
     /* title */
