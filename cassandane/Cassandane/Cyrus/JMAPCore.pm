@@ -129,25 +129,29 @@ sub test_settings
     $self->assert_str_equals("cassandane", $acc->{name});
     $self->assert_equals(JSON::true, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_equals("mail", $acc->{hasDataFor});
+    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
 
     $acc = $accounts->{foo};
     $self->assert_str_equals("foo", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::true, $acc->{isReadOnly});
-    $self->assert_equals("mail", $acc->{hasDataFor});
+    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
 
     $acc = $accounts->{bar};
     $self->assert_str_equals("bar", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_equals("mail", $acc->{hasDataFor});
+    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
 
     $acc = $accounts->{baz};
     $self->assert_str_equals("baz", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_equals("mail", $acc->{hasDataFor});
+    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
 }
 
 1;
