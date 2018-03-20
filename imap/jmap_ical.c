@@ -1835,6 +1835,26 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
     return ret;
 }
 
+/* Convert a VEVENT ical component to CalendarEvent keywords */
+static json_t*
+keywords_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
+{
+    icalproperty* prop;
+    json_t *ret = json_array();
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY)) {
+        json_array_append_new(ret, json_string(icalproperty_get_categories(prop)));
+    }
+    if (!json_array_size(ret)) {
+        json_decref(ret);
+        ret = json_null();
+    }
+
+    return ret;
+}
+
 /* Convert a VEVENT ical component to CalendarEvent relatedTo */
 static json_t*
 relatedto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
@@ -2330,6 +2350,11 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
             json_object_set_new(event, "color",
                     json_string(icalproperty_get_color(prop)));
         }
+    }
+
+    /* keywords */
+    if (wantprop(ctx, "keywords")) {
+        json_object_set_new(event, "keywords", keywords_from_ical(ctx, comp));
     }
 
     /* links */
@@ -3736,6 +3761,45 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
     }
 }
 
+/* Create or overwrite JMAP keywords in comp */
+static void
+keywords_to_ical(context_t *ctx, icalcomponent *comp, json_t *keywords)
+{
+    icalproperty *prop, *next;
+
+    /* Purge existing keywords from component */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY);
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+
+    /* Add keywords */
+    struct buf buf = BUF_INITIALIZER;
+    json_t *jval;
+    size_t i;
+    json_array_foreach(keywords, i, jval) {
+        const char *keyword = json_string_value(jval);
+        if (!keyword) {
+            beginprop_idx(ctx, "keywords", i);
+            invalidprop(ctx, NULL);
+            endprop(ctx);
+            continue;
+        }
+        // FIXME known bug: libical doesn't properly
+        // handle multi-values separated by comma,
+        // if a single entry contains a comma.
+        prop = icalproperty_new_categories(keyword);
+        icalcomponent_add_property(comp, prop);
+    }
+    if (buf_len(&buf)) {
+    }
+    buf_free(&buf);
+}
+
 /* Create or overwrite JMAP relatedTo in comp */
 static void
 relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
@@ -4304,7 +4368,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* description */
-    pe = readprop(ctx, event, "description", is_create, "s", &val);
+    pe = readprop(ctx, event, "description", 0, "s", &val);
     if (pe > 0 && strlen(val)) {
         icalcomponent_set_description(comp, val);
     }
@@ -4314,10 +4378,21 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* color */
-    pe = readprop(ctx, event, "color", is_create, "s", &val);
+    pe = readprop(ctx, event, "color", 0, "s", &val);
     if (pe > 0 && strlen(val)) {
         prop = icalproperty_new_color(val);
         icalcomponent_add_property(comp, prop);
+    }
+
+    /* keywords */
+    json_t *keywords = NULL;
+    pe = readprop(ctx, event, "keywords", 0, "o", &keywords);
+    if (pe > 0) {
+        if (json_is_null(keywords) || json_array_size(keywords)) {
+            keywords_to_ical(ctx, comp, keywords);
+        } else {
+            invalidprop(ctx, "keywords");
+        }
     }
 
     /* links */
