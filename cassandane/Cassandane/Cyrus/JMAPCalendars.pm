@@ -2153,38 +2153,35 @@ sub test_calendarevent_set_isallday
 
     my $res;
 
-    xlog "create event (with erroneous start)";
-    $event->{start} = "2015-10-06T16:45:00",
-    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-        "1" => $event,
-    }}, "R1"]]);
-    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+    foreach (undef, 'Europe/Vienna') {
 
-    xlog "create event (with erroneous timeZone)";
-    $event->{start} = "2015-10-06T00:00:00";
-    $event->{timeZone} = "Europe/Vienna";
-    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-        "1" => $event,
-    }}, "R1"]]);
-    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+        $event->{timeZone} = $_;
 
-    xlog "create event (with erroneous duration)";
-    $event->{start} = "2015-10-06T00:00:00";
-    $event->{timeZone} = undef;
-    $event->{duration} = "PT15M";
-    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-        "1" => $event,
-    }}, "R1"]]);
-    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+        xlog "create all-day event (with erroneous start)";
+        $event->{start} = "2015-10-06T16:45:00";
+        $res = $jmap->CallMethods([['CalendarEvent/set', {
+            create => { "1" => $event, }
+        }, "R1"]]);
+        $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+        $self->assert_str_equals("start", $res->[0][1]{notCreated}{"1"}{properties}[0]);
 
-    xlog "create event";
-    $event->{start} = "2015-10-06T00:00:00";
-    $event->{timeZone} = undef;
-    $event->{duration} = "P1D";
-    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-        "1" => $event,
-    }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"});
+        xlog "create all-day event (with erroneous duration)";
+        $event->{start} = "2015-10-06T00:00:00";
+        $event->{duration} = "PT15M";
+        $res = $jmap->CallMethods([['CalendarEvent/set', {
+            create => { "1" => $event, }
+        }, "R1"]]);
+        $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+        $self->assert_str_equals("duration", $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+        xlog "create all-day event";
+        $event->{start} = "2015-10-06T00:00:00";
+        $event->{duration} = "P1D";
+        $res = $jmap->CallMethods([['CalendarEvent/set', {
+            create => { "1" => $event, }
+        }, "R1"]]);
+        $self->assert_not_null($res->[0][1]{created}{"1"});
+    }
 }
 
 sub test_calendarevent_set_move
