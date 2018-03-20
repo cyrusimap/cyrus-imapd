@@ -769,6 +769,27 @@ sub normalize_event
     }
     if (not exists $event->{attachments}) {
         $event->{attachments} = undef;
+    } elsif (defined $event->{attachments}) {
+        foreach my $att (values %{$event->{attachments}}) {
+            if (not exists $att->{cid}) {
+                $att->{cid} = undef;
+            }
+            if (not exists $att->{type}) {
+                $att->{type} = undef;
+            }
+            if (not exists $att->{size}) {
+                $att->{size} = undef;
+            }
+            if (not exists $att->{rel}) {
+                $att->{rel} = 'related';
+            }
+            if (not exists $att->{title}) {
+                $att->{title} = undef;
+            }
+            if (not exists $att->{properties}) {
+                $att->{properties} = undef;
+            }
+        }
     }
     if (not exists $event->{status}) {
         $event->{status} = "confirmed";
@@ -926,6 +947,7 @@ sub test_calendarevent_get_links
             size => 4480,
             title => "the spec",
             rel => "enclosure",
+            cid => '123456789asd',
         }
     };
 
@@ -1582,6 +1604,14 @@ sub test_calendarevent_set_links
                properties => {
                    "https://tools.ietf.org/html/rfc4791/" => "the related CalDAV spec",
                    "https://tools.ietf.org/html/rfc2445/" => undef,
+               },
+            },
+            "image" => {
+               href => "https://foo.local/favicon.png",
+               rel => "icon",
+               cid => '123456789asd',
+               properties => {
+                   display => 'badge',
                },
             },
         },

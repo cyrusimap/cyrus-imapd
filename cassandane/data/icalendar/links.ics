@@ -11,7 +11,7 @@ DTSTAMP:20150928T132434Z
 CREATED:20150928T125212Z
 DESCRIPTION:
 SUMMARY:yo
-ATTACH;X-TITLE="the spec";FMTTYPE=text/html;SIZE=4480;X-JMAP-REL=enclosure:http://jmap.io/spec.html#calendar-events
+ATTACH;X-TITLE="the spec";X-JMAP-CID=123456789asd;FMTTYPE=text/html;SIZE=4480;X-JMAP-REL=enclosure:http://jmap.io/spec.html#calendar-events
 LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
