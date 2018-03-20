@@ -2629,7 +2629,7 @@ static int localdate_to_icaltime(const char *buf,
         return 0;
     }
     tmp.zone = tz;
-    tmp.is_date = is_allday;
+    tmp.is_date = is_allday && tz == NULL;
     *dt = tmp;
     return 1;
 }
@@ -2743,9 +2743,6 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (is_create) {
         ctx->tzstart_old = ctx->tzstart;
     }
-    if (ctx->is_allday && ctx->tzstart) {
-        invalidprop(ctx, "timeZone");
-    }
 
     /* Determine current end timezone */
     tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
@@ -2852,9 +2849,6 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
     } else {
         dtstart = dtstart_old;
-    }
-    if (ctx->is_allday && !icaltime_is_date(dtstart)) {
-        invalidprop(ctx, "start");
     }
 
     /* Bail out for property errors */
