@@ -2323,6 +2323,15 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         }
     }
 
+    /* color */
+    if (wantprop(ctx, "color")) {
+        prop = icalcomponent_get_first_property(comp, ICAL_COLOR_PROPERTY);
+        if (prop) {
+            json_object_set_new(event, "color",
+                    json_string(icalproperty_get_color(prop)));
+        }
+    }
+
     /* links */
     if (wantprop(ctx, "links") || wantprop(ctx, "localizations")) {
         json_object_set_new(event, "links", links_from_ical(ctx, comp));
@@ -4302,6 +4311,13 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (ctx->localizations) {
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         localizations_to_icalprop(ctx, "description", prop);
+    }
+
+    /* color */
+    pe = readprop(ctx, event, "color", is_create, "s", &val);
+    if (pe > 0 && strlen(val)) {
+        prop = icalproperty_new_color(val);
+        icalcomponent_add_property(comp, prop);
     }
 
     /* links */
