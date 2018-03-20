@@ -1969,7 +1969,7 @@ static void findaccounts_add(json_t *accounts, const char *userid, int rw)
         return;
     }
 
-    json_object_set_new(accounts, userid, json_pack("{s:s s:b s:b s:s}",
+    json_object_set_new(accounts, userid, json_pack("{s:s s:b s:b s:[s]}",
                 "name", userid,
                 "isPrimary", 0,
                 "isReadOnly", !rw,
@@ -2003,7 +2003,7 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
 
 static json_t *user_settings(const char *userid)
 {
-    json_t *accounts = json_pack("{s:{s:s s:b s:b s:s}}",
+    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s]}}",
             userid, "name", userid,
             "isPrimary", 1,
             "isReadOnly", 0,
