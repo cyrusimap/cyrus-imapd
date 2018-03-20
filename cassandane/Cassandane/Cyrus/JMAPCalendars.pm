@@ -710,6 +710,9 @@ sub normalize_event
     if (not exists $event->{freeBusyStatus}) {
         $event->{freeBusyStatus} = 'busy';
     }
+    if (not exists $event->{priority}) {
+        $event->{priority} = 0;
+    }
     if (not exists $event->{description}) {
         $event->{description} = '';
     }
@@ -894,6 +897,7 @@ sub test_calendarevent_get_simple
     $self->assert_str_equals("2015-09-28T12:52:12Z", $event->{created});
     $self->assert_str_equals("2015-09-28T13:24:34Z", $event->{updated});
     $self->assert_num_equals(9, $event->{sequence});
+    $self->assert_num_equals(3, $event->{priority});
     $self->assert_str_equals("public", $event->{privacy});
 }
 
@@ -1437,6 +1441,7 @@ sub test_calendarevent_set_simple
         "sequence"=> 42,
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
+        "priority" => 9,
         "locale" => "en",
         "color" => "turquoise",
         "status" => "tentative",
