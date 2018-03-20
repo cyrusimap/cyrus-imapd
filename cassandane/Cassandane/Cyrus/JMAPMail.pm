@@ -549,6 +549,21 @@ sub test_mailbox_query_parentname
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[1]);
 }
 
+sub test_mailbox_query_limit_zero
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "list mailboxes with limit 0";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { limit => 0 }, "R1"]
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]->{ids});
+}
+
 sub test_mailbox_query_parentid_null
     :JMAP :min_version_3_1
 {
@@ -5199,9 +5214,16 @@ sub test_email_query_empty
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    # See https://github.com/cyrusimap/cyrus-imapd/issues/2266
+    # See
+    # https://github.com/cyrusimap/cyrus-imapd/issues/2266
+    # and
+    # https://github.com/cyrusimap/cyrus-imapd/issues/2287
 
     my $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
+    $self->assert(ref($res->[0][1]->{ids}) eq 'ARRAY');
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+    $res = $jmap->CallMethods([['Email/query', { limit => 0 }, "R1"]]);
     $self->assert(ref($res->[0][1]->{ids}) eq 'ARRAY');
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
 }
