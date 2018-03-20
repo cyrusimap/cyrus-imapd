@@ -1781,6 +1781,11 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
         link = json_pack("{s:s}", "href", url);
         beginprop_key(ctx, "links", url);
 
+        /* cid */
+        if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_CID))) {
+            json_object_set_new(link, "cid", json_string(s));
+        }
+
         /* type */
         param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
         if (param && ((s = icalparameter_get_fmttype(param)))) {
@@ -3632,6 +3637,7 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
         const char *type = NULL;
         const char *title = NULL;
         const char *rel = NULL;
+        const char *cid = NULL;
         json_int_t size = -1;
         json_t *properties = NULL;
 
@@ -3649,6 +3655,9 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
         }
         if (JNOTNULL(json_object_get(link, "title"))) {
             readprop(ctx, link, "title", 0, "s", &title);
+        }
+        if (JNOTNULL(json_object_get(link, "cid"))) {
+            readprop(ctx, link, "cid", 0, "s", &cid);
         }
         if (JNOTNULL(json_object_get(link, "size"))) {
             pe = readprop(ctx, link, "size", 0, "I", &size);
@@ -3673,7 +3682,7 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
             /* type */
             if (type) {
                 icalproperty_add_parameter(prop,
-                                           icalparameter_new_fmttype(type));
+                        icalparameter_new_fmttype(type));
             }
 
             /* title */
@@ -3682,16 +3691,19 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
             }
             localizations_to_icalprop(ctx, "title", prop);
 
+            /* cid */
+            if (cid) set_icalxparam(prop, JMAPICAL_XPARAM_CID, cid, 1);
+
             /* size */
             if (size >= 0) {
                 buf_printf(&buf, "%"JSON_INTEGER_FORMAT, size);
                 icalproperty_add_parameter(prop,
-                                           icalparameter_new_size(buf_cstring(&buf)));
+                        icalparameter_new_size(buf_cstring(&buf)));
                 buf_reset(&buf);
             }
 
             /* rel */
-            if (rel && strcmp(rel, "related")) {
+            if (rel && strcmp(rel, "rel")) {
                 set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
             }
 
