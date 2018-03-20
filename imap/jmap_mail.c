@@ -974,7 +974,7 @@ static char *jmapmbox_role(jmap_req_t *req, const mbname_t *mbname)
             } else if (!strcmp(use, "\\Drafts")) {
                 role = "drafts";
             } else if (!strcmp(use, "\\Junk")) {
-                role = "spam";
+                role = "junk";
             } else if (!strcmp(use, "\\Sent")) {
                 role = "sent";
             } else if (!strcmp(use, "\\Trash")) {
@@ -1083,7 +1083,7 @@ static int jmapmbox_sort_order(jmap_req_t *req, const mbname_t *mbname)
             sort_order = 4;
         else if (!strcmp(role, "sent"))
             sort_order = 5;
-        else if (!strcmp(role, "spam"))
+        else if (!strcmp(role, "junk"))
             sort_order = 6;
         else if (!strcmp(role, "trash"))
             sort_order = 7;
@@ -1149,7 +1149,7 @@ static json_t *jmapmbox_from_mbentry(jmap_req_t *req,
     if (_wantprop(props, "mustBeOnlyMailbox")) {
         if (!strcmpsafe(role, "trash"))
             json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
-        else if (!strcmpsafe(role, "spam"))
+        else if (!strcmpsafe(role, "junk"))
             json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
         else
             json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
@@ -2062,7 +2062,7 @@ static void setmailboxes_read_args(jmap_req_t *req,
                 args->specialuse = "\\Archive";
             } else if (!strcmp(args->role, "drafts")) {
                 args->specialuse = "\\Drafts";
-            } else if (!strcmp(args->role, "spam")) {
+            } else if (!strcmp(args->role, "junk")) {
                 args->specialuse = "\\Junk";
             } else if (!strcmp(args->role, "sent")) {
                 args->specialuse = "\\Sent";
