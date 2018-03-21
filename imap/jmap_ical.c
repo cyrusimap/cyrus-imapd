@@ -382,68 +382,55 @@ static char *mailaddr_to_uri(const char *addr)
     return buf_release(&buf);
 }
 
-static void
-make_data_uri(struct buf* buf, const char *type, const char *data)
+static char*
+encode_base64_uri(const char *data, size_t len, const char *type)
 {
-    buf_setcstr(buf, "data:application/json");
-    if (type) {
-        buf_appendcstr(buf, ";x-jmap-type=");
-        buf_appendcstr(buf, type);
-    }
-    buf_appendcstr(buf, ";base64,");
-    if (data) {
-        buf_appendcstr(buf, data);
-    }
+    /* base64 encode data */
+    size_t len64 = (4 * ((len + 3) / 3)) + 1;
+    char *data64 = xzmalloc(len64);
+    sasl_encode64(data, len, data64, len64, NULL);
+
+    /* Make data URI */
+    char *uri = strconcat("data:", type, ";base64,", data64, NULL);
+    free(data64);
+    return uri;
+}
+
+
+static char*
+encode_base64_json(json_t *src)
+{
+    /* base64 encode JSON */
+    char *data = json_dumps(src, JSON_COMPACT);
+    char *uri = encode_base64_uri(data, strlen(data), "application/json");
+    free(data);
+    return uri;
 }
 
 static char*
-encode_base64_jmap(json_t *src, const char *type)
+decode_base64_uri(const char *uri)
 {
-    char *buf64, *dump;
-    size_t len, len64;
+    const char *data = strstr(uri, ";base64,");
+    if (!data) {
+        return NULL;
+    }
+    data += 8;
     struct buf buf = BUF_INITIALIZER;
-
-    /* base64 encode JSON */
-    dump = json_dumps(src, JSON_COMPACT);
-    len = strlen(dump);
-    len64 = (4 * ((len + 3) / 3)) + 1;
-    buf64 = xzmalloc(len64);
-    sasl_encode64(dump, len, buf64, len64, NULL);
-    make_data_uri(&buf, type, buf64);
-
-    free(buf64);
-    free(dump);
+    if (charset_decode(&buf, data, strlen(data), ENCODING_BASE64) < 0) {
+        buf_free(&buf);
+        return NULL;
+    }
     return buf_release(&buf);
 }
 
 static json_t *
-decode_base64_jmap(const char *uri, const char *type)
+decode_base64_json(const char *uri)
 {
-    json_t *t;
-    struct buf buf = BUF_INITIALIZER;
-    charset_t cs;
-    const char *data;
-    char *tmp;
-
-    make_data_uri(&buf, type, NULL);
-    if (strncmp(uri, buf_cstring(&buf), buf_len(&buf))) {
-        buf_free(&buf);
-        return NULL;
-    }
-
-    t = NULL;
-    cs = charset_lookupname("utf8");
-    data = uri + buf_len(&buf);
-    tmp = charset_to_utf8(data, strlen(uri) - buf_len(&buf),
-                          cs, ENCODING_BASE64);
-    if (tmp) {
-        t = json_loads(tmp, 0, NULL);
-        free(tmp);
-    }
-
-    charset_free(&cs);
-    buf_free(&buf);
-    return t;
+    char *raw = decode_base64_uri(uri);
+    if (!raw) return NULL;
+    json_t *jdata = json_loads(raw, 0, NULL);
+    free(raw);
+    return jdata;
 }
 
 static void remove_icalxparam(icalproperty *prop, const char *name)
@@ -1800,7 +1787,7 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
 
         /* properties */
         if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_PROPERTIES))) {
-            json_t *p = decode_base64_jmap(s, NULL);
+            json_t *p = decode_base64_json(s);
             json_object_set_new(link, "properties", p ? p : json_null());
         }
 
@@ -2218,6 +2205,23 @@ locale_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
     return lang ? json_string(lang) : json_null();
 }
 
+static json_t*
+htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
+{
+   icalproperty *prop =icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+   if (!prop) return json_null();
+
+    icalparameter *altrep = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
+    if (!altrep) return json_null();
+
+    const char *uri = icalparameter_get_altrep(altrep);
+    if (strncasecmp(uri, "data:text/html;", 15)) return json_null();
+    char *tmp = decode_base64_uri(uri);
+    json_t *htmldesc = tmp ? json_string(tmp) : json_null();
+    free(tmp);
+    return htmldesc;
+}
+
 /* Convert the libical VEVENT comp to a CalendarEvent 
  *
  * parent: if not NULL, treat comp as a VEVENT exception
@@ -2339,17 +2343,25 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* description */
     if (wantprop(ctx, "description") || wantprop(ctx, "localizations")) {
+        const char *desc = "";
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         if (prop) {
-            json_object_set_new(event, "description",
-                                json_string(icalproperty_get_description(prop)));
-            localizations_from_icalprop(ctx, "description", prop);
-        } else {
-            json_object_set_new(event, "description", json_string(""));
+            desc = icalproperty_get_description(prop);
+            if (!desc) desc = "";
         }
+        json_object_set_new(event, "description", json_string(desc));
+        localizations_from_icalprop(ctx, "description", prop);
         if (!wantprop(ctx, "description")) {
             json_object_del(event, "description");
         }
+    }
+
+    /* htmlDescription */
+    if (wantprop(ctx, "htmlDescription") || wantprop(ctx, "localizations")) {
+        json_t *desc = htmldescription_from_ical(ctx, comp);
+        json_object_set_new(event, "htmlDescription", desc);
+        if (!wantprop(ctx, "htmlDescription"))
+            json_object_del(event, "htmlDescription");
     }
 
     /* color */
@@ -3658,6 +3670,40 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
 }
 
 static void
+htmldescription_to_ical(context_t *ctx __attribute__((unused)),
+                        icalcomponent *comp, json_t *htmldesc)
+{
+    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+
+    /* Purge existing ALTREP, no matter what */
+    if (prop) icalproperty_remove_parameter_by_kind(prop, ICAL_ALTREP_PARAMETER);
+
+    if (htmldesc == json_null())
+        return;
+
+    if (!prop) {
+        prop = icalproperty_new_description("");
+        icalcomponent_add_property(comp, prop);
+    }
+
+    /* Set HTML description in ALTREP parameter */
+    const char *html = json_string_value(htmldesc);
+    char *uri = encode_base64_uri(html, strlen(html), "text/html");
+    icalparameter *altrep = icalparameter_new_altrep(uri);
+    icalproperty_add_parameter(prop, altrep);
+    free(uri);
+
+    /* Convert HTML to plain */
+    /* libical returns NULL for empty string */
+    const char *s = icalproperty_get_description(prop);
+    if (!s || *s == '\0') {
+        char *plain = charset_extract_plain(html);
+        if (html) icalproperty_set_description(prop, plain);
+        free(plain);
+    }
+}
+
+static void
 links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
 {
     icalproperty *prop;
@@ -3746,7 +3792,7 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
 
             /* properties */
             if (properties) {
-                char *tmp = encode_base64_jmap(properties, NULL);
+                char *tmp = encode_base64_json(properties);
                 set_icalxparam(prop, JMAPICAL_XPARAM_PROPERTIES, tmp, 1);
                 free(tmp);
             }
@@ -4386,6 +4432,14 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (ctx->localizations) {
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         localizations_to_icalprop(ctx, "description", prop);
+    }
+
+    /* htmlDescription - must come after setting DESCRIPTION property */
+    json_t *htmldesc = json_object_get(event, "htmlDescription");
+    if (htmldesc == json_null() || json_is_string(htmldesc)) {
+        htmldescription_to_ical(ctx, comp, htmldesc);
+    } else if (htmldesc) {
+        invalidprop(ctx, "htmlDescription");
     }
 
     /* color */
