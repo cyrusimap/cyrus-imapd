@@ -1063,39 +1063,6 @@ static int jmapmbox_sort_order(jmap_req_t *req, const mbname_t *mbname)
             syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbname_intname(mbname));
         }
     }
-    else {
-        /* calculate based on role.  From FastMail:
-           [  1, '*Inbox',     'inbox',   0,    1, [ 'INBOX' ], { PreviewModeId => 2, MessagesPerPage => 20 } ],
-           [  2, 'Trash',      'trash',   0,    7, [ 'Trash', 'Deleted Items' ], { HasEmpty => 1 } ],
-           [  3, 'Sent',       'sent',    0,    5, [ 'Sent', 'Sent Items' ], { DefSort => 2 } ],
-           [  4, 'Drafts',     'drafts',  0,    4, [ 'Drafts' ] ],
-           [  5, '*User',      undef,     0,   10, [ ] ],
-           [  6, 'Junk',       'spam',    0,    6, [ 'Spam', 'Junk Mail', 'Junk E-Mail' ], { HasEmpty => 1 } ],
-           [  7, 'XChats',     undef,     0,    8, [ 'Chats' ] ],
-           [  8, 'Archive',    'archive', 0,    3, [ 'Archive' ] ],
-           [  9, 'XNotes',     undef,     1,   10, [ 'Notes' ] ],
-           [ 10, 'XTemplates', undef,     0,    9, [ 'Templates' ] ],
-           [ 12, '*Shared',    undef,     0, 1000, [ 'user' ] ],
-           [ 11, '*Restored',  undef,     0, 2000, [ 'RESTORED' ] ],
-           */
-        role = jmapmbox_role(req, mbname);
-        if (!role)
-            sort_order = 10;
-        else if (!strcmp(role, "inbox"))
-            sort_order = 1;
-        else if (!strcmp(role, "archive"))
-            sort_order = 3;
-        else if (!strcmp(role, "drafts"))
-            sort_order = 4;
-        else if (!strcmp(role, "sent"))
-            sort_order = 5;
-        else if (!strcmp(role, "junk"))
-            sort_order = 6;
-        else if (!strcmp(role, "trash"))
-            sort_order = 7;
-        else
-            sort_order = 8;
-    }
 
     free(role);
     buf_free(&attrib);
