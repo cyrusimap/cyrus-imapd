@@ -716,6 +716,9 @@ sub normalize_event
     if (not exists $event->{description}) {
         $event->{description} = '';
     }
+    if (not exists $event->{htmlDescription}) {
+        $event->{htmlDescription} = undef;
+    }
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
     } elsif (defined $event->{locations}) {
@@ -1018,6 +1021,19 @@ sub test_calendarevent_get_keywords
     $self->assert_str_equals('foo', $event->{keywords}[0]);
     $self->assert_str_equals('bar', $event->{keywords}[1]);
     $self->assert_str_equals('baz', $event->{keywords}[2]);
+}
+
+sub test_calendarevent_get_description
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('description');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals("Hello, from plain text.", $event->{description});
+    $self->assert_str_equals("<html><body>Hello, from HTML!</body></html>", $event->{htmlDescription});
 }
 
 sub test_calendarevent_get_participants
@@ -1629,6 +1645,36 @@ sub test_calendarevent_set_endtimezone_recurrence
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
     $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_calendarevent_set_description
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "description"=> "A text description",
+        "htmlDescription"=> "<html><body>Some HTML</body></html>",
+        "privacy" => "secret",
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+
+    delete $event->{description};
+    $ret = $self->createandget_event($event);
+    $event->{description} = "Some HTML";
+    $self->assert_normalized_event_equals($event, $ret);
 }
 
 sub test_calendarevent_set_links
