@@ -1,0 +1,75 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.6 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.6.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.6.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.6.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.6.tar.gz.sig
+
+
+.. _relnotes-3.0.6-changes:
+
+Changes Since 3.0.5
+===================
+
+Experimental features
+---------------------
+
+The experimental JMAP support has been removed in 3.0.6.  The JMAP
+specification has changed substantially since 3.0.0 was released,
+in ways that cannot be simply backported.
+
+If you wish to experiment with or contribute to Cyrus JMAP support,
+please check out the unstable 3.1.x release tags, or the git master
+branch.
+
+Bug fixes
+---------
+
+* Fixed :issue:`2177`: murder frontends using TLS no longer crash on starttls
+  failure (thanks Wolfgang Breyha)
+* Fixed :issue:`2197`: warnings fixed in CYRUS-MASTER.mib (thanks Fabrice
+  Bacchella)
+* Fixed: :cyrusman:`squatter(8)` no longer crashes when conversations are not
+  enabled
+* Fixed :issue:`2301`: rolling-mode squatter now works correctly from
+  :cyrusman:`cyrus.conf(5)` DAEMON section
+* Fixed some compilation warnings in the Xapian wrapper
+* Fixed capabilities detection in :cyrusman:`imtest(1)` (thanks Pavel Zhukov)
+* Fixed :issue:`2253`: :cyrusman:`master(8)` now rejects service entries with
+  listen paths that are too long
+* Fixed :issue:`2303`: :cyrusman:`lmtpd(8)` now looks for sieve scripts in the
+  same directories as the rest of cyrus (including :cyrusman:`timsieved(8)`).
+  Please note that if you had manually installed sieve scripts to the
+  directories lmtpd used to look in, these will need to be moved.
+* Fixed build failure with LibreSSL 2.7 (thanks Bernard Spil)
+* Fixed :issue:`2317`: sieve variables now work correctly in mailboxexists
+  tests
+* Fixed: squatter manpage now installs correctly when SQUAT engine not in use
+  (thanks uutari)
+* Fixed: recover from certain IMAP parse errors without losing protocol sync
+
+Other changes
+-------------
+
+* Services will now syslog warnings about attempts to access nonexistent
+  partitions
+* :cyrusman:`reconstruct(8)` now accepts a `-I` argument to enable updating of
+  mailbox UNIQUEIDs when clashes are detected, and will not do so without.
+  This is useful for preventing problems like :issue:`2240` in replicated
+  environments.
