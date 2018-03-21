@@ -242,6 +242,7 @@ sub run_test
             open FH, '<', $errfile
                 or die "Cannot open $errfile for reading: $!";
             while (readline FH) {
+                chomp;
                 xlog $_;
             }
             close FH;
