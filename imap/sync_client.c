@@ -1384,6 +1384,8 @@ done:
     return r;
 }
 
+static int do_annotation(char *mboxname);
+
 static int update_mailbox(struct sync_folder *local,
 			  struct sync_folder *remote,
 			  struct sync_reserve_list *reserve_guids)
@@ -1400,6 +1402,8 @@ static int update_mailbox(struct sync_folder *local,
 	r = mailbox_full_update(local->name);
 	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
     }
+
+    if (!r) r = do_annotation(local->name);
 
     return r;
 }
@@ -1580,6 +1584,7 @@ bail:
     sync_annot_list_free(&replica_annot);
     return r;
 }
+
 
 /* ====================================================================== */
 
