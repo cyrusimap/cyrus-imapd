@@ -6203,16 +6203,18 @@ static int writetext(const char *s, FILE *out,
 
     while (p < top) {
         const char *q = strchr(p, '\n');
+        int add_lf = 0;
         q = q ? q + 1 : top;
 
         if (q - p > 998) {
             /* Could split on 1000 bytes but let's have some leeway */
             q = split(p, 998);
+            add_lf = 1;
         }
 
         if (fwrite(p, 1, q - p, out) < ((size_t)(q - p)))
             return -1;
-        if (q < top && fputc('\n', out) == EOF)
+        if (q < top && add_lf && fputc('\n', out) == EOF)
             return -1;
 
         p = q;
