@@ -222,6 +222,9 @@ sub run_test
 
     $name =~ s{:}{/}g;
 
+    local $ENV{JMTS_TEST_OUTPUT_TO_STDERR} = 1 if get_verbose;
+    local $ENV{JMTS_TELEMETRY} = 1 if get_verbose;
+
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
             workingdir => $logdir,
