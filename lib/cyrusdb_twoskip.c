@@ -1845,6 +1845,8 @@ static int mycheckpoint(struct dbengine *db)
     r = mycommit(cr.db, cr.tid);
     if (r) goto err;
 
+    cr.tid = NULL;  /* avoid later errors trying to call abort, it's too late! */
+
     /* move new file to original file name */
     r = mappedfile_rename(cr.db->mf, FNAME(db));
     if (r) goto err;
