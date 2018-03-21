@@ -3618,6 +3618,104 @@ static json_t *attachment_from_part(struct body *part,
     return att;
 }
 
+struct jmapmsg_keywords_data {
+    jmap_req_t *req;
+    struct mailbox *mbox;
+    msgrecord_t *mr;
+    json_t *keywords; /* map of keyword name to occurrence count */
+    json_int_t message_count; /* count of unexpunged message */
+};
+
+static int jmapmsg_keywords_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct jmapmsg_keywords_data *data = (struct jmapmsg_keywords_data*) rock;
+    jmap_req_t *req = data->req;
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    uint32_t flags;
+    int r;
+
+    if (rec->part) return 0;
+
+    assert((data->mbox == NULL) == (data->mr == NULL));
+
+    /* Either open mailbox and message record or use from callback data */
+    if (!mbox || strcmp(data->mbox->name, rec->mboxname)) {
+        r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+        if (r) return r;
+        r = msgrecord_find(mbox, rec->uid, &mr);
+        if (r) goto done;
+    } else {
+        mbox = data->mbox;
+        mr = data->mr;
+    }
+
+    /* Ignore deleted messages */
+    r = msgrecord_get_systemflags(mr, &flags);
+    if (r) goto done;
+
+    /* Extract flags, if not expunged */
+    if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+        /* Count that message */
+        data->message_count++;
+        /* Extract and count message flags */
+        strarray_t *flags = NULL;
+        r = msgrecord_extract_flags(mr, req->accountid, &flags);
+        if (r) goto done;
+        char *flag;
+        while ((flag = strarray_pop(flags))) {
+            const char *kw = jmap_keyword_from_imap(flag);
+            if (!kw)
+                continue;
+            json_t *jval = json_object_get(data->keywords, kw);
+            if (jval)
+                json_integer_set(jval, json_integer_value(jval) + 1);
+            else
+                json_object_set_new(data->keywords, kw, json_integer(1));
+            free(flag);
+        }
+        strarray_free(flags);
+    }
+
+done:
+    if (mr != data->mr)
+        msgrecord_unref(&mr);
+    if (mbox != data->mbox)
+        jmap_closembox(req, &mbox);
+    return r;
+}
+
+static json_t *jmapmsg_keywords(jmap_req_t *req, msgrecord_t *mr, const char *msgid)
+{
+    /* Determine which mailbox the current message is in */
+    struct mailbox *mbox = NULL;
+    int r = msgrecord_get_mailbox(mr, &mbox);
+    if (r) {
+        syslog(LOG_ERR, "jmapmsg_keywords(%s): %s", msgid, error_message(r));
+        return json_object();
+    }
+
+    /* Gather counts per message flag */
+    struct jmapmsg_keywords_data data = { req, mbox, mr, json_pack("{}"), 0 };
+    conversations_guid_foreach(req->cstate, msgid+1, jmapmsg_keywords_cb, &data);
+
+    /* Handle special keywords */
+    json_t *jcount = json_object_get(data.keywords, "$seen");
+    if (jcount && json_integer_value(jcount) < data.message_count)
+        json_object_del(data.keywords, "$seen");
+
+    /* Convert to map to boolean */
+    json_t *keywords = json_object();
+    json_t *jval;
+    const char *kw;
+    json_object_foreach(data.keywords, kw, jval) {
+        json_object_set_new(keywords, kw, json_true());
+    }
+    json_decref(data.keywords);
+
+    return keywords;
+}
+
 static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                              struct body *body, struct buf *msg_buf,
                              msgrecord_t *mr, MsgType type,
@@ -4003,12 +4101,13 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
                 json_object_set_new(msg, "threadId", json_null());
             }
         }
+
         /* mailboxIds */
         if (_wantprop(props, "mailboxIds")) {
-            json_t *mailboxes, *val, *ids = json_pack("{}");
+            json_t *mailboxes = jmapmsg_mailboxes(req, msgid);
+            json_t *jval, *ids = json_pack("{}");
             const char *mboxid;
-            mailboxes = jmapmsg_mailboxes(req, msgid);
-            json_object_foreach(mailboxes, mboxid, val) {
+            json_object_foreach(mailboxes, mboxid, jval) {
                 json_object_set_new(ids, mboxid, json_true());
             }
             json_decref(mailboxes);
@@ -4017,21 +4116,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
 
         /* keywords */
         if (_wantprop(props, "keywords")) {
-            strarray_t *flags = NULL;
-            r = msgrecord_extract_flags(mr, req->accountid, &flags);
-            if (r) goto done;
-
-            int i;
-            json_t *keywords = json_pack("{}");
-            for (i = 0; i < flags->count; i++) {
-                const char *flag = strarray_nth(flags, i);
-                const char *keyword = jmap_keyword_from_imap(flag);
-                if (keyword) {
-                    json_object_set_new(keywords, keyword, json_true());
-                }
-            }
-            json_object_set_new(msg, "keywords", keywords);
-            strarray_free(flags);
+            json_object_set_new(msg, "keywords", jmapmsg_keywords(req, mr, msgid));
         }
 
         /* size */
