@@ -3024,72 +3024,6 @@ static char *extract_preview(const char *text, size_t len)
     return (char *) dst;
 }
 
-static void extract_plain_cb(const struct buf *buf, void *rock)
-{
-    struct buf *dst = (struct buf*) rock;
-    const char *p;
-    int seenspace = 0;
-
-    /* Just merge multiple space into one. That's similar to
-     * charset_extract's MERGE_SPACE but since we don't want
-     * it to canonify the text into search form */
-    for (p = buf_base(buf); p < buf_base(buf) + buf_len(buf) && *p; p++) {
-        if (*p == ' ') {
-            if (seenspace) continue;
-            seenspace = 1;
-        } else {
-            seenspace = 0;
-        }
-        buf_appendmap(dst, p, 1);
-    }
-}
-
-static char *extract_plain(const char *html) {
-    struct buf src = BUF_INITIALIZER;
-    struct buf dst = BUF_INITIALIZER;
-    charset_t utf8 = charset_lookupname("utf8");
-    char *text;
-    char *tmp, *q;
-    const char *p;
-
-    /* Replace <br> and <p> with newlines */
-    q = tmp = xstrdup(html);
-    p = html;
-    while (*p) {
-        if (!strncmp(p, "<br>", 4) || !strncmp(p, "</p>", 4)) {
-            *q++ = '\n';
-            p += 4;
-        }
-        else if (!strncmp(p, "p>", 3)) {
-            p += 3;
-        } else {
-            *q++ = *p++;
-        }
-    }
-    *q = 0;
-
-    /* Strip html tags */
-    buf_init_ro(&src, tmp, q - tmp);
-    buf_setcstr(&dst, "");
-    charset_extract(&extract_plain_cb, &dst,
-            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
-    buf_cstring(&dst);
-
-    /* Trim text */
-    buf_trim(&dst);
-    text = buf_releasenull(&dst);
-    if (!strlen(text)) {
-        free(text);
-        text = NULL;
-    }
-
-    buf_free(&src);
-    free(tmp);
-    charset_free(&utf8);
-
-    return text;
-}
-
 struct jmapmsg_mailboxes_data {
     jmap_req_t *req;
     json_t *mboxs;
@@ -3950,7 +3884,7 @@ static int jmapmsg_from_body(jmap_req_t *req, hash_table *props,
     /* textBody */
     if (_wantprop(props, "textBody") || (_wantprop(props, "body") && !html)) {
         if (!text && html) {
-            text = extract_plain(html);
+            text = charset_extract_plain(html);
         }
         json_object_set_new(msg, "textBody", json_string(text ? text : ""));
     }
@@ -6875,7 +6809,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     if (!json_object_get(mymsg, "textBody")) {
         const char *html = json_string_value(json_object_get(mymsg, "htmlBody"));
         if (html) {
-            char *tmp = extract_plain(html);
+            char *tmp = charset_extract_plain(html);
             json_object_set_new(mymsg, "textBody", json_string(tmp));
             free(tmp);
         }

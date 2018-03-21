@@ -3027,3 +3027,68 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len)
     return qp_encode(header, len, 1, NULL);
 }
 
+static void extract_plain_cb(const struct buf *buf, void *rock)
+{
+    struct buf *dst = (struct buf*) rock;
+    const char *p;
+    int seenspace = 0;
+
+    /* Just merge multiple space into one. That's similar to
+     * charset_extract's MERGE_SPACE but since we don't want
+     * it to canonify the text into search form */
+    for (p = buf_base(buf); p < buf_base(buf) + buf_len(buf) && *p; p++) {
+        if (*p == ' ') {
+            if (seenspace) continue;
+            seenspace = 1;
+        } else {
+            seenspace = 0;
+        }
+        buf_appendmap(dst, p, 1);
+    }
+}
+
+EXPORTED char *charset_extract_plain(const char *html) {
+    struct buf src = BUF_INITIALIZER;
+    struct buf dst = BUF_INITIALIZER;
+    charset_t utf8 = charset_lookupname("utf8");
+    char *text;
+    char *tmp, *q;
+    const char *p;
+
+    /* Replace <br> and <p> with newlines */
+    q = tmp = xstrdup(html);
+    p = html;
+    while (*p) {
+        if (!strncmp(p, "<br>", 4) || !strncmp(p, "</p>", 4)) {
+            *q++ = '\n';
+            p += 4;
+        }
+        else if (!strncmp(p, "p>", 3)) {
+            p += 3;
+        } else {
+            *q++ = *p++;
+        }
+    }
+    *q = 0;
+
+    /* Strip html tags */
+    buf_init_ro(&src, tmp, q - tmp);
+    buf_setcstr(&dst, "");
+    charset_extract(&extract_plain_cb, &dst,
+            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
+    buf_cstring(&dst);
+
+    /* Trim text */
+    buf_trim(&dst);
+    text = buf_releasenull(&dst);
+    if (!strlen(text)) {
+        free(text);
+        text = NULL;
+    }
+
+    buf_free(&src);
+    free(tmp);
+    charset_free(&utf8);
+
+    return text;
+}

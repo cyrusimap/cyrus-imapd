@@ -137,4 +137,8 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
                            charset_t charset, int encoding,
                            const char *subtype, int flags);
 
+/* Extract plain text from HTML, converting <p> and <br>
+ * to newlines and trimming space left by HTML-only lines. */
+EXPORTED char *charset_extract_plain(const char *html);
+
 #endif /* INCLUDED_CHARSET_H */
