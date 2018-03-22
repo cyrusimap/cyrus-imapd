@@ -897,7 +897,7 @@ static int sieve_reject(void *ac, void *ic,
 
     if (rc->is_extended || (config_getswitch(IMAPOPT_SIEVE_USE_LMTP_REJECT) && !need_encode)) {
         char *msg = need_encode ?
-            charset_qpencode_mimebody(rc->msg, strlen(rc->msg), NULL) :
+            charset_qpencode_mimebody(rc->msg, strlen(rc->msg), 0, NULL) :
             xstrdup(rc->msg);
         strarray_t *resp = strarray_new();
         struct buf buf = BUF_INITIALIZER;

@@ -454,7 +454,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     }
 
     mimebody = charset_qpencode_mimebody(buf_base(&plainbuf),
-                                         buf_len(&plainbuf), &outlen);
+                                         buf_len(&plainbuf), 0, &outlen);
 
     if (outlen > buf_len(&plainbuf)) {
         buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: quoted-printable\r\n");
@@ -535,7 +535,7 @@ static int imip_send_sendmail(icalcomponent *ical,
     buf_printf(&msgbuf, "Content-ID: <%s@%s>\r\n", uid, config_servername);
 
     ical_str = icalcomponent_as_ical_string(ical);
-    mimebody = charset_qpencode_mimebody(ical_str, strlen(ical_str), &outlen);
+    mimebody = charset_qpencode_mimebody(ical_str, strlen(ical_str), 0, &outlen);
 
     if (outlen > strlen(ical_str)) {
         buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: quoted-printable\r\n");

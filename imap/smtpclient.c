@@ -446,8 +446,9 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
 
     /* Write message, escaping dot characters. */
     buf_ensure(&sm->buf, 4096);
-    int c;
+    int c, prev = 256;
     int at_start = 1;
+    const char *eot = "\r\n.\r\n";
     while ((c = prot_getc(data)) != EOF) {
         if (c == '.' && at_start) {
             prot_ungetc(c, data);
@@ -463,13 +464,17 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
         if (c == '\n') {
             at_start = 1;
         }
+        prev = c;
     }
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
+    /* If message ends with CRLF, omit pre-dot CRLF. */
+    if (prev < 256 && prev == '\r' && c == '\n')
+        eot = ".\r\n";
 
-    /* Write dot */
-    buf_setcstr(&sm->buf, "\r\n.\r\n");
+    /* Write end-of-text. */
+    buf_setcstr(&sm->buf, eot);
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
