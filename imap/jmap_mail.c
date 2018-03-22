@@ -6069,62 +6069,7 @@ static char* _make_boundary()
     return boundary;
 }
 
-static const char* split_plain(const char *s, size_t limit)
-{
-    const char *p = s + limit;
-    while (p > s && !isspace(*p))
-        p--;
-    if (p == s)
-        p = s + limit;
-    return p;
-}
-
-static const char* split_html(const char *s, size_t limit)
-{
-    const char *p = s + limit;
-    while (p > s && !isspace(*p) && *p != '<')
-        p--;
-    if (p == s)
-        p = s + limit;
-    return p;
-}
-
-static int writetext(const char *s, FILE *out,
-                     const char* (*split)(const char *s, size_t limit))
-{
-    /*
-     * RFC 5322 - 2.1.1.  Line Length Limits
-     * There are two limits that this specification places on the number of
-     * characters in a line.  Each line of characters MUST be no more than
-     * 998 characters, and SHOULD be no more than 78 characters, excluding
-     * the CRLF.
-     */
-    const char *p = s;
-    const char *top = p + strlen(p);
-
-    while (p < top) {
-        const char *q = strchr(p, '\n');
-        int add_lf = 0;
-        q = q ? q + 1 : top;
-
-        if (q - p > 998) {
-            /* Could split on 1000 bytes but let's have some leeway */
-            q = split(p, 998);
-            add_lf = 1;
-        }
-
-        if (fwrite(p, 1, q - p, out) < ((size_t)(q - p)))
-            return -1;
-        if (q < top && add_lf && fputc('\n', out) == EOF)
-            return -1;
-
-        p = q;
-    }
-
-    return 0;
-}
-
-static int is_7bit_safe(const char *base, size_t len, const char *boundary __attribute__((unused)))
+static int is_7bit_safe(const char *base, size_t len)
 {
     /* XXX check if boundary exists in base - base+len ? */
 
@@ -6336,7 +6281,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     }
     /* MESSAGE parts mustn't be re-encoded, and maybe no encoding is required... */
     else if (!strcasecmp(part->type, "MESSAGE") ||
-             is_7bit_safe(msg_buf.s + part->content_offset, part->content_size, boundary)) {
+             is_7bit_safe(msg_buf.s + part->content_offset, part->content_size)) {
 
         strarray_add(&headers, "Content-Transfer-Encoding");
         ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
@@ -6353,7 +6298,7 @@ static int writeattach(jmap_req_t *req, json_t *att, const char *boundary, FILE 
     else if (!strcasecmp(part->type, "TEXT")) {
         size_t qplen;
         char *freeme = charset_qpencode_mimebody(msg_buf.s + part->content_offset,
-                                                 body->content_size, &qplen);
+                                                 body->content_size, 0, &qplen);
 
         JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "quoted-printable");
 
@@ -6401,6 +6346,62 @@ done:
     buf_free(&msg_buf);
     strarray_fini(&headers);
     return r;
+}
+
+static int writetext(const char *text, const char *subtype, FILE *out)
+{
+    size_t len = strlen(text);
+
+    /* Check and sanitise text */
+    int has_long_lines = 0;
+    int is_7bit = 1;
+    const char *p = text;
+    const char *lo = text;
+    const char *hi = text + len;
+    const char *last_lf = p;
+    struct buf txtbuf = BUF_INITIALIZER;
+    for (p = lo; p < hi; p++) {
+        /* Keep track of line-length and high-bit bytes */
+        if (p - last_lf > 998)
+            has_long_lines = 1;
+        if (*p == '\n')
+            last_lf = p;
+        if (*p & 0x80)
+            is_7bit = 0;
+        /* Omit CR, expand lone LF to CRLF */
+        if (*p == '\r' && p < hi && *(p+1) != '\n')
+            continue;
+        if (*p == '\n' && p > lo && *(p-1) != '\r')
+            buf_putc(&txtbuf, '\r');
+        buf_putc(&txtbuf, *p);
+    }
+
+    /* Make header */
+    struct buf hdrbuf = BUF_INITIALIZER;
+    buf_printf(&hdrbuf, "text/%s", subtype);
+
+    if (is_7bit && !has_long_lines) {
+        /* Use regular, short line ASCII */
+        buf_appendcstr(&hdrbuf, ";charset=us-ascii");
+        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&hdrbuf));
+        fputs("\r\n", out);
+        fwrite(buf_cstring(&txtbuf), 1, buf_len(&txtbuf), out);
+    }
+    else {
+        /* Write quoted printable */
+        buf_appendcstr(&hdrbuf, ";charset=utf-8");
+        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&hdrbuf));
+        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "quoted-printable");
+        fputs("\r\n", out);
+        size_t qp_len = 0;
+        char *qp_text = charset_qpencode_mimebody(txtbuf.s, txtbuf.len, 1, &qp_len);
+        fwrite(qp_text, 1, qp_len, out);
+        free(qp_text);
+    }
+
+    buf_free(&txtbuf);
+    buf_free(&hdrbuf);
+    return 0;
 }
 
 static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
@@ -6543,16 +6544,10 @@ static int jmapmsg_to_mimebody(jmap_req_t *req, json_t *msg,
 
     }
     else if (JNOTNULL(html)) {
-        /* Content-Type is text/html */
-        JMAPMSG_HEADER_TO_MIME("Content-Type", "text/html;charset=UTF-8");
-        fputs("\r\n", out);
-        writetext(json_string_value(html), out, split_html);
+        writetext(json_string_value(html), "html", out);
     }
     else if (JNOTNULL(text)) {
-        /* Content-Type is text/plain */
-        JMAPMSG_HEADER_TO_MIME("Content-Type", "text/plain;charset=UTF-8");
-        fputs("\r\n", out);
-        writetext(json_string_value(text), out, split_plain);
+        writetext(json_string_value(text), "plain", out);
     }
 
     /* All done */
