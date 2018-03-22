@@ -7730,7 +7730,7 @@ sub test_misc_set_oldstate
     $self->assert(exists $res->[0][1]{oldState});
 }
 
-sub test_email_set_text_lf
+sub test_email_set_text_crlf
     :JMAP :min_version_3_1
 {
     my ($self) = @_;
@@ -7738,37 +7738,9 @@ sub test_email_set_text_lf
 
     my $inboxid = $self->getinbox()->{id};
 
-    my $text = "a\nb\nc";
-
-    my $email =  {
-        mailboxIds => { $inboxid => JSON::true },
-        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
-        to => [ {
-            email => q{foo@bar.com},
-            name => "foo",
-        } ],
-        textBody => $text,
-    };
-
-    xlog "create and get email";
-    my $res = $jmap->CallMethods([
-        ['Email/set', { create => { "1" => $email }}, "R1"],
-        ['Email/get', { ids => [ "#1" ] }, "R2" ],
-    ]);
-    my $ret = $res->[1][1]->{list}[0];
-    $self->assert_str_equals($text, $ret->{textBody});
-}
-
-sub test_email_set_text_split
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $inboxid = $self->getinbox()->{id};
-
-    my $text = "x" x 2000;
-    my $want = ("x" x 998 ) . "\n" . ("x" x 998) . "\nxxxx";
+    # TODO JMAP should replace CRLF with LF on read
+    my $text = "ab\r\ncde\rfgh\nij";
+    my $want = "ab\r\ncdefgh\r\nij";
 
     my $email =  {
         mailboxIds => { $inboxid => JSON::true },
@@ -7789,5 +7761,33 @@ sub test_email_set_text_split
     $self->assert_str_equals($want, $ret->{textBody});
 }
 
+sub test_email_set_text_split
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $text = "x" x 2000;
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+        to => [ {
+            email => q{foo@bar.com},
+            name => "foo",
+        } ],
+        textBody => $text,
+    };
+
+    xlog "create and get email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    my $ret = $res->[1][1]->{list}[0];
+    $self->assert_str_equals($text, $ret->{textBody});
+}
 
 1;
