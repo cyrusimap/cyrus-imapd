@@ -115,7 +115,7 @@ extern char *charset_encode_mimebody(const char *msg_base, size_t len,
                                      char *retval, size_t *outlen,
                                      int *outlines);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
-                                       size_t *outlen);
+                                       int force_quote, size_t *outlen);
 extern char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding);
 extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding);
 

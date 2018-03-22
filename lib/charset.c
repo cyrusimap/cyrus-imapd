@@ -2896,27 +2896,32 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
  * Returns the number of encoded bytes in 'outlen'.
  */
 static char *qp_encode(const char *data, size_t len, int isheader,
-                       size_t *outlen)
+                       int force_quote, size_t *outlen)
 {
     struct buf buf = BUF_INITIALIZER;
     size_t n;
     int need_quote = 0;
 
-    for (n = 0; n < len; n++) {
-        unsigned char this = data[n];
-        unsigned char next = (n < len - 1) ? data[n+1] : '\0';
+    if (!force_quote) {
+        for (n = 0; n < len; n++) {
+            unsigned char this = data[n];
+            unsigned char next = (n < len - 1) ? data[n+1] : '\0';
 
-        if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
-            /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
-            continue;
+            if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
+                /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
+                continue;
+            }
+            else if (!isheader && this == '\r' && next == '\n') {
+                /* line break (CRLF) */
+                n++;
+                continue;
+            }
+            need_quote = 1;
+            break;
         }
-        else if (!isheader && this == '\r' && next == '\n') {
-            /* line break (CRLF) */
-            n++;
-            continue;
-        }
+    }
+    else {
         need_quote = 1;
-        break;
     }
 
     if (need_quote) {
@@ -3006,11 +3011,11 @@ static char *qp_encode(const char *data, size_t len, int isheader,
  * Returns the number of encoded bytes in 'outlen'.
  */
 EXPORTED char *charset_qpencode_mimebody(const char *msg_base, size_t len,
-                                         size_t *outlen)
+                                         int force_quote, size_t *outlen)
 {
     if (!msg_base) return NULL;
 
-    return qp_encode(msg_base, len, 0, outlen);
+    return qp_encode(msg_base, len, 0, force_quote, outlen);
 }
 
 
@@ -3024,7 +3029,7 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len)
 
     if (!len) len = strlen(header);
 
-    return qp_encode(header, len, 1, NULL);
+    return qp_encode(header, len, 1, 0, NULL);
 }
 
 static void extract_plain_cb(const struct buf *buf, void *rock)
