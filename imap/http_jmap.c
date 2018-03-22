@@ -933,6 +933,8 @@ EXPORTED void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
     struct _mboxcache_rec *rec = NULL;
     int i;
 
+    if (!mboxp || !*mboxp) return;
+
     for (i = 0; i < req->mboxes->count; i++) {
         rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
         if (rec->mbox == *mboxp)
