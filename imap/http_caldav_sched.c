@@ -2014,6 +2014,8 @@ void sched_deliver(const char *recipient, void *data, void *rock)
 
     syslog(LOG_DEBUG, "sched_deliver(%s)", recipient);
 
+    memset(&sparam, 0, sizeof(struct caldav_sched_param));
+
     /* Check SCHEDULE-FORCE-SEND value */
     switch (sched_data->force_send) {
     case ICAL_SCHEDULEFORCESEND_NONE:
