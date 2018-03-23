@@ -775,6 +775,7 @@ static int jmap_post(struct transaction_t *txn,
         }
 
         struct jmap_req req;
+        memset(&req, 0, sizeof(struct jmap_req));
         req.method = mname;
         req.userid = httpd_userid;
         req.accountid = accountid;
@@ -889,21 +890,25 @@ EXPORTED int jmap_openmbox(jmap_req_t *req, const char *name,
         if (!strcmp(name, rec->mbox->name)) {
             if (rw && !rec->rw) {
                 /* Lock promotions are not supported */
-                syslog(LOG_ERR, "jmapmbox: won't reopen mailbox %s", name);
+                syslog(LOG_ERR, "jmapmbox: failed to grab write-lock on cached read-only mailbox %s", name);
                 return IMAP_INTERNAL;
             }
+            /* Found a cached mailbox. Increment refcount. */
             rec->refcount++;
             *mboxp = rec->mbox;
+
             return 0;
         }
     }
 
+    /* Add mailbox to cache */
+    if (req->force_openmbox_rw)
+        rw = 1;
     r = rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
     if (r) {
         syslog(LOG_ERR, "jmap_openmbox(%s): %s", name, error_message(r));
         return r;
     }
-
     rec = xzmalloc(sizeof(struct _mboxcache_rec));
     rec->mbox = *mboxp;
     rec->refcount = 1;
@@ -933,24 +938,21 @@ EXPORTED void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
     struct _mboxcache_rec *rec = NULL;
     int i;
 
-    if (!mboxp || !*mboxp) return;
+    if (mboxp == NULL || *mboxp == NULL) return;
 
     for (i = 0; i < req->mboxes->count; i++) {
         rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (rec->mbox == *mboxp)
-            break;
+        if (rec->mbox == *mboxp) {
+            if (!(--rec->refcount)) {
+                ptrarray_remove(req->mboxes, i);
+                mailbox_close(&rec->mbox);
+                free(rec);
+            }
+            *mboxp = NULL;
+            return;
+        }
     }
-    if (i >= req->mboxes->count) {
-        syslog(LOG_ERR, "jmap: ignore non-cached mailbox %s", (*mboxp)->name);
-        return;
-    }
-
-    if (!(--rec->refcount)) {
-        ptrarray_remove(req->mboxes, i);
-        mailbox_close(&rec->mbox);
-        free(rec);
-    }
-    *mboxp = NULL;
+    syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", (*mboxp)->name);
 }
 
 EXPORTED char *jmap_blobid(const struct message_guid *guid)

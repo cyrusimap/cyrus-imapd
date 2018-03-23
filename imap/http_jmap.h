@@ -77,6 +77,18 @@ typedef struct jmap_req {
     struct transaction_t *txn;
     struct mboxname_counters counters;
 
+    /* The JMAP request keeps its own cache of opened mailboxes,
+     * which can be used by calling jmap_openmbox. If the
+     * force_openmboxrw is set, this causes all following
+     * mailboxes to be opened read-writeable, irrespective if
+     * the caller asked for a read-only lock. This allows to
+     * prevent lock promotion conflicts, in case a cached mailbox
+     * was opened read-only by a helper but it now asked to be
+     * locked exclusively. Since the mailbox lock does not
+     * support lock promition, this would currently abort with
+     * an error. */
+    int force_openmbox_rw;
+
     /* Owned by JMAP HTTP handler */
     ptrarray_t *mboxes;
     int is_shared_account;
