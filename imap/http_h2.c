@@ -584,7 +584,7 @@ HIDDEN void http2_output(struct transaction_t *txn)
     struct transaction_t *strm_txn =
         nghttp2_session_get_stream_user_data(ctx->session, stream_id);
 
-    if (strm_txn->ws_ctx) {
+    if (strm_txn && strm_txn->ws_ctx) {
         /* WebSocket output */
         ws_output(strm_txn);
     }
