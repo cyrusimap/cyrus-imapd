@@ -3706,6 +3706,215 @@ sub test_email_set_mailboxids
     $self->assert(exists $res->[0][1]{created}{"1"});
 }
 
+sub test_email_get_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Create IMAP mailbox and message A";
+    $talk->create('INBOX.A') || die;
+    $store->set_folder('INBOX.A');
+    $self->make_message('A') || die;
+
+    xlog "Create IMAP mailbox B and copy message A to B";
+    $talk->create('INBOX.B') || die;
+    $talk->copy('1:*', 'INBOX.B');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+        }, 'R2' ]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    my $jmapmsg = $res->[1][1]{list}[0];
+    $self->assert_not_null($jmapmsg);
+
+    # Keywords are empty by default
+    my $keywords = {};
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Set \\Seen on message A";
+    $store->set_folder('INBOX.A');
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    # Seen must only be set if ALL messages are seen.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {};
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Set \\Seen on message B";
+    $store->set_folder('INBOX.B');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    # Seen must only be set if ALL messages are seen.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {
+        '$seen' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Set \\Flagged on message B";
+    $store->set_folder('INBOX.B');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Flagged)');
+
+    # Any other keyword is set if set on any IMAP message of this email.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {
+        '$seen' => JSON::true,
+        '$flagged' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+}
+
+sub test_email_set_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Create IMAP mailboxes";
+    $talk->create('INBOX.A') || die;
+    $talk->create('INBOX.B') || die;
+    $talk->create('INBOX.C') || die;
+
+    xlog "Get JMAP mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', { properties => [ 'name' ]}, "R1"]]);
+    my %jmailboxes = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %jmailboxes, 4);
+    my $jmailboxA = $jmailboxes{A};
+    my $jmailboxB = $jmailboxes{B};
+    my $jmailboxC = $jmailboxes{C};
+
+    my %mailboxA;
+    my %mailboxB;
+    my %mailboxC;
+
+    xlog "Create message in mailbox A";
+    $store->set_folder('INBOX.A');
+    $mailboxA{1} = $self->make_message('Message');
+    $mailboxA{1}->set_attributes(id => 1, uid => 1, flags => []);
+
+    xlog "Copy message from A to B";
+    $talk->copy('1:*', 'INBOX.B');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Set IMAP flag foo on message A";
+    $store->set_folder('INBOX.A');
+    $store->_select();
+    $talk->store('1', '+flags', '(foo)');
+
+    xlog "Get JMAP keywords";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'keywords']
+        }, 'R2' ]
+    ]);
+    my $jmapmsg = $res->[1][1]{list}[0];
+    my $keywords = {
+        foo => JSON::true
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Update JMAP email keywords";
+    $keywords = {
+        bar => JSON::true,
+        baz => JSON::true,
+    };
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $jmapmsg->{id} => {
+                    keywords => $keywords
+                }
+            }
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ $jmapmsg->{id} ],
+            properties => ['keywords']
+        }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[1][1]{list}[0];
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Set \\Seen on message in mailbox B";
+    $store->set_folder('INBOX.B');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    xlog "Patch JMAP email keywords and update mailboxIds";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $jmapmsg->{id} => {
+                    'keywords/bar' => undef,
+                    'keywords/qux' => JSON::true,
+                    mailboxIds => {
+                        $jmailboxB->{id} => JSON::true,
+                        $jmailboxC->{id} => JSON::true,
+                    }
+                }
+            }
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ $jmapmsg->{id} ],
+            properties => ['keywords', 'mailboxIds']
+        }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[1][1]{list}[0];
+    $keywords = {
+        baz => JSON::true,
+        qux => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog "Set \\Seen on message in mailbox C";
+    $store->set_folder('INBOX.C');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    xlog "Get JMAP keywords";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            ids => [ $jmapmsg->{id} ],
+            properties => [ 'keywords']
+        }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {
+        baz => JSON::true,
+        qux => JSON::true,
+        '$seen' => JSON::true
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+}
+
 sub test_emailsubmission_set
     :JMAP :min_version_3_1
 {
