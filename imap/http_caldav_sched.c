@@ -2425,7 +2425,45 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
     }
 }
 
+static icaltimetype get_historical_cutoff()
+{
+    int age = config_getint(IMAPOPT_CALDAV_HISTORICAL_AGE);
+    icaltimetype cutoff;
+
+    if (age < 0) return icaltime_null_time();
+
+    /* Set cutoff to current time -age days */
+    cutoff = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
+    icaltime_adjust(&cutoff, -age, 0, 0, 0);
+
+    return cutoff;
+}
+
+static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
+{
+    if (icaltime_is_null_time(cutoff)) return 0;
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    struct icalperiodtype span;
+
+    if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+         /* span is just the span of the override */
+        span = icalcomponent_get_utc_timespan(comp, kind);
+    }
+    else {
+        /* span is entire span of the master */
+        icalcomponent *ical = icalcomponent_new_vcalendar();
+
+        icalcomponent_add_component(ical, icalcomponent_new_clone(comp));
+        span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, NULL, NULL);
+        icalcomponent_free(ical);
+    }
+
+    return (icaltime_compare(span.end, cutoff) < 0);
+}
+
 static void schedule_full_cancel(const char *attendee, icalcomponent *mastercomp,
+                                 icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
     /* we need to send a cancel for all recurrences with this attendee,
@@ -2435,6 +2473,8 @@ static void schedule_full_cancel(const char *attendee, icalcomponent *mastercomp
     icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
     clean_component(mastercopy);
     icalcomponent_add_component(itip, mastercopy);
+
+    int do_send = !icalcomponent_is_historical(mastercopy, h_cutoff);
 
     icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -2458,17 +2498,23 @@ static void schedule_full_cancel(const char *attendee, icalcomponent *mastercomp
         icalcomponent *copy = icalcomponent_new_clone(comp);
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
+
+        if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
+            do_send = 1;
     }
 
-    struct sched_data sched =
-        { 0, 0, 0, itip, ICAL_SCHEDULEFORCESEND_NONE, NULL };
-    sched_deliver(attendee, &sched, httpd_authstate);
+    if (do_send) {
+        struct sched_data sched =
+            { 0, 0, 0, itip, ICAL_SCHEDULEFORCESEND_NONE, NULL };
+        sched_deliver(attendee, &sched, httpd_authstate);
+    }
 
     icalcomponent_free(itip);
 }
 
 /* we've already tested that master does NOT contain this attendee */
 static void schedule_sub_cancels(const char *attendee,
+                                 icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
     if (!oldical) return;
@@ -2500,7 +2546,8 @@ static void schedule_sub_cancels(const char *attendee,
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
 
-        do_send = 1;
+        if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
+            do_send = 1;
     }
 
     if (do_send) {
@@ -2525,6 +2572,7 @@ icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
 /* we've already tested that master does NOT contain this attendee or that
  * master doesn't need to be scheduled */
 static void schedule_sub_updates(const char *attendee,
+                                 icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
     if (!newical) return;
@@ -2579,7 +2627,8 @@ static void schedule_sub_updates(const char *attendee,
 
         strarray_add(&recurids, recurid);
 
-        do_send = 1;
+        if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
+            do_send = 1;
 
         if (freeme) icalcomponent_free(freeme);
     }
@@ -2596,6 +2645,7 @@ static void schedule_sub_updates(const char *attendee,
 
 /* we've already tested that master does contain this attendee */
 static void schedule_full_update(const char *attendee, icalcomponent *mastercomp,
+                                 icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
     /* create an itip for the complete event */
@@ -2611,8 +2661,13 @@ static void schedule_full_update(const char *attendee, icalcomponent *mastercomp
     icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
     if (check_changes(oldmaster, mastercopy, attendee)) {
         /* we only force the send if the top level event has changed */
-        do_send = 1;
-        if (oldmaster) is_update = 1;
+        if (!icalcomponent_is_historical(mastercopy, h_cutoff)) do_send = 1;
+
+        if (oldmaster) {
+            is_update = 1;
+            if (!do_send && !icalcomponent_is_historical(oldmaster, h_cutoff))
+                do_send = 1;
+        }
     }
 
     icalproperty *masteratt = find_attendee(mastercomp, attendee);
@@ -2647,8 +2702,10 @@ static void schedule_full_update(const char *attendee, icalcomponent *mastercomp
             schedule_set_exdate(mastercopy, comp);
 
             /* different from last time? */
-            if (!oldcomp || has_old) do_send = 1;
-
+            if ((!oldcomp || has_old) &&
+                !do_send && !icalcomponent_is_historical(comp, h_cutoff)) {
+                do_send = 1;
+            }
             continue;
         }
 
@@ -2670,7 +2727,7 @@ static void schedule_full_update(const char *attendee, icalcomponent *mastercomp
     }
     else {
         /* just look for sub updates */
-        schedule_sub_updates(attendee, oldical, newical);
+        schedule_sub_updates(attendee, h_cutoff, oldical, newical);
     }
 
     icalcomponent_free(itip);
@@ -2679,25 +2736,26 @@ static void schedule_full_update(const char *attendee, icalcomponent *mastercomp
 /* sched_request() helper
  * handles scheduling for a single attendee */
 static void schedule_one_attendee(const char *attendee,
+                                  icaltimetype h_cutoff,
                                   icalcomponent *oldical, icalcomponent *newical)
 {
     /* case: this attendee is attending the master event */
     icalcomponent *mastercomp;
     if ((mastercomp = find_attended_component(newical, "", attendee))) {
-        schedule_full_update(attendee, mastercomp, oldical, newical);
+        schedule_full_update(attendee, mastercomp, h_cutoff, oldical, newical);
         return;
     }
 
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
     if ((mastercomp = find_attended_component(oldical, "", attendee))) {
-        schedule_full_cancel(attendee, mastercomp, oldical, newical);
+        schedule_full_cancel(attendee, mastercomp, h_cutoff, oldical, newical);
     }
     else {
-        schedule_sub_cancels(attendee, oldical, newical);
+        schedule_sub_cancels(attendee, h_cutoff, oldical, newical);
     }
 
-    schedule_sub_updates(attendee, oldical, newical);
+    schedule_sub_updates(attendee, h_cutoff, oldical, newical);
 }
 
 
@@ -2740,12 +2798,14 @@ void sched_request(const char *userid, const char *organizer,
     add_attendees(oldical, organizer, &attendees);
     add_attendees(newical, organizer, &attendees);
 
+    icaltimetype h_cutoff = get_historical_cutoff();
+
     int i;
     for (i = 0; i < strarray_size(&attendees); i++) {
         const char *attendee = strarray_nth(&attendees, i);
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
-        schedule_one_attendee(attendee, oldical, newical);
+        schedule_one_attendee(attendee, h_cutoff, oldical, newical);
     }
 
     strarray_fini(&attendees);
@@ -2880,6 +2940,7 @@ static int partstat_changed(icalcomponent *oldcomp,
 }
 
 static void schedule_sub_declines(const char *attendee,
+                                  icaltimetype h_cutoff,
                                   icalcomponent *oldical, icalcomponent *newical,
                                   struct reply_data *reply)
 {
@@ -2920,12 +2981,14 @@ static void schedule_sub_declines(const char *attendee,
 
         icalcomponent_add_component(reply->itip, copy);
 
-        reply->do_send = 1;
+        if (!reply->do_send && !icalcomponent_is_historical(comp, h_cutoff))
+            reply->do_send = 1;
     }
 }
 
 /* we've already tested that master does NOT contain this attendee */
 static void schedule_sub_replies(const char *attendee,
+                                 icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical,
                                  struct reply_data *reply)
 {
@@ -2981,11 +3044,13 @@ static void schedule_sub_replies(const char *attendee,
             strarray_add(reply->didparts, recurid);
         }
 
-        reply->do_send = 1;
+        if (!reply->do_send && !icalcomponent_is_historical(comp, h_cutoff))
+            reply->do_send = 1;
     }
 }
 
 static void schedule_full_decline(const char *attendee,
+                                  icaltimetype h_cutoff,
                                   icalcomponent *oldical, icalcomponent *newical __attribute__((unused)),
                                   struct reply_data *reply)
 {
@@ -3012,21 +3077,25 @@ static void schedule_full_decline(const char *attendee,
 
     icalcomponent_add_component(reply->itip, mastercopy);
 
-    reply->do_send = 1;
+    if (!reply->do_send && !icalcomponent_is_historical(mastercomp, h_cutoff))
+        reply->do_send = 1;
+
     /* force ALL sub parts to be added */
     reply->master_send = 1;
 }
 
 /* we've already tested that master contains this attendee */
 static void schedule_full_reply(const char *attendee,
+                                icaltimetype h_cutoff,
                                 icalcomponent *oldical, icalcomponent *newical,
                                 struct reply_data *reply)
 {
     icalcomponent *mastercomp = find_attended_component(newical, "", attendee);
     icalcomponent_kind kind;
+    int add_master = 0;
 
     if (!mastercomp) {
-        schedule_full_decline(attendee, oldical, newical, reply);
+        schedule_full_decline(attendee, h_cutoff, oldical, newical, reply);
         return;
     }
 
@@ -3043,17 +3112,17 @@ static void schedule_full_reply(const char *attendee,
 
     /* it's forced */
     if (reply->force_send != ICAL_SCHEDULEFORCESEND_NONE)
-        reply->do_send = 1;
+        add_master = 1;
 
     /* or it's a VPOLL */
     else if (kind == ICAL_VPOLL_COMPONENT)
-        reply->do_send = 1;
+        add_master = 1;
 
     else {
         /* or it's different */
         icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
         if (partstat_changed(oldmaster, mastercomp, attendee))
-            reply->do_send = 1;
+            add_master = 1;
 
         /* or it includes new EXDATEs */
         else {
@@ -3063,12 +3132,12 @@ static void schedule_full_reply(const char *attendee,
                                                                 ICAL_EXDATE_PROPERTY)) {
                 struct icaltimetype exdate = icalproperty_get_exdate(prop);
                 if (!has_exdate(oldmaster, exdate))
-                    reply->do_send = 1;
+                    add_master = 1;
             }
         }
     }
 
-    if (reply->do_send) {
+    if (add_master) {
         if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
         /* add the master */
@@ -3080,6 +3149,10 @@ static void schedule_full_reply(const char *attendee,
 
         /* force ALL sub parts to be added */
         reply->master_send = 1;
+
+        /* master includes "recent" occurrence(s) - send it */
+        if (!icalcomponent_is_historical(mastercopy, h_cutoff))
+            reply->do_send = 1;
     }
 }
 
@@ -3118,10 +3191,11 @@ void sched_reply(const char *userid, const char *attendee,
     /* otherwise we need to decline for each sub event and then we'll still
      * send the accepts if any */
     struct reply_data reply = { NULL, NULL, NULL, 0, 0, ICAL_SCHEDULEFORCESEND_NONE };
+    icaltimetype h_cutoff = get_historical_cutoff();
 
-    schedule_full_reply(attendee, oldical, newical, &reply);
-    schedule_sub_replies(attendee, oldical, newical, &reply);
-    schedule_sub_declines(attendee, oldical, newical, &reply);
+    schedule_full_reply(attendee, h_cutoff, oldical, newical, &reply);
+    schedule_sub_replies(attendee, h_cutoff, oldical, newical, &reply);
+    schedule_sub_declines(attendee, h_cutoff, oldical, newical, &reply);
 
     syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
            attendee, reply.organizer ? reply.organizer : "<unknown>");

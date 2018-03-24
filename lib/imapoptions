@@ -521,6 +521,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "caldav_create_sched", 1, SWITCH }
 /* Create the 'Inbox' and 'Outbox' calendars if they don't already exist */
 
+{ "caldav_historical_age", 7, INT }
+/* Number of days after an occurrence of event or task has concluded
+   that it is considered 'historical'.  Changes to historical
+   occurrences of events or tasks WILL NOT have invite or reply
+   messages sent for them.  A value less than zero means that events
+   and tasks are NEVER considered historical. */
+
 { "caldav_maxdatetime", "20380119T031407Z", STRING }
 /* The latest date and time accepted by the server (ISO format).  This
    value is also used for expanding non-terminating recurrence rules.
