@@ -180,6 +180,7 @@ struct Commandlist {
             strarray_t *options;
             int priority;
             char *message;
+            struct Fileinto fcc;
         } n;
         struct { /* it's a denotify action */
             comp_t comp;

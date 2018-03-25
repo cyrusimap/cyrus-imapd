@@ -456,6 +456,7 @@ void free_tree(commandlist_t *cl)
             free(cl->u.n.from);
             strarray_free(cl->u.n.options);
             free(cl->u.n.message);
+            free_fileinto(&cl->u.n.fcc);
             break;
 
         case DENOTIFY:

@@ -358,7 +358,6 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
     /* enotify - RFC 5435 */
 <INITIAL>notify               return NOTIFY;
-<INITIAL>:method              return METHOD;
 <INITIAL>:options             return OPTIONS;
 <INITIAL>:message             return MESSAGE;
 <INITIAL>:encodeurl           return yylval->nval = ENCODEURL;
@@ -376,6 +375,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 
     /* notify - draft-martin-sieve-notify-01 */
 <INITIAL>denotify             return DENOTIFY;
+<INITIAL>:method              return METHOD;
 <INITIAL>:id                  return ID;
 <INITIAL>:low                 return yylval->nval = LOW;
 <INITIAL>:normal              return yylval->nval = NORMAL;

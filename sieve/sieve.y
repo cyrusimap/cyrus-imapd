@@ -97,8 +97,8 @@ static commandlist_t *build_rej_err(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t*,
                                  commandlist_t *c, strarray_t *flags);
-static commandlist_t *build_notify(sieve_script_t*,
-                                   commandlist_t *c, int t, char *method);
+static commandlist_t *build_notify(sieve_script_t*, int t,
+                                   commandlist_t *c, char *method);
 static commandlist_t *build_denotify(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
 static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
@@ -434,10 +434,10 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
 
         | reject STRING          { $$ = build_rej_err(sscript, $1, $2); }
         | NOTIFY ntags STRING    { $$ = build_notify(sscript,
-                                                     $2, ENOTIFY, $3); }
+                                                     ENOTIFY, $2, $3); }
 
         | NOTIFY ntags           { $$ = build_notify(sscript,
-                                                     $2, NOTIFY, NULL); }
+                                                     NOTIFY, $2, NULL); }
 
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags STRING   { $$ = build_include(sscript, $2, $3); }
@@ -464,6 +464,8 @@ flags: FLAGS stringlist          {
                                          flags = &c->u.f.flags; break;
                                      case VACATION:
                                          flags = &c->u.v.fcc.flags; break;
+                                     case ENOTIFY:
+                                         flags = &c->u.n.fcc.flags; break;
                                      }
 
                                      if (*flags != NULL) {
@@ -517,8 +519,16 @@ copy: COPY                       {
 create: CREATE                  {
                                      /* $0 refers to ftags or vtags */
                                      commandlist_t *c = $<cl>0;
-                                     int *create = (c->type == FILEINTO) ?
-                                         &c->u.f.create : &c->u.v.fcc.create;
+                                     int *create = NULL;
+
+                                     switch (c->type) {
+                                     case FILEINTO:
+                                         create = &c->u.f.create; break;
+                                     case VACATION:
+                                         create = &c->u.v.fcc.create; break;
+                                     case ENOTIFY:
+                                         create = &c->u.n.fcc.create; break;
+                                     }
 
                                      if ((*create)++) {
                                          sieveerror_c(sscript,
@@ -538,8 +548,19 @@ create: CREATE                  {
 specialuse: SPECIALUSE STRING    {
                                      /* $0 refers to ftags or vtags */
                                      commandlist_t *c = $<cl>0;
-                                     char **specialuse = (c->type == FILEINTO) ?
-                                         &c->u.f.specialuse : &c->u.v.fcc.specialuse;
+                                     char **specialuse = NULL;
+
+                                     switch (c->type) {
+                                     case FILEINTO:
+                                         specialuse = &c->u.f.specialuse;
+                                         break;
+                                     case VACATION:
+                                         specialuse = &c->u.v.fcc.specialuse;
+                                         break;
+                                     case ENOTIFY:
+                                         specialuse = &c->u.n.fcc.specialuse;
+                                         break;
+                                     }
 
                                      if (*specialuse != NULL) {
                                          sieveerror_c(sscript,
@@ -740,14 +761,22 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
 
 fcctags: FCC STRING              {
-                                     /* $0 refers to vtags */
+                                     /* $0 refers to vtags or ntags */
                                      commandlist_t *c = $<cl>0;
+                                     char **folder = NULL;
 
-                                     if (c->u.v.fcc.folder != NULL) {
+                                     switch (c->type) {
+                                     case VACATION:
+                                         folder = &c->u.v.fcc.folder; break;
+                                     case ENOTIFY:
+                                         folder = &c->u.n.fcc.folder; break;
+                                     }
+
+                                     if (*folder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":fcc");
-                                         free(c->u.v.fcc.folder);
+                                         free(*folder);
                                      }
                                      else if (!supported(SIEVE_CAPA_FCC)) {
                                          sieveerror_c(sscript,
@@ -755,7 +784,7 @@ fcctags: FCC STRING              {
                                                       "fcc");
                                      }
 
-                                     c->u.v.fcc.folder = $2;
+                                     *folder = $2;
                                  }
         | create
         | flags
@@ -832,7 +861,7 @@ reject:   REJCT
  * try to police it during parsing.  Note that this allows :importance
  * and :low/:normal/:high to be used with the incorrect notify flavor.
  */
-ntags: /* empty */               { $$ = new_command(NOTIFY, sscript); }
+ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
         /* enotify-only tagged arguments */
         | ntags FROM STRING      {
@@ -856,6 +885,7 @@ ntags: /* empty */               { $$ = new_command(NOTIFY, sscript); }
 
                                      $$->u.n.priority = $3;
                                  }
+        | ntags fcctags
 
         /* legacy-only tagged arguments */
         | ntags ID STRING        {
@@ -1993,8 +2023,8 @@ static commandlist_t *build_rej_err(sieve_script_t *sscript,
     return c;
 }
 
-static commandlist_t *build_notify(sieve_script_t *sscript,
-                                   commandlist_t *c, int t, char *method)
+static commandlist_t *build_notify(sieve_script_t *sscript, int t,
+                                   commandlist_t *c, char *method)
 {
     assert(c && (t == NOTIFY || t == ENOTIFY));
 
@@ -2008,6 +2038,16 @@ static commandlist_t *build_notify(sieve_script_t *sscript,
         if (c->u.n.method != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":method");
         }
+        if (c->u.n.fcc.folder) {
+            verify_mailbox(sscript, c->u.n.fcc.folder);
+            if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
+                c->u.n.fcc.flags && !verify_flaglist(c->u.n.fcc.flags)) {
+                strarray_add(c->u.n.fcc.flags, "");
+            }
+        }
+        else if (c->u.n.fcc.create || c->u.n.fcc.flags || c->u.n.fcc.specialuse) {
+            sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
+        }
 
         c->u.n.method = method;
     }
@@ -2017,6 +2057,18 @@ static commandlist_t *build_notify(sieve_script_t *sscript,
         }
         if (c->u.n.from != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":from");
+        }
+        if (c->u.n.fcc.folder != NULL) {
+            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":fcc");
+        }
+        if (c->u.n.fcc.create != 0) {
+            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":create");
+        }
+        if (c->u.n.fcc.flags != NULL) {
+            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":flags");
+        }
+        if (c->u.n.fcc.specialuse != NULL) {
+            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":specialuse");
         }
 
         if (!c->u.n.method) c->u.n.method = xstrdup("default");
