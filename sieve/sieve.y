@@ -302,10 +302,10 @@ extern void sieverestart(FILE *f);
 %type <test> duptags
 %type <nval> idtype
 
-/* draft-bosch-sieve-special-use */
+/* draft-ietf-extra-sieve-special-use */
 %token SPECIALUSEEXISTS SPECIALUSE
 
-/* draft-murchison-sieve-fcc */
+/* draft-ietf-extra-sieve-fcc */
 %token FCC
 
 
