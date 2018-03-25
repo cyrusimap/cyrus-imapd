@@ -145,4 +145,14 @@ Debian/Ubuntu copypasta:
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested
-    dnf install perl-String-CRC32 perl-File-chdir perl-Unix-Syslog perl-Net-Server
+    dnf install perl-String-CRC32 perl-File-chdir perl-Unix-Syslog \
+        perl-Net-Server perl-Clone perl-Test-NoWarnings perl-URI \
+        perl-Digest-SHA perl-BSD-Resource perl-Test-Unit \
+        perl-Test-Unit-Runner-Xml perl-XML-Generator perl-Config-IniFiles \
+        perl-NNTPClient perl-IO-Socket-INET6 perl-Net-Server \
+        perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
+        perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
+        perl-Unix-Syslog perl-Net-Server perl-Net-CalDAVTalk \
+        perl-Net-CardDAVTalk perl-Mail-JMAPTalk perl-AnyEvent \
+        perl-File-Slurp perl-Pod-POM
+
