@@ -624,6 +624,7 @@ sub _generate_imapd_conf
 	sasl_saslauthd_path => "$self->{basedir}/run/mux",
 	notifysocket => "dlist:$self->{basedir}/run/notify",
 	event_notifier => 'pusher',
+       caldav_historical_age => -1,
     );
     if ($cyrus_version >= 3) {
 	$self->{config}->set(
