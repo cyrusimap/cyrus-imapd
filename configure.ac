@@ -1567,8 +1567,8 @@ dnl
                         [Do we have support for setting start point of recurrences?]))
 
         PKG_CHECK_VAR(CYRUS_TIMEZONES_ZONEINFO_DIR, cyrus-timezones, zoneinfo_dir, [
-                 AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR),
-                 with_cyrus_timezones=yes,
+                 AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR)
+                 with_cyrus_timezones=yes
                  CYRUS_TIMEZONES_CFLAGS=-DCYRUS_TIMEZONES_ZONEINFO_DIR="\\\"$CYRUS_TIMEZONES_ZONEINFO_DIR\\\""
                  ],
                 AC_MSG_NOTICE([Cyrus timezones could not be found. Consider installing the cyrus-timezones package for httpd]))
@@ -2347,6 +2347,7 @@ Documentation dependencies:
 Installation directories:
    prefix:             $prefix
    sysconfdir:         $sysconfdir
+   zoneinfo_dir:       $CYRUS_TIMEZONES_ZONEINFO_DIR
 
 Build info:
    shared:             $enable_shared
