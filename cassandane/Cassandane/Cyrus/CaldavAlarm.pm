@@ -1393,7 +1393,15 @@ EOF
 
     $self->assert_alarms();
 
-    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + (86400*7) + 5);
+    # Check if DST is applicable
+    my $tdt = $now->clone();
+    $tdt->add(DateTime::Duration->new(seconds => ((86400 * 7) + 5)));
+    if (!$tdt->is_dst()) {
+        # Not in DST, add an hour
+        $tdt = $tdt->add(DateTime::Duration->new(seconds => (60 * 60)));
+    }
+
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $tdt->epoch());
 
     # should be a new alarm here
     $self->assert_alarms({summary => 'Simple'});
