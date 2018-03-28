@@ -1698,7 +1698,7 @@ EOF
 }
 
 sub test_simple_multiuser
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -1851,7 +1851,7 @@ EOF
 }
 
 sub test_override_multiuser
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -2036,7 +2036,7 @@ EOF
 }
 
 sub test_simple_multiuser_sametime
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
