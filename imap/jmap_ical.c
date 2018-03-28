@@ -1897,7 +1897,8 @@ static json_t *location_features_from_ical(icalparameter *param)
         }
         strarray_free(icalfeatures);
     } else {
-        json_array_append_new(features, json_string(val));
+        buf_setcstr(&buf, val);
+        json_array_append_new(features, json_string(buf_lcase(&buf)));
     }
     buf_free(&buf);
     return features;
