@@ -142,8 +142,13 @@ sub assert_alarms {
         @want = @newwant;
     }
 
-
-    Carp::confess(Data::Dumper::Dumper(\@want, \@left)) if (@want or @left);
+    if (@want or @left) {
+        my $dump = Data::Dumper->Dump([\@want, \@left], [qw(want left)]);
+        $self->assert_equals(0, scalar @want,
+                             "expected events were not received:\n$dump");
+        $self->assert_equals(0, scalar @left,
+                             "unexpected extra events were received:\n$dump");
+    }
 }
 
 sub tear_down
