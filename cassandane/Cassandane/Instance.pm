@@ -611,7 +611,8 @@ sub _generate_imapd_conf
 {
     my ($self) = @_;
 
-    my ($cyrus_version) = Cassandane::Instance->get_version($self->{installation});
+    my ($cyrus_major_version, $cyrus_minor_version) =
+	Cassandane::Instance->get_version($self->{installation});
 
     $self->{config}->set_variables(
 	name => $self->{name},
@@ -625,13 +626,18 @@ sub _generate_imapd_conf
 	notifysocket => "dlist:$self->{basedir}/run/notify",
 	event_notifier => 'pusher',
     );
-    if ($cyrus_version >= 3) {
+    if ($cyrus_major_version >= 3) {
 	$self->{config}->set(
 	    imipnotifier => 'imip',
 	    event_groups => 'mailbox message flags calendar',
-	    smtp_backend => 'host',
-	    smtp_host => $self->{smtphost},
 	);
+
+	if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
+	    $self->{config}->set(
+		smtp_backend => 'host',
+		smtp_host => $self->{smtphost},
+	    );
+	}
     }
     else {
 	$self->{config}->set(
