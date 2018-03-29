@@ -1,6 +1,6 @@
 /* bytecode.h -- bytecode definition
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -55,19 +55,29 @@
 
 
 /* yes, lots of these are superfluous, it's for clarity */
-typedef union
+typedef struct
 {
-    int op; /* OPTYPE */
-    int value;
+    int type; /* bytecode data type */
 
-    int jump;
+    union {
+        int op; /* OPTYPE */
+        int value;
 
-    int listlen;
+        int jump;
 
-    /* store strings (need 2 consecutive bytecodes) */
-    int len;
-    char *str;
+        int listlen;
+        char *str;
+    } u;
+
 } bytecode_t;
+
+enum bytecode_data_type {
+    BT_OPCODE,
+    BT_JUMP,
+    BT_VALUE,
+    BT_LISTLEN,
+    BT_STR
+};
 
 struct bytecode_info
 {

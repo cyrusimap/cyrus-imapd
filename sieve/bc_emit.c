@@ -1,8 +1,9 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
+ * Ken Murchison
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,6 +55,7 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <assert.h>
 
 
 #if DUMPCODE
@@ -89,6 +91,40 @@ static int align_string(int fd, int string_len)
 */
 
 
+/* Write out a string to a given file descriptor.
+ * return # of bytes written on success and -1 on error */
+
+/* <string:(size)(aligned string)>
+*/
+static int bc_string_emit(int fd, int *codep, bytecode_info_t *bc)
+{
+    int len = bc->data[*codep].u.str ? (int) strlen(bc->data[*codep].u.str) : -1;
+    int wrote = 0;
+
+    /* Write string length */
+    if (write_int(fd, len) == -1) return -1;
+
+    wrote += sizeof(int);
+
+    if (len == -1) {
+        /* This is a nil string */
+        /* Skip the null pointer and make up for it
+         * by adjusting the offset */
+        (*codep)++;
+    }
+    else {
+        /* Write string */
+        if (write(fd, bc->data[(*codep)++].u.str, len) == -1) return -1;
+
+        int ret = align_string(fd, len);
+        if (ret < 0) return -1;
+
+        wrote += len + ret;
+    }
+
+    return wrote;
+}
+
 /* Write out a stringlist to a given file descriptor.
  * return # of bytes written on success and -1 on error */
 
@@ -98,7 +134,7 @@ static int align_string(int fd, int string_len)
 */
 static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
 {
-    int len = bc->data[(*codep)++].len;
+    int len = bc->data[(*codep)++].u.listlen;
     int i;
     int ret;
     int wrote = 2*sizeof(int);
@@ -115,15 +151,7 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
      * in sequence */
     for(i=0; i < len; i++)
     {
-        int datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-
-        ret = align_string(fd,datalen);
+        ret = bc_string_emit(fd, codep, bc);
         if(ret == -1) return -1;
 
         wrote+=ret;
@@ -140,13 +168,53 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
     return wrote;
 }
 
-static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc);
+static int bc_params_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
+{
+    int ret;
+    int wrote = 0;
+
+    while (*codep < stopcodep) {
+        switch (bc->data[*codep].type) {
+        case BT_OPCODE:
+        case BT_JUMP:
+            /* Next command (end of parameters) */
+            return wrote;
+
+        case BT_VALUE:
+            ret = write_int(fd, bc->data[(*codep)++].u.value);
+            break;
+
+        case BT_STR:
+            ret = bc_string_emit(fd, codep, bc);
+            break;
+
+        case BT_LISTLEN:
+            ret = bc_stringlist_emit(fd, codep, bc);
+            break;
+
+        default:
+            /* Should never get here */
+            ret = -1;
+            break;
+        }
+
+        if (ret < 0) return -1;
+
+        wrote += ret;
+    }
+
+    return wrote;
+}
+
+static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc);
 
 /* Write out a testlist to a given file descriptor.
  * return # of bytes written on success and -1 on error */
 static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 {
-    int len = bc->data[(*codep)++].len;
+    assert(bc->data[*codep].type == BT_LISTLEN);
+
+    int len = bc->data[(*codep)++].u.listlen;
     int i;
     int ret;
     int begin, end;
@@ -162,9 +230,11 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
     /* Loop through all the items of the list, writing out each
      * test as we reach it in sequence. */
     for(i=0; i < len; i++) {
-        int nextcodep = bc->data[(*codep)++].jump;
+        assert(bc->data[*codep].type == BT_JUMP);
 
-        ret = bc_test_emit(fd, codep, bc);
+        int nextcodep = bc->data[(*codep)++].u.jump;
+
+        ret = bc_test_emit(fd, codep, nextcodep, bc);
         if(ret < 0 ) return -1;
 
         wrote+=ret;
@@ -185,473 +255,68 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 
 /* emit the bytecode for a test.  returns -1 on failure or size of
  * emitted bytecode on success */
-static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
+static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 {
     int opcode;
     int wrote=0;/* Relative offset to account for interleaved strings */
 
     int ret; /* Temporary Return Value Variable */
 
+    assert(bc->data[*codep].type == BT_OPCODE);
+
     /* Output this opcode */
-    opcode = bc->data[(*codep)++].op;
+    opcode = bc->data[(*codep)++].u.op;
     if(write_int(fd, opcode) == -1)
         return -1;
     wrote += sizeof(int);
 
     switch(opcode) {
-    case BC_TRUE:
-    case BC_FALSE:
-        /* No parameter opcodes */
-        break;
-
     case BC_NOT:
-    {
         /* Single parameter: another test */
-        ret = bc_test_emit(fd, codep, bc);
-        if(ret < 0)
-            return -1;
-        else
-            wrote+=ret;
+        ret = bc_test_emit(fd, codep, stopcodep, bc);
         break;
-    }
 
     case BC_ALLOF:
     case BC_ANYOF:
         /*where we jump to?*/
         /* Just drop a testlist */
         ret = bc_testlist_emit(fd, codep, bc);
-        if(ret < 0)
-            return -1;
-        else
-            wrote+=ret;
         break;
 
+    case BC_TRUE:
+    case BC_FALSE:
     case BC_SIZE:
-        /* Drop tag and number */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        if(write_int(fd, bc->data[(*codep)+1].value) == -1)
-            return -1;
-
-        wrote += 2 * sizeof(int);
-        (*codep) += 2;
-        break;
-
     case BC_EXISTS:
     case BC_IHAVE:
     case BC_VALIDEXTLIST:
-    {
-        int ret;
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote += ret;
-        break;
-    }
-
     case BC_HEADER:
     case BC_HASFLAG:
     case BC_STRING:
-    {
-        int ret;
-        if (BC_HEADER == opcode) {
-        /* drop index */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        }
-        /* Drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop relation*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /* Now drop haystacks */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        /* Now drop needles */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        break;
-    }
-
     case BC_ADDRESS:
-        /* drop index */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* fall-through */
     case BC_ENVELOPE:
-    {
-        int ret;
-        /* Drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop relation*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop address part*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /* Now drop headers */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        /* Now drop data */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        break;
-    }
-
     case BC_BODY:
-    {
-        int ret;
-        /* Drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop relation*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop transform*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop offset*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop content-types*/
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        /* Now drop data */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-        break;
-    }
-
     case BC_MAILBOXEXISTS:
-    {
-        int ret;
-
-        /* drop keylist */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
     case BC_METADATA:
-    {
-        int ret;
-        int datalen;
-
-        /* Drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop relation*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop extname */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-        wrote+=ret;
-
-        /* drop keyname */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-        wrote+=ret;
-
-        /* drop keylist */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
     case BC_METADATAEXISTS:
     case BC_SPECIALUSEEXISTS:
-    {
-        int ret;
-        int datalen;
-
-        /* drop extname */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if (datalen == -1) {
-            /* this is a nil string */
-            /* skip the null pointer and make up for it
-             * by adjusting the offset */
-            (*codep)++;
-        }
-        else {
-            if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-            wrote += datalen;
-            ret = align_string(fd,datalen);
-            if(ret == -1) return -1;
-            wrote+=ret;
-        }
-
-        /* drop keylist */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
     case BC_SERVERMETADATA:
     case BC_ENVIRONMENT:
-    {
-        int ret;
-        int datalen;
-
-        /* Drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*now drop relation*/
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-        /*drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop keyname */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-        wrote+=ret;
-
-        /* drop keylist */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
     case BC_SERVERMETADATAEXISTS:
-    {
-        int ret;
-
-        /* drop keylist */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
-
     case BC_DATE:
     case BC_CURRENTDATE:
-    {
-        int ret;
-        int datalen;
-        int tmp;
-
-        /* drop index */
-        if(BC_DATE == opcode) {
-                if(write_int(fd, bc->data[(*codep)].value) == -1)
-                    return -1;
-                wrote += sizeof(int);
-                (*codep)++;
-        }
-
-        /* drop zone tag */
-        tmp = bc->data[(*codep)].value;
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop timezone offset */
-        if (tmp == B_TIMEZONE) {
-                if(write_int(fd, bc->data[(*codep)].value) == -1)
-                    return -1;
-                wrote += sizeof(int);
-                (*codep)++;
-        }
-
-        /* drop match type */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop relation */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop comparator */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop date-part */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        if (BC_DATE == opcode) {
-                /* drop header-name */
-                datalen = bc->data[(*codep)++].len;
-
-                if(write_int(fd, datalen) == -1) return -1;
-                wrote += sizeof(int);
-
-                if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-                wrote += datalen;
-
-                ret = align_string(fd,datalen);
-                if(ret == -1) return -1;
-
-                wrote+=ret;
-        }
-
-        /* drop keywords */
-        ret = bc_stringlist_emit(fd, codep, bc);
-        if(ret < 0) return -1;
-        wrote+=ret;
-
-        break;
-    }
-
     case BC_DUPLICATE:
-    {
-        int ret;
-        int datalen;
-
-        /* drop idtype */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop hdrname/uniqueid */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-
-        wrote+=ret;
-
-        /* drop handle */
-        datalen = bc->data[(*codep)++].len;
-
-        if(write_int(fd, datalen) == -1) return -1;
-        wrote += sizeof(int);
-
-        if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
-        wrote += datalen;
-
-        ret = align_string(fd,datalen);
-        if(ret == -1) return -1;
-
-        wrote+=ret;
-
-        /* drop seconds */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
-        /* drop last tag */
-        if(write_int(fd, bc->data[(*codep)].value) == -1)
-            return -1;
-        wrote += sizeof(int);
-        (*codep)++;
-
+        ret = bc_params_emit(fd, codep, stopcodep, bc);
         break;
-    }
 
     default:
         /* Unknown testcode? */
         return -1;
     }
+
+    if (ret < 0) return -1;
+
+    wrote += ret;
+
     return wrote;
 }
 
@@ -662,10 +327,8 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 static int bc_action_emit(int fd, int codep, int stopcodep,
                           bytecode_info_t *bc, int filelen)
 {
-    int len; /* Temporary Length Variable */
     int ret; /* Temporary Return Value Variable */
     int start_filelen = filelen;
-    int i;
 
     /*debugging variable to check filelen*/
     /*int location;*/
@@ -678,13 +341,15 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
      * Note that for purposes of jumps you must multiply codep by sizeof(int)
      */
     while(codep < stopcodep) {
+        assert(bc->data[codep].type == BT_OPCODE);
+
         /* Output this opcode */
-        if(write_int(fd, bc->data[codep].op) == -1)
+        if(write_int(fd, bc->data[codep].u.op) == -1)
             return -1;
 
         filelen+=sizeof(int);
 
-        switch(bc->data[codep++].op) {
+        switch(bc->data[codep++].u.op) {
 
         case B_IF:
         {
@@ -720,7 +385,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             /* spew the test */
 
             c=codep+3;
-            testdist = bc_test_emit(fd, &c, bc);
+            testdist = bc_test_emit(fd, &c, bc->data[codep].u.jump, bc);
             if(testdist == -1)return -1;
             filelen +=testdist;
 
@@ -746,14 +411,14 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             filelen +=2*sizeof(int); /*jumpop + jump*/
 
             /* spew the then code */
-            thendist = bc_action_emit(fd, bc->data[codep].value,
-                                      bc->data[codep+1].value, bc,
+            thendist = bc_action_emit(fd, bc->data[codep].u.jump,
+                                      bc->data[codep+1].u.jump, bc,
                                       filelen);
 
             filelen+=thendist;
 
             /* there is an else case */
-            if(bc->data[codep+2].value != -1)
+            if(bc->data[codep+2].u.jump != -1)
             {
                 /* leave space for jump */
                 if(write_int(fd, jumpop) == -1)
@@ -777,11 +442,11 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 return -1;
 
             /* there is an else case */
-            if(bc->data[codep+2].value != -1) {
+            if(bc->data[codep+2].u.jump != -1) {
                 /* spew the else code */
-                elsedist = bc_action_emit(fd, bc->data[codep+1].value,
-                                         bc->data[codep+2].value, bc,
-                                         filelen);
+                elsedist = bc_action_emit(fd, bc->data[codep+1].u.jump,
+                                          bc->data[codep+2].u.jump, bc,
+                                          filelen);
 
                 filelen+=elsedist;
 
@@ -794,566 +459,43 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
                 if(lseek(fd,filelen,SEEK_SET) == -1)
                     return -1;
 
-                codep = bc->data[codep+2].value;
+                codep = bc->data[codep+2].u.jump;
             } else {
-                codep = bc->data[codep+1].value;
+                codep = bc->data[codep+1].u.jump;
             }
 
             break;
         }
 
         case B_KEEP:
-            /* Flags Stringlist */
-
-            /* Dump a stringlist of flags */
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if(ret < 0)
-                return -1;
-            filelen += ret;
-
-            break;
-
         case B_FILEINTO:
-            /* Special-Use String, Create (word),
-               Flags Stringlist, Copy (word), Folder String */
-
-            /* Write string length of Special-Use */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            if (len == -1) {
-                /* this is a nil string */
-                /* skip the null pointer and make up for it
-                 * by adjusting the offset */
-                codep++;
-            }
-            else {
-                /* Write Special-Use */
-                if(write(fd,bc->data[codep++].str,len) == -1)
-                    return -1;
-
-                ret = align_string(fd, len);
-                if(ret == -1)
-                    return -1;
-
-                filelen += len + ret;
-            }
-
-            /* Write create */
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-
-            /* Dump a stringlist of flags */
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if(ret < 0)
-                return -1;
-            filelen += ret;
-
-            /* Write Copy */
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-
-            /* Write string length of Folder */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* Write Folder */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            break;
-
         case B_REDIRECT:
-            /* List (word), Copy (word), Address String */
-
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            break;
-
         case B_REJECT:
         case B_EREJECT:
         case B_ERROR:
-            /*just a string*/
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            break;
-
         case B_SETFLAG:
         case B_ADDFLAG:
         case B_REMOVEFLAG:
-            /* Variablename String, Flags Stringlist */
-
-            /* Write string length of Variablename */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* Write Folder */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if(ret < 0)
-                return -1;
-            filelen += ret;
-            break;
-
         case B_ENOTIFY:
         case B_NOTIFY:
-            /* method string, (id|from) string, options string list,
-               priority, Message String */
-            /*method and (id|from)*/
-            for(i=0; i<2; i++) {
-                len = bc->data[codep++].len;
-                if(write_int(fd,len) == -1)
-                    return -1;
-                filelen += sizeof(int);
-                if(len == -1)
-                {
-                    /* this will probably only happen for the id */
-                    /* this is a nil string */
-                    /* skip the null pointer and make up for it
-                     * by adjusting the offset */
-                    codep++;
-                }
-                else
-                {
-                    if(write(fd,bc->data[codep++].str,len) == -1)
-                        return -1;
-
-                    ret = align_string(fd, len);
-                    if(ret == -1)
-                        return -1;
-
-                    filelen += len + ret;
-                }
-
-            }
-            /*options */
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if(ret < 0)
-                return -1;
-            filelen+=ret;
-
-            /*priority*/
-            if(write_int(fd, bc->data[codep].value) == -1)
-                return -1;
-            codep++;
-            filelen += sizeof(int);
-
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-            filelen += sizeof(int);
-
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1) return -1;
-
-            filelen += len + ret;
-            break;
-
-
         case B_DENOTIFY:
-            /* priority num,comptype  num,relat num, comp string*/
-
-            /* priority*/
-            if(write_int(fd, bc->data[codep].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-            codep++;
-            /* comptype */
-            if(write_int(fd, bc->data[codep].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-            codep++;
-            /* relational*/
-            if(write_int(fd, bc->data[codep].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-            codep++;
-            /* comp string*/
-
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-            filelen += sizeof(int);
-
-            if(len == -1)
-            {
-                /* this is a nil string */
-                /* skip the null pointer and make up for it
-                 * by adjusting the offset */
-                codep++;
-            }
-            else
-            {
-                if(write(fd,bc->data[codep++].str,len) == -1)
-                    return -1;
-
-                ret = align_string(fd, len);
-                if(ret == -1) return -1;
-
-                filelen += len + ret;
-            }
-                    break;
         case B_VACATION:
-            /* Address list, Subject String, Message String,
-               Seconds (word), Mime (word), From String, Handle String
-               Fcc String [ Create (word), Flags list, Special-Use String ] */
-
-            /* Address list */
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if(ret < 0) return -1;
-            filelen += ret;
-
-            /* Subject, Message */
-            for(i=0; i<2; i++) {/*writing strings*/
-
-                /*write length of string*/
-                len = bc->data[codep++].len;
-                if(write_int(fd,len) == -1)
-                    return -1;
-                filelen += sizeof(int);
-
-                if(len == -1)
-                {
-                    /* this is a nil string */
-                    /* skip the null pointer and make up for it
-                     * by adjusting the offset */
-                    codep++;
-                }
-                else
-                {
-                    /*write string*/
-                    if(write(fd,bc->data[codep++].str,len) == -1)
-                        return -1;
-
-                    ret = align_string(fd, len);
-                    if(ret == -1) return -1;
-
-                    filelen += len + ret;
-                }
-
-            }
-            /* Seconds*/
-            if(write_int(fd,bc->data[codep].value) == -1)
-                return -1;
-            codep++;
-            filelen += sizeof(int);
-
-            /* Mime */
-            if(write_int(fd,bc->data[codep].value) == -1)
-                return -1;
-            codep++;
-            filelen += sizeof(int);
-
-            /* From, Handle, Fcc */
-            for(i=0; i<3; i++) {/*writing strings*/
-
-                /*write length of string*/
-                len = bc->data[codep++].len;
-                if(write_int(fd,len) == -1)
-                    return -1;
-                filelen += sizeof(int);
-
-                if(len == -1)
-                {
-                    /* this is a nil string */
-                    /* skip the null pointer and make up for it
-                     * by adjusting the offset */
-                    codep++;
-                }
-                else
-                {
-                    /*write string*/
-                    if(write(fd,bc->data[codep++].str,len) == -1)
-                        return -1;
-
-                    ret = align_string(fd, len);
-                    if(ret == -1) return -1;
-
-                    filelen += len + ret;
-                }
-            }
-
-            if (len > 0) {
-                /* Write create */
-                if(write_int(fd,bc->data[codep++].value) == -1)
-                    return -1;
-                filelen += sizeof(int);
-
-                /* Dump a stringlist of flags */
-                ret = bc_stringlist_emit(fd, &codep, bc);
-                if(ret < 0) return -1;
-                filelen += ret;
-
-                /* Write length of Special-Use string */
-                len = bc->data[codep++].len;
-                if(write_int(fd,len) == -1)
-                    return -1;
-                filelen += sizeof(int);
-
-                if(len == -1)
-                {
-                    /* this is a nil string */
-                    /* skip the null pointer and make up for it
-                     * by adjusting the offset */
-                    codep++;
-                }
-                else
-                {
-                    /* write string */
-                    if(write(fd,bc->data[codep++].str,len) == -1)
-                        return -1;
-
-                    ret = align_string(fd, len);
-                    if(ret == -1) return -1;
-
-                    filelen += len + ret;
-                }
-            }
-
-            break;
         case B_INCLUDE:
-            /* Location + (Once<<6) + (Optional<<7) (word), Filename String */
-
-            /* Location + (Once<<6) + (Optional<<7) */
-            if(write_int(fd, bc->data[codep].value) == -1)
-                return -1;
-            filelen += sizeof(int);
-            codep++;
-            /* Filename */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1) return -1;
-
-            filelen += len + ret;
-            break;
-
         case B_SET:
-            /* BITFIELD modifiers
-               STRING variable
-               STRING value
-            */
-            /* write modifiers */
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write string length of variable */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* write variable */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            /* write string length of value */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* write value */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            break;
-
         case B_ADDHEADER:
-            /* NUMBER index
-               STRING name
-               STRING value
-            */
-            /* write index */
-            if(write_int(fd,bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write string length of name */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* write name */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            /* write string length of value */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen+=sizeof(int);
-
-            /* write value */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            break;
-
         case B_DELETEHEADER:
-            /* NUMBER index
-               COMPARATOR
-               STRING name
-               STRINGLIST value-patterns
-            */
-            /* write index */
-            if(write_int(fd, bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write match type */
-            if(write_int(fd, bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write relation */
-            if(write_int(fd, bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write comparator */
-            if(write_int(fd, bc->data[codep++].value) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write string length of name */
-            len = bc->data[codep++].len;
-            if(write_int(fd,len) == -1)
-                return -1;
-
-            filelen += sizeof(int);
-
-            /* write name */
-            if(write(fd,bc->data[codep++].str,len) == -1)
-                return -1;
-
-            ret = align_string(fd, len);
-            if(ret == -1)
-                return -1;
-
-            filelen += len + ret;
-
-            /* write value patterns */
-            ret = bc_stringlist_emit(fd, &codep, bc);
-            if (ret < 0) return -1;
-            filelen += ret;
-
-            break;
-
         case B_NULL:
         case B_STOP:
         case B_DISCARD:
         case B_MARK:
         case B_UNMARK:
         case B_RETURN:
-            /* No Parameters! */
+            /* Spew the action parameters */
+            ret = bc_params_emit(fd, &codep, stopcodep, bc);
+            if (ret < 0) return -1;
+
+            filelen += ret;
+
             break;
 
         default:
@@ -1379,7 +521,7 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     if(write_int(fd, data) == -1) return -1;
 
     /* write extensions bitfield */
-    if (write_int(fd, bc->data[codep++].value) == -1) return -1;
+    if (write_int(fd, bc->data[codep++].u.value) == -1) return -1;
 
 #if DUMPCODE
     dump(bc, 0);
