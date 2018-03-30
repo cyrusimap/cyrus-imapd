@@ -7617,7 +7617,7 @@ sub test_email_import
         },
     }, "R1"]]);
     $self->assert_str_equals("Email/import", $res->[0][0]);
-    $self->assert_str_equals("emailExists", $res->[0][1]->{notCreated}{"1"}{type});
+    $self->assert_str_equals("alreadyExists", $res->[0][1]->{notCreated}{"1"}{type});
 }
 
 sub test_email_import_shared
