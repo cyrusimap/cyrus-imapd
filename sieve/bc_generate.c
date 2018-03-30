@@ -852,7 +852,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    (STRING: len + dataptr)
                    (STRING: len + dataptr)
                    stringlist
-                   (STRING: len + dataptr)
+                   (VALUE)
                    (STRING: len + dataptr)
                    method/(from|id) /options list/priority/message
                 */
