@@ -2934,7 +2934,7 @@ done:
  * Emails
  */
 
-static json_t *_msg_emailer_from_addr(const struct address *a)
+static json_t *_emailer_from_addr(const struct address *a)
 {
     json_t *emailers = json_pack("[]");
     struct buf buf = BUF_INITIALIZER;
@@ -2984,7 +2984,7 @@ static json_t *_msg_emailer_from_addr(const struct address *a)
  * that the total byte count of non-zero characters is at most len.
  *
  * The input string must be properly encoded UTF-8 */
-static char *_msg_extract_preview(const char *text, size_t len)
+static char *_email_extract_preview(const char *text, size_t len)
 {
     unsigned char *dst, *d, *t;
     size_t n;
@@ -3025,14 +3025,14 @@ static char *_msg_extract_preview(const char *text, size_t len)
     return (char *) dst;
 }
 
-struct _msg_get_mailboxes_rock {
+struct _email_get_mailboxes_rock {
     jmap_req_t *req;
     json_t *mboxs;
 };
 
-static int _msg_get_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_get_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct _msg_get_mailboxes_rock *data = (struct _msg_get_mailboxes_rock*) rock;
+    struct _email_get_mailboxes_rock *data = (struct _email_get_mailboxes_rock*) rock;
     json_t *mboxs = data->mboxs;
     jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
@@ -3084,8 +3084,8 @@ struct msgbodies {
     PTRARRAY_INITIALIZER \
 }
 
-static int _msg_extract_bodies(struct body *root, struct buf *msg_buf,
-                          struct msgbodies *bodies)
+static int _email_extract_bodies(struct body *root, struct buf *msg_buf,
+                                 struct msgbodies *bodies)
 {
     /* Dissect a message into its best text and html bodies, attachments
      * and embedded messages. Based on the IMAPTalk find_message function.
@@ -3271,7 +3271,7 @@ static int _msg_extract_bodies(struct body *root, struct buf *msg_buf,
     return 0;
 }
 
-static int _msg_extract_headers(const char *key, const char *val, void *rock)
+static int _email_extract_headers(const char *key, const char *val, void *rock)
 {
     json_t *headers = (json_t*) rock;
     json_t *curval;
@@ -3301,13 +3301,13 @@ done:
     return  0;
 }
 
-static int _msg_extract_annotations(const char *mboxname __attribute__((unused)),
-                               uint32_t uid __attribute__((unused)),
-                               const char *entry,
-                               const char *userid __attribute__((unused)),
-                               const struct buf *value,
-                               const struct annotate_metadata *mdata __attribute__((unused)),
-                               void *rock)
+static int _email_extract_annotations(const char *mboxname __attribute__((unused)),
+                                      uint32_t uid __attribute__((unused)),
+                                      const char *entry,
+                                      const char *userid __attribute__((unused)),
+                                      const struct buf *value,
+                                      const struct annotate_metadata *mdata __attribute__((unused)),
+                                      void *rock)
 {
     json_t *annotations = (json_t *)rock;
 
@@ -3321,7 +3321,7 @@ static int _msg_extract_annotations(const char *mboxname __attribute__((unused))
     return 0;
 }
 
-static char *_msg_id_from_guid(const struct message_guid *guid)
+static char *_email_id_from_guid(const struct message_guid *guid)
 {
     char *msgid = xzmalloc(26);
     msgid[0] = 'M';
@@ -3356,16 +3356,16 @@ static conversation_id_t _cid_from_id(const char *thrid)
  * The return value is a JSON object keyed by the mailbox unique id,
  * and its mailbox name as value.
  */
-static json_t *_msg_get_mailboxes(jmap_req_t *req, const char *msgid)
+static json_t *_email_get_mailboxes(jmap_req_t *req, const char *msgid)
 {
-    struct _msg_get_mailboxes_rock data = { req, json_pack("{}") };
-    conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _msg_get_mailboxes_cb, &data);
+    struct _email_get_mailboxes_rock data = { req, json_pack("{}") };
+    conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_get_mailboxes_cb, &data);
     return data.mboxs;
 }
 
 
 
-static int _msg_keyword_is_valid(const char *keyword)
+static int _email_keyword_is_valid(const char *keyword)
 {
     const char *p;
 
@@ -3430,14 +3430,14 @@ static const char *jmap_keyword_to_imap(const char *keyword)
     else if (!strcasecmp(keyword, "$Draft")) {
         return "\\Draft";
     }
-    else if (_msg_keyword_is_valid(keyword)) {
+    else if (_email_keyword_is_valid(keyword)) {
         return keyword;
     }
     return NULL;
 }
 
-static json_t *_msg_read_annot(const jmap_req_t *req, msgrecord_t *mr,
-                               const char *annot, int structured)
+static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
+                                 const char *annot, int structured)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *annotvalue = NULL;
@@ -3473,7 +3473,7 @@ static json_t *_msg_read_annot(const jmap_req_t *req, msgrecord_t *mr,
 
 /* Replace any <HTML> and </HTML> tags in t with <DIV> and </DIV>,
  * writing results into buf */
-static void _msg_extract_htmlbody(struct buf *buf, const char *t)
+static void _email_extract_htmlbody(struct buf *buf, const char *t)
 {
     const char *top = t + strlen(t);
     const char *p = t, *q = p;
@@ -3512,10 +3512,10 @@ static void _msg_extract_htmlbody(struct buf *buf, const char *t)
     buf_appendmap(buf, p, q - p);
 }
 
-static json_t *_msg_attachment_from_part(struct body *part,
-                                         const struct buf *msg_buf,
-                                         json_t *inlinedcids,
-                                         json_t *imgsizes)
+static json_t *_email_attachment_from_part(struct body *part,
+                                           const struct buf *msg_buf,
+                                           json_t *inlinedcids,
+                                           json_t *imgsizes)
 {
     struct param *param;
     charset_t ascii = charset_lookupname("us-ascii");
@@ -3624,15 +3624,15 @@ static json_t *_msg_attachment_from_part(struct body *part,
     return att;
 }
 
-struct _msg_get_keywords_rock {
+struct _email_get_keywords_rock {
     jmap_req_t *req;
     json_t *keywords; /* map of keyword name to occurrence count */
     json_int_t message_count; /* count of unexpunged message */
 };
 
-static int _msg_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct _msg_get_keywords_rock *data = (struct _msg_get_keywords_rock*) rock;
+    struct _email_get_keywords_rock *data = (struct _email_get_keywords_rock*) rock;
     jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
@@ -3678,11 +3678,11 @@ done:
     return r;
 }
 
-static int _msg_get_keywords(jmap_req_t *req, const char *msgid, json_t **jkeywords)
+static int _email_get_keywords(jmap_req_t *req, const char *msgid, json_t **jkeywords)
 {
     /* Gather counts per message flag */
-    struct _msg_get_keywords_rock data = { req, json_pack("{}"), 0 };
-    int r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _msg_get_keywords_cb, &data);
+    struct _email_get_keywords_rock data = { req, json_pack("{}"), 0 };
+    int r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_get_keywords_cb, &data);
 
     /* Handle special keywords */
     json_t *jcount = json_object_get(data.keywords, "$seen");
@@ -3702,10 +3702,10 @@ static int _msg_get_keywords(jmap_req_t *req, const char *msgid, json_t **jkeywo
     return r;
 }
 
-static int _msg_from_body(jmap_req_t *req, hash_table *props,
-                          struct body *body, struct buf *msg_buf,
-                          msgrecord_t *mr, MsgType type,
-                          json_t **msgp)
+static int _email_from_body(jmap_req_t *req, hash_table *props,
+                            struct body *body, struct buf *msg_buf,
+                            msgrecord_t *mr, MsgType type,
+                            json_t **msgp)
 {
     struct msgbodies bodies = MSGBODIES_INITIALIZER;
     json_t *msg = NULL;
@@ -3719,16 +3719,16 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
     int render_multipart_bodies = config_getswitch(IMAPOPT_JMAP_RENDER_MULTIPART_BODIES);
 
     /* Dissect message into its parts */
-    r = _msg_extract_bodies(body, msg_buf, &bodies);
+    r = _email_extract_bodies(body, msg_buf, &bodies);
     if (r) goto done;
 
     /* Always read the message headers */
     r = message_foreach_header(msg_buf->s + body->header_offset,
-                               body->header_size, _msg_extract_headers,
+                               body->header_size, _email_extract_headers,
                                headers);
     if (r) goto done;
 
-    r = msgrecord_annot_findall(mr, "*", _msg_extract_annotations, annotations);
+    r = msgrecord_annot_findall(mr, "*", _email_extract_annotations, annotations);
     if (r) goto done;
 
     msg = json_pack("{}");
@@ -3796,7 +3796,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
             struct address *addr = NULL;
             parseaddr_list(s, &addr);
             if (addr) {
-                json_t *senders = _msg_emailer_from_addr(addr);
+                json_t *senders = _emailer_from_addr(addr);
                 if (json_array_size(senders)) {
                     sender = json_array_get(senders, 0);
                     json_incref(sender);
@@ -3809,25 +3809,25 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
     }
     /* from */
     if (_wantprop(props, "from")) {
-        json_object_set_new(msg, "from", _msg_emailer_from_addr(body->from));
+        json_object_set_new(msg, "from", _emailer_from_addr(body->from));
     }
     /* to */
     if (_wantprop(props, "to")) {
-        json_object_set_new(msg, "to", _msg_emailer_from_addr(body->to));
+        json_object_set_new(msg, "to", _emailer_from_addr(body->to));
     }
     /* cc */
     if (_wantprop(props, "cc")) {
-        json_object_set_new(msg, "cc", _msg_emailer_from_addr(body->cc));
+        json_object_set_new(msg, "cc", _emailer_from_addr(body->cc));
     }
     /*  bcc */
     if (_wantprop(props, "bcc")) {
-        json_object_set_new(msg, "bcc", _msg_emailer_from_addr(body->bcc));
+        json_object_set_new(msg, "bcc", _emailer_from_addr(body->bcc));
     }
     /* replyTo */
     if (_wantprop(props, "replyTo")) {
         json_t *reply_to = json_null();
         if (json_object_get(headers, "reply-to")) {
-            reply_to = _msg_emailer_from_addr(body->reply_to);
+            reply_to = _emailer_from_addr(body->reply_to);
         }
         json_object_set_new(msg, "replyTo", reply_to);
     }
@@ -3944,7 +3944,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
                                           part->content_size, cs, part->charset_enc);
 
                 if (!strcmp(part->subtype, "HTML")) {
-                    _msg_extract_htmlbody(&buf, t);
+                    _email_extract_htmlbody(&buf, t);
                 }
                 else {
                     buf_appendcstr(&buf, "<div>");
@@ -3997,21 +3997,21 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
 
         /* Load the message annotation with the hash of cid: urls */
         if ((annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT))) {
-            inlinedcids = _msg_read_annot(req, mr, annot, /*structured*/1);
+            inlinedcids = _email_read_annot(req, mr, annot, /*structured*/1);
         }
 
         /* Load the message annotation with the hash of image dimensions */
         if ((annot = config_getstring(IMAPOPT_JMAP_IMAGESIZE_ANNOT))) {
-            imgsizes = _msg_read_annot(req, mr, annot, /*structured*/1);
+            imgsizes = _email_read_annot(req, mr, annot, /*structured*/1);
         }
 
         for (i = 0; i < bodies.atts.count; i++) {
-            json_t *att = _msg_attachment_from_part(ptrarray_nth(&bodies.atts, i),
+            json_t *att = _email_attachment_from_part(ptrarray_nth(&bodies.atts, i),
                                                     msg_buf, inlinedcids, imgsizes);
             json_array_append_new(atts, att);
         }
         for (i = 0; i < bodies.msgs.count; i++) {
-            json_t *att = _msg_attachment_from_part(ptrarray_nth(&bodies.msgs, i),
+            json_t *att = _email_attachment_from_part(ptrarray_nth(&bodies.msgs, i),
                                                     msg_buf, inlinedcids, imgsizes);
             json_array_append_new(atts, att);
         }
@@ -4033,7 +4033,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
             struct body *part = ptrarray_nth(&bodies.msgs, i);
             json_t *submsg = NULL;
 
-            r = _msg_from_body(req, props, part->subpart, msg_buf,
+            r = _email_from_body(req, props, part->subpart, msg_buf,
                                   mr, MSG_IS_ATTACHED, &submsg);
             if (r) goto done;
 
@@ -4068,7 +4068,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
         r = msgrecord_get_guid(mr, &guid);
         if (r) goto done;
 
-        char *msgid = _msg_id_from_guid(&guid);
+        char *msgid = _email_id_from_guid(&guid);
         json_object_set_new(msg, "id", json_string(msgid));
 
         /* blobId */
@@ -4091,7 +4091,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
 
         /* mailboxIds */
         if (_wantprop(props, "mailboxIds")) {
-            json_t *mailboxes = _msg_get_mailboxes(req, msgid);
+            json_t *mailboxes = _email_get_mailboxes(req, msgid);
             json_t *jval, *ids = json_pack("{}");
             const char *mboxid;
             json_object_foreach(mailboxes, mboxid, jval) {
@@ -4104,7 +4104,7 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
         /* keywords */
         if (_wantprop(props, "keywords")) {
             json_t *keywords = NULL;
-            r = _msg_get_keywords(req, msgid, &keywords);
+            r = _email_get_keywords(req, msgid, &keywords);
             if (r) goto done;
             json_object_set_new(msg, "keywords", keywords);
         }
@@ -4117,12 +4117,12 @@ static int _msg_from_body(jmap_req_t *req, hash_table *props,
         /* preview */
         if (_wantprop(props, "preview")) {
             if (preview_annot) {
-                json_t *preview = _msg_read_annot(req, mr, preview_annot, /*structured*/0);
+                json_t *preview = _email_read_annot(req, mr, preview_annot, /*structured*/0);
                 json_object_set_new(msg, "preview", preview ? preview : json_string(""));
             }
             else {
                 /* Generate our own preview */
-                char *preview = _msg_extract_preview(text,
+                char *preview = _email_extract_preview(text,
                         config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH));
                 json_object_set_new(msg, "preview", json_string(preview));
                 free(preview);
@@ -4151,15 +4151,15 @@ done:
     return r;
 }
 
-struct _msg_find_rock {
+struct _email_find_rock {
     jmap_req_t *req;
     char *mboxname;
     uint32_t uid;
 };
 
-static int _msg_find_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct _msg_find_rock *d = (struct _msg_find_rock*) rock;
+    struct _email_find_rock *d = (struct _email_find_rock*) rock;
     jmap_req_t *req = d->req;
     int r = 0;
 
@@ -4206,10 +4206,10 @@ static int _msg_find_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int _msg_find(jmap_req_t *req, const char *msgid,
+static int _email_find(jmap_req_t *req, const char *msgid,
                      char **mboxnameptr, uint32_t *uid)
 {
-    struct _msg_find_rock rock = { req, NULL, 0 };
+    struct _email_find_rock rock = { req, NULL, 0 };
     int r;
 
     /* must be prefixed with 'M' */
@@ -4219,7 +4219,7 @@ static int _msg_find(jmap_req_t *req, const char *msgid,
     if (strlen(msgid) != 25)
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _msg_find_cb, &rock);
+    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_find_cb, &rock);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
     }
@@ -4231,7 +4231,7 @@ static int _msg_find(jmap_req_t *req, const char *msgid,
     return r;
 }
 
-static int _msg_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 {
     jmap_req_t *req = rock;
     msgrecord_t *mr = NULL;
@@ -4257,8 +4257,8 @@ static int _msg_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int _msg_from_record(jmap_req_t *req, hash_table *props,
-                            msgrecord_t *mr, json_t **msgp)
+static int _email_from_record(jmap_req_t *req, hash_table *props,
+                              msgrecord_t *mr, json_t **msgp)
 {
     struct body *body = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
@@ -4271,7 +4271,7 @@ static int _msg_from_record(jmap_req_t *req, hash_table *props,
     r = msgrecord_get_bodystructure(mr, &body);
     if (r) return r;
 
-    r = _msg_from_body(req, props, body, &msg_buf, mr, MSG_IS_ROOT, msgp);
+    r = _email_from_body(req, props, body, &msg_buf, mr, MSG_IS_ROOT, msgp);
     message_free_body(body);
     free(body);
     buf_free(&msg_buf);
@@ -4279,7 +4279,7 @@ static int _msg_from_record(jmap_req_t *req, hash_table *props,
     return r;
 }
 
-static void _msg_search_string(search_expr_t *parent, const char *s, const char *name)
+static void _email_search_string(search_expr_t *parent, const char *s, const char *name)
 {
     charset_t utf8 = charset_lookupname("utf-8");
     search_expr_t *e;
@@ -4301,7 +4301,7 @@ static void _msg_search_string(search_expr_t *parent, const char *s, const char 
     charset_free(&utf8);
 }
 
-static void _msg_search_mbox(jmap_req_t *req, search_expr_t *parent,
+static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
                           json_t *mailbox, int is_not)
 {
     search_expr_t *e;
@@ -4321,7 +4321,7 @@ static void _msg_search_mbox(jmap_req_t *req, search_expr_t *parent,
     e->value.s = mboxname; // takes ownership
 }
 
-static void _msg_search_keyword(search_expr_t *parent, const char *keyword)
+static void _email_search_keyword(search_expr_t *parent, const char *keyword)
 {
     search_expr_t *e;
     if (!strcasecmp(keyword, "$Seen")) {
@@ -4351,7 +4351,7 @@ static void _msg_search_keyword(search_expr_t *parent, const char *keyword)
     }
 }
 
-static void _msg_search_threadkeyword(search_expr_t *parent, const char *keyword)
+static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword)
 {
     const char *flag = jmap_keyword_to_imap(keyword);
     if (!flag) return;
@@ -4361,7 +4361,7 @@ static void _msg_search_threadkeyword(search_expr_t *parent, const char *keyword
     e->value.s = xstrdup(flag);
 }
 
-static int _msg_threadkeyword_is_valid(const char *keyword)
+static int _email_threadkeyword_is_valid(const char *keyword)
 {
     /* \Seen is always supported */
     if (!strcasecmp(keyword, "$Seen"))
@@ -4389,8 +4389,8 @@ static int _msg_threadkeyword_is_valid(const char *keyword)
     return is_supported;
 }
 
-static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
-                                       search_expr_t *parent)
+static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
+                                         search_expr_t *parent)
 {
     search_expr_t *this, *e;
     json_t *val;
@@ -4417,7 +4417,7 @@ static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            _msg_buildsearch(req, val, e);
+            _email_buildsearch(req, val, e);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
@@ -4438,13 +4438,13 @@ static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
             e->value.u = t;
         }
         if ((s = json_string_value(json_object_get(filter, "body")))) {
-            _msg_search_string(this, s, "body");
+            _email_search_string(this, s, "body");
         }
         if ((s = json_string_value(json_object_get(filter, "cc")))) {
-            _msg_search_string(this, s, "cc");
+            _email_search_string(this, s, "cc");
         }
         if ((s = json_string_value(json_object_get(filter, "from")))) {
-            _msg_search_string(this, s, "from");
+            _email_search_string(this, s, "from");
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
@@ -4453,7 +4453,7 @@ static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
             e->value.s = xstrdup(JMAP_HAS_ATTACHMENT_FLAG);
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentName")))) {
-            _msg_search_string(this, s, "attachmentname");
+            _email_search_string(this, s, "attachmentname");
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -4478,34 +4478,34 @@ static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
             charset_free(&utf8);
         }
         if ((val = json_object_get(filter, "inMailbox"))) {
-            _msg_search_mbox(req, this, val, /*is_not*/0);
+            _email_search_mbox(req, this, val, /*is_not*/0);
         }
 
         json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
             e = search_expr_new(this, SEOP_AND);
-            _msg_search_mbox(req, e, val, /*is_not*/1);
+            _email_search_mbox(req, e, val, /*is_not*/1);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
             /* This shouldn't happen, validate_sort should have reported
              * allInThreadHaveKeyword as unsupported. Let's ignore this
              * filter and return false positives. */
-            syslog(LOG_ERR, "_msg_search: ignoring allInThreadHaveKeyword filter");
+            syslog(LOG_ERR, "_email_search: ignoring allInThreadHaveKeyword filter");
         }
         if (JNOTNULL((val = json_object_get(filter, "someInThreadHaveKeyword")))) {
-            _msg_search_threadkeyword(this, json_string_value(val));
+            _email_search_threadkeyword(this, json_string_value(val));
         }
         if (JNOTNULL((val = json_object_get(filter, "noneInThreadHaveKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _msg_search_threadkeyword(e, json_string_value(val));
+            _email_search_threadkeyword(e, json_string_value(val));
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
-            _msg_search_keyword(this, json_string_value(val));
+            _email_search_keyword(this, json_string_value(val));
         }
         if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _msg_search_keyword(e, json_string_value(val));
+            _email_search_keyword(e, json_string_value(val));
         }
 
         if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
@@ -4525,13 +4525,13 @@ static search_expr_t *_msg_buildsearch(jmap_req_t *req, json_t *filter,
             e->value.u = atomodseq_t(s);
         }
         if ((s = json_string_value(json_object_get(filter, "subject")))) {
-            _msg_search_string(this, s, "subject");
+            _email_search_string(this, s, "subject");
         }
         if ((s = json_string_value(json_object_get(filter, "text")))) {
-            _msg_search_string(this, s, "text");
+            _email_search_string(this, s, "text");
         }
         if ((s = json_string_value(json_object_get(filter, "to")))) {
-            _msg_search_string(this, s, "to");
+            _email_search_string(this, s, "to");
         }
     }
 
@@ -4543,8 +4543,8 @@ struct msgfilter_rock {
     json_t *unsupported;
 };
 
-static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
-                              json_t *unsupported, void *rock)
+static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
+                                json_t *unsupported, void *rock)
 {
     jmap_req_t *req = rock;
     json_t *arg, *val;
@@ -4647,7 +4647,7 @@ static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
 
     arg = json_object_get(filter, "allInThreadHaveKeyword");
     if ((s = json_string_value(arg))) {
-        if (!_msg_keyword_is_valid(s)) {
+        if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "allInThreadHaveKeyword");
         }
         else {
@@ -4660,10 +4660,10 @@ static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
     arg = json_object_get(filter, "someInThreadHaveKeyword");
     if ((s = json_string_value(arg))) {
-        if (!_msg_keyword_is_valid(s)) {
+        if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "someInThreadHaveKeyword");
         }
-        if (!_msg_threadkeyword_is_valid(s)) {
+        if (!_email_threadkeyword_is_valid(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
                         "someInThreadHaveKeyword", s));
         }
@@ -4672,10 +4672,10 @@ static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
     arg = json_object_get(filter, "noneInThreadHaveKeyword");
     if ((s = json_string_value(arg))) {
-        if (!_msg_keyword_is_valid(s)) {
+        if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "noneInThreadHaveKeyword");
         }
-        if (!_msg_threadkeyword_is_valid(s)) {
+        if (!_email_threadkeyword_is_valid(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
                         "noneInThreadHaveKeyword", s));
         }
@@ -4686,7 +4686,7 @@ static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
 
     arg = json_object_get(filter, "hasKeyword");
     if ((s = json_string_value(arg))) {
-        if (!_msg_keyword_is_valid(s)) {
+        if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "hasKeyword");
         }
     } else if (arg) {
@@ -4694,7 +4694,7 @@ static void _msg_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
     arg = json_object_get(filter, "notKeyword");
     if ((s = json_string_value(arg))) {
-        if (!_msg_keyword_is_valid(s)) {
+        if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "notKeyword");
         }
     } else if (arg) {
@@ -4815,22 +4815,22 @@ struct getmsglist_window {
     size_t anchor_pos;
 };
 
-static void _msg_querychanges_added(json_t *target, const char *msgid, int index)
+static void _email_querychanges_added(json_t *target, const char *msgid, int index)
 {
     json_t *item = json_pack("{s:s,s:i}", "id", msgid, "index", index);
     json_array_append_new(target, item);
 }
 
-static void _msg_querychanges_destroyed(json_t *target, const char *msgid)
+static void _email_querychanges_destroyed(json_t *target, const char *msgid)
 {
     json_array_append_new(target, json_string(msgid));
 }
 
-static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                       struct getmsglist_window *window, int want_expunged,
-                       size_t *total, size_t *total_threads,
-                       json_t **messageids, json_t **expungedids,
-                       json_t **threadids)
+static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
+                         struct getmsglist_window *window, int want_expunged,
+                         size_t *total, size_t *total_threads,
+                         json_t **messageids, json_t **expungedids,
+                         json_t **threadids)
 {
     hash_table ids = HASH_TABLE_INITIALIZER;
     hashu64_table cids = HASHU64_TABLE_INITIALIZER;
@@ -4848,7 +4848,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
      * request context to save lookups on conversations.db */
 
     /* FIXME JMAP spec introduced negative positions for search results, and
-     * this is what breaks the camel's neck for the mess _msg_search got.
+     * this is what breaks the camel's neck for the mess _email_search got.
      * This function requires a massive refactor before we can add any new
      * functionality.
      * Until then, we fail hard for negative positions */
@@ -4864,7 +4864,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->accountid, req->authstate, 0);
-    searchargs->root = _msg_buildsearch(req, filter, NULL);
+    searchargs->root = _email_buildsearch(req, filter, NULL);
 
     /* Run the search query */
     memset(&init, 0, sizeof(init));
@@ -4940,7 +4940,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             goto doneloop;
 
         free(msgid);
-        msgid = _msg_id_from_guid(&md->guid);
+        msgid = _email_id_from_guid(&md->guid);
 
         /* Have we seen this message already? */
         if (hash_lookup(msgid, &ids))
@@ -4962,7 +4962,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (is_expunged) {
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodseq) goto doneloop;
-                    _msg_querychanges_destroyed(*expungedids, msgid);
+                    _email_querychanges_destroyed(*expungedids, msgid);
                 }
                 else {
                     (*total)++;
@@ -4992,13 +4992,13 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                      */
                     if (one_mailbox_only) {
                         if (md->uid <= window->sinceuid) goto doneloop;
-                        _msg_querychanges_added(*messageids, msgid, *total-1);
+                        _email_querychanges_added(*messageids, msgid, *total-1);
                         /* Keep track of the highest uid */
                         if (window->highestuid < md->uid)
                             window->highestuid = md->uid;
                     } else {
-                        _msg_querychanges_destroyed(*expungedids, msgid);
-                        _msg_querychanges_added(*messageids, msgid, *total-1);
+                        _email_querychanges_destroyed(*expungedids, msgid);
+                        _email_querychanges_added(*messageids, msgid, *total-1);
                     }
                 }
                 goto doneloop;
@@ -5053,13 +5053,13 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
                 if (!is_expunged) {
                     /* this may have been the old exemplar but is not the new exemplar */
                     if (ciddata & 1) {
-                        _msg_querychanges_destroyed(*expungedids, msgid);
+                        _email_querychanges_destroyed(*expungedids, msgid);
                     }
                     else if (ciddata & 4) {
                         /* we need to remove and re-add this record just in case we
                          * got unmasked by the previous */
-                        _msg_querychanges_destroyed(*expungedids, msgid);
-                        _msg_querychanges_added(*messageids, msgid, *total-1);
+                        _email_querychanges_destroyed(*expungedids, msgid);
+                        _email_querychanges_added(*messageids, msgid, *total-1);
                     }
                     /* nothing later could be the old exemplar */
                     hashu64_insert(md->cid, (void *)3, &cids);
@@ -5070,7 +5070,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             /* OK, so this message has changed since last time */
 
             /* we don't know that we weren't the old exemplar, so we always tell a removal */
-            _msg_querychanges_destroyed(*expungedids, msgid);
+            _email_querychanges_destroyed(*expungedids, msgid);
 
             /* not the new exemplar because expunged */
             if (is_expunged) {
@@ -5081,7 +5081,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
             if (ciddata & 1) goto doneloop;
 
             /* this is the new exemplar, so tell about it */
-            _msg_querychanges_added(*messageids, msgid, *total-1);
+            _email_querychanges_added(*messageids, msgid, *total-1);
 
             goto doneloop;
         }
@@ -5159,7 +5159,7 @@ static int _msg_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* Check if the message is expunged in all mailboxes */
         r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
-                                       _msg_is_expunged_cb, req);
+                                       _email_is_expunged_cb, req);
         switch (r) {
             case IMAP_OK_COMPLETED:
                 is_expunged = 0;
@@ -5226,7 +5226,7 @@ static const char *msglist_sortfields[] = {
     NULL
 };
 
-static int _msg_parse_sort(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _email_parse_sort(struct jmap_comparator *comp, void *rock __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -5235,14 +5235,14 @@ static int _msg_parse_sort(struct jmap_comparator *comp, void *rock __attribute_
 
     /* Special case: hasKeyword */
     if (!strncmp(comp->property, "hasKeyword:", 11)) {
-        if (_msg_keyword_is_valid(comp->property + 11)) {
+        if (_email_keyword_is_valid(comp->property + 11)) {
             return 1;
         }
     }
     /* Special case: someInThreadHaveKeyword */
     else if (!strncmp(comp->property, "someInThreadHaveKeyword:", 24)) {
         const char *s = comp->property + 24;
-        if (_msg_keyword_is_valid(s) && _msg_threadkeyword_is_valid(s)) {
+        if (_email_keyword_is_valid(s) && _email_threadkeyword_is_valid(s)) {
             return 1;
         }
     }
@@ -5267,8 +5267,8 @@ static int jmap_email_query(jmap_req_t *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            _msg_parse_filter, req,
-            _msg_parse_sort, req,
+            _email_parse_filter, req,
+            _email_parse_sort, req,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -5302,9 +5302,9 @@ static int jmap_email_query(jmap_req_t *req)
     window.anchor_off = query.anchor_offset;
     window.limit = query.limit;
     window.collapse = collapse_threads;
-    int r = _msg_search(req, query.filter, query.sort, &window, 0,
+    int r = _email_search(req, query.filter, query.sort, &window, 0,
             &query.total, &total_threads, &query.ids, NULL, &threadids);
-    /* FIXME _msg_search is a stinkin' mess. It tries to cover all of
+    /* FIXME _email_search is a stinkin' mess. It tries to cover all of
      * /query, /queryChanges and /changes, making *any* attempt to change
      * its code an egg dance */
     if (!JNOTNULL(query.ids)) query.ids = json_array();
@@ -5347,8 +5347,8 @@ static int jmap_email_querychanges(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            _msg_parse_filter, req,
-            _msg_parse_sort, req,
+            _email_parse_filter, req,
+            _email_parse_sort, req,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -5383,9 +5383,9 @@ static int jmap_email_querychanges(jmap_req_t *req)
     }
     window.uptomsgid = query.up_to_id;
     window.collapse = collapse_threads;
-    int r = _msg_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
+    int r = _email_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
             &query.total, &total_threads, &query.added, &query.removed, &threadids);
-    /* FIXME - _msg_search API deserves some serious rewrite */
+    /* FIXME - _email_search API deserves some serious rewrite */
     if (!JNOTNULL(query.added)) query.added = json_array();
     if (!JNOTNULL(query.removed)) query.removed = json_array();
     json_decref(threadids); /* XXX threadIds is legacy */
@@ -5466,7 +5466,7 @@ static int jmap_email_changes(jmap_req_t *req)
     window.limit = changes.max_changes;
     size_t total = 0, total_threads = 0;
     json_t *threads = json_array();
-    int r = _msg_search(req, filter, sort, &window, /*want_expunge*/1,
+    int r = _email_search(req, filter, sort, &window, /*want_expunge*/1,
             &total, &total_threads,
             &changes.changed, &changes.destroyed, &threads);
     json_decref(filter);
@@ -5528,7 +5528,7 @@ static int jmap_thread_changes(jmap_req_t *req)
     size_t total = 0, total_threads = 0;
     json_t *changed = json_array();
     json_t *destroyed = json_array();
-    int r = _msg_search(req, filter, sort, &window, /*want_expunge*/1,
+    int r = _email_search(req, filter, sort, &window, /*want_expunge*/1,
             &total, &total_threads, &changed, &destroyed, &threads);
     json_decref(filter);
     json_decref(sort);
@@ -5540,7 +5540,7 @@ static int jmap_thread_changes(jmap_req_t *req)
     }
 
     /* Split the collapsed threads into changed and destroyed -
-     * the values from _msg_search are msgids */
+     * the values from _email_search are msgids */
     size_t i;
     json_t *val;
     json_array_foreach(threads, i, val) {
@@ -5631,7 +5631,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _msg_buildsearch(req, filter, NULL);
+    searchargs->root = _email_buildsearch(req, filter, NULL);
 
     /* Build the search query */
     memset(&init, 0, sizeof(init));
@@ -5675,7 +5675,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
 
         msgid = json_string_value(val);
 
-        r = _msg_find(req, msgid, &mboxname, &uid);
+        r = _email_find(req, msgid, &mboxname, &uid);
         if (r) {
             if (r == IMAP_NOTFOUND) {
                 json_array_append_new(*notfound, json_string(msgid));
@@ -5733,7 +5733,7 @@ done:
     return r;
 }
 
-static int _msg_filter_contains_text(json_t *filter)
+static int _email_filter_contains_text(json_t *filter)
 {
     if (JNOTNULL(filter)) {
         json_t *val;
@@ -5768,7 +5768,7 @@ static int _msg_filter_contains_text(json_t *filter)
         }
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            if (_msg_filter_contains_text(val)) {
+            if (_email_filter_contains_text(val)) {
                 return 1;
             }
         }
@@ -5791,7 +5791,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
         jmap_parser_push(&parser, "filter");
-        jmap_filter_parse(filter, &parser, _msg_parse_filter, unsupported_filter, req);
+        jmap_filter_parse(filter, &parser, _email_parse_filter, unsupported_filter, req);
         jmap_parser_pop(&parser);
     }
 
@@ -5820,7 +5820,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     }
     json_decref(unsupported_filter);
 
-    if (json_array_size(messageids) && _msg_filter_contains_text(filter)) {
+    if (json_array_size(messageids) && _email_filter_contains_text(filter)) {
         /* Render snippets */
         r = _snippet_get(req, filter, messageids, &snippets, &notfound);
         if (r) goto done;
@@ -5879,7 +5879,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
 
         json_t *ids = json_pack("[]");
         for (thread = conv->thread; thread; thread = thread->next) {
-            char *msgid = _msg_id_from_guid(&thread->guid);
+            char *msgid = _email_id_from_guid(&thread->guid);
             json_array_append_new(ids, json_string(msgid));
             free(msgid);
         }
@@ -5964,13 +5964,13 @@ static int jmap_email_get(jmap_req_t *req)
         struct mailbox *mbox = NULL;
 
         uint32_t uid;
-        int r = _msg_find(req, id, &mboxname, &uid);
+        int r = _email_find(req, id, &mboxname, &uid);
         if (!r) {
             r = jmap_openmbox(req, mboxname, &mbox, 0);
             if (!r) {
                 r = msgrecord_find(mbox, uid, &mr);
                 if (!r) {
-                    r = _msg_from_record(req, get.props, mr, &msg);
+                    r = _email_from_record(req, get.props, mr, &msg);
                 }
                 jmap_closembox(req, &mbox);
             }
@@ -6001,7 +6001,7 @@ done:
     return 0;
 }
 
-static int _msg_parse_emailer(json_t *emailer,
+static int _email_parse_emailer(json_t *emailer,
                               const char *prefix,
                               int parseaddr,
                               json_t *invalid)
@@ -6038,7 +6038,7 @@ static int _msg_parse_emailer(json_t *emailer,
     return r;
 }
 
-static int _msg_to_mime(jmap_req_t *req, FILE *out, void *rock);
+static int _email_to_mime(jmap_req_t *req, FILE *out, void *rock);
 
 #define JMAPMSG_HEADER_TO_MIME(k, v) \
     { \
@@ -6171,7 +6171,7 @@ static int _mime_write_param(FILE *out, const char *name, const char *value,
     return 0;
 }
 
-static int _msg_attachment_to_mime(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
+static int _email_attachment_to_mime(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
 {
     struct mailbox *mbox = NULL;
     struct body *body = NULL;
@@ -6410,7 +6410,7 @@ static int _mime_write_text(const char *text, const char *subtype, FILE *out)
     return 0;
 }
 
-static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
+static int _email_body_to_mime(jmap_req_t *req, json_t *msg,
                              const char *boundary, FILE *out)
 {
     char *freeme = NULL, *myboundary = NULL;
@@ -6480,12 +6480,12 @@ static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
         }
 
         /* Write any remaining message bodies before the attachments */
-        r = _msg_body_to_mime(req, mymsg, myboundary, out);
+        r = _email_body_to_mime(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
         json_array_foreach(attachments, i, val) {
-            r = _msg_attachment_to_mime(req, val, myboundary, out);
+            r = _email_attachment_to_mime(req, val, myboundary, out);
             if (r) goto done;
         }
 
@@ -6493,7 +6493,7 @@ static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
         json_object_foreach(attached_msgs, subid, submsg) {
             fprintf(out, "\r\n--%s\r\n", myboundary);
             fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
-            r = _msg_to_mime(req, out, submsg);
+            r = _email_to_mime(req, out, submsg);
             if (r) goto done;
         }
 
@@ -6513,7 +6513,7 @@ static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
         json_object_del(mymsg, "attachments");
 
         /* Write the plain text body */
-        r = _msg_body_to_mime(req, mymsg, myboundary, out);
+        r = _email_body_to_mime(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write the html body, including any of its related attachments */
@@ -6522,7 +6522,7 @@ static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
         if (json_array_size(cid_attachments)) {
             json_object_set(mymsg, "attachments", cid_attachments);
         }
-        r = _msg_body_to_mime(req, mymsg, myboundary, out);
+        r = _email_body_to_mime(req, mymsg, myboundary, out);
         if (r) goto done;
 
         fprintf(out, "\r\n--%s--\r\n", myboundary);
@@ -6537,12 +6537,12 @@ static int _msg_body_to_mime(jmap_req_t *req, json_t *msg,
 
         /* Remove the attachments to serialise the html body */
         json_object_del(mymsg, "attachments");
-        r = _msg_body_to_mime(req, mymsg, myboundary, out);
+        r = _email_body_to_mime(req, mymsg, myboundary, out);
         if (r) goto done;
 
         /* Write attachments */
         json_array_foreach(cid_attachments, i, val) {
-            r = _msg_attachment_to_mime(req, val, myboundary, out);
+            r = _email_attachment_to_mime(req, val, myboundary, out);
             if (r) goto done;
         }
 
@@ -6581,7 +6581,7 @@ done:
  * email address.
  *
  * Return 0 on success or non-zero if writing to the file failed */
-static int _msg_to_mime(jmap_req_t *req, FILE *out, void *rock)
+static int _email_to_mime(jmap_req_t *req, FILE *out, void *rock)
 {
     json_t *msg = rock;
     struct jmapmsgdata {
@@ -6817,7 +6817,7 @@ static int _msg_to_mime(jmap_req_t *req, FILE *out, void *rock)
     }
 
     /* Write message body */
-    r = _msg_body_to_mime(req, mymsg, NULL, out);
+    r = _email_body_to_mime(req, mymsg, NULL, out);
     json_decref(mymsg);
 
     free(d.from);
@@ -6846,7 +6846,7 @@ static int _msg_to_mime(jmap_req_t *req, FILE *out, void *rock)
 #undef JMAPMSG_EMAILER_TO_MIME
 #undef JMAPMSG_HEADER_TO_MIME
 
-static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
+static void _email_parse(json_t *msg, json_t *invalid, int is_attached)
 {
     int pe;
     json_t *prop;
@@ -6884,7 +6884,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
             json_t *jval;
 
             json_object_foreach(prop, keyword, jval) {
-                if (jval != json_true() || !_msg_keyword_is_valid(keyword)) {
+                if (jval != json_true() || !_email_keyword_is_valid(keyword)) {
                     buf_printf(&buf, "keywords[%s]", keyword);
                     json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                     buf_reset(&buf);
@@ -6950,7 +6950,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "from[%zu]", i);
-            _msg_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
+            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
@@ -6963,7 +6963,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "to[%zu]", i);
-            _msg_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
+            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
@@ -6976,7 +6976,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "cc[%zu]", i);
-            _msg_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
+            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
@@ -6989,7 +6989,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "bcc[%zu]", i);
-            _msg_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
+            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
@@ -6998,7 +6998,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
 
     prop = json_object_get(msg, "sender");
     if (JNOTNULL(prop)) {
-        _msg_parse_emailer(prop, "sender", validate_addr, invalid);
+        _email_parse_emailer(prop, "sender", validate_addr, invalid);
     }
 
     prop = json_object_get(msg, "replyTo");
@@ -7007,7 +7007,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
         size_t i;
         json_array_foreach(prop, i, emailer) {
             buf_printf(&buf, "replyTo[%zu]", i);
-            _msg_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
+            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
@@ -7035,7 +7035,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
             json_t *errprop;
             size_t j;
 
-            _msg_parse(submsg, subinvalid, 1/*is_attached*/);
+            _email_parse(submsg, subinvalid, 1/*is_attached*/);
 
             buf_printf(&buf, "attachedEmails[%s]", subid);
             json_array_foreach(subinvalid, j, errprop) {
@@ -7096,7 +7096,7 @@ static void _msg_parse(json_t *msg, json_t *invalid, int is_attached)
     if (date) free(date);
 }
 
-static int _msg_copy(jmap_req_t *req, struct mailbox *src,
+static int _email_copy(jmap_req_t *req, struct mailbox *src,
                      struct mailbox *dst,
                      msgrecord_t *mrw)
 {
@@ -7130,7 +7130,7 @@ done:
     return r;
 }
 
-static int _msg_expunge(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
+static int _email_expunge(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
 {
     int r;
     struct mboxevent *mboxevent = NULL;
@@ -7169,15 +7169,15 @@ done:
     return r;
 }
 
-struct _msg_expunge_rock {
+struct _email_expunge_rock {
     jmap_req_t *req;
     int deleted;
     json_t *mailboxes;
 };
 
-static int _msg_expunge_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_expunge_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct _msg_expunge_rock *d = (struct _msg_expunge_rock *) rock;
+    struct _email_expunge_rock *d = (struct _email_expunge_rock *) rock;
     jmap_req_t *req = d->req;
     struct mailbox *mbox = NULL;
     int r = 0;
@@ -7186,7 +7186,7 @@ static int _msg_expunge_cb(const conv_guidrec_t *rec, void *rock)
     if (r) goto done;
 
     if (!d->mailboxes || json_object_get(d->mailboxes, mbox->uniqueid)) {
-        r = _msg_expunge(d->req, mbox, rec->uid);
+        r = _email_expunge(d->req, mbox, rec->uid);
         if (!r) d->deleted++;
     }
 
@@ -7195,7 +7195,7 @@ done:
     return r;
 }
 
-static int _msg_append(jmap_req_t *req,
+static int _email_append(jmap_req_t *req,
                        json_t *mailboxids,
                        strarray_t *keywords,
                        time_t internaldate,
@@ -7251,7 +7251,7 @@ static int _msg_append(jmap_req_t *req,
     }
     if (!mboxname) {
         char *s = json_dumps(mailboxids, 0);
-        syslog(LOG_ERR, "_msg_append: invalid mailboxids: %s", s);
+        syslog(LOG_ERR, "_email_append: invalid mailboxids: %s", s);
         free(s);
         r = IMAP_INTERNAL;
         goto done;
@@ -7281,7 +7281,7 @@ static int _msg_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        *msgid = _msg_id_from_guid(&guid);
+        *msgid = _email_id_from_guid(&guid);
         munmap(addr, len);
     } else {
         r = IMAP_IOERROR;
@@ -7294,7 +7294,7 @@ static int _msg_append(jmap_req_t *req,
      *  visible for the authenticated user. */
     char *exist_mboxname = NULL;
     uint32_t exist_uid;
-    r = _msg_find(req, *msgid, &exist_mboxname, &exist_uid);
+    r = _email_find(req, *msgid, &exist_mboxname, &exist_uid);
     free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
         if (!r) r = IMAP_MAILBOX_EXISTS;
@@ -7421,7 +7421,7 @@ static int _msg_append(jmap_req_t *req,
         r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
 
-        r = _msg_copy(req, mbox, dst, mr);
+        r = _email_copy(req, mbox, dst, mr);
 
         jmap_closembox(req, &dst);
         if (r) goto done;
@@ -7437,15 +7437,15 @@ done:
     return r;
 }
 
-struct _msg_set_answered_rock {
+struct _email_set_answered_rock {
     jmap_req_t* req;
     const char *inreplyto;
     int found;
 };
 
-static int _msg_set_answered_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_set_answered_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct _msg_set_answered_rock *data = rock;
+    struct _email_set_answered_rock *data = rock;
     jmap_req_t *req = data->req;
 
     struct mailbox *mbox = NULL;
@@ -7484,13 +7484,13 @@ done:
     return r;
 }
 
-static int _msg_set_answered(jmap_req_t *req, const char *inreplyto)
+static int _email_set_answered(jmap_req_t *req, const char *inreplyto)
 {
     int r = 0, i;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
     conversation_t *conv = NULL;
     char *guid = NULL;
-    struct _msg_set_answered_rock rock = { req, inreplyto, 0 /*found*/ };
+    struct _email_set_answered_rock rock = { req, inreplyto, 0 /*found*/ };
 
     r = conversations_get_msgid(req->cstate, inreplyto, &cids);
     if (r) return r;
@@ -7507,7 +7507,7 @@ static int _msg_set_answered(jmap_req_t *req, const char *inreplyto)
         struct conv_thread *thread = conv->thread;
         do {
             guid = xstrdup(message_guid_encode(&thread->guid));
-            r = conversations_guid_foreach(req->cstate, guid, _msg_set_answered_cb, &rock);
+            r = conversations_guid_foreach(req->cstate, guid, _email_set_answered_cb, &rock);
             if (r) goto done;
 
             thread = thread->next;
@@ -7523,8 +7523,7 @@ done:
 
 }
 
-static int _msg_create(jmap_req_t *req, json_t *msg, char **msgid,
-                          json_t *invalid)
+static int _email_create(jmap_req_t *req, json_t *msg, char **msgid, json_t *invalid)
 {
     const char *id = NULL;
     json_t *val;
@@ -7559,7 +7558,7 @@ static int _msg_create(jmap_req_t *req, json_t *msg, char **msgid,
     if (!json_object_size(mailboxids) && !json_array_size(invalid)) {
         json_array_append_new(invalid, json_string("mailboxIds"));
     }
-    _msg_parse(msg, invalid, 0/*is_attached*/);
+    _email_parse(msg, invalid, 0/*is_attached*/);
     if (json_array_size(invalid)) {
         return 0;
     }
@@ -7580,8 +7579,8 @@ static int _msg_create(jmap_req_t *req, json_t *msg, char **msgid,
     }
 
     /* Write message */
-    int r = _msg_append(req, mailboxids, &keywords, internaldate,
-                        has_attachment, _msg_to_mime, msg, msgid);
+    int r = _email_append(req, mailboxids, &keywords, internaldate,
+                          has_attachment, _email_to_mime, msg, msgid);
     strarray_fini(&keywords);
     if (r) return r;
 
@@ -7590,14 +7589,14 @@ static int _msg_create(jmap_req_t *req, json_t *msg, char **msgid,
     json_object_foreach(json_object_get(msg, "headers"), header, val) {
         if (!strcasecmp(header, "In-Reply-To")) {
             const char *inreplyto = json_string_value(val);
-            if (inreplyto) r = _msg_set_answered(req, inreplyto);
+            if (inreplyto) r = _email_set_answered(req, inreplyto);
             break;
         }
     }
     return r;
 }
 
-struct _msg_update_checkacl_rock {
+struct _email_update_checkacl_rock {
     jmap_req_t *req;
     json_t *newmailboxes;
     json_t *delmailboxes;
@@ -7606,9 +7605,9 @@ struct _msg_update_checkacl_rock {
     int set_seen;
 };
 
-static int _msg_update_checkacl_cb(const mbentry_t *mbentry, void *xrock)
+static int _email_update_checkacl_cb(const mbentry_t *mbentry, void *xrock)
 {
-    struct _msg_update_checkacl_rock *rock = xrock;
+    struct _email_update_checkacl_rock *rock = xrock;
     const char *id = mbentry->uniqueid;
     jmap_req_t *req = rock->req;
 
@@ -7648,7 +7647,7 @@ struct msg_flagupdate {
 
 #define _MSG_FLAGUPDATE_INITIALIZER { NULL, 0, NULL, NULL, NULL, NULL }
 
-static void _msg_flagupdate_fini(struct msg_flagupdate *update)
+static void _email_flagupdate_fini(struct msg_flagupdate *update)
 {
     if (!update) return;
     json_decref(update->keywords);
@@ -7656,7 +7655,7 @@ static void _msg_flagupdate_fini(struct msg_flagupdate *update)
     json_decref(update->_new_mailboxes);
 }
 
-static void _msg_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, json_t *invalid)
+static void _email_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, json_t *invalid)
 {
     struct buf buf = BUF_INITIALIZER;
     update->keywords = NULL;
@@ -7676,7 +7675,7 @@ static void _msg_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, js
                 continue;
             }
             const char *keyword = field + 9;
-            if (!_msg_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
+            if (!_email_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
                 buf_printf(&buf, "keywords/%s", keyword);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -7694,7 +7693,7 @@ static void _msg_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, js
         const char *keyword;
         json_t *jval;
         json_object_foreach(keywords, keyword, jval) {
-            if (!_msg_keyword_is_valid(keyword) || jval != json_true()) {
+            if (!_email_keyword_is_valid(keyword) || jval != json_true()) {
                 buf_printf(&buf, "keywords[%s]", keyword);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -7711,7 +7710,7 @@ static void _msg_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, js
     buf_free(&buf);
 }
 
-static int _msg_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct msg_flagupdate *update = rock;
     jmap_req_t *req = update->_req;
@@ -7808,7 +7807,7 @@ done:
     return r;
 }
 
-static int _msg_flagupdate_write(jmap_req_t *req, struct msg_flagupdate *update,
+static int _email_flagupdate_write(jmap_req_t *req, struct msg_flagupdate *update,
                                  const char *msgid,
                                  json_t *cur_mailboxes,
                                  json_t *new_mailboxes)
@@ -7828,7 +7827,7 @@ static int _msg_flagupdate_write(jmap_req_t *req, struct msg_flagupdate *update,
 
     /* Prepare patch */
     if (update->is_patch && json_object_size(new_mailboxes)) {
-        r = _msg_get_keywords(req, msgid, &new_keywords);
+        r = _email_get_keywords(req, msgid, &new_keywords);
         if (r) goto done;
         json_object_foreach(update->keywords, keyword, jval) {
             if (jval == json_null())
@@ -7843,7 +7842,7 @@ static int _msg_flagupdate_write(jmap_req_t *req, struct msg_flagupdate *update,
     update->_new_keywords = new_keywords;
 
     r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
-                                   _msg_flagupdate_cb, update);
+                                   _email_flagupdate_cb, update);
     if (r) goto done;
 
 
@@ -7852,8 +7851,8 @@ done:
     return r;
 }
 
-static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
-                          json_t *invalid)
+static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
+                         json_t *invalid)
 {
     uint32_t uid;
     struct mailbox *mbox = NULL;
@@ -7873,16 +7872,16 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     req->force_openmbox_rw = 1;
 
     struct buf buf = BUF_INITIALIZER;
-    struct msg_flagupdate _msg_flagupdate = _MSG_FLAGUPDATE_INITIALIZER;
+    struct msg_flagupdate _email_flagupdate = _MSG_FLAGUPDATE_INITIALIZER;
 
     if (!strlen(msgid) || *msgid == '#') {
         return IMAP_NOTFOUND;
     }
 
     /* Pick record from any current mailbox. That's the master copy. */
-    int r = _msg_find(req, msgid, &mboxname, &uid);
+    int r = _email_find(req, msgid, &mboxname, &uid);
     if (r) return r;
-    src_mailboxes = _msg_get_mailboxes(req, msgid);
+    src_mailboxes = _email_get_mailboxes(req, msgid);
 
     r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) goto done;
@@ -7890,7 +7889,7 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (r) goto done;
 
     /* Parse keywords and keyword patches */
-    _msg_flagupdate_parse(msg, &_msg_flagupdate, invalid);
+    _email_flagupdate_parse(msg, &_email_flagupdate, invalid);
 
     /* Are mailboxes being overwritten or patched? */
     mailboxids = json_incref(json_object_get(msg, "mailboxIds"));
@@ -7969,7 +7968,7 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
         r = 0;
         goto done;
     }
-    if (json_object_size(_msg_flagupdate.keywords) > MAX_USER_FLAGS) {
+    if (json_object_size(_email_flagupdate.keywords) > MAX_USER_FLAGS) {
         /* XXX Not really true for patches. */
         r = IMAP_USERFLAG_EXHAUSTED;
         goto done;
@@ -7994,12 +7993,12 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
 
     /* Check mailbox ACL for shared accounts */
     if (strcmp(req->accountid, req->userid)) {
-        int set_seen = !_msg_flagupdate.is_patch || json_object_get(_msg_flagupdate.keywords, "$seen");
-        int set_keywords = !_msg_flagupdate.is_patch || json_object_size(_msg_flagupdate.keywords);
-        struct _msg_update_checkacl_rock rock = {
+        int set_seen = !_email_flagupdate.is_patch || json_object_get(_email_flagupdate.keywords, "$seen");
+        int set_keywords = !_email_flagupdate.is_patch || json_object_size(_email_flagupdate.keywords);
+        struct _email_update_checkacl_rock rock = {
             req, new_mailboxes, del_mailboxes, cur_mailboxes, set_seen, set_keywords
         };
-        r = jmap_mboxlist(req, _msg_update_checkacl_cb, &rock);
+        r = jmap_mboxlist(req, _email_update_checkacl_cb, &rock);
         if (r) goto done;
     }
 
@@ -8012,7 +8011,7 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
             continue;
         r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
-        r = _msg_copy(req, mbox, dst, mrw);
+        r = _email_copy(req, mbox, dst, mrw);
         jmap_closembox(req, &dst);
         if (r) goto done;
     }
@@ -8020,8 +8019,8 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     /* Remove message from mailboxes. We've checked the required ACLs already,
      * so any error here is fatal */
     if (json_object_size(del_mailboxes)) {
-        struct _msg_expunge_rock data = { req, 0, del_mailboxes };
-        r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _msg_expunge_cb, &data);
+        struct _email_expunge_rock data = { req, 0, del_mailboxes };
+        r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_expunge_cb, &data);
         if (r) goto done;
     }
 
@@ -8030,13 +8029,13 @@ static int _msg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     jmap_closembox(req, &mbox);
 
     /* Now update flags, if requested */
-    r = _msg_flagupdate_write(req, &_msg_flagupdate, msgid, cur_mailboxes, new_mailboxes);
+    r = _email_flagupdate_write(req, &_email_flagupdate, msgid, cur_mailboxes, new_mailboxes);
     if (r) goto done;
 
 done:
     jmap_closembox(req, &mbox);
     msgrecord_unref(&mrw);
-    _msg_flagupdate_fini(&_msg_flagupdate);
+    _email_flagupdate_fini(&_email_flagupdate);
     json_decref(cur_mailboxes);
     json_decref(src_mailboxes);
     json_decref(dst_mailboxes);
@@ -8046,11 +8045,11 @@ done:
     free(mboxname);
     buf_free(&buf);
 
-    if (r) syslog(LOG_ERR, "_msg_update: %s", error_message(r));
+    if (r) syslog(LOG_ERR, "_email_update: %s", error_message(r));
     return r;
 }
 
-static int _msg_expunge_checkacl_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_expunge_checkacl_cb(const conv_guidrec_t *rec, void *rock)
 {
     jmap_req_t *req = rock;
     int r = 0;
@@ -8071,10 +8070,10 @@ static int _msg_expunge_checkacl_cb(const conv_guidrec_t *rec, void *rock)
 }
 
 
-static int _msg_destroy(jmap_req_t *req, const char *msgid)
+static int _email_destroy(jmap_req_t *req, const char *msgid)
 {
     int r;
-    struct _msg_expunge_rock rock = { req, 0, NULL };
+    struct _email_expunge_rock rock = { req, 0, NULL };
 
     if (msgid[0] != 'M')
         return IMAP_NOTFOUND;
@@ -8082,13 +8081,13 @@ static int _msg_destroy(jmap_req_t *req, const char *msgid)
     /* Check mailbox ACL for shared accounts */
     if (strcmp(req->accountid, req->userid)) {
         r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
-                                       _msg_expunge_checkacl_cb, req);
+                                       _email_expunge_checkacl_cb, req);
         if (r) return r;
     }
 
     /* Delete messages */
     r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
-                                   _msg_expunge_cb, &rock);
+                                   _email_expunge_cb, &rock);
     if (r) return r;
 
     return rock.deleted ? 0 : IMAP_NOTFOUND;
@@ -8128,7 +8127,7 @@ static int jmap_email_set(jmap_req_t *req)
             }
 
             char *msgid = NULL;
-            r = _msg_create(req, msg, &msgid, invalid);
+            r = _email_create(req, msg, &msgid, invalid);
             if (json_array_size(invalid)) {
                 json_t *err = json_pack("{s:s, s:o}",
                         "type", "invalidProperties", "properties", invalid);
@@ -8193,7 +8192,7 @@ static int jmap_email_set(jmap_req_t *req)
                 id = newid;
             }
             /* Update message */
-            if ((r = _msg_update(req, id, msg, invalid))) {
+            if ((r = _email_update(req, id, msg, invalid))) {
                 json_decref(invalid);
                 if (r == IMAP_NOTFOUND) {
                     json_t *err= json_pack("{s:s}", "type", "notFound");
@@ -8260,7 +8259,7 @@ static int jmap_email_set(jmap_req_t *req)
                 msgid = newmsgid;
             }
             /* Delete message */
-            if ((r = _msg_destroy(req, msgid))) {
+            if ((r = _email_destroy(req, msgid))) {
                 if (r == IMAP_NOTFOUND) {
                     json_t *err = json_pack("{s:s}", "type", "notFound");
                     json_object_set_new(notDestroyed, msgid, err);
@@ -8303,15 +8302,15 @@ done:
     return r;
 }
 
-struct _msg_import_rock {
+struct _email_import_rock {
     struct buf buf;
     const struct body *part;
 };
 
-static int _msg_import_cb(jmap_req_t *req __attribute__((unused)),
-                          FILE *out, void *rock)
+static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
+                            FILE *out, void *rock)
 {
-    struct _msg_import_rock *data = (struct _msg_import_rock*) rock;
+    struct _email_import_rock *data = (struct _email_import_rock*) rock;
 
     // we never need to pre-decode rfc822 messages, they're always 7bit (right?)
     const char *base = data->buf.s;
@@ -8353,7 +8352,7 @@ static int msgimport_checkacl_cb(const mbentry_t *mbentry, void *xrock)
     return 0;
 }
 
-int _msg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
+int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 {
     int r;
     json_t *mailboxids = json_object_get(msg, "mailboxIds");
@@ -8372,7 +8371,7 @@ int _msg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     }
 
     /* Start import */
-    struct _msg_import_rock content = { BUF_INITIALIZER, NULL };
+    struct _email_import_rock content = { BUF_INITIALIZER, NULL };
     hash_table props = HASH_TABLE_INITIALIZER;
     struct body *bodystructure = NULL;
     struct mailbox *mbox = NULL;
@@ -8391,7 +8390,7 @@ int _msg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (r) goto done;
     r = msgrecord_get_body(mr, &content.buf);
     if (r) goto done;
-    r = _msg_extract_bodies(bodystructure, &content.buf, &bodies);
+    r = _email_extract_bodies(bodystructure, &content.buf, &bodies);
     if (r) goto done;
     has_attachment = bodies.atts.count + bodies.msgs.count;
     jmap_closembox(req, &mbox);
@@ -8411,12 +8410,12 @@ int _msg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     }
 
     /* Write the message to the file system */
-    r = _msg_append(req, mailboxids, &keywords, internaldate,
-                    has_attachment, _msg_import_cb, &content, &msgid);
+    r = _email_append(req, mailboxids, &keywords, internaldate,
+                      has_attachment, _email_import_cb, &content, &msgid);
     if (r) goto done;
 
     /* Load its index record and convert to JMAP */
-    r = _msg_find(req, msgid, &mboxname, &uid);
+    r = _email_find(req, msgid, &mboxname, &uid);
     if (r) goto done;
 
     r = jmap_openmbox(req, mboxname, &mbox, 0);
@@ -8431,7 +8430,7 @@ int _msg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     hash_insert("threadId", (void*)1, &props);
     hash_insert("size", (void*)1, &props);
 
-    r = _msg_from_record(req, &props, mr, createdmsg);
+    r = _email_from_record(req, &props, mr, createdmsg);
     if (r) goto done;
 
     jmap_closembox(req, &mbox);
@@ -8484,7 +8483,7 @@ static int jmap_email_import(jmap_req_t *req)
             json_t *val;
             jmap_parser_push(&parser, "keywords");
             json_object_foreach(keywords, s, val) {
-                if (val != json_true() || !_msg_keyword_is_valid(s)) {
+                if (val != json_true() || !_email_keyword_is_valid(s)) {
                     jmap_parser_invalid(&parser, s);
                 }
             }
@@ -8543,7 +8542,7 @@ static int jmap_email_import(jmap_req_t *req)
     /* Process request */
     json_object_foreach(emails, id, eimp) {
         json_t *email;
-        int r = _msg_import(req, eimp, &email);
+        int r = _email_import(req, eimp, &email);
         if (r) {
             const char *errtyp = NULL;
             switch (r) {
@@ -8806,7 +8805,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
     int fd_msg = -1;
 
     /* Lookup the message */
-    r = _msg_find(req, msgid, &mboxname, &uid);
+    r = _email_find(req, msgid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
             *err = json_pack("{s:s}", "type", "emailNotFound");
@@ -8843,7 +8842,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
         hash_insert("cc", (void*)1, &props);
         hash_insert("bcc", (void*)1, &props);
         hash_insert("replyTo", (void*)1, &props);
-        r = _msg_from_record(req, &props, mr, &msg);
+        r = _email_from_record(req, &props, mr, &msg);
         free_hash_table(&props, NULL);
         if (r) goto done;
 
