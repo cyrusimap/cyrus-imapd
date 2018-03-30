@@ -81,26 +81,26 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static int getMailboxes(jmap_req_t *req);
-static int setMailboxes(jmap_req_t *req);
-static int getMailboxesUpdates(jmap_req_t *req);
-static int getMailboxesList(jmap_req_t *req);
-static int getMailboxesListUpdates(jmap_req_t *req);
-static int getEmailsList(jmap_req_t *req);
-static int getEmailsListUpdates(jmap_req_t *req);
-static int getEmails(jmap_req_t *req);
-static int setEmails(jmap_req_t *req);
-static int getEmailsUpdates(jmap_req_t *req);
-static int importEmails(jmap_req_t *req);
-static int getSearchSnippets(jmap_req_t *req);
-static int getThreads(jmap_req_t *req);
-static int getIdentities(jmap_req_t *req);
-static int getThreadsUpdates(jmap_req_t *req);
-static int getEmailSubmissions(jmap_req_t *req);
-static int setEmailSubmissions(jmap_req_t *req);
-static int getEmailSubmissionsUpdates(jmap_req_t *req);
-static int getEmailSubmissionsList(jmap_req_t *req);
-static int getEmailSubmissionsListUpdates(jmap_req_t *req);
+static int jmap_mailbox_get(jmap_req_t *req);
+static int jmap_mailbox_set(jmap_req_t *req);
+static int jmap_mailbox_changes(jmap_req_t *req);
+static int jmap_mailbox_query(jmap_req_t *req);
+static int jmap_mailbox_querychanges(jmap_req_t *req);
+static int jmap_email_query(jmap_req_t *req);
+static int jmap_email_querychanges(jmap_req_t *req);
+static int jmap_email_get(jmap_req_t *req);
+static int jmap_email_set(jmap_req_t *req);
+static int jmap_email_changes(jmap_req_t *req);
+static int jmap_email_import(jmap_req_t *req);
+static int jmap_searchsnippet_get(jmap_req_t *req);
+static int jmap_thread_get(jmap_req_t *req);
+static int jmap_identity_get(jmap_req_t *req);
+static int jmap_thread_changes(jmap_req_t *req);
+static int jmap_emailsubmission_get(jmap_req_t *req);
+static int jmap_emailsubmission_set(jmap_req_t *req);
+static int jmap_emailsubmission_changes(jmap_req_t *req);
+static int jmap_emailsubmission_query(jmap_req_t *req);
+static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 /*
  * TODO This code is a McMansion where the last 2-3 years of the
@@ -126,26 +126,26 @@ static int getEmailSubmissionsListUpdates(jmap_req_t *req);
  */
 
 jmap_method_t jmap_mail_methods[] = {
-    { "Mailbox/get",                  &getMailboxes },
-    { "Mailbox/set",                  &setMailboxes },
-    { "Mailbox/changes",              &getMailboxesUpdates },
-    { "Mailbox/query",                &getMailboxesList },
-    { "Mailbox/queryChanges",         &getMailboxesListUpdates },
-    { "Email/query",                  &getEmailsList },
-    { "Email/queryChanges",           &getEmailsListUpdates },
-    { "Email/get",                    &getEmails },
-    { "Email/set",                    &setEmails },
-    { "Email/changes",                &getEmailsUpdates },
-    { "Email/import",                 &importEmails },
-    { "SearchSnippet/get",            &getSearchSnippets },
-    { "Thread/get",                   &getThreads },
-    { "Thread/changes",               &getThreadsUpdates },
-    { "Identity/get",                 &getIdentities },
-    { "EmailSubmission/get",          &getEmailSubmissions },
-    { "EmailSubmission/set",          &setEmailSubmissions },
-    { "EmailSubmission/changes",      &getEmailSubmissionsUpdates },
-    { "EmailSubmission/query",        &getEmailSubmissionsList },
-    { "EmailSubmission/queryChanges", &getEmailSubmissionsListUpdates },
+    { "Mailbox/get",                  &jmap_mailbox_get },
+    { "Mailbox/set",                  &jmap_mailbox_set },
+    { "Mailbox/changes",              &jmap_mailbox_changes },
+    { "Mailbox/query",                &jmap_mailbox_query },
+    { "Mailbox/queryChanges",         &jmap_mailbox_querychanges },
+    { "Email/query",                  &jmap_email_query },
+    { "Email/queryChanges",           &jmap_email_querychanges },
+    { "Email/get",                    &jmap_email_get },
+    { "Email/set",                    &jmap_email_set },
+    { "Email/changes",                &jmap_email_changes },
+    { "Email/import",                 &jmap_email_import },
+    { "SearchSnippet/get",            &jmap_searchsnippet_get },
+    { "Thread/get",                   &jmap_thread_get },
+    { "Thread/changes",               &jmap_thread_changes },
+    { "Identity/get",                 &jmap_identity_get },
+    { "EmailSubmission/get",          &jmap_emailsubmission_get },
+    { "EmailSubmission/set",          &jmap_emailsubmission_set },
+    { "EmailSubmission/changes",      &jmap_emailsubmission_changes },
+    { "EmailSubmission/query",        &jmap_emailsubmission_query },
+    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges },
     { NULL,                           NULL}
 };
 
@@ -785,7 +785,7 @@ static json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
     return res;
 }
 
-/* NULL terminated list of supported getEmailsList sort fields */
+/* NULL terminated list of supported jmap_email_query sort fields */
 static const char *msglist_sortfields[];
 
 int jmap_mail_init(hash_table *methods, json_t *capabilities)
@@ -1282,7 +1282,7 @@ static void getmailboxes_notfound(const char *id,
     json_array_append_new((json_t*) rock, json_string(id));
 }
 
-static int getMailboxes(jmap_req_t *req)
+static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -1657,10 +1657,10 @@ static int jmapmbox_search(jmap_req_t *req, struct jmap_query *jquery)
     size_t j;
     json_t *val;
 
-    /* Reject any attempt to calculcate updates for getMailboxesListUpdates.
+    /* Reject any attempt to calculcate updates for jmap_mailbox_querychanges.
      * All of the filter and sort criteria are mutable. That only leaves
      * an unsorted and unfiltere mailbox list which we internally sort
-     * by mailbox ids, which isn't any better than getMailboxesUpdates. */
+     * by mailbox ids, which isn't any better than jmap_mailbox_changes. */
     jquery->can_calculate_changes = 0;
 
     /* Prepare query */
@@ -1799,7 +1799,7 @@ static void parse_mboxfilter_cb(json_t *filter, struct jmap_parser *parser,
 }
 
 
-static int getMailboxesList(jmap_req_t *req)
+static int jmap_mailbox_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -1834,7 +1834,7 @@ done:
     return 0;
 }
 
-static int getMailboxesListUpdates(jmap_req_t *req)
+static int jmap_mailbox_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
@@ -2487,7 +2487,7 @@ done:
     return r;
 }
 
-static int setMailboxes(jmap_req_t *req)
+static int jmap_mailbox_set(jmap_req_t *req)
 {
     int r = 0;
     json_t *set = NULL;
@@ -2884,7 +2884,7 @@ done:
     return r;
 }
 
-static int getMailboxesUpdates(jmap_req_t *req)
+static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -5027,7 +5027,7 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Add the message the list of reported messages */
         hash_insert(msgid, (void*)1, &ids);
 
-        /* we're doing getEmailsListUpdates - we use the results differently */
+        /* we're doing jmap_email_querychanges - we use the results differently */
         if (window->sincemodseq) {
             if (foundupto) goto doneloop;
 
@@ -5091,9 +5091,9 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
              *
              * The concept of "exemplar" comes from the xconv* commands in index.c.
              * The "exemplar" is the first message that matches the current sort/search
-             * for a given conversation.  For getEmailsList this is fairly simple,
+             * for a given conversation.  For jmap_email_query this is fairly simple,
              * just show the first message you find with a given cid, but for
-             * getEmailsListUpdates, you need to say "destroyed" for every message
+             * jmap_email_querychanges, you need to say "destroyed" for every message
              * which MIGHT have been the previous exemplar, because it will be in the
              * client cache, and you need to say both "destroyed" and "added" for the
              * new exemplar unless you can be sure it was also the old exemplar.
@@ -5325,7 +5325,7 @@ static int parse_msgsort_cb(struct sort_comparator *comp, void *rock __attribute
     return 0;
 }
 
-static int getEmailsList(jmap_req_t *req)
+static int jmap_email_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -5405,7 +5405,7 @@ done:
     return 0;
 }
 
-static int getEmailsListUpdates(jmap_req_t *req)
+static int jmap_email_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
@@ -5494,7 +5494,7 @@ done:
     return 0;
 }
 
-static int getEmailsUpdates(jmap_req_t *req)
+static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -5566,7 +5566,7 @@ done:
     return 0;
 }
 
-static int getThreadsUpdates(jmap_req_t *req)
+static int jmap_thread_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -5843,7 +5843,7 @@ static int filter_contains_text(json_t *filter)
     return 0;
 }
 
-static int getSearchSnippets(jmap_req_t *req)
+static int jmap_searchsnippet_get(jmap_req_t *req)
 {
     int r = 0;
     json_t *filter, *messageids, *val, *snippets, *notfound, *res, *item;
@@ -5965,7 +5965,7 @@ done:
     return r;
 }
 
-static int getThreads(jmap_req_t *req)
+static int jmap_thread_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -6002,7 +6002,7 @@ done:
     return 0;
 }
 
-static int getEmails(jmap_req_t *req)
+static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -7399,7 +7399,7 @@ static int jmapmsg_append(jmap_req_t *req,
 
     if (has_attachment) {
         /* Set the $HasAttachment flag. We mainly use that to support
-         * the hasAttachment filter property in getEmailsList */
+         * the hasAttachment filter property in jmap_email_query */
         int userflag;
         r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
         if (r) goto done;
@@ -8158,7 +8158,7 @@ static int jmapmsg_delete(jmap_req_t *req, const char *msgid)
     return data.deleted ? 0 : IMAP_NOTFOUND;
 }
 
-static int setEmails(jmap_req_t *req)
+static int jmap_email_set(jmap_req_t *req)
 {
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
@@ -8519,7 +8519,7 @@ done:
     return r;
 }
 
-static int importEmails(jmap_req_t *req)
+static int jmap_email_import(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     json_t *created = json_pack("{}");
@@ -8665,7 +8665,7 @@ done:
     return 0;
 }
 
-static int getIdentities(jmap_req_t *req)
+static int jmap_identity_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -9020,7 +9020,7 @@ done:
     return r;
 }
 
-static int getEmailSubmissions(jmap_req_t *req)
+static int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -9050,7 +9050,7 @@ done:
     return 0;
 }
 
-static int setEmailSubmissions(jmap_req_t *req)
+static int jmap_emailsubmission_set(jmap_req_t *req)
 {
     int r = 0;
     json_t *set = NULL, *create, *update, *destroy, *state, *item;
@@ -9275,7 +9275,7 @@ static int setEmailSubmissions(jmap_req_t *req)
             json_object_set(subreq.args, "destroy", destroy_msgs);
         }
         json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        r = setEmails(&subreq);
+        r = jmap_email_set(&subreq);
         json_decref(subreq.args);
         if (r) goto done;
     }
@@ -9286,13 +9286,13 @@ done:
     json_decref(destroy_msgs);
     buf_free(&buf);
     if (r) {
-        syslog(LOG_ERR, "setEmailSubmissions: %s", error_message(r));
+        syslog(LOG_ERR, "jmap_emailsubmission_set: %s", error_message(r));
         r = HTTP_SERVER_ERROR;
     }
     return r;
 }
 
-static int getEmailSubmissionsUpdates(jmap_req_t *req)
+static int jmap_emailsubmission_changes(jmap_req_t *req)
 {
     int pe;
     json_int_t max = 0;
@@ -9411,7 +9411,7 @@ static int parse_msgsubsort_cb(struct sort_comparator *comp, void *rock __attrib
     return 0;
 }
 
-static int getEmailSubmissionsList(jmap_req_t *req)
+static int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -9442,7 +9442,7 @@ done:
     return 0;
 }
 
-static int getEmailSubmissionsListUpdates(jmap_req_t *req)
+static int jmap_emailsubmission_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
