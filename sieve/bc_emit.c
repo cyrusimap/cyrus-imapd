@@ -256,7 +256,7 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 {
     int opcode;
-    int wrote=0;/* Relative offset to account for interleaved strings */
+    int wrote = 0;/* Relative offset to account for interleaved strings */
 
     int ret; /* Temporary Return Value Variable */
 
@@ -264,10 +264,12 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 
     /* Output this opcode */
     opcode = bc->data[(*codep)++].u.op;
-    if (write_int(fd, opcode) == -1) return -1;
-    wrote += sizeof(int);
+    ret = write_int(fd, opcode);
+    if (ret < 0) return -1;
 
-    switch(opcode) {
+    wrote += ret;
+
+    switch (opcode) {
     case BC_NOT:
         /* Single parameter: another test */
         ret = bc_test_emit(fd, codep, stopcodep, bc);
@@ -306,7 +308,8 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 
     default:
         /* Unknown testcode? */
-        return -1;
+        ret = -1;
+        break;
     }
 
     if (ret < 0) return -1;
@@ -349,6 +352,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_IF:
         {
             /* IF
+             *  pos of testend (bytes)
              *  test
              *  jump (false condition)
              *  then
@@ -370,7 +374,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             int jumpto = -1;
             int jumpop = B_JUMP;
 
-            /*leave space to store the location of end of the test*/
+            /* leave space to store the location of end of the test */
             ret = lseek(fd, sizeof(int), SEEK_CUR);
             if (ret == -1) return ret;
 
@@ -381,7 +385,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
             c = codep+3;
             testdist = bc_test_emit(fd, &c, bc->data[codep].u.jump, bc);
-            if (testdist == -1)return -1;
+            if (testdist == -1) return -1;
             filelen += testdist;
 
             /* store the location for the end of the test
@@ -390,8 +394,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             if (lseek(fd, testEndLoc, SEEK_SET) == -1) return -1;
             if (write_int(fd, jumpto) == -1) return -1;
 
-            if(lseek(fd,filelen,SEEK_SET) == -1)
-                return -1;
+            if (lseek(fd, filelen, SEEK_SET) == -1) return -1;
 
             /* leave space for jump */
             if (write_int(fd, jumpop) == -1) return -1;
