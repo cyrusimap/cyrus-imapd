@@ -4147,15 +4147,15 @@ done:
     return r;
 }
 
-struct jmapmsg_find_data {
+struct _msg_find_rock {
     jmap_req_t *req;
     char *mboxname;
     uint32_t uid;
 };
 
-static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
+static int _msg_find_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct jmapmsg_find_data *d = (struct jmapmsg_find_data*) rock;
+    struct _msg_find_rock *d = (struct _msg_find_rock*) rock;
     jmap_req_t *req = d->req;
     int r = 0;
 
@@ -4202,10 +4202,10 @@ static int jmapmsg_find_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int jmapmsg_find(jmap_req_t *req, const char *msgid,
-                        char **mboxnameptr, uint32_t *uid)
+static int _msg_find(jmap_req_t *req, const char *msgid,
+                     char **mboxnameptr, uint32_t *uid)
 {
-    struct jmapmsg_find_data data = { req, NULL, 0 };
+    struct _msg_find_rock rock = { req, NULL, 0 };
     int r;
 
     /* must be prefixed with 'M' */
@@ -4215,15 +4215,15 @@ static int jmapmsg_find(jmap_req_t *req, const char *msgid,
     if (strlen(msgid) != 25)
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, jmap_guid(msgid), jmapmsg_find_cb, &data);
+    r = conversations_guid_foreach(req->cstate, jmap_guid(msgid), _msg_find_cb, &rock);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
     }
-    else if (!data.mboxname) {
+    else if (!rock.mboxname) {
         r = IMAP_NOTFOUND;
     }
-    *mboxnameptr = data.mboxname;
-    *uid = data.uid;
+    *mboxnameptr = rock.mboxname;
+    *uid = rock.uid;
     return r;
 }
 
@@ -5740,7 +5740,7 @@ static int jmapmsg_snippets(jmap_req_t *req, json_t *filter, json_t *messageids,
 
         msgid = json_string_value(val);
 
-        r = jmapmsg_find(req, msgid, &mboxname, &uid);
+        r = _msg_find(req, msgid, &mboxname, &uid);
         if (r) {
             if (r == IMAP_NOTFOUND) {
                 json_array_append_new(*notfound, json_string(msgid));
@@ -6029,7 +6029,7 @@ static int jmap_email_get(jmap_req_t *req)
         struct mailbox *mbox = NULL;
 
         uint32_t uid;
-        int r = jmapmsg_find(req, id, &mboxname, &uid);
+        int r = _msg_find(req, id, &mboxname, &uid);
         if (!r) {
             r = jmap_openmbox(req, mboxname, &mbox, 0);
             if (!r) {
@@ -7944,7 +7944,7 @@ static int jmapmsg_update(jmap_req_t *req, const char *msgid, json_t *msg,
     }
 
     /* Pick record from any current mailbox. That's the master copy. */
-    int r = jmapmsg_find(req, msgid, &mboxname, &uid);
+    int r = _msg_find(req, msgid, &mboxname, &uid);
     if (r) return r;
     src_mailboxes = jmapmsg_mailboxes(req, msgid);
 
@@ -8478,7 +8478,7 @@ int jmapmsg_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (r) goto done;
 
     /* Load its index record and convert to JMAP */
-    r = jmapmsg_find(req, msgid, &mboxname, &uid);
+    r = _msg_find(req, msgid, &mboxname, &uid);
     if (r) goto done;
 
     r = jmap_openmbox(req, mboxname, &mbox, 0);
@@ -8868,7 +8868,7 @@ static int jmap_msgsubmission_create(jmap_req_t *req, json_t *msgsub,
     int fd_msg = -1;
 
     /* Lookup the message */
-    r = jmapmsg_find(req, msgid, &mboxname, &uid);
+    r = _msg_find(req, msgid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
             *err = json_pack("{s:s}", "type", "emailNotFound");
