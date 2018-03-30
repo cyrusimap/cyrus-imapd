@@ -1233,7 +1233,7 @@ VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
 CALSCALE:GREGORIAN
 BEGIN:VTIMEZONE
-TZID:Australia/Sydney
+TZID:Australia/Brisbane
 BEGIN:STANDARD
 DTSTART:19700101T000000
 RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
@@ -1254,7 +1254,7 @@ EOF
     $self->assert_not_null($CalendarId);
 
     my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
+    $now->set_time_zone('Australia/Brisbane');
 
     # define the event to start today
     my $startdt = $now->clone();
@@ -1302,7 +1302,7 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch() + 60 );
 
-    $self->assert_alarms({summary => 'allday', start => $start, timezone => 'Australia/Sydney'});
+    $self->assert_alarms({summary => 'allday', start => $start, timezone => 'Australia/Brisbane'});
 }
 
 sub test_replication_withalarms_in_tz_with_dst
