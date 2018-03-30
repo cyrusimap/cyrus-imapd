@@ -4227,15 +4227,9 @@ static int _msg_find(jmap_req_t *req, const char *msgid,
     return r;
 }
 
-struct jmapmsg_isexpunged_data {
-    jmap_req_t *req;
-    int is_expunged;
-};
-
-static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
+static int _msg_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct jmapmsg_isexpunged_data *d = (struct jmapmsg_isexpunged_data*) rock;
-    jmap_req_t *req = d->req;
+    jmap_req_t *req = rock;
     msgrecord_t *mr = NULL;
     struct mailbox *mbox = NULL;
     uint32_t flags;
@@ -4250,34 +4244,12 @@ static int jmapmsg_isexpunged_cb(const conv_guidrec_t *rec, void *rock)
     if (!r) {
         r = msgrecord_get_systemflags(mr, &flags);
         if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-            d->is_expunged = 0;
-            r = IMAP_OK_COMPLETED;
+            return IMAP_OK_COMPLETED;
         }
         msgrecord_unref(&mr);
     }
 
     jmap_closembox(req, &mbox);
-
-    return r;
-}
-
-static int jmapmsg_isexpunged(jmap_req_t *req, const char *msgid, int *is_expunged)
-{
-    struct jmapmsg_isexpunged_data data = { req, 1 };
-    int r;
-
-    if (msgid[0] != 'M')
-        return IMAP_NOTFOUND;
-
-    if (strlen(msgid) != 25)
-        return IMAP_NOTFOUND;
-
-    r = conversations_guid_foreach(req->cstate, jmap_guid(msgid), jmapmsg_isexpunged_cb, &data);
-    if (r == IMAP_OK_COMPLETED) {
-        r = 0;
-    }
-
-    *is_expunged = data.is_expunged;
     return r;
 }
 
@@ -5183,8 +5155,19 @@ static int jmapmsg_search(jmap_req_t *req, json_t *filter, json_t *sort,
         }
 
         /* Check if the message is expunged in all mailboxes */
-        r = jmapmsg_isexpunged(req, msgid, &is_expunged);
-        if (r) goto done;
+        r = conversations_guid_foreach(req->cstate, jmap_guid(msgid),
+                                       _msg_is_expunged_cb, req);
+        switch (r) {
+            case IMAP_OK_COMPLETED:
+                is_expunged = 0;
+                break;
+            case 0:
+                is_expunged = 1;
+                break;
+            default:
+                goto done;
+        }
+        r = 0;
 
         /* Add the message id to the result */
         if (is_expunged && expungedids) {
