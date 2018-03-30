@@ -533,7 +533,7 @@ static void jmap_changes_fini(struct jmap_changes *changes)
     json_decref(changes->destroyed);
 }
 
-static json_t* jmap_changes_reply(struct jmap_changes *changes)
+static json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();
     json_object_set_new(res, "oldState", json_string(changes->since_state));
@@ -647,7 +647,7 @@ static void jmap_query_fini(struct jmap_query *query)
     json_decref(query->ids);
 }
 
-static json_t* jmap_query_reply(struct jmap_query *query)
+static json_t *jmap_query_reply(struct jmap_query *query)
 {
 
     json_t *res = json_object();
@@ -770,7 +770,7 @@ static void jmap_querychanges_fini(struct jmap_querychanges *query)
     json_decref(query->added);
 }
 
-static json_t* jmap_querychanges_reply(struct jmap_querychanges *query)
+static json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
 {
     json_t *res = json_object();
     json_object_set(res, "filter", query->filter);
@@ -1863,7 +1863,7 @@ done:
  * name to a IMAP mailbox name. Does not check for uniqueness.
  *
  * Return the malloced, combined name, or NULL on error. */
-char *jmapmbox_newname(const char *name, const char *parentname)
+static char *jmapmbox_newname(const char *name, const char *parentname)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
@@ -3355,7 +3355,7 @@ static conversation_id_t jmap_decode_thrid(const char *thrid)
  * The return value is a JSON object keyed by the mailbox unique id,
  * and its mailbox name as value.
  */
-static json_t* jmapmsg_mailboxes(jmap_req_t *req, const char *msgid)
+static json_t *jmapmsg_mailboxes(jmap_req_t *req, const char *msgid)
 {
     struct jmapmsg_mailboxes_data data = { req, json_pack("{}") };
     conversations_guid_foreach(req->cstate, jmap_guid(msgid), jmapmsg_mailboxes_cb, &data);
@@ -6129,7 +6129,7 @@ static int jmapmsg_to_mime(jmap_req_t *req, FILE *out, void *rock);
         } \
     }
 
-static char* _make_boundary()
+static char *_make_boundary()
 {
     char *boundary, *p, *q;
 
