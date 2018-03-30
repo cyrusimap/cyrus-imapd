@@ -4227,57 +4227,6 @@ static int _msg_find(jmap_req_t *req, const char *msgid,
     return r;
 }
 
-struct jmapmsg_count_data {
-    jmap_req_t *req;
-    size_t count;
-};
-
-static int jmapmsg_count_cb(const conv_guidrec_t *rec, void *rock)
-{
-    struct jmapmsg_count_data *d = (struct jmapmsg_count_data*) rock;
-    jmap_req_t *req = d->req;
-    msgrecord_t *mr = NULL;
-    struct mailbox *mbox = NULL;
-    uint32_t flags;
-    int r = 0;
-
-    if (rec->part) return 0;
-
-    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
-    if (r) return r;
-
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (!r) {
-        r = msgrecord_get_systemflags(mr, &flags);
-        if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-            d->count++;
-        }
-        msgrecord_unref(&mr);
-    }
-
-    jmap_closembox(req, &mbox);
-
-    return r;
-}
-
-static int jmapmsg_count(jmap_req_t *req, const char *msgid, size_t *count)
-{
-    struct jmapmsg_count_data data = { req, 0 };
-    int r;
-
-    if (msgid[0] != 'M')
-        return IMAP_NOTFOUND;
-
-    r = conversations_guid_foreach(req->cstate, jmap_guid(msgid), jmapmsg_count_cb, &data);
-    if (r == IMAP_OK_COMPLETED) {
-        r = 0;
-    } else if (!data.count) {
-        r = IMAP_NOTFOUND;
-    }
-    *count = data.count;
-    return r;
-}
-
 struct jmapmsg_isexpunged_data {
     jmap_req_t *req;
     int is_expunged;
@@ -7279,7 +7228,7 @@ static int jmapmsg_append(jmap_req_t *req,
     msgrecord_t *mr = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
-    size_t len, msgcount = 0;
+    size_t len;
     int r = HTTP_SERVER_ERROR;
 
     if (!internaldate) internaldate = time(NULL);
@@ -7355,14 +7304,14 @@ static int jmapmsg_append(jmap_req_t *req,
     fclose(f);
     f = NULL;
 
-    /*  Check if a message with this GUID already exists */
-    r = jmapmsg_count(req, *msgid, &msgcount);
-    if (r && r != IMAP_NOTFOUND) {
-        goto done;
-    }
-    if (msgcount) {
-        /* A message with this GUID already exists! */
-        r = IMAP_MAILBOX_EXISTS;
+    /*  Check if a message with this GUID already exists and is
+     *  visible for the authenticated user. */
+    char *exist_mboxname = NULL;
+    uint32_t exist_uid;
+    r = _msg_find(req, *msgid, &exist_mboxname, &exist_uid);
+    free(exist_mboxname);
+    if (r != IMAP_NOTFOUND) {
+        if (!r) r = IMAP_MAILBOX_EXISTS;
         goto done;
     }
 
@@ -8616,7 +8565,7 @@ static int jmap_email_import(jmap_req_t *req)
                     errtyp = "forbidden";
                     break;
                 case IMAP_MAILBOX_EXISTS:
-                    errtyp = "emailExists";
+                    errtyp = "alreadyExists";
                     break;
                 case IMAP_QUOTA_EXCEEDED:
                     errtyp = "maxQuotaReached";
