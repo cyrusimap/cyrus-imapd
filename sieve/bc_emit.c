@@ -62,9 +62,9 @@
 void dump(bytecode_info_t *d, int level);
 #endif
 
-static inline int write_int (int fd, int x)
+static inline int write_int(int fd, int x)
 {
-    int y=htonl(x);
+    int y = htonl(x);
     return (write(fd, &y, sizeof(int)));
 }
 
@@ -76,26 +76,25 @@ static int align_string(int fd, int string_len)
     /* Keep in mind that we always want to pad a string with *at least*
      * one zero, that's why sometimes we have to pad with 4 */
     int needed = sizeof(int) - (string_len % sizeof(int));
-    if (needed>= 0 && needed <=4)
-    {
+    if (needed >= 0 && needed <= 4) {
         if (write(fd, "\0\0\0\0", needed) == -1) return -1;
     }
     return needed;
 }
 
-/*all functions keep codep up to date as they use it.
-  the amount that has been written to the file is maintained by the
-  filelen variable in bc_action_emit
-  the other bc_xxx_emit functions keep track of how much they (and any functions
-  they call) have written and return this value
+/* all functions keep codep up to date as they use it.
+   the amount that has been written to the file is maintained by the
+   filelen variable in bc_action_emit
+   the other bc_xxx_emit functions keep track of how much they (and any functions
+   they call) have written and return this value
 */
 
 
 /* Write out a string to a given file descriptor.
- * return # of bytes written on success and -1 on error */
+ * return # of bytes written on success and -1 on error
 
-/* <string:(size)(aligned string)>
-*/
+ * <string:(size)(aligned string)>
+ */
 static int bc_string_emit(int fd, int *codep, bytecode_info_t *bc)
 {
     int len = bc->data[*codep].u.str ? (int) strlen(bc->data[*codep].u.str) : -1;
@@ -144,27 +143,26 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
     if (write_int(fd, len)== -1) return -1 ;
 
     /* skip one spot end of list position*/
-    begin=lseek(fd,0,SEEK_CUR);
-    lseek(fd,sizeof(int),SEEK_CUR);
+    begin = lseek(fd, 0, SEEK_CUR);
+    lseek(fd, sizeof(int), SEEK_CUR);
 
     /* Loop through all the items of the list, writing out length and string
      * in sequence */
-    for(i=0; i < len; i++)
-    {
+    for (i = 0; i < len; i++) {
         ret = bc_string_emit(fd, codep, bc);
-        if(ret == -1) return -1;
+        if (ret == -1) return -1;
 
-        wrote+=ret;
+        wrote += ret;
     }
-    end=lseek(fd,0,SEEK_CUR);
+    end = lseek(fd, 0, SEEK_CUR);
     if (end < 0) return -1;
 
     /* go back and write end of list position */
-    lseek(fd,begin,SEEK_SET);
-    if(write_int(fd, end) == -1) return -1;
+    lseek(fd, begin, SEEK_SET);
+    if (write_int(fd, end) == -1) return -1;
 
     /* return to the end */
-    lseek(fd,end,SEEK_SET);
+    lseek(fd, end, SEEK_SET);
     return wrote;
 }
 
@@ -221,7 +219,7 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
     int wrote = 2*sizeof(int);
 
     /* Write out number of items in the list */
-    if(write_int(fd, len)== -1) return -1;
+    if (write_int(fd, len)== -1) return -1;
 
     /* skip one spot for end of list position*/
     begin = lseek(fd, 0, SEEK_CUR);
@@ -229,26 +227,26 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 
     /* Loop through all the items of the list, writing out each
      * test as we reach it in sequence. */
-    for(i=0; i < len; i++) {
+    for (i = 0; i < len; i++) {
         assert(bc->data[*codep].type == BT_JUMP);
 
         int nextcodep = bc->data[(*codep)++].u.jump;
 
         ret = bc_test_emit(fd, codep, nextcodep, bc);
-        if(ret < 0 ) return -1;
+        if (ret < 0 ) return -1;
 
-        wrote+=ret;
+        wrote += ret;
         *codep = nextcodep;
     }
     end = lseek(fd, 0, SEEK_CUR);
     if (end < 0) return -1;
 
     /* go back and write the end of list position */
-    lseek(fd,begin,SEEK_SET);
-    if(write_int(fd, end) == -1) return -1;
+    lseek(fd, begin, SEEK_SET);
+    if (write_int(fd, end) == -1) return -1;
 
     /*return to the end */
-    lseek(fd,end,SEEK_SET);
+    lseek(fd, end, SEEK_SET);
 
     return wrote;
 }
@@ -266,8 +264,7 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 
     /* Output this opcode */
     opcode = bc->data[(*codep)++].u.op;
-    if(write_int(fd, opcode) == -1)
-        return -1;
+    if (write_int(fd, opcode) == -1) return -1;
     wrote += sizeof(int);
 
     switch(opcode) {
@@ -278,7 +275,6 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 
     case BC_ALLOF:
     case BC_ANYOF:
-        /*where we jump to?*/
         /* Just drop a testlist */
         ret = bc_testlist_emit(fd, codep, bc);
         break;
@@ -344,12 +340,11 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         assert(bc->data[codep].type == BT_OPCODE);
 
         /* Output this opcode */
-        if(write_int(fd, bc->data[codep].u.op) == -1)
-            return -1;
+        if (write_int(fd, bc->data[codep].u.op) == -1) return -1;
 
-        filelen+=sizeof(int);
+        filelen += sizeof(int);
 
-        switch(bc->data[codep++].u.op) {
+        switch (bc->data[codep++].u.op) {
 
         case B_IF:
         {
@@ -361,103 +356,90 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
              * (if there is an else) else
              */
 
-            int testEndLoc=-1;
+            int testEndLoc = -1;
             int testdist, thendist, elsedist;
             int c;
 
-            int jumpFalseLoc=-1;/*this is the location that is being reserved
-                                  for the first jump command
-                                  we jump to the false condition of the test*/
+            int jumpFalseLoc = -1;/* this is the location that is being reserved
+                                     for the first jump command
+                                     we jump to the false condition of the test */
 
-            int jumpEndLoc=-1; /* this is the location that is being reserved
-                                  for the optional jump command
-                                  it jumps over the else statement to the end*/
-            int jumpto=-1;
-            int jumpop= B_JUMP;
+            int jumpEndLoc = -1; /* this is the location that is being reserved
+                                    for the optional jump command
+                                    it jumps over the else statement to the end */
+            int jumpto = -1;
+            int jumpop = B_JUMP;
 
             /*leave space to store the location of end of the test*/
             ret = lseek(fd, sizeof(int), SEEK_CUR);
-            if(ret == -1) return ret;
+            if (ret == -1) return ret;
 
-            testEndLoc=filelen;
-            filelen+=sizeof(int);
+            testEndLoc = filelen;
+            filelen += sizeof(int);
 
             /* spew the test */
 
-            c=codep+3;
+            c = codep+3;
             testdist = bc_test_emit(fd, &c, bc->data[codep].u.jump, bc);
-            if(testdist == -1)return -1;
-            filelen +=testdist;
+            if (testdist == -1)return -1;
+            filelen += testdist;
 
-            /*store the location for the end of the test
-             *this is important for short circuiting of allof/anyof*/
-            jumpto=filelen/4;
-            if(lseek(fd, testEndLoc, SEEK_SET) == -1)
-                return -1;
-            if(write_int(fd,jumpto) == -1)
-                return -1;
+            /* store the location for the end of the test
+             * this is important for short circuiting of allof/anyof */
+            jumpto = filelen/4;
+            if (lseek(fd, testEndLoc, SEEK_SET) == -1) return -1;
+            if (write_int(fd, jumpto) == -1) return -1;
 
             if(lseek(fd,filelen,SEEK_SET) == -1)
                 return -1;
 
             /* leave space for jump */
-            if(write_int(fd, jumpop) == -1)
-                return -1;
+            if (write_int(fd, jumpop) == -1) return -1;
             ret = lseek(fd, sizeof(int), SEEK_CUR);
-            if(ret == -1)
-                return ret;
-            jumpFalseLoc=filelen+sizeof(int);
+            if (ret == -1) return ret;
+            jumpFalseLoc = filelen + sizeof(int);
 
-            filelen +=2*sizeof(int); /*jumpop + jump*/
+            filelen += 2*sizeof(int); /* jumpop + jump */
 
             /* spew the then code */
             thendist = bc_action_emit(fd, bc->data[codep].u.jump,
                                       bc->data[codep+1].u.jump, bc,
                                       filelen);
 
-            filelen+=thendist;
+            filelen += thendist;
 
             /* there is an else case */
-            if(bc->data[codep+2].u.jump != -1)
-            {
+            if (bc->data[codep+2].u.jump != -1) {
                 /* leave space for jump */
-                if(write_int(fd, jumpop) == -1)
-                    return -1;
+                if (write_int(fd, jumpop) == -1) return -1;
                 ret = lseek(fd, sizeof(int), SEEK_CUR);
-                if(ret == -1)
-                    return ret;
+                if (ret == -1) return ret;
 
-                jumpEndLoc=filelen+sizeof(int);
-                filelen+=2*sizeof(int);/*jumpop + jump*/
+                jumpEndLoc = filelen + sizeof(int);
+                filelen += 2*sizeof(int); /* jumpop + jump */
             }
 
-            /*put previous jump to the end of the then code,
-             *or the end of the jump if there is an else case */
-            jumpto=filelen/4;
-            if(lseek(fd, jumpFalseLoc, SEEK_SET) == -1)
-                return -1;
-            if(write_int(fd,jumpto) == -1)
-                return -1;
-            if(lseek(fd,filelen,SEEK_SET) == -1)
-                return -1;
+            /* put previous jump to the end of the then code,
+             * or the end of the jump if there is an else case */
+            jumpto = filelen/4;
+            if (lseek(fd, jumpFalseLoc, SEEK_SET) == -1) return -1;
+            if (write_int(fd, jumpto) == -1) return -1;
+            if (lseek(fd, filelen, SEEK_SET) == -1) return -1;
 
             /* there is an else case */
-            if(bc->data[codep+2].u.jump != -1) {
+            if (bc->data[codep+2].u.jump != -1) {
                 /* spew the else code */
                 elsedist = bc_action_emit(fd, bc->data[codep+1].u.jump,
                                           bc->data[codep+2].u.jump, bc,
                                           filelen);
 
-                filelen+=elsedist;
+                filelen += elsedist;
 
-                /*put jump to the end of the else code*/
-                jumpto=filelen/4;
-                if(lseek(fd, jumpEndLoc, SEEK_SET) == -1)
-                    return -1;
-                if(write_int(fd,jumpto) == -1)
-                    return -1;
-                if(lseek(fd,filelen,SEEK_SET) == -1)
-                    return -1;
+                /* put jump to the end of the else code */
+                jumpto = filelen/4;
+                if (lseek(fd, jumpEndLoc, SEEK_SET) == -1) return -1;
+                if (write_int(fd, jumpto) == -1) return -1;
+                if (lseek(fd, filelen, SEEK_SET) == -1) return -1;
 
                 codep = bc->data[codep+2].u.jump;
             } else {
@@ -515,10 +497,9 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     int data = BYTECODE_VERSION;
 
     /*this is a string, so it is happy*/
-    if(write(fd, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) == -1)
-        return -1;
+    if (write(fd, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) == -1) return -1;
 
-    if(write_int(fd, data) == -1) return -1;
+    if (write_int(fd, data) == -1) return -1;
 
     /* write extensions bitfield */
     if (write_int(fd, bc->data[codep++].u.value) == -1) return -1;
@@ -533,4 +514,3 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     return bc_action_emit(fd, codep, bc->scriptend, bc,
                           2*sizeof(int) + BYTECODE_MAGIC_LEN);
 }
-
