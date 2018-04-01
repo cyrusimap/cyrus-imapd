@@ -439,8 +439,8 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         break;
     case BODY:
         /* BC_BODY {c : comparator} (B_RAW | B_TEXT | ...)
-           { content-types : stringlist }
            { offset : int }
+           { content-types : stringlist }
            { pattern : string list } */
 
         retval->data[codep++].u.op = BC_BODY;
@@ -484,7 +484,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
     case DATE:
     case CURRENTDATE:
         /* BC_DATE { i: index } { time-zone: string} { c: comparator }
-         *         { header-name : string } { date-part: string }
+         *         { date-part: string } { header-name : string }
          *         { key-list : string list }
          *
          * BC_CURRENTDATE { time-zone: string} { c: comparator }
@@ -1092,7 +1092,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 /* IF
                    (int: begin then block)
                    (int: end then block/begin else block)
-                   (int:end else block) (-1 if no else block)
+                   (int: end else block) (-1 if no else block)
                    (test)
                    (then block)
                    (else block)(optional)
