@@ -45,21 +45,10 @@
 #include <config.h>
 #endif
 
-#include "sieve_interface.h"
-
-#include "bytecode.h"
-#include "script.h"
-
-#include "xmalloc.h"
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <netinet/in.h>
-
 #include <string.h>
 
-#include "map.h"
+#include "bc_parse.h"
 #include "strarray.h"
 #include "times.h"
 
@@ -83,7 +72,7 @@ EXPORTED int bc_header_parse(bytecode_input_t *bc, int *version, int *requires)
 
 /* Given a bytecode_input_t at the beginning of a string (the len block),
  * return the string, the length, and the bytecode index of the NEXT item */
-EXPORTED int bc_string_parse(bytecode_input_t *bc, int pos, char **str)
+static int bc_string_parse(bytecode_input_t *bc, int pos, char **str)
 {
     int len = ntohl(bc[pos++].value);
 
@@ -103,7 +92,7 @@ EXPORTED int bc_string_parse(bytecode_input_t *bc, int pos, char **str)
 
 /* Given a bytecode_input_t at the beginning of a stringlist (the len block),
  * return the stringlist, and the bytecode index of the NEXT item */
-EXPORTED int bc_stringlist_parse(bytecode_input_t *bc, int pos,
+static int bc_stringlist_parse(bytecode_input_t *bc, int pos,
                                   strarray_t **strlist)
 {
     int len = ntohl(bc[pos++].listlen);
@@ -122,7 +111,7 @@ EXPORTED int bc_stringlist_parse(bytecode_input_t *bc, int pos,
     return pos;
 }
 
-EXPORTED int bc_comparator_parse(bytecode_input_t *bc, int pos, comp_t *comp)
+static int bc_comparator_parse(bytecode_input_t *bc, int pos, comp_t *comp)
 {
     comp->match = ntohl(bc[pos++].value);
     comp->relation = ntohl(bc[pos++].value);
