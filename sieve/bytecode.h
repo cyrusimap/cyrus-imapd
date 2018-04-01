@@ -354,6 +354,10 @@ enum bytecode_tags {
     B_IDTYPE_PLACEHOLDER_2
 };
 
+#define INC_LOCATION_MASK 0x3F
+#define INC_OPTIONAL_MASK 0x40
+#define INC_ONCE_MASK     0x80
+
 enum bytecode_variables_bitflags {
     BFV_LOWER	        = 1<<0,
     BFV_UPPER	        = 1<<1,
@@ -364,6 +368,12 @@ enum bytecode_variables_bitflags {
     BFV_LENGTH		= 1<<6,
     BFV_QUOTEREGEX      = 1<<7
 };
+
+#define BFV_MOD40_MASK (BFV_LOWER         | BFV_UPPER)
+#define BFV_MOD30_MASK (BFV_LOWERFIRST    | BFV_UPPERFIRST)
+#define BFV_MOD20_MASK (BFV_QUOTEWILDCARD | BFV_QUOTEREGEX)
+#define BFV_MOD15_MASK (BFV_ENCODEURL)
+#define BFV_MOD10_MASK (BFV_LENGTH)
 
 enum bytecode_required_extensions {
     BFE_VARIABLES       = 1<<0

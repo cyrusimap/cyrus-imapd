@@ -1651,6 +1651,8 @@ sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/bc_emit.c \
 	sieve/bc_eval.c \
 	sieve/bc_generate.c \
+	sieve/bc_parse.c \
+	sieve/bc_parse.h \
 	sieve/comparator.c \
 	sieve/comparator.h \
 	sieve/flags.c \

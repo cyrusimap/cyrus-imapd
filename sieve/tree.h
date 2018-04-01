@@ -129,6 +129,7 @@ struct Fileinto {
 struct Commandlist {
     int type;
     union {
+        int jump; /* only used for parsing bytecode */
         char *str; /* its a reject or error action */
         struct { /* it's an if statement */
             test_t *t;
