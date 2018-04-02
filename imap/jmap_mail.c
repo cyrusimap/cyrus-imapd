@@ -103,19 +103,6 @@ static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 /*
- * TODO This code is a McMansion where the last 2-3 years of the
- * evolvoing JMAP spec shine through. It truly deserves either heavy
- * polishing, or a rewrite. Last time I (rsto) tried in Q1/2018,
- * that turned out to be still too early: there's the stable
- * branch requiring bug fixes, and there's the experimental branch
- * that's following the latest JMAP spec changes, producing more
- * churn. A rewrite in parallel to these two branches turned out
- * to produce an unmanageable load of merge conflicts.
- * When the JMAP spec is stable, this file is ripe to get ripped
- * apart.
- */
-
-/*
  * Possibly to be implemented:
  * - Email/copy
  * - VacationResponse/get
