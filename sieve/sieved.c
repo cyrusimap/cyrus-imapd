@@ -414,11 +414,10 @@ static int dump2_test(bytecode_input_t *d, int i, int version)
 
     case BC_ANYOF:
     case BC_ALLOF:
-        len = ntohl(d[i++].listlen);
+        len = test.u.aa.ntests;
 
         printf("%s({%d}\n\t",
                (test.type == BC_ANYOF) ? "ANYOF" : "ALLOF", len);
-        i++; /* skip position of end of list */
 
         while (len--) {
             i = dump2_test(d, i, version);
@@ -544,7 +543,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_IF:
-            printf("IF (ends at %d) ", ntohl(d[i++].value));
+            printf("IF (ends at %d) ", cmd.u.i.testend);
             i = dump2_test(d, i, version);
             break;
 

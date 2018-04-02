@@ -65,8 +65,12 @@ struct Test {
     int ignore_err;
     union {
         test_t *t; /* not */
-        testlist_t *tl; /* anyof, allof */
         strarray_t *sl; /* exists, ihave, valid_ext_list */
+        testlist_t *tl; /* anyof, allof (bytecode generation only) */
+        struct { /* anyof, allof (bytecode parsing/eval only) */
+            int ntests;   /* number of tests */
+            int endtests; /* offset to end of tests */
+        } aa;
         struct { /* it's a header or hasflag or string test */
             comp_t comp;
             strarray_t *sl;
@@ -129,10 +133,11 @@ struct Fileinto {
 struct Commandlist {
     int type;
     union {
-        int jump; /* only used for parsing bytecode */
+        int jump; /* bytecode parsing/eval only */
         char *str; /* its a reject or error action */
         struct { /* it's an if statement */
             test_t *t;
+            int testend; /* offset to end of test (bytecode parsing/eval only) */
             commandlist_t *do_then;
             commandlist_t *do_else;
         } i;

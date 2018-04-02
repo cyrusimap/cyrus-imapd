@@ -210,6 +210,7 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
 
 
     case B_IF:              /* 6 */
+        cmd->u.i.testend = ntohl(bc[pos++].value);
         /* Tests are parsed by caller */
         break;
 
@@ -391,9 +392,16 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     case BC_FALSE:                /* 0 */
     case BC_TRUE:                 /* 1 */
     case BC_NOT:                  /* 2 */
+        break;
+
+
     case BC_ANYOF:                /* 5 */
     case BC_ALLOF:                /* 6 */
+        test->u.aa.ntests = ntohl(bc[pos++].listlen);
+        test->u.aa.endtests = ntohl(bc[pos++].value) / sizeof(bytecode_input_t);
+        /* Tests are parsed by caller */
         break;
+
 
     case BC_EXISTS:               /* 3 */
     case BC_VALIDEXTLIST:         /* 22 */
