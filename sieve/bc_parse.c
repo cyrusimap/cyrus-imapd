@@ -60,12 +60,19 @@ EXPORTED int bc_header_parse(bytecode_input_t *bc, int *version, int *requires)
 {
     int pos = 0;
 
+    *version = 0;
+    if (requires) *requires = 0;
+
     if (memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) return -1;
 
     pos = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
     *version = ntohl(bc[pos++].value);
-    *requires = (*version >= 0x11) ? ntohl(bc[pos++].value) : 0;
+    if (*version >= 0x11) {
+        int req = ntohl(bc[pos++].value);
+
+        if (requires) *requires = req;
+    }
 
     return pos;
 }
@@ -128,6 +135,14 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
     memset(cmd, 0, sizeof(commandlist_t));
     cmd->type = ntohl(bc[pos++].op);
 
+    /* When a case is switch'ed to, pos points to the first parameter
+     * of the action.  This makes it easier to add future extensions.
+     * Extensions that change an existing action should add any new
+     * parameters to the beginning of the particular action's bytecode.
+     * This will allow the new code to fall through to the  older
+     * code, which will then parse the older parameters and should
+     * require only a minimal set of changes to support any new extension. 
+     */
     switch (cmd->type) {
     case B_STOP:            /* 0 */
         break;
@@ -364,6 +379,14 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     memset(test, 0, sizeof(test_t));
     test->type = opcode;
 
+    /* When a case is switch'ed to, pos points to the first parameter
+     * of the test.  This makes it easier to add future extensions.
+     * Extensions that change an existing test should add any new
+     * parameters to the beginning of the particular test's bytecode.
+     * This will allow the new code to fall through to the  older
+     * code, which will then parse the older parameters and should
+     * require only a minimal set of changes to support any new extension. 
+     */
     switch (opcode) {
     case BC_FALSE:                /* 0 */
     case BC_TRUE:                 /* 1 */
