@@ -56,6 +56,7 @@
 #include "imap/mailbox.h"
 
 #include "sieve/bytecode.h"
+#include "sieve/bc_parse.h"
 #include "sieve/script.h"
 #include "sieve/sieve_interface.h"
 
@@ -200,11 +201,18 @@ EXPORTED int sieve_rebuild(const char *script_fname, const char *bc_fname,
             sieve_execute_t *exe = NULL;
             r = sieve_script_load(bc_fname, &exe);
 
-            if (!r && sieve_bytecode_version(exe->bc_cur) == BYTECODE_VERSION) {
-                syslog(LOG_DEBUG, "%s: %s is up to date\n", __func__, bc_fname);
-                r = SIEVE_OK;
-                sieve_script_unload(&exe);
-                goto done;
+            if (!r) {
+                int version;
+
+                bc_header_parse((bytecode_input_t *) exe->bc_cur->data,
+                                &version, NULL);
+                if (version == BYTECODE_VERSION) {
+                    syslog(LOG_DEBUG,
+                           "%s: %s is up to date\n", __func__, bc_fname);
+                    r = SIEVE_OK;
+                    sieve_script_unload(&exe);
+                    goto done;
+                }
             }
 
             sieve_script_unload(&exe);
