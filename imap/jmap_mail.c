@@ -4726,7 +4726,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
-static struct sortcrit *buildsort(json_t *sort)
+static struct sortcrit *_email_buildsort(json_t *sort)
 {
     json_t *jcomp;
     size_t i;
@@ -4794,7 +4794,7 @@ static struct sortcrit *buildsort(json_t *sort)
     return sortcrit;
 }
 
-struct getmsglist_window {
+struct email_search_window {
     /* input arguments */
     ssize_t position;
     const char *anchor;
@@ -4827,7 +4827,7 @@ static void _email_querychanges_destroyed(json_t *target, const char *msgid)
 }
 
 static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                         struct getmsglist_window *window, int want_expunged,
+                         struct email_search_window *window, int want_expunged,
                          size_t *total, size_t *total_threads,
                          json_t **messageids, json_t **expungedids,
                          json_t **threadids)
@@ -4876,7 +4876,7 @@ static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
     if (r) goto done;
 
     query = search_query_new(state, searchargs);
-    query->sortcrit = sortcrit = buildsort(sort);
+    query->sortcrit = sortcrit = _email_buildsort(sort);
     query->multiple = 1;
     query->need_ids = 1;
     query->verbose = 1;
@@ -5294,9 +5294,9 @@ static int jmap_email_query(jmap_req_t *req)
     /* XXX Guess, we don't need total_threads anymore */
     size_t total_threads = 0;
     json_t *threadids = NULL;
-    /* XXX - getmsglist_window is a legacy and should go away */
-    struct getmsglist_window window;
-    memset(&window, 0, sizeof(struct getmsglist_window));
+    /* XXX - email_search_window is a legacy and should go away */
+    struct email_search_window window;
+    memset(&window, 0, sizeof(struct email_search_window));
     window.position = query.position;
     window.anchor = query.anchor;
     window.anchor_off = query.anchor_offset;
@@ -5371,8 +5371,8 @@ static int jmap_email_querychanges(jmap_req_t *req)
     size_t total_threads = 0;
     json_t *threadids = NULL;
     /* Set up search window */
-    struct getmsglist_window window;
-    memset(&window, 0, sizeof(struct getmsglist_window));
+    struct email_search_window window;
+    memset(&window, 0, sizeof(struct email_search_window));
 
     /* State token is current modseq ':' highestuid - because queryChanges... */
     int nscan = sscanf(query.since_state, MODSEQ_FMT ":%u",
@@ -5460,8 +5460,8 @@ static int jmap_email_changes(jmap_req_t *req)
     /* Search for updates */
     json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct getmsglist_window window;
-    memset(&window, 0, sizeof(struct getmsglist_window));
+    struct email_search_window window;
+    memset(&window, 0, sizeof(struct email_search_window));
     window.collapse = collapse_threads;
     window.limit = changes.max_changes;
     size_t total = 0, total_threads = 0;
@@ -5521,8 +5521,8 @@ static int jmap_thread_changes(jmap_req_t *req)
     /* Search for updates */
     json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct getmsglist_window window;
-    memset(&window, 0, sizeof(struct getmsglist_window));
+    struct email_search_window window;
+    memset(&window, 0, sizeof(struct email_search_window));
     window.collapse = 1;
     window.limit = changes.max_changes;
     size_t total = 0, total_threads = 0;
