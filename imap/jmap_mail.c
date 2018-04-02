@@ -359,7 +359,7 @@ struct jmap_comparator {
 
 typedef int jmap_comparator_parse_cb(struct jmap_comparator *comp, void *rock);
 
-static void parse_sort(json_t *jsort, struct jmap_parser *parser,
+static void parse_comparator(json_t *jsort, struct jmap_parser *parser,
                        jmap_comparator_parse_cb comp_cb, json_t *unsupported,
                        void *rock)
 {
@@ -602,7 +602,7 @@ static void jmap_query_parse(json_t *jargs,
     if (json_is_array(arg)) {
         json_array_foreach(arg, i, val) {
             jmap_parser_push_index(parser, "sort", i);
-            parse_sort(val, parser, comp_cb, unsupported_sort, sort_rock);
+            parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
             jmap_parser_pop(parser);
         }
         if (json_array_size(arg)) {
@@ -730,7 +730,7 @@ static void jmap_querychanges_parse(json_t *jargs,
     if (json_is_array(arg)) {
         json_array_foreach(arg, i, val) {
             jmap_parser_push_index(parser, "sort", i);
-            parse_sort(val, parser, comp_cb, unsupported_sort, sort_rock);
+            parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
             jmap_parser_pop(parser);
         }
         if (json_array_size(arg)) {
@@ -1756,7 +1756,7 @@ done:
     return r;
 }
 
-static int _mbox_parse_sort(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _mbox_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
@@ -1809,7 +1809,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
             _mbox_parse_filter, NULL,
-            _mbox_parse_sort, NULL,
+            _mbox_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -1844,7 +1844,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
             _mbox_parse_filter, NULL,
-            _mbox_parse_sort, NULL,
+            _mbox_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -5226,7 +5226,7 @@ static const char *msglist_sortfields[] = {
     NULL
 };
 
-static int _email_parse_sort(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _email_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -5268,7 +5268,7 @@ static int jmap_email_query(jmap_req_t *req)
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
             _email_parse_filter, req,
-            _email_parse_sort, req,
+            _email_parse_comparator, req,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -5348,7 +5348,7 @@ static int jmap_email_querychanges(jmap_req_t *req)
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
             _email_parse_filter, req,
-            _email_parse_sort, req,
+            _email_parse_comparator, req,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -9333,7 +9333,7 @@ static void _msgsub_parse_filter(json_t *filter, struct jmap_parser *parser,
 }
 
 
-static int _msgsub_parse_sort(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _msgsub_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
 {
     if (comp->collation) {
         return 0;
@@ -9355,7 +9355,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
             _msgsub_parse_filter, NULL,
-            _msgsub_parse_sort, NULL,
+            _msgsub_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -9386,7 +9386,7 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req)
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
             _msgsub_parse_filter, NULL,
-            _msgsub_parse_sort, NULL,
+            _msgsub_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
