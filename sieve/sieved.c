@@ -185,9 +185,7 @@ static void print_comparator(comp_t *comp)
 
     switch (comp->collation) {
     case B_OCTET:        printf(" (octet)");         break;
-
     case B_ASCIICASEMAP: printf(" (ascii-casemap)"); break;
-
     case B_ASCIINUMERIC: printf(" (ascii-numeric)"); break;
     }
 
@@ -400,6 +398,43 @@ static void print_test(test_t *test)
     printf("\n");
 }
 
+static int dump2_test(bytecode_input_t *d, int i, int version)
+{
+    test_t test;
+    int len;
+
+    /* there is no short circuiting involved here */
+    i = bc_test_parse(d, i, version, &test);
+
+    switch (test.type) {
+    case BC_NOT:
+        printf("NOT ");
+        i = dump2_test(d, i, version);
+        break;
+
+    case BC_ANYOF:
+    case BC_ALLOF:
+        len = ntohl(d[i++].listlen);
+
+        printf("%s({%d}\n\t",
+               (test.type == BC_ANYOF) ? "ANYOF" : "ALLOF", len);
+        i++; /* skip position of end of list */
+
+        while (len--) {
+            i = dump2_test(d, i, version);
+            printf("\t");
+        }
+        printf(")\n");
+        break;
+
+    default:
+        print_test(&test);
+        break;
+    }
+
+    return i;
+}
+
 static void dump2(bytecode_input_t *d, int bc_len)
 {
     int i;
@@ -423,8 +458,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
     while (i < bc_len) {
         commandlist_t cmd;
-        test_t test;
-        int len;
 
         printf("%04d: ", i);
 
@@ -512,37 +545,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_IF:
             printf("IF (ends at %d) ", ntohl(d[i++].value));
-
-            /* there is no short circuiting involved here */
-            i = bc_test_parse(d, i, version, &test);
-
-            switch (test.type) {
-            case BC_ANYOF:
-            case BC_ALLOF:
-                len = ntohl(d[i++].listlen);
-
-                printf("%s({%d}\n\t",
-                       (test.type == BC_ANYOF) ? "ANYOF" : "ALLOF", len);
-                i++; /* skip position of end of list */
-
-                while (len--) {
-                    i = bc_test_parse(d, i, version, &test);
-                    print_test(&test);
-                    printf("\t");
-                }
-                printf(")\n");
-                break;
-
-            case BC_NOT:
-                printf("NOT ");
-                i = bc_test_parse(d, i, version, &test);
-
-                GCC_FALLTHROUGH
-
-            default:
-                print_test(&test);
-                break;
-            }
+            i = dump2_test(d, i, version);
             break;
 
 
