@@ -306,6 +306,7 @@ static void print_test(test_t *test)
             printf(" ZONE(ORIGINAL)");
         print_comparator(&test->u.dt.comp);
         printf("\n\tDATEPART(%s)", datepart_to_string(test->u.dt.date_part));
+        print_string(" HEADER", test->u.dt.header_name);
         print_stringlist(" KEYS", test->u.dt.kl);
         break;
 
@@ -317,7 +318,6 @@ static void print_test(test_t *test)
             printf(" ZONE(ORIGINAL)");
         print_comparator(&test->u.dt.comp);
         printf("\n\tDATEPART(%s)", datepart_to_string(test->u.dt.date_part));
-        print_string(" HEADER", test->u.dt.header_name);
         print_stringlist(" KEYS", test->u.dt.kl);
         break;
 
