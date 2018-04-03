@@ -1599,6 +1599,8 @@ envelope_err:
 void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
                      variable_list_t *variables)
 {
+    if (!strlist) return;
+
     int len = strarray_size(strlist);
 
     if (len) {
