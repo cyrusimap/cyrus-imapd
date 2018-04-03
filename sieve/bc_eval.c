@@ -2224,7 +2224,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 if (res == SIEVE_RUN_ERROR)
                     *errmsg = "Vacation can not be used with Reject or Vacation";
             } else if (respond == SIEVE_DONE) {
-                free(strarray_takevf(cmd.u.v.fcc.flags));
+                if (cmd.u.v.fcc.flags) free(strarray_takevf(cmd.u.v.fcc.flags));
             } else {
                 res = SIEVE_RUN_ERROR; /* something is bad */
             }
