@@ -609,6 +609,7 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     const char *host = myaddr ? myaddr : addr;
     syslog(LOG_DEBUG, "smtpclient_open: connecting to host: %s", host);
     bk = backend_connect(NULL, host, &smtp_protocol, NULL, sasl_cb, NULL, logfd);
+    if (sasl_cb) free_callbacks(sasl_cb);
     if (!bk) {
         syslog(LOG_ERR, "smptclient_open: can't connect to host: %s", host);
         if (logfd != -1) close(logfd);
