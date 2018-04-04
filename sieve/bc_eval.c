@@ -335,8 +335,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         int version, int requires)
 {
     test_t test;
-    int res=0;
-    int i=*ip;
+    int res = 0;
+    int i = *ip;
     int x,y,z;/* loop variable */
     int list_len; /* for allof/anyof/exists */
     int list_end; /* for allof/anyof/exists */
@@ -345,39 +345,37 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
     comparator_t * comp=NULL;
     void * comprock=NULL;
     strarray_t *match_vars = NULL;
-    int op= ntohl(bc[i].op);
+    int op = ntohl(bc[i].op);
     #define SCOUNT_SIZE 20
     char scount[SCOUNT_SIZE];
 
     i = bc_test_parse(bc, i, version, &test);
     op = test.type;
 
-    switch(op)
-    {
-    case BC_FALSE:/*0*/
-        res=0;
+    switch (op) {
+    case BC_FALSE:
+        res = 0;
         break;
 
-    case BC_TRUE:/*1*/
-        res=1;
+    case BC_TRUE:
+        res = 1;
         break;
 
-    case BC_NOT:/*2*/
+    case BC_NOT:
         res = eval_bc_test(interp, m, sc, bc, &i, variables,
                            duptrack_list, version, requires);
-        if(res >= 0) res = !res; /* Only invert in non-error case */
+        if (res >= 0) res = !res; /* Only invert in non-error case */
         break;
 
-    case BC_EXISTS:/*3*/
+    case BC_EXISTS:
     {
         const char** val;
 
-        res=1;
+        res = 1;
 
         list_len = strarray_size(test.u.sl);
 
-        for(x=0; x<list_len && res; x++)
-        {
+        for(x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -386,21 +384,20 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                 str = parse_string(str, variables);
             }
 
-            if(interp->getheader(m,str, &val) != SIEVE_OK)
-                res = 0;
+            if (interp->getheader(m, str, &val) != SIEVE_OK) res = 0;
         }
 
         free(strarray_takevf(test.u.sl));
         break;
     }
-    case BC_SIZE:/*4*/
+
+    case BC_SIZE:
     {
         int s;
         int sizevar = test.u.sz.t;
         int x = test.u.sz.n;
 
-        if (interp->getsize(m, &s) != SIEVE_OK)
-            break;
+        if (interp->getsize(m, &s) != SIEVE_OK) break;
 
         if (sizevar ==B_OVER) {
             /* over */
@@ -411,18 +408,18 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         }
         break;
     }
-    case BC_ANYOF:/*5*/
+
+    case BC_ANYOF:
         res = 0;
         list_len = test.u.aa.ntests;
         list_end = test.u.aa.endtests;
 
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
-        for (x=0; x<list_len && !res; x++) {
-            int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
-                               duptrack_list, version, requires);
-            if(tmp < 0) {
+        for (x = 0; x < list_len && !res; x++) {
+            int tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
+                                   duptrack_list, version, requires);
+            if (tmp < 0) {
                 res = tmp;
                 break;
             }
@@ -432,17 +429,17 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         i = list_end; /* handle short-circuting */
 
         break;
-    case BC_ALLOF:/*6*/
+
+    case BC_ALLOF:
         res = 1;
         list_len = test.u.aa.ntests;
         list_end = test.u.aa.endtests;
 
         /* return 1 unless you find one that isn't true, then return 0 */
-        for (x=0; x<list_len && res; x++) {
-            int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
-                               duptrack_list, version, requires);
-            if(tmp < 0) {
+        for (x = 0; x < list_len && res; x++) {
+            int tmp =  eval_bc_test(interp, m, sc, bc, &i, variables,
+                                    duptrack_list, version, requires);
+            if (tmp < 0) {
                 res = tmp;
                 break;
             }
@@ -452,13 +449,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         i = list_end; /* handle short-circuiting */
 
         break;
-    case BC_ADDRESS:/*13*/
-    case BC_ADDRESS_PRE_INDEX:/*7*/
-        address=1;
-        /* fall through */
-    case BC_ENVELOPE:/*8*/
+
+    case BC_ADDRESS:
+    case BC_ADDRESS_PRE_INDEX:
+        address = 1;
+
+        GCC_FALLTHROUGH
+
+    case BC_ENVELOPE:
     {
-        const char ** val;
+        const char **val;
         struct address_itr ai;
         const struct address *a;
         char *addr;
@@ -485,7 +485,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         /*find the correct comparator fcn*/
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
-        if(!comp) {
+        if (!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
@@ -495,8 +495,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 #if VERBOSE
         printf("about to process %d headers\n", numheaders);
 #endif
-        for (x=0; x<numheaders && !res; x++)
-        {
+        for (x = 0; x < numheaders && !res; x++) {
             const char *this_header;
             int reverse_path = 0;
 
@@ -507,16 +506,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             }
 
             /* Try the next string if we don't have this one */
-            if(address) {
+            if (address) {
                 /* Header */
-                if(interp->getheader(m, this_header, &val) != SIEVE_OK)
+                if (interp->getheader(m, this_header, &val) != SIEVE_OK)
                     continue;
 #if VERBOSE
                 printf(" [%d] header %s is %s\n", x, this_header, val[0]);
 #endif
             } else {
                 /* Envelope */
-                if(interp->getenvelope(m, this_header, &val) != SIEVE_OK)
+                if (interp->getenvelope(m, this_header, &val) != SIEVE_OK)
                     continue;
 
                 if (!strcmp(this_header, "from")) reverse_path = 1;
@@ -532,22 +531,22 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             if (index > 0) {
                 --index;
                 if (index >= header_count) {
-                        res = 0;
-                        break;
+                    res = 0;
+                    break;
                 }
                 header_count = index + 1;
             }
             else if (index < 0) {
                 index += header_count;
                 if (index < 0) {
-                        res = 0;
-                        break;
+                    res = 0;
+                    break;
                 }
                 header_count = index + 1;
             }
 
-            /*header exists, now to test it*/
-            /*search through all the headers that match*/
+            /* header exists, now to test it */
+            /* search through all the headers that match */
 
             for (y = index; y < header_count && !res; y++) {
 #if VERBOSE
@@ -560,9 +559,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 #if VERBOSE
                     printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
-                    /*find the part of the address that we want*/
-                    switch(apart)
-                    {
+                    /* find the part of the address that we want */
+                    switch(apart) {
                     case B_ALL:
                         addr = address_get_all(a, /*canon_domain*/0);
                         break;
@@ -589,9 +587,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                     if (match == B_COUNT) {
                         count++;
                     } else {
-                        /*search through all the data*/
-                        for (z=0; z<numdata && !res; z++)
-                        {
+                        /* search through all the data */
+                        for (z = 0; z < numdata && !res; z++) {
                             const char *data_val;
 
                             data_val = strarray_nth(test.u.ae.pl, z);
@@ -607,7 +604,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                                 if (!reg) {
                                     /* Oops */
                                     free(addr);
-                                    res=-1;
+                                    res = -1;
                                     goto envelope_err;
                                 }
 
@@ -637,12 +634,10 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 #endif
         } /* For each script header */
 
-        if  (match == B_COUNT)
-        {
+        if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            for (z=0; z<numdata && !res; z++)
-            {
+            for (z = 0; z < numdata && !res; z++) {
                 const char *data_val;
 
                 data_val = strarray_nth(test.u.ae.pl, z);;
@@ -651,7 +646,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                     data_val = parse_string(data_val, variables);
                 }
 
-                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
+                res |= comp(scount, strlen(scount),
+                            data_val, match_vars, comprock);
             }
         }
 
@@ -660,10 +656,11 @@ envelope_err:
         free(strarray_takevf(test.u.ae.pl));
         break;
     }
-    case BC_HEADER:/*14*/
-    case BC_HEADER_PRE_INDEX:/*9*/
+
+    case BC_HEADER:
+    case BC_HEADER_PRE_INDEX:
     {
-        const char** val;
+        const char **val;
 
         int numheaders = strarray_size(test.u.hhs.sl);
         int numdata = strarray_size(test.u.hhs.pl);
@@ -685,17 +682,16 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(interp, comparator, match, relation, &comprock);
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
-        if(!comp) {
+        if (!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /*search through all the flags for the header*/
-        for(x=0; x<numheaders && !res; x++)
-        {
+        for(x = 0; x < numheaders && !res; x++) {
             const char *this_header;
 
             this_header = strarray_nth(test.u.hhs.sl, x);
@@ -704,8 +700,8 @@ envelope_err:
                 this_header = parse_string(this_header, variables);
             }
 
-            if(interp->getheader(m, this_header, &val) != SIEVE_OK) {
-                continue; /*this header does not exist, search the next*/
+            if (interp->getheader(m, this_header, &val) != SIEVE_OK) {
+                continue; /* this header does not exist, search the next */
             }
 #if VERBOSE
             printf ("val %s %s %s\n", val[0], val[1], val[2]);
@@ -721,31 +717,29 @@ envelope_err:
             if (index > 0) {
                 --index;
                 if (index >= header_count) {
-                        res = 0;
-                        break;
+                    res = 0;
+                    break;
                 }
                 header_count = index + 1;
             }
             else if (index < 0) {
                 index += header_count;
                 if (index < 0) {
-                        res = 0;
-                        break;
+                    res = 0;
+                    break;
                 }
                 header_count = index + 1;
             }
 
             /* search through all the headers that match */
 
-            for (y = index; y < header_count && !res; y++)
-            {
-                if  (match == B_COUNT) {
+            for (y = index; y < header_count && !res; y++) {
+                if (match == B_COUNT) {
                     count++;
                 } else {
                     decoded_header = charset_parse_mimeheader(val[y], 0 /*flags*/);
-                    /*search through all the data*/
-                    for (z=0; z<numdata && !res; z++)
-                    {
+                    /* search through all the data */
+                    for (z = 0; z < numdata && !res; z++) {
                         const char *data_val;
 
                         data_val = strarray_nth(test.u.hhs.pl, z);
@@ -755,12 +749,12 @@ envelope_err:
                         }
 
                         if (isReg) {
-                            regex_t *reg = bc_compile_regex(data_val, ctag,
-                                                            errbuf, sizeof(errbuf));
-                            if (!reg)
-                            {
+                            regex_t *reg =
+                                bc_compile_regex(data_val, ctag,
+                                                 errbuf, sizeof(errbuf));
+                            if (!reg) {
                                 /* Oops */
-                                res=-1;
+                                res = -1;
                                 goto header_err;
                             }
 
@@ -779,12 +773,10 @@ envelope_err:
             }
         }
 
-        if  (match == B_COUNT )
-        {
+        if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
-            /*search through all the data*/
-            for (z=0; z<numdata && !res; z++)
-            {
+            /* search through all the data */
+            for (z = 0; z < numdata && !res; z++) {
                 const char *data_val;
 
                 data_val = strarray_nth(test.u.hhs.pl, z);
@@ -796,7 +788,8 @@ envelope_err:
 #if VERBOSE
                 printf("%d, %s \n", count, data_val);
 #endif
-                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
+                res |= comp(scount, strlen(scount),
+                            data_val, match_vars, comprock);
             }
 
         }
@@ -806,12 +799,13 @@ envelope_err:
         free(strarray_takevf(test.u.hhs.pl));
         break;
     }
-    case BC_STRING:/*21*/
+
+    case BC_STRING:
         is_string = 1;
 
         GCC_FALLTHROUGH
 
-    case BC_HASFLAG:/*15*/
+    case BC_HASFLAG:
     {
         int numhaystacks = strarray_size(test.u.hhs.sl); // number of vars to search
         int numneedles = strarray_size(test.u.hhs.pl); // number of search flags
@@ -820,7 +814,7 @@ envelope_err:
         int relation = test.u.hhs.comp.match;
         int comparator = test.u.hhs.comp.match;
         int count=0;
-        int isReg = (match==B_REGEX);
+        int isReg = (match == B_REGEX);
         int ctag = 0;
         char errbuf[100]; /* Basically unused, regexps tested at compile */
 
@@ -830,9 +824,9 @@ envelope_err:
         }
 
         /*find the correct comparator fcn*/
-        comp=lookup_comp(interp, comparator, match, relation, &comprock);
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
-        if(!comp) {
+        if (!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
@@ -886,8 +880,8 @@ envelope_err:
                 }
 
 		snprintf(scount, SCOUNT_SIZE, "%u", count);
-		/*search through all the data*/
-		for (z=0; z<numneedles && !res; z++) {
+		/* search through all the data */
+		for (z = 0; z < numneedles && !res; z++) {
 		    const char *this_needle;
 
                     this_needle = strarray_nth(test.u.hhs.pl, z);
@@ -906,73 +900,70 @@ envelope_err:
             }
 
             /* search through the haystack for the needles */
-            for(x=0; x<numneedles && !res; x++)
-                {
-                    const char *this_needle;
+            for(x = 0; x < numneedles && !res; x++) {
+                const char *this_needle;
 
-                    this_needle = strarray_nth(test.u.hhs.pl, x);
+                this_needle = strarray_nth(test.u.hhs.pl, x);
 
-                    if (requires & BFE_VARIABLES) {
-                        this_needle = parse_string(this_needle, variables);
-                    }
+                if (requires & BFE_VARIABLES) {
+                    this_needle = parse_string(this_needle, variables);
+                }
 
 #if VERBOSE
-                    printf ("val %s %s %s\n", val[0], val[1], val[2]);
+                printf ("val %s %s %s\n", val[0], val[1], val[2]);
 #endif
 
-                    if (is_string) {
-                        if (isReg) {
-                            regex_t *reg = bc_compile_regex(this_needle, ctag,
-                                                            errbuf, sizeof(errbuf));
-                            if (!reg)
-                                {
-                                    /* Oops */
-                                    res=-1;
-                                    goto string_err;
-                                }
+                if (is_string) {
+                    if (isReg) {
+                        regex_t *reg = bc_compile_regex(this_needle, ctag,
+                                                        errbuf, sizeof(errbuf));
+                        if (!reg) {
+                            /* Oops */
+                            res = -1;
+                            goto string_err;
+                        }
 
-                            res |= comp(this_haystack, strlen(this_haystack),
-                                        (const char *)reg, match_vars, comprock);
+                        res |= comp(this_haystack, strlen(this_haystack),
+                                    (const char *)reg, match_vars, comprock);
+
+                        regfree(reg);
+                        free(reg);
+                    } else {
+                        res |= comp(this_haystack, strlen(this_haystack),
+                                    this_needle, match_vars, comprock);
+                    }
+                } else {
+                    /* search through all the flags */
+
+                    for (y = 0; y < this_var->count && !res; y++) {
+                        const char *active_flag;
+
+                        active_flag = this_var->data[y];
+
+                        if (isReg) {
+                            regex_t *reg =
+                                bc_compile_regex(this_needle, ctag,
+                                                 errbuf, sizeof(errbuf));
+                            if (!reg) {
+                                /* Oops */
+                                res = -1;
+                                goto string_err;
+                            }
+
+                            res |= comp(active_flag, strlen(active_flag),
+                                        (const char *)reg,
+                                        match_vars, comprock);
 
                             regfree(reg);
                             free(reg);
                         } else {
-                            res |= comp(this_haystack, strlen(this_haystack),
+                            res |= comp(active_flag, strlen(active_flag),
                                         this_needle, match_vars, comprock);
                         }
-                    } else {
-                        /* search through all the flags */
+                    }
+                } // (is_string) else
 
-                        for (y=0; y < this_var->count && !res; y++)
-                            {
-                                const char *active_flag;
-
-                                active_flag = this_var->data[y];
-
-                                if (isReg) {
-                                    regex_t *reg = bc_compile_regex(this_needle, ctag,
-                                                                    errbuf, sizeof(errbuf));
-                                    if (!reg)
-                                        {
-                                            /* Oops */
-                                            res=-1;
-                                            goto string_err;
-                                        }
-
-                                    res |= comp(active_flag, strlen(active_flag),
-                                                (const char *)reg,
-                                                match_vars, comprock);
-
-                                    regfree(reg);
-                                    free(reg);
-                                } else {
-                                    res |= comp(active_flag, strlen(active_flag),
-                                                this_needle, match_vars, comprock);
-                                }
-                            }
-                    } // (is_string) else
-
-                } // loop on each item of the current haystack
+            } // loop on each item of the current haystack
 #if VERBOSE
             {
                 /* for debugging purposes only */
@@ -991,9 +982,10 @@ envelope_err:
         free(strarray_takevf(test.u.hhs.pl));
         break;
     }
-    case BC_BODY:/*10*/
+
+    case BC_BODY:
     {
-        sieve_bodypart_t ** val;
+        sieve_bodypart_t **val;
         const char **content_types = NULL;
 
         int numdata = strarray_size(test.u.b.pl);
@@ -1004,7 +996,7 @@ envelope_err:
         int transform = test.u.b.transform;
         /* test.u.b.offset is now unused */
         int count=0;
-        int isReg = (match==B_REGEX);
+        int isReg = (match == B_REGEX);
         int ctag = 0;
         char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
@@ -1016,7 +1008,7 @@ envelope_err:
         /*find the correct comparator fcn*/
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
-        if(!comp) {
+        if (!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
@@ -1062,8 +1054,7 @@ envelope_err:
                 const char *content = val[y]->decoded_body;
 
                 /* search through all the data */
-                for (z=0; z<numdata && !res; z++)
-                {
+                for (z = 0; z < numdata && !res; z++) {
                     const char *data_val;
 
                     data_val = strarray_nth(test.u.b.pl, z);
@@ -1101,12 +1092,10 @@ envelope_err:
         /* free the bodypart array */
         if (val) free(val);
 
-        if  (match == B_COUNT)
-        {
+        if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            for (z=0; z<numdata && !res; z++)
-            {
+            for (z = 0; z < numdata && !res; z++) {
                 const char *data_val;
 
                 data_val = strarray_nth(test.u.b.pl, z);
@@ -1115,15 +1104,17 @@ envelope_err:
                     data_val = parse_string(data_val, variables);
                 }
 
-                res |= comp(scount, strlen(scount), data_val, match_vars, comprock);
+                res |= comp(scount, strlen(scount),
+                            data_val, match_vars, comprock);
             }
         }
 
         free(strarray_takevf(test.u.b.pl));
         break;
     }
-    case BC_DATE:/*11*/
-    case BC_CURRENTDATE:/*12*/
+
+    case BC_DATE:
+    case BC_CURRENTDATE:
     {
         char buffer[64];
         const char **headers = NULL;
@@ -1151,7 +1142,7 @@ envelope_err:
 
         /* timezone offset */
         if (zone == B_TIMEZONE) {
-                timezone_offset = test.u.dt.zone;
+            timezone_offset = test.u.dt.zone;
         }
 
         /* comparator */
@@ -1161,9 +1152,9 @@ envelope_err:
 
         /* find comparator function */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
-        if(!comp) {
-                res = SIEVE_RUN_ERROR;
-                break;
+        if (!comp) {
+            res = SIEVE_RUN_ERROR;
+            break;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
@@ -1171,88 +1162,88 @@ envelope_err:
         date_part = test.u.dt.date_part;
 
         if (BC_DATE == op) {
-                /* header name */
-                header_name = test.u.dt.header_name;
+            /* header name */
+            header_name = test.u.dt.header_name;
 
-                if (requires & BFE_VARIABLES) {
-                    header_name = parse_string(header_name, variables);
+            if (requires & BFE_VARIABLES) {
+                header_name = parse_string(header_name, variables);
+            }
+
+            /*
+             * Process header
+             */
+
+            if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
+                res = 0;
+                break;
+            }
+
+            /* count results */
+            header_count = 0;
+            while (headers[header_count] != NULL) {
+                ++header_count;
+            }
+
+            /* convert index argument value to array index */
+            if (index > 0) {
+                --index;
+                if (index >= header_count) {
+                    res = 0;
+                    break;
+                }
+                header_count = index + 1;
+            }
+            else if (index < 0) {
+                index += header_count;
+                if (index < 0) {
+                    res = 0;
+                    break;
+                }
+                header_count = index + 1;
+            }
+
+            /* check if index is out of bounds */
+            if (index < 0 || index >= header_count) {
+                res = 0;
+                break;
+            }
+            header = headers[index];
+
+            /* look for separator */
+            header_data = strrchr(header, ';');
+            if (header_data) {
+                /* separator found, skip character and continue */
+                ++header_data;
+            }
+            else {
+                /* separator not found, use full header */
+                header_data = header;
+            }
+
+            if (-1 == time_from_rfc5322(header_data, &t, DATETIME_FULL)) {
+                res = 0;
+                break;
+            }
+
+            /* timezone offset */
+            if (zone == B_ORIGINALZONE) {
+                char *zone;
+                char sign;
+                int hours;
+                int minutes;
+
+                zone = strrchr(header, ' ');
+                if (!zone ||
+                    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+                    res = 0;
+                    break;
                 }
 
-                /*
-                 * Process header
-                 */
-
-                if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
-                        res = 0;
-                        break;
-                }
-
-                /* count results */
-                header_count = 0;
-                while (headers[header_count] != NULL) {
-                        ++header_count;
-                }
-
-                /* convert index argument value to array index */
-                if (index > 0) {
-                        --index;
-                        if (index >= header_count) {
-                                res = 0;
-                                break;
-                        }
-                        header_count = index + 1;
-                }
-                else if (index < 0) {
-                        index += header_count;
-                        if (index < 0) {
-                                res = 0;
-                                break;
-                        }
-                        header_count = index + 1;
-                }
-
-                /* check if index is out of bounds */
-                if (index < 0 || index >= header_count) {
-                        res = 0;
-                        break;
-                }
-                header = headers[index];
-
-                /* look for separator */
-                header_data = strrchr(header, ';');
-                if (header_data) {
-                        /* separator found, skip character and continue */
-                        ++header_data;
-                }
-                else {
-                        /* separator not found, use full header */
-                        header_data = header;
-                }
-
-                if (-1 == time_from_rfc5322(header_data, &t, DATETIME_FULL)) {
-                        res = 0;
-                        break;
-                }
-
-                /* timezone offset */
-                if (zone == B_ORIGINALZONE) {
-                        char *zone;
-                        char sign;
-                        int hours;
-                        int minutes;
-
-                        zone = strrchr(header, ' ');
-                        if (!zone ||
-                            3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
-                                res = 0;
-                                break;
-                        }
-
-                        timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
-                }
+                timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
+            }
         }
         else { /* CURRENTDATE */
-                t = interp->time;
+            t = interp->time;
         }
 
         /* apply timezone_offset (if any) */
@@ -1273,84 +1264,83 @@ envelope_err:
 
         keylist = (const char **) strarray_takevf(test.u.dt.kl);
         for (key = keylist; *key; ++key) {
-                switch (date_part) {
-                case B_YEAR:
-                        snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm.tm_year);
-                        break;
-                case B_MONTH:
-                        snprintf(buffer, sizeof(buffer), "%02d", 1 + tm.tm_mon);
-                        break;
-                case B_DAY:
-                        snprintf(buffer, sizeof(buffer), "%02d", tm.tm_mday);
-                        break;
-                case B_DATE:
-                        snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
-                            1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
-                        break;
-                case B_JULIAN: {
-                        int month, year;
-                        int c, ya;
+            switch (date_part) {
+            case B_YEAR:
+                snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm.tm_year);
+                break;
+            case B_MONTH:
+                snprintf(buffer, sizeof(buffer), "%02d", 1 + tm.tm_mon);
+                break;
+            case B_DAY:
+                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_mday);
+                break;
+            case B_DATE:
+                snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
+                         1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
+                break;
+            case B_JULIAN: {
+                int month, year;
+                int c, ya;
 
-                        month = 1 + tm.tm_mon;
-                        year = 1900 + tm.tm_year;
+                month = 1 + tm.tm_mon;
+                year = 1900 + tm.tm_year;
 
-                        if (month > 2) {
-                            month -= 3;
-                        }
-                        else {
-                            month += 9;
-                            --year;
-                        }
-                        c = year / 100;
-                        ya = year - c * 100;
-
-                        snprintf(buffer, sizeof(buffer), "%d",
-                            (c * 146097 / 4 + ya * 1461 / 4 +
-                              (month * 153 + 2) / 5 + tm.tm_mday + 1721119));
-                        } break;
-                case B_HOUR:
-                        snprintf(buffer, sizeof(buffer), "%02d", tm.tm_hour);
-                        break;
-                case B_MINUTE:
-                        snprintf(buffer, sizeof(buffer), "%02d", tm.tm_min);
-                        break;
-                case B_SECOND:
-                        snprintf(buffer, sizeof(buffer), "%02d", tm.tm_sec);
-                        break;
-                case B_TIME:
-                        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
-                            tm.tm_hour, tm.tm_min, tm.tm_sec);
-                        break;
-                case B_ISO8601:
-                        time_to_iso8601(t, buffer, sizeof(buffer), 1);
-                        break;
-                case B_STD11:
-                        time_to_rfc5322(t, buffer, sizeof(buffer));
-                        break;
-                case B_ZONE:
-                        snprintf(buffer, sizeof(buffer), "%c%02d%02d",
-                            timezone_offset >= 0 ? '+' : '-',
-                            abs(timezone_offset) / 60,
-                            abs(timezone_offset) % 60);
-                        break;
-                case B_WEEKDAY:
-                        snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
-                        break;
+                if (month > 2) {
+                    month -= 3;
                 }
+                else {
+                    month += 9;
+                    --year;
+                }
+                c = year / 100;
+                ya = year - c * 100;
 
-                res |= comp(buffer, strlen(buffer), *key, match_vars, comprock);
+                snprintf(buffer, sizeof(buffer), "%d",
+                         (c * 146097 / 4 + ya * 1461 / 4 +
+                          (month * 153 + 2) / 5 + tm.tm_mday + 1721119));
+            } break;
+            case B_HOUR:
+                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_hour);
+                break;
+            case B_MINUTE:
+                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_min);
+                break;
+            case B_SECOND:
+                snprintf(buffer, sizeof(buffer), "%02d", tm.tm_sec);
+                break;
+            case B_TIME:
+                snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+                         tm.tm_hour, tm.tm_min, tm.tm_sec);
+                break;
+            case B_ISO8601:
+                time_to_iso8601(t, buffer, sizeof(buffer), 1);
+                break;
+            case B_STD11:
+                time_to_rfc5322(t, buffer, sizeof(buffer));
+                break;
+            case B_ZONE:
+                snprintf(buffer, sizeof(buffer), "%c%02d%02d",
+                         timezone_offset >= 0 ? '+' : '-',
+                         abs(timezone_offset) / 60,
+                         abs(timezone_offset) % 60);
+                break;
+            case B_WEEKDAY:
+                snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
+                break;
+            }
+
+            res |= comp(buffer, strlen(buffer), *key, match_vars, comprock);
         }
         free(keylist);
         break;
     }
-    case BC_IHAVE:/*24*/
-    {
-        res=1;
+
+    case BC_IHAVE:
+        res = 1;
 
         list_len = strarray_size(test.u.sl);
 
-        for(x=0; x<list_len && res; x++)
-        {
+        for(x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -1360,15 +1350,15 @@ envelope_err:
 
         free(strarray_takevf(test.u.sl));
         break;
-    }
-    case BC_MAILBOXEXISTS:/*16*/
+
+    case BC_MAILBOXEXISTS:
         res = 0;
 
         list_len = strarray_size(test.u.mm.keylist);
 
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
-        for (x=0; x<list_len && !res; x++) {
+        for (x = 0; x < list_len && !res; x++) {
             const char *extname;
 
             /* this is a mailbox name in external namespace */
@@ -1380,9 +1370,9 @@ envelope_err:
         free(strarray_takevf(test.u.mm.keylist));
         break;
 
-    case BC_METADATA:/*17*/
-    case BC_SERVERMETADATA:/*19*/
-    case BC_ENVIRONMENT:/*26*/
+    case BC_METADATA:
+    case BC_SERVERMETADATA:
+    case BC_ENVIRONMENT:
     {
         res = 0;
         const char *extname = NULL;
@@ -1401,10 +1391,10 @@ envelope_err:
             ctag = regcomp_flags(comparator, requires);
         }
 
-        /*find the correct comparator fcn*/
-        comp=lookup_comp(interp, comparator, match, relation, &comprock);
+        /* find the correct comparator fcn */
+        comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
-        if(!comp) {
+        if (!comp) {
             res = SIEVE_RUN_ERROR;
             break;
         }
@@ -1419,7 +1409,7 @@ envelope_err:
 
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
-        for (x=0; val && x<list_len; x++) {
+        for (x = 0; val && x < list_len; x++) {
             const char *testval;
 
             /* this is a mailbox name in external namespace */
@@ -1431,7 +1421,7 @@ envelope_err:
                 if (!reg) {
                     /* Oops */
                     free(val);
-                    res=-1;
+                    res = -1;
                     goto alldone;
                 }
 
@@ -1456,8 +1446,8 @@ envelope_err:
         break;
     }
 
-    case BC_METADATAEXISTS:/*18*/
-    case BC_SERVERMETADATAEXISTS:/*20*/
+    case BC_METADATAEXISTS:
+    case BC_SERVERMETADATAEXISTS:
     {
         res = 1;
         const char *extname = NULL;
@@ -1468,7 +1458,7 @@ envelope_err:
 
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
-        for (x=0; x<list_len; x++) {
+        for (x = 0; x < list_len; x++) {
             const char *keyname = NULL;
             char *val = NULL;
 
@@ -1485,13 +1475,12 @@ envelope_err:
         break;
     }
 
-    case BC_VALIDEXTLIST:/*22*/
-        res=1;
+    case BC_VALIDEXTLIST:
+        res = 1;
 
         list_len = strarray_size(test.u.sl);
 
-        for(x=0; x<list_len && res; x++)
-        {
+        for(x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -1500,13 +1489,13 @@ envelope_err:
                 str = parse_string(str, variables);
             }
 
-            if(interp->isvalidlist(interp->interp_context, str) != SIEVE_OK)
+            if (interp->isvalidlist(interp->interp_context, str) != SIEVE_OK)
                 res = 0;
         }
 
         break;
 
-    case BC_DUPLICATE:/*23*/
+    case BC_DUPLICATE:
     {
         int type = test.u.dup.idtype;
         const char *idval, *handle;
@@ -1549,10 +1538,10 @@ envelope_err:
             }
             else free(dc.id);
         }
+        break;
     }
-    break;
 
-    case BC_SPECIALUSEEXISTS:/*25*/
+    case BC_SPECIALUSEEXISTS:
     {
         res = 1;
         const char *extname = NULL;
@@ -1566,7 +1555,7 @@ envelope_err:
             break;
         }
 
-        for (x=0; x<list_len; x++) {
+        for (x = 0; x < list_len; x++) {
             const char *use = NULL;
 
             /* this is a special-use flag */
@@ -1592,7 +1581,7 @@ envelope_err:
 
  alldone:
 
-    *ip=i;
+    *ip = i;
     return res;
 }
 
@@ -1628,6 +1617,17 @@ void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
     free(strarray_takevf(strlist));
 }
 
+const char *priority_to_string(int priority)
+{
+    switch (priority) {
+    case B_LOW:    return "low";
+    case B_NORMAL: return "normal";
+    case B_HIGH:   return "high";
+    case B_ANY:    return "any";
+    default:       return NULL;
+    }
+}
+
 
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
@@ -1635,8 +1635,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   action_list_t *actions, notify_list_t *notify_list,
                   duptrack_list_t *duptrack_list, const char **errmsg)
 {
-    const char *data;
-    int res=0;
+    int res = 0;
     int op;
     int version;
     int requires = 0;
@@ -1655,8 +1654,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
      * a) have bytecode
      * b) it is atleast long enough for the magic number, the version
      *    and one opcode */
-    if(!bc) return SIEVE_FAIL;
-    if(bc_cur->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
+    if (!bc) return SIEVE_FAIL;
+    if (bc_cur->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
        return SIEVE_FAIL;
 
     ip = bc_header_parse(bc, &version, &requires);
@@ -1669,7 +1668,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
        order.  all the scripts written then would have version 0x01 written
        in host byte order.*/
 
-     if(version == (int)ntohl(1)) {
+     if (version == (int) ntohl(1)) {
         if(errmsg) {
             *errmsg =
                 "Incorrect Bytecode Version, please recompile (use sievec)";
@@ -1678,8 +1677,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         return SIEVE_FAIL;
     }
 
-    if((version < BYTECODE_MIN_VERSION) || (version > BYTECODE_VERSION)) {
-        if(errmsg) {
+    if ((version < BYTECODE_MIN_VERSION) || (version > BYTECODE_VERSION)) {
+        if (errmsg) {
             *errmsg =
                 "Incorrect Bytecode Version, please recompile (use sievec)";
         }
@@ -1692,29 +1691,25 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
     while (ip < ip_max) {
         commandlist_t cmd;
-        int list = 0;
-        int copy = 0;
-        int create = 0;
-        const char *specialuse = NULL;
         strarray_t *actionflags = NULL;
         variable_list_t *variable = NULL;
 
         ip = bc_action_parse(bc, ip, version, &cmd);
         op = cmd.type;
 
-        switch(op) {
-        case B_STOP:/*0*/
-            res=1;
+        switch (op) {
+        case B_STOP:
+            res = 1;
             break;
 
-        case B_KEEP:/*35*/
-        case B_KEEP_COPY:/*22*/
+
+        case B_KEEP:
+        case B_KEEP_COPY:
+        case B_KEEP_ORIG:
             unwrap_flaglist(cmd.u.k.flags, &actionflags,
                             (requires & BFE_VARIABLES) ? variables: NULL);
 
-            /* fall through */
-        case B_KEEP_ORIG:/*1*/
-            /* if there's no :flags parameter, use the internal flags var*/
+            /* if there's no :flags parameter, use the internal flags var */
             if (!actionflags) {
                 actionflags = strarray_dup(variables->var);
             }
@@ -1722,66 +1717,60 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             res = do_keep(actions, actionflags);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
+
             actionflags = NULL;
             break;
 
-        case B_DISCARD:/*2*/
-            res=do_discard(actions);
+
+        case B_DISCARD:
+            res = do_discard(actions);
             break;
 
-        case B_REJECT:/*3*/
-        case B_EREJECT:/*31*/
-            data = cmd.u.str;
+
+        case B_REJECT:
+        case B_EREJECT:
+        {
+            const char *reason = cmd.u.str;
 
             if (requires & BFE_VARIABLES) {
-                data = parse_string(data, variables);
+                reason = parse_string(reason, variables);
             }
 
             res = do_reject(actions,
                             (op == B_EREJECT) ? ACTION_EREJECT : ACTION_REJECT,
-                            data);
+                            reason);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "[e]Reject can not be used with any other action";
 
             break;
+        }
 
-        case B_FILEINTO:/*38*/
-            specialuse = cmd.u.f.specialuse;
+
+        case B_FILEINTO:
+        case B_FILEINTO_CREATE:
+        case B_FILEINTO_FLAGS:
+        case B_FILEINTO_COPY:
+        case B_FILEINTO_ORIG:
+        {
+            const char *folder = cmd.u.f.folder;
+            const char *specialuse = cmd.u.f.specialuse;
 
             if (requires & BFE_VARIABLES) {
+                folder = parse_string(folder, variables);
                 specialuse = parse_string(specialuse, variables);
             }
 
-            /* fall through */
-        case B_FILEINTO_CREATE:/*24*/
-            create = cmd.u.f.create;
-
-            /* fall through */
-        case B_FILEINTO_FLAGS:/*23*/
             unwrap_flaglist(cmd.u.f.flags, &actionflags,
                             (requires & BFE_VARIABLES) ? variables: NULL);
 
-            /* fall through */
-        case B_FILEINTO_COPY:/*19*/
-            copy = cmd.u.f.copy;
-
-            /* fall through */
-        case B_FILEINTO_ORIG:/*4*/
-        {
-            /* if there's no :flags parameter, use the internal flags var*/
+            /* if there's no :flags parameter, use the internal flags var */
             if (!actionflags) {
                 actionflags = strarray_dup(variables->var);
             }
 
-            data = cmd.u.f.folder;
-
-            if (requires & BFE_VARIABLES) {
-                data = parse_string(data, variables);
-            }
-
-            res = do_fileinto(actions, data, specialuse,
-                              !copy, create, actionflags);
+            res = do_fileinto(actions, folder, specialuse,
+                              !cmd.u.f.copy, cmd.u.f.create, actionflags);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -1790,23 +1779,18 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_REDIRECT:/*32*/
-            list = cmd.u.r.list;
 
-            /* fall through */
-        case B_REDIRECT_COPY:/*20*/
-            copy = cmd.u.r.copy;
-
-            /* fall through */
-        case B_REDIRECT_ORIG:/*5*/
+        case B_REDIRECT:
+        case B_REDIRECT_COPY:
+        case B_REDIRECT_ORIG:
         {
-            data = cmd.u.r.address;
+            const char *address = cmd.u.r.address;
 
             if (requires & BFE_VARIABLES) {
-                data = parse_string(data, variables);
+                address = parse_string(address, variables);
             }
 
-            res = do_redirect(actions, data, list, !copy);
+            res = do_redirect(actions, address, cmd.u.r.list, !cmd.u.r.copy);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Redirect can not be used with Reject";
@@ -1814,168 +1798,129 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_IF:/*6*/
+
+        case B_IF:
         {
             int testend = cmd.u.i.testend;
             int result;
 
-            result=eval_bc_test(i, m, sc, bc, &ip, variables,
+            result = eval_bc_test(i, m, sc, bc, &ip, variables,
                                 duptrack_list, version, requires);
 
-            if (result<0) {
+            if (result < 0) {
                 *errmsg = "Invalid test";
                 return SIEVE_FAIL;
             } else if (result) {
-                /*skip over jump instruction*/
-                testend+=2;
+                /* skip over jump instruction */
+                testend += 2;
             }
-            ip=testend;
 
+            ip = testend;
             break;
         }
 
-        case B_MARK:/*7*/
+
+        case B_MARK:
         {
             int n = i->markflags->count;
+
             while (n) {
                 strarray_add_case(variables->var, i->markflags->data[--n]);
             }
-        }
             break;
+        }
 
-        case B_UNMARK:/*8*/
+
+        case B_UNMARK:
         {
             int n = i->markflags->count;
+
             while (n) {
                 strarray_remove_all_case(variables->var,
-                        i->markflags->data[--n]);
+                                         i->markflags->data[--n]);
             }
+            break;
         }
-            break;
 
-        case B_ADDFLAG:/*26*/
-            /* get the variable name */
-            data = cmd.u.fl.variable;
+
+        case B_ADDFLAG:
+        case B_SETFLAG:
+        case B_REMOVEFLAG:
             /* RFC 5229, 3. Interpretation of Strings
-               Strings where no variable substitutions take place are referred to as
-               constant strings.  Future extensions may specify that passing non-
-               constant strings as arguments to its actions or tests is an error.
+               Strings where no variable substitutions take place are
+               referred to as constant strings.  Future extensions may
+               specify that passing non-constant strings as arguments
+               to its actions or tests is an error.
 
-               The name MUST be a constant string and conform
-               to the syntax of variable-name.
+               The name MUST be a constant string and conform to the
+               syntax of variable-name.
                (this is done in the parser in sieve.y)
             */
 
             /* select or create the variable */
-            variable = varlist_select(variables, data);
+            variable = varlist_select(variables, cmd.u.fl.variable);
             if (variable) {
                 actionflags = variable->var;
-            } else {
-                actionflags = (variable = varlist_extend(variables))->var;
-                variable->name = xstrdup(data);
-            }
-
-            /* fall through */
-        case B_ADDFLAG_ORIG:/*9*/
-            if (!actionflags) {
-                actionflags = variables->var;
-            }
-
-            unwrap_flaglist(cmd.u.fl.flags, &actionflags,
-                            (requires & BFE_VARIABLES) ? variables: NULL);
-            break;
-
-        case B_SETFLAG:/*27*/
-            /* get the variable name */
-            data = cmd.u.fl.variable;
-            /* RFC 5229, 3. Interpretation of Strings
-               Strings where no variable substitutions take place are referred to as
-               constant strings.  Future extensions may specify that passing non-
-               constant strings as arguments to its actions or tests is an error.
-
-               The name MUST be a constant string and conform
-               to the syntax of variable-name.
-               (this is done in the parser in sieve.y)
-            */
-
-            /* select or create the variable */
-            variable = varlist_select(variables, data);
-            if (variable) {
-                actionflags = variable->var;
-            } else {
-                actionflags = (variable = varlist_extend(variables))->var;
-                variable->name = xstrdup(data);
-            }
-
-            /* fall through */
-        case B_SETFLAG_ORIG:/*10*/
-            if (!actionflags) {
-                actionflags = variables->var;
-            }
-
-            strarray_fini(actionflags);
-
-            unwrap_flaglist(cmd.u.fl.flags, &actionflags,
-                            (requires & BFE_VARIABLES) ? variables: NULL);
-            break;
-
-        case B_REMOVEFLAG:/*28*/
-            /* get the variable name */
-            data = cmd.u.fl.variable;
-            /* RFC 5229, 3. Interpretation of Strings
-               Strings where no variable substitutions take place are referred to as
-               constant strings.  Future extensions may specify that passing non-
-               constant strings as arguments to its actions or tests is an error.
-
-               The name MUST be a constant string and conform
-               to the syntax of variable-name.
-               (this is done in the parser in sieve.y)
-            */
-
-            /* select or create the variable */
-            variable = varlist_select(variables, data);
-            if (variable) {
-                actionflags = variable->var;
-            } else {
+            } else if (op == B_REMOVEFLAG) {
                 /* variable doesn't exist, so we're done */
                 break;
+            } else {
+                actionflags = (variable = varlist_extend(variables))->var;
+                variable->name = xstrdup(cmd.u.fl.variable);
             }
 
-            /* fall through */
-        case B_REMOVEFLAG_ORIG:/*11*/
-        {
-            strarray_t *temp = NULL;
-            int x;
+            GCC_FALLTHROUGH
 
+        case B_ADDFLAG_ORIG:
+        case B_SETFLAG_ORIG:
+        case B_REMOVEFLAG_ORIG:
             if (!actionflags) {
                 actionflags = variables->var;
             }
 
-            unwrap_flaglist(cmd.u.fl.flags, &temp,
-                            (requires & BFE_VARIABLES) ? variables: NULL);
+            switch (op) {
+            case B_SETFLAG:
+            case B_SETFLAG_ORIG:
+                strarray_fini(actionflags);
 
-            for (x = 0; x < strarray_size(temp); x++) {
-                strarray_remove_all(actionflags, strarray_nth(temp, x));
+                GCC_FALLTHROUGH
+
+            case B_ADDFLAG:
+            case B_ADDFLAG_ORIG:
+                unwrap_flaglist(cmd.u.fl.flags, &actionflags,
+                                (requires & BFE_VARIABLES) ? variables: NULL);
+                break;
+
+            case B_REMOVEFLAG:
+            case B_REMOVEFLAG_ORIG:
+            {
+                strarray_t *temp = NULL;
+                int x;
+
+                unwrap_flaglist(cmd.u.fl.flags, &temp,
+                                (requires & BFE_VARIABLES) ? variables: NULL);
+
+                for (x = 0; x < strarray_size(temp); x++) {
+                    strarray_remove_all(actionflags, strarray_nth(temp, x));
+                }
+
+                strarray_free(temp);
+
+                break;
             }
-
-            strarray_free(temp);
-
+            }
             break;
-        }
 
-        case B_ENOTIFY:/*33*/
-        case B_NOTIFY:/*12*/
+        case B_ENOTIFY:
+        case B_NOTIFY:
         {
-            const char *id = NULL;
-            const char *from = NULL;
-            const char *method;
-            const char **options = NULL;
-            const char *priority = NULL;
-            const char *message;
-            int pri;
+            const char *message = cmd.u.n.message;
+            const char *priority = priority_to_string(cmd.u.n.priority);
 
-            /* method */
-            method = cmd.u.n.method;
+            if (!priority) {
+                res = SIEVE_RUN_ERROR;
+                break;
+            }
 
             /* RFC 5435 (Sieve Extension: Notifications)
              * Section 8. Security Considerations
@@ -1984,276 +1929,176 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
              * the "notify" action.
              */
 
-            if (op == B_ENOTIFY) {
-                /* from */
-                from = cmd.u.n.from;
-            }
-            else {
-                /* id */
-                id = cmd.u.n.id;
-            }
-
-            /*options*/
-            options = (const char **) strarray_takevf(cmd.u.n.options);
-
-            /* priority */
-            pri = cmd.u.n.priority;
-
-            switch (pri)
-            {
-            case B_LOW:
-                priority="low";
-                break;
-            case B_NORMAL:
-                priority="normal";
-                break;
-            case B_HIGH:
-                priority="high";
-                break;
-            case B_ANY:
-                priority="any";
-                break;
-            default:
-                res=SIEVE_RUN_ERROR;
-            }
-
-            /* message */
-            message = cmd.u.n.message;
-
             if (requires & BFE_VARIABLES) {
                 message = parse_string(message, variables);
             }
 
-            res = do_notify(notify_list, id, from, method, options,
+            res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, cmd.u.n.method,
+                            (const char **) strarray_takevf(cmd.u.n.options),
                             priority, message);
 
             break;
         }
-        case B_DENOTIFY:/*13*/
+
+
+        case B_DENOTIFY:
         {
-         /*
-          * i really have no idea what the count matchtype should do here.
-          * the sanest thing would be to use 1.
-          * however that would require passing on the match type to do_notify.
-          *  -jsmith2
-          */
+            /*
+             * i really have no idea what the count matchtype should do here.
+             * the sanest thing would be to use 1.
+             * however that would require passing on the match type to do_notify.
+             *  -jsmith2
+             */
 
             comparator_t *comp = NULL;
-
-            const char *pattern;
-
-            const char *priority = NULL;
+            const char *pattern = cmd.u.d.pattern;
+            const char *priority = priority_to_string(cmd.u.n.priority);
             void *comprock = NULL;
             strarray_t *match_vars = NULL;
+            int comparator = cmd.u.d.comp.match;
+            regex_t *reg = NULL;
 
-            int comparator;
-            int pri;
-
-            pri = cmd.u.d.priority;
-
-            switch (pri)
-            {
-            case B_LOW:
-                priority="low";
+            if (!priority) {
+                res = SIEVE_RUN_ERROR;
                 break;
-            case B_NORMAL:
-                priority="normal";
-                break;
-            case B_HIGH:
-                priority="high";
-                break;
-            case B_ANY:
-                priority="any";
-                break;
-            default:
-                res=SIEVE_RUN_ERROR;
             }
 
-            if(res == SIEVE_RUN_ERROR)
-                break;
-
-            comparator = cmd.u.d.comp.match;
-
-            if (comparator == B_ANY)
-            {
-                comp=NULL;
+            if (comparator == B_ANY) {
+                comp = NULL;
             } else {
-                int x = cmd.u.d.comp.relation;
-
                 comp=lookup_comp(i, B_ASCIICASEMAP, comparator,
-                                 x, &comprock);
+                                 cmd.u.d.comp.relation, &comprock);
                 match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
             }
 
-            pattern = cmd.u.d.pattern;
 
 	    /* draft-ietf-sieve-notify-12:
 	     * Changes since draft-ietf-sieve-notify-00
 	     * Removed denotify action. */
 	  
-            if (comparator == B_REGEX)
-            {
+            if (comparator == B_REGEX) {
                 char errmsg[1024]; /* Basically unused */
 
-                regex_t *reg = bc_compile_regex(pattern,
-                                                REG_EXTENDED | REG_NOSUB | REG_ICASE,
-                                                errmsg, sizeof(errmsg));
+                reg = bc_compile_regex(pattern,
+                                       REG_EXTENDED | REG_NOSUB | REG_ICASE,
+                                       errmsg, sizeof(errmsg));
                 if (!reg) {
                     res = SIEVE_RUN_ERROR;
-                } else {
-                    res = do_denotify(notify_list, comp, reg,
-                                      match_vars, comprock, priority);
-                    regfree(reg);
-                    free(reg);
+                    break;
                 }
-            } else {
-                res = do_denotify(notify_list, comp, pattern,
-                                  match_vars, comprock, priority);
             }
 
+            res = do_denotify(notify_list, comp, reg,
+                              match_vars, comprock, priority);
+
+            if (reg) {
+                regfree(reg);
+                free(reg);
+            }
             break;
         }
-        case B_VACATION_ORIG:/*14*/
-        case B_VACATION_SEC:/*21*/
-        case B_VACATION_FCC:/*36*/
-        case B_VACATION:/*37*/
+
+
+        case B_VACATION_ORIG:
+        case B_VACATION_SEC:
+        case B_VACATION_FCC:
+        case B_VACATION:
         {
             int respond;
-            sieve_fileinto_context_t fcc = { NULL, NULL, NULL, 0 };
+            sieve_fileinto_context_t fcc = {
+                cmd.u.v.fcc.folder,
+                cmd.u.v.fcc.specialuse,
+                NULL,
+                cmd.u.v.fcc.create
+            };
             char *fromaddr = NULL; /* relative to message we send */
-            char *toaddr = NULL; /* relative to message we send */
-            const char *handle = NULL;
-            const char *message = NULL;
-            int seconds, mime;
-            char buf[128];
-            char subject[1024];
+            char *toaddr = NULL;   /* relative to message we send */
+            const char *from = cmd.u.v.from;
+            const char *handle = cmd.u.v.handle;
+            const char *message = cmd.u.v.message;
+            char *subject = cmd.u.v.subject;
+            int seconds = cmd.u.v.seconds * ((op == B_VACATION_ORIG) ? DAY2SEC : 1);
+            int mime = cmd.u.v.mime;
 
             respond = shouldRespond(m, i, cmd.u.v.addresses,
 				    &fromaddr, &toaddr, variables, requires);
 
-            if (respond==SIEVE_OK)
-            {
-                data = cmd.u.v.subject;
-
-                if (requires & BFE_VARIABLES) {
-                    data = parse_string(data, variables);
-                }
-
-                if (!data)
-                {
-                    /* we have to generate a subject */
-                    const char **s;
-                    strlcpy(buf, "subject", sizeof(buf));
-                    if (i->getheader(m, buf, &s) != SIEVE_OK ||
-                        s[0] == NULL) {
-                        strlcpy(subject, "Automated reply", sizeof(subject));
-                    } else {
-                        /* s[0] contains the original subject */
-                        const char *origsubj = s[0];
-                        snprintf(subject, sizeof(subject), "Auto: %s", origsubj);
-                    }
-                } else {
-                    /* user specified subject */
-                    strlcpy(subject, data, sizeof(subject));
-                }
-
-                message = cmd.u.v.message;
-
-                if (requires & BFE_VARIABLES) {
-                    message = parse_string(message, variables);
-                }
-
-                seconds = cmd.u.v.seconds;
-                if (op == B_VACATION_ORIG) {
-                    seconds *= DAY2SEC;
-                }
-                mime = cmd.u.v.mime;
-
-                if (version >= 0x05) {
-                    data = cmd.u.v.from;
-
-                    if (requires & BFE_VARIABLES) {
-                        data = parse_string(data, variables);
-                    }
-
-                    if (data) {
-                        /* user specified from address */
-                        free(fromaddr);
-                        fromaddr = xstrdup(data);
-                    }
-
-                    data = cmd.u.v.handle;
-
-                    if (requires & BFE_VARIABLES) {
-                        data = parse_string(data, variables);
-                    }
-
-                    if (data) {
-                        /* user specified handle */
-                        handle = data;
-                    }
-
-                    if (op == B_VACATION || op == B_VACATION_FCC) {
-                        data = cmd.u.v.fcc.folder;
-
-                        if (data && data[0]) {
-                            /* user specified fcc mailbox */
-                            if (requires & BFE_VARIABLES) {
-                                data = parse_string(data, variables);
-                            }
-
-                            fcc.mailbox = data;
-                            fcc.do_create = cmd.u.v.fcc.create;
-                            unwrap_flaglist(cmd.u.v.fcc.flags, &fcc.imapflags,
-                                            (requires & BFE_VARIABLES) ?
-                                            variables : NULL);
-
-                            if (op == B_VACATION) {
-                                fcc.specialuse = cmd.u.v.fcc.specialuse;
-
-                                if (requires & BFE_VARIABLES) {
-                                    fcc.specialuse =
-                                        parse_string(fcc.specialuse, variables);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                res = do_vacation(actions, toaddr, fromaddr, xstrdup(subject),
-                                  message, seconds, mime, handle, &fcc);
-
-                if (res == SIEVE_RUN_ERROR)
-                    *errmsg = "Vacation can not be used with Reject or Vacation";
-            } else if (respond == SIEVE_DONE) {
+            if (respond != SIEVE_OK) {
                 if (cmd.u.v.fcc.flags) free(strarray_takevf(cmd.u.v.fcc.flags));
-            } else {
-                res = SIEVE_RUN_ERROR; /* something is bad */
+
+                if (respond != SIEVE_DONE) {
+                    res = SIEVE_RUN_ERROR; /* something is bad */
+                }
+                break;
             }
+
+            if (requires & BFE_VARIABLES) {
+                from = parse_string(from, variables);
+                handle = parse_string(handle, variables);
+                message = parse_string(message, variables);
+                subject = xstrdupnull(parse_string(subject, variables));
+
+                fcc.mailbox = parse_string(fcc.mailbox, variables);
+                fcc.specialuse = parse_string(fcc.specialuse, variables);
+            }
+
+            unwrap_flaglist(cmd.u.v.fcc.flags, &fcc.imapflags,
+                            (requires & BFE_VARIABLES) ? variables : NULL);
+
+            if (!subject) {
+                /* we have to generate a subject */
+                struct buf buf = BUF_INITIALIZER;
+                const char **s;
+
+                if (i->getheader(m, "subject", &s) != SIEVE_OK || s[0] == NULL) {
+                    buf_setcstr(&buf, "Automated reply");
+                } else {
+                    /* s[0] contains the original subject */
+                    const char *origsubj = s[0];
+                    buf_printf(&buf, "Auto: %s", origsubj);
+                }
+
+                subject = buf_release(&buf);
+            }
+
+            if (from) {
+                /* user specified from address */
+                free(fromaddr);
+                fromaddr = xstrdup(from);
+            }
+
+            res = do_vacation(actions, toaddr, fromaddr, subject,
+                              message, seconds, mime, handle, &fcc);
+
+            if (res == SIEVE_RUN_ERROR)
+                *errmsg = "Vacation can not be used with Reject or Vacation";
 
             break;
         }
-        case B_NULL:/*15*/
+
+
+        case B_NULL:
             break;
 
-        case B_JUMP:/*16*/
+
+        case B_JUMP:
             ip = cmd.u.jump;
             break;
 
-        case B_INCLUDE:/*17*/
+
+        case B_INCLUDE:
         {
+            const char *script = cmd.u.inc.script;
             int isglobal = cmd.u.inc.location == B_GLOBAL;
             int once = cmd.u.inc.once;
             int isoptional = cmd.u.inc.optional;
             char fpath[4096];
 
-            data = cmd.u.inc.script;
-
             if (requires & BFE_VARIABLES) {
-                data = parse_string(data, variables);
+                script = parse_string(script, variables);
             }
 
-            res = i->getinclude(sc, data, isglobal, fpath, sizeof(fpath));
+            res = i->getinclude(sc, script, isglobal, fpath, sizeof(fpath));
             if (res != SIEVE_OK) {
                 if (isoptional == 0)
                     *errmsg = "Include can not find script";
@@ -2280,20 +2125,21 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_RETURN:/*18*/
+        case B_RETURN:
             if (is_incl)
                 goto done;
             else
-                res=1;
+                res = 1;
             break;
 
-        case B_SET:/*25*/
+
+        case B_SET:
         {
+            const char *name = cmd.u.s.variable;
+            const char *value = cmd.u.s.value;
             int modifiers = cmd.u.s.mod40 | cmd.u.s.mod30 |
                 cmd.u.s.mod20 | cmd.u.s.mod15 | cmd.u.s.mod10;
 
-            /* get the variable name */
-            data = cmd.u.s.variable;
 	    /* RFC 5229, 3. Interpretation of Strings
                Strings where no variable substitutions take place are referred to as
                constant strings.  Future extensions may specify that passing non-
@@ -2305,21 +2151,18 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             */
 
             /* select or create the variable */
-            variable = varlist_select(variables, data);
+            variable = varlist_select(variables, name);
             if (variable) {
                 actionflags = variable->var;
             } else {
                 actionflags = (variable = varlist_extend(variables))->var;
-                variable->name = xstrdup(data);
+                variable->name = xstrdup(name);
             }
 
-            /* get the variable value */
-            data = cmd.u.s.value;
-
             strarray_fini(variable->var);
-            data = parse_string(data, variables);
+            value = parse_string(value, variables);
             strarray_appendm(variable->var,
-                             variables_modify_string(data, modifiers));
+                             variables_modify_string(value, modifiers));
 #if VERBOSE
 	    printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
 #endif
@@ -2327,13 +2170,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_ADDHEADER:/*29*/
+        case B_ADDHEADER:
         {
-            const char *name, *value, *h;
+            const char *name = cmd.u.ah.name;
+            const char *value = cmd.u.ah.value;
+            const char *h;
             int index = cmd.u.ah.index;
-
-            /* get the header name */
-            name = cmd.u.ah.name;
 
             if (requires & BFE_VARIABLES) {
                 name = parse_string(name, variables);
@@ -2352,9 +2194,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
             }
             
-            /* get the header value */
-            value = cmd.u.ah.value;
-
             if (requires & BFE_VARIABLES) {
                 value = parse_string(value, variables);
             }
@@ -2363,16 +2202,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_DELETEHEADER:/*30*/
+        case B_DELETEHEADER:
         {
-            const char *name;
+            const char *name = cmd.u.dh.name;
             int index = cmd.u.dh.comp.index;
             int match = cmd.u.dh.comp.match;
             int relation = cmd.u.dh.comp.relation;
             int comparator = cmd.u.dh.comp.collation;
             comparator_t *comp = NULL;
             void *comprock = NULL;
-            int npat;
+            int npat = strarray_size(cmd.u.dh.values);
 
             /* find comparator function */
             comp = lookup_comp(i, comparator, match, relation, &comprock);
@@ -2380,9 +2219,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 res = SIEVE_RUN_ERROR;
                 break;
             }
-
-            /* get the header name */
-            name = cmd.u.dh.name;
 
             if (requires & BFE_VARIABLES) {
                 name = parse_string(name, variables);
@@ -2392,9 +2228,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 /* MUST NOT delete -- ignore */
                 name = NULL;
             }
-
-            /* get number of value patterns */
-            npat = strarray_size(cmd.u.dh.values);
 
             if (!npat) {
                 if (name) i->deleteheader(sc, m, name, index);
@@ -2499,11 +2332,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_ERROR:/*33*/
-            data = cmd.u.str;
-
+        case B_ERROR:
             res = SIEVE_RUN_ERROR;
-            *errmsg = data;
+            *errmsg = cmd.u.str;
 
             break;
 
@@ -2512,8 +2343,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             return SIEVE_FAIL;
         }
 
-        if (res) /* we've either encountered an error or a stop */
-            break;
+        if (res) break;  /* we've either encountered an error or a stop */
     }
 
   done:
