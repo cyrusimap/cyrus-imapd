@@ -1869,6 +1869,9 @@ EXPORTED const char *charset_name(charset_t charset)
 {
     const char *name;
 
+    if (!charset)
+            goto done;
+
     if (charset->name)
         return charset->name;
 
@@ -1881,6 +1884,7 @@ EXPORTED const char *charset_name(charset_t charset)
         return chartables_charset_table[charset->num].name;
     }
 
+done:
     return "unknown";
 }
 
