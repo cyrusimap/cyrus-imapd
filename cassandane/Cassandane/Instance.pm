@@ -1647,7 +1647,7 @@ sub _fork_command
     setrlimit(RLIMIT_CORE, 100*1024*1024, 100*1024*1024); # 100MB
 
     # let's log our rlimits, might be useful for diagnosing weirdnesses
-    if (get_verbose()) {
+    if (get_verbose() >= 4) {
 	my $limits = get_rlimits();
 	foreach my $name (keys %{$limits}) {
 	    $limits->{$name} = [ getrlimit($limits->{$name}) ];
