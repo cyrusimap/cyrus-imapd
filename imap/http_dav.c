@@ -10039,7 +10039,7 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
     int isadmin;
 
     if ((rights & DACL_SHARE) != DACL_SHARE) return;  /* not shared */
-    if (!strcmp(userid, irock->owner)) return;  /* user is owner */
+    if (!strcmpnull(userid, irock->owner)) return;  /* user is owner */
 
     authstate = auth_newstate(userid);
     isadmin = global_authisa(authstate, IMAPOPT_ADMINS);
