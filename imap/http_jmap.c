@@ -789,6 +789,7 @@ static int jmap_post(struct transaction_t *txn,
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.is_shared_account = strcmp(accountid, httpd_userid);
+        req.force_openmbox_rw = 0;
 
         /* Initialize request context */
         jmap_initreq(&req);
