@@ -308,6 +308,7 @@ sub test_fetch_after_annotate
 }
 
 sub test_annotator_callout_disabled
+    :min_version_3_1
 {
     my ($self) = @_;
     $self->{instance}->{config}->set(annotation_callout_disable_append => 'yes');

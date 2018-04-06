@@ -59,7 +59,11 @@ use charnames ':full';
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({}, @args);
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(caldav_historical_age => -1);
+    return $class->SUPER::new({
+        config => $config,
+                              }, @args);
 }
 
 sub set_up
