@@ -9860,7 +9860,7 @@ done:
     return 0;
 }
 
-static int _msgsub_address_parse(json_t *addr, const char *prefix, json_t *invalid)
+static int _emailsubmission_address_parse(json_t *addr, const char *prefix, json_t *invalid)
 {
     struct buf buf = BUF_INITIALIZER;
     int is_valid = 0;
@@ -9914,7 +9914,7 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
     }
 }
 
-static void _msgsub_envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *env)
+static void _emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *env)
 {
     address_to_smtp(&smtpenv->from, json_object_get(env, "mailFrom"));
     size_t i;
@@ -9926,14 +9926,14 @@ static void _msgsub_envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *env)
     }
 }
 
-static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
+static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
                           json_t *invalid, json_t **err)
 {
     struct buf buf = BUF_INITIALIZER;
 
     /* messageId */
     const char *msgid = NULL;
-    if (readprop(msgsub, "emailId", 1, invalid, "s", &msgid) > 0) {
+    if (readprop(emailsubmission, "emailId", 1, invalid, "s", &msgid) > 0) {
         if (*msgid == '#') {
             const char *id = hash_lookup(msgid + 1, &req->idmap->messages);
             if (id) {
@@ -9946,18 +9946,18 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
 
     /* identityId */
     const char *identityid = NULL;
-    if (readprop(msgsub, "identityId", 1, invalid, "s", &identityid) > 0) {
+    if (readprop(emailsubmission, "identityId", 1, invalid, "s", &identityid) > 0) {
         if (strcmp(identityid, req->userid)) {
             json_array_append_new(invalid, json_string("identityId"));
         }
     }
 
     /* envelope */
-    json_t *envelope = json_object_get(msgsub, "envelope");
+    json_t *envelope = json_object_get(emailsubmission, "envelope");
     if (JNOTNULL(envelope)) {
         json_t *from = json_object_get(envelope, "mailFrom");
         if (json_object_size(from)) {
-            _msgsub_address_parse(from, "envelope.mailFrom", invalid);
+            _emailsubmission_address_parse(from, "envelope.mailFrom", invalid);
         }
         else {
             json_array_append_new(invalid, json_string("envelope.mailFrom"));
@@ -9968,7 +9968,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
             json_t *addr;
             json_array_foreach(rcpt, i, addr) {
                 buf_printf(&buf, "envelope.rcptTo[%zu]", i);
-                _msgsub_address_parse(addr, buf_cstring(&buf), invalid);
+                _emailsubmission_address_parse(addr, buf_cstring(&buf), invalid);
                 buf_reset(&buf);
             }
         }
@@ -9980,25 +9980,25 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
     }
 
     /* Reject read-only properties */
-    if (json_object_get(msgsub, "id")) {
+    if (json_object_get(emailsubmission, "id")) {
         json_array_append_new(invalid, json_string("id"));
     }
-    if (json_object_get(msgsub, "threadId")) {
+    if (json_object_get(emailsubmission, "threadId")) {
         json_array_append_new(invalid, json_string("threadId"));
     }
-    if (json_object_get(msgsub, "sendAt")) {
+    if (json_object_get(emailsubmission, "sendAt")) {
         json_array_append_new(invalid, json_string("sendAt"));
     }
-    if (json_object_get(msgsub, "undoStatus")) {
+    if (json_object_get(emailsubmission, "undoStatus")) {
         json_array_append_new(invalid, json_string("undoStatus"));
     }
-    if (json_object_get(msgsub, "deliveryStatus")) {
+    if (json_object_get(emailsubmission, "deliveryStatus")) {
         json_array_append_new(invalid, json_string("deliveryStatus"));
     }
-    if (json_object_get(msgsub, "dsnBlobIds")) {
+    if (json_object_get(emailsubmission, "dsnBlobIds")) {
         json_array_append_new(invalid, json_string("dsnBlobIds"));
     }
-    if (json_object_get(msgsub, "mdnBlobIds")) {
+    if (json_object_get(emailsubmission, "mdnBlobIds")) {
         json_array_append_new(invalid, json_string("mdnBlobIds"));
     }
 
@@ -10136,7 +10136,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
 
     /* Prepare envelope */
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
-    _msgsub_envelope_to_smtp(&smtpenv, envelope);
+    _emailsubmission_envelope_to_smtp(&smtpenv, envelope);
 
     /* Send message */
     struct protstream *data = prot_new(fd_msg, /*write*/0);
@@ -10152,10 +10152,10 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
     }
 
     /* All done */
-    char *msgsub_id = NULL;
-    msgsub_id = xstrdup(makeuuid());
-    json_object_set_new(msgsub, "id", json_string(msgsub_id));
-    free(msgsub_id);
+    char *emailsubmission_id = NULL;
+    emailsubmission_id = xstrdup(makeuuid());
+    json_object_set_new(emailsubmission, "id", json_string(emailsubmission_id));
+    free(emailsubmission_id);
 
 done:
     if (fd_msg != -1) close(fd_msg);
@@ -10274,15 +10274,15 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_t *created = json_pack("{}");
         json_t *notCreated = json_pack("{}");
         const char *key;
-        json_t *msgsub;
+        json_t *emailsubmission;
 
-        json_object_foreach(create, key, msgsub) {
+        json_object_foreach(create, key, emailsubmission) {
             json_t *invalid = json_pack("[]");
 
             /* Create the message submission or return on error. Process
              * errors in order of: fatal errors, setErrors, property errors */
             json_t *err = NULL;
-            r = _msgsub_create(req, msgsub, invalid, &err);
+            r = _emailsubmission_create(req, emailsubmission, invalid, &err);
             if (err) {
                 json_object_set_new(notCreated, key, err);
                 json_decref(invalid);
@@ -10307,14 +10307,14 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             json_decref(invalid);
 
             /* Report this message submission as created */
-            const char *id = json_string_value(json_object_get(msgsub, "id"));
+            const char *id = json_string_value(json_object_get(emailsubmission, "id"));
             json_object_set_new(created, key, json_pack("{s:s}", "id", id));
 
             /* Build its creation id */
             buf_setcstr(&buf, "#");
             buf_appendcstr(&buf, key);
             buf_cstring(&buf);
-            const char *msgid = json_string_value(json_object_get(msgsub, "emailId"));
+            const char *msgid = json_string_value(json_object_get(emailsubmission, "emailId"));
 
             /* Process onSuccessUpdateEmail */
             json_t *msg = json_object_get(onsuccess_update, buf_cstring(&buf));
@@ -10348,9 +10348,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_t *updated = json_pack("{}");
         json_t *notUpdated = json_pack("{}");
         const char *id;
-        json_t *msgsub;
+        json_t *emailsubmission;
 
-        json_object_foreach(update, id, msgsub) {
+        json_object_foreach(update, id, emailsubmission) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(notUpdated, id, err);
             r = 0;
@@ -10491,7 +10491,7 @@ done:
     return 0;
 }
 
-static void _msgsub_parse_filter(json_t *filter, struct jmap_parser *parser,
+static void _emailsubmission_parse_filter(json_t *filter, struct jmap_parser *parser,
                                  json_t *unsupported __attribute__((unused)),
                                  void *rock __attribute__((unused)))
 {
@@ -10547,7 +10547,7 @@ static void _msgsub_parse_filter(json_t *filter, struct jmap_parser *parser,
 }
 
 
-static int _msgsub_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _emailsubmission_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
 {
     if (comp->collation) {
         return 0;
@@ -10568,8 +10568,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            _msgsub_parse_filter, NULL,
-            _msgsub_parse_comparator, NULL,
+            _emailsubmission_parse_filter, NULL,
+            _emailsubmission_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -10599,8 +10599,8 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            _msgsub_parse_filter, NULL,
-            _msgsub_parse_comparator, NULL,
+            _emailsubmission_parse_filter, NULL,
+            _emailsubmission_parse_comparator, NULL,
             &query, &err);
     if (err) {
         jmap_error(req, err);
