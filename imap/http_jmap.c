@@ -1070,6 +1070,10 @@ static int _findblob(jmap_req_t *req, const char *blobid,
             goto done;
         }
     }
+    else if (mybody) {
+        /* Found blob is top-level body */
+        mypart = mybody;
+    }
 
     *mbox = data.mbox;
     *mr = data.mr;

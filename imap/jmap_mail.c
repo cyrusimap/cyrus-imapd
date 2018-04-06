@@ -154,6 +154,23 @@ struct jmap_get {
     json_t *not_found;
 };
 
+struct jmap_set {
+    /* Request arguments */
+    const char *if_in_state;
+    json_t *create;
+    json_t *update;
+    json_t *destroy;
+    /* Response fields */
+    char *old_state;
+    char *new_state;
+    json_t *created;
+    json_t *updated;
+    json_t *destroyed;
+    json_t *not_created;
+    json_t *not_updated;
+    json_t *not_destroyed;
+};
+
 struct jmap_changes {
     /* Request arguments */
     const char *since_state;
@@ -220,7 +237,7 @@ static void jmap_parser_push_index(struct jmap_parser *parser,
                                    const char *prop,
                                    size_t index)
 {
-    /* XXX make this more clever: won't need to printf most of the time */
+    /* TODO make this more clever: won't need to printf most of the time */
     buf_printf(&parser->buf, "%s[%zu]", prop, index);
     strarray_push(&parser->path, buf_cstring(&parser->buf));
     buf_reset(&parser->buf);
@@ -246,8 +263,7 @@ static const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
             buf_appendcstr(buf, p);
         }
         if ((i + 1) < parser->path.count) {
-            /* XXX legacy - should use / to encode JSON pointer */
-            buf_appendcstr(buf, ".");
+            buf_appendcstr(buf, "/");
         }
     }
 
@@ -424,7 +440,7 @@ static void jmap_get_parse(json_t *jargs,
                 continue;
             }
             /* Weed out unknown creation ids and add the ids of known
-             * creation ids to the requested ids list. XXX THis might
+             * creation ids to the requested ids list. THis might
              * cause a race if the Foo object pointed to by creation
              * id is deleted between parsing the request and answering
              * it. But re-checking creation ids for their existence
@@ -447,9 +463,6 @@ static void jmap_get_parse(json_t *jargs,
         }
         free_hash_table(&_dedup, NULL);
     }
-    /* XXX regression: we should reject an omitted 'ids' argument
-     * as invalid (e.g. client must set it to 'null'. But for sake
-     * of backwards compatibility, we won't */
     else if (JNOTNULL(arg)) {
         jmap_parser_invalid(parser, "ids");
     }
@@ -496,6 +509,152 @@ static json_t *jmap_get_reply(struct jmap_get *get)
     json_object_set(res, "list", get->list);
     json_object_set(res, "notFound", json_array_size(get->not_found) ?
             get->not_found : json_null());
+    return res;
+}
+
+/* Foo/set */
+
+
+static void jmap_set_parse(json_t *jargs,
+                           struct jmap_parser *parser,
+                           void (*parseobject_cb)(
+                               json_t *obj,
+                               const char *id,
+                               int is_create,
+                               void *rock,
+                               json_t **set_err
+                            ),
+                           void *rock,
+                           struct jmap_set *set,
+                           json_t **err)
+{
+    memset(set, 0, sizeof(struct jmap_set));
+    set->create = json_object();
+    set->update = json_object();
+    set->destroy = json_array();
+    set->created = json_object();
+    set->updated = json_object();
+    set->destroyed = json_array();
+    set->not_created = json_object();
+    set->not_updated = json_object();
+    set->not_destroyed = json_object();
+
+    json_t *arg, *val;
+
+    /* ifInState */
+    arg = json_object_get(jargs, "ifInState");
+    if (json_is_string(arg)) {
+        set->if_in_state = json_string_value(arg);
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "ifInState");
+    }
+
+    /* create */
+    arg = json_object_get(jargs, "create");
+    if (json_is_object(arg)) {
+        const char *id;
+        json_object_foreach(arg, id, val) {
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "create");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            if (parseobject_cb) {
+                json_t *set_err = NULL;
+                parseobject_cb(val, id, /*is_create*/1, rock, &set_err);
+                if (set_err) {
+                    json_object_set_new(set->not_created, id, set_err);
+                    continue;
+                }
+            }
+            json_object_set(set->create, id, val);
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "create");
+    }
+
+    /* update */
+    arg = json_object_get(jargs, "update");
+    if (json_is_object(arg)) {
+        const char *id;
+        json_object_foreach(arg, id, val) {
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "update");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            if (parseobject_cb) {
+                json_t *set_err = NULL;
+                parseobject_cb(val, id, /*is_create*/0, rock, &set_err);
+                if (set_err) {
+                    json_object_set_new(set->not_updated, id, set_err);
+                    continue;
+                }
+            }
+            json_object_set(set->update, id, val);
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "update");
+    }
+
+    /* destroy */
+    arg = json_object_get(jargs, "destroy");
+    if (JNOTNULL(arg)) {
+        _parse_strings(arg, parser, "destroy");
+        if (!json_array_size(parser->invalid)) {
+            json_decref(set->destroy);
+            set->destroy = json_incref(arg);
+        }
+    }
+
+    // TODO We could report the following set errors here:
+    // -invalidPatch
+    // - willDestroy
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+
+static void jmap_set_fini(struct jmap_set *set)
+{
+    free(set->new_state);
+    json_decref(set->create);
+    json_decref(set->update);
+    json_decref(set->destroy);
+    json_decref(set->created);
+    json_decref(set->updated);
+    json_decref(set->destroyed);
+    json_decref(set->not_created);
+    json_decref(set->not_updated);
+    json_decref(set->not_destroyed);
+}
+
+static json_t *jmap_set_reply(struct jmap_set *set)
+{
+    json_t *res = json_object();
+    json_object_set_new(res, "oldState",
+            set->old_state ? json_string(set->old_state) : json_null());
+    json_object_set_new(res, "newState", json_string(set->new_state));
+    json_object_set(res, "created", json_object_size(set->created) ?
+            set->created : json_null());
+    json_object_set(res, "updated", json_object_size(set->updated) ?
+            set->updated : json_null());
+    json_object_set(res, "destroyed", json_array_size(set->destroyed) ?
+            set->destroyed : json_null());
+    json_object_set(res, "notCreated", json_object_size(set->not_created) ?
+            set->not_created : json_null());
+    json_object_set(res, "notUpdated", json_object_size(set->not_updated) ?
+            set->not_updated : json_null());
+    json_object_set(res, "notDestroyed", json_object_size(set->not_destroyed) ?
+            set->not_destroyed : json_null());
     return res;
 }
 
@@ -873,6 +1032,7 @@ static int readprop_full(json_t *root, const char *prefix, const char *name,
     return r;
 }
 
+/* TODO sunset readprop and rewrite Foo/set methods to use jmap_set */
 #define readprop(root, name,  mandatory, invalid, fmt, dst) \
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
 
@@ -1339,7 +1499,7 @@ typedef struct {
     enum search_op op;
     /* Arguments for the filter operator or condition. */
     ptrarray_t args;
-} mbox_query_filter_t;
+} mboxquery_filter_t;
 
 typedef struct {
     char *name;
@@ -1347,19 +1507,19 @@ typedef struct {
         char *s;
         short b;
     } val;
-} mbox_query_field_t;
+} mboxquery_field_t;
 
 typedef struct {
     jmap_req_t *req;
-    mbox_query_filter_t *filter;
-    ptrarray_t sort;    /* Sort criteria (mbox_query_sort_t) */
-    ptrarray_t result;  /* Result records (mbox_query_record_t) */
+    mboxquery_filter_t *filter;
+    ptrarray_t sort;    /* Sort criteria (mboxquery_sort_t) */
+    ptrarray_t result;  /* Result records (mboxquery_record_t) */
 
     int _need_name;
     int _need_utf8mboxname;
     int _need_sort_order;
     int _need_role;
-} mbox_query_t;
+} mboxquery_t;
 
 typedef struct {
     char *id;
@@ -1368,48 +1528,48 @@ typedef struct {
     char *utf8mboxname;
     char *jmapname;
     int sort_order;
-} mbox_query_record_t;
+} mboxquery_record_t;
 
 typedef struct {
     char *field;
     int desc;
-} mbox_query_sort_t;
+} mboxquery_sort_t;
 
-static mbox_query_t *_mbox_query_new(jmap_req_t *req)
+static mboxquery_t *_mboxquery_new(jmap_req_t *req)
 {
-    mbox_query_t *q = xzmalloc(sizeof(mbox_query_t));
+    mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
     q->req = req;
     return q;
 }
 
-static void _mbox_query_filter_free(mbox_query_filter_t *filter)
+static void _mboxquery_filter_free(mboxquery_filter_t *filter)
 {
     if (!filter) return;
 
     int i;
     for (i = 0; i < filter->args.count; i++) {
         if (filter->op == SEOP_UNKNOWN) {
-            mbox_query_field_t *field = ptrarray_nth(&filter->args, i);
+            mboxquery_field_t *field = ptrarray_nth(&filter->args, i);
             if (!strcmp(field->name, "parentId"))
                 free(field->val.s);
             free(field->name);
             free(field);
         }
         else {
-            _mbox_query_filter_free(ptrarray_nth(&filter->args, i));
+            _mboxquery_filter_free(ptrarray_nth(&filter->args, i));
         }
     }
     ptrarray_fini(&filter->args);
     free(filter);
 }
 
-static void _mbox_query_free(mbox_query_t **qptr)
+static void _mboxquery_free(mboxquery_t **qptr)
 {
     int i;
-    mbox_query_t *q = *qptr;
+    mboxquery_t *q = *qptr;
 
     for (i = 0; i < q->result.count; i++) {
-        mbox_query_record_t *rec = ptrarray_nth(&q->result, i);
+        mboxquery_record_t *rec = ptrarray_nth(&q->result, i);
         free(rec->id);
         mbname_free(&rec->mbname);
         free(rec->mboxname);
@@ -1419,10 +1579,10 @@ static void _mbox_query_free(mbox_query_t **qptr)
     }
     ptrarray_fini(&q->result);
 
-    _mbox_query_filter_free(q->filter);
+    _mboxquery_filter_free(q->filter);
 
     for (i = 0; i < q->sort.count; i++) {
-        mbox_query_sort_t *crit = ptrarray_nth(&q->sort, i);
+        mboxquery_sort_t *crit = ptrarray_nth(&q->sort, i);
         free(crit->field);
         free(crit);
     }
@@ -1432,8 +1592,8 @@ static void _mbox_query_free(mbox_query_t **qptr)
     *qptr = NULL;
 }
 
-static int _mbox_query_eval_filter(mbox_query_t *query,
-                                   mbox_query_filter_t *filter,
+static int _mboxquery_eval_filter(mboxquery_t *query,
+                                   mboxquery_filter_t *filter,
                                    const mbentry_t *mbentry,
                                    const mbname_t *mbname)
 {
@@ -1445,8 +1605,8 @@ static int _mbox_query_eval_filter(mbox_query_t *query,
     int i;
     if (filter->op != SEOP_UNKNOWN) {
         for (i = 0; i < filter->args.count; i++) {
-            mbox_query_filter_t *arg = ptrarray_nth(&filter->args, i);
-            int m = _mbox_query_eval_filter(query, arg, mbentry, mbname);
+            mboxquery_filter_t *arg = ptrarray_nth(&filter->args, i);
+            int m = _mboxquery_eval_filter(query, arg, mbentry, mbname);
             if (m && filter->op == SEOP_OR)
                 return 1;
             else if (m && filter->op == SEOP_NOT)
@@ -1458,7 +1618,7 @@ static int _mbox_query_eval_filter(mbox_query_t *query,
     }
     else {
         for (i = 0; i < filter->args.count; i++) {
-            mbox_query_field_t *field = ptrarray_nth(&filter->args, i);
+            mboxquery_field_t *field = ptrarray_nth(&filter->args, i);
             if (!strcmp(field->name, "hasRole")) {
                 mbname_t *mbname = mbname_from_intname(mbentry->name);
                 char *role = _mbox_get_role(query->req, mbname);
@@ -1486,9 +1646,9 @@ static int _mbox_query_eval_filter(mbox_query_t *query,
     }
 }
 
-static mbox_query_filter_t *_mbox_query_build_filter(mbox_query_t *query, json_t *jfilter)
+static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *jfilter)
 {
-    mbox_query_filter_t *filter = xzmalloc(sizeof(mbox_query_filter_t));
+    mboxquery_filter_t *filter = xzmalloc(sizeof(mboxquery_filter_t));
     filter->op = SEOP_TRUE;
 
     const char *s = json_string_value(json_object_get(jfilter, "operator"));
@@ -1502,21 +1662,21 @@ static mbox_query_filter_t *_mbox_query_build_filter(mbox_query_t *query, json_t
         size_t i;
         json_t *val;
         json_array_foreach(json_object_get(jfilter, "conditions"), i, val) {
-            ptrarray_append(&filter->args, _mbox_query_build_filter(query, val));
+            ptrarray_append(&filter->args, _mboxquery_build_filter(query, val));
         }
     }
     else {
         json_t *val;
         filter->op = SEOP_UNKNOWN;
         if ((val = json_object_get(jfilter, "parentId"))) {
-            mbox_query_field_t *field = xzmalloc(sizeof(mbox_query_field_t));
+            mboxquery_field_t *field = xzmalloc(sizeof(mboxquery_field_t));
             field->name = xstrdup("parentId");
             /* parentId may be null for top-level mailbox queries */
             field->val.s = xstrdupnull(json_string_value(val));
             ptrarray_append(&filter->args, field);
         }
         if ((val = json_object_get(jfilter, "hasRole"))) {
-            mbox_query_field_t *field = xzmalloc(sizeof(mbox_query_field_t));
+            mboxquery_field_t *field = xzmalloc(sizeof(mboxquery_field_t));
             field->name = xstrdup("hasRole");
             field->val.b = json_boolean_value(val);
             ptrarray_append(&filter->args, field);
@@ -1526,15 +1686,15 @@ static mbox_query_filter_t *_mbox_query_build_filter(mbox_query_t *query, json_t
     return filter;
 }
 
-static int _mbox_query_compar(const void **a, const void **b, void *rock)
+static int _mboxquery_compar(const void **a, const void **b, void *rock)
 {
-    const mbox_query_record_t *pa = *a;
-    const mbox_query_record_t *pb = *b;
+    const mboxquery_record_t *pa = *a;
+    const mboxquery_record_t *pb = *b;
     ptrarray_t *criteria = rock;
     int i;
 
     for (i = 0; i < criteria->count; i++) {
-        mbox_query_sort_t *crit = ptrarray_nth(criteria, i);
+        mboxquery_sort_t *crit = ptrarray_nth(criteria, i);
         int cmp = 0;
         int sign = crit->desc ? -1 : 1;
 
@@ -1551,12 +1711,12 @@ static int _mbox_query_compar(const void **a, const void **b, void *rock)
     return strcmp(pa->id, pb->id);
 }
 
-static int _mbox_query_cb(const mbentry_t *mbentry, void *rock)
+static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     if (mbentry->mbtype & (MBTYPES_NONIMAP|MBTYPE_DELETED))
         return 0;
 
-    mbox_query_t *q = rock;
+    mboxquery_t *q = rock;
     mbname_t *_mbname = mbname_from_intname(mbentry->name);
 
     int r = 0;
@@ -1564,12 +1724,12 @@ static int _mbox_query_cb(const mbentry_t *mbentry, void *rock)
     /* Apply filters */
     int matches = 1;
     if (q->filter) {
-        matches = _mbox_query_eval_filter(q, q->filter, mbentry, _mbname);
+        matches = _mboxquery_eval_filter(q, q->filter, mbentry, _mbname);
     }
     if (!matches) goto done;
 
     /* Found a matching reccord. Add it to the result list. */
-    mbox_query_record_t *rec = xzmalloc(sizeof(mbox_query_record_t));
+    mboxquery_record_t *rec = xzmalloc(sizeof(mboxquery_record_t));
     rec->id = xstrdup(mbentry->uniqueid);
     rec->mbname = _mbname;
     _mbname = NULL; /* rec takes ownership for _mbname */
@@ -1581,7 +1741,7 @@ static int _mbox_query_cb(const mbentry_t *mbentry, void *rock)
     if (q->_need_utf8mboxname) {
         charset_t cs = charset_lookupname("imap-mailbox-name");
         if (!cs) {
-            syslog(LOG_ERR, "_mbox_query_cb: no imap-mailbox-name charset");
+            syslog(LOG_ERR, "_mboxquery_cb: no imap-mailbox-name charset");
             r = IMAP_INTERNAL;
             goto done;
         }
@@ -1608,13 +1768,13 @@ done:
     return r;
 }
 
-static int _mbox_query_run(mbox_query_t *query)
+static int _mboxquery_run(mboxquery_t *query)
 {
     int i;
 
     /* Prepare internal query context. */
     for (i = 0; i < query->sort.count; i++) {
-        mbox_query_sort_t *crit = ptrarray_nth(&query->sort, i);
+        mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
         if (!strcmp(crit->field, "name")) {
             query->_need_name = 1;
         }
@@ -1627,12 +1787,12 @@ static int _mbox_query_run(mbox_query_t *query)
     }
 
     /* Lookup all mailboxes */
-    int r = jmap_mboxlist(query->req, _mbox_query_cb, query);
+    int r = jmap_mboxlist(query->req, _mboxquery_cb, query);
     if (r) goto done;
 
     /* Sort result */
     qsort_r(query->result.data, query->result.count, sizeof(void*),
-            (int(*)(const void*, const void*, void*)) _mbox_query_compar,
+            (int(*)(const void*, const void*, void*)) _mboxquery_compar,
             &query->sort);
 
 done:
@@ -1652,11 +1812,11 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
     jquery->can_calculate_changes = 0;
 
     /* Prepare query */
-    mbox_query_t *query = _mbox_query_new(req);
+    mboxquery_t *query = _mboxquery_new(req);
 
     /* Prepare sort */
     json_array_foreach(jquery->sort, j, val) {
-        mbox_query_sort_t *crit = xzmalloc(sizeof(mbox_query_sort_t));
+        mboxquery_sort_t *crit = xzmalloc(sizeof(mboxquery_sort_t));
         const char *prop = json_string_value(json_object_get(val, "property"));
         crit->field = xstrdup(prop);
         crit->desc = json_object_get(val, "isAscending") == json_false();
@@ -1664,10 +1824,10 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
     }
 
     /* Prepare filter */
-    query->filter = _mbox_query_build_filter(query, jquery->filter);
+    query->filter = _mboxquery_build_filter(query, jquery->filter);
 
     /* Run the query */
-    r = _mbox_query_run(query);
+    r = _mboxquery_run(query);
     if (r) goto done;
 
     jquery->total = query->result.count;
@@ -1690,7 +1850,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
     }
 
     for (i = frompos; i < query->result.count; i++) {
-        mbox_query_record_t *rec = ptrarray_nth(&query->result, i);
+        mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
 
         /* Check anchor */
         if (jquery->anchor && !seen_anchor) {
@@ -1709,7 +1869,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
                 size_t hi = jquery->limit ? lo + jquery->limit : (size_t) i;
                 result_pos = lo;
                 while (lo < hi && lo < (size_t) i) {
-                    mbox_query_record_t *p = ptrarray_nth(&query->result, lo);
+                    mboxquery_record_t *p = ptrarray_nth(&query->result, lo);
                     json_array_append_new(jquery->ids, json_string(p->id));
                     lo++;
                 }
@@ -1739,7 +1899,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
     }
 
 done:
-    _mbox_query_free(&query);
+    _mboxquery_free(&query);
     return r;
 }
 
@@ -2921,45 +3081,366 @@ done:
  * Emails
  */
 
-static json_t *_emailer_from_addr(const struct address *a)
+struct headers {
+    json_t *raw; /* JSON array of EmailHeader */
+    json_t *all; /* JSON object: lower-case header name => list of values */
+    struct buf buf;
+};
+
+#define HEADERS_INITIALIZER \
+    { json_array(), json_object(), BUF_INITIALIZER }
+
+static void _headers_fini(struct headers *headers) {
+    assert(headers);
+    json_decref(headers->all);
+    json_decref(headers->raw);
+    buf_free(&headers->buf);
+}
+
+static void _headers_put_new(struct headers *headers, json_t *header, int shift)
 {
-    json_t *emailers = json_pack("[]");
+    const char *name = json_string_value(json_object_get(header, "name"));
+
+    if (headers->raw == NULL)
+        headers->raw = json_array();
+    if (headers->all == NULL)
+        headers->all = json_object();
+
+    /* Append (or shift) the raw header to the in-order header list */
+    if (shift)
+        json_array_insert(headers->raw, 0, header);
+    else
+        json_array_append(headers->raw, header);
+
+    /* Append the raw header to the list of all equal-named headers */
+    buf_setcstr(&headers->buf, name);
+    const char *lcasename = buf_lcase(&headers->buf);
+    json_t *all = json_object_get(headers->all, lcasename);
+    if (!all) {
+        all = json_array();
+        json_object_set_new(headers->all, lcasename, all);
+    }
+
+    if (shift)
+        json_array_insert_new(all, 0, header);
+    else
+        json_array_append_new(all, header);
+}
+
+static void _headers_add_new(struct headers *headers, json_t *header)
+{
+    if (!header) return;
+    _headers_put_new(headers, header, 0);
+}
+
+static void _headers_shift_new(struct headers *headers, json_t *header)
+{
+    if (!header) return;
+    _headers_put_new(headers, header, 1);
+}
+
+static json_t* _headers_get(struct headers *headers, const char *name)
+{
+    char *lcasename = lcase(xstrdup(name));
+    json_t *jheader = json_object_get(headers->all, lcasename);
+    free(lcasename);
+    return jheader;
+}
+
+static int _headers_have(struct headers *headers, const char *name)
+{
+    return _headers_get(headers, name) != NULL;
+}
+
+static int _headers_from_mime_cb(const char *key, const char *val, void *_rock)
+{
+    struct headers *headers = _rock;
+    _headers_add_new(headers, json_pack("{s:s s:s}", "name", key, "value", val));
+    return 0;
+}
+
+static void _headers_from_mime(const char *base, size_t len, struct headers *headers)
+{
+    message_foreach_header(base, len, _headers_from_mime_cb, headers);
+}
+
+static json_t *_header_as_raw(const char *raw)
+{
+    return raw ? json_string(raw) : json_null();
+}
+
+static json_t *_header_as_text(const char *raw)
+{
+    if (!raw) return json_null();
+
+    /* TODO this could be optimised to omit unfolding, decoding
+     * or normalisation, or all, if ASCII */
+    /* Unfold and remove CRLF */
+    char *unfolded = charset_unfold(raw, strlen(raw), 0);
+    char *p = strchr(unfolded, '\r');
+    while (p && *(p + 1) != '\n') {
+        p = strchr(p + 1, '\r');
+    }
+    if (p) *p = '\0';
+    /* Trim starting SP */
+    const char *trimmed = unfolded;
+    while (isspace(*trimmed)) {
+        trimmed++;
+    }
+    /* Decode header */
+    char *decoded = charset_decode_mimeheader(trimmed, CHARSET_SNIPPET);
+    /* Convert to Unicode NFC */
+    char *nfc = charset_utf8_normalize(decoded);
+
+    json_t *result = json_string(nfc);
+    free(nfc);
+    free(decoded);
+    free(unfolded);
+    return result;
+}
+
+static json_t *_header_as_messageids(const char *raw)
+{
+    if (!raw) return json_null();
+
+    json_t *msgids = json_array();
+    struct buf buf = BUF_INITIALIZER;
+    const char *lo = raw;
+    while (*lo) {
+        lo = strchr(lo, '<');
+        if (!lo) break;
+        const char *hi = strchr(lo + 1, '>');
+        if (!hi) break;
+        buf_setmap(&buf, lo + 1, hi - lo - 1);
+        json_array_append_new(msgids, json_string(buf_cstring(&buf)));
+        lo = hi + 1;
+    }
+    if (!json_array_size(msgids)) {
+        json_decref(msgids);
+        msgids = json_null();
+    }
+    buf_free(&buf);
+    return msgids;
+}
+
+static json_t *_emailaddresses_from_addr(struct address *addr)
+{
+    if (!addr) return json_null();
+
+    json_t *addresses = json_array();
     struct buf buf = BUF_INITIALIZER;
 
-    while (a) {
+    while (addr) {
         json_t *e = json_pack("{}");
-        const char *mailbox = a->mailbox ? a->mailbox : "";
-        const char *domain = a->domain ? a->domain : "";
 
-        if (!strcmp(domain, "unspecified-domain")) {
-            domain = "";
-        }
-        buf_printf(&buf, "%s@%s", mailbox, domain);
-
-        if (a->name) {
-            char *dec = charset_decode_mimeheader(a->name, CHARSET_SNIPPET);
-            if (dec) {
-                json_object_set_new(e, "name", json_string(dec));
-            }
-            free(dec);
+        /* name */
+        if (addr->name) {
+            char *tmp = charset_decode_mimeheader(addr->name, CHARSET_SNIPPET);
+            if (tmp) json_object_set_new(e, "name", json_string(tmp));
+            free(tmp);
         } else {
-            json_object_set_new(e, "name", json_string(""));
+            json_object_set_new(e, "name", json_null());
         }
 
-        json_object_set_new(e, "email", json_string(buf_cstring(&buf)));
-
-        json_array_append_new(emailers, e);
-        buf_reset(&buf);
-        a = a->next;
+        /* email */
+        const char *mailbox = addr->mailbox;
+        if (mailbox) {
+            buf_setcstr(&buf, mailbox);
+            const char *domain = addr->domain;
+            if (!strcmpsafe(domain, "unspecified-domain")) {
+                domain = NULL;
+            }
+            if (domain) {
+                buf_putc(&buf, '@');
+                buf_appendcstr(&buf, domain);
+            }
+            json_object_set_new(e, "email", json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        } else {
+            json_object_set_new(e, "email", json_null());
+        }
+        json_array_append_new(addresses, e);
+        addr = addr->next;
     }
 
-    if (!json_array_size(emailers)) {
-        json_decref(emailers);
-        emailers = json_null();
+    if (!json_array_size(addresses)) {
+        json_decref(addresses);
+        addresses = json_null();
     }
-
     buf_free(&buf);
-    return emailers;
+    return addresses;
+}
+
+
+static json_t *_header_as_addresses(const char *raw)
+{
+    if (!raw) return json_null();
+
+    struct address *addrs = NULL;
+    parseaddr_list(raw, &addrs);
+    json_t *result = _emailaddresses_from_addr(addrs);
+    parseaddr_free(addrs);
+    return result;
+}
+
+static json_t *_header_as_urls(const char *raw)
+{
+    if (!raw) return json_null();
+
+    /* A poor man's implementation of RFC 2369, returning anything
+     * between < and >. */
+    json_t *urls = json_array();
+    struct buf buf = BUF_INITIALIZER;
+    const char *base = raw;
+    const char *top = raw + strlen(raw);
+    while (base < top) {
+        const char *lo = strchr(base, '<');
+        if (!lo) break;
+        const char *hi = strchr(lo, '>');
+        if (!hi) break;
+        buf_setmap(&buf, lo + 1, hi - lo - 1);
+        json_array_append_new(urls, json_string(buf_cstring(&buf)));
+        base = hi + 1;
+    }
+    if (!json_array_size(urls)) {
+        json_decref(urls);
+        urls = json_null();
+    }
+    buf_free(&buf);
+    return urls;
+}
+
+enum _header_form {
+    HEADER_FORM_UNKNOWN = 0, /* MUST be zero so we can cast to void* */
+    HEADER_FORM_RAW,
+    HEADER_FORM_TEXT,
+    HEADER_FORM_ADDRESSES,
+    HEADER_FORM_MESSAGEIDS,
+    HEADER_FORM_DATE,
+    HEADER_FORM_URLS
+};
+
+struct header_prop {
+    char *lcasename;
+    char *name;
+    const char *prop;
+    enum _header_form form;
+    int all;
+};
+
+static void _header_prop_fini(struct header_prop *prop)
+{
+    free(prop->lcasename);
+    free(prop->name);
+}
+
+static struct header_prop *_header_parseprop(const char *s)
+{
+    strarray_t *fields = strarray_split(s + 7, ":", 0);
+    const char *f0, *f1, *f2;
+    int is_valid = 1;
+    enum _header_form form = HEADER_FORM_RAW;
+    char *lcasename = NULL, *name = NULL;
+
+    /* Initialize allowed header forms by lower-case header name. Any
+     * header in this map is allowed to be requested either as Raw
+     * or the form of the map value (casted to void* because C...).
+     * Any header not found in this map is allowed to be requested
+     * in any form. */
+    static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
+    if (allowed_header_forms.size == 0) {
+        /* TODO initialize with all headers in RFC5322 and RFC2369 */
+        construct_hash_table(&allowed_header_forms, 32, 0);
+        hash_insert("bcc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("cc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("content-type", (void*) HEADER_FORM_RAW, &allowed_header_forms);
+        hash_insert("comment", (void*) HEADER_FORM_TEXT, &allowed_header_forms);
+        hash_insert("date", (void*) HEADER_FORM_DATE, &allowed_header_forms);
+        hash_insert("from", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("in-reply-to", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
+        hash_insert("list-archive", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("list-help", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("list-owner", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("list-post", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("list-subscribe", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("list-unsubscribe", (void*) HEADER_FORM_URLS, &allowed_header_forms);
+        hash_insert("message-id", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
+        hash_insert("references", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
+        hash_insert("reply-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-date", (void*) HEADER_FORM_DATE, &allowed_header_forms);
+        hash_insert("resent-from", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-message-id", (void*) HEADER_FORM_MESSAGEIDS, &allowed_header_forms);
+        hash_insert("resent-reply-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-sender", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-cc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("resent-bcc", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("sender", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+        hash_insert("subject", (void*) HEADER_FORM_TEXT, &allowed_header_forms);
+        hash_insert("to", (void*) HEADER_FORM_ADDRESSES, &allowed_header_forms);
+    }
+
+    /* Parse property string into fields */
+    f0 = f1 = f2 = NULL;
+    switch (fields->count) {
+        case 3:
+            f2 = strarray_nth(fields, 2);
+            /* fallthrough */
+        case 2:
+            f1 = strarray_nth(fields, 1);
+            /* fallthrough */
+        case 1:
+            f0 = strarray_nth(fields, 0);
+            lcasename = lcase(xstrdup(f0));
+            name = xstrdup(f0);
+            break;
+        default:
+            is_valid = 0;
+    }
+    if (f2 && (strcmp(f2, "all") || !strcmp(f1, "all"))) {
+        is_valid = 0;
+    }
+    if (f1) {
+        if (!strcmp(f1, "asRaw"))
+            form = HEADER_FORM_RAW;
+        else if (!strcmp(f1, "asText"))
+            form = HEADER_FORM_TEXT;
+        else if (!strcmp(f1, "asAddresses"))
+            form = HEADER_FORM_ADDRESSES;
+        else if (!strcmp(f1, "asMessageIds"))
+            form = HEADER_FORM_MESSAGEIDS;
+        else if (!strcmp(f1, "asDate"))
+            form = HEADER_FORM_DATE;
+        else if (!strcmp(f1, "asURLs"))
+            form = HEADER_FORM_URLS;
+        else if (strcmp(f1, "all"))
+            is_valid = 0;
+    }
+
+    /* Validate requested header form */
+    if (is_valid && form != HEADER_FORM_RAW) {
+        enum _header_form allowed_form = (enum _header_form) \
+                                         hash_lookup(lcasename, &allowed_header_forms);
+        if (allowed_form != HEADER_FORM_UNKNOWN && form != allowed_form) {
+            is_valid = 0;
+        }
+    }
+
+    struct header_prop *hprop = NULL;
+    if (is_valid) {
+        hprop = xzmalloc(sizeof(struct header_prop));
+        hprop->lcasename = lcasename;
+        hprop->name = name;
+        hprop->prop = s;
+        hprop->form = form;
+        hprop->all = f2 != NULL;
+    }
+    else {
+        free(lcasename);
+        free(name);
+    }
+    strarray_free(fields);
+    return hprop;
 }
 
 /* Generate a preview of text of at most len bytes, excluding the zero
@@ -3053,7 +3534,7 @@ struct attachment {
     struct body *body;
 };
 
-struct msgbodies {
+struct emailbodies {
     struct body *text;
     struct body *html;
     ptrarray_t atts;
@@ -3062,7 +3543,7 @@ struct msgbodies {
     ptrarray_t htmllist;
 };
 
-#define MSGBODIES_INITIALIZER { \
+#define EMAILBODIES_INITIALIZER { \
     NULL, \
     NULL, \
     PTRARRAY_INITIALIZER, \
@@ -3071,8 +3552,17 @@ struct msgbodies {
     PTRARRAY_INITIALIZER \
 }
 
+static void _emailbodies_fini(struct emailbodies *bodies)
+{
+    ptrarray_fini(&bodies->atts);
+    ptrarray_fini(&bodies->msgs);
+    ptrarray_fini(&bodies->textlist);
+    ptrarray_fini(&bodies->htmllist);
+}
+
+
 static int _email_extract_bodies(struct body *root, struct buf *msg_buf,
-                                 struct msgbodies *bodies)
+                                 struct emailbodies *bodies)
 {
     /* Dissect a message into its best text and html bodies, attachments
      * and embedded messages. Based on the IMAPTalk find_message function.
@@ -3258,54 +3748,211 @@ static int _email_extract_bodies(struct body *root, struct buf *msg_buf,
     return 0;
 }
 
-static int _email_extract_headers(const char *key, const char *val, void *rock)
+static char *_emailbodies_to_plain(struct emailbodies *bodies, struct buf *msg_buf)
 {
-    json_t *headers = (json_t*) rock;
-    json_t *curval;
-    char *decodedval = NULL;
-    char *lckey = xstrdup(key);
-    char *p;
-    for (p = lckey; *p; p++) {
-        *p = tolower(*p);
+    if (bodies->textlist.count == 1) {
+        struct body *textbody = ptrarray_nth(&bodies->textlist, 0);
+        charset_t cs = charset_lookupname(textbody->charset_id);
+        char *text = charset_to_utf8(msg_buf->s + textbody->content_offset,
+                textbody->content_size, cs, textbody->charset_enc);
+        charset_free(&cs);
+        return text;
     }
 
-    if (isspace(*val)) val++;
+    /* Concatenate all plain text bodies and replace any
+     * inlined images with placeholders. */
+    int i;
+    struct buf buf = BUF_INITIALIZER;
+    for (i = 0; i < bodies->textlist.count; i++) {
+        struct body *part = ptrarray_nth(&bodies->textlist, i);
 
-    decodedval = charset_decode_mimeheader(val, CHARSET_SNIPPET);
-    if (!decodedval) goto done;
+        if (i) buf_appendcstr(&buf, "\n");
 
-    if ((curval = json_object_get(headers, lckey))) {
-        char *newval = strconcat(json_string_value(curval), "\n", decodedval, NULL);
-        json_object_set_new(headers, lckey, json_string(newval));
-        free(newval);
-    } else {
-        json_object_set_new(headers, lckey, json_string(decodedval));
+        if (!strcmp(part->type, "TEXT")) {
+            charset_t cs = charset_lookupname(part->charset_id);
+            char *t = charset_to_utf8(msg_buf->s + part->content_offset,
+                    part->content_size, cs, part->charset_enc);
+            if (t) buf_appendcstr(&buf, t);
+            charset_free(&cs);
+            free(t);
+        }
+        else if (!strcmp(part->type, "IMAGE")) {
+            struct param *param;
+            const char *fname = NULL;
+            for (param = part->disposition_params; param; param = param->next) {
+                if (!strncasecmp(param->attribute, "filename", 8)) {
+                    fname =param->value;
+                    break;
+                }
+            }
+            buf_appendcstr(&buf, "[Inline image");
+            if (fname) {
+                buf_appendcstr(&buf, ":");
+                buf_appendcstr(&buf, fname);
+            }
+            buf_appendcstr(&buf, "]");
+        }
     }
-
-done:
-    free(lckey);
-    free(decodedval);
-    return  0;
+    return buf_release(&buf);
 }
 
-static int _email_extract_annotations(const char *mboxname __attribute__((unused)),
-                                      uint32_t uid __attribute__((unused)),
-                                      const char *entry,
-                                      const char *userid __attribute__((unused)),
-                                      const struct buf *value,
-                                      const struct annotate_metadata *mdata __attribute__((unused)),
-                                      void *rock)
+/* Replace any <HTML> and </HTML> tags in t with <DIV> and </DIV>,
+ * writing results into buf */
+static void _html_concat_div(struct buf *buf, const char *t)
 {
-    json_t *annotations = (json_t *)rock;
+    const char *top = t + strlen(t);
+    const char *p = t, *q = p;
 
-    const char *prefix = "/vendor/jmapio/";
-    size_t prefixlen = strlen(prefix);
+    while (*q) {
+        const char *tag = NULL;
+        if (q < top - 5 && !strncasecmp(q, "<html", 5) &&
+                (*(q+5) == '>' || isspace(*(q+5)))) {
+            /* Found a <HTML> tag */
+            tag = "<div>";
+        }
+        else if (q < top - 6 && !strncasecmp(q, "</html", 6) &&
+                (*(q+6) == '>' || isspace(*(q+6)))) {
+            /* Found a </HTML> tag */
+            tag = "</div>";
+        }
 
-    if (!strncmp(entry, prefix, prefixlen)) {
-        json_object_set_new(annotations, entry + prefixlen, json_string(buf_cstring(value)));
+        /* No special tag? */
+        if (!tag) {
+            q++;
+            continue;
+        }
+
+        /* Append whatever we saw since the last HTML tag. */
+        buf_appendmap(buf, p, q - p);
+
+        /* Look for the end of the tag and replace it, even if
+         * it prematurely ends at the end of the buffer . */
+        while (*q && *q != '>') { q++; }
+        buf_appendcstr(buf, tag);
+        if (*q) q++;
+
+        /* Prepare for next loop */
+        p = q;
+    }
+    buf_appendmap(buf, p, q - p);
+}
+
+
+static char *_emailbodies_to_html(struct emailbodies *bodies, struct buf *msg_buf)
+{
+    if (bodies->htmllist.count == 1) {
+        charset_t cs = charset_lookupname(bodies->html->charset_id);
+        char *html = charset_to_utf8(msg_buf->s + bodies->html->content_offset,
+                bodies->html->content_size, cs, bodies->html->charset_enc);
+        charset_free(&cs);
+        return html;
     }
 
-    return 0;
+    /* Concatenate all TEXT bodies, enclosing PLAIN text
+     * in <div> and replacing <html> tags in HTML bodies
+     * with <div>. */
+    int i;
+    struct buf buf = BUF_INITIALIZER;
+    for (i = 0; i < bodies->htmllist.count; i++) {
+        struct body *part = ptrarray_nth(&bodies->htmllist, i);
+
+        /* XXX htmllist might include inlined images but we
+         * currently ignore them. After all, there should
+         * already be an <img> tag for their Content-Id
+         * header value. If this turns out to be not enough,
+         * we can insert the <img> tags here. */
+        if (strcasecmp(part->type, "TEXT")) {
+            continue;
+        }
+
+        if (!i)
+            buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
+
+        charset_t cs = charset_lookupname(part->charset_id);
+        char *t = charset_to_utf8(msg_buf->s + part->content_offset,
+                part->content_size, cs, part->charset_enc);
+
+        if (!strcmp(part->subtype, "HTML")) {
+            _html_concat_div(&buf, t);
+        }
+        else {
+            buf_appendcstr(&buf, "<div>");
+            buf_appendcstr(&buf, t);
+            buf_appendcstr(&buf, "</div>");
+        }
+        charset_free(&cs);
+        free(t);
+
+        if (i == bodies->htmllist.count - 1)
+            buf_appendcstr(&buf, "</html>");
+    }
+    return buf_release(&buf);
+}
+
+static void _html_to_plain_cb(const struct buf *buf, void *rock)
+{
+    struct buf *dst = (struct buf*) rock;
+    const char *p;
+    int seenspace = 0;
+
+    /* Just merge multiple space into one. That's similar to
+     * charset_extract's MERGE_SPACE but since we don't want
+     * it to canonify the text into search form */
+    for (p = buf_base(buf); p < buf_base(buf) + buf_len(buf) && *p; p++) {
+        if (*p == ' ') {
+            if (seenspace) continue;
+            seenspace = 1;
+        } else {
+            seenspace = 0;
+        }
+        buf_appendmap(dst, p, 1);
+    }
+}
+
+static char *_html_to_plain(const char *html) {
+    struct buf src = BUF_INITIALIZER;
+    struct buf dst = BUF_INITIALIZER;
+    charset_t utf8 = charset_lookupname("utf8");
+    char *text;
+    char *tmp, *q;
+    const char *p;
+
+    /* Replace <br> and <p> with newlines */
+    q = tmp = xstrdup(html);
+    p = html;
+    while (*p) {
+        if (!strncmp(p, "<br>", 4) || !strncmp(p, "</p>", 4)) {
+            *q++ = '\n';
+            p += 4;
+        }
+        else if (!strncmp(p, "p>", 3)) {
+            p += 3;
+        } else {
+            *q++ = *p++;
+        }
+    }
+    *q = 0;
+
+    /* Strip html tags */
+    buf_init_ro(&src, tmp, q - tmp);
+    buf_setcstr(&dst, "");
+    charset_extract(&_html_to_plain_cb, &dst,
+            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
+    buf_cstring(&dst);
+
+    /* Trim text */
+    buf_trim(&dst);
+    text = buf_releasenull(&dst);
+    if (!strlen(text)) {
+        free(text);
+        text = NULL;
+    }
+
+    buf_free(&src);
+    free(tmp);
+    charset_free(&utf8);
+
+    return text;
 }
 
 static char *_email_id_from_guid(const struct message_guid *guid)
@@ -3321,7 +3968,7 @@ static const char *_guid_from_id(const char *msgid)
     return msgid + 1;
 }
 
-static char *_thread_id_from_guid(conversation_id_t cid)
+static char *_thread_id_from_cid(conversation_id_t cid)
 {
     char *thrid = xzmalloc(18);
     thrid[0] = 'T';
@@ -3423,8 +4070,8 @@ static const char *jmap_keyword_to_imap(const char *keyword)
     return NULL;
 }
 
-static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
-                                 const char *annot, int structured)
+static json_t *_email_get_annot(const jmap_req_t *req, msgrecord_t *mr,
+                                const char *annot, int structured)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *annotvalue = NULL;
@@ -3456,159 +4103,6 @@ static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
     buf_free(&buf);
 
     return annotvalue;
-}
-
-/* Replace any <HTML> and </HTML> tags in t with <DIV> and </DIV>,
- * writing results into buf */
-static void _email_extract_htmlbody(struct buf *buf, const char *t)
-{
-    const char *top = t + strlen(t);
-    const char *p = t, *q = p;
-
-    while (*q) {
-        const char *tag = NULL;
-        if (q < top - 5 && !strncasecmp(q, "<html", 5) &&
-                (*(q+5) == '>' || isspace(*(q+5)))) {
-            /* Found a <HTML> tag */
-            tag = "<div>";
-        }
-        else if (q < top - 6 && !strncasecmp(q, "</html", 6) &&
-                (*(q+6) == '>' || isspace(*(q+6)))) {
-            /* Found a </HTML> tag */
-            tag = "</div>";
-        }
-
-        /* No special tag? */
-        if (!tag) {
-            q++;
-            continue;
-        }
-
-        /* Append whatever we saw since the last HTML tag. */
-        buf_appendmap(buf, p, q - p);
-
-        /* Look for the end of the tag and replace it, even if
-         * it prematurely ends at the end of the buffer . */
-        while (*q && *q != '>') { q++; }
-        buf_appendcstr(buf, tag);
-        if (*q) q++;
-
-        /* Prepare for next loop */
-        p = q;
-    }
-    buf_appendmap(buf, p, q - p);
-}
-
-static json_t *_email_attachment_from_part(struct body *part,
-                                           const struct buf *msg_buf,
-                                           json_t *inlinedcids,
-                                           json_t *imgsizes)
-{
-    struct param *param;
-    charset_t ascii = charset_lookupname("us-ascii");
-    const char *cid;
-    strarray_t headers = STRARRAY_INITIALIZER;
-    struct buf buf = BUF_INITIALIZER;
-    char *freeme;
-
-    char *blobid = jmap_blobid(&part->content_guid);
-    json_t *att = json_pack("{s:s}", "blobId", blobid);
-    free(blobid);
-
-    /* type */
-    buf_setcstr(&buf, part->type);
-    if (part->subtype) {
-        buf_appendcstr(&buf, "/");
-        buf_appendcstr(&buf, part->subtype);
-    }
-    json_object_set_new(att, "type", json_string(buf_lcase(&buf)));
-
-    /* name */
-    const char *fname = NULL;
-    int is_extended = 0;
-    for (param = part->disposition_params; param; param = param->next) {
-        if (!strncasecmp(param->attribute, "filename", 8)) {
-            is_extended = param->attribute[8] == '*';
-            fname = param->value;
-            break;
-        }
-    }
-    if (!fname) {
-        for (param = part->params; param; param = param->next) {
-            if (!strncasecmp(param->attribute, "name", 4)) {
-                is_extended = param->attribute[4] == '*';
-                fname = param->value;
-                break;
-            }
-        }
-    }
-    if (fname && is_extended) {
-        char *s = charset_parse_mimexvalue(fname, NULL);
-        json_object_set_new(att, "name", s ? json_string(s) : json_null());
-        free(s);
-    }
-    else if (fname) {
-        int mime_flags = charset_flags & CHARSET_MIME_UTF8;
-        char *s = charset_parse_mimeheader(fname, mime_flags);
-        json_object_set_new(att, "name", s ? json_string(s) : json_null());
-        free(s);
-    }
-    else {
-        json_object_set_new(att, "name", json_null());
-    }
-
-    /* size */
-    if (part->charset_enc) {
-        buf_reset(&buf);
-        charset_decode(&buf, msg_buf->s + part->content_offset,
-                part->content_size, part->charset_enc);
-        json_object_set_new(att, "size", json_integer(buf_len(&buf)));
-    } else {
-        json_object_set_new(att, "size", json_integer(part->content_size));
-    }
-
-    /* cid */
-    strarray_add(&headers, "Content-ID");
-    freeme = xstrndup(msg_buf->s + part->header_offset, part->header_size);
-    message_pruneheader(freeme, &headers, NULL);
-    if ((cid = strchr(freeme, ':'))) {
-        char *unfolded;
-        if ((unfolded = charset_unfold(cid + 1, strlen(cid), 0))) {
-            buf_setcstr(&buf, unfolded);
-            free(unfolded);
-            buf_trim(&buf);
-            cid = buf_cstring(&buf);
-        } else {
-            cid = NULL;
-        }
-    }
-    json_object_set_new(att, "cid", cid ? json_string(cid) : json_null());
-    free(freeme);
-
-    /* isInline */
-    if (inlinedcids && cid && json_object_get(inlinedcids, cid)) {
-        json_object_set_new(att, "isInline", json_true());
-    }
-    else {
-        json_object_set_new(att, "isInline", json_false());
-    }
-
-    /* width, height */
-    json_t *width = json_null(), *height = json_null(), *dim;
-    if (imgsizes && (dim = json_object_get(imgsizes, part->part_id))) {
-        if (json_array_size(dim) >= 2) {
-            width = json_incref(json_array_get(dim, 0));
-            height = json_incref(json_array_get(dim, 1));
-        }
-    }
-    json_object_set_new(att, "width", width);
-    json_object_set_new(att, "height", height);
-
-    charset_free(&ascii);
-    strarray_fini(&headers);
-    buf_free(&buf);
-
-    return att;
 }
 
 struct _email_get_keywords_rock {
@@ -3686,455 +4180,6 @@ static int _email_get_keywords(jmap_req_t *req, const char *msgid, json_t **jkey
     json_decref(data.keywords);
 
     *jkeywords = keywords;
-    return r;
-}
-
-static int _email_from_body(jmap_req_t *req, hash_table *props,
-                            struct body *body, struct buf *msg_buf,
-                            msgrecord_t *mr, MsgType type,
-                            json_t **msgp)
-{
-    struct msgbodies bodies = MSGBODIES_INITIALIZER;
-    json_t *msg = NULL;
-    json_t *headers = json_pack("{}");
-    json_t *annotations = json_pack("{}");
-    struct buf buf = BUF_INITIALIZER;
-    char *text = NULL, *html = NULL;
-    int r;
-
-    const char *preview_annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
-    int render_multipart_bodies = config_getswitch(IMAPOPT_JMAP_RENDER_MULTIPART_BODIES);
-
-    /* Dissect message into its parts */
-    r = _email_extract_bodies(body, msg_buf, &bodies);
-    if (r) goto done;
-
-    /* Always read the message headers */
-    r = message_foreach_header(msg_buf->s + body->header_offset,
-                               body->header_size, _email_extract_headers,
-                               headers);
-    if (r) goto done;
-
-    r = msgrecord_annot_findall(mr, "*", _email_extract_annotations, annotations);
-    if (r) goto done;
-
-    msg = json_pack("{}");
-
-    /* headers */
-    if (_wantprop(props, "headers")) {
-        json_object_set(msg, "headers", headers);
-    }
-    else {
-        json_t *wantheaders = json_pack("{}");
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, "headers.");
-        const char *key;
-        json_t *val;
-        json_object_foreach(headers, key, val) {
-            buf_truncate(&buf, 8);
-            buf_appendcstr(&buf, key);
-            if (_wantprop(props, buf_cstring(&buf))) {
-                json_object_set(wantheaders, key, val);
-            }
-        }
-
-        buf_free(&buf);
-        if (json_object_size(wantheaders))
-            json_object_set_new(msg, "headers", wantheaders);
-        else
-            json_decref(wantheaders);
-    }
-
-    /* annotations */
-    if (_wantprop(props, "annotations")) {
-        json_object_set(msg, "annotations", annotations);
-    }
-    else {
-        json_t *wantannotations = json_pack("{}");
-        buf_setcstr(&buf, "annotations.");
-        const char *key;
-        json_t *val;
-        json_object_foreach(annotations, key, val) {
-            buf_truncate(&buf, 8);
-            buf_appendcstr(&buf, key);
-            if (_wantprop(props, buf_cstring(&buf))) {
-                json_object_set(wantannotations, key, val);
-            }
-        }
-        if (json_object_size(wantannotations))
-            json_object_set_new(msg, "annotations", wantannotations);
-        else
-            json_decref(wantannotations);
-    }
-
-
-    /* sender */
-    if (_wantprop(props, "sender")) {
-        const char *key, *s = NULL;
-        json_t *val, *sender = json_null();
-
-        json_object_foreach(headers, key, val) {
-            if (!strcasecmp(key, "Sender")) {
-                s = json_string_value(val);
-                break;
-            }
-        }
-        if (s) {
-            struct address *addr = NULL;
-            parseaddr_list(s, &addr);
-            if (addr) {
-                json_t *senders = _emailer_from_addr(addr);
-                if (json_array_size(senders)) {
-                    sender = json_array_get(senders, 0);
-                    json_incref(sender);
-                }
-                json_decref(senders);
-            }
-            parseaddr_free(addr);
-        }
-        json_object_set_new(msg, "sender", sender);
-    }
-    /* from */
-    if (_wantprop(props, "from")) {
-        json_object_set_new(msg, "from", _emailer_from_addr(body->from));
-    }
-    /* to */
-    if (_wantprop(props, "to")) {
-        json_object_set_new(msg, "to", _emailer_from_addr(body->to));
-    }
-    /* cc */
-    if (_wantprop(props, "cc")) {
-        json_object_set_new(msg, "cc", _emailer_from_addr(body->cc));
-    }
-    /*  bcc */
-    if (_wantprop(props, "bcc")) {
-        json_object_set_new(msg, "bcc", _emailer_from_addr(body->bcc));
-    }
-    /* replyTo */
-    if (_wantprop(props, "replyTo")) {
-        json_t *reply_to = json_null();
-        if (json_object_get(headers, "reply-to")) {
-            reply_to = _emailer_from_addr(body->reply_to);
-        }
-        json_object_set_new(msg, "replyTo", reply_to);
-    }
-    /* subject */
-    if (_wantprop(props, "subject")) {
-        char *subject = NULL;
-        if (body->subject) {
-            subject = charset_decode_mimeheader(body->subject, CHARSET_SNIPPET);
-        }
-        json_object_set_new(msg, "subject", json_string(subject ? subject : ""));
-        free(subject);
-    }
-    /* receivedAt */
-    if (_wantprop(props, "receivedAt")) {
-        char datestr[RFC3339_DATETIME_MAX];
-        time_t t;
-
-        r = msgrecord_get_internaldate(mr, &t);
-        if (r) return r;
-
-        if (type == MSG_IS_ATTACHED)
-            time_from_rfc5322(body->date, &t, DATETIME_FULL);
-
-        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
-        json_object_set_new(msg, "receivedAt", json_string(datestr));
-    }
-    /* sentAt */
-    if (_wantprop(props, "sentAt")) {
-        json_t *jval = json_object_get(headers, "date");
-        if (jval) {
-            char *p, *headerval = xstrdup(json_string_value(jval));
-            for (p = headerval; *p; p++) {
-                if (*p == '\n') *p = ' ';
-            }
-            time_t t;
-            if (time_from_rfc822(headerval, &t) != -1) {
-                char datestr[RFC3339_DATETIME_MAX];
-                time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
-                json_object_set_new(msg, "sentAt", json_string(datestr));
-            }
-            free(headerval);
-        }
-    }
-
-    if (_wantprop(props, "textBody") ||
-        _wantprop(props, "htmlBody") ||
-        (_wantprop(props, "preview") && !preview_annot) ||
-        _wantprop(props, "body")) {
-
-        if (bodies.textlist.count > 1 && render_multipart_bodies) {
-            /* Concatenate all plain text bodies and replace any
-             * inlined images with placeholders. */
-            int i;
-            for (i = 0; i < bodies.textlist.count; i++) {
-                struct body *part = ptrarray_nth(&bodies.textlist, i);
-
-                if (i) buf_appendcstr(&buf, "\n");
-
-                if (!strcmp(part->type, "TEXT")) {
-                    charset_t cs = charset_lookupname(part->charset_id);
-                    char *t = charset_to_utf8(msg_buf->s + part->content_offset,
-                                              part->content_size, cs, part->charset_enc);
-                    if (t) buf_appendcstr(&buf, t);
-                    charset_free(&cs);
-                    free(t);
-                }
-                else if (!strcmp(part->type, "IMAGE")) {
-					struct param *param;
-                    const char *fname = NULL;
-                    for (param = part->disposition_params; param; param = param->next) {
-                        if (!strncasecmp(param->attribute, "filename", 8)) {
-                            fname =param->value;
-                            break;
-                        }
-                    }
-                    buf_appendcstr(&buf, "[Inline image");
-                    if (fname) {
-                        buf_appendcstr(&buf, ":");
-                        buf_appendcstr(&buf, fname);
-                    }
-                    buf_appendcstr(&buf, "]");
-                }
-            }
-            text = buf_release(&buf);
-        }
-        else if (bodies.text) {
-            charset_t cs = charset_lookupname(bodies.text->charset_id);
-            text = charset_to_utf8(msg_buf->s + bodies.text->content_offset,
-                    bodies.text->content_size, cs, bodies.text->charset_enc);
-            charset_free(&cs);
-        }
-
-        if (bodies.htmllist.count > 1 && render_multipart_bodies) {
-            /* Concatenate all TEXT bodies, enclosing PLAIN text
-             * in <div> and replacing <html> tags in HTML bodies
-             * with <div>. */
-            int i;
-            for (i = 0; i < bodies.htmllist.count; i++) {
-                struct body *part = ptrarray_nth(&bodies.htmllist, i);
-
-                /* XXX htmllist might include inlined images but we
-                 * currently ignore them. After all, there should
-                 * already be an <img> tag for their Content-Id
-                 * header value. If this turns out to be not enough,
-                 * we can insert the <img> tags here. */
-                if (strcasecmp(part->type, "TEXT")) {
-                    continue;
-                }
-
-                if (!i) buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
-
-                charset_t cs = charset_lookupname(part->charset_id);
-                char *t = charset_to_utf8(msg_buf->s + part->content_offset,
-                                          part->content_size, cs, part->charset_enc);
-
-                if (!strcmp(part->subtype, "HTML")) {
-                    _email_extract_htmlbody(&buf, t);
-                }
-                else {
-                    buf_appendcstr(&buf, "<div>");
-                    buf_appendcstr(&buf, t);
-                    buf_appendcstr(&buf, "</div>");
-                }
-                charset_free(&cs);
-                free(t);
-
-                if (i == bodies.htmllist.count - 1) buf_appendcstr(&buf, "</html>");
-            }
-            html  = buf_release(&buf);
-        }
-        else if (bodies.html) {
-            charset_t cs = charset_lookupname(bodies.html->charset_id);
-            html = charset_to_utf8(msg_buf->s + bodies.html->content_offset,
-                    bodies.html->content_size, cs, bodies.html->charset_enc);
-            charset_free(&cs);
-        }
-    }
-
-    /* textBody */
-    if (_wantprop(props, "textBody") || (_wantprop(props, "body") && !html)) {
-        if (!text && html) {
-            text = charset_extract_plain(html);
-        }
-        json_object_set_new(msg, "textBody", json_string(text ? text : ""));
-    }
-    /* htmlBody */
-    if (_wantprop(props, "htmlBody") || (_wantprop(props, "body") && html)) {
-        json_object_set_new(msg, "htmlBody", html ? json_string(html) : json_null());
-    }
-
-    if (_wantprop(props, "hasAttachment")) {
-        int b = 0;
-        if (type == MSG_IS_ATTACHED) {
-            b = bodies.atts.count + bodies.msgs.count;
-        } else {
-            msgrecord_hasflag(mr, JMAP_HAS_ATTACHMENT_FLAG, &b);
-        }
-        json_object_set_new(msg, "hasAttachment", json_boolean(b));
-    }
-
-    /* attachments */
-    if (_wantprop(props, "attachments")) {
-        int i;
-        json_t *atts = json_pack("[]");
-        json_t *inlinedcids = NULL, *imgsizes = NULL;
-        const char *annot;
-
-        /* Load the message annotation with the hash of cid: urls */
-        if ((annot = config_getstring(IMAPOPT_JMAP_INLINEDCIDS_ANNOT))) {
-            inlinedcids = _email_read_annot(req, mr, annot, /*structured*/1);
-        }
-
-        /* Load the message annotation with the hash of image dimensions */
-        if ((annot = config_getstring(IMAPOPT_JMAP_IMAGESIZE_ANNOT))) {
-            imgsizes = _email_read_annot(req, mr, annot, /*structured*/1);
-        }
-
-        for (i = 0; i < bodies.atts.count; i++) {
-            json_t *att = _email_attachment_from_part(ptrarray_nth(&bodies.atts, i),
-                                                    msg_buf, inlinedcids, imgsizes);
-            json_array_append_new(atts, att);
-        }
-        for (i = 0; i < bodies.msgs.count; i++) {
-            json_t *att = _email_attachment_from_part(ptrarray_nth(&bodies.msgs, i),
-                                                    msg_buf, inlinedcids, imgsizes);
-            json_array_append_new(atts, att);
-        }
-        if (!json_array_size(atts)) {
-            json_decref(atts);
-            atts = json_null();
-        }
-        json_object_set_new(msg, "attachments", atts);
-
-        if (inlinedcids) json_decref(inlinedcids);
-    }
-
-    /* attachedEmails */
-    if (_wantprop(props, "attachedEmails")) {
-        int i;
-        json_t *msgs = json_pack("{}");
-
-        for (i = 0; i < bodies.msgs.count; i++) {
-            struct body *part = ptrarray_nth(&bodies.msgs, i);
-            json_t *submsg = NULL;
-
-            r = _email_from_body(req, props, part->subpart, msg_buf,
-                                  mr, MSG_IS_ATTACHED, &submsg);
-            if (r) goto done;
-
-            char *blobid = jmap_blobid(&part->content_guid);
-            json_object_set_new(msgs, blobid, submsg);
-            free(blobid);
-        }
-        if (!json_object_size(msgs)) {
-            json_decref(msgs);
-            msgs = json_null();
-        }
-        json_object_set_new(msg, "attachedEmails", msgs);
-    }
-
-    if (type == MSG_IS_ROOT) {
-        uint32_t system_flags;
-        bit64 cid;
-        uint32_t size;
-
-        r = msgrecord_get_systemflags(mr, &system_flags);
-        if (r) goto done;
-
-        r = msgrecord_get_cid(mr, &cid);
-        if (r) goto done;
-
-        r = msgrecord_get_size(mr, &size);
-        if (r) goto done;
-
-        /* id */
-        struct message_guid guid;
-
-        r = msgrecord_get_guid(mr, &guid);
-        if (r) goto done;
-
-        char *msgid = _email_id_from_guid(&guid);
-        json_object_set_new(msg, "id", json_string(msgid));
-
-        /* blobId */
-        if (_wantprop(props, "blobId")) {
-            char *blobid = jmap_blobid(&guid);
-            json_object_set_new(msg, "blobId", json_string(blobid));
-            free(blobid);
-        }
-        /* threadId */
-        if (_wantprop(props, "threadId")) {
-            if (cid) {
-                char *thrid = _thread_id_from_guid(cid);
-                json_object_set_new(msg, "threadId", json_string(thrid));
-                free(thrid);
-            }
-            else {
-                json_object_set_new(msg, "threadId", json_null());
-            }
-        }
-
-        /* mailboxIds */
-        if (_wantprop(props, "mailboxIds")) {
-            json_t *mailboxes = _email_get_mailboxes(req, msgid);
-            json_t *jval, *ids = json_pack("{}");
-            const char *mboxid;
-            json_object_foreach(mailboxes, mboxid, jval) {
-                json_object_set_new(ids, mboxid, json_true());
-            }
-            json_decref(mailboxes);
-            json_object_set_new(msg, "mailboxIds", ids);
-        }
-
-        /* keywords */
-        if (_wantprop(props, "keywords")) {
-            json_t *keywords = NULL;
-            r = _email_get_keywords(req, msgid, &keywords);
-            if (r) goto done;
-            json_object_set_new(msg, "keywords", keywords);
-        }
-
-        /* size */
-        if (_wantprop(props, "size")) {
-            json_object_set_new(msg, "size", json_integer(size));
-        }
-
-        /* preview */
-        if (_wantprop(props, "preview")) {
-            if (preview_annot) {
-                json_t *preview = _email_read_annot(req, mr, preview_annot, /*structured*/0);
-                json_object_set_new(msg, "preview", preview ? preview : json_string(""));
-            }
-            else {
-                /* Generate our own preview */
-                char *preview = _email_extract_preview(text,
-                        config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH));
-                json_object_set_new(msg, "preview", json_string(preview));
-                free(preview);
-            }
-        }
-        free(msgid);
-    }
-
-    r = 0;
-
-done:
-    json_decref(annotations);
-    json_decref(headers);
-    buf_free(&buf);
-    if (text) free(text);
-    if (html) free(html);
-    ptrarray_fini(&bodies.atts);
-    ptrarray_fini(&bodies.msgs);
-    ptrarray_fini(&bodies.textlist);
-    ptrarray_fini(&bodies.htmllist);
-    if (r) {
-        if (msg) json_decref(msg);
-        msg = NULL;
-    }
-    *msgp = msg;
     return r;
 }
 
@@ -4235,34 +4280,12 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     if (!r) {
         r = msgrecord_get_systemflags(mr, &flags);
         if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
-            return IMAP_OK_COMPLETED;
+            r = IMAP_OK_COMPLETED;
         }
         msgrecord_unref(&mr);
     }
 
     jmap_closembox(req, &mbox);
-    return r;
-}
-
-static int _email_from_record(jmap_req_t *req, hash_table *props,
-                              msgrecord_t *mr, json_t **msgp)
-{
-    struct body *body = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-    int r;
-
-    r = msgrecord_get_body(mr, &msg_buf);
-    if (r) return r;
-
-    /* Parse message body structure */
-    r = msgrecord_get_bodystructure(mr, &body);
-    if (r) return r;
-
-    r = _email_from_body(req, props, body, &msg_buf, mr, MSG_IS_ROOT, msgp);
-    message_free_body(body);
-    free(body);
-    buf_free(&msg_buf);
-
     return r;
 }
 
@@ -4754,7 +4777,6 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             sortcrit[i].key = SORT_SIZE;
         }
         if (!strcmp(prop, "subject")) {
-            /* FIXME JMAP spec requires support of RFC 5256 for sorting */
             sortcrit[i].key = SORT_SUBJECT;
         }
         if (!strcmp(prop, "to")) {
@@ -4830,15 +4852,16 @@ static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
     char *msgid = NULL;
     int i, r;
 
-	/* TODO JMAP spec kicked out threadIds from the Email/query response
-     * somewhen late 2017. Now we should cache emailId -> threadId on the
-     * request context to save lookups on conversations.db */
-
-    /* FIXME JMAP spec introduced negative positions for search results, and
-     * this is what breaks the camel's neck for the mess _email_search got.
-     * This function requires a massive refactor before we can add any new
-     * functionality.
-     * Until then, we fail hard for negative positions */
+	/* TODO rework _email_search
+     * - JMAP spec kicked out threadIds from the Email/query response
+     *   somewhen late 2017. Now we should cache emailId -> threadId on the
+     *   request context to save lookups on conversations.db
+     * - JMAP spec introduced negative positions for search results, and
+     *   this is what breaks the camel's neck for the mess _email_search got.
+     *   This function requires a massive refactor before we can add any new
+     *   functionality.
+     *   Until then, we fail hard for negative positions
+     */
     assert(window->position >= 0);
 
     assert(!want_expunged || expungedids);
@@ -5169,7 +5192,7 @@ static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
         /* Add the thread id */
         if (window->collapse)
             hashu64_insert(md->cid, (void*)1, &cids);
-        char *thrid = _thread_id_from_guid(md->cid);
+        char *thrid = _thread_id_from_cid(md->cid);
         json_array_append_new(*threadids, json_string(thrid));
         free(thrid);
 
@@ -5278,10 +5301,8 @@ static int jmap_email_query(jmap_req_t *req)
         goto done;
     }
 
-    /* XXX Guess, we don't need total_threads anymore */
     size_t total_threads = 0;
     json_t *threadids = NULL;
-    /* XXX - email_search_window is a legacy and should go away */
     struct email_search_window window;
     memset(&window, 0, sizeof(struct email_search_window));
     window.position = query.position;
@@ -5291,11 +5312,8 @@ static int jmap_email_query(jmap_req_t *req)
     window.collapse = collapse_threads;
     int r = _email_search(req, query.filter, query.sort, &window, 0,
             &query.total, &total_threads, &query.ids, NULL, &threadids);
-    /* FIXME _email_search is a stinkin' mess. It tries to cover all of
-     * /query, /queryChanges and /changes, making *any* attempt to change
-     * its code an egg dance */
     if (!JNOTNULL(query.ids)) query.ids = json_array();
-    json_decref(threadids); /* XXX threadIds is legacy */
+    json_decref(threadids);
     if (r) {
         json_t *err = r == IMAP_NOTFOUND ?
             json_pack("{s:s}", "type", "unsupportedFilter") :
@@ -5372,10 +5390,9 @@ static int jmap_email_querychanges(jmap_req_t *req)
     window.collapse = collapse_threads;
     int r = _email_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
             &query.total, &total_threads, &query.added, &query.removed, &threadids);
-    /* FIXME - _email_search API deserves some serious rewrite */
     if (!JNOTNULL(query.added)) query.added = json_array();
     if (!JNOTNULL(query.removed)) query.removed = json_array();
-    json_decref(threadids); /* XXX threadIds is legacy */
+    json_decref(threadids);
     if (r == IMAP_SEARCH_MUTABLE) {
         jmap_error(req, json_pack("{s:s,s:s}", "type", "cannotCalculateChanges",
                     "error", "Search is mutable"));
@@ -5922,10 +5939,949 @@ done:
     return 0;
 }
 
+struct email_get_args {
+    hash_table *props; /* owned by JMAP get or process stack */
+    hash_table *bodyprops;
+    ptrarray_t want_headers;     /* array of header_prop */
+    ptrarray_t want_bodyheaders; /* array of header_prop */
+    short fetch_text_body;
+    short fetch_html_body;
+    short fetch_all_body;
+    size_t max_body_bytes;
+};
+
+#define _EMAIL_GET_ARGS_INITIALIZER \
+    { NULL, NULL, PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER, 0, 0, 0, 0 };
+
+/* Initialized in email_get_parse. *Not* thread-safe */
+static hash_table _email_get_default_props = HASH_TABLE_INITIALIZER;
+static hash_table _email_get_default_bodyprops = HASH_TABLE_INITIALIZER;
+
+static void _email_get_fini(struct email_get_args *args)
+{
+    if (args->bodyprops && args->bodyprops != &_email_get_default_bodyprops) {
+        free_hash_table(args->bodyprops, NULL);
+        free(args->bodyprops);
+    }
+    args->bodyprops = NULL;
+
+    struct header_prop *prop;
+    while ((prop = ptrarray_pop(&args->want_headers))) {
+        _header_prop_fini(prop);
+        free(prop);
+    }
+    ptrarray_fini(&args->want_headers);
+    while ((prop = ptrarray_pop(&args->want_bodyheaders))) {
+        _header_prop_fini(prop);
+        free(prop);
+    }
+    ptrarray_fini(&args->want_bodyheaders);
+}
+
+
+static void _email_parse_wantheaders(json_t *jprops,
+                                     struct jmap_parser *parser,
+                                     const char *prop_name,
+                                     ptrarray_t *want_headers)
+{
+    size_t i;
+    json_t *jval;
+    json_array_foreach(jprops, i, jval) {
+        const char *s = json_string_value(jval);
+        if (!s || strncmp(s, "header:", 7))
+            continue;
+        struct header_prop *hprop;
+        if ((hprop = _header_parseprop(s))) {
+            ptrarray_append(want_headers, hprop);
+        }
+        else {
+            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_invalid(parser, NULL);
+            jmap_parser_pop(parser);
+        }
+    }
+}
+
+static void _email_get_parse(json_t *req_args,
+                           struct jmap_parser *parser,
+                           struct email_get_args *args,
+                           hash_table *props,
+                           json_t **err)
+{
+    size_t i;
+    json_t *val;
+
+    /* properties - already parsed in jmap_get_parse */
+    args->props = props;
+    /* set default props, if not set by client */
+    if (props == NULL) {
+        if (_email_get_default_props.size == 0) {
+            /* Initialize process-owned default property list */
+            construct_hash_table(&_email_get_default_props, 32, 0);
+            hash_insert("attachedEmails", (void*)1, &_email_get_default_props);
+            hash_insert("attachedFiles", (void*)1, &_email_get_default_props);
+            hash_insert("bcc", (void*)1, &_email_get_default_props);
+            hash_insert("blobId", (void*)1, &_email_get_default_props);
+            hash_insert("bodyValues", (void*)1, &_email_get_default_props);
+            hash_insert("cc", (void*)1, &_email_get_default_props);
+            hash_insert("from", (void*)1, &_email_get_default_props);
+            hash_insert("hasAttachment", (void*)1, &_email_get_default_props);
+            hash_insert("htmlBody", (void*)1, &_email_get_default_props);
+            hash_insert("id", (void*)1, &_email_get_default_props);
+            hash_insert("inReplyTo", (void*)1, &_email_get_default_props);
+            hash_insert("keywords", (void*)1, &_email_get_default_props);
+            hash_insert("mailboxIds", (void*)1, &_email_get_default_props);
+            hash_insert("messageId", (void*)1, &_email_get_default_props);
+            hash_insert("preview", (void*)1, &_email_get_default_props);
+            hash_insert("receivedAt", (void*)1, &_email_get_default_props);
+            hash_insert("references", (void*)1, &_email_get_default_props);
+            hash_insert("replyTo", (void*)1, &_email_get_default_props);
+            hash_insert("sender", (void*)1, &_email_get_default_props);
+            hash_insert("sentAt", (void*)1, &_email_get_default_props);
+            hash_insert("size", (void*)1, &_email_get_default_props);
+            hash_insert("subject", (void*)1, &_email_get_default_props);
+            hash_insert("textBody", (void*)1, &_email_get_default_props);
+            hash_insert("threadId", (void*)1, &_email_get_default_props);
+            hash_insert("to", (void*)1, &_email_get_default_props);
+        }
+        args->props = &_email_get_default_props;
+    }
+
+    /* bodyProperties */
+    json_t *arg = json_object_get(req_args, "bodyProperties");
+    if (JNOTNULL(arg)) {
+        if (_parse_strings(arg, parser, "bodyProperties")) {
+            args->bodyprops = xzmalloc(sizeof(hash_table));
+            construct_hash_table(args->bodyprops, json_array_size(arg) + 1, 0);
+            json_array_foreach(arg, i, val) {
+                hash_insert(json_string_value(val), (void*)1, args->bodyprops);
+            }
+        }
+        /* header:Xxx properties */
+        _email_parse_wantheaders(arg, parser, "bodyProperties",
+                                 &args->want_bodyheaders);
+    }
+    else {
+        /* Set default body properties, if not set by client */
+        if (_email_get_default_bodyprops.size == 0) {
+            /* Initialize process-owned default body property list */
+            construct_hash_table(&_email_get_default_bodyprops, 32, 0);
+            hash_insert("blobId", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("charset", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("cid", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("disposition", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("language", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("location", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("name", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("partId", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("size", (void*)1, &_email_get_default_bodyprops);
+            hash_insert("type", (void*)1, &_email_get_default_bodyprops);
+        }
+        args->bodyprops = &_email_get_default_bodyprops;
+    }
+
+    /* fetchTextBodyValues */
+    arg = json_object_get(req_args, "fetchTextBodyValues");
+    if (json_is_boolean(arg)) {
+        args->fetch_text_body = json_boolean_value(arg);
+    }
+    else if (arg) {
+        jmap_parser_invalid(parser, "fetchTextBodyValues");
+    }
+    /* fetchHTMLBodyValues */
+    arg = json_object_get(req_args, "fetchHTMLBodyValues");
+    if (json_is_boolean(arg)) {
+        args->fetch_html_body = json_boolean_value(arg);
+    }
+    else if (arg) {
+        jmap_parser_invalid(parser, "fetchHTMLBodyValues");
+    }
+    /* fetchAllBodyValues */
+    arg = json_object_get(req_args, "fetchAllBodyValues");
+    if (json_is_boolean(arg)) {
+        args->fetch_all_body = json_boolean_value(arg);
+    }
+    else if (arg) {
+        jmap_parser_invalid(parser, "fetchAllBodyValues");
+    }
+    /* maxBodyValueBytes */
+    arg = json_object_get(req_args, "maxBodyValueBytes");
+    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+        args->max_body_bytes = json_integer_value(arg);
+    }
+    else if (arg) {
+        jmap_parser_invalid(parser, "maxBodyValueBytes");
+    }
+    /* header:Xxx properties */
+    json_t *jprops = json_object_get(req_args, "properties");
+    if (JNOTNULL(jprops)) {
+        _email_parse_wantheaders(jprops, parser, "properties",
+                                 &args->want_headers);
+    }
+    /* Complete parse */
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(*err, "arguments", parser->invalid);
+    }
+}
+
+static int _email_get_meta(jmap_req_t *req,
+                           struct email_get_args *args,
+                           struct body *body __attribute__((unused)),
+                           struct buf *msg_buf __attribute__((unused)),
+                           msgrecord_t *mr,
+                           json_t *msg)
+{
+    int r = 0;
+    hash_table *props = args->props;
+    char *msgid = NULL;
+
+    /* Determine message id */
+    struct message_guid guid;
+    r = msgrecord_get_guid(mr, &guid);
+    if (r) goto done;
+    msgid = _email_id_from_guid(&guid);
+
+    /* id */
+    json_object_set_new(msg, "id", json_string(msgid));
+
+    /* blobId */
+    if (_wantprop(props, "blobId")) {
+        char *blobid = jmap_blobid(&guid);
+        json_object_set_new(msg, "blobId", json_string(blobid));
+        free(blobid);
+    }
+
+    /* threadid */
+    if (_wantprop(props, "threadId")) {
+        bit64 cid;
+        r = msgrecord_get_cid(mr, &cid);
+        if (r) goto done;
+        char *threadid = _thread_id_from_cid(cid);
+        json_object_set_new(msg, "threadId", json_string(threadid));
+        free(threadid);
+    }
+
+    /* mailboxIds */
+    if (_wantprop(props, "mailboxIds")) {
+        json_t *mboxids = json_object();
+        json_t *mailboxes = _email_get_mailboxes(req, msgid);
+
+        json_t *val;
+        const char *mboxid;
+        json_object_foreach(mailboxes, mboxid, val) {
+            json_object_set_new(mboxids, mboxid, json_true());
+        }
+        json_decref(mailboxes);
+        json_object_set_new(msg, "mailboxIds", mboxids);
+    }
+
+    /* keywords */
+    if (_wantprop(props, "keywords")) {
+        json_t *keywords = NULL;
+        r = _email_get_keywords(req, msgid, &keywords);
+        if (r) goto done;
+        json_object_set_new(msg, "keywords", keywords);
+    }
+
+    /* size */
+    if (_wantprop(props, "size")) {
+        uint32_t size;
+        r = msgrecord_get_size(mr, &size);
+        if (r) goto done;
+        json_object_set_new(msg, "size", json_integer(size));
+    }
+
+    /* receivedAt */
+    if (_wantprop(props, "receivedAt")) {
+        char datestr[RFC3339_DATETIME_MAX];
+        time_t t;
+
+        r = msgrecord_get_internaldate(mr, &t);
+        if (r) return r;
+        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        json_object_set_new(msg, "receivedAt", json_string(datestr));
+    }
+
+done:
+    free(msgid);
+    return r;
+}
+
+static void _email_get_headerprops(json_t *jdst,
+                                   struct headers *headers,
+                                   ptrarray_t *want_headers)
+{
+    int i;
+    for (i = 0; i < want_headers->count; i++) {
+        struct header_prop *want_header = ptrarray_nth(want_headers, i);
+
+        /* Lookup array of EmailHeader objects by name */
+        json_t *jheaders = json_object_get(headers->all, want_header->lcasename);
+        if (!jheaders) {
+            json_object_set_new(jdst, want_header->prop,
+                    want_header->all ? json_array() : json_null());
+            continue;
+        }
+
+        /* Determine header form converter */
+        json_t* (*cb)(const char *raw);
+        switch (want_header->form) {
+            case HEADER_FORM_TEXT:
+                cb = _header_as_text;
+                break;
+            case HEADER_FORM_ADDRESSES:
+                cb = _header_as_addresses;
+                break;
+            case HEADER_FORM_MESSAGEIDS:
+                cb = _header_as_messageids;
+                break;
+            case HEADER_FORM_URLS:
+                cb = _header_as_urls;
+                break;
+            default:
+                cb = _header_as_raw;
+        }
+
+        /* Convert header values */
+        json_t *allvals = json_array();
+        size_t i = want_header->all ? 0 : json_array_size(jheaders) - 1;
+        for (i = 0; i < json_array_size(jheaders); i++) {
+            json_t *jheader = json_array_get(jheaders, i);
+            json_t *jval = json_object_get(jheader, "value");
+            json_array_append_new(allvals, cb(json_string_value(jval)));
+        }
+        json_object_set(jdst, want_header->prop,
+                want_header->all ?  allvals : json_array_get(allvals, i - 1));
+        json_decref(allvals);
+    }
+}
+
+static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
+                              struct email_get_args *args,
+                              struct body *body,
+                              struct buf *msg_buf,
+                              msgrecord_t *mr __attribute__((unused)),
+                              json_t *msg)
+{
+    int r = 0;
+    hash_table *props = args->props;
+
+    // TODO support embedded messages for Email/parse
+
+    /* Always fetch headers: the struct body type might contain
+     * cached fields such as reply_to, sender, et al that are
+     * not set in the original message, but the JMAP spec
+     * requires us to return NULL if the header is not set. */
+    /* TODO brong -> shall we deal with this in message.c? 
+     * -> some headers are in the cache, use message_get_field 
+     * -> for replyto and sender at the moment ignore spec */
+    struct headers headers = HEADERS_INITIALIZER;
+    _headers_from_mime(msg_buf->s + body->header_offset, body->header_size, &headers);
+
+    /* headers */
+    if (_wantprop(props, "headers")) {
+        json_object_set(msg, "headers", headers.raw); /* incref! */
+    }
+    /* headers:Xxx */
+    if (args->want_headers.count) {
+        _email_get_headerprops(msg, &headers, &args->want_headers);
+    }
+    /* messageId */
+    if (_wantprop(props, "messageId")) {
+        json_object_set_new(msg, "messageId",
+                _header_as_messageids(body->message_id));
+    }
+    /* inReplyTo */
+    if (_wantprop(props, "inReplyTo")) {
+        json_object_set_new(msg, "inReplyTo",
+                _header_as_messageids(body->in_reply_to));
+    }
+    /* references */
+    if (_wantprop(props, "references")) {
+        json_object_set_new(msg, "references",
+                _header_as_messageids(body->references));
+    }
+    /* from */
+    if (_wantprop(props, "from")) {
+        json_object_set_new(msg, "from",
+                _emailaddresses_from_addr(body->from));
+    }
+    /* sender */
+    if (_wantprop(props, "sender")) {
+        json_object_set_new(msg, "sender",
+                json_object_get(headers.all, "sender") ?
+                _emailaddresses_from_addr(body->sender) : json_null());
+    }
+    /* replyTo */
+    if (_wantprop(props, "replyTo")) {
+        json_object_set_new(msg, "replyTo",
+                json_object_get(headers.all, "reply-to") ?
+                _emailaddresses_from_addr(body->reply_to) : json_null());
+    }
+    /* to */
+    if (_wantprop(props, "to")) {
+        json_object_set_new(msg, "to",
+                _emailaddresses_from_addr(body->to));
+    }
+    /* cc */
+    if (_wantprop(props, "cc")) {
+        json_object_set_new(msg, "cc",
+                _emailaddresses_from_addr(body->cc));
+    }
+    /* bcc */
+    if (_wantprop(props, "bcc")) {
+        json_object_set_new(msg, "bcc",
+                _emailaddresses_from_addr(body->bcc));
+    }
+    /* subject */
+    if (_wantprop(props, "subject")) {
+        json_object_set_new(msg, "subject",
+                _header_as_text(body->subject));
+    }
+    /* sentAt */
+    if (_wantprop(props, "sentAt")) {
+        json_t *jsent_at = json_null();
+        time_t t;
+        if (time_from_rfc822(body->date, &t) != -1) {
+            char datestr[RFC3339_DATETIME_MAX];
+            time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+            jsent_at = json_string(datestr);
+        }
+        json_object_set_new(msg, "sentAt", jsent_at);
+    }
+
+    _headers_fini(&headers);
+    return r;
+}
+
+static json_t *_email_get_bodypart(struct body *part,
+                                  struct email_get_args *args,
+                                  struct buf *msg_buf)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct param *param;
+
+    hash_table *bodyprops = args->bodyprops;
+    ptrarray_t *want_bodyheaders = &args->want_bodyheaders;
+
+    json_t *jbodypart = json_object();
+
+    /* partId */
+    if (_wantprop(bodyprops, "partId")) {
+        json_t *jpart_id = json_null();
+        if (!strcasecmp(part->type, "TEXT"))
+            jpart_id = json_string(part->part_id);
+        json_object_set_new(jbodypart, "partId", jpart_id);
+    }
+
+    /* blobId */
+    if (_wantprop(bodyprops, "blobId")) {
+        json_t *jblob_id = json_null();
+        if (!message_guid_isnull(&part->content_guid)) {
+            char *tmp = jmap_blobid(&part->content_guid);
+            jblob_id = json_string(tmp);
+            free(tmp);
+        }
+        json_object_set_new(jbodypart, "blobId", jblob_id);
+    }
+
+    /* size */
+    if (_wantprop(bodyprops, "size")) {
+        size_t size;
+        if (part->numparts) {
+            /* Multi-part */
+            size = part->content_size;
+        }
+        else if (part->charset_enc) {
+            buf_reset(&buf);
+            charset_decode(&buf, msg_buf->s + part->content_offset,
+                    part->content_size, part->charset_enc);
+            size = buf_len(&buf);
+            buf_reset(&buf);
+        }
+        else {
+            size = part->content_size;
+        }
+        json_object_set_new(jbodypart, "size", json_integer(size));
+    }
+
+    /* headers */
+    if (_wantprop(bodyprops, "headers") || want_bodyheaders->count) {
+        struct headers headers = HEADERS_INITIALIZER;
+        _headers_from_mime(msg_buf->s + part->header_offset, part->header_size,
+                           &headers);
+        if (_wantprop(bodyprops, "headers")) {
+            json_object_set(jbodypart, "headers", headers.raw);
+        }
+        if (want_bodyheaders->count) {
+            _email_get_headerprops(jbodypart, &headers, want_bodyheaders);
+        }
+        _headers_fini(&headers);
+    }
+
+    /* name */
+    if (_wantprop(bodyprops, "name")) {
+        const char *fname = NULL;
+        int is_extended = 0;
+        for (param = part->disposition_params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "filename", 8)) {
+                is_extended = param->attribute[8] == '*';
+                fname = param->value;
+                break;
+            }
+        }
+        if (!fname) {
+            for (param = part->params; param; param = param->next) {
+                if (!strncasecmp(param->attribute, "name", 4)) {
+                    is_extended = param->attribute[4] == '*';
+                    fname = param->value;
+                    break;
+                }
+            }
+        }
+        if (fname && is_extended) {
+            char *s = charset_parse_mimexvalue(fname, NULL);
+            json_object_set_new(jbodypart, "name",
+                    s ? json_string(s) : json_null());
+            free(s);
+        }
+        else if (fname) {
+            int mime_flags = charset_flags & CHARSET_MIME_UTF8;
+            char *s = charset_parse_mimeheader(fname, mime_flags);
+            json_object_set_new(jbodypart, "name",
+                    s ? json_string(s) : json_null());
+            free(s);
+        }
+        else {
+            json_object_set_new(jbodypart, "name", json_null());
+        }
+    }
+
+    /* type */
+    if (_wantprop(bodyprops, "type")) {
+        buf_setcstr(&buf, part->type);
+        if (part->subtype) {
+            buf_appendcstr(&buf, "/");
+            buf_appendcstr(&buf, part->subtype);
+        }
+        json_object_set_new(jbodypart, "type", json_string(buf_lcase(&buf)));
+    }
+
+    /* charset */
+    if (_wantprop(bodyprops, "charset")) {
+        json_object_set_new(jbodypart, "charset", part->charset_id ?
+                json_string(part->charset_id) : json_null());
+    }
+
+    /* disposition */
+    if (_wantprop(bodyprops, "disposition")) {
+        json_t *jdisp = json_null();
+        if (part->disposition) {
+            char *disp = lcase(xstrdup(part->disposition));
+            jdisp = json_string(disp);
+            free(disp);
+        }
+        json_object_set_new(jbodypart, "disposition", jdisp);
+    }
+
+    /* cid */
+    if (_wantprop(bodyprops, "cid")) {
+        /* Extract header */
+        /* TODO this should be message_get_field */
+        strarray_t headers = STRARRAY_INITIALIZER;
+        strarray_add(&headers, "Content-ID");
+        char *s = xstrndup(msg_buf->s + part->header_offset, part->header_size);
+        message_pruneheader(s, &headers, NULL);
+
+        /* Parse id */
+        json_t *jcid = json_null();
+        const char *cid = NULL;
+        if ((cid = strchr(s, ':'))) {
+            char *unfolded;
+            if ((unfolded = charset_unfold(cid + 1, strlen(cid), 0))) {
+                json_t *jheaders = _header_as_messageids(cid + 1);
+                if (json_array_size(jheaders))
+                    jcid = json_incref(json_array_get(jheaders, 0));
+                json_decref(jheaders);
+                free(unfolded);
+            }
+        }
+        /* Set field */
+        json_object_set_new(jbodypart, "cid", jcid);
+        free(s);
+        strarray_fini(&headers);
+    }
+
+    /* language */
+    if (_wantprop(bodyprops, "language")) {
+        /* Extract header */
+        strarray_t headers = STRARRAY_INITIALIZER;
+        strarray_add(&headers, "Content-Language");
+        char *s = xstrndup(msg_buf->s + part->header_offset, part->header_size);
+        message_pruneheader(s, &headers, NULL);
+        /* Split by space and comma and aggregate into array */
+        json_t *language = json_array();
+        const char *p = strchr(s, ':');
+        if (p) {
+            int i;
+            char *tmp = charset_unfold(p+1, strlen(p+1) - 1, 0);
+            strarray_t *ls = strarray_split(tmp, "\t ,", STRARRAY_TRIM);
+            for (i = 0; i < ls->count; i++) {
+                json_array_append_new(language, json_string(strarray_nth(ls, i)));
+            }
+            strarray_free(ls);
+            free(tmp);
+
+            /* Set field */
+            if (!json_array_size(language)) {
+                json_decref(language);
+                language = json_null();
+            }
+        }
+        json_object_set_new(jbodypart, "language", language);
+        free(s);
+        strarray_fini(&headers);
+    }
+
+    /* location */
+    if (_wantprop(bodyprops, "location")) {
+        json_object_set_new(jbodypart, "location", part->location ?
+                json_string(part->location) : json_null());
+    }
+
+    /* subParts */
+    if (!strcmp(part->type, "MULTIPART")) {
+        json_t *subparts = json_array();
+        int i;
+        for (i = 0; i < part->numparts; i++) {
+            struct body *subpart = part->subpart + i;
+            json_array_append_new(subparts,
+                    _email_get_bodypart(subpart, args, msg_buf));
+
+        }
+        json_object_set_new(jbodypart, "subParts", subparts);
+    }
+    else if (_wantprop(bodyprops, "subParts")) {
+        json_object_set_new(jbodypart, "subParts", json_array());
+    }
+
+    buf_free(&buf);
+    return jbodypart;
+}
+
+struct _email_get_bodyvalue_rock {
+    struct buf buf;
+    size_t max_body_bytes;
+    int is_truncated;
+};
+
+void _email_get_bodyvalue_cb(const struct buf *text, void *_rock)
+{
+    struct _email_get_bodyvalue_rock *rock = _rock;
+    if (!rock->max_body_bytes) {
+        /* No limit, just copy text */
+        buf_append(&rock->buf, text);
+    }
+    else if (rock->buf.len + text->len <= rock->max_body_bytes) {
+        /* There's a limit but still enough space for all of text */
+        buf_append(&rock->buf, text);
+    }
+    else if (rock->buf.len < rock->max_body_bytes) {
+        /* Reached limit, truncate text into body */
+        size_t left = rock->max_body_bytes - rock->buf.len;
+        buf_appendmap(&rock->buf, text->s, left);
+        rock->is_truncated = 1;
+    }
+    else {
+        /* Over limit - ignore */
+    }
+}
+
+static json_t * _email_get_bodyvalue(struct body *part,
+                                     struct buf *msg_buf,
+                                     size_t max_body_bytes,
+                                     int is_html)
+{
+    /* Determine the start byte of this part's body */
+    struct buf data = BUF_INITIALIZER;
+    buf_init_ro(&data, msg_buf->s + part->content_offset, part->content_size);
+
+    /* Extract up to max_body_bytes */
+    struct _email_get_bodyvalue_rock rock = {
+        BUF_INITIALIZER, max_body_bytes, /*is_truncated*/0
+    };
+    charset_t cs = charset_lookupname(part->charset_id);
+    int flags = CHARSET_SNIPPET|CHARSET_KEEPHTML;
+    int is_problem = !charset_extract(_email_get_bodyvalue_cb,
+            &rock, &data, cs, part->charset_enc, part->subtype, flags);
+    charset_free(&cs);
+    buf_cstring(&rock.buf);
+
+    /* Truncate UTF-8 (assuming sane UTF-8 to start from). */
+    /* XXX do not split between combining characters */
+    struct buf *txt = &rock.buf;
+    if (buf_len(txt) && max_body_bytes) {
+        const unsigned char *base = (unsigned char *) buf_base(txt);
+        const unsigned char *top = base + buf_len(txt);
+        const unsigned char *p = top - 1;
+        while (p >= base && ((*p & 0xc0) == 0x80))
+            p--;
+        if (p >= base) {
+            ssize_t have_bytes = top - p;
+            ssize_t need_bytes = 0;
+            unsigned char hi_nibble = *p & 0xf0;
+            switch (hi_nibble) {
+                case 0xf0:
+                    need_bytes = 4;
+                    break;
+                case 0xe0:
+                    need_bytes = 3;
+                    break;
+                case 0xc0:
+                    need_bytes = 2;
+                    break;
+                default:
+                    need_bytes = 1;
+            }
+            if (have_bytes < need_bytes)
+                buf_truncate(txt, p - base);
+        }
+        else {
+            buf_reset(txt);
+        }
+    }
+
+    /* Truncate HTML */
+    if (buf_len(txt) && max_body_bytes && is_html) {
+        /* Truncate any trailing '<' start tag character without closing '>' */
+        const char *base = buf_base(txt);
+        const char *top  = base + buf_len(txt);
+        const char *p;
+        for (p = top - 1; *p != '>' && p >= base; p--) {
+            if (*p == '<') {
+                buf_truncate(txt, p - base + 1);
+                break;
+            }
+        }
+    }
+
+    /* Build value */
+    json_t *bodyvalue = json_object();
+    json_object_set_new(bodyvalue, "value",
+            json_string(buf_cstring(txt)));
+    json_object_set_new(bodyvalue, "isEncodingProblem",
+            json_boolean(is_problem));
+    json_object_set_new(bodyvalue, "isTruncated",
+            json_boolean(rock.is_truncated));
+
+    buf_free(&rock.buf);
+    return bodyvalue;
+}
+
+
+static int _email_get_bodies(jmap_req_t *req,
+                             struct email_get_args *args,
+                             struct body *msg_body,
+                             struct buf *msg_buf,
+                             msgrecord_t *mr,
+                             json_t *msg)
+{
+    struct emailbodies bodies = EMAILBODIES_INITIALIZER;
+    hash_table *props = args->props;
+    int r = 0;
+
+    // TODO sunset RENDER_MULTIPART in lib/imapoptions
+
+    /* Dissect message into its parts */
+    r = _email_extract_bodies(msg_body, msg_buf, &bodies);
+    if (r) goto done;
+
+    /* bodyStructure */
+    if (_wantprop(props, "bodyStructure")) {
+        json_object_set_new(msg, "bodyStructure",
+                _email_get_bodypart(msg_body, args, msg_buf));
+    }
+
+    /* bodyValues */
+    if (_wantprop(props, "bodyValues")) {
+        json_t *body_values = json_object();
+
+        /* Determine which body valuex to fetch */
+        int i;
+        ptrarray_t parts = PTRARRAY_INITIALIZER;
+        if (args->fetch_text_body || args->fetch_all_body) {
+            for (i = 0; i < bodies.textlist.count; i++)
+                ptrarray_append(&parts, ptrarray_nth(&bodies.textlist, i));
+        }
+        if (args->fetch_html_body || args->fetch_all_body) {
+            for (i = 0; i < bodies.htmllist.count; i++)
+                ptrarray_append(&parts, ptrarray_nth(&bodies.htmllist, i));
+        }
+
+        /* Fetch body values */
+        for (i = 0; i < parts.count; i++) {
+            struct body *part = ptrarray_nth(&parts, i);
+            if (strcmp("TEXT", part->type))
+                continue;
+            if (json_object_get(body_values, part->part_id))
+                continue;
+            json_object_set_new(body_values, part->part_id,
+                    _email_get_bodyvalue(part, msg_buf, args->max_body_bytes,
+                                         !strcmp("HTML", part->subtype)));
+        }
+        ptrarray_fini(&parts);
+
+        json_object_set_new(msg, "bodyValues", body_values);
+    }
+
+    /* textBody */
+    if (_wantprop(props, "textBody")) {
+        json_t *text_body = json_array();
+        int i;
+        for (i = 0; i < bodies.textlist.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.textlist, i);
+            json_array_append_new(text_body,
+                    _email_get_bodypart(part, args, msg_buf));
+        }
+        json_object_set_new(msg, "textBody", text_body);
+    }
+
+    /* htmlBody */
+    if (_wantprop(props, "htmlBody")) {
+        json_t *html_body = json_array();
+        int i;
+        for (i = 0; i < bodies.htmllist.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.htmllist, i);
+            json_array_append_new(html_body,
+                    _email_get_bodypart(part, args, msg_buf));
+        }
+        json_object_set_new(msg, "htmlBody", html_body);
+    }
+
+    /* attachedEmails */
+    if (_wantprop(props, "attachedEmails")) {
+        json_t *attached_emails = json_array();
+        int i;
+        for (i = 0; i < bodies.msgs.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.msgs, i);
+            json_array_append_new(attached_emails,
+                    _email_get_bodypart(part, args, msg_buf));
+        }
+        json_object_set_new(msg, "attachedEmails", attached_emails);
+    }
+
+    /* attachedFiles */
+    if (_wantprop(props, "attachedFiles")) {
+        json_t *attached_files = json_array();
+        int i;
+        for (i = 0; i < bodies.atts.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.atts, i);
+            json_array_append_new(attached_files,
+                    _email_get_bodypart(part, args, msg_buf));
+        }
+        json_object_set_new(msg, "attachedFiles", attached_files);
+    }
+
+    /* hasAttachment */
+    if (_wantprop(props, "hasAttachment")) {
+        int b = 0;
+        // TODO support embedded message for Email/parse
+        msgrecord_hasflag(mr, JMAP_HAS_ATTACHMENT_FLAG, &b);
+        json_object_set_new(msg, "hasAttachment", json_boolean(b));
+    }
+
+    /* preview */
+    if (_wantprop(props, "preview")) {
+        const char *preview_annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
+        if (preview_annot) {
+            json_t *preview = _email_get_annot(req, mr, preview_annot, /*structured*/0);
+            json_object_set_new(msg, "preview", preview ? preview : json_string(""));
+        }
+        else {
+            /* TODO optimise for up to PREVIEW_LEN bytes */
+            char *text = _emailbodies_to_plain(&bodies, msg_buf);
+            if (!text) {
+                char *html = _emailbodies_to_html(&bodies, msg_buf);
+                text = _html_to_plain(html);
+                free(html);
+            }
+            size_t len = config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH);
+            char *preview = _email_extract_preview(text, len);
+            json_object_set_new(msg, "preview", json_string(preview));
+            free(preview);
+            free(text);
+        }
+    }
+
+done:
+    _emailbodies_fini(&bodies);
+    return r;
+}
+
+static int _email_get(jmap_req_t *req,
+                      struct email_get_args *args,
+                      struct body *body,
+                      struct buf *msg_buf,
+                      msgrecord_t *mr,
+                      json_t **msgptr)
+{
+    json_t *msg = json_object();
+    int r = 0;
+
+    r = _email_get_meta(req, args, body, msg_buf, mr, msg);
+    if (r) goto done;
+    r = _email_get_headers(req, args, body, msg_buf, mr, msg);
+    if (r) goto done;
+    r = _email_get_bodies(req, args, body, msg_buf, mr, msg);
+    if (r) goto done;
+
+    *msgptr = msg;
+done:
+
+    if (r) json_decref(msg);
+    return r;
+}
+
+static int _email_get_record(jmap_req_t *req,
+                              struct email_get_args *args,
+                              msgrecord_t *mr,
+                              json_t **msgp)
+{
+    struct body *body = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    int r;
+
+    r = msgrecord_get_body(mr, &msg_buf);
+    if (r) return r;
+    r = msgrecord_get_bodystructure(mr, &body);
+    if (r) return r;
+    r = _email_get(req, args, body, &msg_buf, mr, msgp);
+
+    message_free_body(body);
+    free(body);
+    buf_free(&msg_buf);
+    return r;
+}
+
+static int _email_get_with_props(jmap_req_t *req,
+                                 hash_table *props,
+                                 msgrecord_t *mr,
+                                 json_t **msgp)
+{
+    struct email_get_args args = _EMAIL_GET_ARGS_INITIALIZER;
+    args.props = props;
+    int r = _email_get_record(req, &args, mr, msgp);
+    args.props = NULL;
+    _email_get_fini(&args);
+    return r;
+}
+
 static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
+	struct email_get_args args = _EMAIL_GET_ARGS_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */
@@ -5934,6 +6890,11 @@ static int jmap_email_get(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
+	_email_get_parse(req->args, &parser, &args, get.props, &err);
+	if (err) {
+		jmap_error(req, err);
+		goto done;
+	}
 
     /* Refuse to fetch *all* Email */
     if (!JNOTNULL(get.ids)) {
@@ -5957,7 +6918,7 @@ static int jmap_email_get(jmap_req_t *req)
             if (!r) {
                 r = msgrecord_find(mbox, uid, &mr);
                 if (!r) {
-                    r = _email_from_record(req, get.props, mr, &msg);
+                    r = _email_get_record(req, &args, mr, &msg);
                 }
                 jmap_closembox(req, &mbox);
             }
@@ -5983,71 +6944,11 @@ static int jmap_email_get(jmap_req_t *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
+	_email_get_fini(&args);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     return 0;
 }
-
-static int _email_parse_emailer(json_t *emailer,
-                              const char *prefix,
-                              int parseaddr,
-                              json_t *invalid)
-{
-    struct buf buf = BUF_INITIALIZER;
-    int r = 1;
-    json_t *val;
-    int valid = 1;
-
-    val = json_object_get(emailer, "name");
-    if (!val || json_typeof(val) != JSON_STRING) {
-        buf_printf(&buf, "%s.%s", prefix, "name");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-        r = 0;
-    }
-    val = json_object_get(emailer, "email");
-    if (val && parseaddr && json_string_value(val)) {
-        struct address *addr = NULL;
-        parseaddr_list(json_string_value(val), &addr);
-        if (!addr || addr->invalid || !addr->mailbox || !addr->domain || addr->next) {
-            valid = 0;
-        }
-        parseaddr_free(addr);
-    }
-    if (!val || json_typeof(val) != JSON_STRING || !valid) {
-        buf_printf(&buf, "%s.%s", prefix, "email");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-        r = 0;
-    }
-
-    buf_free(&buf);
-    return r;
-}
-
-static int _email_to_mime(jmap_req_t *req, FILE *out, void *rock);
-
-#define JMAPMSG_HEADER_TO_MIME(k, v) \
-    { \
-       const char *_v = (v); \
-       char *s = charset_encode_mimeheader(_v, strlen(_v)); \
-       fprintf(out, "%s: %s\r\n", k, s); \
-       free(s); \
-    }
-
-#define JMAPMSG_EMAILER_TO_MIME(b, m) \
-    { \
-        json_t *_m = (m); \
-        const char *name = json_string_value(json_object_get(_m, "name")); \
-        const char *email = json_string_value(json_object_get(_m, "email")); \
-        if (strlen(name) && email) { \
-            char *xname = charset_encode_mimeheader(name, strlen(name)); \
-            buf_printf(b, "%s <%s>", xname, email); \
-            free(xname); \
-        } else if (email) { \
-            buf_appendcstr(b, email); \
-        } \
-    }
 
 static char *_mime_make_boundary()
 {
@@ -6062,30 +6963,9 @@ static char *_mime_make_boundary()
     return boundary;
 }
 
-static int _mime_is_7bit_safe(const char *base, size_t len)
-{
-    /* XXX check if boundary exists in base - base+len ? */
-
-    size_t linelen = 0;
-    size_t i;
-    for (i = 0; i < len; i++) {
-        if (base[i] == '\n') linelen = 0;
-        else linelen++;
-
-        // any long lines, reject
-        if (linelen > 80) return 0;
-
-        // any 8bit, reject
-        if (base[i] & 0x80) return 0;
-
-        // xxx - boundary match ?
-    }
-
-    return 1;
-}
-
 #define MIME_MAX_HEADER_LENGTH 78
 
+__attribute__((unused)) // FIXME
 static int _mime_write_param(FILE *out, const char *name, const char *value,
                              int quote, int is_extended)
 {
@@ -6156,931 +7036,6 @@ static int _mime_write_param(FILE *out, const char *name, const char *value,
     }
 
     return 0;
-}
-
-static int _email_attachment_to_mime(jmap_req_t *req, json_t *att, const char *boundary, FILE *out)
-{
-    struct mailbox *mbox = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-    const char *blobid, *type, *cid, *name;
-    strarray_t headers = STRARRAY_INITIALIZER;
-    msgrecord_t *mr;
-    char *ctenc = NULL, *content_type = NULL;
-    uint32_t size;
-    int r, name_is_ascii = 1;
-
-    type = json_string_value(json_object_get(att, "type"));
-    blobid = json_string_value(json_object_get(att, "blobId"));
-    cid = json_string_value(json_object_get(att, "cid"));
-    name = json_string_value(json_object_get(att, "name"));
-
-    if (name) {
-        const unsigned char *p;
-        for (p = (const unsigned char*) name; *p; p++) {
-            if (!isascii(*p)) {
-                name_is_ascii = 0;
-                break;
-            }
-        }
-    }
-
-    /* Find part containing blob */
-    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part);
-    if (r) goto done;
-
-    /* Map the message into memory */
-    r = msgrecord_get_body(mr, &msg_buf);
-    if (r) goto done;
-
-    r = msgrecord_get_size(mr, &size);
-    if (r) goto done;
-
-    if (boundary) {
-        fprintf(out, "\r\n--%s\r\n", boundary);
-    }
-
-    /* Write headers */
-
-    /* Content-Type */
-    if (type) {
-        content_type = xstrdup(type);
-    }
-    else if (part) {
-        content_type = strconcat(part->type, "/", part->subtype, NULL);
-        lcase(content_type);
-    }
-    else {
-        content_type = xstrdup("email/rfc822");
-    }
-
-    fputs("Content-Type: ", out);
-    fputs(content_type, out);
-
-    if (name) {
-        /* RFC 2045 dropped the "name" parameter value for Content-Type,
-         * but the quasi-standard is to QP-encode any attachment name in
-         * this parameter value */
-        char *qpname = charset_encode_mimeheader(name, strlen(name));
-        _mime_write_param(out, "name", qpname, 1, 0);
-        free(qpname);
-    }
-    if (part && part->params) {
-        /* Copy any additional Content-Type parameters from original body */
-        struct param *param;
-        for (param = part->params; param; param = param->next) {
-            char *param_name = lcase(xstrdup(param->attribute));
-            if (strcmp(param_name, "name")) {
-                const char *p;
-                int need_quote = 0;
-                for (p = param->value; p && *p; p++) {
-                    if (strchr(MIME_TSPECIALS, *p)) {
-                        need_quote = 1;
-                        break;
-                    }
-                }
-                _mime_write_param(out, param_name, param->value, need_quote, 0);
-            }
-            free(param_name);
-        }
-    }
-    fputs("\r\n", out);
-    free(content_type);
-
-    /* Content-ID */
-    if (cid) {
-        JMAPMSG_HEADER_TO_MIME("Content-ID", cid);
-    }
-
-    /* Content-Disposition */
-    fputs("Content-Disposition: attachment", out);
-    if (name) {
-        /* XXX break excessively long parameter values */
-        if (!name_is_ascii) {
-            char *s = charset_encode_mimexvalue(name, NULL);
-            _mime_write_param(out, "filename*", s, 0, 1);
-            free(s);
-        } else {
-            _mime_write_param(out, "filename", name, 1, 0);
-        }
-    }
-    fputs("\r\n", out);
-
-    /* Raw file */
-    if (!part) {
-        fputs("\r\n", out);
-        fwrite(msg_buf.s, 1, size, out);
-    }
-    /* MESSAGE parts mustn't be re-encoded, and maybe no encoding is required... */
-    else if (!strcasecmp(part->type, "MESSAGE") ||
-             _mime_is_7bit_safe(msg_buf.s + part->content_offset, part->content_size)) {
-
-        strarray_add(&headers, "Content-Transfer-Encoding");
-        ctenc = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-        message_pruneheader(ctenc, &headers, NULL);
-        fwrite(ctenc, 1, strlen(ctenc), out);
-        strarray_truncate(&headers, 0);
-        free(ctenc);
-        ctenc = NULL;
-
-        fputs("\r\n", out);
-
-        fwrite(msg_buf.s + part->content_offset, 1, part->content_size, out);
-    }
-    else if (!strcasecmp(part->type, "TEXT")) {
-        size_t qplen;
-        char *freeme = charset_qpencode_mimebody(msg_buf.s + part->content_offset,
-                                                 body->content_size, 0, &qplen);
-
-        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "quoted-printable");
-
-        fputs("\r\n", out);
-
-        fwrite(freeme, 1, qplen, out);
-
-        free(freeme);
-    }
-    else {
-        size_t b64_size;
-
-        /* Determine encoded size */
-        charset_encode_mimebody(NULL, part->content_size, NULL,
-                                &b64_size, NULL);
-
-        /* Realloc buffer to accomodate encoding overhead */
-        char *freeme = xmalloc(b64_size);
-
-        /* Encode content into buffer at current position */
-        charset_encode_mimebody(msg_buf.s + part->content_offset,
-                                body->content_size,
-                                freeme, NULL, NULL);
-
-        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "base64");
-
-        fputs("\r\n", out);
-
-        fwrite(freeme, 1, b64_size, out);
-
-        free(freeme);
-    }
-
-    r = 0;
-
-
-done:
-    if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    free(ctenc);
-    buf_free(&msg_buf);
-    strarray_fini(&headers);
-    return r;
-}
-
-static int _mime_write_text(const char *text, const char *subtype, FILE *out)
-{
-    size_t len = strlen(text);
-
-    /* Check and sanitise text */
-    int has_long_lines = 0;
-    int is_7bit = 1;
-    const char *p = text;
-    const char *lo = text;
-    const char *hi = text + len;
-    const char *last_lf = p;
-    struct buf txtbuf = BUF_INITIALIZER;
-    for (p = lo; p < hi; p++) {
-        /* Keep track of line-length and high-bit bytes */
-        if (p - last_lf > 998)
-            has_long_lines = 1;
-        if (*p == '\n')
-            last_lf = p;
-        if (*p & 0x80)
-            is_7bit = 0;
-        /* Omit CR, expand lone LF to CRLF */
-        if (*p == '\r' && p < hi && *(p+1) != '\n')
-            continue;
-        if (*p == '\n' && p > lo && *(p-1) != '\r')
-            buf_putc(&txtbuf, '\r');
-        buf_putc(&txtbuf, *p);
-    }
-
-    /* Make header */
-    struct buf hdrbuf = BUF_INITIALIZER;
-    buf_printf(&hdrbuf, "text/%s", subtype);
-
-    if (is_7bit && !has_long_lines) {
-        /* Use regular, short line ASCII */
-        buf_appendcstr(&hdrbuf, ";charset=us-ascii");
-        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&hdrbuf));
-        fputs("\r\n", out);
-        fwrite(buf_cstring(&txtbuf), 1, buf_len(&txtbuf), out);
-    }
-    else {
-        /* Write quoted printable */
-        buf_appendcstr(&hdrbuf, ";charset=utf-8");
-        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&hdrbuf));
-        JMAPMSG_HEADER_TO_MIME("Content-Transfer-Encoding", "quoted-printable");
-        fputs("\r\n", out);
-        size_t qp_len = 0;
-        char *qp_text = charset_qpencode_mimebody(txtbuf.s, txtbuf.len, 1, &qp_len);
-        fwrite(qp_text, 1, qp_len, out);
-        free(qp_text);
-    }
-
-    buf_free(&txtbuf);
-    buf_free(&hdrbuf);
-    return 0;
-}
-
-static int _email_body_to_mime(jmap_req_t *req, json_t *msg,
-                             const char *boundary, FILE *out)
-{
-    char *freeme = NULL, *myboundary = NULL;
-    size_t i;
-    struct buf buf = BUF_INITIALIZER;
-    int r;
-    json_t *attachments = NULL, *cid_attachments = NULL, *attached_msgs = NULL;
-    json_t *val = NULL, *text = NULL, *html = NULL, *mymsg = NULL;
-
-    /* Make. a shallow copy of msg as scratchpad. */
-    mymsg = json_copy(msg);
-
-    /* Determine text bodies */
-    text = json_object_get(mymsg, "textBody");
-    html = json_object_get(mymsg, "htmlBody");
-    json_incref(text);
-    json_incref(html);
-
-    /* Determine attached messages */
-    attached_msgs = json_object_get(mymsg, "attachedEmails");
-    json_incref(attached_msgs);
-
-    /* Split attachments into ones with and without cid. If there's no
-     * htmlBody defined, all attachments end up in a multipart. */
-    cid_attachments = json_pack("[]");
-    attachments = json_pack("[]");
-    json_array_foreach(json_object_get(mymsg, "attachments"), i, val) {
-        if (html && JNOTNULL(json_object_get(val, "cid")) &&
-                    json_object_get(val, "isInline") == json_true()) {
-            json_array_append(cid_attachments, val);
-        } else {
-            json_array_append(attachments, val);
-        }
-    }
-    if (!json_array_size(cid_attachments)) {
-        json_decref(cid_attachments);
-        cid_attachments = NULL;
-    }
-    if (!json_array_size(attachments)) {
-        json_decref(attachments);
-        attachments = NULL;
-    }
-
-    if (boundary) {
-        fprintf(out, "\r\n--%s\r\n", boundary);
-    }
-
-    if (json_array_size(attachments) || json_object_size(attached_msgs)) {
-        /* Content-Type is multipart/mixed */
-        json_t *submsg;
-        const char *subid;
-        myboundary = _mime_make_boundary();
-
-        buf_setcstr(&buf, "multipart/mixed; boundary=");
-        buf_appendcstr(&buf, myboundary);
-        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&buf));
-
-        /* Remove any non-cid attachments and attached messages. We'll
-         * write them after the trimmed down message is serialised. */
-        json_object_del(mymsg, "attachments");
-        json_object_del(mymsg, "attachedEmails");
-
-        /* If there's attachments with CIDs pass them on so the
-         * htmlBody can be serialised together with is attachments. */
-        if (cid_attachments) {
-            json_object_set(mymsg, "attachments", cid_attachments);
-        }
-
-        /* Write any remaining message bodies before the attachments */
-        r = _email_body_to_mime(req, mymsg, myboundary, out);
-        if (r) goto done;
-
-        /* Write attachments */
-        json_array_foreach(attachments, i, val) {
-            r = _email_attachment_to_mime(req, val, myboundary, out);
-            if (r) goto done;
-        }
-
-        /* Write embedded RFC822 messages */
-        json_object_foreach(attached_msgs, subid, submsg) {
-            fprintf(out, "\r\n--%s\r\n", myboundary);
-            fputs("Content-Type: message/rfc822;charset=UTF-8\r\n\r\n", out);
-            r = _email_to_mime(req, out, submsg);
-            if (r) goto done;
-        }
-
-        fprintf(out, "\r\n--%s--\r\n", myboundary);
-    }
-    else if (JNOTNULL(text) && JNOTNULL(html)) {
-        /* Content-Type is multipart/alternative */
-        myboundary = _mime_make_boundary();
-
-        buf_setcstr(&buf, "multipart/alternative; boundary=");
-        buf_appendcstr(&buf, myboundary);
-        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&buf));
-
-        /* Remove the html body and any attachments it refers to. We'll write
-         * them after the plain text body has been serialised. */
-        json_object_del(mymsg, "htmlBody");
-        json_object_del(mymsg, "attachments");
-
-        /* Write the plain text body */
-        r = _email_body_to_mime(req, mymsg, myboundary, out);
-        if (r) goto done;
-
-        /* Write the html body, including any of its related attachments */
-        json_object_del(mymsg, "textBody");
-        json_object_set(mymsg, "htmlBody", html);
-        if (json_array_size(cid_attachments)) {
-            json_object_set(mymsg, "attachments", cid_attachments);
-        }
-        r = _email_body_to_mime(req, mymsg, myboundary, out);
-        if (r) goto done;
-
-        fprintf(out, "\r\n--%s--\r\n", myboundary);
-    }
-    else if (html && json_array_size(cid_attachments)) {
-        /* Content-Type is multipart/related */
-        myboundary = _mime_make_boundary();
-
-        buf_setcstr(&buf, "multipart/related; type=\"text/html\"; boundary=");
-        buf_appendcstr(&buf, myboundary);
-        JMAPMSG_HEADER_TO_MIME("Content-Type", buf_cstring(&buf));
-
-        /* Remove the attachments to serialise the html body */
-        json_object_del(mymsg, "attachments");
-        r = _email_body_to_mime(req, mymsg, myboundary, out);
-        if (r) goto done;
-
-        /* Write attachments */
-        json_array_foreach(cid_attachments, i, val) {
-            r = _email_attachment_to_mime(req, val, myboundary, out);
-            if (r) goto done;
-        }
-
-        fprintf(out, "\r\n--%s--\r\n", myboundary);
-
-    }
-    else if (JNOTNULL(html)) {
-        _mime_write_text(json_string_value(html), "html", out);
-    }
-    else if (JNOTNULL(text)) {
-        _mime_write_text(json_string_value(text), "plain", out);
-    }
-
-    /* All done */
-    r = 0;
-
-done:
-    if (myboundary) free(myboundary);
-    if (freeme) free(freeme);
-    json_decref(attachments);
-    json_decref(cid_attachments);
-    json_decref(attached_msgs);
-    json_decref(text);
-    json_decref(html);
-    json_decref(mymsg);
-    buf_free(&buf);
-    if (r) r = HTTP_SERVER_ERROR;
-    return r;
-}
-
-/* Write the JMAP Email msg in RFC-5322 compliant wire format.
- *
- * The message is assumed to not contain value errors. If 'date' is neither
- * set in the message headers nor property, the current date is set. If
- * From isn't set, the userid of the current jmap request is used as
- * email address.
- *
- * Return 0 on success or non-zero if writing to the file failed */
-static int _email_to_mime(jmap_req_t *req, FILE *out, void *rock)
-{
-    json_t *msg = rock;
-    struct jmapmsgdata {
-        char *subject;
-        char *to;
-        char *to_header;
-        char *cc;
-        char *cc_header;
-        char *bcc;
-        char *bcc_header;
-        char *replyto;
-        char *replyto_header;
-        char *sender;
-        char *sender_header;
-        char *from;
-        char *from_header;
-        char *date;
-        char *messageid;
-        char *mua;
-
-        char *references;
-        char *inreplyto;
-        json_t *headers;
-    } d;
-
-    json_t *val, *prop, *mymsg;
-    const char *key, *s;
-    size_t i;
-    struct buf buf = BUF_INITIALIZER;
-    int r = 0;
-    memset(&d, 0, sizeof(struct jmapmsgdata));
-
-    /* Weed out special header values. */
-    d.headers = json_pack("{}");
-    json_object_foreach(json_object_get(msg, "headers"), key, val) {
-        s = json_string_value(val);
-        if (!s) {
-            continue;
-        } else if (!strcasecmp(key, "Bcc")) {
-            d.bcc_header = xstrdup(s);
-        } else if (!strcasecmp(key, "Cc")) {
-            d.cc_header = xstrdup(s);
-        } else if (!strcasecmp(key, "Content-Transfer-Encoding")) {
-            /* Ignore */
-        } else if (!strcasecmp(key, "Content-Type")) {
-            /* Ignore */
-        } else if (!strcasecmp(key, "Date")) {
-            d.date = xstrdup(s);
-        } else if (!strcasecmp(key, "From")) {
-            d.from_header = xstrdup(s);
-        } else if (!strcasecmp(key, "In-Reply-To")) {
-            d.inreplyto = xstrdup(s);
-        } else if (!strcasecmp(key, "Message-ID")) {
-            /* Ignore */
-        } else if (!strcasecmp(key, "MIME-Version")) {
-            /* Ignore */
-        } else if (!strcasecmp(key, "References")) {
-            d.references = xstrdup(s);
-        } else if (!strcasecmp(key, "Reply-To")) {
-            d.replyto_header = xstrdup(s);
-        } else if (!strcasecmp(key, "Sender")) {
-            d.sender_header = xstrdup(s);
-        } else if (!strcasecmp(key, "Subject")) {
-            d.subject = xstrdup(s);
-        } else if (!strcasecmp(key, "To")) {
-            d.to_header = xstrdup(s);
-        } else if (!strcasecmp(key, "User-Agent")) {
-            d.mua = xstrdup(s);
-        } else {
-            json_object_set(d.headers, key, val);
-        }
-    }
-
-    /* Override the From header */
-    if ((prop = json_object_get(msg, "from"))) {
-        json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ",\r\n\t");
-            JMAPMSG_EMAILER_TO_MIME(&buf, val);
-        }
-        d.from = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-    if (!d.from) d.from = xstrdup(req->userid);
-
-    /* Override the Sender header */
-    if ((prop = json_object_get(msg, "sender"))) {
-        JMAPMSG_EMAILER_TO_MIME(&buf, prop);
-        d.sender = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-
-    /* Override the To header */
-    if ((prop = json_object_get(msg, "to"))) {
-        json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ",\r\n\t");
-            JMAPMSG_EMAILER_TO_MIME(&buf, val);
-        }
-        d.to = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-
-    /* Override the Cc header */
-    if ((prop = json_object_get(msg, "cc"))) {
-        json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ",\r\n\t");
-            JMAPMSG_EMAILER_TO_MIME(&buf, val);
-        }
-        d.cc = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-
-    /* Override the Bcc header */
-    if ((prop = json_object_get(msg, "bcc"))) {
-        json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ",\r\n\t");
-            JMAPMSG_EMAILER_TO_MIME(&buf, val);
-        }
-        d.bcc = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-
-    /* Override the Reply-To header */
-    if ((prop = json_object_get(msg, "replyTo"))) {
-        json_array_foreach(prop, i, val) {
-            if (i) buf_appendcstr(&buf, ",\r\n\t");
-            JMAPMSG_EMAILER_TO_MIME(&buf, val);
-        }
-        d.replyto = buf_newcstring(&buf);
-        buf_reset(&buf);
-    }
-
-    /* Override Subject header */
-    if ((s = json_string_value(json_object_get(msg, "subject")))) {
-        if (d.subject) free(d.subject);
-        d.subject = xstrdup(s);
-    }
-    if (!d.subject) d.subject = xstrdup("");
-
-    /* Override Date header */
-    /* Precedence (highest first): "receivedAt" property, Date header, now */
-    time_t date = time(NULL);
-    if ((s = json_string_value(json_object_get(msg, "receivedAt")))) {
-        struct tm tm;
-        strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        date = mktime(&tm);
-    }
-    if (json_object_get(msg, "receivedAt") || !d.date) {
-        char fmt[RFC5322_DATETIME_MAX+1];
-        memset(fmt, 0, RFC5322_DATETIME_MAX+1);
-        time_to_rfc5322(date, fmt, RFC5322_DATETIME_MAX+1);
-        if (d.date) free(d.date);
-        d.date = xstrdup(fmt);
-    }
-
-    /* Set Message-ID header */
-    buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
-    d.messageid = buf_release(&buf);
-
-    /* Set User-Agent header */
-    if (!d.mua) {
-        d.mua = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
-    }
-
-    /* Build raw message */
-    fputs("MIME-Version: 1.0\r\n", out);
-
-    /* Mandatory headers according to RFC 5322 */
-    JMAPMSG_HEADER_TO_MIME("From", d.from);
-    JMAPMSG_HEADER_TO_MIME("Date", d.date);
-
-    /* Emailer type fields have precendence over header */
-    if (d.to)
-        fprintf(out, "To: %s\r\n", d.to);
-    else if (d.to_header)
-        JMAPMSG_HEADER_TO_MIME("To", d.to_header);
-    if (d.cc)
-        fprintf(out, "Cc: %s\r\n", d.cc);
-    else if (d.cc_header)
-        JMAPMSG_HEADER_TO_MIME("Cc", d.cc_header);
-    if (d.bcc)
-        fprintf(out, "Bcc: %s\r\n", d.bcc);
-    else if (d.bcc_header)
-        JMAPMSG_HEADER_TO_MIME("Bcc", d.bcc_header);
-    if (d.sender)
-        fprintf(out, "Sender: %s\r\n", d.sender);
-    else if (d.sender_header)
-        JMAPMSG_HEADER_TO_MIME("Sender", d.sender_header);
-    if (d.replyto)
-        fprintf(out, "Reply-To: %s\r\n", d.replyto);
-    else if (d.replyto_header)
-        JMAPMSG_HEADER_TO_MIME("Reply-To", d.replyto_header);
-
-    /* Subject */
-    if (d.subject) JMAPMSG_HEADER_TO_MIME("Subject", d.subject);
-
-    /* References, In-Reply-To and the custom X-JMAP header */
-    if (d.inreplyto)  JMAPMSG_HEADER_TO_MIME("In-Reply-To", d.inreplyto);
-    if (d.references) JMAPMSG_HEADER_TO_MIME("References", d.references);
-
-    /* Custom headers */
-    json_object_foreach(d.headers, key, val) {
-        char *freeme, *p, *q;
-        s = json_string_value(val);
-        if (!s) continue;
-        freeme = xstrdup(s);
-        for (q = freeme, p = freeme; *p; p++) {
-            if (*p == '\n' && (p == q || *(p-1) != '\r')) {
-                *p = '\0';
-                JMAPMSG_HEADER_TO_MIME(key, q);
-                *p = '\n';
-                q = p + 1;
-            }
-        }
-        JMAPMSG_HEADER_TO_MIME(key, q);
-        free(freeme);
-    }
-
-    /* Not mandatory but we'll always write these */
-    JMAPMSG_HEADER_TO_MIME("Message-ID", d.messageid);
-    JMAPMSG_HEADER_TO_MIME("User-Agent", d.mua);
-
-    /* Make a shallow copy to alter */
-    mymsg = json_copy(msg);
-
-    /* Convert html body to plain text, if required */
-    if (!json_object_get(mymsg, "textBody")) {
-        const char *html = json_string_value(json_object_get(mymsg, "htmlBody"));
-        if (html) {
-            char *tmp = charset_extract_plain(html);
-            json_object_set_new(mymsg, "textBody", json_string(tmp));
-            free(tmp);
-        }
-    }
-
-    /* Write message body */
-    r = _email_body_to_mime(req, mymsg, NULL, out);
-    json_decref(mymsg);
-
-    free(d.from);
-    free(d.from_header);
-    free(d.sender);
-    free(d.date);
-    free(d.to);
-    free(d.to_header);
-    free(d.cc);
-    free(d.cc_header);
-    free(d.bcc);
-    free(d.bcc_header);
-    free(d.replyto);
-    free(d.replyto_header);
-    free(d.subject);
-    free(d.messageid);
-    free(d.references);
-    free(d.inreplyto);
-    free(d.mua);
-    json_decref(d.headers);
-    buf_free(&buf);
-    if (r) r = HTTP_SERVER_ERROR;
-    return r;
-}
-
-#undef JMAPMSG_EMAILER_TO_MIME
-#undef JMAPMSG_HEADER_TO_MIME
-
-static void _email_parse(json_t *msg, json_t *invalid, int is_attached)
-{
-    int pe;
-    json_t *prop;
-    const char *sval;
-    int bval, intval;
-    struct buf buf = BUF_INITIALIZER;
-    struct tm *date = xzmalloc(sizeof(struct tm));
-    char *mboxname = NULL;
-    char *mboxrole = NULL;
-    int validate_addr = 1;
-
-    if (json_object_get(msg, "id")) {
-        json_array_append_new(invalid, json_string("id"));
-    }
-
-    if (json_object_get(msg, "blobId")) {
-        json_array_append_new(invalid, json_string("blobId"));
-    }
-
-    if (json_object_get(msg, "threadId")) {
-        json_array_append_new(invalid, json_string("threadId"));
-    }
-
-    prop = json_object_get(msg, "inReplyToEmailId");
-    if (JNOTNULL(prop)) {
-        if (!((sval = json_string_value(prop)) && strlen(sval))) {
-            json_array_append_new(invalid, json_string("inReplyToEmailId"));
-        }
-    }
-
-    if (!is_attached) {
-        pe = readprop(msg, "keywords", 0, invalid, "o", &prop);
-        if (pe > 0) {
-            const char *keyword;
-            json_t *jval;
-
-            json_object_foreach(prop, keyword, jval) {
-                if (jval != json_true() || !_email_keyword_is_valid(keyword)) {
-                    buf_printf(&buf, "keywords[%s]", keyword);
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-                }
-            }
-            if (json_object_get(prop, "$Draft")) {
-                validate_addr = 0;
-            }
-        }
-    } else if (json_object_get(msg, "keywords")) {
-        json_array_append_new(invalid, json_string("keywords"));
-    }
-
-    if (json_object_get(msg, "hasAttachment")) {
-        json_array_append_new(invalid, json_string("hasAttachment"));
-    }
-
-    prop = json_object_get(msg, "headers");
-    if (json_object_size(prop)) {
-        const char *key;
-        json_t *val;
-        json_object_foreach(prop, key, val) {
-            int valid = strlen(key) && val && json_typeof(val) == JSON_STRING;
-            /* Keys MUST only contain A-Z,* a-z, 0-9 and hyphens. */
-            const char *c;
-            for (c = key; *c && valid; c++) {
-                if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') ||
-                      (*c >= '0' && *c <= '9') || (*c == '-'))) {
-                    valid = 0;
-                }
-            }
-            /* Validate mail addresses in overridden header */
-            int ismailheader = (!strcasecmp(key, "From") ||
-                                !strcasecmp(key, "Reply-To") ||
-                                !strcasecmp(key, "Cc") ||
-                                !strcasecmp(key, "Bcc") ||
-                                !strcasecmp(key, "To"));
-            if (valid && ismailheader && validate_addr) {
-                struct address *ap, *addr = NULL;
-                parseaddr_list(json_string_value(val), &addr);
-                if (!addr) valid = 0;
-                for (ap = addr; valid && ap; ap = ap->next) {
-                    if (ap->invalid || !ap->mailbox || !ap->domain) {
-                        valid = 0;
-                    }
-                }
-                parseaddr_free(addr);
-            }
-            if (!valid) {
-                buf_printf(&buf, "header[%s]", key);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
-                break;
-            }
-        }
-    } else if (prop && json_typeof(prop) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string("headers"));
-    }
-
-    prop = json_object_get(msg, "from");
-    if (json_array_size(prop)) {
-        json_t *emailer;
-        size_t i;
-        json_array_foreach(prop, i, emailer) {
-            buf_printf(&buf, "from[%zu]", i);
-            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
-            buf_reset(&buf);
-        }
-    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("from"));
-    }
-
-    prop = json_object_get(msg, "to");
-    if (json_array_size(prop)) {
-        json_t *emailer;
-        size_t i;
-        json_array_foreach(prop, i, emailer) {
-            buf_printf(&buf, "to[%zu]", i);
-            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
-            buf_reset(&buf);
-        }
-    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("to"));
-    }
-
-    prop = json_object_get(msg, "cc");
-    if (json_array_size(prop)) {
-        json_t *emailer;
-        size_t i;
-        json_array_foreach(prop, i, emailer) {
-            buf_printf(&buf, "cc[%zu]", i);
-            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
-            buf_reset(&buf);
-        }
-    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("cc"));
-    }
-
-    prop = json_object_get(msg, "bcc");
-    if (json_array_size(prop)) {
-        json_t *emailer;
-        size_t i;
-        json_array_foreach(prop, i, emailer) {
-            buf_printf(&buf, "bcc[%zu]", i);
-            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
-            buf_reset(&buf);
-        }
-    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("bcc"));
-    }
-
-    prop = json_object_get(msg, "sender");
-    if (JNOTNULL(prop)) {
-        _email_parse_emailer(prop, "sender", validate_addr, invalid);
-    }
-
-    prop = json_object_get(msg, "replyTo");
-    if (json_array_size(prop)) {
-        json_t *emailer;
-        size_t i;
-        json_array_foreach(prop, i, emailer) {
-            buf_printf(&buf, "replyTo[%zu]", i);
-            _email_parse_emailer(emailer, buf_cstring(&buf), validate_addr, invalid);
-            buf_reset(&buf);
-        }
-    } else if (JNOTNULL(prop) && json_typeof(prop) != JSON_ARRAY) {
-        json_array_append_new(invalid, json_string("replyTo"));
-    }
-
-    if (json_object_get(msg, "size")) {
-        json_array_append_new(invalid, json_string("size"));
-    }
-
-    if (json_object_get(msg, "preview")) {
-        json_array_append_new(invalid, json_string("preview"));
-    }
-
-    readprop(msg, "subject", 0, invalid, "s", &sval);
-    readprop(msg, "textBody", 0, invalid, "s", &sval);
-    readprop(msg, "htmlBody", 0, invalid, "s", &sval);
-
-    prop = json_object_get(msg, "attachedEmails");
-    if (json_object_size(prop)) {
-        json_t *submsg;
-        const char *subid;
-        json_object_foreach(prop, subid, submsg) {
-            json_t *subinvalid = json_pack("[]");
-            json_t *errprop;
-            size_t j;
-
-            _email_parse(submsg, subinvalid, 1/*is_attached*/);
-
-            buf_printf(&buf, "attachedEmails[%s]", subid);
-            json_array_foreach(subinvalid, j, errprop) {
-                const char *s = json_string_value(errprop);
-                buf_appendcstr(&buf, ".");
-                buf_appendcstr(&buf, s);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_truncate(&buf, buf_len(&buf) - strlen(s) - 1);
-            }
-            json_decref(subinvalid);
-            buf_reset(&buf);
-        }
-    }
-    else if (JNOTNULL(prop)) {
-        json_array_append_new(invalid, json_string("attachedEmails"));
-    }
-
-    prop = json_object_get(msg, "attachments");
-    if (json_array_size(prop)) {
-        json_t *att;
-        size_t i;
-
-        json_array_foreach(prop, i, att) {
-            const char *prefix;
-            buf_printf(&buf, "attachments[%zu]", i);
-            prefix = buf_cstring(&buf);
-
-            readprop_full(att, prefix, "blobId", 1, invalid, "s", &sval);
-            readprop_full(att, prefix, "type", 0, invalid, "s", &sval);
-            readprop_full(att, prefix, "name", 0, invalid, "s", &sval);
-
-            if (readprop_full(att, prefix, "cid", 0, invalid, "s", &sval) > 0) {
-                struct address *addr = NULL;
-                parseaddr_list(sval, &addr);
-                if (!addr || addr->next || addr->name) {
-                    char *freeme = strconcat(prefix, ".", "cid", NULL);
-                    json_array_append_new(invalid, json_string(freeme));
-                    free(freeme);
-                }
-                parseaddr_free(addr);
-            }
-
-            readprop_full(att, prefix, "isInline", 0, invalid, "b", &bval);
-            readprop_full(att, prefix, "width", 0, invalid, "i", &intval);
-            readprop_full(att, prefix, "height", 0, invalid, "i", &intval);
-
-            buf_reset(&buf);
-        }
-
-    }
-    else if (JNOTNULL(prop)) {
-        json_array_append_new(invalid, json_string("attachments"));
-    }
-
-    buf_free(&buf);
-    if (mboxname) free(mboxname);
-    if (mboxrole) free(mboxrole);
-    if (date) free(date);
 }
 
 static int _email_copy(jmap_req_t *req, struct mailbox *src,
@@ -7416,11 +7371,11 @@ static int _email_append(jmap_req_t *req,
 
 done:
     if (f) fclose(f);
-    if (stage) append_removestage(stage);
-    if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
-    if (mboxname) free(mboxname);
-    if (mailboxes) json_decref(mailboxes);
+    append_removestage(stage);
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    free(mboxname);
+    json_decref(mailboxes);
     return r;
 }
 
@@ -7510,77 +7465,1444 @@ done:
 
 }
 
-static int _email_create(jmap_req_t *req, json_t *msg, char **msgid, json_t *invalid)
-{
-    const char *id = NULL;
-    json_t *val;
-    time_t internaldate = 0;
-    json_t *mailboxids = NULL;
-    strarray_t keywords = STRARRAY_INITIALIZER;
-    const char *keyword;
+struct emailpart {
+    /* Mandatory fields */
+    struct headers headers;       /* raw headers */
+    /* Optional fields */
+    json_t *jpart;                /* original EmailBodyPart JSON object */
+    json_t *jbody;                /* EmailBodyValue for text bodies */
+    char *blob_id;                /* blobId to dump contents from */
+    ptrarray_t subparts;          /* array of emailpart pointers */
+    int is_attachment;            /* neither text nor inline */
+    char *type;                   /* Content-Type main type */
+    char *subtype;                /* Content-Type subtype */
+    char *charset;                /* Content-Type charset parameter */
+    char *boundary;               /* Content-Type boundary parameter */
+    char *disposition;            /* Content-Disposition without parameters */
+    char *filename;               /* Content-Disposition filename parameter */
+};
 
-    /* Validate mailboxids here, we need them anyway */
-    mailboxids = json_object_get(msg, "mailboxIds");
-    json_object_foreach(mailboxids, id, val) {
-        if (json_true() != val) {
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "mailboxIds{%s}", id);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_free(&buf);
+static void _emailpart_fini(struct emailpart *part)
+{
+    if (!part) return;
+
+    struct emailpart *subpart;
+    while ((subpart = ptrarray_pop(&part->subparts))) {
+        _emailpart_fini(subpart);
+        free(subpart);
+    }
+    ptrarray_fini(&part->subparts);
+    json_decref(part->jpart);
+    json_decref(part->jbody);
+    _headers_fini(&part->headers);
+    free(part->type);
+    free(part->subtype);
+    free(part->boundary);
+    free(part->charset);
+    free(part->disposition);
+    free(part->filename);
+    free(part->blob_id);
+}
+
+struct email {
+    struct headers headers; /* parsed headers */
+    json_t *jemail;               /* original Email JSON object */
+    struct emailpart *body;      /* top-level MIME part */
+    int has_attachment;           /* set the HasAttachment flag */
+};
+
+static void _email_fini(struct email *email)
+{
+    if (!email) return;
+    _headers_fini(&email->headers);
+    json_decref(email->jemail);
+    _emailpart_fini(email->body);
+    free(email->body);
+}
+
+static json_t *_header_make(const char *header_name, const char *prop_name, struct buf *val)
+{
+    // FIXME encode specials? extended MIME? probably reuse _mime_write_param.
+    char *tmp = buf_release(val);
+    json_t *jheader = json_pack("{s:s s:s}", "name", header_name, "value", tmp);
+    free(tmp);
+    if (prop_name) json_object_set_new(jheader, "prop", json_string(prop_name));
+    return jheader;
+}
+
+typedef json_t* (*header_from_t)(json_t *jval,
+                                 struct jmap_parser *parser,
+                                 const char *prop_name,
+                                 const char *header_name);
+
+static json_t *_header_from_raw(json_t *jraw,
+                                struct jmap_parser *parser,
+                                const char *prop_name,
+                                const char *header_name)
+{
+    /* Verbatim use header value in raw form */
+    if (json_is_string(jraw)) {
+        json_t *jheader = json_pack("{s:s s:O s:s}",
+                "name", header_name, "value", jraw, "prop", prop_name);
+        return jheader;
+    }
+    else {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+}
+
+static json_t *_header_from_text(json_t *jtext,
+                                 struct jmap_parser *parser,
+                                 const char *prop_name,
+                                 const char *header_name)
+{
+    /* Parse a Text header into raw form */
+    if (json_is_string(jtext)) {
+        const char *s = json_string_value(jtext);
+        char *tmp = charset_encode_mimeheader(s, strlen(s));
+        struct buf val = BUF_INITIALIZER;
+        buf_setcstr(&val, tmp);
+        free(tmp);
+        return _header_make(header_name, prop_name, &val);
+    }
+    else {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+}
+
+static json_t *_header_from_addresses(json_t *addrs,
+                                       struct jmap_parser *parser,
+                                       const char *prop_name,
+                                       const char *header_name)
+{
+    if (!json_array_size(addrs)) {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+
+    size_t i;
+    json_t *addr;
+    struct buf val = BUF_INITIALIZER;
+
+    json_array_foreach(addrs, i, addr) {
+        json_t *jname = json_object_get(addr, "name");
+        if (!json_is_string(jname) && JNOTNULL(jname)) {
+            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_invalid(parser, "name");
+            jmap_parser_pop(parser);
+        }
+
+        json_t *jemail = json_object_get(addr, "email");
+        if (!json_is_string(jemail) && JNOTNULL(jemail)) {
+            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_invalid(parser, "email");
+            jmap_parser_pop(parser);
+        }
+
+        if (json_array_size(parser->invalid))
+            goto fail;
+        if (!JNOTNULL(jname) && !JNOTNULL(jemail))
+            continue;
+
+        const char *name = json_string_value(jname);
+        const char *email = json_string_value (jemail);
+        if (!name && !email) continue;
+
+        /* We'll fold the MIME header value later, but
+         * let's try to break lines at sane places. */
+        if (i) buf_appendcstr(&val, ",\r\n\t");
+        if (name && strlen(name) && email) {
+            char *xname = charset_encode_mimeheader(name, strlen(name));
+            buf_printf(&val, "%s <%s>", xname, email);
+            free(xname);
+        } else if (email) {
+            buf_appendcstr(&val, email);
+        }
+    }
+
+    return _header_make(header_name, prop_name, &val);
+
+fail:
+    buf_free(&val);
+    return NULL;
+}
+
+static json_t *_header_from_messageids(json_t *jmessageids,
+                                       struct jmap_parser *parser,
+                                       const char *prop_name,
+                                       const char *header_name)
+{
+    if (!json_array_size(jmessageids)) {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+
+    size_t i;
+    json_t *jval;
+    struct buf val = BUF_INITIALIZER;
+
+    json_array_foreach(jmessageids, i, jval) {
+        if (!json_is_string(jval)) {
+            jmap_parser_invalid(parser, prop_name);
+            goto fail;
+        }
+        if (i) buf_appendcstr(&val, " ");
+        buf_appendcstr(&val, "<");
+        buf_appendcstr(&val, json_string_value(jval));
+        buf_appendcstr(&val, ">");
+    }
+
+    return _header_make(header_name, prop_name, &val);
+
+fail:
+    buf_free(&val);
+    return NULL;
+}
+
+static json_t *_header_from_date(json_t *jdate,
+                                 struct jmap_parser *parser,
+                                 const char *prop_name,
+                                 const char *header_name)
+{
+    const char *s = json_string_value(jdate);
+    if (!s) {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+
+    time_t t;
+    int n = time_from_iso8601(s, &t);
+    if (n <= 0 || s[n] != '\0') {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+    char fmt[RFC5322_DATETIME_MAX+1];
+    memset(fmt, 0, RFC5322_DATETIME_MAX+1);
+    time_to_rfc5322(t, fmt, RFC5322_DATETIME_MAX+1);
+
+    struct buf val = BUF_INITIALIZER;
+    buf_setcstr(&val, fmt);
+    return _header_make(header_name, prop_name, &val);
+}
+
+static json_t *_header_from_urls(json_t *jurls,
+                                 struct jmap_parser *parser,
+                                 const char *prop_name,
+                                const char *header_name)
+{
+    if (!json_array_size(jurls)) {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+
+    size_t i;
+    json_t *jval;
+    struct buf val = BUF_INITIALIZER;
+
+    json_array_foreach(jurls, i, jval) {
+        if (!json_is_string(jval)) {
+            jmap_parser_invalid(parser, prop_name);
+            goto fail;
+        }
+        if (i) buf_appendcstr(&val, ", ");
+        buf_appendcstr(&val, "<");
+        buf_appendcstr(&val, json_string_value(jval));
+        buf_appendcstr(&val, ">");
+    }
+
+    return _header_make(header_name, prop_name, &val);
+
+fail:
+    buf_free(&val);
+    return NULL;
+}
+
+static void _headers_parseprops(json_t *jobject,
+                           struct jmap_parser *parser,
+                           struct headers *headers)
+{
+    const char *field;
+    json_t *jval;
+    json_object_foreach(jobject, field, jval) {
+        if (strncmp(field, "header:", 7))
+            continue;
+        /* Parse header or reject if invalid form */
+        struct header_prop *hprop = _header_parseprop(field+7);
+        if (!hprop) {
+            jmap_parser_invalid(parser, field);
             continue;
         }
-        const char *mboxid = id;
-        if (id && *id == '#') {
-            mboxid = hash_lookup(id + 1, &req->idmap->mailboxes);
+        /* Reject redefinition of header */
+        if (json_object_get(headers->all, hprop->lcasename)) {
+            jmap_parser_invalid(parser, field);
+            continue;
         }
-        char *name = NULL;
-        if (!mboxid || !(name = _mbox_find_uniqueid(req, mboxid))) {
-            struct buf buf = BUF_INITIALIZER;
-            buf_printf(&buf, "mailboxIds{%s}", id);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        /* Parse header value */
+        header_from_t cb = NULL;
+        switch (hprop->form) {
+            case HEADER_FORM_RAW:
+                cb = _header_from_raw;
+                break;
+            case HEADER_FORM_TEXT:
+                cb = _header_from_text;
+                break;
+            case HEADER_FORM_ADDRESSES:
+                cb = _header_from_addresses;
+                break;
+            case HEADER_FORM_MESSAGEIDS:
+                cb = _header_from_messageids;
+                break;
+            case HEADER_FORM_DATE:
+                cb = _header_from_date;
+                break;
+            case HEADER_FORM_URLS:
+                cb = _header_from_urls;
+                break;
+            default:
+                syslog(LOG_ERR, "jmap: unknown header form: %d", hprop->form);
+                jmap_parser_invalid(parser, field);
+        }
+        if (hprop->all) {
+            size_t i;
+            json_t *jheaderval;
+            json_array_foreach(jval, i, jheaderval) {
+                jmap_parser_push_index(parser, field, i);
+                cb(jheaderval, parser, field, hprop->name);
+                jmap_parser_pop(parser);
+            }
+        }
+        else {
+            cb(jval, parser, field, hprop->name);
+        }
+    }
+}
+
+static void _emailpart_parse_headers(json_t *jpart,
+                                     struct jmap_parser *parser,
+                                     struct emailpart *part)
+{
+    /* headers */
+    if (JNOTNULL(json_object_get(jpart, "headers"))) {
+        jmap_parser_invalid(parser, "headers");
+    }
+
+    /* header:Xxx */
+    const char *lcasename = NULL;
+    json_t *jheaders;
+    _headers_parseprops(jpart, parser, &part->headers);
+    /* Validate Content-Xxx headers */
+    json_object_foreach(part->headers.all, lcasename, jheaders) {
+        if (strncmp(lcasename, "content-", 8))
+            continue;
+
+        json_t *jheader = json_array_get(jheaders, 0);
+        const char *name = json_string_value(json_object_get(jheader, "name"));
+        const char *val = json_string_value(json_object_get(jheader, "value"));
+        const char *prop = json_string_value(json_object_get(jheader, "prop"));
+
+        /* Reject re-definition of Content-Xxx headers */
+        if (json_array_size(jheaders) > 1) {
+            size_t j;
+            json_array_foreach(jheaders, j, jheader) {
+                prop = json_string_value(json_object_get(jheader, "prop"));
+                jmap_parser_invalid(parser, prop);
+            }
+            continue;
+        }
+        if (!strcasecmp(name, "Content-Type")) {
+            /* Validate Content-Type */
+            struct param *type_params = NULL;
+            message_parse_type(val, &part->type, &part->subtype, &type_params);
+            if (part->type  && part->subtype) {
+                struct param *param = type_params;
+                while (param) {
+                    if (!strcasecmp(param->attribute, "BOUNDARY")) {
+                        part->boundary = xstrdupnull(param->value);
+                    }
+                    if (!strcasecmp(param->attribute, "CHARSET")) {
+                        part->charset = xstrdupnull(param->value);
+                    }
+                    param = param->next;
+                }
+                /* Headers for multipart MUST specify a boundary */
+                if (!strcasecmp(part->type, "MULTIPART") && !part->boundary)
+                    jmap_parser_invalid(parser, prop);
+                /* Headers for bodyparts with partId MUST NOT specify a charset */
+                if (JNOTNULL(json_object_get(jpart, "partId")) && part->charset)
+                    jmap_parser_invalid(parser, prop);
+            }
+            else {
+                jmap_parser_invalid(parser, prop);
+            }
+            param_free(&type_params);
+        }
+        else if (!strcasecmp(name, "Content-Disposition")) {
+            /* Validate Content-Disposition */
+            struct param *disp_params = NULL;
+            message_parse_disposition(val, &part->disposition, &disp_params);
+            if (!part->disposition) {
+                jmap_parser_invalid(parser, prop);
+                continue;
+            }
+            param_free(&disp_params);
+        }
+        else if (!strcasecmp(name, "Content-Transfer-Encoding")) {
+            /* Always reject Content-Transfer-Encoding */
+            jmap_parser_invalid(parser, prop);
+        }
+    }
+}
+
+static struct emailpart *_emailpart_parse(json_t *jpart,
+                                          struct jmap_parser *parser,
+                                          json_t *bodies)
+{
+    if (!json_is_object(jpart)) {
+        jmap_parser_invalid(parser, NULL);
+        return NULL;
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    struct emailpart *part = xzmalloc(sizeof(struct emailpart));
+    part->jpart = json_incref(jpart);
+
+    json_t *jval;
+
+    /* partId */
+    json_t *jpartId = json_object_get(jpart, "partId");
+    if (JNOTNULL(jpartId) && !json_is_string(jpartId)) {
+        jmap_parser_invalid(parser, "partId");
+    }
+
+    /* blobId */
+    jval = json_object_get(jpart, "blobId");
+    if (JNOTNULL(jval) && json_is_string(jval)) {
+        part->blob_id = xstrdup(json_string_value(jval));
+    }
+    else if (JNOTNULL(jval)) {
+        jmap_parser_invalid(parser, "blobId");
+    }
+
+    /* size */
+    jval = json_object_get(jpart, "size");
+    if (JNOTNULL(jval) && (!json_is_integer(jval) || JNOTNULL(jpartId))) {
+        jmap_parser_invalid(parser, "size");
+    }
+
+    /* Parse headers */
+    _emailpart_parse_headers(jpart, parser, part);
+
+    /* Parse convenience header properties */
+    int seen_header;
+
+    /* cid */
+    json_t *jcid = json_object_get(jpart, "cid");
+    seen_header = _headers_have(&part->headers, "Content-Id");
+    if (json_is_string(jcid) && !seen_header) {
+        const char *cid = json_string_value(jcid);
+        buf_setcstr(&buf, "<");
+        buf_appendcstr(&buf, cid);
+        buf_appendcstr(&buf, ">");
+        _headers_add_new(&part->headers, _header_make("Content-Id", "cid", &buf));
+    }
+    else if (JNOTNULL(jcid)) {
+        jmap_parser_invalid(parser, "cid");
+    }
+
+    /* language */
+    json_t *jlanguage = json_object_get(jpart, "language");
+    seen_header = _headers_have(&part->headers, "Content-Language");
+    if (json_is_array(jlanguage) && !seen_header) {
+        size_t i;
+        json_t *jval;
+        buf_reset(&buf);
+        json_array_foreach(jlanguage, i, jval) {
+            if (!json_is_string(jval)) {
+                jmap_parser_invalid(parser, "language");
+                buf_reset(&buf);
+                break;
+            }
+            if (i) buf_appendcstr(&buf, ", ");
+            buf_appendcstr(&buf, json_string_value(jval));
+        }
+        _headers_add_new(&part->headers,_header_make("Content-Language", "language", &buf));
+    }
+    else if (JNOTNULL(jlanguage)) {
+        jmap_parser_invalid(parser, "language");
+    }
+
+    /* location */
+    json_t *jlocation = json_object_get(jpart, "location");
+    seen_header = _headers_have(&part->headers, "Content-Location");
+    if (json_is_string(jlocation) && !seen_header) {
+        buf_setcstr(&buf, json_string_value(jlocation));
+        _headers_add_new(&part->headers, _header_make("Content-Location", "location", &buf));
+    }
+    else if (JNOTNULL(jlocation)) {
+        jmap_parser_invalid(parser, "location");
+    }
+
+    /* Check Content-Type and Content-Disposition header properties */
+    int have_type_header = _headers_have(&part->headers, "Content-Type");
+    int have_disp_header = _headers_have(&part->headers, "Content-Disposition");
+    /* name */
+    json_t *jname = json_object_get(jpart, "name");
+    if (json_is_string(jname) && !have_type_header && !have_disp_header) {
+        part->filename = xstrdup(json_string_value(jname));
+    }
+    else if (JNOTNULL(jname)) {
+        jmap_parser_invalid(parser, "name");
+    }
+    /* disposition */
+    json_t *jdisposition = json_object_get(jpart, "disposition");
+    if (json_is_string(jdisposition) && !have_disp_header) {
+        /* Build Content-Disposition header */
+        part->disposition = xstrdup(json_string_value(jdisposition));
+        buf_setcstr(&buf, part->disposition);
+        if (part->filename) {
+            buf_appendcstr(&buf, "; filename=\"");
+            buf_appendcstr(&buf, part->filename);
+            buf_appendcstr(&buf, "\"");
+        }
+        _headers_add_new(&part->headers,
+                _header_make("Content-Disposition", "disposition", &buf));
+    }
+    else if (JNOTNULL(jdisposition)) {
+        jmap_parser_invalid(parser, "disposition");
+    }
+    else if (jname) {
+        /* No disposition but a name, make standard Content-Disposition */
+        part->disposition = xstrdup("attachment");
+        const char *name = json_string_value(jname);
+        char *tmp = charset_encode_mimeheader(name, strlen(name));
+        buf_printf(&buf, "attachment;filename=\"%s\"", tmp);
+        free(tmp);
+        _headers_add_new(&part->headers,
+                _header_make("Content-Disposition", "name", &buf));
+    }
+    /* charset */
+    json_t *jcharset = json_object_get(jpart, "charset");
+    if (json_is_string(jcharset) && !have_type_header && JNOTNULL(jpartId)) {
+        part->charset = xstrdup(json_string_value(jcharset));
+    }
+    else if (JNOTNULL(jcharset)) {
+        jmap_parser_invalid(parser, "charset");
+    }
+    /* type */
+    json_t *jtype = json_object_get(jpart, "type");
+    if (JNOTNULL(jtype) && json_is_string(jtype) && !have_type_header) {
+		const char *type = json_string_value(jtype);
+        struct param *type_params = NULL;
+        /* Validate type value */
+        message_parse_type(type, &part->type, &part->subtype, &type_params);
+        if (part->type && part->subtype && !type_params) {
+            /* Build Content-Type header */
+            if (!strcasecmp(part->type, "MULTIPART")) {
+                /* Make boundary */
+                part->boundary = _mime_make_boundary();
+            }
             buf_reset(&buf);
+            buf_printf(&buf, "%s/%s", part->type, part->subtype);
+            buf_lcase(&buf);
+            if (part->boundary) {
+                buf_appendcstr(&buf, "; boundary=");
+                buf_appendcstr(&buf, part->boundary);
+            }
+            if (part->filename) {
+                buf_appendcstr(&buf, "; name=\"");
+                buf_appendcstr(&buf, part->filename);
+                buf_appendcstr(&buf, "\"");
+            }
+            if (part->charset) {
+                buf_appendcstr(&buf, "; charset=");
+                buf_appendcstr(&buf, part->charset);
+            }
+            _headers_add_new(&part->headers,
+                    _header_make("Content-Type", "type", &buf));
         }
-        free(name);
+        else {
+            jmap_parser_invalid(parser, "type");
+        }
+        param_free(&type_params);
     }
-    if (!json_object_size(mailboxids) && !json_array_size(invalid)) {
-        json_array_append_new(invalid, json_string("mailboxIds"));
+    else if (JNOTNULL(jtype)) {
+        jmap_parser_invalid(parser, "type");
     }
-    _email_parse(msg, invalid, 0/*is_attached*/);
-    if (json_array_size(invalid)) {
-        return 0;
+
+    /* Validate by type */
+    const char *part_id = json_string_value(json_object_get(jpart, "partId"));
+    const char *blob_id = json_string_value(json_object_get(jpart, "blobId"));
+    json_t *subParts = json_object_get(jpart, "subParts");
+    json_t *bodyValue = part_id ? json_object_get(bodies, part_id) : NULL;
+
+    if (part_id && blob_id)
+        jmap_parser_invalid(parser, "blobId");
+    if (part_id && !bodyValue)
+        jmap_parser_invalid(parser, "partId");
+
+    if (subParts || (part->type && !strcasecmp(part->type, "MULTIPART"))) {
+        /* Parse sub parts */
+        if (json_array_size(subParts)) {
+            size_t i;
+            json_t *subPart;
+            json_array_foreach(subParts, i, subPart) {
+                jmap_parser_push_index(parser, "subParts", i);
+                struct emailpart *subpart = _emailpart_parse(subPart, parser, bodies);
+                if (subpart) ptrarray_append(&part->subparts, subpart);
+                jmap_parser_pop(parser);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, "subParts");
+        }
+        /* Must not have a body value */
+        if (JNOTNULL(bodyValue))
+            jmap_parser_invalid(parser, "partId");
+        /* Must not have a blobId */
+        if (blob_id)
+            jmap_parser_invalid(parser, "blobId");
+    }
+    else if (part_id || (part->type && !strcasecmp(part->type, "TEXT"))) {
+        /* Must have a text body as blob or bodyValue */
+        if ((bodyValue == NULL) == (blob_id == NULL))
+            jmap_parser_invalid(parser, "blobId");
+        /* Must not have sub parts */
+        if (JNOTNULL(subParts))
+            jmap_parser_invalid(parser, "subParts");
+    }
+    else {
+        /* Must have a blob id */
+        if (!blob_id)
+            jmap_parser_invalid(parser, "blobId");
+        /* Must not have a text body */
+        if (bodyValue)
+            jmap_parser_invalid(parser, "partId");
+        /* Must not have sub parts */
+        if (JNOTNULL(subParts))
+            jmap_parser_invalid(parser, "subParts");
+    }
+
+    buf_free(&buf);
+
+    if (json_array_size(parser->invalid)) {
+        _emailpart_fini(part);
+        free(part);
+        return NULL;
+    }
+
+    /* Check if this part is marked as attachment */
+    if (part->type) {
+        if (strcasecmp(part->type, "TEXT") && strcasecmp(part->type, "MULTIPART")) {
+            if (!part->disposition || strcasecmp(part->disposition, "INLINE"))
+                part->is_attachment = 1;
+        }
+    }
+    else if (part->blob_id) {
+        part->is_attachment = 1;
+    }
+
+    /* Finalize part definition */
+    part->jbody = json_incref(bodyValue);
+
+    return part;
+}
+
+static struct emailpart *_emailpart_new_multi(const char *subtype,
+                                               ptrarray_t *subparts)
+{
+    struct emailpart *part = xzmalloc(sizeof(struct emailpart));
+    int i;
+
+    part->type = xstrdup("multipart");
+    part->subtype = xstrdup(subtype);
+    part->boundary = _mime_make_boundary();
+    struct buf val = BUF_INITIALIZER;
+    buf_printf(&val, "%s/%s;boundary=%s",
+            part->type, part->subtype, part->boundary);
+    _headers_add_new(&part->headers,
+            _header_make("Content-Type", NULL, &val));
+    for (i = 0; i < subparts->count; i++)
+        ptrarray_append(&part->subparts, ptrarray_nth(subparts, i));
+
+    return part;
+}
+
+static struct emailpart *_email_buildbody(struct emailpart *text_body,
+                                          struct emailpart *html_body,
+                                          ptrarray_t *attached_emails,
+                                          ptrarray_t *attached_files)
+{
+    /* Make MIME part for embedded emails. */
+    struct emailpart *emails = NULL;
+    if (attached_emails->count >= 2)
+        emails = _emailpart_new_multi("digest", attached_emails);
+    else if (attached_emails->count == 1)
+        emails = ptrarray_nth(attached_emails, 0);
+
+    /* Make MIME part for text bodies. */
+    struct emailpart *text = NULL;
+    if (text_body && html_body) {
+        ptrarray_t alternatives = PTRARRAY_INITIALIZER;
+        ptrarray_append(&alternatives, text_body);
+        ptrarray_append(&alternatives, html_body);
+        text = _emailpart_new_multi("alternative", &alternatives);
+        ptrarray_fini(&alternatives);
+    }
+    else if (text_body)
+        text = text_body;
+    else if (html_body)
+        text = html_body;
+
+    /* Choose top-level MIME part. */
+    if (attached_files->count) {
+        struct emailpart *mixed = _emailpart_new_multi("mixed", attached_files);
+        if (emails) ptrarray_insert(&mixed->subparts, 0, emails);
+        if (text) ptrarray_insert(&mixed->subparts, 0, text);
+        return mixed;
+    }
+    else if (text && emails) {
+        struct emailpart *wrapper = NULL;
+        ptrarray_t wrapped = PTRARRAY_INITIALIZER;
+        ptrarray_append(&wrapped, text);
+        ptrarray_append(&wrapped, emails);
+        wrapper = _emailpart_new_multi("mixed", &wrapped);
+        ptrarray_fini(&wrapped);
+        return wrapper;
+    }
+    else if (text)
+        return text;
+    else if (emails)
+        return emails;
+    else
+        return NULL;
+}
+
+
+static void _email_parse_bodies(json_t *jemail,
+                                struct jmap_parser *parser,
+                                struct email *email)
+{
+    /* bodyValues */
+    json_t *bodyValues = json_object_get(jemail, "bodyValues");
+    if (json_is_object(bodyValues)) {
+        const char *part_id;
+        json_t *bodyValue;
+        jmap_parser_push(parser, "bodyValues");
+        json_object_foreach(bodyValues, part_id, bodyValue) {
+            jmap_parser_push(parser, part_id);
+            if (json_is_object(bodyValue)) {
+                json_t *jval = json_object_get(bodyValue, "value");
+                if (!json_is_string(jval)) {
+                    jmap_parser_invalid(parser, "value");
+                }
+                jval = json_object_get(bodyValue, "isEncodingProblem");
+                if (JNOTNULL(jval) && jval != json_false()) {
+                    jmap_parser_invalid(parser, "isEncodingProblem");
+                }
+                jval = json_object_get(bodyValue, "isTruncated");
+                if (JNOTNULL(jval) && jval != json_false()) {
+                    jmap_parser_invalid(parser, "isTruncated");
+                }
+            }
+            else {
+                jmap_parser_invalid(parser, NULL);
+            }
+            jmap_parser_pop(parser);
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(bodyValues)) {
+        jmap_parser_invalid(parser, "bodyValues");
+    }
+
+    /* bodyStructure */
+    json_t *jbody = json_object_get(jemail, "bodyStructure");
+    if (json_is_object(jbody)) {
+        jmap_parser_push(parser, "bodyStructure");
+        email->body = _emailpart_parse(jbody, parser, bodyValues);
+        jmap_parser_pop(parser);
+        /* Top-level body part MUST NOT redefine headers in Email */
+        if (email->body) {
+            const char *name;
+            json_t *jheader;
+            json_object_foreach(email->body->headers.all, name, jheader) {
+                if (json_object_get(email->headers.all, name)) {
+                    /* Report offending header property */
+                    json_t *jprop = json_object_get(jheader, "prop");
+                    const char *prop = json_string_value(jprop);
+                    if (prop) prop = "bodyStructure";
+                    jmap_parser_invalid(parser, prop);
+                }
+            }
+        }
+    }
+    else if (JNOTNULL(jbody)) {
+        jmap_parser_invalid(parser, "bodyStructure");
+    }
+
+    json_t *jtextBody = json_object_get(jemail, "textBody");
+    json_t *jhtmlBody = json_object_get(jemail, "htmlBody");
+    json_t *jattachedEmails = json_object_get(jemail, "attachedEmails");
+    json_t *jattachedFiles = json_object_get(jemail, "attachedFiles");
+
+    struct emailpart *text_body = NULL;
+    struct emailpart *html_body = NULL;
+    ptrarray_t attached_emails = PTRARRAY_INITIALIZER; /* array of struct emailpart* */
+    ptrarray_t attached_files = PTRARRAY_INITIALIZER;  /* array of struct emailpart* */
+
+    if (JNOTNULL(jbody)) {
+        /* bodyStructure and fooBody are mutually exclusive */
+        if (JNOTNULL(jtextBody)) {
+            jmap_parser_invalid(parser, "textBody");
+        }
+        if (JNOTNULL(jhtmlBody)) {
+            jmap_parser_invalid(parser, "htmlBody");
+        }
+        if (JNOTNULL(jattachedEmails)) {
+            jmap_parser_invalid(parser, "attachedEmails");
+        }
+        if (JNOTNULL(jattachedFiles)) {
+            jmap_parser_invalid(parser, "attachedFiles");
+        }
+    }
+    else {
+        /* textBody */
+        if (json_array_size(jtextBody) == 1) {
+            json_t *jpart = json_array_get(jtextBody, 0);
+            jmap_parser_push_index(parser, "textBody", 0);
+            text_body = _emailpart_parse(jpart, parser, bodyValues);
+            jmap_parser_pop(parser);
+            if (text_body) {
+                if (!text_body->type) {
+                    /* Set default type */
+                    text_body->type = xstrdup("text");
+                    text_body->subtype = xstrdup("plain");
+                    struct buf val = BUF_INITIALIZER;
+                    buf_setcstr(&val, "text/plain");
+                    _headers_add_new(&text_body->headers,
+                            _header_make("Content-Type", NULL, &val));
+                }
+                else if (strcasecmp(text_body->type, "text") ||
+                         strcasecmp(text_body->subtype, "plain")) {
+                    jmap_parser_invalid(parser, "textBody");
+                }
+            }
+        }
+        else if (JNOTNULL(jtextBody)) {
+            jmap_parser_invalid(parser, "textBody");
+        }
+        /* htmlBody */
+        if (json_array_size(jhtmlBody) == 1) {
+            json_t *jpart = json_array_get(jhtmlBody, 0);
+            jmap_parser_push_index(parser, "htmlBody", 0);
+            html_body = _emailpart_parse(jpart, parser, bodyValues);
+            jmap_parser_pop(parser);
+            if (html_body) {
+                if (!html_body->type) {
+                    /* Set default type */
+                    html_body->type = xstrdup("text");
+                    html_body->subtype = xstrdup("html");
+                    struct buf val = BUF_INITIALIZER;
+                    buf_setcstr(&val, "text/html");
+                    _headers_add_new(&html_body->headers,
+                            _header_make("Content-Type", NULL, &val));
+                }
+                else if (strcasecmp(html_body->type, "text") ||
+                         strcasecmp(html_body->subtype, "html")) {
+                    jmap_parser_invalid(parser, "htmlBody");
+                }
+            }
+        }
+        else if (JNOTNULL(jhtmlBody)) {
+            jmap_parser_invalid(parser, "htmlBody");
+        }
+        /* attachedEmails */
+        if (json_is_array(jattachedEmails)) {
+            size_t i;
+            json_t *jpart;
+            struct emailpart *attpart;
+            json_array_foreach(jattachedEmails, i, jpart) {
+                jmap_parser_push_index(parser, "attachedEmails", i);
+                attpart = _emailpart_parse(jpart, parser, bodyValues);
+                if (attpart) {
+                    if (attpart->type && !strcasecmp(attpart->type, "message") &&
+                        (!strcasecmp(attpart->subtype, "rfc822") ||
+                         !strcasecmp(attpart->subtype, "global"))) {
+                        /* It's aegit part */
+                        ptrarray_append(&attached_emails, attpart);
+                    }
+                    else if (!attpart->type) {
+                        /* Set default type */
+                        attpart->type = xstrdup("message");
+                        attpart->subtype = xstrdup("rfc822");
+                        struct buf val = BUF_INITIALIZER;
+                        buf_setcstr(&val, "message/rfc822");
+                        _headers_add_new(&attpart->headers,
+                                _header_make("Content-Type", NULL, &val));
+                        ptrarray_append(&attached_emails, attpart);
+                    }
+                    else {
+                        jmap_parser_invalid(parser, NULL);
+                    }
+                }
+                jmap_parser_pop(parser);
+            }
+        }
+        else if (JNOTNULL(jattachedEmails)) {
+            jmap_parser_invalid(parser, "attachedEmails");
+        }
+        /* attachedFiles */
+        if (json_is_array(jattachedFiles)) {
+            size_t i;
+            json_t *jpart;
+            struct emailpart *attpart;
+            json_array_foreach(jattachedFiles, i, jpart) {
+                jmap_parser_push_index(parser, "attachedFiles", i);
+                attpart = _emailpart_parse(jpart, parser, bodyValues);
+                if (attpart) ptrarray_append(&attached_files, attpart);
+                jmap_parser_pop(parser);
+            }
+        }
+        else if (JNOTNULL(jattachedFiles)) {
+            jmap_parser_invalid(parser, "attachedFiles");
+        }
+    }
+
+    if (!email->body) {
+        /* Build email body from convenience body properties */
+        email->body = _email_buildbody(text_body, html_body,
+                &attached_emails, &attached_files);
+    }
+
+    ptrarray_fini(&attached_emails);
+    ptrarray_fini(&attached_files);
+
+    /* Look through all parts if any part is an attachment.
+     * If so, set the hasAttachment flag. */
+    if (email->body) {
+        ptrarray_t work = PTRARRAY_INITIALIZER;
+        ptrarray_append(&work, email->body);
+
+        struct emailpart *part;
+        while ((part = ptrarray_pop(&work))) {
+            int i;
+            if (part->is_attachment) {
+                email->has_attachment = 1;
+                break;
+            }
+            for (i = 0; i < part->subparts.count; i++) {
+                struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
+                ptrarray_append(&work, subpart);
+            }
+        }
+        ptrarray_fini(&work);
+    }
+}
+
+/* Parse a JMAP Email into its internal representation for creation. */
+static void _email_parse(json_t *jemail,
+                         struct jmap_parser *parser,
+                         struct email *email)
+{
+    email->jemail = json_incref(jemail);
+
+    /* mailboxIds */
+    json_t *jmailboxIds = json_object_get(jemail, "mailboxIds");
+    if (json_object_size(jmailboxIds)) {
+        const char *mailboxid;
+        json_t *jval;
+        jmap_parser_push(parser, "mailboxIds");
+        json_object_foreach(jmailboxIds, mailboxid, jval) {
+            if (*mailboxid == '\0') {
+                jmap_parser_invalid(parser, NULL);
+                break;
+            }
+            if (jval != json_true()) {
+                jmap_parser_invalid(parser, mailboxid);
+            }
+        }
+        jmap_parser_pop(parser);
+    }
+    else {
+        jmap_parser_invalid(parser, "mailboxIds");
+    }
+
+    /* keywords */
+    json_t *jkeywords = json_object_get(jemail, "keywords");
+    if (json_is_object(jkeywords)) {
+        const char *keyword;
+        json_t *jval;
+        jmap_parser_push(parser, "keywords");
+        json_object_foreach(jkeywords, keyword, jval) {
+            if (jval != json_true() || !_email_keyword_is_valid(keyword)) {
+                jmap_parser_invalid(parser, keyword);
+            }
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(jkeywords)) {
+        jmap_parser_invalid(parser, "keywords");
+    }
+
+    /* headers */
+    if (JNOTNULL(json_object_get(jemail, "headers"))) {
+        jmap_parser_invalid(parser, "headers");
+    }
+    /* header:Xxx */
+    _headers_parseprops(jemail, parser, &email->headers);
+    size_t i;
+    json_t *jheader;
+    json_array_foreach(email->headers.raw, i, jheader) {
+        const char *s = json_string_value(json_object_get(jheader, "name"));
+        /* Reject Content-Xxx headers in Email/headers */
+            if (!strncasecmp("Content-", s, 8)) {
+                char *tmp = strconcat("header:", s, NULL);
+                jmap_parser_invalid(parser, tmp);
+                free(tmp);
+            }
+    }
+
+    /* Parse convenience header properties - in order as serialised */
+    struct buf buf = BUF_INITIALIZER;
+    json_t *prop;
+    int seen_header;
+
+    /* messageId */
+    prop = json_object_get(jemail, "messageId");
+    seen_header = _headers_have(&email->headers, "Message-Id");
+    if (json_array_size(prop) == 1 && !seen_header) {
+        _headers_add_new(&email->headers, _header_from_messageids(prop,
+                    parser, "messageId", "Message-Id"));
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "messageId");
+    }
+    /* inReplyTo */
+    prop = json_object_get(jemail, "inReplyTo");
+    seen_header = _headers_have(&email->headers, "In-Reply-To");
+    if (json_is_array(prop) && !seen_header) {
+        _headers_add_new(&email->headers, _header_from_messageids(prop,
+                    parser, "inReplyTo", "In-Reply-To"));
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "inReplyTo");
+    }
+    /* references */
+    prop = json_object_get(jemail, "references");
+    seen_header = _headers_have(&email->headers, "References");
+    if (json_is_array(prop) && !seen_header) {
+        _headers_add_new(&email->headers, _header_from_messageids(prop,
+                    parser, "references", "References"));
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "references");
+    }
+    /* sentAt */
+    prop = json_object_get(jemail, "sentAt");
+    seen_header = _headers_have(&email->headers, "Date");
+    if (json_is_string(prop) && !seen_header) {
+        _headers_add_new(&email->headers, _header_from_date(prop,
+                    parser, "sentAt", "Date"));
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "sentAt");
+    }
+    /* from */
+    prop = json_object_get(jemail, "from");
+    seen_header = _headers_have(&email->headers, "From");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "from", "From"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "from");
+    }
+    /* replyTo */
+    prop = json_object_get(jemail, "replyTo");
+    seen_header = _headers_have(&email->headers, "Reply-To");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "replyTo", "Reply-To"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "replyTo");
+    }
+    /* sender */
+    prop = json_object_get(jemail, "sender");
+    seen_header = _headers_have(&email->headers, "Sender");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "sender", "Sender"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "sender");
+    }
+    /* to */
+    prop = json_object_get(jemail, "to");
+    seen_header = _headers_have(&email->headers, "To");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "to", "To"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "to");
+    }
+    /* cc */
+    prop = json_object_get(jemail, "cc");
+    seen_header = _headers_have(&email->headers, "Cc");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "cc", "Cc"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "cc");
+    }
+    /* bcc */
+    prop = json_object_get(jemail, "bcc");
+    seen_header = _headers_have(&email->headers, "Bcc");
+    if (json_is_array(prop) && !seen_header) {
+        if ((jheader = _header_from_addresses(prop, parser, "bcc", "Bcc"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "bcc");
+    }
+    /* subject */
+    prop = json_object_get(jemail, "subject");
+    seen_header = _headers_have(&email->headers, "Subject");
+    if (json_is_string(prop) && !seen_header) {
+        if ((jheader = _header_from_text(prop, parser, "subject", "Subject"))) {
+            _headers_add_new(&email->headers, jheader);
+        }
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "subject");
+    }
+    buf_free(&buf);
+
+    /* Parse bodies */
+    _email_parse_bodies(jemail, parser, email);
+}
+
+static void _emailpart_blob_to_mime(jmap_req_t *req,
+                                    FILE *fp,
+                                    struct emailpart *part,
+                                    json_t *missing_blobs)
+{
+    struct buf blob_buf = BUF_INITIALIZER;
+    msgrecord_t *mr = NULL;
+    struct mailbox *mbox = NULL;
+    struct body *top_body = NULL;
+    const struct body *blob_body = NULL;
+
+    /* Find body part containing blob */
+    int r = jmap_findblob(req, part->blob_id, &mbox, &mr, &top_body, &blob_body);
+    if (r) goto done;
+
+    /* Map the blob into memory */
+    r = msgrecord_get_body(mr, &blob_buf);
+    if (r) goto done;
+
+    uint32_t size;
+    r = msgrecord_get_size(mr, &size);
+    if (r) goto done;
+
+    /* Write headers defined by client. */
+    size_t i;
+    json_t *jheader;
+    json_array_foreach(part->headers.raw, i, jheader) {
+        json_t *jval = json_object_get(jheader, "name");
+        const char *name = json_string_value(jval);
+        jval = json_object_get(jheader, "value");
+        const char *value = json_string_value(jval);
+        fprintf(fp, "%s: %s\r\n", name, value);
+    }
+
+    /* Write blob. For embedded messages, we dump the complete
+     * bodypart, including its headers, as MIME body. For any
+     * other blob, we optionally write the Content-Type and
+     * encoding MIME headers, followed by the raw blob contents
+     * as body. */
+    if (part->type && !strcasecmp(part->type, "MESSAGE")) {
+        fputs("\r\n", fp);
+        fwrite(blob_buf.s, 1, blob_buf.len, fp);
+    }
+    else {
+        if (!_headers_have(&part->headers, "Content-Type")) {
+            fprintf(fp, "Content-Type: %s/%s", blob_body->type, blob_body->subtype);
+            if (blob_body->charset_id)
+                fprintf(fp, ";charset=%s", blob_body->charset_id);
+            fputs("\r\n", fp);
+        }
+        if (blob_body->encoding) {
+            fputs("Content-Transfer-Encoding: ", fp);
+            fputs(blob_body->encoding, fp);
+            fputs("\r\n", fp);
+        }
+        fputs("\r\n", fp);
+        fwrite(blob_buf.s + blob_body->content_offset, 1,
+                blob_body->content_size, fp);
+    }
+
+done:
+    if (r) json_array_append_new(missing_blobs, json_string(part->blob_id));
+    if (top_body) {
+        message_free_body(top_body);
+        free(top_body);
+    }
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    buf_free(&blob_buf);
+}
+
+static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
+{
+    json_t *jval = json_object_get(part->jbody, "value");
+    const char *text = json_string_value(jval);
+    size_t len = strlen(text);
+
+    /* Check and sanitise text */
+    int has_long_lines = 0;
+    int is_7bit = 1;
+    const char *p = text;
+    const char *lo = text;
+    const char *hi = text + len;
+    const char *last_lf = p;
+    struct buf txtbuf = BUF_INITIALIZER;
+    for (p = lo; p < hi; p++) {
+        /* Keep track of line-length and high-bit bytes */
+        if (p - last_lf > 998)
+            has_long_lines = 1;
+        if (*p == '\n')
+            last_lf = p;
+        if (*p & 0x80)
+            is_7bit = 0;
+        /* Omit CR, expand lone LF to CRLF */
+        if (*p == '\r' && p < hi && *(p+1) != '\n')
+            continue;
+        if (*p == '\n' && p > lo && *(p-1) != '\r')
+            buf_putc(&txtbuf, '\r');
+        buf_putc(&txtbuf, *p);
+    }
+    const char *charset = NULL;
+    if (!is_7bit) charset = "utf-8";
+
+    /* Write headers */
+    size_t i;
+    json_t *jheader;
+    json_array_foreach(part->headers.raw, i, jheader) {
+        json_t *jval = json_object_get(jheader, "name");
+        const char *name = json_string_value(jval);
+        jval = json_object_get(jheader, "value");
+        const char *value = json_string_value(jval);
+        if (!strcasecmp(name, "Content-Type") && charset) {
+            /* Clients are forbidden to set charset on TEXT bodies,
+             * so make sure we properly set the parameter value. */
+            fprintf(fp, "%s: %s;charset=%s\r\n", name, value, charset);
+        }
+        else {
+            fprintf(fp, "%s: %s\r\n", name, value);
+        }
+    }
+    /* Write body */
+    if (!is_7bit || has_long_lines) {
+        /* Write quoted printable */
+        size_t qp_len = 0;
+        char *qp_text = charset_qpencode_mimebody(txtbuf.s, txtbuf.len, 1, &qp_len);
+        fputs("Content-Transfer-Encoding : quoted-printable\r\n", fp);
+        fputs("\r\n", fp);
+        fwrite(qp_text, 1, qp_len, fp);
+        free(qp_text);
+    }
+    else {
+        /*  Write plain */
+        fputs("\r\n", fp);
+        fwrite(buf_cstring(&txtbuf), 1, buf_len(&txtbuf), fp);
+    }
+
+    buf_free(&txtbuf);
+}
+
+static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
+                               struct emailpart *part,
+                               json_t *missing_blobs)
+{
+    if (part->subparts.count) {
+        /* Write raw headers */
+        size_t i;
+        json_t *jheader;
+        json_array_foreach(part->headers.raw, i, jheader) {
+            json_t *jval = json_object_get(jheader, "name");
+            const char *name = json_string_value(jval);
+            jval = json_object_get(jheader, "value");
+            const char *value = json_string_value(jval);
+            fprintf(fp, "%s: %s\r\n", name, value);
+        }
+        /* Write default Content-Type, if not set */
+        if (!_headers_have(&part->headers, "Content-Type")) {
+            part->boundary = _mime_make_boundary();
+            fputs("Content-Type: multipart/mixed;boundary=", fp);
+            fputs(part->boundary, fp);
+            fputs("\r\n", fp);
+        }
+        /* Write sub parts */
+        int j;
+        for (j = 0; j < part->subparts.count; j++) {
+            fprintf(fp, "\r\n--%s\r\n", part->boundary);
+            _emailpart_to_mime(req, fp, ptrarray_nth(&part->subparts, j),
+                               missing_blobs);
+        }
+        fprintf(fp, "\r\n--%s--\r\n", part->boundary);
+    }
+    else if (part->jbody) {
+        _emailpart_text_to_mime(fp, part);
+    }
+    else if (part->blob_id) {
+        _emailpart_blob_to_mime(req, fp, part, missing_blobs);
+        return;
+    }
+}
+
+struct email_to_mime_rock {
+    struct email *email;
+    json_t **set_err;
+};
+
+static int _email_to_mime(jmap_req_t *req, FILE *fp, void *_rock)
+{
+    struct email_to_mime_rock *rock = _rock;
+    struct email *email = rock->email;
+    json_t *header;
+    size_t i;
+
+    /* Set mandatory and quasi-mandatory headers */
+    if (!json_object_get(email->headers.all, "user-agent")) {
+        char *tmp = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
+        header = json_pack("{s:s s:s}", "name", "User-Agent", "value", tmp);
+        _headers_shift_new(&email->headers, header);
+        free(tmp);
+    }
+    if (!json_object_get(email->headers.all, "message-id")) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
+        header = json_pack("{s:s s:s}", "name", "Message-Id", "value", buf_cstring(&buf));
+        _headers_shift_new(&email->headers, header);
+        buf_free(&buf);
+    }
+    if (!json_object_get(email->headers.all, "date")) {
+        char fmt[RFC5322_DATETIME_MAX+1];
+        memset(fmt, 0, RFC5322_DATETIME_MAX+1);
+        time_to_rfc5322(time(NULL), fmt, RFC5322_DATETIME_MAX+1);
+        header = json_pack("{s:s s:s}", "name", "Date", "value", fmt);
+        _headers_shift_new(&email->headers, header);
+    }
+    if (!json_object_get(email->headers.all, "from")) {
+        header = json_pack("{s:s s:s}", "name", "From", "value", req->userid);
+        _headers_shift_new(&email->headers, header);
+    }
+
+    /* Write headers */
+    json_array_foreach(email->headers.raw, i, header) {
+        json_t *jval;
+        jval = json_object_get(header, "name");
+        const char *name = json_string_value(jval);
+        jval = json_object_get(header, "value");
+        const char *value = json_string_value(jval);
+        fprintf(fp, "%s: %s\r\n", name, value);
+    }
+
+    json_t *missing_blobs = json_array();
+    if (email->body) _emailpart_to_mime(req, fp, email->body, missing_blobs);
+    if (json_array_size(missing_blobs)) {
+        *rock->set_err = json_pack("{s:s s:o}", "type", "blobNotFound",
+                "notFound", missing_blobs);
+    }
+    else {
+        json_decref(missing_blobs);
+    }
+
+    return 0;
+}
+
+static void _email_create(jmap_req_t *req,
+                          json_t *jemail,
+                          json_t **new_email,
+                          json_t **set_err)
+{
+    strarray_t keywords = STRARRAY_INITIALIZER;
+    int r = 0;
+    *set_err = NULL;
+    char *emailid = NULL;
+
+    /* Parse Email object into internal representation */
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, 0 };
+    _email_parse(jemail, &parser, &email);
+    if (json_array_size(parser.invalid)) {
+        *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
+                "properties", parser.invalid);
+        goto done;
     }
 
     /* Gather keywords */
-    json_object_foreach(json_object_get(msg, "keywords"), keyword, val) {
-        strarray_append(&keywords, keyword);
-    }
-    if (keywords.count > MAX_USER_FLAGS) {
-        return IMAP_USERFLAG_EXHAUSTED;
-    }
-
-    /* Determine if we need to set the $HasAttachment flag */
-    int has_attachment = 0;
-    if (json_array_size(json_object_get(msg, "attachments")) ||
-        json_object_size(json_object_get(msg, "attachedEmails"))) {
-        has_attachment = 1;
-    }
-
-    /* Write message */
-    int r = _email_append(req, mailboxids, &keywords, internaldate,
-                          has_attachment, _email_to_mime, msg, msgid);
-    strarray_fini(&keywords);
-    if (r) return r;
-
-    /* Update ANSWERED flags of replied-to messages */
-    const char *header;
-    json_object_foreach(json_object_get(msg, "headers"), header, val) {
-        if (!strcasecmp(header, "In-Reply-To")) {
-            const char *inreplyto = json_string_value(val);
-            if (inreplyto) r = _email_set_answered(req, inreplyto);
-            break;
+    json_t *jkeywords = json_object_get(jemail, "keywords");
+    if (json_object_size(jkeywords)) {
+        json_t *jval;
+        const char *keyword;
+        json_object_foreach(jkeywords, keyword, jval) {
+            strarray_append(&keywords, keyword);
         }
     }
-    return r;
+    if (keywords.count > MAX_USER_FLAGS) {
+        *set_err = json_pack("{s:s}",  "type", "tooManyKeywords");
+        goto done;
+    }
+
+    /* Append MIME-encoded Email to mailboxes and write keywords */
+    json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
+    struct email_to_mime_rock rock = { &email, set_err };
+    r = _email_append(req, jmailboxids, &keywords, time(NULL),
+                      email.has_attachment, _email_to_mime,
+                      &rock, &emailid);
+    if (r || *set_err) goto done;
+
+    /* Update ANSWERED flags of replied-to messages */
+    json_t *jheaders = _headers_get(&email.headers, "In-Reply-To");
+    if (json_array_size(jheaders)) {
+        json_t *jheader = json_array_get(jheaders, 0);
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, json_string_value(json_object_get(jheader, "value")));
+        buf_trim(&buf);
+        r = _email_set_answered(req, buf_cstring(&buf));
+        buf_free(&buf);
+        if (r) goto done;
+    }
+
+    /* Return newly created Email object */
+    *new_email = json_pack("{s:s}", "id", emailid);
+    *set_err = NULL;
+
+done:
+    if (r && *set_err == NULL) {
+        syslog(LOG_ERR, "jmap: email_create: %s", error_message(r));
+        if (r == IMAP_QUOTA_EXCEEDED)
+            *set_err = json_pack("{s:s}", "type", "maxQuotaReached");
+        else
+            *set_err = json_pack("{s:s s:s}", "type", "serverError",
+                    "description", error_message(r));
+    }
+    strarray_fini(&keywords);
+    jmap_parser_fini(&parser);
+    _email_fini(&email);
+    free(emailid);
 }
 
 struct _email_update_checkacl_rock {
@@ -7622,7 +8944,7 @@ static int _email_update_checkacl_cb(const mbentry_t *mbentry, void *xrock)
     return 0;
 }
 
-struct msg_flagupdate {
+struct email_flagupdate {
     json_t *keywords;
     int is_patch;
     /* Callback data */
@@ -7632,9 +8954,9 @@ struct msg_flagupdate {
     json_t *_new_keywords;
 };
 
-#define _MSG_FLAGUPDATE_INITIALIZER { NULL, 0, NULL, NULL, NULL, NULL }
+#define _EMAIL_FLAGUPDATE_INITIALIZER { NULL, 0, NULL, NULL, NULL, NULL }
 
-static void _email_flagupdate_fini(struct msg_flagupdate *update)
+static void _email_flagupdate_fini(struct email_flagupdate *update)
 {
     if (!update) return;
     json_decref(update->keywords);
@@ -7642,30 +8964,31 @@ static void _email_flagupdate_fini(struct msg_flagupdate *update)
     json_decref(update->_new_mailboxes);
 }
 
-static void _email_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, json_t *invalid)
+static void _email_flagupdate_parse(json_t *email,
+                                    struct email_flagupdate *update,
+                                    struct jmap_parser *parser)
 {
-    struct buf buf = BUF_INITIALIZER;
     update->keywords = NULL;
     update->is_patch = 0;
 
     int is_patch = 0;
 
     /* Are keywords overwritten or patched? */
-    json_t *keywords = json_incref(json_object_get(msg, "keywords"));
+    json_t *keywords = json_incref(json_object_get(email, "keywords"));
     if (keywords == NULL) {
         /* Collect keywords as patch */
         const char *field = NULL;
         json_t *jval;
         keywords = json_object();
-        json_object_foreach(msg, field, jval) {
+        json_object_foreach(email, field, jval) {
             if (strncmp(field, "keywords/", 9))  {
                 continue;
             }
             const char *keyword = field + 9;
             if (!_email_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
-                buf_printf(&buf, "keywords/%s", keyword);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
+                jmap_parser_push(parser, "keywords");
+                jmap_parser_invalid(parser, keyword);
+                jmap_parser_pop(parser);
                 continue;
             }
             /* At least one keyword gets patched */
@@ -7681,25 +9004,24 @@ static void _email_flagupdate_parse(json_t *msg, struct msg_flagupdate *update, 
         json_t *jval;
         json_object_foreach(keywords, keyword, jval) {
             if (!_email_keyword_is_valid(keyword) || jval != json_true()) {
-                buf_printf(&buf, "keywords[%s]", keyword);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
+                jmap_parser_push(parser, "keywords");
+                jmap_parser_invalid(parser, keyword);
+                jmap_parser_pop(parser);
                 continue;
             }
         }
     }
     else if (JNOTNULL(keywords)) {
-        json_array_append_new(invalid, json_string("keywords"));
+        jmap_parser_invalid(parser, "keywords");
     }
 
     update->keywords = keywords;
     update->is_patch = is_patch;
-    buf_free(&buf);
 }
 
 static int _email_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct msg_flagupdate *update = rock;
+    struct email_flagupdate *update = rock;
     jmap_req_t *req = update->_req;
     json_t *cur_mailboxes = update->_cur_mailboxes;
 
@@ -7794,7 +9116,7 @@ done:
     return r;
 }
 
-static int _email_flagupdate_write(jmap_req_t *req, struct msg_flagupdate *update,
+static int _email_flagupdate_write(jmap_req_t *req, struct email_flagupdate *update,
                                  const char *msgid,
                                  json_t *cur_mailboxes,
                                  json_t *new_mailboxes)
@@ -7838,8 +9160,11 @@ done:
     return r;
 }
 
-static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
-                         json_t *invalid)
+static void _email_update(jmap_req_t *req,
+                          json_t *email,
+                          const char *msgid,
+                          json_t **new_email,
+                          json_t **set_err)
 {
     uint32_t uid;
     struct mailbox *mbox = NULL;
@@ -7854,20 +9179,22 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
     json_t *cur_mailboxes = NULL; /* current mailboxes that are kept */
     json_t *new_mailboxes = NULL; /* mailboxes to add the message to */
     json_t *del_mailboxes = NULL; /* mailboxes to delete the message from */
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     /* Make sure all helper routines open mailboxes exclusively. */
     req->force_openmbox_rw = 1;
 
     struct buf buf = BUF_INITIALIZER;
-    struct msg_flagupdate _email_flagupdate = _MSG_FLAGUPDATE_INITIALIZER;
+    struct email_flagupdate _email_flagupdate = _EMAIL_FLAGUPDATE_INITIALIZER;
 
     if (!strlen(msgid) || *msgid == '#') {
-        return IMAP_NOTFOUND;
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
     }
 
     /* Pick record from any current mailbox. That's the master copy. */
     int r = _email_find(req, msgid, &mboxname, &uid);
-    if (r) return r;
+    if (r) goto done;
     src_mailboxes = _email_get_mailboxes(req, msgid);
 
     r = jmap_openmbox(req, mboxname, &mbox, 1);
@@ -7876,14 +9203,14 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
     if (r) goto done;
 
     /* Parse keywords and keyword patches */
-    _email_flagupdate_parse(msg, &_email_flagupdate, invalid);
+    _email_flagupdate_parse(email, &_email_flagupdate, &parser);
 
     /* Are mailboxes being overwritten or patched? */
-    mailboxids = json_incref(json_object_get(msg, "mailboxIds"));
+    mailboxids = json_incref(json_object_get(email, "mailboxIds"));
     if (mailboxids == NULL) {
         /* Check if mailboxIds are patched */
         int patch_mailboxids = 0;
-        json_object_foreach(msg, field, val) {
+        json_object_foreach(email, field, val) {
             if (strncmp(field, "mailboxIds/", 11)) {
                 continue;
             }
@@ -7897,7 +9224,7 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
                 json_object_set(mailboxids, field, json_true());
             }
             /* Patch mailboxIds */
-            json_object_foreach(msg, field, val) {
+            json_object_foreach(email, field, val) {
                 if (strncmp(field, "mailboxIds/", 11)) {
                     continue;
                 }
@@ -7908,12 +9235,12 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
                     json_object_del(mailboxids, field + 11);
                 }
                 else {
-                    json_array_append_new(invalid, json_string(field));
+                    jmap_parser_invalid(&parser, field);
                 }
             }
         }
     }
-    if (json_array_size(invalid)) {
+    if (json_array_size(parser.invalid)) {
         r = 0;
         goto done;
     }
@@ -7923,10 +9250,9 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
         dst_mailboxes = json_pack("{}");
         json_object_foreach(mailboxids, id, val) {
             if (json_true() != val) {
-                struct buf buf = BUF_INITIALIZER;
-                buf_printf(&buf, "mailboxIds{%s}", id);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_free(&buf);
+                jmap_parser_push(&parser, "mailboxIds");
+                jmap_parser_invalid(&parser, id);
+                jmap_parser_pop(&parser);
                 continue;
             }
             const char *mboxid = id;
@@ -7937,21 +9263,19 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
             if (mboxid && (name = _mbox_find_uniqueid(req, mboxid))) {
                 json_object_set_new(dst_mailboxes, mboxid, json_string(name));
             } else {
-                buf_reset(&buf);
-                struct buf buf = BUF_INITIALIZER;
-                buf_printf(&buf, "mailboxIds{%s}", id);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
+                jmap_parser_push(&parser, "mailboxIds");
+                jmap_parser_invalid(&parser, id);
+                jmap_parser_pop(&parser);
             }
             free(name);
         }
         if (!json_object_size(dst_mailboxes)) {
-            json_array_append_new(invalid, json_string("mailboxIds"));
+            jmap_parser_invalid(&parser, "mailboxIds");
         }
     } else {
         dst_mailboxes = json_deep_copy(src_mailboxes);
     }
-    if (json_array_size(invalid)) {
+    if (json_array_size(parser.invalid)) {
         r = 0;
         goto done;
     }
@@ -8019,7 +9343,10 @@ static int _email_update(jmap_req_t *req, const char *msgid, json_t *msg,
     r = _email_flagupdate_write(req, &_email_flagupdate, msgid, cur_mailboxes, new_mailboxes);
     if (r) goto done;
 
+    *new_email = json_pack("{s:s}", "id", msgid);
+
 done:
+    jmap_parser_fini(&parser);
     jmap_closembox(req, &mbox);
     msgrecord_unref(&mrw);
     _email_flagupdate_fini(&_email_flagupdate);
@@ -8031,9 +9358,10 @@ done:
     json_decref(mailboxids);
     free(mboxname);
     buf_free(&buf);
-
-    if (r) syslog(LOG_ERR, "_email_update: %s", error_message(r));
-    return r;
+    if (r) {
+        *set_err = json_pack("{s:s}", "type", "serverError");
+        syslog(LOG_ERR, "_email_update: %s", error_message(r));
+    }
 }
 
 static int _email_expunge_checkacl_cb(const conv_guidrec_t *rec, void *rock)
@@ -8057,236 +9385,134 @@ static int _email_expunge_checkacl_cb(const conv_guidrec_t *rec, void *rock)
 }
 
 
-static int _email_destroy(jmap_req_t *req, const char *msgid)
+static void _email_destroy(jmap_req_t *req, const char *msgid, json_t **set_err)
 {
-    int r;
-    struct _email_expunge_rock rock = { req, 0, NULL };
+    int r = 0;
 
-    if (msgid[0] != 'M')
-        return IMAP_NOTFOUND;
-
+    if (msgid[0] != 'M') {
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
     /* Check mailbox ACL for shared accounts */
     if (strcmp(req->accountid, req->userid)) {
         r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
                                        _email_expunge_checkacl_cb, req);
-        if (r) return r;
+        if (r) goto done;
     }
-
     /* Delete messages */
+    struct _email_expunge_rock rock = { req, 0, NULL };
     r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
                                    _email_expunge_cb, &rock);
-    if (r) return r;
+    if (r) goto done;
+    r = rock.deleted ? 0 : IMAP_NOTFOUND;
 
-    return rock.deleted ? 0 : IMAP_NOTFOUND;
+done:
+    if (r == IMAP_NOTFOUND) {
+        *set_err = json_pack("{s:s}", "type", "notFound");
+    }
+    else if (r) {
+        *set_err = json_pack("{s:s s:s}", "type", "serverError",
+                "description", error_message(r));
+    }
 }
 
 static int jmap_email_set(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *set = NULL, *create, *update, *destroy, *state, *item;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
 
-    state = json_object_get(req->args, "ifInState");
-    if (JNOTNULL(state)) {
-        if (jmap_cmpstate(req, state, 0/*mbtype*/)) {
-            json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                        "error", "type", "stateMismatch", req->tag));
+    json_t *err = NULL;
+    /* Just parse the generic set request. We'll validate
+     * the Email object arguments during create and update. */
+    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    if (set.if_in_state) {
+        /* TODO rewrite state function to use char* not json_t* */
+        json_t *jstate = json_string(set.if_in_state);
+        if (jmap_cmpstate(req, jstate, 0/*mbtype*/)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_incref(state);
-    }
-    set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
-
-    create = json_object_get(req->args, "create");
-    if (create) {
-        json_t *created = json_pack("{}");
-        json_t *notCreated = json_pack("{}");
-        const char *key;
-        json_t *msg;
-
-        json_object_foreach(create, key, msg) {
-            json_t *invalid = json_pack("[]");
-
-            if (!strlen(key)) {
-                json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-
-            char *msgid = NULL;
-            r = _email_create(req, msg, &msgid, invalid);
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                free(msgid);
-                continue;
-            }
-            json_decref(invalid);
-
-            if (r == IMAP_QUOTA_EXCEEDED) {
-                json_t *err = json_pack("{s:s}", "type", "maxQuotaReached");
-                json_object_set_new(notCreated, key, err);
-                free(msgid);
-                r = 0;
-                continue;
-            } else if (r == IMAP_USERFLAG_EXHAUSTED) {
-                json_t *err = json_pack("{s:s}", "type", "tooManyKeywords");
-                json_object_set_new(notCreated, key, err);
-                free(msgid);
-                r = 0;
-                continue;
-            } else if (r) {
-                free(msgid);
-                goto done;
-            }
-
-            json_object_set_new(created, key, json_pack("{s:s}", "id", msgid));
-            hash_insert(key, msgid, &req->idmap->messages); // hash takes ownership of msgid
-        }
-
-        if (json_object_size(created)) {
-            json_object_set(set, "created", created);
-        }
-        json_decref(created);
-
-        if (json_object_size(notCreated)) {
-            json_object_set(set, "notCreated", notCreated);
-        }
-        json_decref(notCreated);
+        json_decref(jstate);
+        set.old_state = xstrdup(set.if_in_state);
     }
 
-    update = json_object_get(req->args, "update");
-    if (update) {
-        json_t *updated = json_pack("{}");
-        json_t *notUpdated = json_pack("{}");
-        const char *id;
-        json_t *msg;
+    json_t *email;
+    const char *creation_id;
+    json_object_foreach(set.create, creation_id, email) {
+        json_t *set_err = NULL;
+        json_t *new_email = NULL;
+        /* Create message */
+        _email_create(req, email, &new_email, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_created, creation_id, set_err);
+            continue;
+        }
+        /* Report message as created */
+        json_object_set_new(set.created, creation_id, new_email);
+        char *msg_id = xstrdup(json_string_value(json_object_get(new_email, "id")));
+        hash_insert(creation_id, msg_id, &req->idmap->messages);
+    }
 
-        json_object_foreach(update, id, msg) {
-            json_t *invalid = json_pack("[]");
-            /* Validate id */
+    const char *email_id;
+    json_object_foreach(set.update, email_id, email) {
+        if (*email_id == '#') {
+            const char *id = hash_lookup(email_id + 1, &req->idmap->messages);
             if (!id) {
+                json_object_set_new(set.not_updated, email_id, json_pack("{s:s}",
+                            "type", "notFound"));
                 continue;
             }
-            if (id && id[0] == '#') {
-                const char *newid = hash_lookup(id + 1, &req->idmap->messages);
-                if (!newid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, id, err);
-                    continue;
-                }
-                id = newid;
-            }
-            /* Update message */
-            if ((r = _email_update(req, id, msg, invalid))) {
-                json_decref(invalid);
-                if (r == IMAP_NOTFOUND) {
-                    json_t *err= json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, id, err);
-                    r = 0;
-                    continue;
-                }
-                else if (r == IMAP_PERMISSION_DENIED) {
-                    json_t *err= json_pack("{s:s}", "type", "forbidden");
-                    json_object_set_new(notUpdated, id, err);
-                    r = 0;
-                    continue;
-                } else if (r == IMAP_USERFLAG_EXHAUSTED) {
-                    json_t *err = json_pack("{s:s}", "type", "tooManyKeywords");
-                    json_object_set_new(notUpdated, id, err);
-                    r = 0;
-                    continue;
-                }
-                else {
-                    goto done;
-                }
-            }
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notUpdated, id, err);
-                continue;
-            }
-            json_object_set_new(updated, id, json_null());
-            json_decref(invalid);
+            email_id = id;
         }
-
-        if (json_object_size(updated)) {
-            json_object_set(set, "updated", updated);
+        json_t *set_err = NULL;
+        json_t *new_email = NULL;
+        _email_update(req, email, email_id, &new_email, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_updated, email_id, set_err);
+            continue;
         }
-        json_decref(updated);
-
-        if (json_object_size(notUpdated)) {
-            json_object_set(set, "notUpdated", notUpdated);
-        }
-        json_decref(notUpdated);
+        json_object_set_new(set.updated, email_id, new_email);
     }
 
-    destroy = json_object_get(req->args, "destroy");
-    if (destroy) {
-        json_t *destroyed = json_pack("[]");
-        json_t *notDestroyed = json_pack("{}");
-        json_t *id;
-        size_t i;
-
-        json_array_foreach(destroy, i, id) {
-            const char *msgid = json_string_value(id);
-            /* Validate msgid */
-            if (!msgid) {
+    size_t i;
+    json_t *jid;
+    json_array_foreach(set.destroy, i, jid) {
+        json_t *set_err = NULL;
+        const char *email_id = json_string_value(jid);
+        if (*email_id == '#') {
+            const char *id = hash_lookup(email_id + 1, &req->idmap->messages);
+            if (!id) {
+                json_object_set_new(set.not_updated, email_id, json_pack("{s:s}",
+                            "type", "notFound"));
                 continue;
             }
-            if (msgid && msgid[0] == '#') {
-                const char *newmsgid = hash_lookup(msgid + 1, &req->idmap->messages);
-                if (!newmsgid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, msgid, err);
-                    continue;
-                }
-                msgid = newmsgid;
-            }
-            /* Delete message */
-            if ((r = _email_destroy(req, msgid))) {
-                if (r == IMAP_NOTFOUND) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, msgid, err);
-                    r = 0;
-                    continue;
-                } else if (r == IMAP_PERMISSION_DENIED) {
-                    json_t *err = json_pack("{s:s}", "type", "forbidden");
-                    json_object_set_new(notDestroyed, msgid, err);
-                    r = 0;
-                    continue;
-                } else if (r) {
-                    goto done;
-                }
-            }
-            json_array_append_new(destroyed, json_string(msgid));
+            email_id = id;
         }
-
-        if (json_array_size(destroyed)) {
-            json_object_set(set, "destroyed", destroyed);
+        _email_destroy(req, email_id, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_destroyed, email_id, set_err);
+            continue;
         }
-        json_decref(destroyed);
-        if (json_object_size(notDestroyed)) {
-            json_object_set(set, "notDestroyed", notDestroyed);
-        }
-        json_decref(notDestroyed);
+        json_array_append(set.destroyed, json_string(email_id));
     }
 
-    json_object_set_new(set, "newState", jmap_getstate(req, 0/*mbtype*/));
-    json_object_set_new(set, "accountId", json_string(req->accountid));
+    // TODO refactor jmap_getstate to return a string, once
+    // all code has been migrated to the new JMAP parser.
+    json_t *jstate = jmap_getstate(req, 0/*mbtype*/);
+    set.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    json_incref(set);
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("Email/set"));
-    json_array_append_new(item, set);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    if (set) json_decref(set);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return 0;
 }
 
 struct _email_import_rock {
@@ -8367,7 +9593,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     uint32_t uid;
     time_t internaldate = 0;
     strarray_t keywords = STRARRAY_INITIALIZER;
-    struct msgbodies bodies = MSGBODIES_INITIALIZER;
+    struct emailbodies bodies = EMAILBODIES_INITIALIZER;
     int has_attachment = 0;
 
     /* Lookup blob and check if it has any attachments */
@@ -8417,7 +9643,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     hash_insert("threadId", (void*)1, &props);
     hash_insert("size", (void*)1, &props);
 
-    r = _email_from_record(req, &props, mr, createdmsg);
+    r = _email_get_with_props(req, &props, mr, createdmsg);
     if (r) goto done;
 
     jmap_closembox(req, &mbox);
@@ -8659,7 +9885,7 @@ static int _msgsub_address_parse(json_t *addr, const char *prefix, json_t *inval
     json_t *parameters = json_object_get(addr, "parameters");
     json_object_foreach(parameters, key, val) {
         if (JNOTNULL(val) && !json_is_string(val)) {
-            /* FIXME validate allowed esmtp characters */
+            /* TODO validate allowed esmtp characters */
             buf_printf(&buf, "%s.parameters[%s]", prefix, key);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
@@ -8713,7 +9939,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
             if (id) {
                 msgid = id;
             } else {
-                json_array_append_new(invalid, json_string(msgid));
+                json_array_append_new(invalid, json_string("emailId"));
             }
         }
     }
@@ -8722,7 +9948,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
     const char *identityid = NULL;
     if (readprop(msgsub, "identityId", 1, invalid, "s", &identityid) > 0) {
         if (strcmp(identityid, req->userid)) {
-            json_array_append_new(invalid, json_string(identityid));
+            json_array_append_new(invalid, json_string("identityId"));
         }
     }
 
@@ -8829,7 +10055,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
         hash_insert("cc", (void*)1, &props);
         hash_insert("bcc", (void*)1, &props);
         hash_insert("replyTo", (void*)1, &props);
-        r = _email_from_record(req, &props, mr, &msg);
+        r = _email_get_with_props(req, &props, mr, &msg);
         free_hash_table(&props, NULL);
         if (r) goto done;
 
@@ -8847,7 +10073,7 @@ static int _msgsub_create(jmap_req_t *req, json_t *msgsub,
             goto done;
         }
         const char *from = json_string_value(jfrom);
-        /* FIXME If the address found from this is not allowed by the identity
+        /* TODO If the address found from this is not allowed by the identity
          * associated with this submission, the email property from the identity
          * MUST be used instead. */
         json_object_set_new(myenvelope, "mailFrom", json_pack("{s:s}", "email", from));
@@ -9190,6 +10416,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     if (json_object_size(update_msgs) || json_array_size(destroy_msgs)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
+        subreq.method = "Email/set";
         if (json_object_size(update_msgs)) {
             json_object_set(subreq.args, "update", update_msgs);
         }
