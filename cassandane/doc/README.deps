@@ -154,5 +154,5 @@ Fedora copypasta:
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
         perl-Unix-Syslog perl-Net-Server perl-Net-CalDAVTalk \
         perl-Net-CardDAVTalk perl-Mail-JMAPTalk perl-AnyEvent \
-        perl-File-Slurp perl-Pod-POM
+        perl-File-Slurp perl-Pod-POM perl-experimental
 
