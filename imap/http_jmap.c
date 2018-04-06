@@ -1169,6 +1169,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     req.idmap = NULL;
     req.txn = txn;
     req.is_shared_account = strcmp(req.accountid, req.userid);
+    req.force_openmbox_rw = 0;
 
 
     /* Initialize ACL mailbox cache for findblob */

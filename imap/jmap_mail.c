@@ -8995,8 +8995,10 @@ static void _email_flagupdate_parse(json_t *email,
             is_patch = 1;
             json_object_set(keywords, keyword, jval);
         }
-        if (!json_object_size(keywords))
+        if (!json_object_size(keywords)) {
             json_decref(keywords);
+            keywords = NULL;
+        }
     }
     else if (json_is_object(keywords)) {
         /* Overwrite keywords */
@@ -9498,7 +9500,7 @@ static int jmap_email_set(jmap_req_t *req)
             json_object_set_new(set.not_destroyed, email_id, set_err);
             continue;
         }
-        json_array_append(set.destroyed, json_string(email_id));
+        json_array_append_new(set.destroyed, json_string(email_id));
     }
 
     // TODO refactor jmap_getstate to return a string, once
@@ -10326,7 +10328,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             json_t *jkey;
             json_array_foreach(onsuccess_destroy, i, jkey) {
                 if (!strcmp(buf_cstring(&buf), json_string_value(jkey))) {
-                    json_array_append(destroy_msgs, json_string(msgid));
+                    json_array_append_new(destroy_msgs, json_string(msgid));
                 }
             }
             buf_reset(&buf);
