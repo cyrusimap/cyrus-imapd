@@ -69,6 +69,9 @@
 # How many worker processes to run.  Overridden by -j argument to
 # testrunner.pl.
 ##maxworkers = 1
+# Base port number to use.  All Cyrus instances run by Cassandane
+# will listen at ports starting from this number.
+##base_port = 9100
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
