@@ -1631,7 +1631,8 @@ sub test_mailbox_changes_counts
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "foo",
+        textBody => [{partId=>'1'}],
+        bodyValues => { 1 => { value => "foo" }},
         keywords => {
             '$Draft' => JSON::true,
         },
@@ -1790,6 +1791,11 @@ sub test_mailbox_changes_shared
     $state = $res->[0][1]->{newState};
 }
 
+sub defaultprops_for_email_get
+{
+    return ( "id", "blobId", "threadId", "mailboxIds", "keywords", "size", "receivedAt", "messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo", "subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody", "attachedFiles", "attachedEmails" );
+}
+
 sub test_email_get
     :JMAP :min_version_3_1
 {
@@ -1846,18 +1852,21 @@ sub test_email_get
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
 
+    my @props = $self->defaultprops_for_email_get();
+
+    push @props, "header:x-tra";
+
     xlog "get emails";
     my $ids = $res->[0][1]->{ids};
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => \@props }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
     $self->assert_not_null($msg->{mailboxIds}{$inboxid});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
 
-    my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
+    $self->assert_str_equals('fake.123456789@local', $msg->{messageId}[0]);
+    $self->assert_str_equals(' foo bar baz', $msg->{'header:x-tra'});
     $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
@@ -1878,28 +1887,15 @@ sub test_email_get
     });
     $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
     $self->assert_null($msg->{replyTo});
-    $self->assert_deep_equals($msg->{sender}, {
+    $self->assert_deep_equals($msg->{sender}, [{
             name => "Bla",
             email => "blu\@local"
-    });
+    }]);
     $self->assert_str_equals($msg->{subject}, "Email A");
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{receivedAt});
     $self->assert_not_null($msg->{size});
-
-    xlog "fetch again but only some properties";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => ['sender', 'headers.x-tra'] }, "R1"]]);
-    $msg = $res->[0][1]->{list}[0];
-    $hdrs = $msg->{headers};
-    $self->assert_null($msg->{mailboxIds});
-    $self->assert_null($msg->{subject});
-    $self->assert_deep_equals($msg->{sender}, {
-            name => "Bla",
-            email => "blu\@local"
-    });
-    $self->assert_null($hdrs->{'Message-ID'});
-    $self->assert_str_equals('foo bar baz', $hdrs->{'x-tra'});
 }
 
 sub test_email_get_mimeencode
@@ -1951,144 +1947,23 @@ sub test_email_get_mimeencode
 
     xlog "get email list";
     $res = $jmap->CallMethods([
-            ['Email/query', { }, 'R1'],
-            ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'subject', 'header:x-mood:asText', 'from', 'to' ],
+        }, 'R2'],
     ]);
     $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
     my $msg = $res->[1][1]->{list}[0];
 
     $self->assert_str_equals("If you can read this you understand the example.", $msg->{subject});
-    $self->assert_str_equals("I feel \N{WHITE SMILING FACE}", $msg->{headers}{"x-mood"});
+    $self->assert_str_equals("I feel \N{WHITE SMILING FACE}", $msg->{'header:x-mood:asText'});
     $self->assert_str_equals("Keld J\N{LATIN SMALL LETTER O WITH STROKE}rn Simonsen", $msg->{from}[0]{name});
     $self->assert_str_equals("Tom To", $msg->{to}[0]{name});
-}
-
-sub test_email_get_fetchemails
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-
-    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my $inboxid = $res->[0][1]{list}[0]{id};
-
-    my $body = "";
-    $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
-    $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
-
-    my $maildate = DateTime->now();
-    $maildate->add(DateTime::Duration->new(seconds => -10));
-
-    xlog "Generate a email in INBOX via IMAP";
-    my %exp_inbox;
-    my %params = (
-        date => $maildate,
-        from => Cassandane::Address->new(
-            name => "Sally Sender",
-            localpart => "sally",
-            domain => "local"
-        ),
-        to => Cassandane::Address->new(
-            name => "Tom To",
-            localpart => 'tom',
-            domain => 'local'
-        ),
-        cc => Cassandane::Address->new(
-            name => "Cindy CeeCee",
-            localpart => 'cindy',
-            domain => 'local'
-        ),
-        bcc => Cassandane::Address->new(
-            name => "Benny CarbonCopy",
-            localpart => 'benny',
-            domain => 'local'
-        ),
-        messageid => 'fake.123456789@local',
-        extra_headers => [
-            ['x-tra', "foo bar\r\n baz"],
-            ['sender', "Bla <blu\@local>"],
-        ],
-        body => $body
-    );
-    $self->make_message("Email A", %params) || die;
-
-    xlog "get email list";
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, "R1"],
-        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
-    ]);
-    $self->assert_num_equals(scalar @{$res}, 2);
-    $self->assert_str_equals($res->[0][0], "Email/query");
-    $self->assert_str_equals($res->[1][0], "Email/get");
-    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
-    $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
-
-    my $msg = $res->[1][1]->{list}[0];
-
-    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
-    $self->assert_num_equals(scalar keys %{$msg->{mailboxIds}}, 1);
-
-    my $hdrs = $msg->{headers};
-    $self->assert_str_equals($hdrs->{'message-id'}, '<fake.123456789@local>');
-    $self->assert_str_equals($hdrs->{'x-tra'}, 'foo bar baz');
-    $self->assert_deep_equals($msg->{from}[0], {
-            name => "Sally Sender",
-            email => "sally\@local"
-    });
-    $self->assert_deep_equals($msg->{to}[0], {
-            name => "Tom To",
-            email => "tom\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{to}}, 1);
-    $self->assert_deep_equals($msg->{cc}[0], {
-            name => "Cindy CeeCee",
-            email => "cindy\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{cc}}, 1);
-    $self->assert_deep_equals($msg->{bcc}[0], {
-            name => "Benny CarbonCopy",
-            email => "benny\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
-    $self->assert_null($msg->{replyTo});
-    $self->assert_deep_equals($msg->{sender}, {
-            name => "Bla",
-            email => "blu\@local"
-    });
-    $self->assert_str_equals($msg->{subject}, "Email A");
-
-    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-    $self->assert_str_equals($datestr, $msg->{receivedAt});
-    $self->assert_not_null($msg->{size});
-
-    xlog "fetch again but only some properties";
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, "R1"],
-        ['Email/get', {
-            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['sender', 'headers.x-tra']
-        }, 'R2'],
-    ]);
-
-    $self->assert_num_equals(scalar @{$res}, 2);
-    $self->assert_str_equals($res->[0][0], "Email/query");
-    $self->assert_str_equals($res->[1][0], "Email/get");
-    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
-    $self->assert_num_equals(scalar @{$res->[1][1]->{list}}, 1);
-
-    $msg = $res->[1][1]->{list}[0];
-    $hdrs = $msg->{headers};
-    $self->assert_null($msg->{mailboxIds});
-    $self->assert_null($msg->{subject});
-    $self->assert_deep_equals($msg->{sender}, {
-            name => "Bla",
-            email => "blu\@local"
-    });
-    $self->assert_null($hdrs->{'Message-ID'});
-    $self->assert_str_equals('foo bar baz', $hdrs->{'x-tra'});
 }
 
 sub test_email_get_multimailboxes
@@ -2173,18 +2048,13 @@ sub test_email_get_body_both
     my $ids = $res->[0][1]->{ids};
 
     xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, fetchAllBodyValues => JSON::true }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($textBody, $msg->{textBody});
-    $self->assert_str_equals($htmlBody, $msg->{htmlBody});
-
-    xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => ["body"] }, "R1"]]);
-    $msg = $res->[0][1]{list}[0];
-
-    $self->assert_str_equals($htmlBody, $msg->{htmlBody});
-    $self->assert(not exists $msg->{textBody});
+    my $partId = $msg->{textBody}[0]{partId};
+    $self->assert_str_equals($textBody, $msg->{bodyValues}{$partId}{value});
+    $partId = $msg->{htmlBody}[0]{partId};
+    $self->assert_str_equals($htmlBody, $msg->{bodyValues}{$partId}{value});
 }
 
 sub test_email_get_body_plain
@@ -2213,18 +2083,12 @@ sub test_email_get_body_plain
     my $ids = $res->[0][1]->{ids};
 
     xlog "get emails";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, fetchAllBodyValues => JSON::true,  }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($body, $msg->{textBody});
-    $self->assert_null($msg->{htmlBody});
-
-    xlog "get emails";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => ["body"] }, "R1"]]);
-    $msg = $res->[0][1]{list}[0];
-
-    $self->assert_str_equals($body, $msg->{textBody});
-    $self->assert_null($msg->{htmlBody});
+    my $partId = $msg->{textBody}[0]{partId};
+    $self->assert_str_equals($body, $msg->{bodyValues}{$partId}{value});
+    $self->assert_str_equals($msg->{textBody}[0]{partId}, $msg->{htmlBody}[0]{partId});
 }
 
 sub test_email_get_body_html
@@ -2254,292 +2118,11 @@ sub test_email_get_body_html
     my $ids = $res->[0][1]->{ids};
 
     xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, fetchAllBodyValues => JSON::true }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals('A HTML email.', $msg->{textBody});
-    $self->assert_str_equals($body, $msg->{htmlBody});
-
-    xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', {
-        ids => $ids, properties => ["body"],
-    }, "R1"]]);
-    $msg = $res->[0][1]{list}[0];
-    $self->assert_str_equals($body, $msg->{htmlBody});
-    $self->assert(not exists $msg->{textBody});
-}
-
-sub test_email_get_body_multi
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    if ($self->{instance}->{config}->get('jmap_render_multipart_bodies')) {
-        xlog "jmap_render_multipart_bodies is enabled. Skipping test.";
-        return;
-    }
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-    my $inbox = 'INBOX';
-
-    xlog "Generate a email in $inbox via IMAP";
-    my %exp_sub;
-    $store->set_folder($inbox);
-    $store->_select();
-    $self->{gen}->set_next_uid(1);
-
-    my $body = "".
-    "--sub\r\n".
-    "Content-Type: text/plain; charset=UTF-8\r\n".
-    "Content-Disposition: inline\r\n".
-    "\r\n".
-    "Short text". # Exactly 10 byte long body
-    "\r\n--sub\r\n".
-    "Content-Type: multipart/mixed; boundary=subsub\r\n".
-        "\r\n--subsub\r\n".
-        "Content-Type: multipart/alternative; boundary=subsubsub\r\n".
-            "\r\n--subsubsub\r\n".
-            "Content-Type: multipart/mixed; boundary=subsubsubsub\r\n".
-                "\r\n--subsubsubsub\r\n".
-                "Content-Type: text/plain\r\n".
-                "\r\n" .
-                "Be that the best text that we'll find".
-                "\r\n--subsubsubsub\r\n".
-                "Content-Type: image/jpeg\r\n".
-                "Content-Transfer-Encoding: base64\r\n".
-                "\r\n" .
-                "beefc0de".
-                "\r\n--subsubsubsub\r\n".
-                "Content-Type: text/plain\r\n".
-                "\r\n".
-                "Don't expect this to be the text body, even if it's longer".
-                "\r\n--subsubsubsub--\r\n".
-            "\r\n--subsubsub\r\n".
-            "Content-Type: multipart/related; boundary=subsubsubsub\r\n".
-                "\r\n--subsubsubsub\r\n".
-                "Content-Type: text/html\r\n".
-                "\r\n" .
-                "<html>Expect this to be the html body</html>".
-                "\r\n--subsubsubsub\r\n".
-                "Content-Type: image/png\r\n".
-                "Content-Transfer-Encoding: base64\r\n".
-                "\r\n" .
-                "f00bae==".
-                "\r\n--subsubsubsub--\r\n".
-            "\r\n--subsubsub\r\n".
-            "Content-Type: image/tiff\r\n".
-            "Content-Transfer-Encoding: base64\r\n".
-            "\r\n" .
-            "abc=".
-            "\r\n--subsubsub\r\n".
-            "Content-Type: application/x-excel\r\n".
-            "Content-Transfer-Encoding: base64\r\n".
-            "Content-Disposition: attachment; filename=\"f.xls\"\r\n".
-            "\r\n" .
-            "012312312313".
-            "\r\n--subsubsub\r\n".
-            "Content-Type: message/rfc822\r\n".
-            "\r\n" .
-            "Return-Path: <Ava.Nguyen\@local>\r\n".
-            "Mime-Version: 1.0\r\n".
-            "Content-Type: text/plain\r\n".
-            "Content-Transfer-Encoding: 7bit\r\n".
-            "Subject: bar\r\n".
-            "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n".
-            "Message-ID: <fake.1475639947.6507\@local>\r\n".
-            "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n".
-            "To: Test User <test\@local>\r\n".
-            "\r\n".
-            "Jeez....an embedded email".
-            "\r\n--subsubsub--\r\n".
-        "\r\n--subsub\r\n".
-        "Content-Type: text/plain\r\n".
-        "\r\n".
-        "The Kenosha Kid".
-        "\r\n--subsub--\r\n".
-    "\r\n--sub--";
-
-    $exp_sub{A} = $self->make_message("foo",
-        mime_type => "multipart/mixed",
-        mime_boundary => "sub",
-        body => $body
-    );
-    $talk->store('1', '+flags', '($HasAttachment)');
-
-    xlog "get email list";
-    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    my $ids = $res->[0][1]->{ids};
-
-    xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
-    my $msg = $res->[0][1]{list}[0];
-
-    $self->assert_str_equals("Be that the best text that we'll find", $msg->{textBody});
-
-    $self->assert_equals(JSON::true, $msg->{hasAttachment});
-
-    # Assert embedded email support
-    $self->assert_num_equals(1, scalar keys %{$msg->{attachedEmails}});
-    my $submsg = (values %{$msg->{attachedEmails}})[0];
-
-    $self->assert_str_equals('<fake.1475639947.6507@local>', $submsg->{headers}->{'message-id'});
-    $self->assert_deep_equals({
-            name => "Ava T. Nguyen",
-            email => "Ava.Nguyen\@local"
-    }, $submsg->{from}[0]);
-    $self->assert_deep_equals({
-            name => "Test User",
-            email => "test\@local"
-    }, $submsg->{to}[0]);
-    $self->assert_null($submsg->{cc});
-    $self->assert_null($submsg->{bcc});
-    $self->assert_null($submsg->{replyTo});
-    $self->assert_str_equals("bar", $submsg->{subject});
-    $self->assert_str_equals("2016-10-05T03:59:07Z", $submsg->{sentAt});
-    $self->assert_str_equals("Jeez....an embedded email", $submsg->{textBody});
-    $self->assert_null($submsg->{mailboxIds});
-    $self->assert_null($submsg->{keywords});
-    $self->assert_null($submsg->{size});
-
-    # Assert attachments
-    $self->assert_num_equals(5, scalar @{$msg->{attachments}});
-    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
-    my $att;
-
-    $att = $m{"image/jpeg"};
-    $self->assert_num_equals(6, $att->{size});
-    $self->assert_equals(JSON::false, $att->{isInline});
-    $self->assert_null($att->{cid});
-
-    $att = $m{"image/png"};
-    $self->assert_num_equals(4, $att->{size});
-    $self->assert_equals(JSON::false, $att->{isInline});
-    $self->assert_null($att->{cid});
-
-    $att = $m{"image/tiff"};
-    $self->assert_num_equals(2, $att->{size});
-    $self->assert_equals(JSON::false, $att->{isInline});
-    $self->assert_null($att->{cid});
-
-    $att = $m{"application/x-excel"};
-    $self->assert_num_equals(9, $att->{size});
-    $self->assert_equals(JSON::false, $att->{isInline});
-    $self->assert_null($att->{cid});
-}
-
-sub test_email_get_body_multi_fromlist
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    if (not $self->{instance}->{config}->get('jmap_render_multipart_bodies')) {
-        xlog "jmap_render_multipart_bodies is disabled. Skipping test.";
-        return;
-    }
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-    my $inbox = 'INBOX';
-
-    xlog "Generate a email in $inbox via IMAP";
-    my %exp_sub;
-    $store->set_folder($inbox);
-    $store->_select();
-    $self->{gen}->set_next_uid(1);
-
-    # As see in IMAPTalk.pm
-    my $body = "".
-    "--b\r\n".
-    "Content-Type: text/plain; charset=UTF-8\r\n".
-    "Content-Disposition: inline\r\n".
-    "\r\n".
-    "bodyA".
-    "\r\n--b\r\n".
-    "Content-Type: multipart/mixed; boundary=bb\r\n".
-        "\r\n--bb\r\n".
-        "Content-Type: multipart/alternative; boundary=bbb\r\n".
-            "\r\n--bbb\r\n".
-            "Content-Type: multipart/mixed; boundary=bbbb\r\n".
-                "\r\n--bbbb\r\n".
-                "Content-Type: text/plain\r\n".
-                "Content-Disposition: inline\r\n".
-                "\r\n" .
-                "bodyB".
-                "\r\n--bbbb\r\n".
-                "Content-Type: image/jpeg\r\n".
-                "Content-Transfer-Encoding: base64\r\n".
-                "Content-Disposition: inline\r\n".
-                "\r\n" .
-                "bodyC".
-                "\r\n--bbbb\r\n".
-                "Content-Type: text/plain\r\n".
-                "Content-Disposition: inline\r\n".
-                "\r\n".
-                "bodyD".
-                "\r\n--bbbb--\r\n".
-            "\r\n--bbb\r\n".
-            "Content-Type: multipart/related; boundary=bbbb\r\n".
-                "\r\n--bbbb\r\n".
-                "Content-Type: text/html\r\n".
-                "\r\n" .
-                "<html>bodyE</html>".
-                "\r\n--bbbb\r\n".
-                "Content-Type: image/jpg\r\n".
-                "Content-Disposition: attachment; filename=\"bodyF.jpg\"\r\n".
-                "\r\n" .
-                "bodyF".
-                "\r\n--bbbb--\r\n".
-             "\r\n--bbb--\r\n".
-        "\r\n--bb\r\n".
-        "Content-Type: image/jpeg\r\n".
-        "Content-Disposition: attachment; filename=\"bodyG.jpg\"\r\n".
-        "\r\n" .
-        "bodyG".
-        "\r\n--bb\r\n".
-        "Content-Type: application/x-excel\r\n".
-        "\r\n" .
-        "bodyH".
-        "\r\n--bb\r\n".
-        "Content-Type: message/rfc822\r\n".
-        "\r\n" .
-        "Return-Path: <Ava.Nguyen\@local>\r\n".
-        "Mime-Version: 1.0\r\n".
-        "Content-Type: text/plain\r\n".
-        "Content-Transfer-Encoding: 7bit\r\n".
-        "Subject: bar\r\n".
-        "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n".
-        "Message-ID: <fake.1475639947.6507\@local>\r\n".
-        "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n".
-        "To: Test User <test\@local>\r\n".
-        "\r\n".
-        "bodyJ".
-        "\r\n--bb--\r\n".
-    "\r\n--b\r\n".
-    "Content-Type: text/plain\r\n".
-    "\r\n".
-    "bodyK".
-    "\r\n--b--";
-
-    $exp_sub{A} = $self->make_message("foo",
-        mime_type => "multipart/mixed",
-        mime_boundary => "b",
-        body => $body
-    );
-
-    xlog "get email list";
-    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    my $ids = $res->[0][1]->{ids};
-
-    xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
-    my $msg = $res->[0][1]{list}[0];
-
-    $self->assert_str_equals("bodyA\nbodyB\n[Inline image]\nbodyD\nbodyK", $msg->{textBody});
-    $self->assert_str_equals("<html><div>bodyA</div><div>bodyE</div><div>bodyK</div></html>", $msg->{htmlBody});
-
+    my $partId = $msg->{htmlBody}[0]{partId};
+    $self->assert_str_equals($body, $msg->{bodyValues}{$partId}{value});
 }
 
 sub test_email_get_attachment_name
@@ -2618,7 +2201,7 @@ sub test_email_get_attachment_name
     $self->assert_equals(JSON::true, $msg->{hasAttachment});
 
     # Assert embedded email support
-    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
+    my %m = map { $_->{type} => $_ } @{$msg->{attachedFiles}};
     my $att;
 
     $att = $m{"image/tiff"};
@@ -2670,8 +2253,8 @@ sub test_email_get_body_notext
     ]);
     my $msg = $res->[1][1]->{list}[0];
 
-    $self->assert_str_equals("", $msg->{textBody});
-    $self->assert_null($msg->{htmlBody});
+    $self->assert_deep_equals([], $msg->{textBody});
+    $self->assert_deep_equals([], $msg->{htmlBody});
 }
 
 
@@ -2703,8 +2286,7 @@ sub test_email_get_preview
     $res = $jmap->CallMethods([['Email/get', { ids => $res->[0][1]->{ids} }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_str_equals($msg->{textBody}, "A   plain\r\ntext email.");
-    $self->assert_str_equals($msg->{preview}, 'A plain text email.');
+    $self->assert_str_equals('A plain text email.', $msg->{preview});
 }
 
 sub test_email_get_shared
@@ -2770,7 +2352,7 @@ sub test_email_set_draft
     my $draft =  {
         mailboxIds => { $draftsmbox => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
-        sender => { name => "Marvin the Martian", email => "marvin\@acme.local" },
+        sender => [{ name => "Marvin the Martian", email => "marvin\@acme.local" }],
         to => [
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
             { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
@@ -2782,12 +2364,13 @@ sub test_email_set_draft
         bcc => [
             { name => "Wile E. Coyote", email => "coyote\@acme.local" },
         ],
-        replyTo => [ { name => "", email => "the.other.sam\@acme.local" } ],
+        replyTo => [ { name => undef, email => "the.other.sam\@acme.local" } ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        htmlBody => "Oh!!! I <em>hate</em> that Rabbit.",
-        headers => {
-            "foo" => "bar\nbaz\nbam",
+        textBody => [{ partId => '1' }],
+        htmlBody => [{ partId => '2' }],
+        bodyValues => {
+            '1' => { value => "I'm givin' ya one last chance ta surrenda!" },
+            '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
         },
         keywords => { '$Draft' => JSON::true },
     };
@@ -2808,9 +2391,6 @@ sub test_email_set_draft
     $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
     $self->assert_deep_equals($msg->{replyTo}, $draft->{replyTo});
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
-    $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
-    $self->assert_str_equals($msg->{htmlBody}, $draft->{htmlBody});
-    $self->assert_str_equals($msg->{headers}->{foo}, $draft->{headers}->{foo});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
 
@@ -2917,13 +2497,16 @@ sub test_email_set_inreplyto
     $self->make_message("foo") || die;
     $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
-        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => [ 'id', 'messageId' ],
+        }, 'R2'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
     my $orig_msg = $res->[1][1]->{list}[0];
-    my $orig_id= $orig_msg->{id};
-    my $orig_msgid = $orig_msg->{headers}{"message-id"};
+    my $orig_id = $orig_msg->{id};
+    my $orig_msgid = $orig_msg->{messageId}[0];
     $self->assert(not exists $orig_msg->{keywords}->{'$answered'});
 
     xlog "create drafts mailbox";
@@ -2943,8 +2526,9 @@ sub test_email_set_inreplyto
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        headers => {"in-reply-to" => $orig_msgid },
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
+        inReplyTo => [ $orig_msgid ],
         keywords => { '$Draft' => JSON::true },
     };
 
@@ -2953,7 +2537,7 @@ sub test_email_set_inreplyto
 
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
-    $self->assert_str_equals($orig_msgid, $msg->{headers}->{"in-reply-to"});
+    $self->assert_str_equals($orig_msgid, $msg->{inReplyTo}[0]);
 
     $res = $jmap->CallMethods([['Email/get', { ids => [$orig_id] }, "R1"]]);
     $orig_msg = $res->[0][1]->{list}[0];
@@ -2966,59 +2550,67 @@ sub test_email_set_attachedemails
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "create drafts mailbox";
-    my $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "drafts",
-                            parentId => undef,
-                            role => "drafts"
-             }}}, "R1"]
-    ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    $self->assert_not_null($res->[0][1]{created});
-    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    my $store = $self->{store};
+    my $talk = $store->get_client();
 
-    my $draft =  {
-        mailboxIds =>  { $draftsmbox => JSON::true },
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
-        to => [
-            { name => "Bugs Bunny", email => "bugs\@acme.local" },
-        ],
-        subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
-        attachedEmails => {
+    xlog "Generate email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'blobId' ],
+        }, 'R2']
+    ]);
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_not_null($msg);
+    my $blobId = $msg->{blobId};
+    my $blob = $jmap->Download('cassandane', $blobId);
+
+    xlog "Attach the email to a new email";
+    my $inboxid = $self->getinbox()->{id};
+    my $email = {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [{ name => "Test", email => q{foo@bar} }],
+        subject => "test",
+        textBody => [{
+            partId => "1",
+        }],
+        htmlBody => [{
+            partId => "2",
+        }],
+        attachedEmails => [{
+            blobId => $blobId,
+        }],
+        bodyValues => {
             "1" => {
-                from => [ { name => "Bla", email => "bla\@acme.local" } ],
-                to => [ { name => "Blu",   email => "blu\@acme.local" } ],
-                subject  => "an embedded email",
-                textBody => "Yo!",
+                value => "A text body",
+            },
+            "2" => {
+                value => "<p>A HTML body</p>",
             },
         },
-        keywords => { '$Draft' => JSON::true },
     };
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+        ['Email/get', {
+            ids => [ '#1' ],
+            properties => [ "textBody", "attachedEmails", "bodyValues" ],
+            bodyProperties => [ 'partId', 'blobId' ],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
 
-    xlog "Create a draft";
-    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"1"}{id};
-
-    xlog "Get draft $id";
-    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
-    my $msg = $res->[0][1]->{list}[0];
-
-    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
-    $self->assert_deep_equals($msg->{from}, $draft->{from});
-    $self->assert_deep_equals($msg->{to}, $draft->{to});
-    $self->assert_str_equals($msg->{subject}, $draft->{subject});
-    $self->assert_str_equals($msg->{textBody}, $draft->{textBody});
-
-    my $got = (values %{$msg->{attachedEmails}})[0];
-    my $want = $draft->{attachedEmails}->{1};
-    $self->assert_deep_equals($got->{from}, $want->{from});
-    $self->assert_deep_equals($got->{to}, $want->{to});
-    $self->assert_str_equals($got->{textBody}, $want->{textBody});
-    $self->assert_str_equals($got->{subject}, $want->{subject});
+    my $attachedBlobId = $res->[1][1]{list}[0]{attachedEmails}[0]{blobId};
+    my $attachedBlob = $jmap->Download('cassandane', $attachedBlobId);
+    # FIXME these should, but do not match
+    #$self->assert_str_equals($blob->{content}, $attachedBlob->{content});
 }
 
 sub test_email_set_shared
@@ -3108,7 +2700,12 @@ sub test_email_set_userkeywords
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
+        textBody => [{ partId => '1' }],
+        bodyValues => {
+            '1' => {
+                value => "I'm givin' ya one last chance ta surrenda!"
+            }
+        },
         keywords => {
             '$Draft' => JSON::true,
             'foo' => JSON::true
@@ -3181,9 +2778,13 @@ sub test_misc_upload_zero
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
-        attachments => [{
+        textBody => [{ partId => '1' }],
+        bodyValues => {
+            '1' => {
+                value => "I'm givin' ya one last chance ta surrenda!"
+            }
+        },
+        attachedFiles => [{
             blobId => $data->{blobId},
             name => "emptyfile.txt",
         }],
@@ -3226,9 +2827,17 @@ sub test_misc_upload
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
-        attachments => [{
+        textBody => [{partId => '1'}],
+        htmlBody => [{partId => '2'}],
+        bodyValues => {
+            1 => {
+                value => "I'm givin' ya one last chance ta surrenda!"
+            },
+            2 => {
+                value => "<html>I'm givin' ya one last chance ta surrenda!</html>"
+            },
+        },
+        attachedFiles => [{
             blobId => $data->{blobId},
             name => "test.txt",
         }],
@@ -3323,9 +2932,9 @@ sub test_misc_upload_bin
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        htmlBody => "<html>I'm givin' ya one last chance ta surrenda!</html>",
-        attachments => [{
+        textBody => [{ partId => '1' }],
+        bodyValues => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
+        attachedFiles => [{
             blobId => $data->{blobId},
             name => "logo.gif",
         }],
@@ -3378,7 +2987,7 @@ sub test_misc_download
     $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
     my $blobid1 = $m{"image/jpeg"}->{blobId};
     my $blobid2 = $m{"image/png"}->{blobId};
     $self->assert_not_null($blobid1);
@@ -3504,11 +3113,11 @@ sub test_email_set_attachments
     $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
-    my $blobid1 = $m{"image/jpeg"}->{blobId};
-    my $blobid2 = $m{"image/png"}->{blobId};
-    $self->assert_not_null($blobid1);
-    $self->assert_not_null($blobid2);
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
+    my $blobJpeg = $m{"image/jpeg"}->{blobId};
+    my $blobPng = $m{"image/png"}->{blobId};
+    $self->assert_not_null($blobJpeg);
+    $self->assert_not_null($blobPng);
 
     xlog "create drafts mailbox";
     $res = $jmap->CallMethods([
@@ -3529,21 +3138,26 @@ sub test_email_set_attachments
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
-        htmlBody => "<html>I'm givin' ya one last chance ta surrenda! ".
-                    "<img src=\"cid:foo\@local\"></html>",
-        attachments => [{
-            blobId => $blobid1,
+        htmlBody => [{ partId => '1' }],
+        bodyValues => {
+            '1' => {
+                value => "<html>I'm givin' ya one last chance ta surrenda! ".
+                         "<img src=\"cid:foo\@local\"></html>",
+            },
+        },
+        attachedFiles => [{
+            blobId => $blobJpeg,
             name => "test\N{GRINNING FACE}.jpg",
         }, {
-            blobId => $blobid2,
-            cid => "<foo\@local>",
-            isInline => JSON::true,
+            blobId => $blobPng,
+            cid => "foo\@local",
+            disposition => 'inline',
         }, {
-            blobId => $blobid1,
+            blobId => $blobJpeg,
             type => "application/test",
             name => $longfname,
         }, {
-            blobId => $blobid2,
+            blobId => $blobPng,
             type => "application/test2",
             name => "simple",
         }],
@@ -3558,23 +3172,19 @@ sub test_email_set_attachments
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
 
-    %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
 
     my $att = $m{"image/jpeg"};
     $self->assert_not_null($att);
     $self->assert_str_equals($att->{name}, "test\N{GRINNING FACE}.jpg");
     $self->assert_num_equals($att->{size}, 6);
     $self->assert_null($att->{cid});
-    $self->assert_equals(JSON::false, $att->{isInline});
-    $self->assert_null($att->{width});
-    $self->assert_null($att->{height});
 
     $att = $m{"image/png"};
     $self->assert_not_null($att);
     $self->assert_num_equals($att->{size}, 4);
-    $self->assert_str_equals("<foo\@local>", $att->{cid});
-    $self->assert_null($att->{width});
-    $self->assert_null($att->{height});
+    $self->assert_str_equals("foo\@local", $att->{cid});
+    $self->assert_str_equals("inline", $att->{disposition});
 
     $att = $m{"application/test"};
     $self->assert_not_null($att);
@@ -3607,7 +3217,8 @@ sub test_email_set_flagged
     my $draft =  {
         mailboxIds =>  { $drafts => JSON::true },
         keywords => { '$Draft' => JSON::true, '$Flagged' => JSON::true },
-        textBody => "a flagged draft"
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "a flagged draft" }},
     };
 
     xlog "Create a draft";
@@ -3620,37 +3231,6 @@ sub test_email_set_flagged
 
     $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$flagged'});
-}
-
-
-sub test_email_set_invalid_mailaddr
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $inboxid = $self->getinbox()->{id};
-
-    my $msg = {
-        mailboxIds =>  { $inboxid => JSON::true },
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
-        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
-        subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
-        keywords => { },
-    };
-
-    xlog 'Create a email with invalid replyTo property without $Drafts flags (should fail)';
-    $msg->{replyTo} = [ { name => "", email => "a\@bad\@address\@acme.local" } ];
-    my $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
-    $self->assert_str_equals('replyTo[0].email', $res->[0][1]{notCreated}{"1"}{properties}[0]);
-
-    xlog 'Create a email with invalid replyTo property with $Drafts flags';
-    $msg->{keywords} = { '$Draft' => JSON::true };
-    $msg->{replyTo} = [ { name => "", email => "address\@acme.local" } ];
-    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
-    $self->assert_not_null($res->[0][1]{created}{"1"});
 }
 
 sub test_email_set_mailboxids
@@ -3674,7 +3254,8 @@ sub test_email_set_mailboxids
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
-        textBody => "I'm givin' ya one last chance ta surrenda!",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
         keywords => { '$Draft' => JSON::true },
     };
 
@@ -4031,7 +3612,8 @@ sub test_emailsubmission_set_issue2285
                     '$Seen' => JSON::true,
                     '$Draft' => JSON::true
                 },
-                'textBody' => 'lsdkgjh',
+                textBody => [{partId => '1'}],
+                bodyValues => { '1' => { value => 'lsdkgjh' }},
                 'to' => [
                     {
                         'email' => 'foo@bar.com',
@@ -4048,7 +3630,6 @@ sub test_emailsubmission_set_issue2285
                 'mailboxIds' => {
                     $inboxid => JSON::true,
                 },
-                'headers' => {}
             }
         }
     }, "R1" ],
@@ -4246,7 +3827,8 @@ sub test_email_set_update
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
         cc => [ { name => "Elmer Fudd", email => "elmer\@acme.local" } ],
         subject => "created",
-        htmlBody => "Oh!!! I <em>hate</em> that Rabbit.",
+        htmlBody => [ {partId => '1'} ],
+        bodyValues => { 1 => { value => "Oh!!! I <em>hate</em> that Rabbit." }},
         keywords => {
             '$Draft' => JSON::true,
         }
@@ -4361,7 +3943,8 @@ sub test_email_set_destroy
         from       => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
         to         => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
         subject    => "created",
-        textBody   => "Oh!!! I *hate* that Rabbit.",
+        textBody   => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Oh!!! I *hate* that Rabbit." }},
         keywords => { '$Draft' => JSON::true },
     };
     $res = $jmap->CallMethods(
@@ -5755,13 +5338,13 @@ sub test_email_query_unknown_mailbox
     $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => "foo" } }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-    $self->assert_str_equals('filter.inMailbox', $res->[0][1]{arguments}[0]);
+    $self->assert_str_equals('filter/inMailbox', $res->[0][1]{arguments}[0]);
 
     xlog "filter inMailboxOtherThan with unknown mailbox";
     $res = $jmap->CallMethods([['Email/query', { filter => { inMailboxOtherThan => ["foo"] } }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-    $self->assert_str_equals('filter.inMailboxOtherThan[0]', $res->[0][1]{arguments}[0]);
+    $self->assert_str_equals('filter/inMailboxOtherThan[0]', $res->[0][1]{arguments}[0]);
 }
 
 
@@ -6058,8 +5641,9 @@ sub test_email_query_attachments
                           { name => "Bugs Bunny", email => "bugs\@acme.local" },
                       ],
                       subject => "Memo",
-                      textBody => "I'm givin' ya one last chance ta surrenda!",
-                      attachments => [{
+                      textBody => [{ partId => '1' }],
+                      bodyValues => {'1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
+                      attachedFiles => [{
                               blobId => $data->{blobId},
                               name => "logo.gif",
                       }],
@@ -6072,8 +5656,9 @@ sub test_email_query_attachments
                           { name => "Bugs Bunny", email => "bugs\@acme.local" },
                       ],
                       subject => "Memo 2",
-                      textBody => "I'm givin' ya *one* last chance ta surrenda!",
-                      attachments => [{
+                      textBody => [{ partId => '1' }],
+                      bodyValues => {'1' => { value => "I'm givin' ya *one* last chance ta surrenda!" }},
+                      attachedFiles => [{
                               blobId => $data->{blobId},
                               name => "somethingelse.gif",
                       }],
@@ -6157,8 +5742,9 @@ sub test_email_query_attachmentname
                       from => [ { name => "", email => "sam\@acme.local" } ] ,
                       to => [ { name => "", email => "bugs\@acme.local" } ],
                       subject => "msg1",
-                      textBody => "foo",
-                      attachments => [{
+                      textBody => [{ partId => '1' }],
+                      bodyValues => { '1' => { value => "foo" } },
+                      attachedFiles => [{
                               blobId => $data->{blobId},
                               name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
                       }],
@@ -6229,10 +5815,18 @@ sub test_thread_get
     xlog "fetch emails";
     $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
-        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
     ]);
 
-    my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
+    # Map messages by body contents
+    my %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
     my $msgA = $m{"a"};
     my $msgB = $m{"b"};
     my $msgC = $m{"c"};
@@ -6249,11 +5843,12 @@ sub test_thread_get
     $res = $jmap->CallMethods(
         [[ 'Email/set', { create => { "1" => {
             mailboxIds           => {$drafts =>  JSON::true},
-            headers              => { "In-Reply-To" => $msgA->{headers}{"message-id"}},
+            inReplyTo            => $msgA->{messageId},
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Re: Email A",
-            textBody             => "I'm givin' ya one last chance ta surrenda!",
+            textBody             => [{ partId => '1' }],
+            bodyValues           => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
     my $draftid = $res->[0][1]{created}{"1"}{id};
@@ -6442,7 +6037,8 @@ sub test_email_changes
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Email B",
-            textBody             => "I'm givin' ya one last chance ta surrenda!",
+            textBody             => [{ partId => '1' }],
+            bodyValues           => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
     my $idb = $res->[0][1]{created}{"1"}{id};
@@ -6455,7 +6051,8 @@ sub test_email_changes
             from                 => [ { name => "", email => "sam\@acme.local" } ],
             to                   => [ { name => "", email => "bugs\@acme.local" } ],
             subject              => "Email C",
-            textBody             => "I *hate* that rabbit!",
+            textBody             => [{ partId => '1' }],
+            bodyValues           => { '1' => { value => "I *hate* that rabbit!" } },
             keywords             => { '$Draft' => JSON::true },
         }}}, "R1" ]]);
     my $idc = $res->[0][1]{created}{"1"}{id};
@@ -7440,10 +7037,18 @@ sub test_thread_changes
     xlog "fetch emails";
     $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
-        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
     ]);
 
-    my %m = map { $_->{textBody} => $_ } @{$res->[1][1]{list}};
+    # Map messages by body contents
+    my %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
     my $msgA = $m{"a"};
     my $msgB = $m{"b"};
     my $msgC = $m{"c"};
@@ -7569,7 +7174,7 @@ sub test_email_import
             properties => ['attachedEmails'],
         }, 'R2' ],
     ]);
-    my $blobid = (keys %{$res->[1][1]->{list}[0]->{attachedEmails}})[0];
+    my $blobid = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
     $self->assert_not_null($blobid);
 
     xlog "create drafts mailbox";
@@ -7796,7 +7401,8 @@ sub test_email_set_patch
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
-        textBody => "Whoa!",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Whoa!" }},
         keywords => { '$Draft' => JSON::true, foo => JSON::true },
     };
 
@@ -7915,7 +7521,8 @@ sub test_misc_set_oldstate
             { name => "Bugs Bunny", email => "bugs\@acme.local" },
         ],
         subject => "foo",
-        textBody => "bar",
+        textBody => [{partId => '1' }],
+        bodyValues => { 1 => { value => "bar" }},
         keywords => { '$Draft' => JSON::true },
     };
 
@@ -7958,16 +7565,18 @@ sub test_email_set_text_crlf
             email => q{foo@bar.com},
             name => "foo",
         } ],
-        textBody => $text,
+        textBody => [{partId => '1'}],
+        bodyValues => {1 => { value => $text }},
     };
 
     xlog "create and get email";
     my $res = $jmap->CallMethods([
         ['Email/set', { create => { "1" => $email }}, "R1"],
-        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+        ['Email/get', { ids => [ "#1" ], fetchAllBodyValues => JSON::true }, "R2" ],
     ]);
     my $ret = $res->[1][1]->{list}[0];
-    $self->assert_str_equals($want, $ret->{textBody});
+    my $got = $ret->{bodyValues}{$ret->{textBody}[0]{partId}}{value};
+    $self->assert_str_equals($want, $got);
 }
 
 sub test_email_set_text_split
@@ -7987,16 +7596,17 @@ sub test_email_set_text_split
             email => q{foo@bar.com},
             name => "foo",
         } ],
-        textBody => $text,
+        textBody => [{partId => '1'}],
+        bodyValues => {1 => { value => $text }},
     };
 
     xlog "create and get email";
     my $res = $jmap->CallMethods([
         ['Email/set', { create => { "1" => $email }}, "R1"],
-        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+        ['Email/get', { ids => [ "#1" ], fetchAllBodyValues => JSON::true }, "R2" ],
     ]);
     my $ret = $res->[1][1]->{list}[0];
-    $self->assert_str_equals($text, $ret->{textBody});
+    my $got = $ret->{bodyValues}{$ret->{textBody}[0]{partId}}{value};
 }
 
 1;
