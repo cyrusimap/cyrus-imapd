@@ -68,7 +68,7 @@
 ##cleanup = no
 # How many worker processes to run.  Overridden by -j argument to
 # testrunner.pl.
-##maxworkers = 2
+##maxworkers = 1
 
 # This section describes configurable properties of Valgrind.
 [valgrind]

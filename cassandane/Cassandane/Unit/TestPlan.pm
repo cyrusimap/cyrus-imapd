@@ -477,7 +477,7 @@ sub new
 	schedule => {},
 	keep_going => delete $opts{keep_going} || 0,
 	log_directory => delete $opts{log_directory},
-	maxworkers => delete $opts{maxworkers},
+	maxworkers => delete $opts{maxworkers} || 1,
     };
     die "Unknown options: " . join(' ', keys %opts)
 	if scalar %opts;

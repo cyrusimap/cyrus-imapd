@@ -274,7 +274,7 @@ Cassandane::Instance::cleanup_leftovers()
 
 my $plan = Cassandane::Unit::TestPlan->new(
 	keep_going => $keep_going,
-	maxworkers => $cassini->val('cassandane', 'maxworkers'),
+	maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
 	log_directory => $log_directory,
     );
 
