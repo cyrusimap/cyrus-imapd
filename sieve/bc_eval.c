@@ -85,8 +85,7 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
     /* support UTF8 comparisons */
     ctag |= REG_UTF8;
 #endif
-    if ( (ret=regcomp(reg, s, ctag)) != 0)
-    {
+    if ((ret = regcomp(reg, s, ctag)) != 0) {
         (void) regerror(ret, reg, errmsg, errsiz);
         regfree(reg);
         free(reg);
@@ -143,8 +142,7 @@ static char* look_for_me(char *myaddr, strarray_t *addresses, const char **body,
                 break;
             }
 
-            for(x=0; x<numaddresses; x++)
-            {
+            for(x = 0; x < numaddresses; x++) {
                 char *altaddr;
                 const char *str;
 
@@ -266,7 +264,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 
     /* ok, is it any of the other addresses i've
        specified? */
-    for(x=0; x<numaddresses; x++) {
+    for(x = 0; x < numaddresses; x++) {
         const char *address;
 
         address = strarray_nth(addresses, x);
@@ -327,6 +325,62 @@ static int regcomp_flags(int comparator, int requires)
     return cflags;
 }
 
+static int do_comparison(const char *needle, const char *hay,
+                         comparator_t *comp, void *comprock, int ctag,
+                         variable_list_t *variables, strarray_t *match_vars)
+{
+    int res;
+
+    if (variables) {
+        needle = parse_string(needle, variables);
+    }
+
+    if (ctag) {
+        char errbuf[100]; /* Basically unused, as regex tested at compile */
+        regex_t *reg = bc_compile_regex(needle, ctag, errbuf, sizeof(errbuf));
+
+        if (!reg) {
+            /* Oops */
+            res = SIEVE_NOMEM;
+        }
+        else {
+            res = comp(hay, strlen(hay),
+                       (const char *) reg, match_vars, comprock);
+            regfree(reg);
+            free(reg);
+        }
+    } else {
+#if VERBOSE
+        printf("%s compared to %s (from script)\n", hay, needle);
+#endif
+        res = comp(hay, strlen(hay), needle, match_vars, comprock);
+    }
+
+    return res;
+}
+
+static int do_comparisons(strarray_t *needles, const char *hay,
+                          comparator_t *comp, void *comprock, int ctag,
+                          variable_list_t *variables, strarray_t *match_vars)
+{
+    int n, res = 0, numneedles = strarray_size(needles);
+
+    for (n = 0; n < numneedles && !res; n++) {
+        const char *needle = strarray_nth(needles, n);
+
+        if (variables) {
+            needle = parse_string(needle, variables);
+        }
+
+        int tmp = do_comparison(needle, hay,
+                                comp, comprock, ctag, variables, match_vars);
+        if (tmp < 0) res = tmp;
+        else res |= tmp;
+    }
+
+    return res;
+}
+
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
@@ -337,15 +391,13 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
     test_t test;
     int res = 0;
     int i = *ip;
-    int x,y,z;/* loop variable */
+    int x, y, z;  /* loop variable */
     int list_len; /* for allof/anyof/exists */
     int list_end; /* for allof/anyof/exists */
-    int address=0;/*to differentiate between address and envelope*/
-    int is_string = 0; /* differentiate between string and hasflag tests */
-    comparator_t * comp=NULL;
-    void * comprock=NULL;
+    comparator_t *comp = NULL;
+    void *comprock = NULL;
     strarray_t *match_vars = NULL;
-    int op = ntohl(bc[i].op);
+    int op;
     #define SCOUNT_SIZE 20
     char scount[SCOUNT_SIZE];
 
@@ -369,7 +421,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
     case BC_EXISTS:
     {
-        const char** val;
+        const char **val;
 
         res = 1;
 
@@ -452,10 +504,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
     case BC_ADDRESS:
     case BC_ADDRESS_PRE_INDEX:
-        address = 1;
-
-        GCC_FALLTHROUGH
-
     case BC_ENVELOPE:
     {
         const char **val;
@@ -464,7 +512,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         char *addr;
 
         int numheaders = strarray_size(test.u.ae.sl);
-        int numdata = strarray_size(test.u.ae.pl);
 
         int header_count;
         int index = test.u.ae.comp.index; // used for address only
@@ -472,17 +519,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         int relation = test.u.ae.comp.relation;
         int comparator = test.u.ae.comp.collation;
         int apart = test.u.ae.addrpart;
-        int count=0;
-        int isReg = (match==B_REGEX);
+        int count = 0;
+        int isReg = (match == B_REGEX);
         int ctag = 0;
-        char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
         if (isReg) {
             ctag = regcomp_flags(comparator, requires);
         }
 
-        /*find the correct comparator fcn*/
+        /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if (!comp) {
@@ -491,7 +537,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
-        /*loop through all the headers*/
+        /* loop through all the headers */
 #if VERBOSE
         printf("about to process %d headers\n", numheaders);
 #endif
@@ -506,21 +552,21 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             }
 
             /* Try the next string if we don't have this one */
-            if (address) {
-                /* Header */
-                if (interp->getheader(m, this_header, &val) != SIEVE_OK)
-                    continue;
-#if VERBOSE
-                printf(" [%d] header %s is %s\n", x, this_header, val[0]);
-#endif
-            } else {
+            if (op == BC_ENVELOPE) {
                 /* Envelope */
                 if (interp->getenvelope(m, this_header, &val) != SIEVE_OK)
                     continue;
 
                 if (!strcmp(this_header, "from")) reverse_path = 1;
             }
-
+            else {
+                /* Address Header */
+                if (interp->getheader(m, this_header, &val) != SIEVE_OK)
+                    continue;
+#if VERBOSE
+                printf(" [%d] address header %s is %s\n", x, this_header, val[0]);
+#endif
+            }
             /* count results */
             header_count = 0;
             while (val[header_count] != NULL) {
@@ -588,40 +634,14 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         count++;
                     } else {
                         /* search through all the data */
-                        for (z = 0; z < numdata && !res; z++) {
-                            const char *data_val;
-
-                            data_val = strarray_nth(test.u.ae.pl, z);
-
-                            if (requires & BFE_VARIABLES) {
-                                data_val = parse_string(data_val, variables);
-                            }
-
-                            if (isReg) {
-                                regex_t *reg = bc_compile_regex(data_val, ctag,
-                                                                errbuf,
-                                                                sizeof(errbuf));
-                                if (!reg) {
-                                    /* Oops */
-                                    free(addr);
-                                    res = -1;
-                                    goto envelope_err;
-                                }
-
-                                res |= comp(addr, strlen(addr),
-                                            (const char *)reg,
-                                            match_vars, comprock);
-                                regfree(reg);
-                                free(reg);
-                            } else {
-#if VERBOSE
-                                printf("%s compared to %s(from script)\n",
-                                       addr, data_val);
-#endif
-                                res |= comp(addr, strlen(addr),
-                                            data_val, match_vars, comprock);
-                            }
-                        } /* For each data */
+                        res = do_comparisons(test.u.ae.pl, addr,
+                                             comp, comprock, ctag,
+                                             (requires & BFE_VARIABLES) ?
+                                             variables : NULL, match_vars);
+                        if (res < 0) {
+                            free(addr);
+                            goto envelope_err;
+                        }
                     }
                     free(addr);
                 } /* For each address */
@@ -637,18 +657,10 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            for (z = 0; z < numdata && !res; z++) {
-                const char *data_val;
-
-                data_val = strarray_nth(test.u.ae.pl, z);;
-
-                if (requires & BFE_VARIABLES) {
-                    data_val = parse_string(data_val, variables);
-                }
-
-                res |= comp(scount, strlen(scount),
-                            data_val, match_vars, comprock);
-            }
+            res = do_comparisons(test.u.ae.pl, scount,
+                                 comp, comprock, 0 /* regex */,
+                                 (requires & BFE_VARIABLES) ? variables : NULL,
+                                 match_vars);
         }
 
 envelope_err:
@@ -663,17 +675,15 @@ envelope_err:
         const char **val;
 
         int numheaders = strarray_size(test.u.hhs.sl);
-        int numdata = strarray_size(test.u.hhs.pl);
 
         int header_count;
         int index = test.u.hhs.comp.index;
         int match = test.u.hhs.comp.match;
         int relation = test.u.hhs.comp.relation;
         int comparator = test.u.hhs.comp.collation;
-        int count=0;
-        int isReg = (match==B_REGEX);
+        int count = 0;
+        int isReg = (match == B_REGEX);
         int ctag = 0;
-        char errbuf[100]; /* Basically unused, regexps tested at compile */
         char *decoded_header;
 
         /* set up variables needed for compiling regex */
@@ -681,7 +691,7 @@ envelope_err:
             ctag = regcomp_flags(comparator, requires);
         }
 
-        /*find the correct comparator fcn*/
+        /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if (!comp) {
@@ -690,7 +700,7 @@ envelope_err:
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
-        /*search through all the flags for the header*/
+        /* search through all the flags for the header */
         for(x = 0; x < numheaders && !res; x++) {
             const char *this_header;
 
@@ -737,38 +747,16 @@ envelope_err:
                 if (match == B_COUNT) {
                     count++;
                 } else {
-                    decoded_header = charset_parse_mimeheader(val[y], 0 /*flags*/);
-                    /* search through all the data */
-                    for (z = 0; z < numdata && !res; z++) {
-                        const char *data_val;
+                    decoded_header =
+                        charset_parse_mimeheader(val[y], 0 /*flags*/);
 
-                        data_val = strarray_nth(test.u.hhs.pl, z);
-
-                        if (requires & BFE_VARIABLES) {
-                            data_val = parse_string(data_val, variables);
-                        }
-
-                        if (isReg) {
-                            regex_t *reg =
-                                bc_compile_regex(data_val, ctag,
-                                                 errbuf, sizeof(errbuf));
-                            if (!reg) {
-                                /* Oops */
-                                res = -1;
-                                goto header_err;
-                            }
-
-                            res |= comp(decoded_header, strlen(decoded_header),
-                                        (const char *)reg, match_vars, comprock);
-
-                            regfree(reg);
-                            free(reg);
-                        } else {
-                            res |= comp(decoded_header, strlen(decoded_header),
-                                        data_val, match_vars, comprock);
-                        }
-                    }
+                    res = do_comparisons(test.u.hhs.pl, decoded_header,
+                                         comp, comprock, ctag,
+                                         (requires & BFE_VARIABLES) ?
+                                         variables : NULL, match_vars);
                     free(decoded_header);
+
+                    if (res < 0) goto header_err;
                 }
             }
         }
@@ -776,22 +764,10 @@ envelope_err:
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            for (z = 0; z < numdata && !res; z++) {
-                const char *data_val;
-
-                data_val = strarray_nth(test.u.hhs.pl, z);
-
-                if (requires & BFE_VARIABLES) {
-                    data_val = parse_string(data_val, variables);
-                }
-
-#if VERBOSE
-                printf("%d, %s \n", count, data_val);
-#endif
-                res |= comp(scount, strlen(scount),
-                            data_val, match_vars, comprock);
-            }
-
+            res = do_comparisons(test.u.hhs.pl, scount,
+                                 comp, comprock, 0 /* regex */,
+                                 (requires & BFE_VARIABLES) ? variables : NULL,
+                                 match_vars);
         }
 
       header_err:
@@ -801,10 +777,6 @@ envelope_err:
     }
 
     case BC_STRING:
-        is_string = 1;
-
-        GCC_FALLTHROUGH
-
     case BC_HASFLAG:
     {
         int numhaystacks = strarray_size(test.u.hhs.sl); // number of vars to search
@@ -813,17 +785,16 @@ envelope_err:
         int match = test.u.hhs.comp.match;
         int relation = test.u.hhs.comp.match;
         int comparator = test.u.hhs.comp.match;
-        int count=0;
+        int count = 0;
         int isReg = (match == B_REGEX);
         int ctag = 0;
-        char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
         if (isReg) {
             ctag = regcomp_flags(comparator, requires);
         }
 
-        /*find the correct comparator fcn*/
+        /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if (!comp) {
@@ -833,7 +804,7 @@ envelope_err:
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /* loop on each haystack */
-        for (z = 0; z < (is_string ? numhaystacks :
+        for (z = 0; z < (op == BC_STRING ? numhaystacks :
                          numhaystacks ? numhaystacks : 1); z++) {
             const char *this_haystack = NULL;
             strarray_t *this_var = NULL;
@@ -842,7 +813,7 @@ envelope_err:
                 this_haystack = strarray_nth(test.u.hhs.sl, z);
             }
 
-            if (is_string) {
+            if (op == BC_STRING) {
                 if (requires & BFE_VARIABLES) {
                     this_haystack = parse_string(this_haystack, variables);
                 }
@@ -865,7 +836,7 @@ envelope_err:
             }
 
 	    if (match == B_COUNT) {
-                if (is_string) {
+                if (op == BC_STRING) {
                     if (this_haystack[0] != '\0') {
                         count += 1;
                     }
@@ -881,27 +852,18 @@ envelope_err:
 
 		snprintf(scount, SCOUNT_SIZE, "%u", count);
 		/* search through all the data */
-		for (z = 0; z < numneedles && !res; z++) {
-		    const char *this_needle;
-
-                    this_needle = strarray_nth(test.u.hhs.pl, z);
-
-		    if (requires & BFE_VARIABLES) {
-			this_needle = parse_string(this_needle, variables);
-		    }
-
-#if VERBOSE
-		    printf("%d, %s \n", count, data_val);
-#endif
-		    res |= comp(scount, strlen(scount), this_needle,
-                                match_vars, comprock);
-		}
+                res = do_comparisons(test.u.hhs.pl, scount,
+                                     comp, comprock, 0 /* regex */,
+                                     (requires & BFE_VARIABLES) ?
+                                     variables : NULL,
+                                     match_vars);
                 break;
             }
 
             /* search through the haystack for the needles */
-            for(x = 0; x < numneedles && !res; x++) {
+            for (x = 0; x < numneedles && !res; x++) {
                 const char *this_needle;
+                int tmp;
 
                 this_needle = strarray_nth(test.u.hhs.pl, x);
 
@@ -913,25 +875,16 @@ envelope_err:
                 printf ("val %s %s %s\n", val[0], val[1], val[2]);
 #endif
 
-                if (is_string) {
-                    if (isReg) {
-                        regex_t *reg = bc_compile_regex(this_needle, ctag,
-                                                        errbuf, sizeof(errbuf));
-                        if (!reg) {
-                            /* Oops */
-                            res = -1;
-                            goto string_err;
-                        }
-
-                        res |= comp(this_haystack, strlen(this_haystack),
-                                    (const char *)reg, match_vars, comprock);
-
-                        regfree(reg);
-                        free(reg);
-                    } else {
-                        res |= comp(this_haystack, strlen(this_haystack),
-                                    this_needle, match_vars, comprock);
+                if (op == BC_STRING) {
+                    tmp = do_comparison(this_needle, this_haystack,
+                                        comp, comprock, ctag,
+                                        NULL /* variables */, match_vars);
+                    if (tmp < 0) {
+                        res = -1;
+                        goto string_err;
                     }
+
+                    res |= tmp;
                 } else {
                     /* search through all the flags */
 
@@ -940,28 +893,17 @@ envelope_err:
 
                         active_flag = this_var->data[y];
 
-                        if (isReg) {
-                            regex_t *reg =
-                                bc_compile_regex(this_needle, ctag,
-                                                 errbuf, sizeof(errbuf));
-                            if (!reg) {
-                                /* Oops */
-                                res = -1;
-                                goto string_err;
-                            }
-
-                            res |= comp(active_flag, strlen(active_flag),
-                                        (const char *)reg,
-                                        match_vars, comprock);
-
-                            regfree(reg);
-                            free(reg);
-                        } else {
-                            res |= comp(active_flag, strlen(active_flag),
-                                        this_needle, match_vars, comprock);
+                        tmp = do_comparison(this_needle, active_flag,
+                                            comp, comprock, ctag,
+                                            NULL /* variables */, match_vars);
+                        if (tmp < 0) {
+                            res = -1;
+                            goto string_err;
                         }
+
+                        res |= tmp;
                     }
-                } // (is_string) else
+                } // (op == BC_STRING) else
 
             } // loop on each item of the current haystack
 #if VERBOSE
@@ -970,7 +912,7 @@ envelope_err:
                 char *temp;
                 temp = strarray_join(varlist_select(variables, VL_MATCH_VARS)->var,
                                      ", ");
-                printf((!is_string ? "B_hasflag:" : "B_STRING"));
+                printf((op == BC_STRING ? "BC_STRING" : "BC_HASFLAG"));
                 printf(" %s\n\n", temp);
                 free (temp);
             }
@@ -988,24 +930,21 @@ envelope_err:
         sieve_bodypart_t **val;
         const char **content_types = NULL;
 
-        int numdata = strarray_size(test.u.b.pl);
-
         int match = test.u.b.comp.match;
         int relation = test.u.b.comp.relation;
         int comparator = test.u.b.comp.collation;
         int transform = test.u.b.transform;
         /* test.u.b.offset is now unused */
-        int count=0;
+        int count = 0;
         int isReg = (match == B_REGEX);
         int ctag = 0;
-        char errbuf[100]; /* Basically unused, as regexps are tested at compile */
 
         /* set up variables needed for compiling regex */
         if (isReg) {
             ctag = regcomp_flags(comparator, requires);
         }
 
-        /*find the correct comparator fcn*/
+        /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
 
         if (!comp) {
@@ -1037,7 +976,7 @@ envelope_err:
              /* break; */
         }
 
-        /*find the part(s) of the body that we want*/
+        /* find the part(s) of the body that we want */
         content_types = (const char **) strarray_takevf(test.u.b.content_types);
         res = interp->getbody(m, content_types, &val);
         free(content_types);
@@ -1054,34 +993,14 @@ envelope_err:
                 const char *content = val[y]->decoded_body;
 
                 /* search through all the data */
-                for (z = 0; z < numdata && !res; z++) {
-                    const char *data_val;
-
-                    data_val = strarray_nth(test.u.b.pl, z);
-
-                    if (requires & BFE_VARIABLES) {
-                        data_val = parse_string(data_val, variables);
-                    }
-
-                    if (isReg) {
-                        regex_t *reg = bc_compile_regex(data_val, ctag,
-                                                        errbuf, sizeof(errbuf));
-                        if (!reg) {
-                            /* should only get here due to a memory issue */
-                            res = SIEVE_NOMEM;
-                            break;
-                        }
-
-                        res |= comp(content, strlen(content), (const char *)reg,
-                                    match_vars, comprock);
-
-                        regfree(reg);
-                        free(reg);
-                    } else {
-                        res |= comp(content, strlen(content), data_val,
-                                    match_vars, comprock);
-                    }
-                } /* For each data */
+                res = do_comparisons(test.u.b.pl, content,
+                                     comp, comprock, ctag,
+                                     (requires & BFE_VARIABLES) ?
+                                     variables : NULL, match_vars);
+                if (res < 0) {
+                    free(val[y]);
+                    goto body_err;
+                }
             }
 
             /* free the bodypart */
@@ -1095,20 +1014,13 @@ envelope_err:
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            for (z = 0; z < numdata && !res; z++) {
-                const char *data_val;
-
-                data_val = strarray_nth(test.u.b.pl, z);
-
-                if (requires & BFE_VARIABLES) {
-                    data_val = parse_string(data_val, variables);
-                }
-
-                res |= comp(scount, strlen(scount),
-                            data_val, match_vars, comprock);
-            }
+            res = do_comparisons(test.u.b.pl, scount,
+                                 comp, comprock, 0 /* regex */,
+                                 (requires & BFE_VARIABLES) ? variables : NULL,
+                                 match_vars);
         }
 
+      body_err:
         free(strarray_takevf(test.u.b.pl));
         break;
     }
@@ -1382,9 +1294,8 @@ envelope_err:
         int match = test.u.mm.comp.match;
         int relation = test.u.mm.comp.relation;
         int comparator = test.u.mm.comp.collation;
-        int isReg = (match==B_REGEX);
+        int isReg = (match == B_REGEX);
         int ctag = 0;
-        char errbuf[100]; /* Basically unused, regexps tested at compile */
 
         /* set up variables needed for compiling regex */
         if (isReg) {
@@ -1401,48 +1312,21 @@ envelope_err:
 
         if (op == BC_METADATA) extname = test.u.mm.extname;
         keyname = test.u.mm.keyname;
-        /* unpack the world */
-        list_len = strarray_size(test.u.mm.keylist);
 
-        if (op == BC_ENVIRONMENT) interp->getenvironment(sc, keyname, &val);
-        else interp->getmetadata(sc, extname, keyname, &val);
+        if (op == BC_ENVIRONMENT)
+            interp->getenvironment(sc, keyname, &val);
+        else
+            interp->getmetadata(sc, extname, keyname, &val);
 
-        /* need to process all of them, to ensure our instruction pointer stays
-         * in the right place */
-        for (x = 0; val && x < list_len; x++) {
-            const char *testval;
-
-            /* this is a mailbox name in external namespace */
-            testval = strarray_nth(test.u.mm.keylist, x);
-
-            if (isReg) {
-                regex_t *reg = bc_compile_regex(testval, ctag,
-                                                errbuf, sizeof(errbuf));
-                if (!reg) {
-                    /* Oops */
-                    free(val);
-                    res = -1;
-                    goto alldone;
-                }
-
-                res |= comp(val, strlen(val),
-                            (const char *)reg, match_vars, comprock);
-
-                regfree(reg);
-                free(reg);
-            } else {
-#if VERBOSE
-                printf("%s compared to %s(from script)\n",
-                       val, testval);
-#endif
-                res |= comp(val, strlen(val),
-                            testval, match_vars, comprock);
-            }
-            if (res) break;
+        if (val) {
+            res = do_comparisons(test.u.mm.keylist, val,
+                                 comp, comprock, ctag,
+                                 (requires & BFE_VARIABLES) ? variables : NULL,
+                                 match_vars);
+            free(val);
         }
 
         free(strarray_takevf(test.u.mm.keylist));
-        free(val);
         break;
     }
 
@@ -1450,14 +1334,13 @@ envelope_err:
     case BC_SERVERMETADATAEXISTS:
     {
         res = 1;
+
         const char *extname = NULL;
 
         if (op == BC_METADATAEXISTS) extname = test.u.mm.extname;
 
         list_len = strarray_size(test.u.mm.keylist);
 
-        /* need to process all of them, to ensure our instruction pointer stays
-         * in the right place */
         for (x = 0; x < list_len; x++) {
             const char *keyname = NULL;
             char *val = NULL;
@@ -1966,8 +1849,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (comparator == B_ANY) {
                 comp = NULL;
             } else {
-                comp=lookup_comp(i, B_ASCIICASEMAP, comparator,
-                                 cmd.u.d.comp.relation, &comprock);
+                comp = lookup_comp(i, B_ASCIICASEMAP, comparator,
+                                   cmd.u.d.comp.relation, &comprock);
                 match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
             }
 
@@ -2281,39 +2164,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     pat = strarray_nth(cmd.u.dh.values, p);
 
                     for (v = first_val; v < nval; v++) {
-                        if (!(delete_mask & (1<<v))) {
+                        if (!(delete_mask & (1 << v))) {
                             const char *val;
-                            regex_t *reg = NULL;
-
-                            if (requires & BFE_VARIABLES) {
-                                pat = parse_string(pat, variables);
-                            }
 
                             if (match == B_COUNT) {
                                 val = scount;
                             }
                             else {
                                 val = strarray_nth(&decoded_vals, v);
-
-                                if (match == B_REGEX) {
-                                    char errbuf[100];
-
-                                    reg = bc_compile_regex(pat, ctag,
-                                                           errbuf,
-                                                           sizeof(errbuf));
-                                    if (!reg) continue;
-                                    else pat = (const char *) reg;
-                                }
                             }
-
-                            if (comp(val, strlen(val), pat, NULL, comprock)) {
+                            if (do_comparison(pat, val, comp, comprock,
+                                              ctag, variables, NULL)) {
                                 /* flag the header for deletion */
-                                delete_mask |= (1<<v);
-                            }
-
-                            if (reg) {
-                                regfree(reg);
-                                free(reg);
+                                delete_mask |= (1 << v);
                             }
                         }
                     }
