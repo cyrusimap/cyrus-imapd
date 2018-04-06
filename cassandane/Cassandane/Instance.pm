@@ -1459,10 +1459,17 @@ sub run_command
 	$options = shift(@args);
     }
 
-    my $pid = $self->_fork_command($options, @args);
+    my ($pid, $got_exit) = $self->_fork_command($options, @args);
 
     return $pid
 	if ($options->{background});
+
+    if (defined $got_exit) {
+        # Child already reaped, pass it on
+        $? = $got_exit;
+
+        return $self->_handle_wait_status($pid);
+    }
 
     return $self->reap_command($pid);
 }
@@ -1508,8 +1515,8 @@ my %default_command_handlers = (
 
 sub _add_child
 {
-    my ($self, $binary, $pid, $handlers, $fh) = @_;
-    my $key = $fh || $pid;
+    my ($self, $binary, $pid, $handlers) = @_;
+    my $key = $pid;
 
     $handlers ||= \%default_command_handlers;
 
@@ -1590,10 +1597,10 @@ sub _fork_command
 	if ($pid)
 	{
 	    # parent process
-	    $self->_add_child($binary, $pid, $options->{handlers}, $fh);
+	    $self->_add_child($binary, $pid, $options->{handlers});
 	    print $fh ${$data};
 	    close ($fh);
-	    return $pid;
+	    return ($pid, $?);
 	}
     }
     else
@@ -1605,8 +1612,8 @@ sub _fork_command
 	if ($pid)
 	{
 	    # parent process
-	    $self->_add_child($binary, $pid, $options->{handlers}, undef);
-	    return $pid;
+	    $self->_add_child($binary, $pid, $options->{handlers});
+	    return ($pid, undef);
 	}
     }
 
