@@ -7668,7 +7668,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             assert(!buf_len(&txn->buf));
             buf_printf(&txn->buf, "<%s>", organizer);
             mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
-                                                buf_len(&txn->buf));
+                                                buf_len(&txn->buf), 0);
             spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
             buf_reset(&txn->buf);
         }
@@ -7676,7 +7676,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     if (prop) {
-        mimehdr = charset_encode_mimeheader(icalproperty_get_summary(prop), 0);
+        mimehdr = charset_encode_mimeheader(icalproperty_get_summary(prop), 0, 0);
         spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
     }
     else spool_replace_header(xstrdup("Subject"),
@@ -7684,7 +7684,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                             txn->req_hdrs);
 
     if (schedule_address) {
-        mimehdr = charset_encode_mimeheader(schedule_address, 0);
+        mimehdr = charset_encode_mimeheader(schedule_address, 0, 0);
         spool_replace_header(xstrdup("X-Schedule-User-Address"),
                              mimehdr, txn->req_hdrs);
     }

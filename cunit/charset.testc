@@ -271,7 +271,7 @@ static void test_encode_mimeheader(void)
     { \
         static const char _in[] = (in); \
         static const char _exp[] = (exp); \
-        char *s = charset_encode_mimeheader(_in, 0); \
+        char *s = charset_encode_mimeheader(_in, 0, 0); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
         free(s); \

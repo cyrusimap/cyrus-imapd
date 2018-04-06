@@ -222,7 +222,7 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
     if (param) {
         new->name = icalparameter_get_cn(param);
-        new->qpname = charset_encode_mimeheader(new->name, 0);
+        new->qpname = charset_encode_mimeheader(new->name, 0, 0);
     }
     param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
     if (param)
@@ -374,7 +374,7 @@ static int imip_send_sendmail(icalcomponent *ical,
 
     buf_printf(&msgbuf, "Subject: %s: ", filename);
     if (summary) {
-        char *mimehdr = charset_encode_mimeheader(summary, 0);
+        char *mimehdr = charset_encode_mimeheader(summary, 0, 0);
         buf_appendcstr(&msgbuf, mimehdr);
         free(mimehdr);
     }

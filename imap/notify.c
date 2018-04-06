@@ -186,14 +186,14 @@ EXPORTED int notify_at(time_t when, const char *method,
     syslog(LOG_NOTICE, "APPENDING TO STAGE: %s (%u)", mailbox->name, (unsigned)when);
     time_to_rfc5322(when, datestr, sizeof(datestr));
     fprintf(f, "Date: %s\r\n", datestr);
-    fprintf(f, "Method: %s\r\n", charset_encode_mimeheader(method, 0));
-    fprintf(f, "Class: %s\r\n", charset_encode_mimeheader(class, 0));
-    fprintf(f, "Priority: %s\r\n", charset_encode_mimeheader(priority, 0));
-    fprintf(f, "User: %s\r\n", charset_encode_mimeheader(user, 0));
-    fprintf(f, "Mailbox: %s\r\n", charset_encode_mimeheader(mboxname, 0));
+    fprintf(f, "Method: %s\r\n", charset_encode_mimeheader(method, 0, 0));
+    fprintf(f, "Class: %s\r\n", charset_encode_mimeheader(class, 0, 0));
+    fprintf(f, "Priority: %s\r\n", charset_encode_mimeheader(priority, 0, 0));
+    fprintf(f, "User: %s\r\n", charset_encode_mimeheader(user, 0, 0));
+    fprintf(f, "Mailbox: %s\r\n", charset_encode_mimeheader(mboxname, 0, 0));
     for (i = 0; i < nopt; i++)
-        fprintf(f, "Option: %s\r\n", charset_encode_mimeheader(options[i], 0));
-    fprintf(f, "Message: %s\r\n", charset_encode_mimeheader(message, 0));
+        fprintf(f, "Option: %s\r\n", charset_encode_mimeheader(options[i], 0, 0));
+    fprintf(f, "Message: %s\r\n", charset_encode_mimeheader(message, 0, 0));
     fprintf(f, "\r\n");
 
     fclose(f);

@@ -3029,13 +3029,13 @@ EXPORTED char *charset_qpencode_mimebody(const char *msg_base, size_t len,
  * located at 'header'.
  * Returns a buffer which the caller must free.
  */
-EXPORTED char *charset_encode_mimeheader(const char *header, size_t len)
+EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int force_quote)
 {
     if (!header) return NULL;
 
     if (!len) len = strlen(header);
 
-    return qp_encode(header, len, 1, 0, NULL);
+    return qp_encode(header, len, 1, force_quote, NULL);
 }
 
 static void extract_plain_cb(const struct buf *buf, void *rock)

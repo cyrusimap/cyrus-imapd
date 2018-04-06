@@ -1467,7 +1467,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
         }
 
         mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
-                                            buf_len(&txn->buf));
+                                            buf_len(&txn->buf), 0);
         fprintf(f, "From: %s\r\n", mimehdr);
         free(mimehdr);
         buf_reset(&txn->buf);

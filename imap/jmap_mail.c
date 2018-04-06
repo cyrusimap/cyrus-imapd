@@ -7560,7 +7560,8 @@ static json_t *_header_from_text(json_t *jtext,
     /* Parse a Text header into raw form */
     if (json_is_string(jtext)) {
         const char *s = json_string_value(jtext);
-        char *tmp = charset_encode_mimeheader(s, strlen(s));
+        int force_quote = strlen(header_name) + strlen(s) + 4 > 998;
+        char *tmp = charset_encode_mimeheader(s, strlen(s), force_quote);
         struct buf val = BUF_INITIALIZER;
         buf_setcstr(&val, tmp);
         free(tmp);
@@ -7614,7 +7615,7 @@ static json_t *_header_from_addresses(json_t *addrs,
          * let's try to break lines at sane places. */
         if (i) buf_appendcstr(&val, ",\r\n\t");
         if (name && strlen(name) && email) {
-            char *xname = charset_encode_mimeheader(name, strlen(name));
+            char *xname = charset_encode_mimeheader(name, strlen(name), 0);
             buf_printf(&val, "%s <%s>", xname, email);
             free(xname);
         } else if (email) {
@@ -7976,7 +7977,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
         /* No disposition but a name, make standard Content-Disposition */
         part->disposition = xstrdup("attachment");
         const char *name = json_string_value(jname);
-        char *tmp = charset_encode_mimeheader(name, strlen(name));
+        char *tmp = charset_encode_mimeheader(name, strlen(name), 0);
         buf_printf(&buf, "attachment;filename=\"%s\"", tmp);
         free(tmp);
         _headers_add_new(&part->headers,

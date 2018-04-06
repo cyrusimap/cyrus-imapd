@@ -970,7 +970,7 @@ static int sieve_reject(void *ac, void *ic,
 static void dump_header(const char *name, const char *value, void *rock)
 {
     /* Q-encode the value */
-    char *mimehdr = charset_encode_mimeheader(value, strlen(value));
+    char *mimehdr = charset_encode_mimeheader(value, strlen(value), 0);
     char *freeme = mimehdr;
     size_t maxlen = 78 - (strlen(name) + 2);
 
@@ -1371,7 +1371,7 @@ static int send_response(void *ac, void *ic,
             src->subj[i] = '\0';
             break;
         }
-    subj = charset_encode_mimeheader(src->subj, strlen(src->subj));
+    subj = charset_encode_mimeheader(src->subj, strlen(src->subj), 0);
     buf_printf(&header, "Subject: %s\r\n", subj);
     free(subj);
     if (md->id) buf_printf(&header, "In-Reply-To: %s\r\n", md->id);

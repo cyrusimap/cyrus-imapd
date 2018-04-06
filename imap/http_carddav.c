@@ -615,7 +615,7 @@ static int store_resource(struct transaction_t *txn,
     }
 
     /* Create and cache RFC 5322 header fields for resource */
-    mimehdr = charset_encode_mimeheader(fullname, 0);
+    mimehdr = charset_encode_mimeheader(fullname, 0, 0);
     spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
 
     /* XXX - validate uid for mime safety? */

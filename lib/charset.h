@@ -122,7 +122,7 @@ extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t cha
 
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
-extern char *charset_encode_mimeheader(const char *header, size_t len);
+extern char *charset_encode_mimeheader(const char *header, size_t len, int force_quote);
 
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
