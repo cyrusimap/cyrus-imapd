@@ -40,6 +40,8 @@
 package Cassandane::PortManager;
 use strict;
 use warnings;
+
+use lib '.';
 use Cassandane::Cassini;
 
 my $base_port;
