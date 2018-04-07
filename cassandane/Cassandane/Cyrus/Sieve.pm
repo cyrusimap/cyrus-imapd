@@ -1188,4 +1188,50 @@ EOF
     $self->assert_matches(qr/X-Cassandane-Test: append3\r\n\r\n/, $msg1);
 }
 
+sub test_duplicate
+{
+    my ($self) = @_;
+
+    xlog "Install a sieve script with a duplicate check";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["duplicate", "variables"];
+if allof (header :matches "subject" "ALERT: *",
+          duplicate :seconds 1 :last :uniqueid "${1}") {
+    discard;
+}
+EOF
+    );
+
+    xlog "Deliver a message";
+    # This message sets the duplicate tracking entry
+    my $msg1 = $self->{gen}->generate(subject => "ALERT: server down");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Deliver second message";
+    # This message should be discarded
+    my $msg2 = $self->{gen}->generate(subject => "ALERT: server down");
+    $self->{instance}->deliver($msg2);
+
+    xlog "Deliver third message";
+    # This message should be discarded
+    my $msg3 = $self->{gen}->generate(subject => "ALERT: server down");
+    $self->{instance}->deliver($msg3);
+
+    sleep 1;
+    xlog "Deliver fourth message";
+    # This message should be delivered (after the expire time)
+    my $msg4 = $self->{gen}->generate(subject => "ALERT: server down");
+    $self->{instance}->deliver($msg4);
+
+    xlog "Deliver fifth message";
+    # This message should be discarded
+    my $msg5 = $self->{gen}->generate(subject => "ALERT: server down");
+    $self->{instance}->deliver($msg5);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+
+    $self->assert_num_equals(2, $imaptalk->get_response_code('exists'));
+}
+
 1;
