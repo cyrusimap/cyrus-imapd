@@ -199,7 +199,12 @@ sub test_plus_address_case_bogusdomain
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
-    $self->{instance}->deliver($msgs{1}, user => "cassandane+applepie\@bogusdomain");
+    my $r = $self->{instance}->deliver(
+                $msgs{1},
+                user => "cassandane+applepie\@bogusdomain"
+            );
+    # expect deliver to exit with EC_DATAERR
+    $self->assert_not_equals(0, $r);
 
     xlog "Check that the message didn't make it";
     $self->{store}->set_folder($folder);
