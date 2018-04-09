@@ -81,10 +81,6 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
     int ret;
     regex_t *reg = (regex_t *) xzmalloc(sizeof(regex_t));
 
-#ifdef HAVE_PCREPOSIX_H
-    /* support UTF8 comparisons */
-    ctag |= REG_UTF8;
-#endif
     if ((ret = regcomp(reg, s, ctag)) != 0) {
         (void) regerror(ret, reg, errmsg, errsiz);
         regfree(reg);
@@ -319,8 +315,19 @@ static int regcomp_flags(int comparator, int requires)
 {
     int cflags = REG_EXTENDED;
 
-    if (comparator == B_ASCIICASEMAP) cflags |= REG_ICASE;
-    if (!(requires & BFE_VARIABLES))  cflags |= REG_NOSUB;
+#ifdef HAVE_PCREPOSIX_H
+    /* support UTF8 comparisons */
+    cflags |= REG_UTF8;
+#endif
+
+    if (comparator == B_ASCIICASEMAP) {
+        /* case-insensitive matches */
+        cflags |= REG_ICASE;
+    }
+    if (!(requires & BFE_VARIABLES)) {
+        /* do NOT need position of matches */
+        cflags |= REG_NOSUB;
+    }
 
     return cflags;
 }
@@ -336,7 +343,7 @@ static int do_comparison(const char *needle, const char *hay,
     }
 
     if (ctag) {
-        char errbuf[100]; /* Basically unused, as regex tested at compile */
+        char errbuf[100]; /* Basically unused, as regex is tested at compile */
         regex_t *reg = bc_compile_regex(needle, ctag, errbuf, sizeof(errbuf));
 
         if (!reg) {
@@ -427,7 +434,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
         list_len = strarray_size(test.u.sl);
 
-        for(x = 0; x < list_len && res; x++) {
+        for (x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -451,12 +458,12 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
         if (interp->getsize(m, &s) != SIEVE_OK) break;
 
-        if (sizevar ==B_OVER) {
+        if (sizevar == B_OVER) {
             /* over */
-            res= s > x;
+            res = s > x;
         } else {
             /* under */
-            res= s < x;
+            res = s < x;
         }
         break;
     }
@@ -466,8 +473,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         list_len = test.u.aa.ntests;
         list_end = test.u.aa.endtests;
 
-        /* need to process all of them, to ensure our instruction pointer stays
-         * in the right place */
+        /* return 0 unless you find one that is true, then return 1 */
         for (x = 0; x < list_len && !res; x++) {
             int tmp = eval_bc_test(interp, m, sc, bc, &i, variables,
                                    duptrack_list, version, requires);
@@ -478,7 +484,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             res = res || tmp;
         }
 
-        i = list_end; /* handle short-circuting */
+        i = list_end; /* handle short-circuiting */
 
         break;
 
@@ -520,11 +526,10 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         int comparator = test.u.ae.comp.collation;
         int apart = test.u.ae.addrpart;
         int count = 0;
-        int isReg = (match == B_REGEX);
         int ctag = 0;
 
         /* set up variables needed for compiling regex */
-        if (isReg) {
+        if (match == B_REGEX) {
             ctag = regcomp_flags(comparator, requires);
         }
 
@@ -682,12 +687,11 @@ envelope_err:
         int relation = test.u.hhs.comp.relation;
         int comparator = test.u.hhs.comp.collation;
         int count = 0;
-        int isReg = (match == B_REGEX);
         int ctag = 0;
         char *decoded_header;
 
         /* set up variables needed for compiling regex */
-        if (isReg) {
+        if (match == B_REGEX) {
             ctag = regcomp_flags(comparator, requires);
         }
 
@@ -701,7 +705,7 @@ envelope_err:
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
 
         /* search through all the flags for the header */
-        for(x = 0; x < numheaders && !res; x++) {
+        for (x = 0; x < numheaders && !res; x++) {
             const char *this_header;
 
             this_header = strarray_nth(test.u.hhs.sl, x);
@@ -786,11 +790,10 @@ envelope_err:
         int relation = test.u.hhs.comp.match;
         int comparator = test.u.hhs.comp.match;
         int count = 0;
-        int isReg = (match == B_REGEX);
         int ctag = 0;
 
         /* set up variables needed for compiling regex */
-        if (isReg) {
+        if (match == B_REGEX) {
             ctag = regcomp_flags(comparator, requires);
         }
 
@@ -936,11 +939,10 @@ envelope_err:
         int transform = test.u.b.transform;
         /* test.u.b.offset is now unused */
         int count = 0;
-        int isReg = (match == B_REGEX);
         int ctag = 0;
 
         /* set up variables needed for compiling regex */
-        if (isReg) {
+        if (match == B_REGEX) {
             ctag = regcomp_flags(comparator, requires);
         }
 
@@ -1252,7 +1254,7 @@ envelope_err:
 
         list_len = strarray_size(test.u.sl);
 
-        for(x = 0; x < list_len && res; x++) {
+        for (x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -1294,11 +1296,10 @@ envelope_err:
         int match = test.u.mm.comp.match;
         int relation = test.u.mm.comp.relation;
         int comparator = test.u.mm.comp.collation;
-        int isReg = (match == B_REGEX);
         int ctag = 0;
 
         /* set up variables needed for compiling regex */
-        if (isReg) {
+        if (match == B_REGEX) {
             ctag = regcomp_flags(comparator, requires);
         }
 
@@ -1363,7 +1364,7 @@ envelope_err:
 
         list_len = strarray_size(test.u.sl);
 
-        for(x = 0; x < list_len && res; x++) {
+        for (x = 0; x < list_len && res; x++) {
             const char *str;
 
             str = strarray_nth(test.u.sl, x);
@@ -1900,7 +1901,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             const char *handle = cmd.u.v.handle;
             const char *message = cmd.u.v.message;
             char *subject = cmd.u.v.subject;
-            int seconds = cmd.u.v.seconds * ((op == B_VACATION_ORIG) ? DAY2SEC : 1);
+            int seconds =
+                cmd.u.v.seconds * ((op == B_VACATION_ORIG) ? DAY2SEC : 1);
             int mime = cmd.u.v.mime;
 
             respond = shouldRespond(m, i, cmd.u.v.addresses,
