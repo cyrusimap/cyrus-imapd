@@ -1277,6 +1277,11 @@ envelope_err:
 
             /* this is a mailbox name in external namespace */
             extname = strarray_nth(test.u.mm.keylist, x);
+
+            if (requires & BFE_VARIABLES) {
+                extname = parse_string(extname, variables);
+            }
+
             res = interp->getmailboxexists(sc, extname);
             if (res) break;
         }
@@ -1311,8 +1316,18 @@ envelope_err:
             break;
         }
 
-        if (op == BC_METADATA) extname = test.u.mm.extname;
+        if (op == BC_METADATA) {
+            extname = test.u.mm.extname;
+
+            if (requires & BFE_VARIABLES) {
+                extname = parse_string(extname, variables);
+            }
+        }
+
         keyname = test.u.mm.keyname;
+        if (requires & BFE_VARIABLES) {
+            keyname = parse_string(keyname, variables);
+        }
 
         if (op == BC_ENVIRONMENT)
             interp->getenvironment(sc, keyname, &val);
@@ -1338,7 +1353,13 @@ envelope_err:
 
         const char *extname = NULL;
 
-        if (op == BC_METADATAEXISTS) extname = test.u.mm.extname;
+        if (op == BC_METADATAEXISTS) {
+            extname = test.u.mm.extname;
+
+            if (requires & BFE_VARIABLES) {
+                extname = parse_string(extname, variables);
+            }
+        }
 
         list_len = strarray_size(test.u.mm.keylist);
 
@@ -1348,6 +1369,10 @@ envelope_err:
 
             /* this is an annotation name */
             keyname = strarray_nth(test.u.mm.keylist, x);
+
+            if (requires & BFE_VARIABLES) {
+                keyname = parse_string(keyname, variables);
+            }
 
             interp->getmetadata(sc, extname, keyname, &val);
             if (!val) res = 0;
