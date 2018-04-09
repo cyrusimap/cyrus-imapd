@@ -1253,7 +1253,7 @@ sub test_duplicate
     $self->{instance}->install_sieve_script(<<EOF
 require ["duplicate", "variables"];
 if allof (header :matches "subject" "ALERT: *",
-          duplicate :seconds 1 :last :uniqueid "${1}") {
+          duplicate :seconds 3 :last :uniqueid "${1}") {
     discard;
 }
 EOF
@@ -1274,7 +1274,7 @@ EOF
     my $msg3 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg3);
 
-    sleep 1;
+    sleep 3;
     xlog "Deliver fourth message";
     # This message should be delivered (after the expire time)
     my $msg4 = $self->{gen}->generate(subject => "ALERT: server down");
