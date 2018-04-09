@@ -1291,4 +1291,28 @@ EOF
     $self->assert_num_equals(2, $imaptalk->get_response_code('exists'));
 }
 
+sub test_ereject
+{
+    my ($self) = @_;
+
+    xlog "Install a sieve script rejecting all mail";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["ereject"];
+ereject "Go away!";
+EOF
+    );
+
+    xlog "Attempt to deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    my $res = $self->{instance}->deliver($msg1);
+
+    # should fail to deliver
+    $self->assert_num_not_equals(0, $res);
+
+    # should NOT appear in INBOX
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
+}
+
 1;
