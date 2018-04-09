@@ -1415,12 +1415,19 @@ sub deliver
     }
     push(@cmd, @users);
 
+    my $ret = 0;
+
     $self->run_command({
 	cyrus => 1,
 	redirects => {
 	    stdin => \$str
-	}
+	},
+	handlers => {
+	    exited_abnormally => sub { (undef, $ret) = @_; },
+	},
     }, @cmd);
+
+    return $ret;
 }
 
 # Runs a command with the given arguments.  The first argument is an
