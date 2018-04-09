@@ -9183,6 +9183,7 @@ static void _email_update(jmap_req_t *req,
     json_t *new_mailboxes = NULL; /* mailboxes to add the message to */
     json_t *del_mailboxes = NULL; /* mailboxes to delete the message from */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    int r = 0;
 
     /* Make sure all helper routines open mailboxes exclusively. */
     req->force_openmbox_rw = 1;
@@ -9196,7 +9197,7 @@ static void _email_update(jmap_req_t *req,
     }
 
     /* Pick record from any current mailbox. That's the master copy. */
-    int r = _email_find(req, msgid, &mboxname, &uid);
+    r = _email_find(req, msgid, &mboxname, &uid);
     if (r) goto done;
     src_mailboxes = _email_get_mailboxes(req, msgid);
 
