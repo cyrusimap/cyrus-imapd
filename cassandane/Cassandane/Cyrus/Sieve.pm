@@ -699,6 +699,63 @@ EOF
     }
 }
 
+sub test_rfc5490_mailboxexists_variables
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"mailboxexists\" test with variables";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $testfolder = "INBOX.testfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailbox", "variables"];
+set "testfolder" "$testfolder";
+if mailboxexists "\${testfolder}"  {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the test folder";
+    $talk->create($testfolder);
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
 sub test_rfc5490_metadata
     :min_version_3_0
 {
