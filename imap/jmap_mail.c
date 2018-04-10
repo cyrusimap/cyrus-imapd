@@ -3395,10 +3395,13 @@ static struct header_prop *_header_parseprop(const char *s)
             name = xstrdup(f0);
             break;
         default:
-            is_valid = 0;
+            strarray_free(fields);
+            return NULL;
     }
+
     if (f2 && (strcmp(f2, "all") || !strcmp(f1, "all"))) {
-        is_valid = 0;
+        strarray_free(fields);
+        return NULL;
     }
     if (f1) {
         if (!strcmp(f1, "asRaw"))
@@ -3433,7 +3436,7 @@ static struct header_prop *_header_parseprop(const char *s)
         hprop->name = name;
         hprop->prop = s;
         hprop->form = form;
-        hprop->all = f2 != NULL;
+        hprop->all = f2 != NULL || (f1 && !strcmp(f1, "all"));
     }
     else {
         free(lcasename);
@@ -7730,7 +7733,7 @@ static void _headers_parseprops(json_t *jobject,
         if (strncmp(field, "header:", 7))
             continue;
         /* Parse header or reject if invalid form */
-        struct header_prop *hprop = _header_parseprop(field+7);
+        struct header_prop *hprop = _header_parseprop(field);
         if (!hprop) {
             jmap_parser_invalid(parser, field);
             continue;
