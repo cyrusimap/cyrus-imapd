@@ -7715,4 +7715,36 @@ sub test_email_get_maxbodyvaluebytes_utf8
     }
 }
 
+sub test_email_get_header_all
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a email in INBOX via IMAP";
+    my %exp_inbox;
+    my %params = (
+        extra_headers => [
+            ['x-tra', "foo"],
+            ['x-tra', "bar"],
+        ],
+        body => "hello",
+    );
+    $self->make_message("Email A", %params) || die;
+
+    xlog "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog "get email";
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => ['header:x-tra:all', 'header:x-tra:asRaw:all'] }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_deep_equals([' foo', ' bar'], $msg->{'header:x-tra:all'});
+    $self->assert_deep_equals([' foo', ' bar'], $msg->{'header:x-tra:asRaw:all'});
+}
+
 1;
