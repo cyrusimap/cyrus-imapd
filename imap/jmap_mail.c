@@ -6579,22 +6579,31 @@ struct _email_get_bodyvalue_rock {
 void _email_get_bodyvalue_cb(const struct buf *text, void *_rock)
 {
     struct _email_get_bodyvalue_rock *rock = _rock;
-    if (!rock->max_body_bytes) {
-        /* No limit, just copy text */
-        buf_append(&rock->buf, text);
+
+    /* Skip remaining text bodies */
+    if (rock->is_truncated) return;
+
+    const char *p = buf_base(text);
+    const char *top = p + buf_len(text);
+
+    while (p < top) {
+        const char *cr = memchr(p, '\r', top - p);
+        if (cr) {
+            /* Write bytes up to CR, but skip CR */
+            buf_appendmap(&rock->buf, p, cr - p);
+            p = cr + 1;
+        }
+        else {
+            /* Write remaining bytes */
+            buf_appendmap(&rock->buf, p, top - p);
+            p = top;
+        }
     }
-    else if (rock->buf.len + text->len <= rock->max_body_bytes) {
-        /* There's a limit but still enough space for all of text */
-        buf_append(&rock->buf, text);
-    }
-    else if (rock->buf.len < rock->max_body_bytes) {
-        /* Reached limit, truncate text into body */
-        size_t left = rock->max_body_bytes - rock->buf.len;
-        buf_appendmap(&rock->buf, text->s, left);
+
+    /* Truncate bytes */
+    if (rock->max_body_bytes && buf_len(&rock->buf) > rock->max_body_bytes) {
+        buf_truncate(&rock->buf, rock->max_body_bytes);
         rock->is_truncated = 1;
-    }
-    else {
-        /* Over limit - ignore */
     }
 }
 
@@ -8674,11 +8683,11 @@ static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
     int has_long_lines = 0;
     int is_7bit = 1;
     const char *p = text;
-    const char *lo = text;
-    const char *hi = text + len;
+    const char *base = text;
+    const char *top = text + len;
     const char *last_lf = p;
     struct buf txtbuf = BUF_INITIALIZER;
-    for (p = lo; p < hi; p++) {
+    for (p = base; p < top; p++) {
         /* Keep track of line-length and high-bit bytes */
         if (p - last_lf > 998)
             has_long_lines = 1;
@@ -8686,10 +8695,11 @@ static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
             last_lf = p;
         if (*p & 0x80)
             is_7bit = 0;
-        /* Omit CR, expand lone LF to CRLF */
-        if (*p == '\r' && p < hi && *(p+1) != '\n')
+        /* Omit CR */
+        if (*p == '\r')
             continue;
-        if (*p == '\n' && p > lo && *(p-1) != '\r')
+        /* Expand LF to CRLF */
+        if (*p == '\n')
             buf_putc(&txtbuf, '\r');
         buf_putc(&txtbuf, *p);
     }
