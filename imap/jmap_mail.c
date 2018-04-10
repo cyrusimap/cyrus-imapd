@@ -4033,24 +4033,20 @@ static int _email_keyword_is_valid(const char *keyword)
     return 1;
 }
 
-static const char *jmap_keyword_from_imap(const char *flag)
+static char *jmap_keyword_from_imap(const char *flag)
 {
-    if (!strcmp(flag, "\\Seen")) {
-        return "$seen";
-    }
-    else if (!strcmp(flag, "\\Flagged")) {
-        return "$flagged";
-    }
-    else if (!strcmp(flag, "\\Answered")) {
-        return "$answered";
-    }
-    else if (!strcmp(flag, "\\Draft")) {
-        return "$draft";
-    }
-    else if (*flag != '\\') {
-        return flag;
-    }
-    return NULL;
+    const char *kw = NULL;
+    if (!strcmp(flag, "\\Seen"))
+        kw = "$seen";
+    else if (!strcmp(flag, "\\Flagged"))
+        kw = "$flagged";
+    else if (!strcmp(flag, "\\Answered"))
+        kw = "$answered";
+    else if (!strcmp(flag, "\\Draft"))
+        kw = "$draft";
+    else if (*flag != '\\')
+        kw = flag;
+    return kw ? lcase(xstrdup(kw)) : NULL;
 }
 
 static const char *jmap_keyword_to_imap(const char *keyword)
@@ -4144,7 +4140,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
     if (r) goto done;
     char *flag;
     while ((flag = strarray_pop(flags))) {
-        const char *kw = jmap_keyword_from_imap(flag);
+        char *kw = jmap_keyword_from_imap(flag);
         if (!kw)
             continue;
         json_t *jval = json_object_get(data->keywords, kw);
@@ -4153,6 +4149,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
         else
             json_object_set_new(data->keywords, kw, json_integer(1));
         free(flag);
+        free(kw);
     }
     strarray_free(flags);
 
