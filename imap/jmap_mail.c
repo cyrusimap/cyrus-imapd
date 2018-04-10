@@ -3334,6 +3334,12 @@ static void _header_prop_fini(struct header_prop *prop)
     free(prop->name);
 }
 
+static void _header_prop_free(struct header_prop *prop)
+{
+    _header_prop_fini(prop);
+    free(prop);
+}
+
 static struct header_prop *_header_parseprop(const char *s)
 {
     strarray_t *fields = strarray_split(s + 7, ":", 0);
@@ -7746,6 +7752,7 @@ static void _headers_parseprops(json_t *jobject,
         }
         /* Reject redefinition of header */
         if (json_object_get(headers->all, hprop->lcasename)) {
+            _header_prop_free(hprop);
             jmap_parser_invalid(parser, field);
             continue;
         }
@@ -7788,6 +7795,7 @@ static void _headers_parseprops(json_t *jobject,
             json_t *jheader = cb(jval, parser, field, hprop->name);
             if (jheader) _headers_add_new(headers, jheader);
         }
+        _header_prop_free(hprop);
     }
 }
 
