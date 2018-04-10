@@ -7587,9 +7587,8 @@ sub test_email_set_text_crlf
 
     my $inboxid = $self->getinbox()->{id};
 
-    # TODO JMAP should replace CRLF with LF on read
     my $text = "ab\r\ncde\rfgh\nij";
-    my $want = "ab\r\ncdefgh\r\nij";
+    my $want = "ab\ncdefgh\nij";
 
     my $email =  {
         mailboxIds => { $inboxid => JSON::true },
