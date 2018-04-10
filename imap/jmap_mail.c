@@ -7776,15 +7776,17 @@ static void _headers_parseprops(json_t *jobject,
         }
         if (hprop->all) {
             size_t i;
-            json_t *jheaderval;
-            json_array_foreach(jval, i, jheaderval) {
+            json_t *jall = jval;
+            json_array_foreach(jall, i, jval) {
                 jmap_parser_push_index(parser, field, i);
-                cb(jheaderval, parser, field, hprop->name);
+                json_t *jheader = cb(jval, parser, field, hprop->name);
+                if (jheader) _headers_add_new(headers, jheader);
                 jmap_parser_pop(parser);
             }
         }
         else {
-            cb(jval, parser, field, hprop->name);
+            json_t *jheader = cb(jval, parser, field, hprop->name);
+            if (jheader) _headers_add_new(headers, jheader);
         }
     }
 }
