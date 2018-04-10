@@ -3364,6 +3364,39 @@ sub test_email_get_keywords
     $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
 }
 
+sub test_email_get_keywords_case_insensitive
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Create IMAP mailbox and message A";
+    $talk->create('INBOX.A') || die;
+    $store->set_folder('INBOX.A');
+    $self->make_message('A') || die;
+
+    xlog "Set flag Foo and Flagged on message A";
+    $store->set_folder('INBOX.A');
+    $talk->store('1', '+flags', '(Foo \\Flagged)');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+        }, 'R2' ]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    my $jmapmsg = $res->[1][1]{list}[0];
+    my $keywords = {
+        'foo' => JSON::true,
+        '$flagged' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+}
+
 sub test_email_set_keywords
     :JMAP :min_version_3_1
 {
