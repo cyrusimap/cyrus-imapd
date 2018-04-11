@@ -1,6 +1,6 @@
 /* sieve_interface.h -- interface for deliver
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -122,6 +122,9 @@ typedef struct sieve_duplicate {
 typedef struct sieve_redirect_context {
     const char *addr;
     int is_ext_list :1;
+    const char *deliverby;
+    const char *dsn_notify;
+    const char *dsn_ret;
 } sieve_redirect_context_t;
 
 typedef struct sieve_reject_context {

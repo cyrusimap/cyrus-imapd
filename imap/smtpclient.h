@@ -101,7 +101,7 @@ extern int smtpclient_close(smtpclient_t **smp);
 /* Add the AUTH=userid parameter to MAIL FROM commands, if the
  * SMTP backend advertised support for the RFC 4954 AUTH extension.
  *
- * An AUTH paremeter in the SMTP envelope of the smtpclient_send
+ * An AUTH parameter in the SMTP envelope of the smtpclient_send
  * function overrides this value, regardless of advertised extensions.
  *
  * Setting this to NULL resets userid. */
@@ -110,11 +110,29 @@ extern void smtpclient_set_auth(smtpclient_t *sm, const char *userid);
 /* Add the NOTIFY=value parameter to RCPT TO commands, if the
  * SMTP backend advertised support for the RFC 3461 DSN extension.
  *
- * A NOTIFY paremeter in the SMTP envelope of the smtpclient_send
+ * A NOTIFY parameter in the SMTP envelope of the smtpclient_send
  * function overrides this value, regardless of advertised extensions.
  *
  * Setting this to NULL resets the value. */
 extern void smtpclient_set_notify(smtpclient_t *sm, const char *value);
+
+/* Add the RET=value parameter to MAIL FROM commands, if the
+ * SMTP backend advertised support for the RFC 3461 DSN extension.
+ *
+ * A RET parameter in the SMTP envelope of the smtpclient_from
+ * function overrides this value, regardless of advertised extensions.
+ *
+ * Setting this to NULL resets the value. */
+extern void smtpclient_set_ret(smtpclient_t *sm, const char *value);
+
+/* Add the BY=value parameter to MAIL FROM commands, if the
+ * SMTP backend advertised support for the RFC 2852 DELIVERYBY extension.
+ *
+ * A BY parameter in the SMTP envelope of the smtpclient_from
+ * function overrides this value, regardless of advertised extensions.
+ *
+ * Setting this to NULL resets the value. */
+extern void smtpclient_set_by(smtpclient_t *sm, const char *value);
 
 /* Return the argument string of SMTP extension 'name' as returned
  * in response to the EHLO command, excluding the extension name.

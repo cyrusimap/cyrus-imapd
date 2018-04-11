@@ -423,6 +423,10 @@ void free_tree(commandlist_t *cl)
 
         case REDIRECT:
             free(cl->u.r.address);
+            free(cl->u.r.bytime);
+            free(cl->u.r.bymode);
+            free(cl->u.r.dsn_notify);
+            free(cl->u.r.dsn_ret);
             break;
 
         case REJCT:

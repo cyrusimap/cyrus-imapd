@@ -168,6 +168,11 @@ struct Commandlist {
             char *address;
             int copy;
             int list;
+            char *bytime;
+            char *bymode;
+            int bytrace;
+            char *dsn_notify;
+            char *dsn_ret;
         } r;
         struct { /* it's a vacation action */
             char *subject;

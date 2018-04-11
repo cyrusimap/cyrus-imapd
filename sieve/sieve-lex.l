@@ -397,6 +397,16 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>servermetadata       return yylval->nval = SERVERMETADATA;
 <INITIAL>servermetadataexists return SERVERMETADATAEXISTS;
 
+    /* redirect-deliverby - RFC 6009 */
+<INITIAL>:bytimerelative      return BYTIMEREL;
+<INITIAL>:bytimeabsolute      return BYTIMEABS;
+<INITIAL>:bymode              return BYMODE;
+<INITIAL>:bytrace             return BYTRACE;
+
+    /* redirect-dsn - RFC 6009 */
+<INITIAL>:notify              return DSNNOTIFY;
+<INITIAL>:ret                 return DSNRET;
+
     /* include - RFC 6609 */
 <INITIAL>include              return INCLUDE;
 <INITIAL>:personal            return yylval->nval = PERSONAL;

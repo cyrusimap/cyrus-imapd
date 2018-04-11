@@ -78,10 +78,13 @@ struct smtpclient {
     struct buf buf;
     char *authid;
     char *notify;
+    char *ret;
+    char *by;
 };
 
 enum {
-    SMTPCLIENT_CAPA_DSN = (1 << 3)
+    SMTPCLIENT_CAPA_DSN       = (1 << 3),
+    SMTPCLIENT_CAPA_DELIVERBY = (1 << 4)
 };
 
 static struct protocol_t smtp_protocol =
@@ -92,6 +95,7 @@ static struct protocol_t smtp_protocol =
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
           { "DSN", SMTPCLIENT_CAPA_DSN },
+          { "DELIVERYBY", SMTPCLIENT_CAPA_DELIVERBY },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -174,6 +178,8 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
         sm->have_exts = NULL;
     }
     buf_free(&sm->buf);
+    free(sm->by);
+    free(sm->ret);
     free(sm->notify);
     free(sm->authid);
 
@@ -404,6 +410,12 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
     if (sm->authid && CAPA(sm->backend, CAPA_AUTH)) {
         smtp_params_set_extra(&addr->params, &extra_params, "AUTH", sm->authid);
     }
+    if (sm->ret && CAPA(sm->backend, SMTPCLIENT_CAPA_DSN)) {
+        smtp_params_set_extra(&addr->params, &extra_params, "RET", sm->ret);
+    }
+    if (sm->by && CAPA(sm->backend, SMTPCLIENT_CAPA_DELIVERBY)) {
+        smtp_params_set_extra(&addr->params, &extra_params, "BY", sm->by);
+    }
     int r = write_addr(sm, "MAIL FROM", addr, &extra_params);
     smtp_params_fini(&extra_params);
     return r;
@@ -550,6 +562,18 @@ EXPORTED void smtpclient_set_notify(smtpclient_t *sm, const char *value)
 {
     free(sm->notify);
     sm->notify = xstrdupnull(value);
+}
+
+EXPORTED void smtpclient_set_ret(smtpclient_t *sm, const char *value)
+{
+    free(sm->ret);
+    sm->ret = xstrdupnull(value);
+}
+
+EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
+{
+    free(sm->by);
+    sm->by = xstrdupnull(value);
 }
 
 /* SMTP backend implementations */

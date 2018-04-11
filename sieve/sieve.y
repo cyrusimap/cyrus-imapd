@@ -69,6 +69,7 @@
 #include "imparse.h"
 #include "libconfig.h"
 #include "times.h"
+#include "tok.h"
 
 #define ERR_BUF_SIZE 1024
 
@@ -285,6 +286,12 @@ extern void sieverestart(FILE *f);
 /* servermetadata - RFC 5490 */
 %token <nval> SERVERMETADATA
 %token SERVERMETADATAEXISTS
+
+/* redirect-deliveryby - RFC 6009 */
+%token BYTIMEREL BYTIMEABS BYMODE BYTRACE
+
+/* redirect-dsn - RFC 6009 */
+%token DSNNOTIFY DSNRET
 
 /* extlists - RFC 6134 */
 %token VALIDEXTLIST
@@ -593,6 +600,102 @@ rtags: /* empty */               { $$ = new_command(REDIRECT, sscript); }
                                                       SIEVE_MISSING_REQUIRE,
                                                       "extlists");
                                      }
+                                 }
+        | rtags delbytags        {
+                                     if (!supported(SIEVE_CAPA_REDIR_DELBY)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "redirect-deliverby");
+                                     }
+                                 }
+        | rtags dsntags          {
+                                     if (!supported(SIEVE_CAPA_REDIR_DSN)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "redirect-dsn");
+                                     }
+                                 }
+        ;
+
+/* REDIRECT-DELIVERBY tagged arguments */
+delbytags: BYTIMEREL NUMBER      {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.bytime != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":bytime*");
+                                     }                                         
+
+                                     struct buf buf = BUF_INITIALIZER;
+                                     buf_printf(&buf, "+%d", $2);
+                                     c->u.r.bytime = buf_release(&buf);
+                                 }
+        | BYTIMEABS STRING       {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.bytime != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":bytimerelative"
+                                                      " OR :bytimeabsolute");
+                                     }
+
+                                     c->u.r.bytime = $2;
+                                 }
+        | BYMODE STRING          {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.bymode != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":bymode");
+                                     }
+
+                                     c->u.r.bymode = $2;
+                                 }
+        | BYTRACE                {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.bytrace != 0) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":bytrace");
+                                     }
+
+                                     c->u.r.bytrace = 1;
+                                 }
+        ;
+
+
+/* REDIRECT-DSN tagged arguments */
+dsntags:  DSNNOTIFY STRING       {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.dsn_notify != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":notify");
+                                     }                                         
+
+                                     c->u.r.dsn_notify = $2;
+                                 }
+        | DSNRET STRING          {
+                                     /* $0 refers to rtags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.r.dsn_ret != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":ret");
+                                     }
+
+                                     c->u.r.dsn_ret = $2;
                                  }
         ;
 
@@ -1885,6 +1988,66 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
 
     if (c->u.r.list) verify_list(sscript, address);
     else verify_address(sscript, address);
+
+    /* Verify DELIVERBY values */
+    if (c->u.r.bytime) {
+        if (!supported(SIEVE_CAPA_VARIABLES)) {
+            time_t t;
+
+            if (c->u.r.bytime[0] != '+' &&
+                time_from_iso8601(c->u.r.bytime, &t) == -1) {
+                sieveerror_f(sscript,
+                             "string '%s': not a valid DELIVERBY time value",
+                             c->u.r.bytime);
+            }
+            if (c->u.r.bymode &&
+                strcasecmp(c->u.r.bymode, "NOTIFY") &&
+                strcasecmp(c->u.r.bymode, "RETURN")) {
+                sieveerror_f(sscript,
+                             "string '%s': not a valid DELIVERBY mode value",
+                             c->u.r.bymode);
+            }
+        }
+    }
+    else if (c->u.r.bymode || c->u.r.bytrace) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG,
+                     ":bytimerelative OR :bytimeabsolute");
+    }
+
+    /* Verify DSN NOTIFY value(s) */
+    if (c->u.r.dsn_notify && !supported(SIEVE_CAPA_VARIABLES)) {
+        tok_t tok =
+            TOK_INITIALIZER(c->u.r.dsn_notify, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        char *token;
+        int never = 0;
+
+        while ((token = tok_next(&tok))) {
+            if (!strcasecmp(token, "NEVER")) never = 1;
+            else if (never) {
+                sieveerror_f(sscript,
+                             "DSN NOTIFY value 'NEVER' MUST be used by itself",
+                             token);
+                break;
+            }
+            else if (strcasecmp(token, "SUCCESS") &&
+                     strcasecmp(token, "FAILURE") &&
+                     strcasecmp(token, "DELAY")) {
+                sieveerror_f(sscript,
+                             "string '%s': not a valid DSN NOTIFY value",
+                             token);
+                break;
+            }
+        }
+        tok_fini(&tok);
+    }
+
+    /* Verify DSN RET value */
+    if (c->u.r.dsn_ret && !supported(SIEVE_CAPA_VARIABLES) &&
+        strcasecmp(c->u.r.dsn_ret, "FULL") &&
+        strcasecmp(c->u.r.dsn_ret, "HDRS")) {
+        sieveerror_f(sscript, "string '%s': not a valid DSN RET value",
+                     c->u.r.dsn_ret);
+    }
 
     c->u.r.address = address;
 

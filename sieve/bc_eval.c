@@ -1690,16 +1690,67 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
         case B_REDIRECT:
+        case B_REDIRECT_LIST:
         case B_REDIRECT_COPY:
         case B_REDIRECT_ORIG:
         {
             const char *address = cmd.u.r.address;
+            const char *bytime = cmd.u.r.bytime;
+            const char *bymode = cmd.u.r.bymode;
+            const char *dsn_notify = cmd.u.r.dsn_notify;
+            const char *dsn_ret = cmd.u.r.dsn_ret;
+            const char *deliverby = NULL;
 
             if (requires & BFE_VARIABLES) {
                 address = parse_string(address, variables);
+                bytime = parse_string(bytime, variables);
+                bymode = parse_string(bymode, variables);
+                dsn_notify = parse_string(dsn_notify, variables);
+                dsn_ret = parse_string(dsn_ret, variables);
             }
 
-            res = do_redirect(actions, address, cmd.u.r.list, !cmd.u.r.copy);
+            if (bytime) {
+                long sec;
+
+                if (bytime[0] == '+') {
+                    /* Relative time ("+" 1*9DIGIT) */
+                    sec = atol(cmd.u.r.bytime);
+                }
+                else {
+                    /* Absolute time (RFC 3339 date-time) */
+                    time_t t;
+
+                    if (time_from_iso8601(bytime, &t) == -1) {
+                        res = SIEVE_RUN_ERROR;
+                        *errmsg = "Redirect bytimeabsolute value is invalid";
+                    }
+                    sec = t - time(NULL);
+                }
+
+                if (abs(sec) > 999999999 /* RFC 2852 */) {
+                    res = SIEVE_RUN_ERROR;
+                    *errmsg = "Redirect bytime value too large";
+                    break;
+                }
+
+                /*
+                  Construct RFC 2852 by-value:
+
+                  by-value = by-time";"by-mode[by-trace]
+                  by-time  = ["-" / "+"]1*9digit ; a <= zero value is not
+                                                 ; allowed with a by-mode of "R"
+                  by-mode  = "N" / "R"           ; "Notify" or "Return"
+                  by-trace = "T"                 ; "Trace"
+                */
+                static char by_value[14];
+                snprintf(by_value, sizeof(by_value), "%+ld;%c%s",
+                         sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
+                deliverby = by_value;
+            }
+
+            res = do_redirect(actions, address,
+                              deliverby, dsn_notify, dsn_ret,
+                              cmd.u.r.list, !cmd.u.r.copy);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Redirect can not be used with Reject";

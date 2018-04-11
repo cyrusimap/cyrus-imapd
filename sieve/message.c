@@ -146,7 +146,8 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
  *
  * incompatible with: [e]reject
  */
-int do_redirect(action_list_t *a, const char *addr,
+int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
+                const char *dsn_notify, const char *dsn_ret,
                 int is_ext_list, int cancel_keep)
 {
     action_list_t *b = NULL;
@@ -168,6 +169,9 @@ int do_redirect(action_list_t *a, const char *addr,
     a->cancel_keep = cancel_keep;
     a->u.red.addr = addr;
     a->u.red.is_ext_list = is_ext_list;
+    a->u.red.deliverby = deliverby;
+    a->u.red.dsn_notify = dsn_notify;
+    a->u.red.dsn_ret = dsn_ret;
 
     b->next = a;
 

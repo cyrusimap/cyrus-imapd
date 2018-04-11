@@ -167,8 +167,8 @@ enum sieve_capa_flag {
     /* DSN & Deliver-By - RFC 6009 */
     SIEVE_CAPA_ENV_DELBY    = 0LL<<34, /* currently unsupported */
     SIEVE_CAPA_ENV_DSN      = 0LL<<35, /* currently unsupported */
-    SIEVE_CAPA_REDIR_DELBY  = 0LL<<36, /* currently unsupported */
-    SIEVE_CAPA_REDIR_DSN    = 0LL<<37, /* currently unsupported */
+    SIEVE_CAPA_REDIR_DELBY  = 1LL<<36,
+    SIEVE_CAPA_REDIR_DSN    = 1LL<<37,
 
     /* Vacation :seconds - RFC 6131 */
     SIEVE_CAPA_VACATION_SEC = 1LL<<38,
@@ -188,10 +188,10 @@ enum sieve_capa_flag {
     /* Duplicate - RFC 7352 */
     SIEVE_CAPA_DUPLICATE    = 1LL<<43,
 
-    /* Special-Use - draft-bosch-sieve-special-use */
+    /* Special-Use - draft-ietf-extra-sieve-special-use */
     SIEVE_CAPA_SPECIAL_USE  = 1LL<<44,
 
-    /* Fcc - draft-murchison-sieve-fcc */
+    /* Fcc - draft-ietf-extra-sieve-fcc */
     SIEVE_CAPA_FCC          = 1LL<<45,
 };
 

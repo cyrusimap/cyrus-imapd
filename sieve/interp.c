@@ -461,10 +461,10 @@ static const struct sieve_capa_t {
     /* Duplicate - RFC 7352 */
     { "duplicate", SIEVE_CAPA_DUPLICATE },
 
-    /* Special-Use - draft-bosch-sieve-special-use */
+    /* Special-Use - draft-ietf-extra-sieve-special-use */
     { "special-use", SIEVE_CAPA_SPECIAL_USE },
 
-    /* Fcc - draft-murchison-sieve-fcc */
+    /* Fcc - draft-ietf-extra-sieve-fcc */
     { "fcc", SIEVE_CAPA_FCC },
 
     { NULL, 0 }
@@ -628,6 +628,15 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_FCC:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_REDIR_DELBY:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY))
+            capa = 0;
+        break;
+
+    case SIEVE_CAPA_REDIR_DSN:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)) capa = 0;
         break;
 
     default:

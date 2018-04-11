@@ -528,13 +528,22 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_REDIRECT_ORIG:
         case B_REDIRECT_COPY:
+        case B_REDIRECT_LIST:
         case B_REDIRECT:
             printf("REDIRECT");
             if (cmd.type >= B_REDIRECT_COPY) {
                 printf(" COPY(%d)", cmd.u.r.copy);
 
-                if (cmd.type >= B_REDIRECT) {
+                if (cmd.type >= B_REDIRECT_LIST) {
                     printf( "LIST(%d)", cmd.u.r.list);
+
+                    if (cmd.type >= B_REDIRECT) {
+                        print_string(" BYTIME", cmd.u.r.bytime);
+                        print_string(" BYMODE", cmd.u.r.bymode);
+                        printf(" BYTRACE(%d)", cmd.u.r.bytrace);
+                        print_string("\n\tDSN-NOTIFY", cmd.u.r.dsn_notify);
+                        print_string(" DSN-RET", cmd.u.r.dsn_ret);
+                    }
                 }
             }
             print_string(" ADDRESS", cmd.u.r.address);

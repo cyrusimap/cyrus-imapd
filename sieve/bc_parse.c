@@ -194,7 +194,16 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         break;
 
 
-    case B_REDIRECT:        /* 32 */
+    case B_REDIRECT:        /* 39 */
+        pos = bc_string_parse(bc, pos, &cmd->u.r.bytime);
+        pos = bc_string_parse(bc, pos, &cmd->u.r.bymode);
+        cmd->u.r.bytrace = ntohl(bc[pos++].value);
+        pos = bc_string_parse(bc, pos, &cmd->u.r.dsn_notify);
+        pos = bc_string_parse(bc, pos, &cmd->u.r.dsn_ret);
+
+        GCC_FALLTHROUGH
+
+    case B_REDIRECT_LIST:   /* 32 */
         cmd->u.r.list = ntohl(bc[pos++].value);
 
         GCC_FALLTHROUGH

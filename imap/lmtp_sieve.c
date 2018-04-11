@@ -783,6 +783,9 @@ static int send_forward(sieve_redirect_context_t *rc,
     if (r) goto done;
 
     smtpclient_set_auth(sm, ctx->userid);
+    smtpclient_set_notify(sm, rc->dsn_notify);
+    smtpclient_set_ret(sm, rc->dsn_ret);
+    smtpclient_set_by(sm, rc->deliverby);
     r = smtpclient_send(sm, &sm_env, &msgbuf);
     smtpclient_close(&sm);
 

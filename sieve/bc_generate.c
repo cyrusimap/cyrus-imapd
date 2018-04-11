@@ -809,12 +809,27 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case REDIRECT:
                 /* REDIRECT
+                   STRING bytime
+                   STRING bymode
+                   VALUE bytrace
+                   STRING dsn_notify
+                   STRING dsn_ret
                    VALUE list
                    VALUE copy
                    STRING address
                 */
                 retval->data[codep++].u.op = B_REDIRECT;
-                if (!atleast(retval, codep+3)) return -1;
+                if (!atleast(retval, codep+8)) return -1;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.r.bytime;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.r.bymode;
+                retval->data[codep].type = BT_VALUE;
+                retval->data[codep++].u.value = c->u.r.bytrace;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.r.dsn_notify;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.r.dsn_ret;
                 retval->data[codep].type = BT_VALUE;
                 retval->data[codep++].u.value = c->u.r.list;
                 retval->data[codep].type = BT_VALUE;
