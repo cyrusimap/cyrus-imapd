@@ -4721,37 +4721,42 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
                                     int(*cb)(const char*, const char*, void*),
                                     void *rock)
 {
-    char *tmp, *key;
+    struct buf key = BUF_INITIALIZER;
+    struct buf val = BUF_INITIALIZER;
+    const char *top = headers + len;
+    const char *hdr = headers;
     int r = 0;
 
-    tmp = charset_unfold(headers, len, 0);
-    if (!tmp) return IMAP_INTERNAL;
-
-    key = tmp;
-    while (key && *key) {
-        /* Look for the key-value separator. */
-        char *val = strchr(key, ':');
-        if (!val || val == key) {
-            break;
+    while (hdr < top) {
+        /* Look for colon separating header name from value */
+        const char *p = memchr(hdr, ':', top - hdr);
+        if (!p) {
+            r = IMAP_INTERNAL;
+            goto done;
         }
-        *val++ = '\0';
-
-        /* Look for end of header. */
-        char *eol = strchr(val, '\r');
-        while (eol && (*++eol != '\n'))
-            eol = strchr(eol, '\r');
-        if (eol) {
-            *(eol-1) = '\0';
-            ++eol;
+        buf_setmap(&key, hdr, p - hdr);
+        p++;
+        /* Extract raw header value, skipping over folding CRLF */
+        const char *q = p;
+        while (q < top && (q = memchr(q, '\n', top - q))) {
+            if ((++q == top) || !isspace(*q))
+                break;
         }
-
-        r = cb(key, val, rock);
+        if (!q) q = top;
+        /* Chomp of trailing CRLF */
+        buf_setmap(&val, p, q - p >= 2 ? q - p - 2 : 0);
+        /* Call callback for header */
+        r = cb(buf_cstring(&key), buf_cstring(&val), rock);
         if (r) break;
-
-        key = eol;
+        /* Prepare next iteration */
+        buf_reset(&key);
+        buf_reset(&val);
+        hdr = q;
     }
 
-    free(tmp);
+done:
+    buf_free(&key);
+    buf_free(&val);
     return r;
 }
 

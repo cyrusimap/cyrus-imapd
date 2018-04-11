@@ -197,6 +197,10 @@ extern void message_read_bodystructure(const struct index_record *record,
 
 extern int message_update_conversations(struct conversations_state *, struct mailbox *, struct index_record *, conversation_t **);
 
+/* Call proc for each header in headers, which must contain valid
+ * MIME header bytes. Header keys and values passed to the callback
+ * are zero-terminated strings. Header values are not unfolded and
+ * omit the terminated CR LF sequence. */
 extern int message_foreach_header(const char *headers, size_t len,
                    int (*proc)(const char *key, const char *val, void *rock),
                    void *rock);
