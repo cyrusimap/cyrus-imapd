@@ -8828,7 +8828,7 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_MAILBOXID) {
-        prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->uniqueid);
+        prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_UNSEEN) {
@@ -8892,7 +8892,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
     if (r) return r;
 
 nonconv:
-    sd->uniqueid = mbentry->uniqueid;
+    sd->mailboxid = mbentry->uniqueid;
 
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)

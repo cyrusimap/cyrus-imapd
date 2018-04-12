@@ -130,7 +130,7 @@ struct statusdata {
     uint32_t recent;
     uint32_t uidnext;
     uint32_t uidvalidity;
-    const char *uniqueid;
+    const char *mailboxid;
     uint32_t unseen;
     uint32_t size;
     modseq_t highestmodseq;
