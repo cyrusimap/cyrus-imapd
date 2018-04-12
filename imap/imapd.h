@@ -130,7 +130,9 @@ enum {
     FETCH_CID =                 (1<<18),
     FETCH_FOLDER =              (1<<19),
     FETCH_UIDVALIDITY =         (1<<20),
-    FETCH_BASECID =             (1<<21)
+    FETCH_BASECID =             (1<<21),
+    FETCH_EMAILID =             (1<<22),
+    FETCH_THREADID =            (1<<23)
 };
 
 enum {
@@ -316,11 +318,12 @@ enum {
     STATUS_UIDNEXT =            (1<<2),
     STATUS_UIDVALIDITY =        (1<<3),
     STATUS_UNSEEN =             (1<<4),
-    STATUS_SIZE =               (1<<5),
-    STATUS_HIGHESTMODSEQ =      (1<<6),
-    STATUS_XCONVEXISTS =        (1<<7),
-    STATUS_XCONVUNSEEN =        (1<<8),
-    STATUS_XCONVMODSEQ =        (1<<9)
+    STATUS_MAILBOXID =          (1<<5),
+    STATUS_SIZE =               (1<<6),
+    STATUS_HIGHESTMODSEQ =      (1<<7),
+    STATUS_XCONVEXISTS =        (1<<8),
+    STATUS_XCONVUNSEEN =        (1<<9),
+    STATUS_XCONVMODSEQ =        (1<<10)
     /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 

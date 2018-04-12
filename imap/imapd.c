@@ -342,6 +342,7 @@ static struct capa_struct base_capabilities[] = {
     { "DIGEST=SHA1",           2 }, /* not standard */
     { "X-REPLICATION",         2 }, /* not standard */
     { "STATUS=SIZE",           2 }, /* draft-bosch-imap-status-size */
+    { "OBJECTID",              2 }, /* draft-gondwana-imap-uniqueid */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -4737,6 +4738,9 @@ badannotation:
             if (!strcmp(fetchatt.s, "ENVELOPE")) {
                 fa->fetchitems |= FETCH_ENVELOPE;
             }
+            else if (!strcmp(fetchatt.s, "EMAILID")) {
+                fa->fetchitems |= FETCH_EMAILID;
+            }
             else goto badatt;
             break;
 
@@ -4844,6 +4848,13 @@ badannotation:
                     goto freeargs;
                 }
                 c = prot_getc(imapd_in);
+            }
+            else goto badatt;
+            break;
+
+        case 'T':
+            if (!strcmp(fetchatt.s, "THREADID")) {
+                fa->fetchitems |= FETCH_THREADID;
             }
             else goto badatt;
             break;
@@ -6601,6 +6612,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *server = NULL;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
+    struct mailbox *mailbox = NULL;
 
     /* We don't care about trailing hierarchy delimiters. */
     if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
@@ -6850,7 +6862,7 @@ localcreate:
             localonly,                                          // int forceuser
             0,                                                  // int dbonly
             1,                                                  // int notify
-            NULL                                                // struct mailbox mailboxptr
+            &mailbox                                            // struct mailbox mailboxptr
         );
 
 #ifdef USE_AUTOCREATE
@@ -6871,7 +6883,7 @@ localcreate:
                         0,
                         0,
                         1,
-                        NULL
+                        &mailbox
                     );
 
                 if (r) {
@@ -6941,11 +6953,12 @@ localcreate:
         }
     }
 
-    prot_printf(imapd_out, "%s OK Completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailbox->uniqueid);
 
     imapd_check(NULL, 0);
 
 done:
+    mailbox_close(&mailbox);
     buf_free(&specialuse);
     mbname_free(&mbname);
 }
@@ -8739,6 +8752,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "uidvalidity")) {
             statusitems |= STATUS_UIDVALIDITY;
         }
+        else if (!strcmp(arg.s, "mailboxid")) {
+            statusitems |= STATUS_MAILBOXID;
+        }
         else if (!strcmp(arg.s, "unseen")) {
             statusitems |= STATUS_UNSEEN;
         }
@@ -8805,6 +8821,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
         prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar, sd->uidvalidity);
         sepchar = ' ';
     }
+    if (statusitems & STATUS_MAILBOXID) {
+        prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->uniqueid);
+        sepchar = ' ';
+    }
     if (statusitems & STATUS_UNSEEN) {
         prot_printf(imapd_out, "%cUNSEEN %u", sepchar, sd->unseen);
         sepchar = ' ';
@@ -8836,7 +8856,7 @@ static int print_statusline(const char *extname, unsigned statusitems,
     return 0;
 }
 
-static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
+static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
                             struct statusdata *sd)
 {
     int r;
@@ -8846,7 +8866,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
     statusitems &= ~STATUS_CONVITEMS; /* strip them for the regular lookup */
 
     /* use the existing state if possible */
-    state = conversations_get_mbox(mailboxname);
+    state = conversations_get_mbox(mbentry->name);
 
     /* otherwise fetch a new one! */
     if (!state) {
@@ -8854,7 +8874,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
             conversations_abort(&global_conversations);
             global_conversations = NULL;
         }
-        r = conversations_open_mbox(mailboxname, &state);
+        r = conversations_open_mbox(mbentry->name, &state);
         if (r) {
             /* maybe the mailbox doesn't even have conversations - just ignore */
             goto nonconv;
@@ -8862,16 +8882,18 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
         global_conversations = state;
     }
 
-    r = conversation_getstatus(state, mailboxname, &sd->xconv);
+    r = conversation_getstatus(state, mbentry->name, &sd->xconv);
     if (r) return r;
 
 nonconv:
+    sd->uniqueid = mbentry->uniqueid;
+
     /* use the index status if we can so we get the 'alive' Recent count */
-    if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)) && imapd_index->mailbox)
+    if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)
         return index_status(imapd_index, sd);
 
     /* fall back to generic lookup */
-    return status_lookup(mailboxname, imapd_userid, statusitems, sd);
+    return status_lookup(mbentry->name, imapd_userid, statusitems, sd);
 }
 
 /*
@@ -8958,7 +8980,7 @@ static void cmd_status(char *tag, char *name)
         }
     }
 
-    if (!r) r = imapd_statusdata(intname, statusitems, &sdata);
+    if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
@@ -12463,7 +12485,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
 
     /* can we read the status data ? */
     if ((listargs->ret & LIST_RET_STATUS) && mbentry) {
-        r = imapd_statusdata(mbentry->name, listargs->statusitems, &sdata);
+        r = imapd_statusdata(mbentry, listargs->statusitems, &sdata);
         if (r) {
             /* RFC 5819: the STATUS response MUST NOT be returned and the
              * LIST response MUST include the \NoSelect attribute. */
@@ -13091,9 +13113,9 @@ static int list_data_remote(struct backend *be, char *tag,
                 /* print status items */
                 const char *status_items[] = {
                     /* XXX  MUST be in same order as STATUS_* bitmask */
-                    "messages", "recent", "uidnext", "uidvalidity", "unseen",
-                    "highestmodseq", "xconvexists", "xconvunseen",
-                    "xconvmodseq", NULL
+                    "messages", "recent", "uidnext", "uidvalidity",
+                    "unseen", "uniqueid", "size", "highestmodseq",
+                    "xconvexists", "xconvunseen", "xconvmodseq", NULL
                 };
 
                 c = '(';

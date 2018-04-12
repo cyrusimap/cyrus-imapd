@@ -4021,6 +4021,14 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
         sepchar = ' ';
     }
+    if (fetchitems & FETCH_EMAILID) {
+        char emailid[26];
+        emailid[0] = 'M';
+        memcpy(emailid+1, message_guid_encode(&record.guid), 24);
+        emailid[25] = '\0';
+        prot_printf(state->out, "%cEMAILID %s", sepchar, emailid);
+        sepchar = ' ';
+    }
     if ((fetchitems & FETCH_CID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
         struct buf buf = BUF_INITIALIZER;
@@ -4032,6 +4040,24 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         buf_free(&buf);
         sepchar = ' ';
     }
+    if ((fetchitems & FETCH_THREADID)) {
+        char threadid[18];
+        if (!record.cid) {
+            threadid[0] = 'N';
+            threadid[0] = 'I';
+            threadid[0] = 'L';
+            threadid[3] = '\0';
+        }
+        else {
+            threadid[0] = 'T';
+            memcpy(threadid+1, conversation_id_encode(record.cid), 16);
+            threadid[17] = '\0';
+        }
+
+        prot_printf(state->out, "%cTHREADID %s", sepchar, threadid);
+        sepchar = ' ';
+    }
+
     if ((fetchitems & FETCH_BASECID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
         mailbox_read_basecid(mailbox, &record);

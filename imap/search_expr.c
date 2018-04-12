@@ -1666,6 +1666,40 @@ static void _search_annot_callback(const char *mboxname __attribute__((unused)),
     }
 }
 
+static int search_emailid_match(message_t *m, const union search_value *v,
+                              void *internalised __attribute__((unused)),
+                              void *data1 __attribute__((unused)))
+{
+    const struct message_guid *guid = NULL;
+    char emailid[26];
+
+    int r = message_get_guid(m, &guid);
+    if (r) return 0;
+
+    emailid[0] = 'M';
+    memcpy(emailid+1, message_guid_encode(guid), 24);
+    emailid[25] = '\0';
+
+    return !strcmp(v->s, emailid);
+}
+
+static int search_threadid_match(message_t *m, const union search_value *v,
+                                 void *internalised __attribute__((unused)),
+                                 void *data1 __attribute__((unused)))
+{
+    conversation_id_t cid = 0;
+    char threadid[18];
+
+    int r = message_get_cid(m, &cid);
+    if (r) return 0;
+
+    threadid[0] = 'T';
+    memcpy(threadid+1, conversation_id_encode(cid), 16);
+    threadid[17] = '\0';
+
+    return !strcmp(v->s, threadid);
+}
+
 static int search_annotation_match(message_t *m, const union search_value *v,
                                    void *internalised, void *data1 __attribute__((unused)))
 {
@@ -2301,6 +2335,34 @@ EXPORTED void search_attr_init(void)
             /*duplicate*/NULL,
             /*free*/NULL,
             (void *)message_get_cid
+        },{
+            "emailid",
+            /* flags */0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            /*cmp*/ NULL,
+            search_emailid_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)NULL
+        },{
+            "threadid",
+            /* flags */0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            /*cmp*/ NULL,
+            search_threadid_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            (void *)NULL
         },{
             "folder",
             /*flags*/0,

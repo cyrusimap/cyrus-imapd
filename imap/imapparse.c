@@ -681,6 +681,23 @@ static void string_match(search_expr_t *parent, const char *val,
     }
 }
 
+static void bytestring_match(search_expr_t *parent, const char *val,
+                             const char *aname,
+                             struct searchargs *base __attribute__((unused)))
+{
+    search_expr_t *e;
+    const search_attr_t *attr = search_attr_find(aname);
+    enum search_op op = SEOP_MATCH;
+
+    e = search_expr_new(parent, op);
+    e->attr = attr;
+    e->value.s = xstrdupnull(val);
+    if (!e->value.s) {
+        e->op = SEOP_FALSE;
+        e->attr = NULL;
+    }
+}
+
 static void systemflag_match(search_expr_t *parent, unsigned int flag, int not)
 {
     search_expr_t *e;
@@ -906,6 +923,16 @@ static int get_search_criterion(struct protstream *pin,
         }
         else if (!strcmp(criteria.s, "draft")) {        /* RFC 3501 */
             systemflag_match(parent, FLAG_DRAFT, /*not*/0);
+        }
+        else goto badcri;
+        break;
+
+    case 'e':
+        if (!strcmp(criteria.s, "emailid")) {   /* draft-gondwana-imap-uniqueid */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto missingarg;
+            bytestring_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
         break;
@@ -1149,6 +1176,12 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg);
             if (c == EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
+        }
+        else if (!strcmp(criteria.s, "threadid")) {   /* draft-gondwana-imap-uniqueid */
+            if (c != ' ') goto missingarg;
+            c = getastring(pin, pout, &arg);
+            if (c == EOF) goto missingarg;
+            bytestring_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
         break;
