@@ -8621,17 +8621,17 @@ static void _email_parse(json_t *jemail,
 
 static void _emailpart_blob_to_mime(jmap_req_t *req,
                                     FILE *fp,
-                                    struct emailpart *part,
+                                    struct emailpart *emailpart,
                                     json_t *missing_blobs)
 {
     struct buf blob_buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
     struct mailbox *mbox = NULL;
-    struct body *top_body = NULL;
-    const struct body *blob_body = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
 
     /* Find body part containing blob */
-    int r = jmap_findblob(req, part->blob_id, &mbox, &mr, &top_body, &blob_body);
+    int r = jmap_findblob(req, emailpart->blob_id, &mbox, &mr, &body, &part);
     if (r) goto done;
 
     /* Map the blob into memory */
@@ -8645,7 +8645,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     /* Write headers defined by client. */
     size_t i;
     json_t *jheader;
-    json_array_foreach(part->headers.raw, i, jheader) {
+    json_array_foreach(emailpart->headers.raw, i, jheader) {
         json_t *jval = json_object_get(jheader, "name");
         const char *name = json_string_value(jval);
         jval = json_object_get(jheader, "value");
@@ -8653,37 +8653,48 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         fprintf(fp, "%s: %s\r\n", name, value);
     }
 
-    /* Write blob. For embedded messages, we dump the complete
-     * bodypart, including its headers, as MIME body. For any
-     * other blob, we optionally write the Content-Type and
-     * encoding MIME headers, followed by the raw blob contents
-     * as body. */
-    if (part->type && !strcasecmp(part->type, "MESSAGE")) {
-        fputs("\r\n", fp);
-        fwrite(blob_buf.s, 1, blob_buf.len, fp);
-    }
-    else {
-        if (!_headers_have(&part->headers, "Content-Type")) {
-            fprintf(fp, "Content-Type: %s/%s", blob_body->type, blob_body->subtype);
-            if (blob_body->charset_id)
-                fprintf(fp, ";charset=%s", blob_body->charset_id);
-            fputs("\r\n", fp);
+    /* Fetch blob contents and headers */
+    const char *base = blob_buf.s;
+    size_t len = blob_buf.len;
+    int need_type = !_headers_have(&emailpart->headers, "Content-Type");
+
+    if (part) {
+        /* Map into body part */
+        base += part->content_offset;
+        len = part->content_size;
+
+        /* Write Content-Type, if required */
+        if (need_type) {
+            strarray_t partheaders = STRARRAY_INITIALIZER;
+            strarray_add(&partheaders, "Content-Type");
+            char *ctype = xstrndup(blob_buf.s + part->header_offset, part->header_size);
+            message_pruneheader(ctype, &partheaders, NULL);
+            if (*ctype)
+                fputs(ctype, fp);
+            else
+                fputs("Content-Type: application/octet-stream\r\n", fp);
+            strarray_fini(&partheaders);
+            free(ctype);
         }
-        if (blob_body->encoding) {
+        if (part->charset_enc & 0xff) {
             fputs("Content-Transfer-Encoding: ", fp);
-            fputs(blob_body->encoding, fp);
+            fputs(encoding_name(part->charset_enc & 0xff), fp);
             fputs("\r\n", fp);
         }
-        fputs("\r\n", fp);
-        fwrite(blob_buf.s + blob_body->content_offset, 1,
-                blob_body->content_size, fp);
+    }
+    else if (need_type) {
+        fputs("Content-Type: message/rfc822\r\n", fp);
     }
 
+    /* Write body */
+    fputs("\r\n", fp);
+    fwrite(base, 1, len, fp);
+
 done:
-    if (r) json_array_append_new(missing_blobs, json_string(part->blob_id));
-    if (top_body) {
-        message_free_body(top_body);
-        free(top_body);
+    if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
+    if (body) {
+        message_free_body(body);
+        free(body);
     }
     msgrecord_unref(&mr);
     jmap_closembox(req, &mbox);
@@ -8788,7 +8799,7 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
             _emailpart_to_mime(req, fp, ptrarray_nth(&part->subparts, j),
                                missing_blobs);
         }
-        fprintf(fp, "\r\n--%s--\r\n", part->boundary);
+        fprintf(fp, "\r\n--%s--", part->boundary);
     }
     else if (part->jbody) {
         _emailpart_text_to_mime(fp, part);

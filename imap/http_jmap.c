@@ -1071,10 +1071,6 @@ static int _findblob(jmap_req_t *req, const char *blobid,
             goto done;
         }
     }
-    else if (mybody) {
-        /* Found blob is top-level body */
-        mypart = mybody;
-    }
 
     *mbox = data.mbox;
     *mr = data.mr;
@@ -1210,7 +1206,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     size_t len = msg_buf.len;
     txn->resp_body.type = "message/rfc822";
 
-    if (part != body || mbox->mbtype) {
+    if (part) {
         // map into just this part
         txn->resp_body.type = "application/octet-stream";
         base += part->content_offset;
