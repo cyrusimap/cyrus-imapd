@@ -1866,7 +1866,7 @@ sub test_email_get
     $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
 
     $self->assert_str_equals('fake.123456789@local', $msg->{messageId}[0]);
-    $self->assert_str_equals(' foo bar baz', $msg->{'header:x-tra'});
+    $self->assert_str_equals(" foo bar\r\n baz", $msg->{'header:x-tra'});
     $self->assert_deep_equals($msg->{from}[0], {
             name => "Sally Sender",
             email => "sally\@local"
@@ -7777,6 +7777,76 @@ sub test_email_get_header_all
 
     $self->assert_deep_equals([' foo', ' bar'], $msg->{'header:x-tra:all'});
     $self->assert_deep_equals([' foo', ' bar'], $msg->{'header:x-tra:asRaw:all'});
+}
+
+sub test_email_set_headers
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $text = "x";
+
+    # Prepare test headers
+    my $headers = {
+        'header:TextHeader8bit' => {
+            format  => 'asText',
+            value   => "I feel \N{WHITE SMILING FACE}",
+            wantRaw => " =?UTF-8?Q?I_feel_=E2=98=BA?="
+        },
+        'header:TextHeaderLong' => {
+            format  => 'asText',
+            value   => "x" x 80,
+            wantRaw => " =?UTF-8?Q?xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx?=\r\n =?UTF-8?Q?xxxxxxxxxxxxxxxxxx?="
+        },
+        'header:TextHeaderShort' => {
+            format  => 'asText',
+            value   => "x",
+            wantRaw => " x"
+        },
+    };
+
+    # Prepare test email
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+    };
+    while( my ($k, $v) = each %$headers ) {
+        $email->{$k.':'.$v->{format}} = $v->{value},
+    }
+
+    my @properties = keys %$headers;
+    while( my ($k, $v) = each %$headers ) {
+        push @properties, $k.':'.$v->{format};
+    }
+
+
+    # Create and get mail
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', {
+            ids => [ "#1" ],
+            properties => \@properties,
+        }, "R2" ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+
+    # Validate header values
+    while( my ($k, $v) = each %$headers ) {
+        xlog "Validating $k";
+        my $raw = $msg->{$k};
+        my $val = $msg->{$k.':'.$v->{format}};
+        # Check raw header
+        $self->assert_str_equals($v->{wantRaw}, $raw);
+        # Check formatted header
+        if (ref $v->{value} eq 'ARRAY') {
+            $self->assert_deep_equals($v->{value}, $val);
+        } else {
+            $self->assert_str_equals($v->{value}, $val);
+        }
+    }
 }
 
 1;
