@@ -6613,6 +6613,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
+    char *mailboxid = NULL;
 
     /* We don't care about trailing hierarchy delimiters. */
     if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
@@ -6934,6 +6935,10 @@ localcreate:
     } // (r)
 #endif // USE_AUTOCREATE
 
+    /* Close newly created mailbox before writing annotations */
+    mailboxid = xstrdup(mailbox->uniqueid);
+    mailbox_close(&mailbox);
+
     if (specialuse.len) {
         r = annotatemore_write(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &specialuse);
         if (r) {
@@ -6953,7 +6958,7 @@ localcreate:
         }
     }
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailbox->uniqueid);
+    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
 
     imapd_check(NULL, 0);
 
@@ -6961,6 +6966,7 @@ done:
     mailbox_close(&mailbox);
     buf_free(&specialuse);
     mbname_free(&mbname);
+    free(mailboxid);
 }
 
 /* Callback for use by cmd_delete */
