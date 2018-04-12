@@ -1210,7 +1210,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     size_t len = msg_buf.len;
     txn->resp_body.type = "message/rfc822";
 
-    if (part) {
+    if (part != body || mbox->mbtype) {
         // map into just this part
         txn->resp_body.type = "application/octet-stream";
         base += part->content_offset;
