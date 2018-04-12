@@ -4026,7 +4026,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         emailid[0] = 'M';
         memcpy(emailid+1, message_guid_encode(&record.guid), 24);
         emailid[25] = '\0';
-        prot_printf(state->out, "%cEMAILID %s", sepchar, emailid);
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
@@ -4054,7 +4054,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             threadid[17] = '\0';
         }
 
-        prot_printf(state->out, "%cTHREADID %s", sepchar, threadid);
+        prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
         sepchar = ' ';
     }
 
