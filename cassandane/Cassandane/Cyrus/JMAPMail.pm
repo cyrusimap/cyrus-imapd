@@ -7849,4 +7849,121 @@ sub test_email_set_headers
     }
 }
 
+sub test_email_download
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a email in INBOX via IMAP";
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "some text";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<p>some HTML text</p>";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+    $self->make_message("foo",
+        mime_type => "multipart/alternative",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    xlog "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'blobId' ],
+        }, 'R2'],
+    ]);
+    my $msg = $res->[1][1]->{list}[0];
+
+    my $blob = $jmap->Download('cassandane', $msg->{blobId});
+    $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+}
+
+sub test_email_embedded_download
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    # Generate an embedded email
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Return-Path: <Ava.Nguyen\@local>\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "Subject: bar\r\n"
+          . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+          . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: Test User <test\@local>\r\n"
+          . "\r\n"
+          . "An embedded email"
+          . "\r\n--sub--",
+    ) || die;
+
+    xlog "get blobId";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['attachedEmails'],
+        }, 'R2' ],
+    ]);
+    my $blobId = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
+
+    my $blob = $jmap->Download('cassandane', $blobId);
+    $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+}
+
+sub test_blob_download
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    my $blob = $jmap->Download('cassandane', $data->{blobId});
+    $self->assert_str_equals('image/gif', $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($binary, $blob->{content});
+}
+
+
 1;
