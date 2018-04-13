@@ -12915,7 +12915,8 @@ static void free_list_entry(void *rock)
     free(entry);
 }
 
-static void list_data_recursivematch(struct listargs *listargs) {
+static void list_data_recursivematch(struct listargs *listargs)
+{
     struct list_rock_recursivematch rock;
 
     rock.count = 0;
