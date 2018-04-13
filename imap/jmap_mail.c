@@ -8799,7 +8799,7 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
             _emailpart_to_mime(req, fp, ptrarray_nth(&part->subparts, j),
                                missing_blobs);
         }
-        fprintf(fp, "\r\n--%s--", part->boundary);
+        fprintf(fp, "\r\n--%s--\r\n", part->boundary);
     }
     else if (part->jbody) {
         _emailpart_text_to_mime(fp, part);
