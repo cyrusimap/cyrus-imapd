@@ -57,7 +57,8 @@ sub alloc
 	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
 	    if (defined($workerid) && $workerid eq 'invalid');
 	my $cassini = Cassandane::Cassini->instance();
-	$base_port = 0 + $cassini->val('cassandane', 'base_port') || 9100;
+	my $cassini_base_port = $cassini->val('cassandane', 'base_port') // 0;
+	$base_port = 0 + $cassini_base_port || 9100;
 	$base_port += $max_ports * ($workerid-1);
     }
     for (my $i = 0 ; $i < $max_ports ; $i++)
