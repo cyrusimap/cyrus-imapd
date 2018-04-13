@@ -269,11 +269,10 @@ sub _make_unique_instance_info
 	$stamp = to_iso8601(DateTime->now);
 	$stamp =~ s/.*T(\d+)Z/$1/;
 
-	# name workers as A, B, C, ...
 	my $workerid = $ENV{TEST_UNIT_WORKER_ID};
 	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
 	    if (defined($workerid) && $workerid eq 'invalid');
-	$stamp .= chr(64 + $workerid) if defined $workerid;
+	$stamp .= sprintf("%02X", $workerid) if defined $workerid;
     }
 
     my $rootdir = _rootdir();
@@ -282,7 +281,7 @@ sub _make_unique_instance_info
     my $basedir;
     for (;;)
     {
-	$name = $stamp . $next_unique;
+	$name = sprintf("%s%02X", $stamp, $next_unique);
 	$next_unique++;
 	$basedir = "$rootdir/$name";
 	last if mkdir($basedir);
