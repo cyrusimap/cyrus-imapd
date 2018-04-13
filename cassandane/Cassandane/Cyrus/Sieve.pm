@@ -1212,6 +1212,7 @@ EOF
 }
 
 sub test_editheader
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1246,6 +1247,7 @@ EOF
 }
 
 sub test_duplicate
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1292,6 +1294,7 @@ EOF
 }
 
 sub test_ereject
+    :min_version_3_1
 {
     my ($self) = @_;
 
