@@ -1592,6 +1592,8 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
         PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
                 AC_DEFINE(HAVE_NGHTTP2,[],
                         [Build HTTP/2 support into httpd?])
+                AC_CHECK_DECLS([NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL],
+                        [], [], [[#include <nghttp2/nghttp2.h>]])
                 with_nghttp2=yes
                 ],
                 AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
