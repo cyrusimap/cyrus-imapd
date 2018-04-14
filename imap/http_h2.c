@@ -526,6 +526,8 @@ HIDDEN int http2_start_session(struct http_connection *conn,
         txn->flags.ver = VER_2;
     }
 
+    tcp_disable_nagle(1); /* output fd */
+
     r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, &iv, 1);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_settings: %s", nghttp2_strerror(r));
