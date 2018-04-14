@@ -1252,7 +1252,6 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
-            if (txn->conn->http2_ctx) txn->flags.upgrade |= UPGRADE_HTTP2;
         }
 
         syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
