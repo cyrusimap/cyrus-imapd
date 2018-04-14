@@ -742,8 +742,15 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
     int r;
 
     /* NOTE: The protstream that we use as the data source MUST remain
-       available until the data source read callback has retrieved all data */
-    prd.source.ptr = prot_readmap(data, datalen);
+       available until the data source read callback has retrieved all data.
+       Also note that we need to make a copy of the data because data frames
+       may not be sent prior to the original pointer becoming invalid.
+    */
+    struct protstream *s = prot_readmap(xmemdup(data, datalen), datalen);
+    s->buf = s->ptr;
+    s->buf_size = datalen;
+
+    prd.source.ptr = s;
     prd.read_callback = data_source_read_cb;
 
     if (txn->flags.te) {
