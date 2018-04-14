@@ -87,14 +87,25 @@ static int _alpn_select_cb(SSL *ssl __attribute__((unused)),
                            const unsigned char *in, unsigned int inlen,
                            void *arg)
 {
-    int *is_h2 = (int *) arg;
+    struct http_connection *http_conn = (struct http_connection *) arg;
 
-    if (nghttp2_select_next_protocol((u_char **) out, outlen, in, inlen) == 1) {
-        *is_h2 = 1;
-        return SSL_TLSEXT_ERR_OK;
+    int r = nghttp2_select_next_protocol((u_char **) out, outlen, in, inlen);
+
+    switch (r) {
+    case 0: /* http/1.1 */
+        break;
+
+    case 1: /* h2 */
+        if (http2_start_session(NULL, http_conn) == 0) break;
+
+        /* Fall through as unsupported */
+        GCC_FALLTHROUGH
+
+    default:
+        return SSL_TLSEXT_ERR_NOACK;
     }
 
-    return SSL_TLSEXT_ERR_NOACK;
+    return SSL_TLSEXT_ERR_OK;
 }
 
 static ssize_t send_cb(nghttp2_session *session __attribute__((unused)),
@@ -458,12 +469,14 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 }
 
 
-HIDDEN int http2_start_session(struct http_connection *conn,
-                               struct transaction_t *txn)
+HIDDEN int http2_start_session(struct transaction_t *txn,
+                               struct http_connection *conn)
 {
     nghttp2_settings_entry iv = { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 };
     struct http2_context *ctx = xzmalloc(sizeof(struct http2_context));
     int r;
+
+    if (!conn) conn = txn->conn;
 
     r = nghttp2_option_new(&ctx->options);
     if (r) {
@@ -828,8 +841,8 @@ HIDDEN int http2_preface(struct transaction_t *txn __attribute__((unused)))
     return 0;
 }
 
-HIDDEN int http2_start_session(struct http_connection *c __attribute__((unused)),
-                               struct transaction_t *txn __attribute__((unused)))
+HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused)),
+                               struct http_connection *c __attribute__((unused)))
 {
     fatal("http2_start() called, but no Nghttp2", EC_SOFTWARE);
 }

@@ -361,7 +361,7 @@ struct backend **backend_cached = NULL;
 
 /* end PROXY stuff */
 
-static int starttls(struct transaction_t *txn, void **tls , int *http2);
+static int starttls(struct transaction_t *txn, struct http_connection *conn);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -791,11 +791,7 @@ int service_main(int argc __attribute__((unused)),
     /* we were connected on https port so we should do
        TLS negotiation immediately */
     if (https == 1) {
-        int r, http2 = 0;
-
-        r = starttls(NULL, &http_conn.tls_ctx, &http2);
-        if (!r && http2) r = http2_start_session(&http_conn, NULL);
-        if (r) shut_down(0);
+        if (starttls(NULL, &http_conn) != 0) shut_down(0);
     }
 
     /* Setup the signal handler for keepalive heartbeat */
@@ -942,11 +938,13 @@ void fatal(const char* s, int code)
 
 
 #ifdef HAVE_SSL
-static int starttls(struct transaction_t *txn, void **tls, int *http2)
+static int starttls(struct transaction_t *txn, struct http_connection *conn)
 {
     int https = (txn == NULL);
     int result;
     SSL_CTX *ctx = NULL;
+
+    if (!conn) conn = txn->conn;
 
     result=tls_init_serverengine("http",
                                  5,        /* depth to verify */
@@ -960,11 +958,10 @@ static int starttls(struct transaction_t *txn, void **tls, int *http2)
         return HTTP_SERVER_ERROR;
     }
 
-    *http2 = 0;
     if (http2_enabled()) {
 #ifdef HAVE_TLS_ALPN
         /* enable TLS ALPN extension */
-        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, http2);
+        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, conn);
 #endif
     }
 
@@ -977,7 +974,7 @@ static int starttls(struct transaction_t *txn, void **tls, int *http2)
                                1, /* write */
                                https ? 180 : httpd_timeout,
                                &saslprops,
-                               (SSL **) tls);
+                               (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {
@@ -999,8 +996,8 @@ static int starttls(struct transaction_t *txn, void **tls, int *http2)
     }
 
     /* tell the prot layer about our new layers */
-    prot_settls(httpd_in, *tls);
-    prot_settls(httpd_out, *tls);
+    prot_settls(httpd_in, conn->tls_ctx);
+    prot_settls(httpd_out, conn->tls_ctx);
 
     httpd_tls_required = 0;
 
@@ -1010,8 +1007,7 @@ static int starttls(struct transaction_t *txn, void **tls, int *http2)
 }
 #else
 static int starttls(struct transaction_t *txn __attribute__((unused)),
-                    void **tls __attribute__((unused)),
-                    int *http2 __attribute__((unused)))
+                    struct http_connection *conn __attribute__((unused)))
 {
     fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
@@ -1252,19 +1248,17 @@ EXPORTED int examine_request(struct transaction_t *txn)
         }
 
         if (txn->flags.upgrade & UPGRADE_TLS) {
-            int http2 = 0;
-            if ((ret = starttls(txn, &txn->conn->tls_ctx, &http2))) {
+            if ((ret = starttls(txn, NULL))) {
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
-            if (http2) txn->flags.upgrade |= UPGRADE_HTTP2;
+            if (txn->conn->http2_ctx) txn->flags.upgrade |= UPGRADE_HTTP2;
         }
 
         syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
                txn->flags.upgrade, httpd_tls_required);
         if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
-            if ((ret = http2_start_session(txn->conn,
-                                           txn->conn->tls_ctx ? NULL : txn))) {
+            if ((ret = http2_start_session(txn, NULL))) {
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
@@ -1726,7 +1720,7 @@ static void cmdloop(struct http_connection *conn)
         }
         else if (http2_preface(&txn)) {
             /* HTTP/2 client connection preface */
-            ret = http2_start_session(txn.conn, &txn);
+            ret = http2_start_session(&txn, NULL);
         }
         else {
             /* HTTP/1.x request */

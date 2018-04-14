@@ -74,8 +74,8 @@ extern void http2_done();
 
 extern int http2_preface(struct transaction_t *txn);
 
-extern int http2_start_session(struct http_connection *conn,
-                               struct transaction_t *txn);
+extern int http2_start_session(struct transaction_t *txn,
+                               struct http_connection *conn);
 
 extern void http2_end_session(void *http2_ctx);
 
