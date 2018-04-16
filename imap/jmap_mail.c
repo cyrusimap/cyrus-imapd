@@ -1269,14 +1269,6 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "name", json_string(name));
         free(name);
     }
-    if (_wantprop(props, "mustBeOnlyMailbox")) {
-        if (!strcmpsafe(role, "trash"))
-            json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
-        else if (!strcmpsafe(role, "junk"))
-            json_object_set_new(obj, "mustBeOnlyMailbox", json_true());
-        else
-            json_object_set_new(obj, "mustBeOnlyMailbox", json_false());
-    }
 
     if (_wantprop(props, "parentId")) {
         json_object_set_new(obj, "parentId",
@@ -2216,9 +2208,6 @@ static void jmap_mailbox_set_parse(jmap_req_t *req,
     }
 
     /* mayXXX. These are immutable, but we ignore them during update. */
-    if (json_object_get(jargs, "mustBeOnlyMailbox") && is_create) {
-        json_array_append_new(invalid, json_string("mustBeOnlyMailbox"));
-    }
     json_t *jrights = json_object_get(jargs, "myRights");
     if (JNOTNULL(jrights)) {
         if (json_object_get(jrights, "mayReadItems") && is_create) {
