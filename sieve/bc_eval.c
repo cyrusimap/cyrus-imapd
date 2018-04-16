@@ -1559,6 +1559,11 @@ envelope_err:
 
             /* this is a mailbox name in external namespace */
             i = unwrap_string(bc, i, &extname, NULL);
+
+            if (requires & BFE_VARIABLES) {
+                extname = parse_string(extname, variables);
+            }
+
             res = interp->getmailboxexists(sc, extname);
             if (res) break;
         }
@@ -1599,6 +1604,11 @@ envelope_err:
         /* unpack the world */
         list_len=ntohl(bc[i++].len);
         list_end=ntohl(bc[i++].len)/4;
+
+        if (requires & BFE_VARIABLES) {
+            extname = parse_string(extname, variables);
+            keyname = parse_string(keyname, variables);
+        }
 
         interp->getmetadata(sc, extname, keyname, &val);
 
@@ -1649,6 +1659,10 @@ envelope_err:
         list_len=ntohl(bc[i++].len);
         list_end=ntohl(bc[i++].len)/4;
 
+        if (requires & BFE_VARIABLES) {
+            extname = parse_string(extname, variables);
+        }
+
         /* need to process all of them, to ensure our instruction pointer stays
          * in the right place */
         for (x=0; x<list_len; x++) {
@@ -1657,6 +1671,10 @@ envelope_err:
 
             /* this is an annotation name */
             i = unwrap_string(bc, i, &keyname, NULL);
+
+            if (requires & BFE_VARIABLES) {
+                keyname = parse_string(keyname, variables);
+            }
 
             interp->getmetadata(sc, extname, keyname, &val);
             if (!val) res = 0;
