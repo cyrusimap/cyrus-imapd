@@ -1512,7 +1512,7 @@ dist_man8_MANS = \
 	man/tls_prune.8 \
 	man/unexpunge.8
 
-if USE_SQUAT
+if SQUATTER
 dist_man8_MANS += \
 	man/squatter.8
 
@@ -1520,7 +1520,7 @@ else
 EXTRA_DIST += \
 	man/squatter.8
 
-endif # USE_SQUAT
+endif # SQUATTER
 
 if NNTPD
 dist_man8_MANS += \
