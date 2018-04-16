@@ -1524,6 +1524,15 @@ static int http1_input(struct transaction_t *txn)
     struct request_line_t *req_line = &txn->req_line;
     int empty = 0, ret = 0;
 
+    if (http2_preface(txn)) {
+        /* HTTP/2 client connection preface */
+        ret = http2_start_session(txn, NULL);
+        if (ret) txn->flags.conn = CONN_CLOSE;
+
+        return ret;
+    }
+
+
     do {
         /* Read request-line */
         syslog(LOG_DEBUG, "read & parse request-line");
@@ -1716,10 +1725,6 @@ static void cmdloop(struct http_connection *conn)
         if (txn.conn->http2_ctx) {
             /* HTTP/2 input */
             http2_input(&txn);
-        }
-        else if (http2_preface(&txn)) {
-            /* HTTP/2 client connection preface */
-            ret = http2_start_session(&txn, NULL);
         }
         else {
             /* HTTP/1.x request */
