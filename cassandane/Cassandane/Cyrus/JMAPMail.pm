@@ -2036,7 +2036,7 @@ sub test_email_get_body_both
     $body .= "\r\n";
     $body .= $htmlBody;
     $body .= "\r\n";
-    $body .= "--047d7b33dd729737fe04d3bde348--";
+    $body .= "--047d7b33dd729737fe04d3bde348--\r\n";
     $exp_sub{A} = $self->make_message("foo",
         mime_type => "multipart/alternative",
         mime_boundary => "047d7b33dd729737fe04d3bde348",
@@ -2181,7 +2181,7 @@ sub test_email_get_attachment_name
     "Content-Disposition: attachment; filename*0*=utf-8''%F0%9F%98%80;\r\n filename*1=\".txt\"\r\n".
     "\r\n" .
     "baz".
-    "\r\n--sub--";
+    "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
         mime_type => "multipart/mixed",
@@ -2644,7 +2644,7 @@ sub test_email_set_bodystructure
           . "To: Test User <test\@local>\r\n"
           . "\r\n"
           . "An embedded email"
-          . "\r\n--sub--",
+          . "\r\n--sub--\r\n",
     ) || die;
     my $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
@@ -2715,7 +2715,7 @@ sub test_email_set_bodystructure
     $self->assert_str_equals('image/gif', $gotBodyStructure->{subParts}[2]{type});
     $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[2]{blobId});
     $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[3]{type});
-    # TODO $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[3]{blobId});
+    $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[3]{blobId});
 }
 
 sub test_email_set_shared
@@ -3081,7 +3081,7 @@ sub test_misc_download
           . "Content-Transfer-Encoding: base64\r\n"
           . "\r\n"
           . "f00bae=="
-          . "\r\n--sub--",
+          . "\r\n--sub--\r\n",
     );
 
     xlog "get email list";
@@ -3207,7 +3207,7 @@ sub test_email_set_attachments
           . "Content-Transfer-Encoding: base64\r\n"
           . "\r\n"
           . "f00bae=="
-          . "\r\n--sub--",
+          . "\r\n--sub--\r\n",
     );
 
     xlog "get email list";
@@ -6780,17 +6780,17 @@ sub test_misc_upload_downloadtypes
     $data = $jmap->Upload($lazy, "text/html");
     my $blobid2 = $data->{blobId};
 
-    $self->assert_str_not_equals($blobid, $blobid2);
+    $self->assert_str_equals($blobid, $blobid2);
 
     my $download = $jmap->Download('cassandane', $blobid);
 
-    $self->assert_str_equals($download->{content}, $lazy);
-    $self->assert_str_equals($download->{headers}{'content-type'}, "text/plain");
+    $self->assert_str_equals($lazy, $download->{content});
+    $self->assert_str_equals('text/plain', $download->{headers}{'content-type'});
 
     $download = $jmap->Download('cassandane', $blobid2);
 
-    $self->assert_str_equals($download->{content}, $lazy);
-    $self->assert_str_equals($download->{headers}{'content-type'}, "text/html");
+    $self->assert_str_equals($lazy, $download->{content});
+    $self->assert_str_equals('text/plain', $download->{headers}{'content-type'});
 }
 
 sub test_misc_upload_downloadcharsets
@@ -6807,7 +6807,7 @@ sub test_misc_upload_downloadcharsets
     $data = $jmap->Upload($lazy, "text/plain; charset=utf-8");
     my $blobid2 = $data->{blobId};
 
-    $self->assert_str_not_equals($blobid, $blobid2);
+    $self->assert_str_equals($blobid, $blobid2);
 
     my $download = $jmap->Download('cassandane', $blobid);
 
@@ -7301,7 +7301,7 @@ sub test_email_import
           . "To: Test User <test\@local>\r\n"
           . "\r\n"
           . "An embedded email"
-          . "\r\n--sub--",
+          . "\r\n--sub--\r\n",
     ) || die;
 
     xlog "get blobId";
@@ -7782,7 +7782,7 @@ sub test_email_get_attachedemails
     "To: Test User <test\@local>\r\n".
     "\r\n".
     "Jeez....an embedded email".
-    "\r\n--sub--";
+    "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
         mime_type => "multipart/mixed",
@@ -7974,7 +7974,7 @@ sub test_email_download
     $body .= "\r\n";
     $body .= "<p>some HTML text</p>";
     $body .= "\r\n";
-    $body .= "--047d7b33dd729737fe04d3bde348--";
+    $body .= "--047d7b33dd729737fe04d3bde348--\r\n";
     $self->make_message("foo",
         mime_type => "multipart/alternative",
         mime_boundary => "047d7b33dd729737fe04d3bde348",
@@ -8033,7 +8033,7 @@ sub test_email_embedded_download
           . "To: Test User <test\@local>\r\n"
           . "\r\n"
           . "An embedded email"
-          . "\r\n--sub--",
+          . "\r\n--sub--\r\n",
     ) || die;
 
     xlog "get blobId";
@@ -8069,6 +8069,5 @@ sub test_blob_download
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
     $self->assert_equals($binary, $blob->{content});
 }
-
 
 1;
