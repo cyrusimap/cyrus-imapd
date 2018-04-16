@@ -72,7 +72,7 @@ sub tear_down
 # Test uniqueid and rename
 #
 sub test_uniqueid
-    :AltNamespace
+    :AltNamespace :min_version_3_1
 {
     my ($self) = @_;
 
@@ -98,7 +98,7 @@ sub test_uniqueid
 # Test uniqueid and rename
 #
 sub test_emailid_threadid
-    :AltNamespace :Conversations
+    :AltNamespace :Conversations :min_version_3_1
 {
     my ($self) = @_;
 
@@ -165,6 +165,8 @@ EOF
 
     $talk->append("INBOX", "()", " 7-Feb-1994 22:43:04 -0800", { Literal => "$email" },
                            "()", " 7-Feb-1994 22:43:04 -0800", { Literal => "$email2" });
+
+    # XXX and then what???  is this test incomplete?
 }
 
 1;
