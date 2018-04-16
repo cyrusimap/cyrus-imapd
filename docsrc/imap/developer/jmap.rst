@@ -111,9 +111,3 @@ Developing the client further
 -----------------------------
 
 You'll want to become deeply familiar with the `JMAP developer documentation <http://jmap.io/#i-want-to-get-involved-with-jmap.-what-do-i-need-to-know?>`_
-
-
-.. note::
-
-    JMAP implementation in Cyrus is a work in progress. Current status can be
-    viewed on the main :ref:`JMAP configuration page <jmap-implementation>`.
