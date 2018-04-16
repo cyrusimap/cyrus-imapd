@@ -6967,6 +6967,8 @@ static char *_mime_make_boundary()
     return boundary;
 }
 
+/* A soft limit for MIME header lengths when generating MIME from JMAP.
+ * See the header_from_Xxx functions for usage. */
 #define MIME_MAX_HEADER_LENGTH 78
 
 __attribute__((unused)) // FIXME
@@ -7584,6 +7586,54 @@ static json_t *_header_from_text(json_t *jtext,
     }
 }
 
+static json_t *_header_from_jstrings(json_t *jstrings,
+                                     struct jmap_parser *parser,
+                                     const char *prop_name,
+                                     const char *header_name,
+                                     char sep)
+{
+    if (!json_array_size(jstrings)) {
+        jmap_parser_invalid(parser, prop_name);
+        return NULL;
+    }
+
+    size_t sep_len  = sep ? 1 : 0;
+    size_t line_len = strlen(header_name) + 2;
+    size_t i;
+    json_t *jval;
+    struct buf val = BUF_INITIALIZER;
+
+    json_array_foreach(jstrings, i, jval) {
+        const char *s = json_string_value(jval);
+        if (!s) {
+            jmap_parser_invalid(parser, prop_name);
+            goto fail;
+        }
+        size_t s_len = strlen(s);
+        if (i && sep) {
+            buf_putc(&val, sep);
+            line_len++;
+        }
+        if (line_len + s_len + sep_len  + 1 > MIME_MAX_HEADER_LENGTH) {
+            buf_appendcstr(&val, "\r\n ");
+            line_len = 1;
+        }
+        else if (i) {
+            buf_putc(&val, ' ');
+            line_len++;
+        }
+        buf_appendcstr(&val, s);
+        line_len += s_len;
+    }
+
+    return _header_make(header_name, prop_name, &val);
+
+fail:
+    buf_free(&val);
+    return NULL;
+}
+
+
 static json_t *_header_from_addresses(json_t *addrs,
                                        struct jmap_parser *parser,
                                        const char *prop_name,
@@ -7596,7 +7646,9 @@ static json_t *_header_from_addresses(json_t *addrs,
 
     size_t i;
     json_t *addr;
-    struct buf val = BUF_INITIALIZER;
+    struct buf adr = BUF_INITIALIZER;
+    json_t *jstrings = json_array();
+    json_t *ret = NULL;
 
     json_array_foreach(addrs, i, addr) {
         json_t *jname = json_object_get(addr, "name");
@@ -7614,7 +7666,7 @@ static json_t *_header_from_addresses(json_t *addrs,
         }
 
         if (json_array_size(parser->invalid))
-            goto fail;
+            goto done;
         if (!JNOTNULL(jname) && !JNOTNULL(jemail))
             continue;
 
@@ -7622,23 +7674,22 @@ static json_t *_header_from_addresses(json_t *addrs,
         const char *email = json_string_value (jemail);
         if (!name && !email) continue;
 
-        /* We'll fold the MIME header value later, but
-         * let's try to break lines at sane places. */
-        if (i) buf_appendcstr(&val, ",\r\n\t");
         if (name && strlen(name) && email) {
             char *xname = charset_encode_mimeheader(name, strlen(name), 0);
-            buf_printf(&val, "%s <%s>", xname, email);
+            buf_printf(&adr, "%s <%s>", xname, email);
             free(xname);
         } else if (email) {
-            buf_appendcstr(&val, email);
+            buf_setcstr(&adr, email);
         }
+        json_array_append_new(jstrings, json_string(buf_cstring(&adr)));
+        buf_reset(&adr);
     }
+    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
 
-    return _header_make(header_name, prop_name, &val);
-
-fail:
-    buf_free(&val);
-    return NULL;
+done:
+    json_decref(jstrings);
+    buf_free(&adr);
+    return ret;
 }
 
 static json_t *_header_from_messageids(json_t *jmessageids,
@@ -7654,23 +7705,27 @@ static json_t *_header_from_messageids(json_t *jmessageids,
     size_t i;
     json_t *jval;
     struct buf val = BUF_INITIALIZER;
+    json_t *jstrings = json_array();
+    json_t *ret = NULL;
 
     json_array_foreach(jmessageids, i, jval) {
-        if (!json_is_string(jval)) {
+        const char *s = json_string_value(jval);
+        if (!s) {
             jmap_parser_invalid(parser, prop_name);
-            goto fail;
+            goto done;
         }
-        if (i) buf_appendcstr(&val, " ");
         buf_appendcstr(&val, "<");
-        buf_appendcstr(&val, json_string_value(jval));
+        buf_appendcstr(&val, s);
         buf_appendcstr(&val, ">");
+        json_array_append_new(jstrings, json_string(buf_cstring(&val)));
+        buf_reset(&val);
     }
+    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, 0);
 
-    return _header_make(header_name, prop_name, &val);
-
-fail:
+done:
+    json_decref(jstrings);
     buf_free(&val);
-    return NULL;
+    return ret;
 }
 
 static json_t *_header_from_date(json_t *jdate,
@@ -7712,23 +7767,28 @@ static json_t *_header_from_urls(json_t *jurls,
     size_t i;
     json_t *jval;
     struct buf val = BUF_INITIALIZER;
+    json_t *jstrings = json_array();
+    json_t *ret = NULL;
 
     json_array_foreach(jurls, i, jval) {
-        if (!json_is_string(jval)) {
+        const char *s = json_string_value(jval);
+        if (!s) {
             jmap_parser_invalid(parser, prop_name);
-            goto fail;
+            goto done;
         }
-        if (i) buf_appendcstr(&val, ", ");
+
         buf_appendcstr(&val, "<");
-        buf_appendcstr(&val, json_string_value(jval));
+        buf_appendcstr(&val, s);
         buf_appendcstr(&val, ">");
+        json_array_append_new(jstrings, json_string(buf_cstring(&val)));
+        buf_reset(&val);
     }
+    ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
 
-    return _header_make(header_name, prop_name, &val);
-
-fail:
+done:
+    json_decref(jstrings);
     buf_free(&val);
-    return NULL;
+    return ret;
 }
 
 static void _headers_parseprops(json_t *jobject,
@@ -7931,19 +7991,8 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
     json_t *jlanguage = json_object_get(jpart, "language");
     seen_header = _headers_have(&part->headers, "Content-Language");
     if (json_is_array(jlanguage) && !seen_header) {
-        size_t i;
-        json_t *jval;
-        buf_reset(&buf);
-        json_array_foreach(jlanguage, i, jval) {
-            if (!json_is_string(jval)) {
-                jmap_parser_invalid(parser, "language");
-                buf_reset(&buf);
-                break;
-            }
-            if (i) buf_appendcstr(&buf, ", ");
-            buf_appendcstr(&buf, json_string_value(jval));
-        }
-        _headers_add_new(&part->headers,_header_make("Content-Language", "language", &buf));
+        _headers_add_new(&part->headers, _header_from_jstrings(jlanguage,
+                    parser, "language", "Content-Language", ','));
     }
     else if (JNOTNULL(jlanguage)) {
         jmap_parser_invalid(parser, "language");
