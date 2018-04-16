@@ -120,7 +120,6 @@ sub test_mailbox_get
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($inbox->{role}, "inbox");
     $self->assert_num_equals($inbox->{sortOrder}, 0);
-    $self->assert_equals($inbox->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($inbox->{myRights}->{mayReadItems}, JSON::true);
     $self->assert_equals($inbox->{myRights}->{mayAddItems}, JSON::true);
     $self->assert_equals($inbox->{myRights}->{mayRemoveItems}, JSON::true);
@@ -140,7 +139,6 @@ sub test_mailbox_get
     $self->assert_null($foo->{parentId});
     $self->assert_null($foo->{role});
     $self->assert_num_equals($foo->{sortOrder}, 0);
-    $self->assert_equals($foo->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($foo->{myRights}->{mayReadItems}, JSON::true);
     $self->assert_equals($foo->{myRights}->{mayAddItems}, JSON::true);
     $self->assert_equals($foo->{myRights}->{mayRemoveItems}, JSON::true);
@@ -157,7 +155,6 @@ sub test_mailbox_get
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
     $self->assert_null($bar->{role});
     $self->assert_num_equals($bar->{sortOrder}, 0);
-    $self->assert_equals($bar->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($bar->{myRights}->{mayReadItems}, JSON::true);
     $self->assert_equals($bar->{myRights}->{mayAddItems}, JSON::true);
     $self->assert_equals($bar->{myRights}->{mayRemoveItems}, JSON::true);
@@ -747,7 +744,6 @@ sub test_mailbox_set
     $self->assert_null($mbox->{parentId});
     $self->assert_null($mbox->{role});
     $self->assert_num_equals($mbox->{sortOrder}, 0);
-    $self->assert_equals($mbox->{mustBeOnlyMailbox}, JSON::false);
     $self->assert_equals($mbox->{myRights}->{mayReadItems}, JSON::true);
     $self->assert_equals($mbox->{myRights}->{mayAddItems}, JSON::true);
     $self->assert_equals($mbox->{myRights}->{mayRemoveItems}, JSON::true);
