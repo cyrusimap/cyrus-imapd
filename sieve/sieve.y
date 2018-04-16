@@ -2094,7 +2094,7 @@ static struct dttags *new_dttags(void)
 
 static struct dttags *canon_dttags(struct dttags *dt)
 {
-    char zone[6];
+    char zone[14];
     int gmoffset;
     int hours;
     int minutes;
@@ -2109,7 +2109,7 @@ static struct dttags *canon_dttags(struct dttags *dt)
         gmoffset = gmtoff_of(&tm, t) / 60;
         hours = abs(gmoffset) / 60;
         minutes = abs(gmoffset) % 60;
-        snprintf(zone, 6, "%c%02d%02d",
+        snprintf(zone, sizeof(zone), "%c%02d%02d",
                  (gmoffset >= 0 ? '+' : '-'), hours, minutes);
         dt->zone = xstrdup(zone);
         dt->zonetag = ZONE;

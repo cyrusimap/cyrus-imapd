@@ -469,7 +469,7 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
 
     if (!strarray_size(tzids)) {
         /* No tzids found in shapefile(s) */
-        char tzid_buf[11];
+        char tzid_buf[19];
 
         if (latitude <= -60) {
             /* Antarctic region - guess-timate offset from GMT based on:

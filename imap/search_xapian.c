@@ -1082,7 +1082,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     int r;
 
     r = check_config();
-    if (r) goto out;
+    if (r) return NULL;
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
