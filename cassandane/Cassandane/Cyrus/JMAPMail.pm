@@ -7892,21 +7892,93 @@ sub test_email_set_headers
 
     # Prepare test headers
     my $headers = {
-        'header:TextHeader8bit' => {
+        'header:X-TextHeader8bit' => {
             format  => 'asText',
             value   => "I feel \N{WHITE SMILING FACE}",
             wantRaw => " =?UTF-8?Q?I_feel_=E2=98=BA?="
         },
-        'header:TextHeaderLong' => {
+        'header:X-TextHeaderLong' => {
             format  => 'asText',
             value   => "x" x 80,
             wantRaw => " =?UTF-8?Q?xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx?=\r\n =?UTF-8?Q?xxxxxxxxxxxxxxxxxx?="
         },
-        'header:TextHeaderShort' => {
+        'header:X-TextHeaderShort' => {
             format  => 'asText',
             value   => "x",
             wantRaw => " x"
         },
+       'header:X-MsgIdsShort' => {
+           format => 'asMessageIds',
+           value  => [ 'foobarbaz' ],
+           wantRaw => " <foobarbaz>",
+       },
+       'header:X-MsgIdsLong' => {
+           format => 'asMessageIds',
+           value  => [
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+               'foobarbaz',
+           ],
+           wantRaw => (" <foobarbaz>" x 5)."\r\n".(" <foobarbaz>" x 3),
+       },
+       'header:X-AddrsShort' => {
+           format => 'asAddresses',
+           value => [{ 'name' => 'foo', email => 'bar@local' }],
+           wantRaw => ' foo <bar@local>',
+       },
+       'header:X-Addrs8bit' => {
+           format => 'asAddresses',
+           value => [{ 'name' => "Rudi R\N{LATIN SMALL LETTER U WITH DIAERESIS}be", email => 'bar@local' }],
+           wantRaw => ' =?UTF-8?Q?Rudi_R=C3=BCbe?= <bar@local>',
+       },
+       'header:X-AddrsLong' => {
+           format => 'asAddresses',
+           value => [{
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }],
+           wantRaw => (' foo <bar@local>,' x 3)."\r\n".(' foo <bar@local>,' x 4)."\r\n".' foo <bar@local>',
+       },
+       'header:X-URLsShort' => {
+           format => 'asURLs',
+           value => [ 'foourl' ],
+           wantRaw => ' <foourl>',
+       },
+       'header:X-URLsLong' => {
+           format => 'asURLs',
+           value => [
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+           ],
+           wantRaw => (' <foourl>,' x 6)."\r\n".(' <foourl>,' x 4).' <foourl>',
+       },
     };
 
     # Prepare test email
