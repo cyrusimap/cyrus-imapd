@@ -623,16 +623,6 @@ static void body_add_content_guid(const char *base, struct body *body)
     base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
     if (base) {
         message_guid_generate(&body->content_guid, base, len);
-        /* mix in type and charset */
-        struct iovec iov[3];
-        iov[0].iov_base = body->type;
-        iov[1].iov_base = body->subtype;
-        iov[2].iov_base = cs ? (char *)charset_name(cs) : NULL;
-        iov[0].iov_len = iov[0].iov_base ? strlen(iov[0].iov_base) : 0;
-        iov[1].iov_len = iov[1].iov_base ? strlen(iov[1].iov_base) : 0;
-        iov[2].iov_len = iov[2].iov_base ? strlen(iov[2].iov_base) : 0;
-        uint32_t crc = crc32_iovec(iov, 3);
-        message_guid_permute32(&body->content_guid, crc);
     }
     else message_guid_set_null(&body->content_guid);
     charset_free(&cs);
