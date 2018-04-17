@@ -982,27 +982,54 @@ static void dump_header(const char *name, const char *value, void *rock)
 
     /* fold value */
     /* XXX  Do we want/need to do smarter folding on structured headers? */
-    while (strlen(mimehdr) > maxlen) {
-        char *p;
+    while (*mimehdr) {
+        char *p = mimehdr;
+        char *last_sp = NULL;
+  
+        if (isblank(*p)) {
+            /* write fold */
+            fputs("\r\n", (FILE *) rock);
 
-        /* look for first whitespace prior to maxlen */
-        for (p = mimehdr + maxlen; p > mimehdr; p--) {
-            if (*p == ' ' || *p == '\t') {
-                *p = '\t';  /* make sure its a TAB */
+            /* skip FWS */
+            while (isblank(*++p));
+        }
+
+        for (; *p; p++) {
+            if (*p == '\t') {
+                /* assume a HTAB is where the header was folded */
                 break;
             }
+            else if (*p == ' ') {
+                if (p[1] == ' ') {
+                    /* assume multiple SP is where the header was folded */
+                    break;
+                }
+                else if (strlen(mimehdr) <= maxlen) {
+                    /* don't care about single SP in short value */
+                    continue;
+                }
+                else if (!last_sp) {
+                    /* track last found SP */
+                    last_sp = p;
+                }
+                else if ((size_t) (p - mimehdr) <= maxlen) {
+                    /* update last found SP prior to maxlen */
+                    last_sp = p;
+                }
+            }
         }
-        if (p == mimehdr) break;
 
-        /* write chunk of value + fold */
-        fprintf((FILE *) rock, "%.*s\r\n", (int) (p - mimehdr), mimehdr);
+        if (!*p && last_sp) p = last_sp;
+
+        /* write chunk of value */
+        fprintf((FILE *) rock, "%.*s", (int) (p - mimehdr), mimehdr);
 
         mimehdr = p;
         maxlen = 78;
     }
 
-    /* write remainder of value */
-    fprintf((FILE *) rock, "%s\r\n", mimehdr);
+    /* write end of header value */
+    fputs("\r\n", (FILE *) rock);
 
     free(freeme);
 }
