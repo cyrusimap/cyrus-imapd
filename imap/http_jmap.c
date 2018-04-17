@@ -1184,6 +1184,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     struct buf msg_buf = BUF_INITIALIZER;
     char *decbuf = NULL;
     strarray_t headers = STRARRAY_INITIALIZER;
+    char *accept_mime = NULL;
 
     /* Find part containing blob */
     r = _findblob(&req, blobid, accountid, &mbox, &mr, &body, &part);
@@ -1201,34 +1202,29 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
+    const char **hdr;
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+        struct accept *accept = parse_accept(hdr);
+        if (accept) {
+            accept_mime = xstrdup(accept->token);
+            struct accept *tmp;
+            for (tmp = accept; tmp && tmp->token; tmp++) {
+                free(tmp->token);
+            }
+            free(accept);
+        }
+    }
+    if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
+
     // default with no part is the whole message
     const char *base = msg_buf.s;
     size_t len = msg_buf.len;
-    txn->resp_body.type = "message/rfc822";
+    txn->resp_body.type = accept_mime;
 
     if (part) {
         // map into just this part
-        txn->resp_body.type = "application/octet-stream";
         base += part->content_offset;
         len = part->content_size;
-
-        // update content type header if present
-        strarray_add(&headers, "Content-Type");
-        ctype = xstrndup(msg_buf.s + part->header_offset, part->header_size);
-        message_pruneheader(ctype, &headers, NULL);
-        strarray_truncate(&headers, 0);
-        if (ctype) {
-            char *p = strchr(ctype, ':');
-            if (p) {
-                p++;
-                while (*p == ' ') p++;
-                char *end = strchr(p, '\n');
-                if (end) *end = '\0';
-                end = strchr(p, '\r');
-                if (end) *end = '\0';
-            }
-            if (p && *p) txn->resp_body.type = p;
-        }
 
         // binary decode if needed
         int encoding = part->charset_enc & 0xff;
@@ -1241,6 +1237,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     write_body(HTTP_OK, txn, base, len);
 
  done:
+    free(accept_mime);
     free_hash_table(&mboxrights, free);
     free(accountid);
     free(decbuf);
