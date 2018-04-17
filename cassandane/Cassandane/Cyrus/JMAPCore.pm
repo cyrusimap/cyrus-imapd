@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.10;
+use Mail::JMAPTalk 0.11;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -153,5 +153,28 @@ sub test_settings
     $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
     $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
 }
+
+sub test_blob_download
+:JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $data = $jmap->Upload("some test", "text/plain");
+
+    my $resp = $jmap->Download('cassandane', $data->{blobId});
+
+    $self->assert_str_equals('application/octet-stream', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => 'text/plain' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => 'text/plain;q=0.9, text/html' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('text/html', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+}
+
 
 1;

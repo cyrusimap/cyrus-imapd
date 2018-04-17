@@ -2972,33 +2972,6 @@ sub test_misc_upload_multiaccount
     $self->assert_str_equals($res[0]->{status}, '404');
 }
 
-sub test_misc_upload_charset
-:JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $data = $jmap->Upload("some test with utf8", "text/plain; charset=utf-8");
-
-    my $resp = $jmap->Download('cassandane', $data->{blobId});
-
-    $self->assert_str_equals('text/plain; charset=utf-8', $resp->{headers}{'content-type'});
-
-    # XXX - fetch back the parts
-}
-
-sub test_misc_upload_type
-:JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $data = $jmap->Upload("some test with a funky type", "text/plain;"
-        . "\r\n charset=utf-8;"
-        . "title==?US-ASCII?Q?This is fun?=");
-    $self->assert_str_equals("text/plain; charset=utf-8;title=This is fun", $data->{type});
-}
-
 sub test_misc_upload_bin
     :JMAP :min_version_3_1
 {
@@ -6762,60 +6735,6 @@ sub test_misc_upload_sametype
     $self->assert_str_equals($blobid, $blobid2);
 }
 
-sub test_misc_upload_downloadtypes
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $lazy = "the quick brown fox jumped over the lazy dog";
-
-    my $data = $jmap->Upload($lazy, "text/plain");
-    my $blobid = $data->{blobId};
-
-    $data = $jmap->Upload($lazy, "text/html");
-    my $blobid2 = $data->{blobId};
-
-    $self->assert_str_equals($blobid, $blobid2);
-
-    my $download = $jmap->Download('cassandane', $blobid);
-
-    $self->assert_str_equals($lazy, $download->{content});
-    $self->assert_str_equals('text/plain', $download->{headers}{'content-type'});
-
-    $download = $jmap->Download('cassandane', $blobid2);
-
-    $self->assert_str_equals($lazy, $download->{content});
-    $self->assert_str_equals('text/plain', $download->{headers}{'content-type'});
-}
-
-sub test_misc_upload_downloadcharsets
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $lazy = "the quick brown fox jumped over the lazy dog";
-
-    my $data = $jmap->Upload($lazy, "text/plain; charset=us-ascii");
-    my $blobid = $data->{blobId};
-
-    $data = $jmap->Upload($lazy, "text/plain; charset=utf-8");
-    my $blobid2 = $data->{blobId};
-
-    $self->assert_str_equals($blobid, $blobid2);
-
-    my $download = $jmap->Download('cassandane', $blobid);
-
-    $self->assert_str_equals($download->{content}, $lazy);
-    $self->assert_matches(qr/text\/plain/, $download->{headers}{'content-type'});
-
-    $download = $jmap->Download('cassandane', $blobid2);
-
-    $self->assert_str_equals($download->{content}, $lazy);
-    $self->assert_matches(qr/text\/plain/, $download->{headers}{'content-type'});
-}
-
 sub test_misc_brokenrfc822_badendline
     :JMAP :min_version_3_1
 {
@@ -8063,7 +7982,7 @@ sub test_email_download
     ]);
     my $msg = $res->[1][1]->{list}[0];
 
-    my $blob = $jmap->Download('cassandane', $msg->{blobId});
+    my $blob = $jmap->Download({ accept => 'message/rfc822' }, 'cassandane', $msg->{blobId});
     $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
 }
@@ -8114,7 +8033,7 @@ sub test_email_embedded_download
     ]);
     my $blobId = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
 
-    my $blob = $jmap->Download('cassandane', $blobId);
+    my $blob = $jmap->Download({ accept => 'message/rfc822' }, 'cassandane', $blobId);
     $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
 }
@@ -8132,7 +8051,7 @@ sub test_blob_download
     close(FH);
     my $data = $jmap->Upload($binary, "image/gif");
 
-    my $blob = $jmap->Download('cassandane', $data->{blobId});
+    my $blob = $jmap->Download({ accept => 'image/gif' }, 'cassandane', $data->{blobId});
     $self->assert_str_equals('image/gif', $blob->{headers}->{'content-type'});
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
     $self->assert_equals($binary, $blob->{content});
