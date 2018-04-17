@@ -8694,34 +8694,18 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     /* Fetch blob contents and headers */
     const char *base = blob_buf.s;
     size_t len = blob_buf.len;
-    int need_type = !_headers_have(&emailpart->headers, "Content-Type");
 
     if (part) {
         /* Map into body part */
         base += part->content_offset;
         len = part->content_size;
 
-        /* Write Content-Type, if required */
-        if (need_type) {
-            strarray_t partheaders = STRARRAY_INITIALIZER;
-            strarray_add(&partheaders, "Content-Type");
-            char *ctype = xstrndup(blob_buf.s + part->header_offset, part->header_size);
-            message_pruneheader(ctype, &partheaders, NULL);
-            if (*ctype)
-                fputs(ctype, fp);
-            else
-                fputs("Content-Type: application/octet-stream\r\n", fp);
-            strarray_fini(&partheaders);
-            free(ctype);
-        }
+        /* Write encoding, if required */
         if (part->charset_enc & 0xff) {
             fputs("Content-Transfer-Encoding: ", fp);
             fputs(encoding_name(part->charset_enc & 0xff), fp);
             fputs("\r\n", fp);
         }
-    }
-    else if (need_type) {
-        fputs("Content-Type: message/rfc822\r\n", fp);
     }
 
     /* Write body */
