@@ -1,6 +1,6 @@
 /* http_ws.c - WebSockets support functions
  *
- * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -95,6 +95,8 @@ struct ws_context {
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
 
+    struct protstream *h2_pin;       /* Input protstream when under HTTP/2 */
+
     union {
         struct {
             void *zstrm;             /* Zlib decompression context */
@@ -155,16 +157,17 @@ static const char *wslay_strerror(int err_code)
 
 static ssize_t send_cb(wslay_event_context_ptr ev,
                        const uint8_t *data, size_t len,
-                       int flags __attribute__((unused)),
-                       void *user_data)
+                       int flags, void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
     int r;
 
     if (txn->conn->http2_ctx) {
-        /* Treat as chunked data */
-        txn->flags.te = TE_CHUNKED;
-        r = http2_data_chunk(txn, (char *) data, len, 0, NULL /* md5ctx */);
+        int last_chunk =
+            (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
+
+        r = http2_data_chunk(txn, (const char *) data, len,
+                             last_chunk, NULL /* md5ctx */);
     }
     else {
         r = prot_write(txn->conn->pout, (const char *) data, len);
@@ -190,9 +193,7 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     ssize_t n;
 
     if (txn->conn->http2_ctx) {
-        /* Data has been read as request body */
-        pin = prot_readmap(buf_base(&txn->req_body.payload),
-                           buf_len(&txn->req_body.payload));
+        pin = ((struct ws_context *) txn->ws_ctx)->h2_pin;
     }
 
     prot_NONBLOCK(pin);
@@ -200,7 +201,7 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     n = prot_read(pin, (char *) buf, len);
     if (!n) {
         /* No data */
-        if (pin->eof)
+        if (pin->eof && !pin->fixedsize)
             wslay_event_set_error(ev, WSLAY_ERR_NO_MORE_MSG);
         else if (pin->error)
             wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
@@ -213,8 +214,6 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     syslog(LOG_DEBUG,
            "ws_recv_cb(%zu): n = %zd, eof = %d, err = '%s', errno = %m",
            len, n, pin->eof, pin->error ? pin->error : "");
-
-    if (txn->conn->http2_ctx) prot_free(pin);
 
     return n;
 }
@@ -302,6 +301,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     case WSLAY_CONNECTION_CLOSE:
         buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
                    buf_len(&inbuf) ? buf_cstring(&inbuf)+2 : "");
+        txn->flags.conn = CONN_CLOSE;
         break;
 
     case WSLAY_TEXT_FRAME:
@@ -514,6 +514,9 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
             return HTTP_NOT_ALLOWED;
         }
 
+        /* Treat as chunked response */
+        txn->flags.te = TE_CHUNKED;
+
         success = HTTP_OK;
     }
     else {
@@ -720,7 +723,18 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (want_read) {
         /* Read frame(s) */
+        if (txn->conn->http2_ctx) {
+            /* Data has been read into request body */
+            ctx->h2_pin = prot_readmap(buf_base(&txn->req_body.payload),
+                                       buf_len(&txn->req_body.payload));
+        }
+
         int r = wslay_event_recv(ev);
+
+        if (txn->conn->http2_ctx) {
+            buf_reset(&txn->req_body.payload);
+            prot_free(ctx->h2_pin);
+        }
 
         if (!r) {
             /* Successfully received frames */
@@ -755,7 +769,6 @@ HIDDEN void ws_input(struct transaction_t *txn)
                 syslog(LOG_ERR,
                        "wslay_event_queue_close: %s", wslay_strerror(r));
             }
-            else ws_output(txn);
 
             txn->flags.conn = CONN_CLOSE;
         }

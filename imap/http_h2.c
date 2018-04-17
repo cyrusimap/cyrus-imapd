@@ -1,6 +1,6 @@
 /* http_h2.c - HTTP/2 support functions
  *
- * Copyright (c) 1994-2017 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -337,11 +337,14 @@ static int frame_recv_cb(nghttp2_session *session,
         if (txn->ws_ctx) {
             /* WebSocket input */
             ws_input(txn);
+
+            ws_output(txn);
             break;
         }
 
         /* Check that the client request has finished */
-        if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
+        if (txn->meth != METH_CONNECT &&
+            !(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
 
         /* Check that we still want to process the request */
         if (txn->req_body.flags & BODY_DISCARD) break;
@@ -384,13 +387,14 @@ static int frame_recv_cb(nghttp2_session *session,
 }
 
 static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
-                           uint32_t error_code __attribute__((unused)),
+                           uint32_t error_code,
                            void *user_data __attribute__((unused)))
 {
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, stream_id);
 
-    syslog(LOG_DEBUG, "http2_stream_close_cb(id=%d)", stream_id);
+    syslog(LOG_DEBUG, "http2_stream_close_cb(id=%d): '%s'",
+           stream_id, nghttp2_http2_strerror(error_code));
 
     if (txn) {
         /* Memory cleanup */
@@ -479,6 +483,13 @@ HIDDEN int http2_preface(struct transaction_t *txn)
 }
 
 
+#if HAVE_DECL_NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL
+static int nghttp2_extended_connect = 1;
+#else
+#define NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL 0x08
+static int nghttp2_extended_connect = 0;
+#endif
+
 HIDDEN int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn)
 {
@@ -498,6 +509,12 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
                "nghttp2_option_new: %s", nghttp2_strerror(r));
         free(ctx);
         return HTTP_SERVER_ERROR;
+    }
+
+    if (ws_enabled() && !nghttp2_extended_connect) {
+        /* Need to forcefully allow :scheme, :path, :protocol pseudo-headers
+           (this version of of libnghttp2 doesn't understand extended CONNECT) */
+        nghttp2_option_set_no_http_messaging(ctx->options, 1);
     }
 
     r = nghttp2_session_server_new2(&ctx->session,
@@ -580,14 +597,6 @@ HIDDEN void http2_end_session(void *http2_ctx)
 HIDDEN void http2_output(struct transaction_t *txn)
 {
     struct http2_context *ctx = (struct http2_context *) txn->conn->http2_ctx;
-    int32_t stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
-    struct transaction_t *strm_txn =
-        nghttp2_session_get_stream_user_data(ctx->session, stream_id);
-
-    if (strm_txn && strm_txn->ws_ctx) {
-        /* WebSocket output */
-        ws_output(strm_txn);
-    }
 
     if (nghttp2_session_want_write(ctx->session)) {
         /* Send queued frame(s) */
