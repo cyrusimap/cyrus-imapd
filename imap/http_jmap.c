@@ -1137,12 +1137,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     const char *name = slash + 1;
 
-    /* now we're allocating memory, so don't return from here! */
-
-    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     char *accountid = xstrndup(userid, strchr(userid, '/') - userid);
-    char *blobid = NULL;
-    char *ctype = NULL;
     int res = 0;
 
     struct conversations_state *cstate = NULL;
@@ -1150,8 +1145,15 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     if (r) {
         txn->error.desc = error_message(r);
         res = (r == IMAP_MAILBOX_BADNAME) ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR;
-        goto done;
+        free(accountid);
+        return res;
     }
+
+    /* now we're allocating memory, so don't return from here! */
+
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+    char *blobid = NULL;
+    char *ctype = NULL;
 
     struct jmap_req req;
     req.userid = httpd_userid;
