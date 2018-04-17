@@ -4729,7 +4729,7 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
         /* Extract raw header value, skipping over folding CRLF */
         const char *q = p;
         while (q < top && (q = memchr(q, '\n', top - q))) {
-            if ((++q == top) || !isspace(*q))
+            if ((++q == top) || (*q != ' ' && *q != '\t'))
                 break;
         }
         if (!q) q = top;
