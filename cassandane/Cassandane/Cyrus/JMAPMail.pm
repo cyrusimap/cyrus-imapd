@@ -2670,6 +2670,10 @@ sub test_email_set_bodystructure
                 type => 'message/rfc822',
                 blobId => $embeddedEmailBlobId,
             }, {
+                type => 'image/gif',
+                blobId => $dataBlobId,
+            }, {
+                # No type set
                 blobId => $dataBlobId,
             }, {
                 type => 'message/rfc822',
@@ -2710,8 +2714,11 @@ sub test_email_set_bodystructure
     $self->assert_str_equals($embeddedEmailBlobId, $gotBodyStructure->{subParts}[1]{blobId});
     $self->assert_str_equals('image/gif', $gotBodyStructure->{subParts}[2]{type});
     $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[2]{blobId});
-    $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[3]{type});
-    $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[3]{blobId});
+    # Default type is text/plain if no Content-Type header is set
+    $self->assert_str_equals('text/plain', $gotBodyStructure->{subParts}[3]{type});
+    $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[3]{blobId});
+    $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[4]{type});
+    $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[4]{blobId});
 }
 
 sub test_email_set_shared
@@ -3222,9 +3229,11 @@ sub test_email_set_attachments
         attachedFiles => [{
             blobId => $blobJpeg,
             name => "test\N{GRINNING FACE}.jpg",
+            type => 'image/jpeg',
         }, {
             blobId => $blobPng,
             cid => "foo\@local",
+            type => 'image/png',
             disposition => 'inline',
         }, {
             blobId => $blobJpeg,
