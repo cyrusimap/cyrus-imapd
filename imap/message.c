@@ -4672,30 +4672,35 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
             buf_reset(&raw);
         hasname = 0;
     }
-
-    else if (mailbox_cached_header(hdr) != BIT32_MAX) {
-        /* it's in the cache */
-        char *headers = NULL;
-        int r = message_need(m, M_CACHE);
-        if (r) return r;
-        headers = xstrndup(cacheitem_base(&m->record, CACHE_HEADERS),
-                           cacheitem_size(&m->record, CACHE_HEADERS));
-        strarray_append(&want, hdr);
-        message_pruneheader(headers, &want, NULL);
-        buf_appendcstr(&raw, headers);
-        free(headers);
-        hasname = 1;
-    }
     else {
-        char *headers = NULL;
-        int r = message_need(m, M_MAP|M_CACHEBODY);
+        int r = message_need(m, M_RECORD);
         if (r) return r;
-        headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
-        strarray_append(&want, hdr);
-        message_pruneheader(headers, &want, NULL);
-        buf_appendcstr(&raw, headers);
-        free(headers);
-        hasname = 1;
+
+        unsigned cache_version = mailbox_cached_header(hdr);
+        if (m->record.cache_version >= cache_version) {
+            /* it's in the cache */
+            char *headers = NULL;
+            int r = message_need(m, M_CACHE);
+            if (r) return r;
+            headers = xstrndup(cacheitem_base(&m->record, CACHE_HEADERS),
+                      cacheitem_size(&m->record, CACHE_HEADERS));
+            strarray_append(&want, hdr);
+            message_pruneheader(headers, &want, NULL);
+            buf_appendcstr(&raw, headers);
+            free(headers);
+            hasname = 1;
+        }
+        else {
+            char *headers = NULL;
+            int r = message_need(m, M_MAP|M_CACHEBODY);
+            if (r) return r;
+            headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
+            strarray_append(&want, hdr);
+            message_pruneheader(headers, &want, NULL);
+            buf_appendcstr(&raw, headers);
+            free(headers);
+            hasname = 1;
+        }
     }
 
     if (raw.len)
