@@ -441,6 +441,11 @@ static int jmap_connect(struct transaction_t *txn,
         return HTTP_NOT_ALLOWED;
     }
 
+    if (!(txn->flags.upgrade & UPGRADE_WS)) {
+        txn->error.desc = "Missing/unsupported :protocol value ";
+        return HTTP_BAD_REQUEST;
+    }
+
     return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
 }
 
@@ -458,8 +463,13 @@ static int jmap_get(struct transaction_t *txn,
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         /* Upgrade to WebSockets over HTTP/1.1 on API endpoint, if requested */
         if (txn->flags.ver == VER_1_1) {
-            r = ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
-            if (r) return r;
+            if (txn->flags.upgrade & UPGRADE_WS) {
+                return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+            }
+            else if (ws_enabled()) {
+                txn->flags.upgrade |= UPGRADE_WS;
+                txn->flags.conn |= CONN_UPGRADE;
+            }
         }
 
         return jmap_settings(txn);

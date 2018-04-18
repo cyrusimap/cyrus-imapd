@@ -260,8 +260,12 @@ static int header_cb(nghttp2_session *session,
         case 'a': /* :authority */
             break;
 
-        case 'p': /* :path */
+        case 'p': /* :path, :protocol */
             if (!strcmp("ath", my_name+2)) txn->req_line.uri = my_value;
+            else if (!strcmp("rotocol", my_name+2) &&
+                     !strcmp(my_value, WS_TOKEN)) {
+                txn->flags.upgrade |= UPGRADE_WS;
+            }
             break;
         }
     }

@@ -4184,6 +4184,11 @@ static int meth_connect(struct transaction_t *txn,
 
     if (strcmp(txn->req_uri->path, "/")) return HTTP_NOT_ALLOWED;
 
+    if (!(txn->flags.upgrade & UPGRADE_WS)) {
+        txn->error.desc = "Missing/unsupported :protocol value ";
+        return HTTP_BAD_REQUEST;
+    }
+
     return ws_start_channel(txn, NULL, &ws_echo);
 }
 
@@ -4204,8 +4209,13 @@ static int meth_get(struct transaction_t *txn,
 
     /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
     if ((txn->flags.ver == VER_1_1) && !strcmp(txn->req_uri->path, "/")) {
-        ret = ws_start_channel(txn, NULL, &ws_echo);
-        if (ret) return ret;
+        if (txn->flags.upgrade & UPGRADE_WS) {
+            return ws_start_channel(txn, NULL, &ws_echo);
+        }
+        else if (ws_enabled()) {
+            txn->flags.upgrade |= UPGRADE_WS;
+            txn->flags.conn |= CONN_UPGRADE;
+        }
     }
 
     /* Check if this is a request for /.well-known/ listing */

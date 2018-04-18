@@ -489,7 +489,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                             int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
                                            struct buf *logbuf, void **rock))
 {
-    int r, success;
+    int r, success, bad_ver;
     const char **hdr, *clientkey = NULL;
     unsigned char sha1buf[SHA1_DIGEST_LENGTH];
     wslay_event_context_ptr ev;
@@ -505,33 +505,13 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     };
 
     if (txn->flags.ver == VER_2) {
-        /* Check for proper request method */
-        if (txn->meth != METH_CONNECT) return 0;
-
-        /* Check for WebSocket upgrade */
-        else if (!(hdr = spool_getheader(txn->req_hdrs, ":protocol")) ||
-                 strcmp(hdr[0], WS_TOKEN)) {
-            return HTTP_NOT_ALLOWED;
-        }
-
         /* Treat as chunked response */
         txn->flags.te = TE_CHUNKED;
 
         success = HTTP_OK;
+        bad_ver = HTTP_BAD_REQUEST;
     }
     else {
-        /* Check for proper request method */
-        if (txn->meth != METH_GET) return 0;
-
-        /* Check for WebSocket upgrade */
-        else if (!(txn->flags.upgrade & UPGRADE_WS)) {
-            if (ws_enabled()) {
-                txn->flags.upgrade |= UPGRADE_WS;
-                txn->flags.conn |= CONN_UPGRADE;
-            }
-            return 0;
-        }
-
         /* Check for WebSocket client key */
         hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
         if (!hdr) {
@@ -549,6 +529,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         clientkey = hdr[0];
 
         success = HTTP_SWITCH_PROT;
+        bad_ver = HTTP_UPGRADE;
     }
 
     /* Check for supported WebSocket version */
@@ -563,7 +544,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     }
     else if (strcmp(hdr[0], WS_VERSION)) {
         txn->error.desc = "Unsupported WebSocket version";
-        return HTTP_UPGRADE;
+        return bad_ver;
     }
 
     if (protocol) {
