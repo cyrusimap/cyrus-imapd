@@ -221,7 +221,7 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
 #line 85 "mailbox_header_cache.gperf"
       {"domainkey-signature", BIT32_MAX},
 #line 81 "mailbox_header_cache.gperf"
-      {"sender", BIT32_MAX},
+      {"sender", 7},
 #line 61 "mailbox_header_cache.gperf"
       {"x-msmail-priority", 2},
 #line 73 "mailbox_header_cache.gperf"
@@ -243,7 +243,7 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
 #line 84 "mailbox_header_cache.gperf"
       {"dkim-signature", BIT32_MAX},
 #line 78 "mailbox_header_cache.gperf"
-      {"reply-to", BIT32_MAX},
+      {"reply-to", 7},
 #line 67 "mailbox_header_cache.gperf"
       {"x-truedomain-domain", 3},
 #line 70 "mailbox_header_cache.gperf"

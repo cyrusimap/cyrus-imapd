@@ -75,10 +75,10 @@ struct mailbox_header_cache {
 "from", BIT32_MAX
 "in-reply-to", BIT32_MAX
 "mime-version", BIT32_MAX
-"reply-to", BIT32_MAX
+"reply-to", 7
 "received", BIT32_MAX
 "return-path", BIT32_MAX
-"sender", BIT32_MAX
+"sender", 7
 "subject", BIT32_MAX
 "to", BIT32_MAX
 "dkim-signature", BIT32_MAX
