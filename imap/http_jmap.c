@@ -2061,7 +2061,7 @@ static int jmap_settings(struct transaction_t *txn)
         return HTTP_SERVER_ERROR;
     }
     txn->resp_body.type = "application/json; charset=utf-8";
-    write_body(HTTP_CREATED, txn, sbuf, strlen(sbuf));
+    write_body(HTTP_OK, txn, sbuf, strlen(sbuf));
 
     free(sbuf);
     json_decref(res);
