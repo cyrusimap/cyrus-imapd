@@ -3212,6 +3212,7 @@ sub test_email_set_attachments
     $self->assert_str_equals($res->[0][2], 'R1');
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    my $shortfname = "test\N{GRINNING FACE}.jpg";
     my $longfname = "a_very_long_filename_thats_looking_quite_bogus_but_in_fact_is_absolutely_valid\N{GRINNING FACE}!.bin";
 
     my $draft =  {
@@ -3228,7 +3229,7 @@ sub test_email_set_attachments
         },
         attachedFiles => [{
             blobId => $blobJpeg,
-            name => "test\N{GRINNING FACE}.jpg",
+            name => $shortfname,
             type => 'image/jpeg',
         }, {
             blobId => $blobPng,
@@ -3259,7 +3260,7 @@ sub test_email_set_attachments
 
     my $att = $m{"image/jpeg"};
     $self->assert_not_null($att);
-    $self->assert_str_equals($att->{name}, "test\N{GRINNING FACE}.jpg");
+    $self->assert_str_equals($shortfname, $att->{name});
     $self->assert_num_equals($att->{size}, 6);
     $self->assert_null($att->{cid});
 
@@ -8064,6 +8065,82 @@ sub test_blob_download
     $self->assert_str_equals('image/gif', $blob->{headers}->{'content-type'});
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
     $self->assert_equals($binary, $blob->{content});
+}
+
+sub test_email_set_filename
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Upload a data blob";
+    my $binary = pack "H*", "beefcode";
+    my $data = $jmap->Upload($binary, "image/gif");
+    my $dataBlobId = $data->{blobId};
+
+    my @testcases = ({
+        name   => 'foo',
+        wantCt => ' image/gif; name="foo"',
+        wantCd => ' attachment;filename=foo',
+    }, {
+        name   => "I feel \N{WHITE SMILING FACE}",
+        wantCt => ' image/gif; name="=?UTF-8?Q?I_feel_=E2=98=BA?="',
+        wantCd => " attachment;filename*=utf-8''%49%20%66%65%65%6c%20%e2%98%ba",
+    }, {
+        name   => "foo" . ("_foo" x 20),
+        wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\"",
+        wantCd => " attachment;\r\n filename*0*=foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_f;\r\n filename*1*=oo_foo_foo_foo_foo_foo",
+    });
+
+    foreach my $tc (@testcases) {
+        xlog "Checking name $tc->{name}";
+        my $bodyStructure = {
+            type => "multipart/alternative",
+            subParts => [{
+                    type => 'text/plain',
+                    partId => '1',
+                }, {
+                    type => 'image/gif',
+                    disposition => 'attachment',
+                    name => $tc->{name},
+                    blobId => $dataBlobId,
+                }],
+        };
+
+        xlog "Create email with body structure";
+        my $inboxid = $self->getinbox()->{id};
+        my $email = {
+            mailboxIds => { $inboxid => JSON::true },
+            from => [{ name => "Test", email => q{foo@bar} }],
+            subject => "test",
+            bodyStructure => $bodyStructure,
+            bodyValues => {
+                "1" => {
+                    value => "A text body",
+                },
+            },
+        };
+        my $res = $jmap->CallMethods([
+                ['Email/set', { create => { '1' => $email } }, 'R1'],
+                ['Email/get', {
+                        ids => [ '#1' ],
+                        properties => [ 'bodyStructure' ],
+                        bodyProperties => [ 'partId', 'blobId', 'type', 'name', 'disposition', 'header:Content-Type', 'header:Content-Disposition' ],
+                        fetchAllBodyValues => JSON::true,
+                    }, 'R2' ],
+            ]);
+
+        my $gotBodyStructure = $res->[1][1]{list}[0]{bodyStructure};
+        my $gotName = $gotBodyStructure->{subParts}[1]{name};
+        $self->assert_str_equals($tc->{name}, $gotName);
+        my $gotCt = $gotBodyStructure->{subParts}[1]{'header:Content-Type'};
+        $self->assert_str_equals($tc->{wantCt}, $gotCt);
+        my $gotCd = $gotBodyStructure->{subParts}[1]{'header:Content-Disposition'};
+        $self->assert_str_equals($tc->{wantCd}, $gotCd);
+    }
 }
 
 1;
