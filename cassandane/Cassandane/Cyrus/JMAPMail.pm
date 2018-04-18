@@ -7546,7 +7546,7 @@ sub test_capability
     if ($ENV{DEBUGJMAP}) {
         warn "JMAP " . Dumper($Request, $Response);
     }
-    $self->assert_str_equals('201', $Response->{status});
+    $self->assert_str_equals('200', $Response->{status});
 
     my $settings;
     $settings = eval { decode_json($Response->{content}) } if $Response->{success};
