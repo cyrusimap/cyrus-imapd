@@ -6971,77 +6971,52 @@ static char *_mime_make_boundary()
  * See the header_from_Xxx functions for usage. */
 #define MIME_MAX_HEADER_LENGTH 78
 
-__attribute__((unused)) // FIXME
-static int _mime_write_param(FILE *out, const char *name, const char *value,
-                             int quote, int is_extended)
+static void _mime_write_xparam(struct buf *buf, const char *name, const char *value)
 {
-    /* Normalize arguments */
-    if (quote) quote = 1;
-    if (is_extended) is_extended = 1;
-
-    if (strlen(name) + strlen(value) + 4 + quote*2 < MIME_MAX_HEADER_LENGTH) {
-        /* It all fits in one line, great! */
-        return fprintf(out, ";\r\n\t%s=%s%s%s",
-                name,
-                quote ? "\"" : "",
-                value,
-                quote ? "\"" : "");
+    int is_7bit = 1;
+    int is_fold = 0;
+    const char *p = value;
+    for (p = value; *p && (is_7bit || !is_fold); p++) {
+        if (*p & 0x80)
+            is_7bit = 0;
+        if (*p == '\n')
+            is_fold = 1;
     }
-    else if (!is_extended && strchr(value, '\r')) {
-        /* The non-extended value already includes continuations  */
-        const char *p = value, *top = value + strlen(value);
-        int section = 0;
+    char *xvalue = is_7bit ? xstrdup(value) : charset_encode_mimexvalue(value, NULL);
 
+    if (strlen(name) + strlen(xvalue) + 1 < MIME_MAX_HEADER_LENGTH) {
+        buf_printf(buf, ";%s%s=%s", name, is_7bit ? "" : "*", xvalue);
+        goto done;
+    }
+
+    /* Break value into continuations */
+    int section = 0;
+    p = xvalue;
+    struct buf line = BUF_INITIALIZER;
+    buf_appendcstr(&line, ";\r\n ");
+    while (*p) {
+        /* Build parameter continuation line. */
+        buf_printf(&line, "%s*%d*=", name, section);
+        int n = buf_len(&line) + 1;
+        /* Write at least one character of the value */
         do {
-            const char *q = strchr(p, '\r');
-            if (!q) q = top;
-            fprintf(out, ";\r\n\t%s*%d=", name, section);
-            if (quote) fputc('"', out);
-            fwrite(p, 1, q - p, out);
-            if (quote) fputc('"', out);
-            p = q + 3;
-            section++;
-        } while (p < top);
-
-        return 0;
+            buf_putc(&line, *p);
+            n++;
+            p++;
+            if (!is_7bit && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
+                break;
+        } while (*p && n < MIME_MAX_HEADER_LENGTH);
+        /* Write line */
+        buf_append(buf, &line);
+        /* Prepare next iteration */
+        if (*p) buf_appendcstr(buf, ";\r\n ");
+        buf_reset(&line);
+        section++;
     }
-    else {
-        /* We have to break the values by ourselves into continuations */
-        const char *p = value, *top = value + strlen(value);
-        int section = 0;
-        struct buf buf = BUF_INITIALIZER;
+    buf_free(&line);
 
-        while (p < top) {
-            buf_printf(&buf, ";\r\n\t%s%s%d%s=", name,
-                    is_extended ? "" : "*",
-                    section,
-                    is_extended ? "*" : "");
-
-            size_t n = fwrite(buf_base(&buf), 1, buf_len(&buf), out);
-            if (!n) return -1;
-            buf_reset(&buf);
-
-            if (n > MIME_MAX_HEADER_LENGTH) {
-                /* We already overran the maximum length by just writing the
-                 * parameter name. Let's insert a continuation so we can
-                 * write any bytes of the parameter value */
-                fprintf(out, "\r\n\t");
-                n = 3;
-            }
-
-            const char *q, *eol = p + MIME_MAX_HEADER_LENGTH - n - quote*2;
-            if (quote) fputc('"', out);
-            for (q = p; q < top && q < eol; q++) {
-                fputc(*q, out);
-            }
-            if (quote) fputc('"', out);
-            p = q;
-            section++;
-        }
-        buf_free(&buf);
-    }
-
-    return 0;
+done:
+    free(xvalue);
 }
 
 static int _email_copy(jmap_req_t *req, struct mailbox *src,
@@ -7528,7 +7503,6 @@ static void _email_fini(struct email *email)
 
 static json_t *_header_make(const char *header_name, const char *prop_name, struct buf *val)
 {
-    // FIXME encode specials? extended MIME? probably reuse _mime_write_param.
     char *tmp = buf_release(val);
     json_t *jheader = json_pack("{s:s s:s}", "name", header_name, "value", tmp);
     free(tmp);
@@ -8027,9 +8001,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
         part->disposition = xstrdup(json_string_value(jdisposition));
         buf_setcstr(&buf, part->disposition);
         if (part->filename) {
-            buf_appendcstr(&buf, "; filename=\"");
-            buf_appendcstr(&buf, part->filename);
-            buf_appendcstr(&buf, "\"");
+            _mime_write_xparam(&buf, "filename", part->filename);
         }
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "disposition", &buf));
@@ -8038,12 +8010,10 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
         jmap_parser_invalid(parser, "disposition");
     }
     else if (jname) {
-        /* No disposition but a name, make standard Content-Disposition */
+        /* Make Content-Disposition header */
         part->disposition = xstrdup("attachment");
-        const char *name = json_string_value(jname);
-        char *tmp = charset_encode_mimeheader(name, strlen(name), 0);
-        buf_printf(&buf, "attachment;filename=\"%s\"", tmp);
-        free(tmp);
+        buf_printf(&buf, "attachment");
+        _mime_write_xparam(&buf, "filename", part->filename);
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "name", &buf));
     }
@@ -8071,18 +8041,25 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
             buf_reset(&buf);
             buf_printf(&buf, "%s/%s", part->type, part->subtype);
             buf_lcase(&buf);
-            if (part->boundary) {
-                buf_appendcstr(&buf, "; boundary=");
-                buf_appendcstr(&buf, part->boundary);
-            }
-            if (part->filename) {
-                buf_appendcstr(&buf, "; name=\"");
-                buf_appendcstr(&buf, part->filename);
-                buf_appendcstr(&buf, "\"");
-            }
             if (part->charset) {
                 buf_appendcstr(&buf, "; charset=");
                 buf_appendcstr(&buf, part->charset);
+            }
+            if (part->filename) {
+                int force_quote = strlen(part->filename) > MIME_MAX_HEADER_LENGTH;
+                char *tmp = charset_encode_mimeheader(part->filename, 0, force_quote);
+                if (force_quote)
+                    buf_appendcstr(&buf, ";\r\n ");
+                else
+                    buf_appendcstr(&buf, "; ");
+                buf_appendcstr(&buf, "name=\"");
+                buf_appendcstr(&buf, tmp);
+                buf_appendcstr(&buf, "\"");
+                free(tmp);
+            }
+            if (part->boundary) {
+                buf_appendcstr(&buf, ";\r\n boundary=");
+                buf_appendcstr(&buf, part->boundary);
             }
             _headers_add_new(&part->headers,
                     _header_make("Content-Type", "type", &buf));
