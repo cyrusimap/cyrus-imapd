@@ -6256,7 +6256,7 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
                               struct email_get_args *args,
                               struct body *body,
                               struct buf *msg_buf,
-                              msgrecord_t *mr __attribute__((unused)),
+                              msgrecord_t *mr,
                               json_t *msg)
 {
     int r = 0;
@@ -6264,24 +6264,24 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
 
     // TODO support embedded messages for Email/parse
 
-    /* Always fetch headers: the struct body type might contain
-     * cached fields such as reply_to, sender, et al that are
-     * not set in the original message, but the JMAP spec
-     * requires us to return NULL if the header is not set. */
-    /* TODO brong -> shall we deal with this in message.c? 
-     * -> some headers are in the cache, use message_get_field 
-     * -> for replyto and sender at the moment ignore spec */
-    struct headers headers = HEADERS_INITIALIZER;
-    _headers_from_mime(msg_buf->s + body->header_offset, body->header_size, &headers);
+    message_t *m = NULL;
+    r = msgrecord_get_message(mr, &m);
+    if (r) return r;
 
-    /* headers */
-    if (_wantprop(props, "headers")) {
-        json_object_set(msg, "headers", headers.raw); /* incref! */
+    if (_wantprop(props, "headers") || args->want_headers.count) {
+        struct headers headers = HEADERS_INITIALIZER;
+        _headers_from_mime(msg_buf->s + body->header_offset, body->header_size, &headers);
+        /* headers */
+        if (_wantprop(props, "headers")) {
+            json_object_set(msg, "headers", headers.raw); /* incref! */
+        }
+        /* headers:Xxx */
+        if (args->want_headers.count) {
+            _email_get_headerprops(msg, &headers, &args->want_headers);
+        }
+        _headers_fini(&headers);
     }
-    /* headers:Xxx */
-    if (args->want_headers.count) {
-        _email_get_headerprops(msg, &headers, &args->want_headers);
-    }
+
     /* messageId */
     if (_wantprop(props, "messageId")) {
         json_object_set_new(msg, "messageId",
@@ -6301,18 +6301,6 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     if (_wantprop(props, "from")) {
         json_object_set_new(msg, "from",
                 _emailaddresses_from_addr(body->from));
-    }
-    /* sender */
-    if (_wantprop(props, "sender")) {
-        json_object_set_new(msg, "sender",
-                json_object_get(headers.all, "sender") ?
-                _emailaddresses_from_addr(body->sender) : json_null());
-    }
-    /* replyTo */
-    if (_wantprop(props, "replyTo")) {
-        json_object_set_new(msg, "replyTo",
-                json_object_get(headers.all, "reply-to") ?
-                _emailaddresses_from_addr(body->reply_to) : json_null());
     }
     /* to */
     if (_wantprop(props, "to")) {
@@ -6346,7 +6334,40 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
         json_object_set_new(msg, "sentAt", jsent_at);
     }
 
-    _headers_fini(&headers);
+    /* Both sender and replyTo require special treatment, because the
+     * IMAP spec requires bodystructure to use the same valus as From,
+     * if they are not set. The JMAP spec requires us to only set the
+     * fields if their respective MIME header was indeed set, so we
+     * look up the message headers in the cache. */
+    /* sender */
+    if (_wantprop(props, "sender")) {
+        json_t *sender = json_null();
+        struct buf buf = BUF_INITIALIZER;
+        message_get_field(m, "Sender", MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+        if (buf_len(&buf)) {
+            struct address *addr = NULL;
+            parseaddr_list(buf_cstring(&buf), &addr);
+            sender = _emailaddresses_from_addr(addr);
+            parseaddr_free(addr);
+        }
+        buf_free(&buf);
+        json_object_set_new(msg, "sender", sender);
+    }
+    /* replyTo */
+    if (_wantprop(props, "replyTo")) {
+        json_t *replyTo = json_null();
+        struct buf buf = BUF_INITIALIZER;
+        message_get_field(m, "Reply-To", MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+        if (buf_len(&buf)) {
+            struct address *addr = NULL;
+            parseaddr_list(buf_cstring(&buf), &addr);
+            replyTo = _emailaddresses_from_addr(addr);
+            parseaddr_free(addr);
+        }
+        buf_free(&buf);
+        json_object_set_new(msg, "replyTo", replyTo);
+    }
+
     return r;
 }
 
