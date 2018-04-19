@@ -438,6 +438,14 @@ struct method_t {
     void *params;               /* Parameters to pass to the method */
 };
 
+struct connect_params {
+    /* WebSocket parameters */
+    const char *endpoint;
+    const char *subprotocol;
+    int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
+};
+
 struct namespace_t {
     unsigned id;                /* Namespace identifier */
     unsigned enabled;           /* Is this namespace enabled? */
@@ -544,6 +552,8 @@ extern void write_body(long code, struct transaction_t *txn,
                        const char *buf, unsigned len);
 extern void write_multipart_body(long code, struct transaction_t *txn,
                                  const char *buf, unsigned len);
+
+extern int meth_connect(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
 extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);

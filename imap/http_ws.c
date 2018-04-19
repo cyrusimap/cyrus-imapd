@@ -489,7 +489,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                             int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
                                            struct buf *logbuf, void **rock))
 {
-    int r, success, bad_ver;
+    int r;
     const char **hdr, *clientkey = NULL;
     unsigned char sha1buf[SHA1_DIGEST_LENGTH];
     wslay_event_context_ptr ev;
@@ -504,14 +504,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         on_msg_recv_cb
     };
 
-    if (txn->flags.ver == VER_2) {
-        /* Treat as chunked response */
-        txn->flags.te = TE_CHUNKED;
-
-        success = HTTP_OK;
-        bad_ver = HTTP_BAD_REQUEST;
-    }
-    else {
+    if (txn->flags.ver == VER_1_1) {
         /* Check for WebSocket client key */
         hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
         if (!hdr) {
@@ -526,10 +519,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
             txn->error.desc = "Invalid WebSocket client key";
             return HTTP_BAD_REQUEST;
         }
-        clientkey = hdr[0];
 
-        success = HTTP_SWITCH_PROT;
-        bad_ver = HTTP_UPGRADE;
+        clientkey = hdr[0];
     }
 
     /* Check for supported WebSocket version */
@@ -544,7 +535,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     }
     else if (strcmp(hdr[0], WS_VERSION)) {
         txn->error.desc = "Unsupported WebSocket version";
-        return bad_ver;
+        return HTTP_UPGRADE;
     }
 
     if (protocol) {
@@ -553,8 +544,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
 
         hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Protocol");
         if (!hdr) {
-          txn->error.desc = "Missing WebSocket protocol";
-          return HTTP_BAD_REQUEST;
+            txn->error.desc = "Missing WebSocket protocol";
+            return HTTP_BAD_REQUEST;
         }
 
         for (i = 0; !found && hdr[i]; i++) {
@@ -622,7 +613,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     ctx->log_tail = buf_len(&ctx->log);
 
     /* Tell client that WebSocket negotiation has succeeded */
-    return success;
+    return HTTP_SWITCH_PROT;
 }
 
 

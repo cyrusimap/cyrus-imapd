@@ -386,10 +386,11 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static int auth_success(struct transaction_t *txn, const char *userid);
 static int http_auth(const char *creds, struct transaction_t *txn);
 
-static int meth_connect(struct transaction_t *txn, void *params);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
+static int ws_echo(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
@@ -426,6 +427,10 @@ const struct known_meth_t http_methods[] = {
     { NULL,             0,              0 }
 };
 
+static struct connect_params ws_params = {
+    "/", NULL /* sub-protocol */, &ws_echo
+};
+
 /* Namespace to fetch static content from filesystem */
 struct namespace_t namespace_default = {
     URL_NS_DEFAULT, 1, "default", "", NULL,
@@ -436,7 +441,7 @@ struct namespace_t namespace_default = {
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
-        { &meth_connect,        NULL },                 /* CONNECT      */
+        { &meth_connect,        &ws_params },           /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
         { &meth_get,            NULL },                 /* GET          */
@@ -4176,20 +4181,38 @@ static int ws_echo(struct buf *inbuf, struct buf *outbuf,
 }
 
 
-static int meth_connect(struct transaction_t *txn,
-                        void *params __attribute__((unused)))
+HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 {
-    /* Upgrade to WebSockets over HTTP/2 on root, if requested */
-    if (txn->flags.ver != VER_2) return HTTP_NOT_IMPLEMENTED;
+    struct connect_params *cparams = (struct connect_params *) params;
 
-    if (strcmp(txn->req_uri->path, "/")) return HTTP_NOT_ALLOWED;
+    /* Bootstrap WebSockets over HTTP/2, if requested */
+    if ((txn->flags.ver != VER_2) ||
+        !ws_enabled() || !cparams || !cparams->endpoint) {
+        return HTTP_NOT_IMPLEMENTED;
+    }
+
+    if (strcmp(txn->req_uri->path, cparams->endpoint)) return HTTP_NOT_ALLOWED;
 
     if (!(txn->flags.upgrade & UPGRADE_WS)) {
         txn->error.desc = "Missing/unsupported :protocol value ";
         return HTTP_BAD_REQUEST;
     }
 
-    return ws_start_channel(txn, NULL, &ws_echo);
+    int ret = ws_start_channel(txn, cparams->subprotocol, cparams->data_cb);
+
+    switch (ret) {
+    case HTTP_SWITCH_PROT:
+        /* Treat as chunked response */
+        txn->flags.te = TE_CHUNKED;
+
+        return HTTP_OK;
+
+    case HTTP_UPGRADE:
+        return HTTP_BAD_REQUEST;
+
+    default:
+        return ret;
+    }
 }
 
 
