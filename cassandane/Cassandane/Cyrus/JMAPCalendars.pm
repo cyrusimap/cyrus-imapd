@@ -2697,7 +2697,7 @@ sub test_calendarevent_query
     xlog "get unfiltered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{calendarEventIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "get filtered calendar event list with flat filter";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2709,8 +2709,8 @@ sub test_calendarevent_query
                     }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog "get filtered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2729,8 +2729,8 @@ sub test_calendarevent_query
                     }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog "filter by calendar $calidA";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2738,8 +2738,8 @@ sub test_calendarevent_query
                         "inCalendars" => [ $calidA ],
                     }
                 }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog "filter by calendar $calidA or $calidB";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2747,7 +2747,7 @@ sub test_calendarevent_query
                         "inCalendars" => [ $calidA, $calidB ],
                     }
                 }, "R1"] ]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
+    $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 2);
 
     xlog "filter by calendar NOT in $calidA and $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/query', {
@@ -2757,17 +2757,17 @@ sub test_calendarevent_query
                                 "inCalendars" => [ $calidA, $calidB ],
                             }],
                     }}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 0);
+    $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 0);
 
     xlog "limit results";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { limit => 1 }, "R1"] ]);
     $self->assert_num_equals($res->[0][1]{total}, 2);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 1);
 
     xlog "skip result a position 1";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => 1 }, "R1"] ]);
     $self->assert_num_equals($res->[0][1]{total}, 2);
-    $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+    $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 1);
 }
 
 sub test_calendarevent_query_shared
@@ -2851,7 +2851,7 @@ sub test_calendarevent_query_shared
         xlog "get unfiltered calendar event list";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account }, "R1"] ]);
         $self->assert_num_equals(2, $res->[0][1]{total});
-        $self->assert_num_equals(2, scalar @{$res->[0][1]{calendarEventIds}});
+        $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
         $self->assert_str_equals($account, $res->[0][1]{accountId});
 
         xlog "get filtered calendar event list with flat filter";
@@ -2865,8 +2865,8 @@ sub test_calendarevent_query_shared
                         }
                     }, "R1"] ]);
         $self->assert_num_equals(1, $res->[0][1]{total});
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
         xlog "get filtered calendar event list";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2886,8 +2886,8 @@ sub test_calendarevent_query_shared
                         }
                     }, "R1"] ]);
         $self->assert_num_equals(1, $res->[0][1]{total});
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
         xlog "filter by calendar $calidA";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2896,8 +2896,8 @@ sub test_calendarevent_query_shared
                             "inCalendars" => [ $calidA ],
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
         xlog "filter by calendar $calidA or $calidB";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -2906,7 +2906,7 @@ sub test_calendarevent_query_shared
                             "inCalendars" => [ $calidA, $calidB ],
                         }
                     }, "R1"] ]);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 2);
+        $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 2);
 
         xlog "filter by calendar NOT in $calidA and $calidB";
         $res = $jmap->CallMethods([['CalendarEvent/query', {
@@ -2917,17 +2917,17 @@ sub test_calendarevent_query_shared
                                     "inCalendars" => [ $calidA, $calidB ],
                                 }],
                         }}, "R1"]]);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 0);
+        $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 0);
 
         xlog "limit results";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, limit => 1 }, "R1"] ]);
         $self->assert_num_equals($res->[0][1]{total}, 2);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+        $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 1);
 
         xlog "skip result a position 1";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, position => 1 }, "R1"] ]);
         $self->assert_num_equals($res->[0][1]{total}, 2);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
+        $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 1);
     }
 }
 
@@ -3248,8 +3248,8 @@ sub test_calendarevent_query_text
                         }
                     }, "R1"] ]);
         $self->assert_num_equals(1, $res->[0][1]{total});
-        $self->assert_num_equals(1, scalar @{$res->[0][1]{calendarEventIds}});
-        $self->assert_str_equals($id1, $res->[0][1]{calendarEventIds}[0]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
         # Sanity check catch-all text search
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
@@ -3266,8 +3266,8 @@ sub test_calendarevent_query_text
                         }
                     }, "R1"] ]);
         $self->assert_num_equals($res->[0][1]{total}, 1);
-        $self->assert_num_equals(scalar @{$res->[0][1]{calendarEventIds}}, 1);
-        $self->assert_str_equals($res->[0][1]{calendarEventIds}[0], $id1);
+        $self->assert_num_equals(scalar @{$res->[0][1]{ids}}, 1);
+        $self->assert_str_equals($res->[0][1]{ids}[0], $id1);
 
         # Sanity check property name search
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
