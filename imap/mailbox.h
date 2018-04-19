@@ -75,7 +75,7 @@
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
 #define MAILBOX_MINOR_VERSION   14
-#define MAILBOX_CACHE_MINOR_VERSION 7
+#define MAILBOX_CACHE_MINOR_VERSION 8
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"

@@ -129,6 +129,9 @@ struct body {
      */
     char *decoded_body;
 
+    /* Decoded content size, or 0 if unknown */
+    uint32_t decoded_content_size;
+
     /* Message GUID. Only filled in at top level */
     struct message_guid guid;
 };

@@ -623,8 +623,12 @@ static void body_add_content_guid(const char *base, struct body *body)
     base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
     if (base) {
         message_guid_generate(&body->content_guid, base, len);
+        body->decoded_content_size = len;
     }
-    else message_guid_set_null(&body->content_guid);
+    else {
+        message_guid_set_null(&body->content_guid);
+        body->decoded_content_size = 0;
+    }
     charset_free(&cs);
     free(decbuf);
 }
@@ -2249,6 +2253,7 @@ static void message_write_nocharset(struct buf *buf, const struct body *body)
     if (body) message_guid_export(&body->content_guid, guidbuf);
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
+    buf_appendbit32(buf, body ? body->decoded_content_size : 0);
 }
 
 /*
@@ -2399,6 +2404,7 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     if (body) message_guid_export(&body->content_guid, guidbuf);
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
+    buf_appendbit32(buf, body ? body->decoded_content_size : 0);
 }
 
 /*
@@ -3044,6 +3050,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
         p += 5 * CACHE_ITEM_SIZE_SKIP;
         if (cache_version >= 5)
             p += MESSAGE_GUID_SIZE;
+        if (cache_version >= 8)
+            p += CACHE_ITEM_SIZE_SKIP;
     }
     else {
         /* read header part */
@@ -3075,6 +3083,11 @@ static void message_read_binarybody(struct body *body, const char **sect,
         }
         if (cache_version >= 5)
             p = message_guid_import(&body->content_guid, p);
+
+        if (cache_version >= 8) {
+            body->decoded_content_size = CACHE_ITEM_BIT32(p);
+            p += CACHE_ITEM_SIZE_SKIP;
+        }
     }
 
     /* read body parts */
@@ -3107,6 +3120,11 @@ static void message_read_binarybody(struct body *body, const char **sect,
         }
         if (cache_version >= 5)
             p = message_guid_import(&subpart[i].content_guid, p);
+
+        if (cache_version >= 8) {
+            subpart[i].decoded_content_size = CACHE_ITEM_BIT32(p);
+            p += CACHE_ITEM_SIZE_SKIP;
+        }
     }
 
     /* read sub-parts */
@@ -4007,6 +4025,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             if (cache_version >= 5)
                 *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
 
+            if (cache_version >= 8) {
+                body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
+
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
                 this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
@@ -4026,6 +4049,12 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 /* CACHE_MINOR_VERSION 5 adds a sha1 after the charset */
                 if (cache_version >= 5)
                     *cachestrp = message_guid_import(&this->content_guid, *cachestrp);
+
+                /* CACHE_MINOR_VERSION 8 adds the decoded content size after sha1 */
+                if (cache_version >= 8) {
+                    this->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                    *cachestrp += CACHE_ITEM_SIZE_SKIP;
+                }
             }
 
             /* and parse subparts */
@@ -4054,6 +4083,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             *cachestrp += 5*4;
             if (cache_version >= 5)
                 *cachestrp += MESSAGE_GUID_SIZE;
+            if (cache_version >= 8)
+                *cachestrp += 1*4;
             *cachestrp += 4*4;
 
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
@@ -4075,6 +4106,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             if (cache_version >= 5)
                 *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
 
+            if (cache_version >= 8) {
+                body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
+
             /* and parse subpart */
             if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version))
                 return IMAP_MAILBOX_BADFORMAT;
@@ -4090,6 +4126,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         *cachestrp += 5*4;
         if (cache_version >= 5)
             *cachestrp += MESSAGE_GUID_SIZE;
+        if (cache_version >= 8)
+            *cachestrp += 4;
         for (part = 0; part < body->numparts; part++) {
             this = &body->subpart[part];
             this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
@@ -4104,6 +4142,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
             if (cache_version >= 5)
                 *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
+
+            if (cache_version >= 8) {
+                body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
         }
 
         for (part = 0; part < body->numparts; part++) {
