@@ -1033,7 +1033,16 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
     hash_insert(creation_id, xstrdup(id), req->new_creation_ids);
 }
 
-/* Perform WebSocket request (JMAP API) */
+/*
+ * WebSockets data callback ('jmap' sub-protocol): Process JMAP API request.
+ *
+ * Can be tested with:
+ *   https://github.com/websockets/wscat
+ *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
+ *
+ * WebSockets over HTTP/2 currently only available in:
+ *   https://www.google.com/chrome/browser/canary.html
+ */
 static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock)
 {

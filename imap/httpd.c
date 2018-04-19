@@ -4165,11 +4165,16 @@ static int list_well_known(struct transaction_t *txn)
 
 
 /*
- * Just echo back non-control messages.
+ * WebSockets data callback (no sub-protocol): Echo back non-control messages.
+ *
  * Can be tested with:
  *   https://github.com/websockets/wscat
- *   https://demos.kaazing.com/echo/
  *   https://addons.mozilla.org/en-US/firefox/addon/simple-websocket-client/
+ *   https://chrome.google.com/webstore/detail/simple-websocket-client/gobngblklhkgmjhbpbdlkglbhhlafjnh
+ *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
+ *
+ * WebSockets over HTTP/2 currently only available in:
+ *   https://www.google.com/chrome/browser/canary.html
  */
 static int ws_echo(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf __attribute__((unused)),
