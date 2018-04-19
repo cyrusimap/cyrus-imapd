@@ -339,7 +339,7 @@ static int frame_recv_cb(nghttp2_session *session,
 
     case NGHTTP2_DATA:
         if (txn->ws_ctx) {
-            /* WebSocket input */
+            /* WebSocket over HTTP/2 input */
             ws_input(txn);
 
             ws_output(txn);
