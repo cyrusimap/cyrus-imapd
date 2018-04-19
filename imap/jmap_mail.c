@@ -6405,16 +6405,22 @@ static json_t *_email_get_bodypart(struct body *part,
     /* size */
     if (_wantprop(bodyprops, "size")) {
         size_t size;
-        if (part->numparts) {
-            /* Multi-part */
-            size = part->content_size;
+        if (part->numparts && strcasecmp(part->type, "MESSAGE")) {
+            /* Multipart */
+            size = 0;
         }
-        else if (part->charset_enc) {
-            buf_reset(&buf);
-            charset_decode(&buf, msg_buf->s + part->content_offset,
-                    part->content_size, part->charset_enc);
-            size = buf_len(&buf);
-            buf_reset(&buf);
+        else if (part->charset_enc & 0xff) {
+            if (part->decoded_content_size == 0) {
+                char *tmp = NULL;
+                size_t tmp_size;
+                charset_decode_mimebody(msg_buf->s + part->content_offset,
+                        part->content_size, part->charset_enc, &tmp, &tmp_size);
+                size = tmp_size;
+                free(tmp);
+            }
+            else {
+                size = part->decoded_content_size;
+            }
         }
         else {
             size = part->content_size;
