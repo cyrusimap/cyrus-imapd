@@ -1599,7 +1599,6 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
 
-dnl  Don't bother checking for Wslay until CalConnect finalizes streaming updates
         PKG_CHECK_MODULES([WSLAY], [libwslay], [
                 AC_DEFINE(HAVE_WSLAY,[],
                         [Build WebSockets support into httpd?])
