@@ -8143,4 +8143,27 @@ sub test_email_set_filename
     }
 }
 
+sub test_email_get_size
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    $self->make_message("foo",
+        mime_type => 'text/plain; charset="UTF-8"',
+        mime_encoding => 'quoted-printable',
+        body => '=C2=A1Hola, se=C3=B1or!',
+    ) || die;
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['bodyStructure', 'size'],
+        }, 'R2' ],
+    ]);
+
+    my $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(15, $msg->{bodyStructure}{size});
+}
+
 1;
