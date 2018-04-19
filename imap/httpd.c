@@ -1291,6 +1291,8 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
+
+            /* Don't advertise TLS Upgrade anymore */
             txn->flags.upgrade &= ~UPGRADE_TLS;
         }
 
@@ -1301,6 +1303,8 @@ EXPORTED int examine_request(struct transaction_t *txn)
                 txn->flags.conn = CONN_CLOSE;
                 return ret;
             }
+
+            /* Upgrade header field mechanism not available under HTTP/2 */
             txn->flags.upgrade = 0;
         }
     }
