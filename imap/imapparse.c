@@ -412,7 +412,12 @@ EXPORTED void eatline(struct protstream *pin, int c)
 {
     for (;;) {
         if (c == '\n') return;
-        if (c == EOF) return;
+
+        /* Several of the parser helper functions return EOF
+           even if an unexpected character (other than EOF) is received. 
+           We need to confirm that the stream is actually at EOF. */
+        if (c == EOF && prot_IS_EOF(pin)) return;
+
         /* see if it's a literal */
         if (c == '{') {
             c = prot_getc(pin);
