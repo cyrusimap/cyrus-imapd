@@ -6722,8 +6722,6 @@ static int _email_get_bodies(jmap_req_t *req,
     hash_table *props = args->props;
     int r = 0;
 
-    // TODO sunset RENDER_MULTIPART in lib/imapoptions
-
     /* Dissect message into its parts */
     r = _email_extract_bodies(msg_body, msg_buf, &bodies);
     if (r) goto done;
