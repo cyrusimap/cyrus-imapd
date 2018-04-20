@@ -81,12 +81,13 @@ sub test_uniqueid
 
     $talk->create('foo');
     $talk->create('bar');
-    my $status1 = $talk->status('foo', "(mailboxid uidvalidity)");
-    my $status2 = $talk->status('bar', "(mailboxid uidvalidity)");
+    $talk->create('foo');
+    my $status1 = $talk->status('foo', "(mailboxid)");
+    my $status2 = $talk->status('bar', "(mailboxid)");
 
     $talk->rename('foo', 'renamed');
-    my $status3 = $talk->status('renamed', "(mailboxid uidvalidity)");
-    my $status4 = $talk->status('bar', "(mailboxid uidvalidity)");
+    my $status3 = $talk->status('renamed', "(mailboxid)");
+    my $status4 = $talk->status('bar', "(mailboxid)");
 
     $self->assert_str_equals($status1->{mailboxid}[0], $status3->{mailboxid}[0]);
     $self->assert_str_equals($status2->{mailboxid}[0], $status4->{mailboxid}[0]);
