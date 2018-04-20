@@ -517,14 +517,6 @@ static json_t *jmap_get_reply(struct jmap_get *get)
 
 static void jmap_set_parse(json_t *jargs,
                            struct jmap_parser *parser,
-                           void (*parseobject_cb)(
-                               json_t *obj,
-                               const char *id,
-                               int is_create,
-                               void *rock,
-                               json_t **set_err
-                            ),
-                           void *rock,
                            struct jmap_set *set,
                            json_t **err)
 {
@@ -561,14 +553,6 @@ static void jmap_set_parse(json_t *jargs,
                 jmap_parser_pop(parser);
                 continue;
             }
-            if (parseobject_cb) {
-                json_t *set_err = NULL;
-                parseobject_cb(val, id, /*is_create*/1, rock, &set_err);
-                if (set_err) {
-                    json_object_set_new(set->not_created, id, set_err);
-                    continue;
-                }
-            }
             json_object_set(set->create, id, val);
         }
     }
@@ -586,14 +570,6 @@ static void jmap_set_parse(json_t *jargs,
                 jmap_parser_invalid(parser, id);
                 jmap_parser_pop(parser);
                 continue;
-            }
-            if (parseobject_cb) {
-                json_t *set_err = NULL;
-                parseobject_cb(val, id, /*is_create*/0, rock, &set_err);
-                if (set_err) {
-                    json_object_set_new(set->not_updated, id, set_err);
-                    continue;
-                }
             }
             json_object_set(set->update, id, val);
         }
@@ -9488,9 +9464,7 @@ static int jmap_email_set(jmap_req_t *req)
     struct jmap_set set;
 
     json_t *err = NULL;
-    /* Just parse the generic set request. We'll validate
-     * the Email object arguments during create and update. */
-    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    jmap_set_parse(req->args, &parser, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
