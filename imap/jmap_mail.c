@@ -2052,7 +2052,7 @@ static int _mbox_isparent(const char *mboxname)
     return has_child;
 }
 
-struct jmap_mailbox_set {
+struct mbox_setargs {
     const char *id;
     char *name;
     char *parentid;
@@ -2061,35 +2061,35 @@ struct jmap_mailbox_set {
     int sortorder;
 };
 
-static void jmap_mailbox_set_fini(struct jmap_mailbox_set *args)
+static void _mbox_setargs_fini(struct mbox_setargs *args)
 {
     free(args->parentid);
     free(args->name);
 }
 
-static void jmap_mailbox_set_parse(jmap_req_t *req,
-                                   json_t *jargs,
-                                   struct jmap_mailbox_set *args,
-                                   int is_create,
-                                   json_t *invalid)
+static void _mbox_setargs_parse(json_t *jargs,
+                                struct jmap_parser *parser,
+                                struct mbox_setargs *args,
+                                jmap_req_t *req,
+                                int is_create)
 {
-    int pe;
-
     /* Initialize arguments */
-    memset(args, 0, sizeof(struct jmap_mailbox_set));
+    memset(args, 0, sizeof(struct mbox_setargs));
     args->sortorder = -1;
 
     /* id */
-    pe = readprop(jargs, "id", 0, invalid, "s", &args->id);
-    if (pe > 0 && is_create) {
-        json_array_append_new(invalid, json_string("id"));
+    json_t *jid = json_object_get(jargs, "id");
+    if (json_is_string(jid) && !is_create) {
+        args->id = json_string_value(jid);
+    }
+    else if (JNOTNULL(jid) && is_create) {
+        jmap_parser_invalid(parser, "id");
     }
 
     /* name */
-    const char *s;
-    pe = readprop(jargs, "name", is_create, invalid, "s", &s);
-    if (pe > 0) {
-        char *name = charset_utf8_normalize(s);
+    json_t *jname = json_object_get(jargs, "name");
+    if (json_is_string(jname)) {
+        char *name = charset_utf8_normalize(json_string_value(jname));
         size_t len = strlen(name);
         int is_valid = 0;
         size_t i;
@@ -2107,117 +2107,119 @@ static void jmap_mailbox_set_parse(jmap_req_t *req,
         }
         else {
             /* Empty string, bogus characters or just whitespace */
-            json_array_append_new(invalid, json_string("name"));
+            jmap_parser_invalid(parser, "name");
         }
+    }
+    else if (JNOTNULL(jname)) {
+        jmap_parser_invalid(parser, "name");
     }
 
     /* parentId */
-    json_t *jparentid = json_object_get(jargs, "parentId");
-    if (JNOTNULL(jparentid)) {
-        const char *parentid = NULL;
-        pe = readprop(jargs, "parentId", 1, invalid, "s", &parentid);
-        if (pe > 0 && *parentid == '#') {
+    json_t *jparentId = json_object_get(jargs, "parentId");
+    if (json_is_string(jparentId)) {
+        const char *parentid = json_string_value(jparentId);
+        if (parentid && *parentid == '#') {
             parentid = hash_lookup(parentid + 1, &req->idmap->mailboxes);
-            if (!parentid) {
-                json_array_append_new(invalid, json_string("parentId"));
-            }
         }
         if (parentid) {
             args->parentid = xstrdup(parentid);
         }
-    } else if (jparentid == json_null() || (is_create && !jparentid)) {
+        if (!args->parentid) {
+            jmap_parser_invalid(parser, "parentId");
+        }
+    } else if (jparentId == json_null() || (is_create && !jparentId)) {
         mbentry_t *inboxentry = NULL;
         mboxlist_lookup(req->inboxname, &inboxentry, NULL);
         args->parentid = xstrdup(inboxentry->uniqueid);
         mboxlist_entry_free(&inboxentry);
     }
-    if (args->parentid) {
-        char *tmp = _mbox_find_uniqueid(req, args->parentid);
-        if (!tmp) json_array_append_new(invalid, json_string("parentId"));
-        free(tmp);
-    }
 
     /* role */
-    if (JNOTNULL(json_object_get(jargs, "role"))) {
-        pe = readprop(jargs, "role", is_create, invalid, "s", &args->role);
-        if (pe > 0) {
-            int is_valid = 1;
-            if (!strcmp(args->role, "inbox")) {
-                /* inbox role is server-set */
-                is_valid = 0;
-            } else if (!strcmp(args->role, "archive")) {
-                args->specialuse = "\\Archive";
-            } else if (!strcmp(args->role, "drafts")) {
-                args->specialuse = "\\Drafts";
-            } else if (!strcmp(args->role, "junk")) {
-                args->specialuse = "\\Junk";
-            } else if (!strcmp(args->role, "sent")) {
-                args->specialuse = "\\Sent";
-            } else if (!strcmp(args->role, "trash")) {
-                args->specialuse = "\\Trash";
-            } else if (strncmp(args->role, "x-", 2)) {
-                /* Does it start with an "x-"? If not, reject it. */
-                is_valid = 0;
+    json_t *jrole = json_object_get(jargs, "role");
+    if (json_is_string(jrole)) {
+        args->role = json_string_value(jrole);
+        int is_valid = 1;
+        if (!strcmp(args->role, "inbox")) {
+            /* inbox role is server-set */
+            is_valid = 0;
+        } else if (!strcmp(args->role, "archive")) {
+            args->specialuse = "\\Archive";
+        } else if (!strcmp(args->role, "drafts")) {
+            args->specialuse = "\\Drafts";
+        } else if (!strcmp(args->role, "junk")) {
+            args->specialuse = "\\Junk";
+        } else if (!strcmp(args->role, "sent")) {
+            args->specialuse = "\\Sent";
+        } else if (!strcmp(args->role, "trash")) {
+            args->specialuse = "\\Trash";
+        } else if (strncmp(args->role, "x-", 2)) {
+            /* Does it start with an "x-"? If not, reject it. */
+            is_valid = 0;
+        }
+        if (is_valid) {
+            char *exists = NULL;
+            if (args->specialuse) {
+                /* Check that no such IMAP specialuse mailbox already exists. */
+                exists = _mbox_find_specialuse(req, args->specialuse);
+            } else {
+                /* Check that no mailbox with this x-role exists. */
+                exists = _mbox_find_xrole(req, args->role);
             }
-            if (is_valid) {
-                char *exists = NULL;
-                if (args->specialuse) {
-                    /* Check that no such IMAP specialuse mailbox already exists. */
-                    exists = _mbox_find_specialuse(req, args->specialuse);
-                } else {
-                    /* Check that no mailbox with this x-role exists. */
-                    exists = _mbox_find_xrole(req, args->role);
-                }
-                is_valid = exists == NULL;
-                free(exists);
-            }
-            if (!is_valid) {
-                json_array_append_new(invalid, json_string("role"));
-            }
+            is_valid = exists == NULL;
+            free(exists);
+        }
+        if (!is_valid) {
+            jmap_parser_invalid(parser, "role");
         }
     }
-    /* sortOrder */
-    if (readprop(jargs, "sortOrder", 0, invalid, "i", &args->sortorder) > 0) {
-        if (args->sortorder < 0 || args->sortorder >= INT_MAX) {
-            json_array_append_new(invalid, json_string("sortOrder"));
-        }
+    else if (JNOTNULL(jrole)) {
+        jmap_parser_invalid(parser, "role");
     }
 
-    /* mayXXX. These are immutable, but we ignore them during update. */
+    /* sortOrder */
+    json_t *jsortOrder = json_object_get(jargs, "sortOrder");
+    if (json_is_integer(jsortOrder)) {
+        args->sortorder = json_integer_value(jsortOrder);
+        if (args->sortorder < 0 || args->sortorder >= INT_MAX) {
+            jmap_parser_invalid(parser, "sortOrder");
+        }
+    }
+    else if (JNOTNULL(jsortOrder)) {
+        jmap_parser_invalid(parser, "sortOrder");
+    }
+
+    /* All of these are server-set. */
     json_t *jrights = json_object_get(jargs, "myRights");
-    if (JNOTNULL(jrights)) {
-        if (json_object_get(jrights, "mayReadItems") && is_create) {
-            json_array_append_new(invalid, json_string("myRights/mayReadItems"));
+    if (json_is_object(jrights) && !is_create) {
+        /* Update allows clients to set myRights, as long as
+         * it doesn't change their values. Don't bother with
+         * that during parsing, just make sure that it is
+         * syntactically valid. */
+        const char *right;
+        json_t *jval;
+        jmap_parser_push(parser, "myRights");
+        json_object_foreach(jrights, right, jval) {
+            if (!json_is_boolean(jval))
+                jmap_parser_invalid(parser, right);
         }
-        if (json_object_get(jrights, "mayAddItems") && is_create) {
-            json_array_append_new(invalid, json_string("myRights/mayAddItems"));
-        }
-        if (json_object_get(jrights, "mayRemoveItems") && is_create) {
-            json_array_append_new(invalid, json_string("myRights/mayRemoveItems"));
-        }
-        if (json_object_get(jrights, "mayRename") && is_create) {
-            json_array_append_new(invalid, json_string("myRights/mayRename"));
-        }
-        if (json_object_get(jrights, "mayDelete") && is_create) {
-            json_array_append_new(invalid, json_string("myRights/mayDelete"));
-        }
+        jmap_parser_pop(parser);
     }
-    if (json_object_get(jargs, "totalEmails") && is_create) {
-        json_array_append_new(invalid, json_string("totalEmails"));
+    else if (JNOTNULL(jrights)) {
+        jmap_parser_invalid(parser, "myRights");
     }
-    if (json_object_get(jargs, "unreadEmails") && is_create) {
-        json_array_append_new(invalid, json_string("unreadEmails"));
-    }
-    if (json_object_get(jargs, "totalThreads") && is_create) {
-        json_array_append_new(invalid, json_string("totalThreads"));
-    }
-    if (json_object_get(jargs, "unreadThreads") && is_create) {
-        json_array_append_new(invalid, json_string("unreadThreads"));
-    }
+
+    if (json_object_get(jargs, "totalEmails") && is_create)
+        jmap_parser_invalid(parser, "totalEmails");
+    if (json_object_get(jargs, "unreadEmails") && is_create)
+        jmap_parser_invalid(parser, "unreadEmails");
+    if (json_object_get(jargs, "totalThreads") && is_create)
+        jmap_parser_invalid(parser, "unreadEmails");
+    if (json_object_get(jargs, "unreadThreads") && is_create)
+        jmap_parser_invalid(parser, "unreadThreads");
 }
 
 static int _mbox_set_annots(jmap_req_t *req,
-                            struct jmap_mailbox_set *args,
+                            struct mbox_setargs *args,
                             const char *mboxname)
 {
     int r = 0;
@@ -2278,21 +2280,21 @@ done:
 }
 
 static int _mbox_create(jmap_req_t *req,
-                           struct jmap_mailbox_set *args,
-                           json_t *invalid,
-                           char **mboxid,
-                           json_t **err __attribute__((unused)))
+                        struct mbox_setargs *args,
+                        char **mboxid,
+                        json_t **err)
 {
     char *mboxname = NULL, *parentname = NULL;
     int r = 0, rights = 0;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
 
     /* Check parent ACL */
     parentname = _mbox_find_uniqueid(req, args->parentid);
     if (!parentname) {
-        json_array_append_new(invalid, json_string("parentId"));
+        jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
     r = mboxlist_lookup(parentname, &mbparent, NULL);
@@ -2303,7 +2305,7 @@ static int _mbox_create(jmap_req_t *req,
     }
     rights = jmap_myrights(req, mbparent);
     if (!(rights & ACL_CREATE)) {
-        json_array_append_new(invalid, json_string("parentId"));
+        jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
 
@@ -2319,7 +2321,7 @@ static int _mbox_create(jmap_req_t *req,
     mboxlist_entry_free(&mbexists);
     if (r != IMAP_MAILBOX_NONEXISTENT) {
         syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
-        json_array_append_new(invalid, json_string("name"));
+        jmap_parser_invalid(&parser, "name");
         r = 0;
         goto done;
     }
@@ -2348,38 +2350,34 @@ static int _mbox_create(jmap_req_t *req,
     *mboxid = xstrdup(mbentry->uniqueid);
 
 done:
+    if (json_array_size(parser.invalid)) {
+        *err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(*err, "properties", parser.invalid);
+    }
     free(mboxname);
     free(parentname);
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbparent);
     mboxlist_entry_free(&mbentry);
+    jmap_parser_fini(&parser);
 
     return r;
 }
 
-static int _mbox_update(jmap_req_t *req,
-                        struct jmap_mailbox_set *args,
-                        json_t *invalid,
-                        const char *mboxid,
-                        json_t **err)
+static int _mbox_update(jmap_req_t *req, struct mbox_setargs *args, json_t **err)
 {
     /* So many names... manage them in our own string pool */
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
     int r = 0, rights = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL, *mbparent = NULL;
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
-
-    /* Sanity-check arguments */
-    if (args->id && strcmp(args->id, mboxid)) {
-        json_array_append_new(invalid, json_string("id"));
-    }
-    if (json_array_size(invalid)) return 0;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     /* Determine current mailbox and parent names */
     char *mboxname = NULL;
     char *parentname = NULL;
-    if (strcmp(mboxid, mbinbox->uniqueid)) {
-        mboxname = _mbox_find_uniqueid(req, mboxid);
+    if (strcmp(args->id, mbinbox->uniqueid)) {
+        mboxname = _mbox_find_uniqueid(req, args->id);
         if (!mboxname) {
             *err = json_pack("{s:s}", "type", "notFound");
             goto done;
@@ -2419,7 +2417,7 @@ static int _mbox_update(jmap_req_t *req,
             newparentname = xstrdup(mbinbox->name);
         }
         if (!newparentname) {
-            json_array_append_new(invalid, json_string("parentId"));
+            jmap_parser_invalid(&parser, "parentId");
             goto done;
         }
         ptrarray_append(&strpool, newparentname);
@@ -2441,7 +2439,7 @@ static int _mbox_update(jmap_req_t *req,
             /* Check ACL of new parent */
             int parent_rights = jmap_myrights(req, mbparent);
             if (!(parent_rights & ACL_CREATE)) {
-                json_array_append_new(invalid, json_string("parentId"));
+                jmap_parser_invalid(&parser, "parentId");
                 goto done;
             }
         }
@@ -2474,7 +2472,7 @@ static int _mbox_update(jmap_req_t *req,
             mboxlist_entry_free(&mbexists);
 			if (r != IMAP_MAILBOX_NONEXISTENT) {
 				syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
-				json_array_append_new(invalid, json_string("name"));
+				jmap_parser_invalid(&parser, "name");
 				r = 0;
 				goto done;
 			}
@@ -2502,6 +2500,11 @@ static int _mbox_update(jmap_req_t *req,
     if (r) goto done;
 
 done:
+    if (json_array_size(parser.invalid)) {
+        *err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(*err, "properties", parser.invalid);
+    }
+    jmap_parser_fini(&parser);
     while (strpool.count) free(ptrarray_pop(&strpool));
     ptrarray_fini(&strpool);
     mboxlist_entry_free(&mbentry);
@@ -2602,237 +2605,179 @@ done:
 
 static int jmap_mailbox_set(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *set = NULL;
-    char *mboxname = NULL;
-    char *parentname = NULL;
-    json_t *state, *create, *update, *destroy;
-    int bump_modseq = 0;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
 
-    mbentry_t *inboxentry = NULL;
-    mboxlist_lookup(req->inboxname, &inboxentry, NULL);
-
-    state = json_object_get(req->args, "ifInState");
-    if (JNOTNULL(state)) {
-        if (jmap_cmpstate(req, state, 0/*mbtype*/)) {
-            json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                        "error", "type", "stateMismatch", req->tag));
+    /* Parse arguments */
+    int on_destroy_remove_msgs = 0;
+    json_t *jarg = json_object_get(req->args, "onDestroyRemoveMessages");
+    if (json_is_boolean(jarg)) {
+        on_destroy_remove_msgs = json_boolean_value(jarg);
+    }
+    else if (JNOTNULL(jarg)) {
+        jmap_parser_invalid(&parser, "onDestroyRemoveMessages");
+    }
+    json_t *arg_err = NULL;
+    jmap_set_parse(req->args, &parser, &set, &arg_err);
+    if (arg_err) {
+        jmap_error(req, arg_err);
+        goto done;
+    }
+    if (set.if_in_state) {
+        json_t *jstate = json_string(set.if_in_state);
+        if (jmap_cmpstate(req, jstate, 0/*mbtype*/)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_incref(state);
+        json_decref(jstate);
+        set.old_state = xstrdup(set.if_in_state);
     }
-    set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
 
-    create = json_object_get(req->args, "create");
-    if (create) {
-        json_t *created = json_pack("{}");
-        json_t *notCreated = json_pack("{}");
-        const char *key;
-        json_t *arg;
-
+    /* Process creates */
+    if (json_object_size(set.create)) {
         strarray_t todo = STRARRAY_INITIALIZER;
-
-        /* sort keys topologically */
-        json_object_foreach(create, key, arg) {
-            /* Validate key. */
-            if (!strlen(key)) {
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-
-            strarray_append(&todo, key);
+        /* Process keys topologically */
+        const char *creation_id;
+        json_t *jarg;
+        json_object_foreach(set.create, creation_id, jarg) {
+            strarray_append(&todo, creation_id);
         }
-
         while (strarray_size(&todo)) {
             int didsome = 0;
             int i;
-
             for (i = 0; i < strarray_size(&todo); i++) {
-                key = strarray_nth(&todo, i);
-                arg = json_object_get(create, key);
+                const char *creation_id = strarray_nth(&todo, i);
+                json_t *jmbox = json_object_get(set.create, creation_id);
 
-                // check that parentId reference exists
-                const char *parentId = json_string_value(json_object_get(arg, "parentId"));
-                if (parentId && *parentId == '#' && !hash_lookup(parentId + 1, &req->idmap->mailboxes))
-                    continue;
+                /* Skip this mailbox if it parent hasn't been created, yet. */
+                json_t *jparentId = json_object_get(jmbox, "parentId");
+                const char *need_parent_id = json_string_value(jparentId);
+                if (need_parent_id && *need_parent_id == '#')
+                    if (!hash_lookup(need_parent_id + 1, &req->idmap->mailboxes))
+                        continue;
 
+                /* Ready to process */
+                struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+                struct mbox_setargs args;
+                json_t *set_err = NULL;
                 didsome = 1;
 
-                json_t *invalid = json_pack("[]");
-                char *uid = NULL;
-                json_t *err = NULL;
-                struct jmap_mailbox_set args;
-
-                /* Process arguments */
-                jmap_mailbox_set_parse(req, arg, &args, 1, invalid);
-                if (!json_array_size(invalid)) {
-                    r = _mbox_create(req, &args, invalid, &uid, &err);
-                }
-                jmap_mailbox_set_fini(&args);
-
-                /* Handle errors */
-                if (r) {
-                    goto done;
-                }
-                else if (err) {
-                    json_object_set_new(notCreated, key, err);
-                    json_decref(invalid);
-                    free(strarray_remove(&todo, i--));
-                    continue;
-                } else if (json_array_size(invalid)) {
-                    json_t *err = json_pack("{s:s, s:o}",
-                            "type", "invalidProperties", "properties", invalid);
-                    json_object_set_new(notCreated, key, err);
+                /* Parse mailbox */
+                _mbox_setargs_parse(jmbox, &parser, &args, req, 1);
+                if (json_array_size(parser.invalid)) {
+                    set_err = json_pack("{s:s}", "type", "invalidProperties");
+                    json_object_set(set_err, "properties", parser.invalid);
+                    json_object_set_new(set.not_created, creation_id, set_err);
+                    jmap_parser_fini(&parser);
                     free(strarray_remove(&todo, i--));
                     continue;
                 }
-                json_decref(invalid);
+                jmap_parser_fini(&parser);
 
-                /* Done */
-                json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
-                hash_insert(key, uid, &req->idmap->mailboxes);
+                /* Create mailbox */
+                char *mbox_id = NULL;
+                int r = _mbox_create(req, &args, &mbox_id, &set_err);
+                _mbox_setargs_fini(&args);
+                if (r || set_err) {
+                    if (!set_err) set_err = json_pack("{s:s}", "type", "serverError");
+                    json_object_set_new(set.not_created, creation_id, set_err);
+                    free(strarray_remove(&todo, i--));
+                    continue;
+                }
+                json_object_set_new(set.created, creation_id,
+                        json_pack("{s:s}", "id", mbox_id));
+                hash_insert(creation_id, mbox_id, &req->idmap->mailboxes);
                 free(strarray_remove(&todo, i--));
             }
-
-            if (!didsome)
-                return IMAP_INTERNAL; // XXX - nice error for missing parent?
+            if (!didsome) {
+                json_object_set_new(set.not_created, creation_id,
+                        json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                            "properties", "parentId"));
+            }
         }
-
-        if (json_object_size(created)) {
-            json_object_set(set, "created", created);
-            bump_modseq = 1;
-        }
-        json_decref(created);
-
-        if (json_object_size(notCreated)) {
-            json_object_set(set, "notCreated", notCreated);
-        }
-        json_decref(notCreated);
-
         strarray_fini(&todo);
     }
 
-    update = json_object_get(req->args, "update");
-    if (update) {
-        json_t *updated = json_pack("{}");
-        json_t *notUpdated = json_pack("{}");
-        const char *uid;
-        json_t *arg;
-
-        json_object_foreach(update, uid, arg) {
-            json_t *invalid = json_pack("[]");
-            json_t *err = NULL;
-            struct jmap_mailbox_set args;
-
-            /* Process arguments */
-            jmap_mailbox_set_parse(req, arg, &args, 0, invalid);
-            if (!json_array_size(invalid)) {
-                r = _mbox_update(req, &args, invalid, uid, &err);
-            }
-            jmap_mailbox_set_fini(&args);
-
-            /* Handle errors */
-            if (r) {
-                goto done;
-            }
-            else if (err) {
-                json_object_set_new(notUpdated, uid, err);
-                json_decref(invalid);
+    /* Process updates */
+    const char *mbox_id;
+    json_object_foreach(set.update, mbox_id, jarg) {
+        if (*mbox_id == '#') {
+            const char *id = hash_lookup(mbox_id + 1, &req->idmap->messages);
+            if (!id) {
+                json_object_set_new(set.not_updated, mbox_id,
+                        json_pack("{s:s}", "type", "notFound"));
                 continue;
             }
-            else if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notUpdated, uid, err);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Done */
-            json_object_set_new(updated, uid, json_null());
+            mbox_id = id;
         }
 
-        if (json_object_size(updated)) {
-            json_object_set(set, "updated", updated);
-            bump_modseq = 1;
+        /* Parse mailbox */
+        struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+        struct mbox_setargs args;
+        _mbox_setargs_parse(jarg, &parser, &args, req, 0);
+        if (args.id && strcmp(args.id, mbox_id)) {
+            jmap_parser_invalid(&parser, "id");
         }
-        json_decref(updated);
+        if (json_array_size(parser.invalid)) {
+            json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set(err, "properties", parser.invalid);
+            json_object_set_new(set.not_updated, mbox_id, err);
+            jmap_parser_fini(&parser);
+            continue;
+        }
+        if (!args.id) args.id = mbox_id;
+        jmap_parser_fini(&parser);
 
-        if (json_object_size(notUpdated)) {
-            json_object_set(set, "notUpdated", notUpdated);
+        /* Update mailbox */
+        json_t *set_err = NULL;
+        int r = _mbox_update(req, &args, &set_err);
+        _mbox_setargs_fini(&args);
+        if (r || set_err) {
+            if (!set_err) set_err = json_pack("{s:s}", "type", "serverError");
+            json_object_set_new(set.not_updated, mbox_id, set_err);
+            continue;
         }
-        json_decref(notUpdated);
+        json_object_set_new(set.updated, mbox_id, json_null());
     }
 
-    destroy = json_object_get(req->args, "destroy");
-    if (destroy) {
-        json_t *destroyed = json_pack("[]");
-        json_t *notDestroyed = json_pack("{}");
-
-        size_t index;
-        json_t *juid;
-        int removemsgs =
-            json_object_get(req->args, "onDestroyRemoveMessages") == json_true();
-
-        json_array_foreach(destroy, index, juid) {
-
-            /* Validate uid. */
-            const char *uid = json_string_value(juid);
-            if (!uid) {
+    size_t i;
+    json_t *jid;
+    json_array_foreach(set.destroy, i, jid) {
+        json_t *set_err = NULL;
+        const char *mbox_id = json_string_value(jid);
+        if (*mbox_id == '#') {
+            const char *id = hash_lookup(mbox_id + 1, &req->idmap->messages);
+            if (!id) {
+                json_object_set_new(set.not_updated, mbox_id,
+                        json_pack("{s:s}", "type", "notFound"));
                 continue;
             }
-            if (uid && uid[0] == '#') {
-                const char *newuid = hash_lookup(uid + 1, &req->idmap->mailboxes);
-                if (!newuid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, uid, err);
-                    continue;
-                }
-                uid = newuid;
-            }
-
-            json_t *err = NULL;
-            r = _mbox_destroy(req, uid, removemsgs, &err);
-            if (r)  {
-                goto done;
-            }
-            else if (err) {
-                json_object_set_new(notDestroyed, uid, err);
-                continue;
-            }
-
-            /* Report mailbox as destroyed. */
-            json_array_append_new(destroyed, json_string(uid));
+            mbox_id = id;
         }
-        if (json_array_size(destroyed)) {
-            json_object_set(set, "destroyed", destroyed);
-            bump_modseq = 1;
+        _mbox_destroy(req, mbox_id, on_destroy_remove_msgs, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_destroyed, mbox_id, set_err);
+            continue;
         }
-        json_decref(destroyed);
-        if (json_object_size(notDestroyed)) {
-            json_object_set(set, "notDestroyed", notDestroyed);
-        }
-        json_decref(notDestroyed);
+        json_array_append_new(set.destroyed, json_string(mbox_id));
     }
 
-    if (bump_modseq) jmap_bumpstate(req, 0);
-    json_object_set_new(set, "newState", jmap_getstate(req, 0/*mbtype*/));
+    if (json_object_size(set.created) ||
+        json_object_size(set.updated) ||
+        json_array_size(set.destroyed)) {
+        /* Bump folders modseq */
+        jmap_bumpstate(req, 0);
+    }
+    json_t *jstate = jmap_getstate(req, 0);
+    set.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    json_incref(set);
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Mailbox/set"));
-    json_array_append_new(item, set);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    free(mboxname);
-    free(parentname);
-    mboxlist_entry_free(&inboxentry);
-    if (set) json_decref(set);
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return 0;
 }
 
 struct _mbox_changes_data {
