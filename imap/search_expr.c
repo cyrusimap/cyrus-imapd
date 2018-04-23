@@ -1867,6 +1867,31 @@ static int search_convflags_match(message_t *m,
     return r;
 }
 
+static int search_allconvflags_match(message_t *m,
+                                     const union search_value *v __attribute__((unused)),
+                                     void *internalised,
+                                     void *data1 __attribute__((unused)))
+{
+    struct conv_rock *rock = (struct conv_rock *)internalised;
+    conversation_id_t cid = NULLCONVERSATION;
+    conversation_t *conv = NULL;
+    int r = 0; /* invalid flag name */
+
+    if (!rock->cstate) return 0;
+
+    message_get_cid(m, &cid);
+    if (conversation_load(rock->cstate, cid, &conv)) return 0;
+    if (!conv) return 0;
+
+    if (rock->num == 0)
+        r = !conv->unseen;
+    else if (rock->num > 0)
+        r = (conv->counts[rock->num-1] == conv->exists);
+
+    conversation_free(conv);
+    return r;
+}
+
 unsigned int search_convflags_get_countability(const union search_value *v)
 {
     if (!strcasecmp(v->s, "\\Seen"))
@@ -2287,6 +2312,20 @@ EXPORTED void search_attr_init(void)
             search_convflags_internalise,
             /*cmp*/NULL,
             search_convflags_match,
+            search_string_serialise,
+            search_string_unserialise,
+            search_convflags_get_countability,
+            search_string_duplicate,
+            search_string_free,
+            NULL
+        },{
+            "allconvflags",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_CONV,
+            search_convflags_internalise,
+            /*cmp*/NULL,
+            search_allconvflags_match,
             search_string_serialise,
             search_string_unserialise,
             search_convflags_get_countability,
