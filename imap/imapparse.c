@@ -389,7 +389,7 @@ EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
  * all were right with the world */
 EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
 {
-    int c;
+    int c = EOF;
     unsigned int i = 0;
     char buf[32];
     int gotchar = 0;
@@ -401,8 +401,10 @@ EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
         gotchar = 1;
     }
 
-    if (!gotchar || i == sizeof(buf))
+    if (!gotchar || i == sizeof(buf)) {
+        if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
 
     buf[i] = '\0';
     *num = strtoull(buf, NULL, 10);
