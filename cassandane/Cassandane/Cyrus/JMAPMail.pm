@@ -6548,6 +6548,7 @@ sub test_email_querychanges_implementation
     $self->assert_str_equals($msgidC, $res->[0][1]{added}[1]{id});
     $self->assert_num_equals(2, $res->[0][1]{added}[1]{index});
     $self->assert_deep_equals([$msgidB, $msgidC], $res->[0][1]{removed});
+    $self->assert_num_equals(4, $res->[0][1]{total});
     $state_trivial = $res->[0][1]{newState};
 
     # 'collapsed' case
@@ -6557,6 +6558,7 @@ sub test_email_querychanges_implementation
     $self->assert_str_equals($msgidC, $res->[1][1]{added}[1]{id});
     $self->assert_num_equals(2, $res->[1][1]{added}[1]{index});
     $self->assert_deep_equals([$msgidB, $msgidC], $res->[1][1]{removed});
+    $self->assert_num_equals(4, $res->[0][1]{total});
     $state_collapsed = $res->[1][1]{newState};
 
     # 'concise' case
@@ -6564,9 +6566,10 @@ sub test_email_querychanges_implementation
     $self->assert_str_equals($msgidC, $res->[2][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[2][1]{added}[0]{index});
     $self->assert_deep_equals([], $res->[2][1]{removed});
+    $self->assert_num_equals(4, $res->[0][1]{total});
     $state_concise = $res->[2][1]{newState};
 
-    xlog "delete email B ($msgidC)";
+    xlog "delete email C ($msgidC)";
     $res = $jmap->CallMethods([['Email/set', { destroy => [ $msgidC ] }, "R1"]]);
     $self->assert_str_equals($msgidC, $res->[0][1]->{destroyed}[0]);
 
@@ -6603,18 +6606,21 @@ sub test_email_querychanges_implementation
     $self->assert_str_equals($msgidD, $res->[0][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
     $self->assert_deep_equals([$msgidC, $msgidD], $res->[0][1]{removed});
+    $self->assert_num_equals(3, $res->[0][1]{total});
 
     # 'collapsed' case
     $self->assert_num_equals(1, scalar @{$res->[1][1]{added}});
     $self->assert_str_equals($msgidD, $res->[1][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[1][1]{added}[0]{index});
     $self->assert_deep_equals([$msgidC, $msgidD], $res->[1][1]{removed});
+    $self->assert_num_equals(3, $res->[0][1]{total});
 
     # 'concise' case
     $self->assert_num_equals(1, scalar @{$res->[2][1]{added}});
     $self->assert_str_equals($msgidD, $res->[2][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[2][1]{added}[0]{index});
     $self->assert_deep_equals([$msgidC], $res->[2][1]{removed});
+    $self->assert_num_equals(3, $res->[0][1]{total});
 }
 
 sub test_email_changes_shared
