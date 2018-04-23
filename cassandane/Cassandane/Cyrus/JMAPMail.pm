@@ -7818,6 +7818,41 @@ sub test_email_get_header_all
     $self->assert_deep_equals([' foo', ' bar'], $msg->{'header:x-tra:asRaw:all'});
 }
 
+sub test_email_set_nullheader
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $text = "x";
+
+    # Prepare test email
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+        'header:foo' => undef,
+        'header:foo:asMessageIds' => undef,
+    };
+
+    # Create and get mail
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', {
+            ids => [ "#1" ],
+            properties => [ 'headers', 'header:foo' ],
+        }, "R2" ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+
+    foreach (@{$msg->{headers}}) {
+        xlog "Checking header $_->{name}";
+        $self->assert_str_not_equals('foo', $_->{name});
+    }
+    $self->assert_null($msg->{'header:foo'});
+}
+
 sub test_email_set_headers
     :JMAP :min_version_3_1
 {
