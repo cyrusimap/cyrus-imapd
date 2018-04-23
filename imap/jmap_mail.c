@@ -4698,18 +4698,20 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         if (!strcmp(prop, "to")) {
             sortcrit[i].key = SORT_TO;
         }
-        if (!strncmp(prop, "hasKeyword:", 11)) {
-            const char *name = jmap_keyword_to_imap(prop + 11);
-            if (name) {
+        if (!strcmp(prop, "hasKeyword")) {
+            const char *name = json_string_value(json_object_get(jcomp, "keyword"));
+            const char *flagname = jmap_keyword_to_imap(name);
+            if (flagname) {
                 sortcrit[i].key = SORT_HASFLAG;
-                sortcrit[i].args.flag.name = xstrdup(name);
+                sortcrit[i].args.flag.name = xstrdup(flagname);
             }
         }
-        if (!strncmp(prop, "someInThreadHaveKeyword:", 24)) {
-            const char *name = jmap_keyword_to_imap(prop + 24);
-            if (name) {
-                sortcrit[i].key = SORT_HASFLAG;
-                sortcrit[i].args.flag.name = xstrdup(name);
+        if (!strcmp(prop, "someInThreadHaveKeyword")) {
+            const char *name = json_string_value(json_object_get(jcomp, "keyword"));
+            const char *flagname = jmap_keyword_to_imap(name);
+            if (flagname) {
+                sortcrit[i].key = SORT_HASCONVFLAG;
+                sortcrit[i].args.flag.name = xstrdup(flagname);
             }
         }
     }
