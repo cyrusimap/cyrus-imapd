@@ -5408,7 +5408,9 @@ static int jmap_email_changes(jmap_req_t *req)
         json_decref(val);
     }
     else {
-        changes.new_state = xstrdup(changes.since_state);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        changes.new_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
     }
 
     jmap_ok(req, jmap_changes_reply(&changes));
