@@ -380,7 +380,7 @@ static void test_get_search_program(void)
 
     /* CONVUNREAD */
     TESTCASE("convunread\r\n",
-             "(and (not (match convflags \"\\Seen\")))");
+             "(and (not (match allconvflags \"\\Seen\")))");
 
     /* CONVSEEN */
     TESTCASE("convseen\r\n",
@@ -388,7 +388,7 @@ static void test_get_search_program(void)
 
     /* CONVUNSEEN */
     TESTCASE("convunseen\r\n",
-             "(and (not (match convflags \"\\Seen\")))");
+             "(and (not (match allconvflags \"\\Seen\")))");
 
     /* CONVMODSEQ <modseq> */
     TESTCASE("convmodseq 0\r\n",            /* not a valid modseq but we can search on it */
