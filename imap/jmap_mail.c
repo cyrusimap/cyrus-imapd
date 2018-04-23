@@ -4884,15 +4884,14 @@ static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
 
         /* we're doing jmap_email_querychanges - we use the results differently */
         if (window->sincemodseq) {
-            if (foundupto) goto doneloop;
-
             /* Keep track of the highest modseq */
-            if (window->highestmodseq < md->modseq)
+            if (!foundupto && window->highestmodseq < md->modseq)
                 window->highestmodseq = md->modseq;
 
             /* trivial case - not collapsing conversations */
             if (!window->collapse) {
                 if (is_expunged) {
+                    /* Don't count to total */
                     if (foundupto) goto doneloop;
                     if (md->modseq <= window->sincemodseq) goto doneloop;
                     _email_querychanges_destroyed(*expungedids, msgid);
