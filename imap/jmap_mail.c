@@ -7751,6 +7751,11 @@ static void _headers_parseprops(json_t *jobject,
                 syslog(LOG_ERR, "jmap: unknown header form: %d", hprop->form);
                 jmap_parser_invalid(parser, field);
         }
+        if (!jval || jval == json_null()) {
+            /* ignore null headers */
+            _header_prop_free(hprop);
+            continue;
+        }
         if (hprop->all) {
             size_t i;
             json_t *jall = jval;
