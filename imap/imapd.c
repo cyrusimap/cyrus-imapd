@@ -8740,10 +8740,10 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     c = prot_getc(imapd_in);
-    if (c != '(') return EOF;
+    if (c != '(') goto bad;
 
     c = getword(imapd_in, &arg);
-    if (arg.s[0] == '\0') return EOF;
+    if (arg.s[0] == '\0') goto bad;
     for (;;) {
         lcase(arg.s);
         if (!strcmp(arg.s, "messages")) {
@@ -8783,7 +8783,7 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
             static char buf[200];
             snprintf(buf, 200, "Invalid Status attributes %s", arg.s);
             *errstr = buf;
-            return EOF;
+            goto bad;
         }
 
         if (c == ' ') c = getword(imapd_in, &arg);
@@ -8792,13 +8792,17 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 
     if (c != ')') {
         *errstr = "Missing close parenthesis in Status";
-        return EOF;
+        goto bad;
     }
     c = prot_getc(imapd_in);
 
     /* success */
     *statusitemsp = statusitems;
     return c;
+
+bad:
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
 }
 
 static int print_statusline(const char *extname, unsigned statusitems,
@@ -8965,6 +8969,7 @@ static void cmd_status(char *tag, char *name)
     c = parse_statusitems(&statusitems, &errstr);
     if (c == EOF) {
         prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
+        eatline(imapd_in, c);
         goto done;
     }
 
@@ -12171,7 +12176,7 @@ static int getlistretopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_STATUS;
             c = parse_statusitems(&args->statusitems, &errstr);
             if (c == EOF) {
-                prot_printf(imapd_out, "%s BAD %s", tag, errstr);
+                prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
                 return EOF;
             }
         }
