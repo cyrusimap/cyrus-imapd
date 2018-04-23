@@ -179,11 +179,15 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 buf_cstring(buf);
                 return EOF;
             }
+            /* XXX we could reject "imbedded NUL"s immediately in here,
+             * instead of postprocessing for them??? */
             buf_putc(buf, c);
         }
         buf_cstring(buf);
-        if (!(flags & GXS_BINARY) && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
+        if (!(flags & GXS_BINARY) && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf)) {
+            if (c != EOF) prot_ungetc(c, pin);
             return EOF; /* Disallow imbedded NUL */
+        }
         return prot_getc(pin);
 
     default:
@@ -219,12 +223,14 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                     buf_free(buf);
                     return c;
                 }
+                if (c != EOF) prot_ungetc(c, pin);
                 return EOF;
             }
         }
         goto fail;
     }
 
+    /* XXX i think we can never get to this line? */
     return EOF;
 
 fail:
