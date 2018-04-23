@@ -2632,6 +2632,11 @@ static int jmap_mailbox_set(jmap_req_t *req)
         json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        set.old_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
+    }
 
     /* Process creates */
     if (json_object_size(set.create)) {
@@ -9414,6 +9419,11 @@ static int jmap_email_set(jmap_req_t *req)
         }
         json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
+    }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        set.old_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
     }
 
     json_t *email;
