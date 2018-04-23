@@ -4277,13 +4277,14 @@ static void _email_search_keyword(search_expr_t *parent, const char *keyword)
     }
 }
 
-static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword)
+static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword,
+                                        int matchall)
 {
     const char *flag = jmap_keyword_to_imap(keyword);
     if (!flag) return;
 
     search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("convflags");
+    e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flag);
 }
 
@@ -4416,14 +4417,14 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
             /* This shouldn't happen, validate_sort should have reported
              * allInThreadHaveKeyword as unsupported. Let's ignore this
              * filter and return false positives. */
-            syslog(LOG_ERR, "_email_search: ignoring allInThreadHaveKeyword filter");
+            _email_search_threadkeyword(this, json_string_value(val), 1);
         }
         if (JNOTNULL((val = json_object_get(filter, "someInThreadHaveKeyword")))) {
-            _email_search_threadkeyword(this, json_string_value(val));
+            _email_search_threadkeyword(this, json_string_value(val), 0);
         }
         if (JNOTNULL((val = json_object_get(filter, "noneInThreadHaveKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_threadkeyword(e, json_string_value(val));
+            _email_search_threadkeyword(e, json_string_value(val), 0);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
@@ -4576,8 +4577,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
         if (!_email_keyword_is_valid(s)) {
             jmap_parser_invalid(parser, "allInThreadHaveKeyword");
         }
-        else {
-            /* XXX currently can't support this filter */
+        if (!_email_threadkeyword_is_valid(s)) {
             json_array_append_new(unsupported, json_pack("{s:s}",
                         "allInThreadHaveKeyword", s));
         }
