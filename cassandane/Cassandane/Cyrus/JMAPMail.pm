@@ -4852,7 +4852,7 @@ sub test_email_query_keywords
 
     xlog "fetch emails sorted ascending by \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:$Seen' }],
+        sort => [{ property => 'hasKeyword', keyword => '$Seen' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4860,7 +4860,7 @@ sub test_email_query_keywords
 
     xlog "fetch emails sorted descending by \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:$Seen', isAscending => JSON::false }],
+        sort => [{ property => 'hasKeyword', keyword => '$Seen', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -4921,7 +4921,7 @@ sub test_email_query_userkeywords
 
     xlog "fetch emails sorted ascending by foo flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:foo' }],
+        sort => [{ property => 'hasKeyword', keyword => 'foo' }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
@@ -4929,7 +4929,7 @@ sub test_email_query_userkeywords
 
     xlog "fetch emails sorted descending by foo flag";
     $res = $jmap->CallMethods([['Email/query', {
-        sort => [{ property => 'hasKeyword:foo', isAscending => JSON::false }],
+        sort => [{ property => 'hasKeyword', keyword => 'foo', isAscending => JSON::false }],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
@@ -6073,7 +6073,6 @@ sub test_email_changes
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
-
 
     xlog "get email updates";
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $state }, "R1"]]);
