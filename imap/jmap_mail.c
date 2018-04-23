@@ -5161,20 +5161,6 @@ static int _email_parse_comparator(struct jmap_comparator *comp, void *rock __at
         return 0;
     }
 
-    /* Special case: hasKeyword */
-    if (!strncmp(comp->property, "hasKeyword:", 11)) {
-        if (_email_keyword_is_valid(comp->property + 11)) {
-            return 1;
-        }
-    }
-    /* Special case: someInThreadHaveKeyword */
-    else if (!strncmp(comp->property, "someInThreadHaveKeyword:", 24)) {
-        const char *s = comp->property + 24;
-        if (_email_keyword_is_valid(s) && _email_threadkeyword_is_valid(s)) {
-            return 1;
-        }
-    }
-
     /* Search in list of supported sortFields */
     const char **sp;
     for (sp = msglist_sortfields; *sp; sp++) {
