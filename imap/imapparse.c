@@ -552,7 +552,7 @@ static int get_search_return_opts(struct protstream *pin,
     if (c != '(') {
         prot_printf(pout,
                     "%s BAD Missing return options in Search\r\n", searchargs->tag);
-        return EOF;
+        goto bad;
     }
 
     do {
@@ -579,7 +579,7 @@ static int get_search_return_opts(struct protstream *pin,
             prot_printf(pout,
                         "%s BAD Invalid Search return option %s\r\n",
                         searchargs->tag, opt.s);
-            return EOF;
+            goto bad;
         }
 
     } while (c == ' ');
@@ -596,12 +596,16 @@ static int get_search_return_opts(struct protstream *pin,
         prot_printf(pout,
                     "%s BAD Missing close parenthesis in Search\r\n",
                     searchargs->tag);
-        return EOF;
+        goto bad;
     }
 
     c = prot_getc(pin);
 
     return c;
+
+bad:
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
 }
 
 /*
