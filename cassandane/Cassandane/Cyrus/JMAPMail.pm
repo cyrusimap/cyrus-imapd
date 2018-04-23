@@ -6069,8 +6069,8 @@ sub test_email_changes
     $self->assert_str_equals($res->[0][1]->{type}, "invalidArguments");
     $self->assert_str_equals($res->[0][1]->{arguments}[0], "sinceState");
 
-    xlog "get email list";
-    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    xlog "get email state";
+    $res = $jmap->CallMethods([['Email/get', { ids => []}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
@@ -6642,14 +6642,16 @@ sub test_email_changes_shared
     $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
 
     xlog "get email state";
-    $res = $jmap->CallMethods([['Email/query', { accountId => 'foo', }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', { accountId => 'foo', ids => []}, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "get email updates (expect no changes)";
+    xlog "get email updates (expect empty changes)";
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
-    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    # This could be the same as oldState, or not, as we might leak
+    # unshared modseqs (but not the according mail!).
+    $self->assert_not_null($res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -6672,10 +6674,12 @@ sub test_email_changes_shared
     $self->{adminstore}->set_folder('user.foo.box1');
     $self->make_message("Email B", store => $self->{adminstore}) || die;
 
-    xlog "get email updates (expect no changes)";
+    xlog "get email updates (expect empty changes)";
     $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
-    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    # This could be the same as oldState, or not, as we might leak
+    # unshared modseqs (but not the according mail!).
+    $self->assert_not_null($res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
