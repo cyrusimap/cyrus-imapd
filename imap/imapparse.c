@@ -620,32 +620,29 @@ static int get_search_annotation(struct protstream *pin,
     struct buf value = BUF_INITIALIZER;
 
     if (c != ' ')
-        return EOF;
+        goto bad;
 
     /* parse the entry */
     c = getastring(pin, pout, &entry);
     if (!entry.len || c != ' ') {
-        c = EOF;
-        goto out;
+        goto bad;
     }
 
     /* parse the attrib */
     c = getastring(pin, pout, &attrib);
     if (!attrib.len || c != ' ') {
-        c = EOF;
-        goto out;
+        goto bad;
     }
     if (strcmp(attrib.s, "value") &&
         strcmp(attrib.s, "value.shared") &&
         strcmp(attrib.s, "value.priv")) {
-        c = EOF;
-        goto out;
+        goto bad;
     }
 
     /* parse the value */
     c = getbnstring(pin, pout, &value);
     if (c == EOF)
-        goto out;
+        goto bad;
 
     sa = xzmalloc(sizeof(*sa));
     sa->entry = buf_release(&entry);
@@ -658,11 +655,18 @@ static int get_search_annotation(struct protstream *pin,
 
     *lp = sa;
 
-out:
     buf_free(&entry);
     buf_free(&attrib);
     buf_free(&value);
     return c;
+
+bad:
+    buf_free(&entry);
+    buf_free(&attrib);
+    buf_free(&value);
+
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
 }
 
 
