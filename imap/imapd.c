@@ -9162,6 +9162,7 @@ static int parsecreateargs(struct dlist **extargs)
 
  fail:
     dlist_free(&res);
+    if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 }
 
@@ -12031,6 +12032,7 @@ syntax_error:
     free(windowargs.anchorfolder);
     buf_free(&ext_folder);
     prot_printf(imapd_out, "%s BAD Syntax error in window arguments\r\n", tag);
+    if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 }
 
@@ -12063,7 +12065,7 @@ static int getlistselopts(char *tag, struct listargs *args)
             prot_printf(imapd_out,
                         "%s BAD Invalid syntax in List command\r\n",
                         tag);
-            return EOF;
+            goto bad;
         }
 
         lcase(buf.s);
@@ -12095,7 +12097,7 @@ static int getlistselopts(char *tag, struct listargs *args)
             prot_printf(imapd_out,
                         "%s BAD Invalid List selection option \"%s\"\r\n",
                         tag, buf.s);
-            return EOF;
+            goto bad;
         }
 
         if (c != ' ') break;
@@ -12104,7 +12106,7 @@ static int getlistselopts(char *tag, struct listargs *args)
     if (c != ')') {
         prot_printf(imapd_out,
                     "%s BAD Missing close parenthesis for List selection options\r\n", tag);
-        return EOF;
+        goto bad;
     }
 
     if (args->sel & list_select_mod_opts
@@ -12112,10 +12114,14 @@ static int getlistselopts(char *tag, struct listargs *args)
         prot_printf(imapd_out,
                     "%s BAD Invalid combination of selection options\r\n",
                     tag);
-        return EOF;
+        goto bad;
     }
 
     return prot_getc(imapd_in);
+
+bad:
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
 }
 
 /*
@@ -12131,20 +12137,20 @@ static int getlistretopts(char *tag, struct listargs *args)
     if (!*buf.s) {
         prot_printf(imapd_out,
                     "%s BAD Invalid syntax in List command\r\n", tag);
-        return EOF;
+        goto bad;
     }
     lcase(buf.s);
     if (strcasecmp(buf.s, "return")) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra argument to List: \"%s\"\r\n",
                     tag, buf.s);
-        return EOF;
+        goto bad;
     }
 
     if (c != ' ' || (c = prot_getc(imapd_in)) != '(') {
         prot_printf(imapd_out,
                     "%s BAD Missing return argument list\r\n", tag);
-        return EOF;
+        goto bad;
     }
 
     if ( (c = prot_getc(imapd_in)) == ')')
@@ -12158,7 +12164,7 @@ static int getlistretopts(char *tag, struct listargs *args)
         if (!*buf.s) {
             prot_printf(imapd_out,
                         "%s BAD Invalid syntax in List command\r\n", tag);
-            return EOF;
+            goto bad;
         }
 
         lcase(buf.s);
@@ -12190,7 +12196,7 @@ static int getlistretopts(char *tag, struct listargs *args)
             prot_printf(imapd_out,
                         "%s BAD Invalid List return option \"%s\"\r\n",
                         tag, buf.s);
-            return EOF;
+            goto bad;
         }
 
         if (c != ' ') break;
@@ -12199,10 +12205,14 @@ static int getlistretopts(char *tag, struct listargs *args)
     if (c != ')') {
         prot_printf(imapd_out,
                     "%s BAD Missing close parenthesis for List return options\r\n", tag);
-        return EOF;
+        goto bad;
     }
 
     return prot_getc(imapd_in);
+
+bad:
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
 }
 
 /*
@@ -12238,7 +12248,7 @@ static int getdatetime(time_t *date)
     return c;
 
  baddate:
-    prot_ungetc(c, imapd_in);
+    if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 }
 
