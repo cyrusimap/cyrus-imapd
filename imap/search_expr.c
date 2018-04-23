@@ -1859,7 +1859,7 @@ static int search_convflags_match(message_t *m,
     if (!conv) return 0;
 
     if (rock->num == 0)
-        r = !conv->unseen;
+        r = (conv->unseen != conv->exists);
     else if (rock->num > 0)
         r = !!conv->counts[rock->num-1];
 

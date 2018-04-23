@@ -741,14 +741,15 @@ static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
     e->value.u = flag;
 }
 
-static void convflag_match(search_expr_t *parent, const char *flagname, int not)
+static void convflag_match(search_expr_t *parent, const char *flagname, int not,
+                           int matchall)
 {
     search_expr_t *e;
 
     if (not)
         parent = search_expr_new(parent, SEOP_NOT);
     e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("convflags");
+    e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flagname);
 }
 
@@ -892,19 +893,19 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             c = getword(pin, &arg);
             lcase(arg.s);
-            convflag_match(parent, arg.s, /*not*/0);
+            convflag_match(parent, arg.s, /*not*/0, /*all*/0);
         }
         else if (hasconv && !strcmp(criteria.s, "convread")) {  /* nonstandard */
-            convflag_match(parent, "\\Seen", /*not*/0);
+            convflag_match(parent, "\\Seen", /*not*/0, /*all*/0);
         }
         else if (hasconv && !strcmp(criteria.s, "convunread")) {    /* nonstandard */
-            convflag_match(parent, "\\Seen", /*not*/1);
+            convflag_match(parent, "\\Seen", /*not*/1, /*all*/1);
         }
         else if (hasconv && !strcmp(criteria.s, "convseen")) {  /* nonstandard */
-            convflag_match(parent, "\\Seen", /*not*/0);
+            convflag_match(parent, "\\Seen", /*not*/0, /*all*/0);
         }
         else if (hasconv && !strcmp(criteria.s, "convunseen")) {    /* nonstandard */
-            convflag_match(parent, "\\Seen", /*not*/1);
+            convflag_match(parent, "\\Seen", /*not*/1, /*all*/1);
         }
         else if (hasconv && !strcmp(criteria.s, "convmodseq")) {    /* nonstandard */
             modseq_t ms;
