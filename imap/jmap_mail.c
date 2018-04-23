@@ -1444,7 +1444,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -1937,7 +1937,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
         jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-    json_t *jstate = jmap_getstate(req, 0/*mbtype*/);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     query.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -2768,7 +2768,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
         /* Bump folders modseq */
         jmap_bumpstate(req, 0);
     }
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -5241,7 +5241,7 @@ static int jmap_email_query(jmap_req_t *req)
     query.position = window.position;
 
     /* State token is current modseq ':' highestuid - because queryChanges... */
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, "%s:%u", json_string_value(jstate), window.highestuid);
     query.state = buf_release(&buf);
@@ -5844,7 +5844,7 @@ static int jmap_thread_get(jmap_req_t *req)
         goto done;
     }
 
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -6887,7 +6887,7 @@ static int jmap_email_get(jmap_req_t *req)
         msgrecord_unref(&mr);
     }
 
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -9488,7 +9488,7 @@ static int jmap_email_set(jmap_req_t *req)
 
     // TODO refactor jmap_getstate to return a string, once
     // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, 0/*mbtype*/);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -10171,7 +10171,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         json_array_append(get.not_found, val);
     }
 
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -10201,7 +10201,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* ifInState never fails for message submission random states */
     set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, 0));
+    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, MBTYPE_EMAIL));
 
     /* onSuccessUpdateEmail */
     json_t *invalid = json_pack("[]");
@@ -10455,7 +10455,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
 
     /* Trivially find no message submission updates at all. */
     oldstate = json_string(since);
-    newstate = jmap_getstate(req, 0/*mbtype*/);
+    newstate = jmap_getstate(req, MBTYPE_EMAIL);
 
     /* Prepare response. */
     res = json_pack("{}");
@@ -10562,7 +10562,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     }
 
     /* We don't store EmailSubmissions */
-    json_t *jstate = jmap_getstate(req, 0);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
     query.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.position = 0;

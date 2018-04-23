@@ -57,6 +57,7 @@
 #define MAX_PARTITION_LEN 64
 
 /* flags for types of mailboxes */
+#define MBTYPE_EMAIL 0 /* default mbtype is zero */
 #define MBTYPE_REMOTE (1<<0) /* Not on this server (part is remote host) */
 #define MBTYPE_RESERVE (1<<1) /* Reserved [mupdate/imapd] /
                                Rename Target [imapd] (part is normal, but
