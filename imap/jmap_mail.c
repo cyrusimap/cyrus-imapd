@@ -2625,7 +2625,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
     }
     if (set.if_in_state) {
         json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, 0/*mbtype*/)) {
+        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
@@ -9408,7 +9408,7 @@ static int jmap_email_set(jmap_req_t *req)
     if (set.if_in_state) {
         /* TODO rewrite state function to use char* not json_t* */
         json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, 0/*mbtype*/)) {
+        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
