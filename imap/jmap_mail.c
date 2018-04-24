@@ -600,6 +600,7 @@ static void jmap_set_parse(json_t *jargs,
 
 static void jmap_set_fini(struct jmap_set *set)
 {
+    free(set->old_state);
     free(set->new_state);
     json_decref(set->create);
     json_decref(set->update);
