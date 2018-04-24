@@ -179,15 +179,13 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 buf_cstring(buf);
                 return EOF;
             }
-            /* XXX we could reject "imbedded NUL"s immediately in here,
-             * instead of postprocessing for them??? */
             buf_putc(buf, c);
         }
         buf_cstring(buf);
-        if (!(flags & GXS_BINARY) && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf)) {
-            if (c != EOF) prot_ungetc(c, pin);
+        /* n.b. we've consumed an exact number of bytes according to the literal, do
+         * not unget anything even if we don't like the literal */
+        if (!(flags & GXS_BINARY) && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
             return EOF; /* Disallow imbedded NUL */
-        }
         return prot_getc(pin);
 
     default:

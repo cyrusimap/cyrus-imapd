@@ -163,12 +163,8 @@ static void test_getastring(void)
     TESTCASE(getastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
     TESTCASE(getastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
-    /* literals with embedded NUL - getastring() rejects these 
-     * Note that we currently post-process for NULs, so we consume bytes up to
-     * the end of the literal, then put the last byte back into the stream (so
-     * that eatline() is safe) if we didn't like the literal.
-     */
-    TESTCASE(getastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
+    /* literals with embedded NUL - getastring() rejects these */
+    TESTCASE(getastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0bar")); /* should be ' ', "foo\0bar" */
 }
 
 /*
@@ -321,12 +317,8 @@ static void test_getstring(void)
     TESTCASE(getstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
     TESTCASE(getstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
-    /* literals with embedded NUL - getstring() rejects these
-     * Note that we currently post-process for NULs, so we consume bytes up to
-     * the end of the literal, then put the last byte back into the stream (so
-     * that eatline() is safe) if we didn't like the literal.
-     */
-    TESTCASE(getstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
+    /* literals with embedded NUL - getstring() rejects these */
+    TESTCASE(getstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0bar")); /* should be ' ', "foo\0bar" */
 }
 
 
@@ -478,12 +470,8 @@ static void test_getnstring(void)
     TESTCASE(getnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
     TESTCASE(getnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
-    /* literals with embedded NUL - getnstring() rejects these
-     * Note that we currently post-process for NULs, so we consume bytes up to
-     * the end of the literal, then put the last byte back into the stream (so
-     * that eatline() is safe) if we didn't like the literal.
-     */
-    TESTCASE(getnstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
+    /* literals with embedded NUL - getnstring() rejects these */
+    TESTCASE(getnstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0bar")); /* should be ' ', "foo\0bar" */
 }
 
 /*
@@ -632,11 +620,7 @@ static void test_getnastring(void)
     TESTCASE(getnastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
     TESTCASE(getnastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar ")   );
-    /* literals with embedded NUL - getastring() rejects these
-     * Note that we currently post-process for NULs, so we consume bytes up to
-     * the end of the literal, then put the last byte back into the stream (so
-     * that eatline() is safe) if we didn't like the literal.
-     */
-    TESTCASE(getnastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
+    /* literals with embedded NUL - getastring() rejects these */
+    TESTCASE(getnastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0bar")); /* should be ' ', "foo\0bar" */
 }
 /* vim: set ft=c: */
