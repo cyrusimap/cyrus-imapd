@@ -176,6 +176,276 @@ static void test_getsint32(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR8));
 }
 
+static void test_getuint32(void)
+{
+    static const char STR1[] = "0 ";
+    static const uint32_t VAL1 = 0;
+    static const char STR2[] = "1234567890 ";
+    static const uint32_t VAL2 = 1234567890;
+    static const char STR3[] = "12345678901234567890 ";
+    static const char STR4[] = "123)";
+    static const uint32_t VAL4 = 123;
+    static const char STR5[] = "y&+123 ";
+    static const char STR6[] = "123";
+    static const uint32_t VAL6 = 123;
+    static const char STR7[] = "-123 ";
+    static const char STR8[] = "+123 ";
+    uint32_t val;
+    int c;
+    int bytes_in;
+
+    /* test a valid zero value */
+    wrap_int_parser(getuint32, uint32_t, STR1, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
+
+    /* test a valid value with all the digits */
+    wrap_int_parser(getuint32, uint32_t, STR2, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
+
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL_BEGIN;
+        wrap_int_parser(getuint32, uint32_t, STR3, &c, &val, NULL);
+    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+
+    /* test a valid value with a different terminator */
+    wrap_int_parser(getuint32, uint32_t, STR4, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ')');
+    CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
+
+    /* test an invalid string */
+    wrap_int_parser(getuint32, uint32_t, STR5, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test the corner case where we encounter EOF
+     * at the end of a valid string of digits */
+    wrap_int_parser(getuint32, uint32_t, STR6, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
+
+    /* test a leading - */
+    wrap_int_parser(getuint32, uint32_t, STR7, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test a leading + */
+    wrap_int_parser(getuint32, uint32_t, STR8, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+}
+
+static void test_getint64(void)
+{
+    static const char STR1[] = "0 ";
+    static const int64_t VAL1 = 0;
+    static const char STR2[] = "1234567890 ";
+    static const int64_t VAL2 = 1234567890;
+    static const char STR3[] = "12345678901234567890 ";
+    static const char STR4[] = "123)";
+    static const int64_t VAL4 = 123;
+    static const char STR5[] = "y&+123 ";
+    static const char STR6[] = "123";
+    static const int64_t VAL6 = 123;
+    static const char STR7[] = "-123 ";
+    static const char STR8[] = "+123 ";
+    int64_t val;
+    int c;
+    int bytes_in;
+
+    /* test a valid zero value */
+    wrap_int_parser(getint64, int64_t, STR1, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
+
+    /* test a valid value with all the digits */
+    wrap_int_parser(getint64, int64_t, STR2, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
+
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL_BEGIN;
+        wrap_int_parser(getint64, int64_t, STR3, &c, &val, NULL);
+    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+
+    /* test a valid value with a different terminator */
+    wrap_int_parser(getint64, int64_t, STR4, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ')');
+    CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
+
+    /* test an invalid string */
+    wrap_int_parser(getint64, int64_t, STR5, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test the corner case where we encounter EOF
+     * at the end of a valid string of digits */
+    wrap_int_parser(getint64, int64_t, STR6, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
+
+    /* test a leading - */
+    wrap_int_parser(getint64, int64_t, STR7, &c, &val, NULL);
+    /* XXX this would have succeeded if getint64() weren't broken */
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+
+    /* test a leading + */
+    wrap_int_parser(getint64, int64_t, STR8, &c, &val, NULL);
+    /* XXX this would have succeeded if getint64() weren't broken */
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+}
+
+static void test_getsint64(void)
+{
+    static const char STR1[] = "0 ";
+    static const int64_t VAL1 = 0;
+    static const char STR2[] = "1234567890 ";
+    static const int64_t VAL2 = 1234567890;
+    static const char STR3[] = "12345678901234567890 ";
+    static const char STR4[] = "123)";
+    static const int64_t VAL4 = 123;
+    static const char STR5[] = "y&+123 ";
+    static const char STR6[] = "123";
+    static const int64_t VAL6 = 123;
+    static const char STR7[] = "-123 ";
+    static const int64_t VAL7 = -123;
+    static const char STR8[] = "+123 ";
+    static const int64_t VAL8 = 123;
+    int64_t val;
+    int c;
+    int bytes_in;
+
+    /* test a valid zero value */
+    wrap_int_parser(getsint64, int64_t, STR1, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
+
+    /* test a valid value with all the digits */
+    wrap_int_parser(getsint64, int64_t, STR2, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
+
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL_BEGIN;
+        wrap_int_parser(getsint64, int64_t, STR3, &c, &val, NULL);
+    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+
+    /* test a valid value with a different terminator */
+    wrap_int_parser(getsint64, int64_t, STR4, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ')');
+    CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
+
+    /* test an invalid string */
+    wrap_int_parser(getsint64, int64_t, STR5, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test the corner case where we encounter EOF
+     * at the end of a valid string of digits */
+    wrap_int_parser(getsint64, int64_t, STR6, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
+
+    /* test a leading - */
+    wrap_int_parser(getsint64, int64_t, STR7, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL7);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR7));
+
+    /* test a leading + */
+    wrap_int_parser(getsint64, int64_t, STR8, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL8);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR8));
+}
+
+static void test_getuint64(void)
+{
+    static const char STR1[] = "0 ";
+    static const uint64_t VAL1 = 0;
+    static const char STR2[] = "1234567890 ";
+    static const uint64_t VAL2 = 1234567890;
+    static const char STR3[] = "123456789012345678901 ";
+    static const char STR4[] = "123)";
+    static const uint64_t VAL4 = 123;
+    static const char STR5[] = "y&+123 ";
+    static const char STR6[] = "123";
+    static const uint64_t VAL6 = 123;
+    static const char STR7[] = "-123 ";
+    static const char STR8[] = "+123 ";
+    uint64_t val;
+    int c;
+    int bytes_in;
+
+    /* test a valid zero value */
+    wrap_int_parser(getuint64, uint64_t, STR1, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
+
+    /* test a valid value with all the digits */
+    wrap_int_parser(getuint64, uint64_t, STR2, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ' ');
+    CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
+
+    /* test a string with too many digits */
+    CU_EXPECT_CYRFATAL_BEGIN;
+        wrap_int_parser(getuint64, uint64_t, STR3, &c, &val, NULL);
+    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+
+    /* test a valid value with a different terminator */
+    wrap_int_parser(getuint64, uint64_t, STR4, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, ')');
+    CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
+
+    /* test an invalid string */
+    wrap_int_parser(getuint64, uint64_t, STR5, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test the corner case where we encounter EOF
+     * at the end of a valid string of digits */
+    wrap_int_parser(getuint64, uint64_t, STR6, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
+
+    /* test a leading - */
+    wrap_int_parser(getuint64, uint64_t, STR7, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+
+    /* test a leading + */
+    wrap_int_parser(getuint64, uint64_t, STR8, &c, &val, &bytes_in);
+    CU_ASSERT_EQUAL(c, EOF);
+    /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
+}
+
 static void test_getmodseq(void)
 {
     static const char STR1[] = "0 ";
