@@ -507,8 +507,7 @@ static json_t *jmap_get_reply(struct jmap_get *get)
     json_t *res = json_object();
     json_object_set_new(res, "state", json_string(get->state));
     json_object_set(res, "list", get->list);
-    json_object_set(res, "notFound", json_array_size(get->not_found) ?
-            get->not_found : json_null());
+    json_object_set(res, "notFound", get->not_found);
     return res;
 }
 
