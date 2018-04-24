@@ -20,7 +20,7 @@ static void test_parsenum(void)
     CU_ASSERT_EQUAL(val, 18338747846901181684LLU);
 }
 
-int wrap_getint32(const char *s, int32_t *valp)
+int wrap_getint32(const char *s, int32_t *valp, int *inp)
 {
     struct protstream *prot;
     char *b;
@@ -30,6 +30,7 @@ int wrap_getint32(const char *s, int32_t *valp)
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY;
     c = getint32(prot, valp);
+    if (inp) *inp = prot_bytes_in(prot);
     free(b);
     prot_free(prot);
 
@@ -52,52 +53,58 @@ static void test_getint32(void)
     static const char STR8[] = "+123 ";
     int32_t val;
     int c;
+    int bytes_in;
 
     /* test a valid zero value */
-    c = wrap_getint32(STR1, &val);
+    c = wrap_getint32(STR1, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
 
     /* test a valid value with all the digits */
-    c = wrap_getint32(STR2, &val);
+    c = wrap_getint32(STR2, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
-        c = wrap_getint32(STR3, &val);
+        c = wrap_getint32(STR3, &val, NULL);
     CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
-    c = wrap_getint32(STR4, &val);
+    c = wrap_getint32(STR4, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ')');
     CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
 
     /* test an invalid string */
-    c = wrap_getint32(STR5, &val);
+    c = wrap_getint32(STR5, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
 
     /* test the corner case where we encounter EOF
      * at the end of a valid string of digits */
-    c = wrap_getint32(STR6, &val);
+    c = wrap_getint32(STR6, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
 
     /* test a leading - */
-    c = wrap_getint32(STR7, &val);
-    /* this would have succeeded if getint32() weren't broken */
+    c = wrap_getint32(STR7, &val, NULL);
+    /* XXX this would have succeeded if getint32() weren't broken */
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
 
     /* test a leading + */
-    c = wrap_getint32(STR8, &val);
-    /* this would have succeeded if getint32() weren't broken */
+    c = wrap_getint32(STR8, &val, NULL);
+    /* XXX this would have succeeded if getint32() weren't broken */
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
 }
 
-int wrap_getsint32(const char *s, int32_t *valp)
+int wrap_getsint32(const char *s, int32_t *valp, int *inp)
 {
     struct protstream *prot;
     char *b;
@@ -107,6 +114,7 @@ int wrap_getsint32(const char *s, int32_t *valp)
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY;
     c = getsint32(prot, valp);
+    if (inp) *inp = prot_bytes_in(prot);
     free(b);
     prot_free(prot);
 
@@ -131,50 +139,58 @@ static void test_getsint32(void)
     static const int32_t VAL8 = 123;
     int32_t val;
     int c;
+    int bytes_in;
 
     /* test a valid zero value */
-    c = wrap_getsint32(STR1, &val);
+    c = wrap_getsint32(STR1, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
 
     /* test a valid value with all the digits */
-    c = wrap_getsint32(STR2, &val);
+    c = wrap_getsint32(STR2, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
-        c = wrap_getsint32(STR3, &val);
+        c = wrap_getsint32(STR3, &val, NULL);
     CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
-    c = wrap_getsint32(STR4, &val);
+    c = wrap_getsint32(STR4, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ')');
     CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
 
     /* test an invalid string */
-    c = wrap_getsint32(STR5, &val);
+    c = wrap_getsint32(STR5, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
 
     /* test the corner case where we encounter EOF
      * at the end of a valid string of digits */
-    c = wrap_getsint32(STR6, &val);
+    c = wrap_getsint32(STR6, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
 
     /* test a leading - */
-    c = wrap_getsint32(STR7, &val);
+    c = wrap_getsint32(STR7, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL7);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR7));
 
     /* test a leading + */
-    c = wrap_getsint32(STR8, &val);
+    c = wrap_getsint32(STR8, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL8);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR8));
 }
 
-int wrap_getmodseq(const char *s, modseq_t *valp)
+int wrap_getmodseq(const char *s, modseq_t *valp, int *inp)
 {
     struct protstream *prot;
     char *b;
@@ -184,6 +200,7 @@ int wrap_getmodseq(const char *s, modseq_t *valp)
     prot = prot_readmap(b, strlen(b));
     *valp = CANARY64;
     c = getmodseq(prot, valp);
+    if (inp) *inp = prot_bytes_in(prot);
     free(b);
     prot_free(prot);
 
@@ -208,21 +225,25 @@ static void test_getmodseq(void)
     static const char STR8[] = "+123 ";
     modseq_t val;
     int c;
+    int bytes_in;
 
     /* test a valid zero value */
-    c = wrap_getmodseq(STR1, &val);
+    c = wrap_getmodseq(STR1, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL1);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR1));
 
     /* test a valid value with all the digits */
-    c = wrap_getmodseq(STR2, &val);
+    c = wrap_getmodseq(STR2, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL2);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a valid value >32b */
-    c = wrap_getmodseq(STR3, &val);
+    c = wrap_getmodseq(STR3, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ' ');
     CU_ASSERT_EQUAL(val, VAL3);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR3));
 
 // This test fatal()s which we cannot catch for now
 //     /* test a string with too many digits */
@@ -231,30 +252,35 @@ static void test_getmodseq(void)
 //     CU_ASSERT_EQUAL(val, CANARY64);
 
     /* test a valid value with a different terminator */
-    c = wrap_getmodseq(STR4, &val);
+    c = wrap_getmodseq(STR4, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, ')');
     CU_ASSERT_EQUAL(val, VAL4);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR4));
 
     /* test an invalid string */
-    c = wrap_getmodseq(STR5, &val);
+    c = wrap_getmodseq(STR5, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
 
     /* test the corner case where we encounter EOF
      * at the end of a valid string of digits */
-    c = wrap_getmodseq(STR6, &val);
+    c = wrap_getmodseq(STR6, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     CU_ASSERT_EQUAL(val, VAL6);
+    CU_ASSERT_EQUAL(bytes_in, strlen(STR6));
 
     /* test a leading - */
-    c = wrap_getmodseq(STR7, &val);
+    c = wrap_getmodseq(STR7, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
 
     /* test a leading + */
-    c = wrap_getmodseq(STR8, &val);
+    c = wrap_getmodseq(STR8, &val, &bytes_in);
     CU_ASSERT_EQUAL(c, EOF);
     /* sadly, val is undefined at this point */
+    CU_ASSERT_EQUAL(bytes_in, 0);
 }
 
 /* vim: set ft=c: */
