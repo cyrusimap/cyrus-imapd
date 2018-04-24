@@ -51,7 +51,7 @@
  * Note: prot_setisclient() turns off off literal synchronising so
  * we don't have to futz around with testing that.
  */
-#define _TESTCASE_PRE(fut, input, retval)                           \
+#define _TESTCASE_PRE(fut, input, retval, consumed)                 \
     do {                                                            \
         struct buf b = BUF_INITIALIZER;                             \
         struct protstream *p;                                       \
@@ -61,6 +61,9 @@
         prot_setisclient(p, 1);                                     \
         c = fut(p, NULL, &b);                                       \
         CU_ASSERT_EQUAL(c, retval);                                 \
+        if (consumed >= 0) {                                        \
+            CU_ASSERT_EQUAL(prot_bytes_in(p), consumed);            \
+        }                                                           \
         if (c != EOF) {
 
 #define _TESTCASE_POST()                                            \
@@ -69,22 +72,26 @@
         buf_free(&b);                                               \
     } while (0)
 
-#define TESTCASE(fut, input, retval, output)                        \
+#define TESTCASE(fut, input, retval, output, consumed)              \
     do {                                                            \
         int outputlen = sizeof(output)-1;                           \
-        _TESTCASE_PRE(fut, input, retval);                          \
+        _TESTCASE_PRE(fut, input, retval, consumed);                \
         CU_ASSERT_EQUAL(b.len, outputlen);                          \
         CU_ASSERT(!memcmp(b.s, output, outputlen));                 \
         _TESTCASE_POST();                                           \
     } while(0)
 
-#define TESTCASE_NULL(fut, input, retval)                           \
+#define TESTCASE_NULL(fut, input, retval, consumed)                 \
     do {                                                            \
-        _TESTCASE_PRE(fut, input, retval);                          \
+        _TESTCASE_PRE(fut, input, retval, consumed);                \
         CU_ASSERT_EQUAL(b.len, 0);                                  \
         CU_ASSERT_PTR_NULL(b.s);                                    \
         _TESTCASE_POST();                                           \
     } while(0)
+
+/* strlen-y, but embedded NULs are okay
+ * N.B. this macro is ONLY valid for string literals! */
+#define BLEN(s) (sizeof(s) - 1)
 
 /*
  * getastring() parses something vaguely like an astring, with a few differences.
@@ -92,13 +99,13 @@
 static void test_getastring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms */
-    TESTCASE(getastring, "hydrogen helium", ' ', "hydrogen");
-    TESTCASE(getastring, "258 uranium", ' ', "258");
-    TESTCASE(getastring, "uranium258 plutonium", ' ', "uranium258");
+    TESTCASE(getastring, "hydrogen helium", ' ', "hydrogen", BLEN("hydrogen "));
+    TESTCASE(getastring, "258 uranium", ' ', "258", BLEN("258 "));
+    TESTCASE(getastring, "uranium258 plutonium", ' ', "uranium258", BLEN("uranium258 "));
 
     /* The character sequence NIL is not special, it's parsed as an atom */
-    TESTCASE(getastring, "NIL by mouth", ' ', "NIL");
-    TESTCASE(getastring, "NELLY the lamb", ' ', "NELLY");
+    TESTCASE(getastring, "NIL by mouth", ' ', "NIL", BLEN("NIL "));
+    TESTCASE(getastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -106,8 +113,8 @@ static void test_getastring(void)
      * which are like astrings but also allow unquoted wildcards,
      * as astrings.
      */
-    TESTCASE(getastring, "foo*bar baz", ' ', "foo*bar");
-    TESTCASE(getastring, "baz%quux foo", ' ', "baz%quux");
+    TESTCASE(getastring, "foo*bar baz", ' ', "foo*bar", BLEN("foo*bar "));
+    TESTCASE(getastring, "baz%quux foo", ' ', "baz%quux", BLEN("baz%quux "));
 
     /*
      * Various special characters are not part of atoms.
@@ -116,48 +123,52 @@ static void test_getastring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getastring, "foo(bar baz", '(', "foo");
-    TESTCASE(getastring, "foo)bar baz", ')', "foo");
-    TESTCASE(getastring, "foo{bar baz", ' ', "foo{bar"); /* should be: '{', "foo" */
-    TESTCASE(getastring, "foo\"bar baz", '"', "foo");
-    TESTCASE(getastring, "foo\\bar baz", ' ', "foo\\bar"); /* should be: '\\', "foo" */
-    TESTCASE(getastring, "foo]bar baz", ' ', "foo]bar"); /* should be ']', "foo" */
+    TESTCASE(getastring, "foo(bar baz", '(', "foo", BLEN("foo("));
+    TESTCASE(getastring, "foo)bar baz", ')', "foo", BLEN("foo)"));
+    TESTCASE(getastring, "foo{bar baz", ' ', "foo{bar", BLEN("foo{bar ")); /* should be: '{', "foo" */
+    TESTCASE(getastring, "foo\"bar baz", '"', "foo", BLEN("foo\""));
+    TESTCASE(getastring, "foo\\bar baz", ' ', "foo\\bar", BLEN("foo\\bar ")); /* should be: '\\', "foo" */
+    TESTCASE(getastring, "foo]bar baz", ' ', "foo]bar", BLEN("foo]bar ")); /* should be ']', "foo" */
 
     /*
      * Quoted strings are astrings
      */
-    TESTCASE(getastring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getastring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getastring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getastring, "\"foo bar", EOF, "");
-    TESTCASE(getastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getastring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getastring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getastring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getastring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getastring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getastring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getastring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getastring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getastring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getastring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are astrings
      */
     /* boring literal */
-    TESTCASE(getastring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getastring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getastring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getastring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getastring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getastring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
-    /* literals with embedded NUL - getastring() rejects these */
-    TESTCASE(getastring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
+    TESTCASE(getastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
+    /* literals with embedded NUL - getastring() rejects these 
+     * Note that we currently post-process for NULs, so we consume bytes up to
+     * the end of the literal, then put the last byte back into the stream (so
+     * that eatline() is safe) if we didn't like the literal.
+     */
+    TESTCASE(getastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
 }
 
 /*
@@ -167,13 +178,13 @@ static void test_getastring(void)
 static void test_getbastring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms */
-    TESTCASE(getbastring, "hydrogen helium", ' ', "hydrogen");
-    TESTCASE(getbastring, "258 uranium", ' ', "258");
-    TESTCASE(getbastring, "uranium258 plutonium", ' ', "uranium258");
+    TESTCASE(getbastring, "hydrogen helium", ' ', "hydrogen", BLEN("hydrogen "));
+    TESTCASE(getbastring, "258 uranium", ' ', "258", BLEN("258 "));
+    TESTCASE(getbastring, "uranium258 plutonium", ' ', "uranium258", BLEN("uranium258 "));
 
     /* The character sequence NIL is not special, it's parsed as an atom */
-    TESTCASE(getbastring, "NIL by mouth", ' ', "NIL");
-    TESTCASE(getbastring, "NELLY the lamb", ' ', "NELLY");
+    TESTCASE(getbastring, "NIL by mouth", ' ', "NIL", BLEN("NIL "));
+    TESTCASE(getbastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -183,8 +194,8 @@ static void test_getbastring(void)
      * but it's a liberal-server interpretation which has been in the
      * field a while now, so we ought to preserve it.
      */
-    TESTCASE(getbastring, "foo*bar baz", ' ', "foo*bar");
-    TESTCASE(getbastring, "baz%quux foo", ' ', "baz%quux");
+    TESTCASE(getbastring, "foo*bar baz", ' ', "foo*bar", BLEN("foo*bar "));
+    TESTCASE(getbastring, "baz%quux foo", ' ', "baz%quux", BLEN("baz%quux "));
 
     /*
      * Various special characters are not part of atoms.
@@ -193,48 +204,48 @@ static void test_getbastring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getbastring, "foo(bar baz", '(', "foo");
-    TESTCASE(getbastring, "foo)bar baz", ')', "foo");
-    TESTCASE(getbastring, "foo{bar baz", ' ', "foo{bar"); /* should be: '{', "foo" */
-    TESTCASE(getbastring, "foo\"bar baz", '"', "foo");
-    TESTCASE(getbastring, "foo\\bar baz", ' ', "foo\\bar"); /* should be: '\\', "foo" */
-    TESTCASE(getbastring, "foo]bar baz", ' ', "foo]bar"); /* should be ']', "foo" */
+    TESTCASE(getbastring, "foo(bar baz", '(', "foo", BLEN("foo("));
+    TESTCASE(getbastring, "foo)bar baz", ')', "foo", BLEN("foo)"));
+    TESTCASE(getbastring, "foo{bar baz", ' ', "foo{bar", BLEN("foo{bar ")); /* should be: '{', "foo" */
+    TESTCASE(getbastring, "foo\"bar baz", '"', "foo", BLEN("foo\""));
+    TESTCASE(getbastring, "foo\\bar baz", ' ', "foo\\bar", BLEN("foo\\bar ")); /* should be: '\\', "foo" */
+    TESTCASE(getbastring, "foo]bar baz", ' ', "foo]bar", BLEN("foo]bar ")); /* should be ']', "foo" */
 
     /*
      * Quoted strings are astrings
      */
-    TESTCASE(getbastring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getbastring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getbastring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getbastring, "\"foo bar", EOF, "");
-    TESTCASE(getbastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getbastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getbastring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getbastring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getbastring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getbastring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getbastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getbastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getbastring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getbastring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getbastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getbastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getbastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getbastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getbastring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getbastring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getbastring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getbastring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are astrings
      */
     /* boring literal */
-    TESTCASE(getbastring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getbastring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getbastring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getbastring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getbastring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getbastring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getbastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getbastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getbastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getbastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getbastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
+    TESTCASE(getbastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
     /* literals with embedded NUL - getbastring() allows these */
-    TESTCASE(getbastring, "{7}\r\nfoo\0bar ", ' ', "foo\0bar");
+    TESTCASE(getbastring, "{7}\r\nfoo\0bar ", ' ', "foo\0bar", BLEN("{7}\r\nfoo\0bar "));
 }
 
 /*
@@ -244,13 +255,13 @@ static void test_getstring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms
      * which are not strings */
-    TESTCASE(getstring, "hydrogen helium", EOF, "");
-    TESTCASE(getstring, "258 uranium", EOF, "");
-    TESTCASE(getstring, "uranium258 plutonium", EOF, "");
+    TESTCASE(getstring, "hydrogen helium", EOF, "", 0);
+    TESTCASE(getstring, "258 uranium", EOF, "", 0);
+    TESTCASE(getstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is not special, it's parsed as an atom */
-    TESTCASE(getstring, "NIL by mouth", EOF, "");
-    TESTCASE(getstring, "NELLY the lamb", EOF, "");
+    TESTCASE(getstring, "NIL by mouth", EOF, "", 0);
+    TESTCASE(getstring, "NELLY the lamb", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -260,8 +271,8 @@ static void test_getstring(void)
      * but it's a liberal-server interpretation which has been in the
      * field a while now, so we ought to preserve it.
      */
-    TESTCASE(getstring, "foo*bar baz", EOF, "");
-    TESTCASE(getstring, "baz%quux foo", EOF, "");
+    TESTCASE(getstring, "foo*bar baz", EOF, "", 0);
+    TESTCASE(getstring, "baz%quux foo", EOF, "", 0);
 
     /*
      * Various special characters are not part of atoms.
@@ -270,48 +281,52 @@ static void test_getstring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getstring, "foo(bar baz", EOF, "");
-    TESTCASE(getstring, "foo)bar baz", EOF, "");
-    TESTCASE(getstring, "foo{bar baz", EOF, "");
-    TESTCASE(getstring, "foo\"bar baz", EOF, "");
-    TESTCASE(getstring, "foo\\bar baz", EOF, "");
-    TESTCASE(getstring, "foo]bar baz", EOF, "");
+    TESTCASE(getstring, "foo(bar baz", EOF, "", 0);
+    TESTCASE(getstring, "foo)bar baz", EOF, "", 0);
+    TESTCASE(getstring, "foo{bar baz", EOF, "", 0);
+    TESTCASE(getstring, "foo\"bar baz", EOF, "", 0);
+    TESTCASE(getstring, "foo\\bar baz", EOF, "", 0);
+    TESTCASE(getstring, "foo]bar baz", EOF, "", 0);
 
     /*
      * Quoted strings are strings
      */
-    TESTCASE(getstring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getstring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getstring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getstring, "\"foo bar", EOF, "");
-    TESTCASE(getstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getstring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getstring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getstring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getstring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getstring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getstring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getstring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getstring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getstring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getstring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are strings
      */
     /* boring literal */
-    TESTCASE(getstring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getstring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getstring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getstring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getstring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getstring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
-    /* literals with embedded NUL - getstring() rejects these */
-    TESTCASE(getqstring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
+    TESTCASE(getstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
+    /* literals with embedded NUL - getstring() rejects these
+     * Note that we currently post-process for NULs, so we consume bytes up to
+     * the end of the literal, then put the last byte back into the stream (so
+     * that eatline() is safe) if we didn't like the literal.
+     */
+    TESTCASE(getstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
 }
 
 
@@ -323,13 +338,13 @@ static void test_getqstring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms
      * which are not qstrings */
-    TESTCASE(getqstring, "hydrogen helium", EOF, "");
-    TESTCASE(getqstring, "258 uranium", EOF, "");
-    TESTCASE(getqstring, "uranium258 plutonium", EOF, "");
+    TESTCASE(getqstring, "hydrogen helium", EOF, "", 0);
+    TESTCASE(getqstring, "258 uranium", EOF, "", 0);
+    TESTCASE(getqstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is not special, it's parsed as an atom */
-    TESTCASE(getqstring, "NIL by mouth", EOF, "");
-    TESTCASE(getqstring, "NELLY the lamb", EOF, "");
+    TESTCASE(getqstring, "NIL by mouth", EOF, "", 0);
+    TESTCASE(getqstring, "NELLY the lamb", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -339,8 +354,8 @@ static void test_getqstring(void)
      * but it's a liberal-server interpretation which has been in the
      * field a while now, so we ought to preserve it.
      */
-    TESTCASE(getqstring, "foo*bar baz", EOF, "");
-    TESTCASE(getqstring, "baz%quux foo", EOF, "");
+    TESTCASE(getqstring, "foo*bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "baz%quux foo", EOF, "", 0);
 
     /*
      * Various special characters are not part of atoms.
@@ -349,48 +364,48 @@ static void test_getqstring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getqstring, "foo(bar baz", EOF, "");
-    TESTCASE(getqstring, "foo)bar baz", EOF, "");
-    TESTCASE(getqstring, "foo{bar baz", EOF, "");
-    TESTCASE(getqstring, "foo\"bar baz", EOF, "");
-    TESTCASE(getqstring, "foo\\bar baz", EOF, "");
-    TESTCASE(getqstring, "foo]bar baz", EOF, "");
+    TESTCASE(getqstring, "foo(bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "foo)bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "foo{bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "foo\"bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "foo\\bar baz", EOF, "", 0);
+    TESTCASE(getqstring, "foo]bar baz", EOF, "", 0);
 
     /*
      * Quoted strings
      */
-    TESTCASE(getqstring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getqstring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getqstring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getqstring, "\"foo bar", EOF, "");
-    TESTCASE(getqstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getqstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getqstring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getqstring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getqstring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getqstring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getqstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getqstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getqstring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getqstring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getqstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getqstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getqstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getqstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getqstring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getqstring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getqstring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getqstring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are not qstrings
      */
     /* boring literal */
-    TESTCASE(getqstring, "{3}\r\nfoo ", EOF, "");
+    TESTCASE(getqstring, "{3}\r\nfoo ", EOF, "", 0);
     /* literal NIL */
-    TESTCASE(getqstring, "{3}\r\nNIL ", EOF, "");
+    TESTCASE(getqstring, "{3}\r\nNIL ", EOF, "", 0);
     /* literals with embedded space */
-    TESTCASE(getqstring, "{7}\r\nfoo bar ", EOF, "");
+    TESTCASE(getqstring, "{7}\r\nfoo bar ", EOF, "", 0);
     /* literals with embedded \n or \r */
-    TESTCASE(getqstring, "{7}\r\nfoo\nbar ", EOF, "");
-    TESTCASE(getqstring, "{7}\r\nfoo\rbar ", EOF, "");
+    TESTCASE(getqstring, "{7}\r\nfoo\nbar ", EOF, "", 0);
+    TESTCASE(getqstring, "{7}\r\nfoo\rbar ", EOF, "", 0);
     /* literals with 8-bit chars */
-    TESTCASE(getqstring, "{7}\r\nfoo\277bar ", EOF, "");
+    TESTCASE(getqstring, "{7}\r\nfoo\277bar ", EOF, "", 0);
     /* literals with embedded NUL */
-    TESTCASE(getqstring, "{7}\r\nfoo\0bar ", EOF, "");
+    TESTCASE(getqstring, "{7}\r\nfoo\0bar ", EOF, "", 0);
 }
 
 /*
@@ -399,13 +414,13 @@ static void test_getqstring(void)
 static void test_getnstring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms */
-    TESTCASE(getnstring, "hydrogen helium", EOF, "");
-    TESTCASE(getnstring, "258 uranium", EOF, "");
-    TESTCASE(getnstring, "uranium258 plutonium", EOF, "");
+    TESTCASE(getnstring, "hydrogen helium", EOF, "", 0);
+    TESTCASE(getnstring, "258 uranium", EOF, "", 0);
+    TESTCASE(getnstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is special for nstrings only */
-    TESTCASE_NULL(getnstring, "NIL by mouth", ' ');
-    TESTCASE(getnstring, "NELLY ", EOF, "");
+    TESTCASE_NULL(getnstring, "NIL by mouth", ' ', BLEN("NIL "));
+    TESTCASE(getnstring, "NELLY ", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -413,8 +428,8 @@ static void test_getnstring(void)
      * which are like astrings but also allow unquoted wildcards,
      * as astrings.
      */
-    TESTCASE(getnstring, "foo*bar baz", EOF, "");
-    TESTCASE(getnstring, "baz%quux foo", EOF, "");
+    TESTCASE(getnstring, "foo*bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "baz%quux foo", EOF, "", 0);
 
     /*
      * Various special characters are not part of atoms.
@@ -423,48 +438,52 @@ static void test_getnstring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getnstring, "foo(bar baz", EOF, "");
-    TESTCASE(getnstring, "foo)bar baz", EOF, "");
-    TESTCASE(getnstring, "foo{bar baz", EOF, "");
-    TESTCASE(getnstring, "foo\"bar baz", EOF, "");
-    TESTCASE(getnstring, "foo\\bar baz", EOF, "");
-    TESTCASE(getnstring, "foo]bar baz", EOF, "");
+    TESTCASE(getnstring, "foo(bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "foo)bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "foo{bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "foo\"bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "foo\\bar baz", EOF, "", 0);
+    TESTCASE(getnstring, "foo]bar baz", EOF, "", 0);
 
     /*
      * Quoted strings are nstrings
      */
-    TESTCASE(getnstring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getnstring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getnstring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getnstring, "\"foo bar", EOF, "");
-    TESTCASE(getnstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getnstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getnstring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getnstring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getnstring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getnstring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getnstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getnstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getnstring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getnstring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getnstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getnstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getnstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getnstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\\bar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getnstring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getnstring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getnstring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getnstring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are nstrings
      */
     /* boring literal */
-    TESTCASE(getnstring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getnstring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getnstring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getnstring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getnstring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getnstring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getnstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getnstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
-    /* literals with embedded NUL - getnstring() rejects these */
-    TESTCASE(getnstring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
+    TESTCASE(getnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
+    /* literals with embedded NUL - getnstring() rejects these
+     * Note that we currently post-process for NULs, so we consume bytes up to
+     * the end of the literal, then put the last byte back into the stream (so
+     * that eatline() is safe) if we didn't like the literal.
+     */
+    TESTCASE(getnstring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
 }
 
 /*
@@ -474,13 +493,13 @@ static void test_getnstring(void)
 static void test_getbnstring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms */
-    TESTCASE(getbnstring, "hydrogen helium", EOF, "");
-    TESTCASE(getbnstring, "258 uranium", EOF, "");
-    TESTCASE(getbnstring, "uranium258 plutonium", EOF, "");
+    TESTCASE(getbnstring, "hydrogen helium", EOF, "", 0);
+    TESTCASE(getbnstring, "258 uranium", EOF, "", 0);
+    TESTCASE(getbnstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is special for nstrings only */
-    TESTCASE_NULL(getbnstring, "NIL by mouth", ' ');
-    TESTCASE(getbnstring, "NELLY ", EOF, "");
+    TESTCASE_NULL(getbnstring, "NIL by mouth", ' ', BLEN("NIL "));
+    TESTCASE(getbnstring, "NELLY ", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -488,8 +507,8 @@ static void test_getbnstring(void)
      * which are like astrings but also allow unquoted wildcards,
      * as astrings.
      */
-    TESTCASE(getnstring, "foo*bar baz", EOF, "");
-    TESTCASE(getbnstring, "baz%quux foo", EOF, "");
+    TESTCASE(getnstring, "foo*bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "baz%quux foo", EOF, "", 0);
 
     /*
      * Various special characters are not part of atoms.
@@ -498,48 +517,48 @@ static void test_getbnstring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getbnstring, "foo(bar baz", EOF, "");
-    TESTCASE(getbnstring, "foo)bar baz", EOF, "");
-    TESTCASE(getbnstring, "foo{bar baz", EOF, "");
-    TESTCASE(getbnstring, "foo\"bar baz", EOF, "");
-    TESTCASE(getbnstring, "foo\\bar baz", EOF, "");
-    TESTCASE(getbnstring, "foo]bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo(bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "foo)bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "foo{bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "foo\"bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "foo\\bar baz", EOF, "", 0);
+    TESTCASE(getbnstring, "foo]bar baz", EOF, "", 0);
 
     /*
      * Quoted strings are nstrings
      */
-    TESTCASE(getbnstring, "\"foo\" bar", ' ', "foo");
-    TESTCASE(getbnstring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getbnstring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getbnstring, "\"foo bar", EOF, "");
-    TESTCASE(getbnstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getbnstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getbnstring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
+    TESTCASE(getbnstring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getbnstring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getbnstring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getbnstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getbnstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getbnstring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getbnstring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getbnstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getbnstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getbnstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getbnstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getbnstring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getbnstring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getbnstring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getbnstring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are nstrings
      */
     /* boring literal */
-    TESTCASE(getbnstring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getbnstring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getbnstring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getbnstring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getbnstring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getbnstring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getbnstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getbnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getbnstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getbnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getbnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
+    TESTCASE(getbnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar "));
     /* literals with embedded NUL - getbnstring() allows these */
-    TESTCASE(getbnstring, "{7}\r\nfoo\0bar ", ' ', "foo\0bar");
+    TESTCASE(getbnstring, "{7}\r\nfoo\0bar ", ' ', "foo\0bar", BLEN("{7}\r\nfoo\0bar "));
 }
 
 /*
@@ -548,13 +567,13 @@ static void test_getbnstring(void)
 static void test_getnastring(void)
 {
     /* Simple sequences of ascii alphanumerics characters are atoms */
-    TESTCASE(getnastring, "hydrogen helium", ' ', "hydrogen");
-    TESTCASE(getnastring, "258 uranium", ' ', "258");
-    TESTCASE(getnastring, "uranium258 plutonium", ' ', "uranium258");
+    TESTCASE(getnastring, "hydrogen helium", ' ', "hydrogen", BLEN("hydrogen "));
+    TESTCASE(getnastring, "258 uranium", ' ', "258", BLEN("258 "));
+    TESTCASE(getnastring, "uranium258 plutonium", ' ', "uranium258", BLEN("uranium258 "));
 
     /* The character sequence NIL is special, unless quoted */
-    TESTCASE_NULL(getnastring, "NIL by mouth", ' ');
-    TESTCASE(getnastring, "NELLY the lamb", ' ', "NELLY");
+    TESTCASE_NULL(getnastring, "NIL by mouth", ' ', BLEN("NIL "));
+    TESTCASE(getnastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -562,8 +581,8 @@ static void test_getnastring(void)
      * which are like astrings but also allow unquoted wildcards,
      * as astrings.
      */
-    TESTCASE(getnastring, "foo*bar baz", ' ', "foo*bar");
-    TESTCASE(getnastring, "baz%quux foo", ' ', "baz%quux");
+    TESTCASE(getnastring, "foo*bar baz", ' ', "foo*bar", BLEN("foo*bar "));
+    TESTCASE(getnastring, "baz%quux foo", ' ', "baz%quux", BLEN("baz%quux "));
 
     /*
      * Various special characters are not part of atoms.
@@ -572,48 +591,52 @@ static void test_getnastring(void)
      * things which aren't in the ABNF, so we test for the liberal
      * interpretation and note the conservative one in a comment.
      */
-    TESTCASE(getnastring, "foo(bar baz", '(', "foo");
-    TESTCASE(getnastring, "foo)bar baz", ')', "foo");
-    TESTCASE(getnastring, "foo{bar baz", ' ', "foo{bar"); /* should be: '{', "foo" */
-    TESTCASE(getnastring, "foo\"bar baz", '"', "foo");
-    TESTCASE(getnastring, "foo\\bar baz", ' ', "foo\\bar"); /* should be: '\\', "foo" */
-    TESTCASE(getnastring, "foo]bar baz", ' ', "foo]bar"); /* should be ']', "foo" */
+    TESTCASE(getnastring, "foo(bar baz", '(', "foo", BLEN("foo("));
+    TESTCASE(getnastring, "foo)bar baz", ')', "foo", BLEN("foo)"));
+    TESTCASE(getnastring, "foo{bar baz", ' ', "foo{bar", BLEN("foo{bar ")); /* should be: '{', "foo" */
+    TESTCASE(getnastring, "foo\"bar baz", '"', "foo", BLEN("foo\""));
+    TESTCASE(getnastring, "foo\\bar baz", ' ', "foo\\bar", BLEN("foo\\bar ")); /* should be: '\\', "foo" */
+    TESTCASE(getnastring, "foo]bar baz", ' ', "foo]bar", BLEN("foo]bar ")); /* should be ']', "foo" */
 
     /*
      * Quoted strings are astrings
      */
-    TESTCASE(getnastring, "\"foo\" bar", ' ', "foo");
+    TESTCASE(getnastring, "\"foo\" bar", ' ', "foo", BLEN("\"foo\" "));
     /* literals with embedded space */
-    TESTCASE(getnastring, "\"NIL\" by mouth ", ' ', "NIL");
-    TESTCASE(getnastring, "\"foo bar\" baz", ' ', "foo bar");
-    TESTCASE(getnastring, "\"foo bar", EOF, "");
-    TESTCASE(getnastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
-    TESTCASE(getnastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    TESTCASE(getnastring, "\"NIL\" by mouth ", ' ', "NIL", BLEN("\"NIL\" "));
+    TESTCASE(getnastring, "\"foo bar\" baz", ' ', "foo bar", BLEN("\"foo bar\" "));
+    TESTCASE(getnastring, "\"foo bar", EOF, "", BLEN("\"foo bar"));
+    TESTCASE(getnastring, "\"foo\\\"bar\" baz", ' ', "foo\"bar", BLEN("\"foo\\\"bar\" "));
+    TESTCASE(getnastring, "\"foo\\\\bar\" baz", ' ', "foo\\bar", BLEN("\"foo\\\\bar\" "));
     /* Any non-special char can be escaped with \ */
-    TESTCASE(getnastring, "\"foo\\bar\" baz", ' ', "foobar");
+    TESTCASE(getnastring, "\"foo\\bar\" baz", ' ', "foobar", BLEN("\"foo\\bar\" "));
     /* \n and \r can be escaped with \ */
-    TESTCASE(getnastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
-    TESTCASE(getnastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    TESTCASE(getnastring, "\"foo\\\nbar\" baz", ' ', "foo\nbar", BLEN("\"foo\\\nbar\" "));
+    TESTCASE(getnastring, "\"foo\\\rbar\" baz", ' ', "foo\rbar", BLEN("\"foo\\\rbar\" "));
     /* Non-escaped \n and \r.  The server is actually more
      * conversative than the ABNF and rejects these. */
-    TESTCASE(getnastring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
-    TESTCASE(getnastring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+    TESTCASE(getnastring, "\"foo\nbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\nbar" */
+    TESTCASE(getnastring, "\"foo\rbar\" baz", EOF, "", BLEN("\"foo")); /* should be ' ', "foo\rbar" */
 
     /*
      * Literals are astrings
      */
     /* boring literal */
-    TESTCASE(getnastring, "{3}\r\nfoo ", ' ', "foo");
+    TESTCASE(getnastring, "{3}\r\nfoo ", ' ', "foo", BLEN("{3}\r\nfoo "));
     /* literal NIL */
-    TESTCASE(getnastring, "{3}\r\nNIL ", ' ', "NIL");
+    TESTCASE(getnastring, "{3}\r\nNIL ", ' ', "NIL", BLEN("{3}\r\nNIL "));
     /* literals with embedded space */
-    TESTCASE(getnastring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    TESTCASE(getnastring, "{7}\r\nfoo bar ", ' ', "foo bar", BLEN("{7}\r\nfoo bar "));
     /* literals with embedded \n or \r */
-    TESTCASE(getnastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
-    TESTCASE(getnastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    TESTCASE(getnastring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar", BLEN("{7}\r\nfoo\nbar "));
+    TESTCASE(getnastring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar", BLEN("{7}\r\nfoo\rbar "));
     /* literals with 8-bit chars */
-    TESTCASE(getnastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
-    /* literals with embedded NUL - getastring() rejects these */
-    TESTCASE(getnastring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
+    TESTCASE(getnastring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar", BLEN("{7}\r\nfoo\277bar ")   );
+    /* literals with embedded NUL - getastring() rejects these
+     * Note that we currently post-process for NULs, so we consume bytes up to
+     * the end of the literal, then put the last byte back into the stream (so
+     * that eatline() is safe) if we didn't like the literal.
+     */
+    TESTCASE(getnastring, "{7}\r\nfoo\0bar ", EOF, "", BLEN("{7}\r\nfoo\0ba")); /* should be ' ', "foo\0bar" */
 }
 /* vim: set ft=c: */
