@@ -9749,7 +9749,7 @@ static int jmap_email_import(jmap_req_t *req)
             const char *errtyp = NULL;
             switch (r) {
                 case IMAP_NOTFOUND:
-                    errtyp = "attachmentNotFound";
+                    errtyp = "blobNotFound";
                     break;
                 case IMAP_PERMISSION_DENIED:
                     errtyp = "forbidden";
