@@ -5974,7 +5974,7 @@ sub test_thread_get
     xlog "get threads";
     $res = $jmap->CallMethods([['Thread/get', { ids => \@threadids }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
-    $self->assert_null($res->[0][1]->{notFound});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
 
     %m = map { $_->{id} => $_ } @{$res->[0][1]{list}};
     my $threadA = $m{$msgA->{threadId}};
@@ -7296,6 +7296,42 @@ sub test_email_import
     $self->assert_str_equals("Email/import", $res->[0][0]);
     $self->assert_str_equals("alreadyExists", $res->[0][1]->{notCreated}{"1"}{type});
 }
+
+sub test_email_import_error
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $res = $jmap->CallMethods([['Email/import', { emails => "nope" }, 'R1' ]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('emails', $res->[0][1]{arguments}[0]);
+
+    $res = $jmap->CallMethods([['Email/import', { emails => { 1 => "nope" }}, 'R1' ]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('emails/1', $res->[0][1]{arguments}[0]);
+
+    $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => "nope",
+                mailboxIds => {$inboxid =>  JSON::true},
+            },
+        },
+    }, "R1"]]);
+
+    $self->assert_str_equals('Email/import', $res->[0][0]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('blobId', $res->[0][1]{notCreated}{1}{properties}[0]);
+}
+
 
 sub test_email_import_shared
     :JMAP :min_version_3_1
