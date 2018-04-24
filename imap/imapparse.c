@@ -242,7 +242,7 @@ fail:
 EXPORTED int getint32(struct protstream *pin, int32_t *num)
 {
     int32_t result = 0;
-    int c;
+    int c = EOF;
     int gotchar = 0;
 
     /* INT_MAX == 2147483647 */
@@ -253,8 +253,10 @@ EXPORTED int getint32(struct protstream *pin, int32_t *num)
         gotchar = 1;
     }
 
-    if (!gotchar)
+    if (!gotchar) {
+        if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
 
     *num = result;
 
@@ -293,7 +295,7 @@ EXPORTED int getsint32(struct protstream *pin, int32_t *num)
 EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
 {
     uint32_t result = 0;
-    int c;
+    int c = EOF;
     int gotchar = 0;
 
     /* UINT_MAX == 4294967295U */
@@ -304,8 +306,10 @@ EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
         gotchar = 1;
     }
 
-    if (!gotchar)
+    if (!gotchar) {
+        if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
 
     *num = result;
 
@@ -315,7 +319,7 @@ EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
 EXPORTED int getint64(struct protstream *pin, int64_t *num)
 {
     int64_t result = 0;
-    int c;
+    int c = EOF;
     int gotchar = 0;
 
     /* LLONG_MAX == 9223372036854775807LL */
@@ -326,8 +330,10 @@ EXPORTED int getint64(struct protstream *pin, int64_t *num)
         gotchar = 1;
     }
 
-    if (!gotchar)
+    if (!gotchar) {
+        if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
 
     *num = result;
 
@@ -366,7 +372,7 @@ EXPORTED int getsint64(struct protstream *pin, int64_t *num)
 EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
 {
     uint64_t result = 0;
-    int c;
+    int c = EOF;
     int gotchar = 0;
 
     /* ULLONG_MAX == 18446744073709551615ULL */
@@ -377,8 +383,10 @@ EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
         gotchar = 1;
     }
 
-    if (!gotchar)
+    if (!gotchar) {
+        if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
 
     *num = result;
 
