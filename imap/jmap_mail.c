@@ -9657,7 +9657,6 @@ done:
 
 static int jmap_email_import(jmap_req_t *req)
 {
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     json_t *created = json_pack("{}");
     json_t *not_created = json_pack("{}");
 
@@ -9665,12 +9664,36 @@ static int jmap_email_import(jmap_req_t *req)
     const char *id;
     json_t *eimp;
 
-    /* Parse request */
+    /* Parse arguments */
+    if (json_is_object(emails)) {
+        struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+        jmap_parser_push(&parser, "emails");
+        json_object_foreach(emails, id, eimp) {
+            if (!json_is_object(eimp)) {
+                jmap_parser_invalid(&parser, id);
+            }
+        }
+        json_t *invalid = json_incref(parser.invalid);
+        jmap_parser_fini(&parser);
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set_new(err, "arguments", invalid);
+            jmap_error(req, err);
+            goto done;
+        }
+        json_decref(invalid);
+    }
+    else {
+        jmap_error(req, json_pack("{s:s, s:[s]}",
+                "type", "invalidArguments", "arguments", "emails"));
+        goto done;
+    }
+
     json_object_foreach(emails, id, eimp) {
+        /* Parse import */
+        struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         json_t *val;
         const char *s;
-
-        jmap_parser_push(&parser, "emails");
 
         /* blobId */
         s = json_string_value(json_object_get(eimp, "blobId"));
@@ -9727,29 +9750,26 @@ static int jmap_email_import(jmap_req_t *req)
             jmap_parser_invalid(&parser, "mailboxIds");
         }
 
-        jmap_parser_pop(&parser); /* emails */
-    }
-    if (!json_is_object(emails)) {
-        jmap_parser_invalid(&parser, "emails");
-    }
+        json_t *invalid = json_incref(parser.invalid);
+        jmap_parser_fini(&parser);
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set_new(err, "properties", invalid);
+            json_object_set_new(not_created, id, err);
+            continue;
+        }
+        json_decref(invalid);
 
-    /* Bail out for argument errors */
-    if (json_array_size(parser.invalid)) {
-        jmap_error(req, json_pack("{s:s, s:O}",
-                "type", "invalidArguments", "arguments", parser.invalid));
-        goto done;
-    }
-
-    /* Process request */
-    json_object_foreach(emails, id, eimp) {
+        /* Process import */
         json_t *email;
         int r = _email_import(req, eimp, &email);
-        if (r) {
+        if (r == IMAP_NOTFOUND) {
+            json_object_set_new(not_created, id, json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties", "properties", "blobId"));
+        }
+        else if (r) {
             const char *errtyp = NULL;
             switch (r) {
-                case IMAP_NOTFOUND:
-                    errtyp = "blobNotFound";
-                    break;
                 case IMAP_PERMISSION_DENIED:
                     errtyp = "forbidden";
                     break;
@@ -9780,12 +9800,13 @@ static int jmap_email_import(jmap_req_t *req)
             syslog(LOG_ERR, "jmap: Email/import(%s): %s", id, error_message(r));
             json_object_set_new(not_created,
                     id, json_pack("{s:s}", "type", errtyp));
-            continue;
         }
-        json_object_set_new(created, id, email);
-
-        const char *newmsgid = json_string_value(json_object_get(email, "id"));
-        hash_insert(id, xstrdup(newmsgid), &req->idmap->messages);
+        else {
+            /* Successful import */
+            json_object_set_new(created, id, email);
+            const char *newid = json_string_value(json_object_get(email, "id"));
+            hash_insert(id, xstrdup(newid), &req->idmap->messages);
+        }
     }
 
     /* Reply */
@@ -9795,7 +9816,6 @@ static int jmap_email_import(jmap_req_t *req)
                 "notCreated", not_created));
 
 done:
-    jmap_parser_fini(&parser);
     json_decref(created);
     json_decref(not_created);
     return 0;
