@@ -6799,7 +6799,7 @@ EOF
             },
         }, "R1"]]);
     my $error = $@;
-    $self->assert_str_equals("emailContainsBareNewlines", $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals("invalidEmail", $res->[0][1]{notCreated}{1}{type});
 }
 
 sub test_email_import_zerobyte
@@ -6846,7 +6846,7 @@ EOF
                 },
             },
         }, "R1"]]);
-    $self->assert_str_equals("emailContainsNulByte", $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals("invalidEmail", $res->[0][1]{notCreated}{1}{type});
 }
 
 
