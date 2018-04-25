@@ -3787,8 +3787,8 @@ sub test_emailsubmission_changes
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert_null($res->[0][1]->{changed});
-    $self->assert_null($res->[0][1]->{destroyed});
+    $self->assert_deep_equals([], $res->[0][1]->{changed});
+    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 
     xlog "Generate a email via IMAP";
     $self->make_message("foo", body => "a email") or die;
@@ -3813,8 +3813,8 @@ sub test_emailsubmission_changes
     }, "R1" ] ] );
     $self->assert(exists $res->[0][1]->{changed});
     $self->assert(exists $res->[0][1]->{destroyed});
-    $self->assert_null($res->[0][1]->{changed});
-    $self->assert_null($res->[0][1]->{destroyed});
+    $self->assert_deep_equals([], $res->[0][1]->{changed});
+    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 }
 
 sub test_emailsubmission_query
