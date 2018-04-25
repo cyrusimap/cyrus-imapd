@@ -9754,6 +9754,7 @@ static int jmap_email_import(jmap_req_t *req)
         }
         else if (r) {
             const char *errtyp = NULL;
+            const char *errdesc = NULL;
             switch (r) {
                 case IMAP_PERMISSION_DENIED:
                     errtyp = "forbidden";
@@ -9765,26 +9766,20 @@ static int jmap_email_import(jmap_req_t *req)
                     errtyp = "maxQuotaReached";
                     break;
                 case IMAP_MESSAGE_CONTAINSNULL:
-                    errtyp = "emailContainsNulByte";
-                    break;
                 case IMAP_MESSAGE_CONTAINSNL:
-                    errtyp = "emailContainsBareNewlines";
-                    break;
                 case IMAP_MESSAGE_CONTAINS8BIT:
-                    errtyp = "emailContainsNonASCIIHeader";
-                    break;
                 case IMAP_MESSAGE_BADHEADER:
-                    errtyp = "emailContainsInvalidHeader";
-                    break;
                 case IMAP_MESSAGE_NOBLANKLINE:
-                    errtyp = "emailHasNoHeaderBodySeparator";
+                    errtyp = "invalidEmail";
+                    errdesc = error_message(r);
                     break;
                 default:
                     errtyp = "serverError";
             }
             syslog(LOG_ERR, "jmap: Email/import(%s): %s", id, error_message(r));
-            json_object_set_new(not_created,
-                    id, json_pack("{s:s}", "type", errtyp));
+            json_t *err = json_pack("{s:s}", "type", errtyp);
+            if (errdesc) json_object_set_new(err, "description", json_string(errdesc));
+            json_object_set_new(not_created, id, err);
         }
         else {
             /* Successful import */
