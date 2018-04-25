@@ -976,42 +976,6 @@ static int _wantprop(hash_table *props, const char *name)
     return hash_lookup(name, props) != NULL;
 }
 
-static int readprop_full(json_t *root, const char *prefix, const char *name,
-                         int mandatory, json_t *invalid, const char *fmt,
-                         void *dst)
-{
-    int r = 0;
-    json_t *jval = json_object_get(root, name);
-    if (!jval && mandatory) {
-        r = -1;
-    } else if (jval) {
-        json_error_t err;
-        if (!mandatory && json_is_null(jval)) {
-            /* XXX not all non-mandatory properties are nullable */
-            r = 0;
-        }
-        else if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            r = -2;
-        }
-        else {
-            r = 1;
-        }
-    }
-    if (r < 0 && prefix) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s.%s", prefix, name);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_free(&buf);
-    } else if (r < 0) {
-        json_array_append_new(invalid, json_string(name));
-    }
-    return r;
-}
-
-/* TODO sunset readprop and rewrite Foo/set methods to use jmap_set */
-#define readprop(root, name,  mandatory, invalid, fmt, dst) \
-    readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
-
 /*
  * Mailboxes
  */
@@ -9889,9 +9853,8 @@ done:
     return 0;
 }
 
-static int _emailsubmission_address_parse(json_t *addr, const char *prefix, json_t *invalid)
+static int _emailsubmission_address_parse(json_t *addr, struct jmap_parser *parser)
 {
-    struct buf buf = BUF_INITIALIZER;
     int is_valid = 0;
 
     json_t *email = json_object_get(addr, "email");
@@ -9904,24 +9867,21 @@ static int _emailsubmission_address_parse(json_t *addr, const char *prefix, json
         parseaddr_free(a);
     }
     else {
-        buf_printf(&buf, "%s.%s", prefix, "email");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
+        jmap_parser_invalid(parser, "email");
     }
 
     const char *key;
     json_t *val;
     json_t *parameters = json_object_get(addr, "parameters");
+    jmap_parser_push(parser, "parameters");
     json_object_foreach(parameters, key, val) {
+        /* TODO validate allowed esmtp characters */
         if (JNOTNULL(val) && !json_is_string(val)) {
-            /* TODO validate allowed esmtp characters */
-            buf_printf(&buf, "%s.parameters[%s]", prefix, key);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+            jmap_parser_invalid(parser, key);
         }
     }
+    jmap_parser_pop(parser);
 
-    buf_free(&buf);
     return is_valid;
 }
 
@@ -9955,86 +9915,106 @@ static void _emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *
     }
 }
 
-static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
-                          json_t *invalid, json_t **err)
+static int _emailsubmission_create(jmap_req_t *req,
+                                   json_t *emailsubmission,
+                                   json_t **new_submission,
+                                   json_t **set_err)
 {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
 
     /* messageId */
     const char *msgid = NULL;
-    if (readprop(emailsubmission, "emailId", 1, invalid, "s", &msgid) > 0) {
+    json_t *jemailId = json_object_get(emailsubmission, "emailId");
+    if (json_is_string(jemailId)) {
+        msgid = json_string_value(jemailId);
         if (*msgid == '#') {
             const char *id = hash_lookup(msgid + 1, &req->idmap->messages);
             if (id) {
                 msgid = id;
             } else {
-                json_array_append_new(invalid, json_string("emailId"));
+                jmap_parser_invalid(&parser, "emailId");
             }
         }
+    }
+    else {
+        jmap_parser_invalid(&parser, "emailId");
     }
 
     /* identityId */
     const char *identityid = NULL;
-    if (readprop(emailsubmission, "identityId", 1, invalid, "s", &identityid) > 0) {
+    json_t *jidentityId = json_object_get(emailsubmission, "identityId");
+    if (json_is_string(jidentityId)) {
+        identityid = json_string_value(jidentityId);
         if (strcmp(identityid, req->userid)) {
-            json_array_append_new(invalid, json_string("identityId"));
+            jmap_parser_invalid(&parser, "identityId");
         }
+    }
+    else {
+        jmap_parser_invalid(&parser, "identityId");
     }
 
     /* envelope */
     json_t *envelope = json_object_get(emailsubmission, "envelope");
     if (JNOTNULL(envelope)) {
+        jmap_parser_push(&parser, "envelope");
         json_t *from = json_object_get(envelope, "mailFrom");
         if (json_object_size(from)) {
-            _emailsubmission_address_parse(from, "envelope.mailFrom", invalid);
+            jmap_parser_push(&parser, "mailFrom");
+            _emailsubmission_address_parse(from, &parser);
+            jmap_parser_pop(&parser);
         }
         else {
-            json_array_append_new(invalid, json_string("envelope.mailFrom"));
+            jmap_parser_invalid(&parser, "mailFrom");
         }
         json_t *rcpt = json_object_get(envelope, "rcptTo");
         if (json_array_size(rcpt)) {
             size_t i;
             json_t *addr;
             json_array_foreach(rcpt, i, addr) {
-                buf_printf(&buf, "envelope.rcptTo[%zu]", i);
-                _emailsubmission_address_parse(addr, buf_cstring(&buf), invalid);
-                buf_reset(&buf);
+                jmap_parser_push_index(&parser, "rcptTo", i);
+                _emailsubmission_address_parse(addr, &parser);
+                jmap_parser_pop(&parser);
             }
         }
         else {
-            json_array_append_new(invalid, json_string("envelope.rcptTo"));
+            jmap_parser_invalid(&parser, "mailFrom");
         }
+        jmap_parser_pop(&parser);
     } else {
         envelope = NULL;
     }
 
     /* Reject read-only properties */
     if (json_object_get(emailsubmission, "id")) {
-        json_array_append_new(invalid, json_string("id"));
+        jmap_parser_invalid(&parser, "id");
     }
     if (json_object_get(emailsubmission, "threadId")) {
-        json_array_append_new(invalid, json_string("threadId"));
+        jmap_parser_invalid(&parser, "threadId");
     }
     if (json_object_get(emailsubmission, "sendAt")) {
-        json_array_append_new(invalid, json_string("sendAt"));
+        jmap_parser_invalid(&parser, "sendAt");
     }
     if (json_object_get(emailsubmission, "undoStatus")) {
-        json_array_append_new(invalid, json_string("undoStatus"));
+        jmap_parser_invalid(&parser, "undoStatus");
     }
     if (json_object_get(emailsubmission, "deliveryStatus")) {
-        json_array_append_new(invalid, json_string("deliveryStatus"));
+        jmap_parser_invalid(&parser, "deliveryStatus");
     }
     if (json_object_get(emailsubmission, "dsnBlobIds")) {
-        json_array_append_new(invalid, json_string("dsnBlobIds"));
+        jmap_parser_invalid(&parser, "dsnBlobIds");
     }
     if (json_object_get(emailsubmission, "mdnBlobIds")) {
-        json_array_append_new(invalid, json_string("mdnBlobIds"));
+        jmap_parser_invalid(&parser, "mdnBlobIds");
     }
 
-    if (json_array_size(invalid)) {
-        buf_free(&buf);
+    if (json_array_size(parser.invalid)) {
+        *set_err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(*set_err, "properties", parser.invalid);
+        jmap_parser_fini(&parser);
         return 0;
     }
+    jmap_parser_fini(&parser);
 
     /* No more returns from here on */
     char *mboxname = NULL;
@@ -10050,14 +10030,14 @@ static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
     r = _email_find(req, msgid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
-            *err = json_pack("{s:s}", "type", "emailNotFound");
+            *set_err = json_pack("{s:s}", "type", "emailNotFound");
         }
         goto done;
     }
 
     /* Check ACL */
     if (!(jmap_myrights_byname(req, mboxname) & ACL_READ)) {
-        *err = json_pack("{s:s}", "type", "emailNotFound");
+        *set_err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }
 
@@ -10098,7 +10078,7 @@ static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
             jfrom = json_object_get(json_array_get(jfrom, 0), "email");
         }
         if (!jfrom) {
-            *err = json_pack("{s:s}", "type", "notPermittedFrom");
+            *set_err = json_pack("{s:s}", "type", "notPermittedFrom");
             goto done;
         }
         const char *from = json_string_value(jfrom);
@@ -10134,7 +10114,7 @@ static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
 
     /* Validate envelope */
     if (!json_array_size(json_object_get(envelope, "rcptTo"))) {
-        *err = json_pack("{s:s}", "type", "noRecipients");
+        *set_err = json_pack("{s:s}", "type", "noRecipients");
         goto done;
     }
 
@@ -10176,15 +10156,14 @@ static int _emailsubmission_create(jmap_req_t *req, json_t *emailsubmission,
     if (r) {
         syslog(LOG_ERR, "jmap: can't create message submission: %s",
                 error_message(r));
-        *err = json_pack("{s:s}", "type", "smtpProtocolError");
+        *set_err = json_pack("{s:s}", "type", "smtpProtocolError");
         goto done;
     }
 
     /* All done */
-    char *emailsubmission_id = NULL;
-    emailsubmission_id = xstrdup(makeuuid());
-    json_object_set_new(emailsubmission, "id", json_string(emailsubmission_id));
-    free(emailsubmission_id);
+    char *new_id = xstrdup(makeuuid());
+    *new_submission = json_pack("{s:s}", "id", new_id);
+    free(new_id);
 
 done:
     if (fd_msg != -1) close(fd_msg);
@@ -10229,294 +10208,147 @@ done:
 
 static int jmap_emailsubmission_set(jmap_req_t *req)
 {
-    int r = 0;
-    json_t *set = NULL, *create, *update, *destroy, *state, *item;
-    json_t *onsuccess_update = NULL;
-    json_t *onsuccess_destroy = NULL;
-    json_t *update_msgs = NULL;
-    json_t *destroy_msgs = NULL;
-    struct buf buf = BUF_INITIALIZER;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
 
-    /* Validate top-level arguments */
-
-    /* ifInState */
-    state = json_object_get(req->args, "ifInState");
-    if (state) json_incref(state);
-
-    /* ifInState never fails for message submission random states */
-    set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", state ? state : jmap_getstate(req, MBTYPE_EMAIL));
-
-    /* onSuccessUpdateEmail */
-    json_t *invalid = json_pack("[]");
-    onsuccess_update = json_object_get(req->args, "onSuccessUpdateEmail");
-    if (JNOTNULL(onsuccess_update)) {
-        if (json_is_object(onsuccess_update)) {
-            const char *key;
-            json_t *val;
-            json_object_foreach(onsuccess_update, key, val) {
-                if (!json_is_object(val)) {
-                    buf_printf(&buf, "onSuccessUpdateEmail[%s]", key);
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-                }
-            }
-        } else {
-            json_array_append_new(invalid, json_string("onSuccessUpdateEmail"));
-        }
-    }
-    /* onSuccessDestroyEmail */
-    onsuccess_destroy = json_object_get(req->args, "onSuccessDestroyEmail");
-    if (json_is_array(onsuccess_destroy)) {
-        size_t i;
-        json_t *val;
-        json_array_foreach(onsuccess_destroy, i, val) {
-            if (!json_is_string(val)) {
-                buf_printf(&buf, "onSuccessDestroyEmail[%zu]", i);
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                buf_reset(&buf);
+    /* Parse request */
+    json_t *onSuccessUpdate = json_object_get(req->args, "onSuccessUpdateEmail");
+    if (json_is_object(onSuccessUpdate)) {
+        json_t *jval;
+        const char *emailsubmission_id;
+        json_object_foreach(onSuccessUpdate, emailsubmission_id, jval) {
+            if (!json_is_object(jval)) {
+                jmap_parser_push(&parser, "onSuccessUpdateEmail");
+                jmap_parser_invalid(&parser, emailsubmission_id);
+                jmap_parser_pop(&parser);
             }
         }
-    } else if (JNOTNULL(onsuccess_destroy)) {
-        json_array_append_new(invalid, json_string("onSuccessDestroyEmail"));
     }
-
-    /* Return early for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
-        r = 0;
+    else if (JNOTNULL(onSuccessUpdate)) {
+        jmap_parser_invalid(&parser, "onSuccessUpdateEmail");
+    }
+    json_t *onSuccessDestroy = json_object_get(req->args, "onSuccessDestroyEmail");
+    if (JNOTNULL(onSuccessDestroy)) {
+        _parse_strings(onSuccessDestroy, &parser, "onSuccessDestroyEmail");
+    }
+    jmap_set_parse(req->args, &parser, &set, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
-    invalid = NULL;
 
-    /* Handle create, update, destroy */
+    /* Process request */
 
-    update_msgs = json_pack("{}");
-    destroy_msgs = json_pack("[]");
-
-    create = json_object_get(req->args, "create");
-    if (create) {
-        json_t *created = json_pack("{}");
-        json_t *notCreated = json_pack("{}");
-        const char *key;
-        json_t *emailsubmission;
-
-        json_object_foreach(create, key, emailsubmission) {
-            json_t *invalid = json_pack("[]");
-
-            /* Create the message submission or return on error. Process
-             * errors in order of: fatal errors, setErrors, property errors */
-            json_t *err = NULL;
-            r = _emailsubmission_create(req, emailsubmission, invalid, &err);
-            if (err) {
-                json_object_set_new(notCreated, key, err);
-                json_decref(invalid);
-                r = 0;
-                continue;
-            }
-            else if (r) {
-                json_decref(invalid);
-                goto done;
-            }
-            else if (err) {
-                json_object_set_new(notCreated, key, err);
-                r = 0;
-                continue;
-            }
-            else if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Report this message submission as created */
-            const char *id = json_string_value(json_object_get(emailsubmission, "id"));
-            json_object_set_new(created, key, json_pack("{s:s}", "id", id));
-
-            /* Build its creation id */
-            buf_setcstr(&buf, "#");
-            buf_appendcstr(&buf, key);
-            buf_cstring(&buf);
-            const char *msgid = json_string_value(json_object_get(emailsubmission, "emailId"));
-
-            /* Process onSuccessUpdateEmail */
-            json_t *msg = json_object_get(onsuccess_update, buf_cstring(&buf));
-            if (msg) {
-                    json_object_set(update_msgs, msgid, msg);
-            }
-            /* Process onSuccessDestroyEmail */
-            size_t i;
-            json_t *jkey;
-            json_array_foreach(onsuccess_destroy, i, jkey) {
-                if (!strcmp(buf_cstring(&buf), json_string_value(jkey))) {
-                    json_array_append_new(destroy_msgs, json_string(msgid));
-                }
-            }
-            buf_reset(&buf);
-        }
-
-        if (json_object_size(created)) {
-            json_object_set(set, "created", created);
-        }
-        json_decref(created);
-
-        if (json_object_size(notCreated)) {
-            json_object_set(set, "notCreated", notCreated);
-        }
-        json_decref(notCreated);
+    /* As long as EmailSubmission/set returns random states, we
+     * never can guarantee the EmailSubmission state not to have
+     * changed. Reject all ifInState requests. */
+    if (set.if_in_state) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
     }
 
-    update = json_object_get(req->args, "update");
-    if (update) {
-        json_t *updated = json_pack("{}");
-        json_t *notUpdated = json_pack("{}");
+    json_t *jsubmission;
+    const char *creation_id;
+    json_object_foreach(set.create, creation_id, jsubmission) {
+        json_t *set_err = NULL;
+        json_t *new_submission;
+        _emailsubmission_create(req, jsubmission, &new_submission, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_created, creation_id, set_err);
+            continue;
+        }
+        json_object_set_new(set.created, creation_id, new_submission);
+    }
+
+    const char *id;
+    json_object_foreach(set.update, id, jsubmission) {
+        json_t *set_err = json_pack("{s:s}", "type", "notFound");
+        json_object_set_new(set.not_updated, id, set_err);
+    }
+
+    size_t i;
+    json_t *jsubmissionId;
+    json_array_foreach(set.destroy, i, jsubmissionId) {
+        json_t *set_err = json_pack("{s:s}", "type", "notFound");
+        json_object_set_new(set.not_destroyed,
+                json_string_value(jsubmissionId), set_err);
+    }
+
+    /* Process onSuccessXxxEmail */
+    json_t *updateEmails = json_object();
+    if (JNOTNULL(onSuccessUpdate)) {
         const char *id;
-        json_t *emailsubmission;
+        json_t *jemail;
+        json_object_foreach(onSuccessUpdate, id, jemail) {
+            /* Ignore updates, we rejected all of them */
+            if (*id != '#') continue;
 
-        json_object_foreach(update, id, emailsubmission) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(notUpdated, id, err);
-            r = 0;
+            json_t *jsubmission = json_object_get(set.create, id+1);
+            if (!jsubmission) continue;
+            json_t *jemailId = json_object_get(jsubmission, "emailId");
+            if (!jemailId) continue;
+            json_object_set(updateEmails, json_string_value(jemailId), jemail);
         }
-
-        if (json_object_size(updated)) {
-            json_object_set(set, "updated", updated);
-        }
-        json_decref(updated);
-
-        if (json_object_size(notUpdated)) {
-            json_object_set(set, "notUpdated", notUpdated);
-        }
-        json_decref(notUpdated);
     }
-
-    destroy = json_object_get(req->args, "destroy");
-    if (destroy) {
-        json_t *destroyed = json_pack("[]");
-        json_t *notDestroyed = json_pack("{}");
-        json_t *jid;
+    json_t *destroyEmails = json_array();
+    if (JNOTNULL(onSuccessDestroy)) {
         size_t i;
-
-        json_array_foreach(destroy, i, jid) {
+        json_t *jid;
+        json_array_foreach(onSuccessDestroy, i, jid) {
             const char *id = json_string_value(jid);
-            if (!id) continue;
+            /* Ignore updates, we rejected all of them */
+            if (*id != '#') continue;
 
-            json_object_set_new(notDestroyed, id,
-                    json_pack("{s:s}", "type", "notFound"));
+            json_t *jsubmission = json_object_get(set.create, id+1);
+            if (!jsubmission) continue;
+            json_t *jemailId = json_object_get(jsubmission, "emailId");
+            if (!jemailId) continue;
+            json_array_append(destroyEmails, jemailId);
         }
-
-        if (json_array_size(destroyed)) {
-            json_object_set(set, "destroyed", destroyed);
-        }
-        json_decref(destroyed);
-
-        if (json_object_size(notDestroyed)) {
-            json_object_set(set, "notDestroyed", notDestroyed);
-        }
-        json_decref(notDestroyed);
     }
 
-    if (json_object_size(json_object_get(set, "created")) ||
-        json_object_size(json_object_get(set, "updated")) ||
-        json_array_size(json_object_get(set, "destroyed"))) {
-        /* Create a random new state */
-        json_object_set_new(set, "newState", json_string(makeuuid()));
-    }
-    else {
-        /* Keep the old state */
-        json_object_set(set, "newState", state);
-    }
+    /* Create a random new state. /changes will return empty changes. */
+    set.new_state = xstrdup(makeuuid());
 
-    json_object_set_new(set, "accountId", json_string(req->accountid));
+    jmap_ok(req, jmap_set_reply(&set));
 
-    json_incref(set);
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("EmailSubmission/set"));
-    json_array_append_new(item, set);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    if (json_object_size(update_msgs) || json_array_size(destroy_msgs)) {
+    if (json_object_size(updateEmails) || json_array_size(destroyEmails)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "Email/set";
-        if (json_object_size(update_msgs)) {
-            json_object_set(subreq.args, "update", update_msgs);
-        }
-        if (json_array_size(destroy_msgs)) {
-            json_object_set(subreq.args, "destroy", destroy_msgs);
-        }
+        json_object_set(subreq.args, "update", updateEmails);
+        json_object_set(subreq.args, "destroy", destroyEmails);
         json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        r = jmap_email_set(&subreq);
+        jmap_email_set(&subreq);
         json_decref(subreq.args);
-        if (r) goto done;
     }
+    json_decref(updateEmails);
+    json_decref(destroyEmails);
 
 done:
-    if (set) json_decref(set);
-    json_decref(update_msgs);
-    json_decref(destroy_msgs);
-    buf_free(&buf);
-    if (r) {
-        syslog(LOG_ERR, "jmap_emailsubmission_set: %s", error_message(r));
-        r = HTTP_SERVER_ERROR;
-    }
-    return r;
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return 0;
 }
 
 static int jmap_emailsubmission_changes(jmap_req_t *req)
 {
-    int pe;
-    json_int_t max = 0;
-    json_t *invalid, *res, *oldstate, *newstate;
-    const char *since;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* sinceState */
-    pe = readprop(req->args, "sinceState", 1, invalid, "s", &since);
-    if (pe > 0 && !atomodseq_t(since)) {
-        json_array_append_new(invalid, json_string("sinceState"));
+    json_t *err = NULL;
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        return 0;
     }
-    /* maxChanges */
-    readprop(req->args, "maxChanges", 0, invalid, "I", &max);
-    if (max < 0) json_array_append_new(invalid, json_string("maxChanges"));
-
-    /* Bail out for argument errors */
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}", "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]", "error", err, req->tag));
-        goto done;
-    }
-    json_decref(invalid);
 
     /* Trivially find no message submission updates at all. */
-    oldstate = json_string(since);
-    newstate = jmap_getstate(req, MBTYPE_EMAIL);
-
-    /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "oldState", oldstate);
-    json_object_set_new(res, "newState", newstate);
-    json_object_set_new(res, "hasMoreChanges", json_false());
-    json_object_set_new(res, "changed", json_null());
-    json_object_set_new(res, "destroyed", json_null());
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("EmailSubmission/changes"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-done:
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    changes.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_changes_reply(&changes));
     return 0;
 }
 
