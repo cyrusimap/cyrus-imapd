@@ -4726,423 +4726,83 @@ static struct sortcrit *_email_buildsort(json_t *sort)
     return sortcrit;
 }
 
-struct email_search_window {
-    /* input arguments */
-    ssize_t position;
-    const char *anchor;
-    int anchor_off;
-    size_t limit;
-    int collapse;
-    modseq_t sincemodseq;
-    uint32_t sinceuid; /* for queryChanges */
-    const char *uptomsgid;
+static void _email_querychanges_added(struct jmap_querychanges *query,
+                                      const char *email_id)
+{
+    json_t *item = json_pack("{s:s,s:i}", "id", email_id, "index", query->total-1);
+    json_array_append_new(query->added, item);
+}
 
-    /* output arguments */
-    modseq_t highestmodseq;
-    uint32_t highestuid; /* for queryChanges */
-    int cancalcupdates;
+static void _email_querychanges_destroyed(struct jmap_querychanges *query,
+                                          const char *email_id)
+{
+    json_array_append_new(query->removed, json_string(email_id));
+}
 
-    /* internal state */
-    size_t mdcount;
-    size_t anchor_pos;
+struct email_search {
+    struct searchargs *args;
+    struct index_state *state;
+    search_query_t *query;
+    struct sortcrit *sortcrit;
+    struct index_init init;
+    int is_mutable;
+    int err;
 };
 
-static void _email_querychanges_added(json_t *target, const char *msgid, int index)
+static struct email_search* _email_runsearch(jmap_req_t *req,
+                                             json_t *filter,
+                                             json_t *sort,
+                                             int want_expunged)
 {
-    json_t *item = json_pack("{s:s,s:i}", "id", msgid, "index", index);
-    json_array_append_new(target, item);
-}
+    struct email_search* search = xzmalloc(sizeof(struct email_search));
+    int r = 0;
 
-static void _email_querychanges_destroyed(json_t *target, const char *msgid)
-{
-    json_array_append_new(target, json_string(msgid));
-}
+    /* Build search args */
+    search->args = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
+            &jmap_namespace, req->accountid, req->authstate, 0);
+    search->args->root = _email_buildsearch(req, filter, NULL);
 
-static int _email_search(jmap_req_t *req, json_t *filter, json_t *sort,
-                         struct email_search_window *window, int want_expunged,
-                         size_t *total, size_t *total_threads,
-                         json_t **messageids, json_t **expungedids,
-                         json_t **threadids)
-{
-    hash_table ids = HASH_TABLE_INITIALIZER;
-    hashu64_table cids = HASHU64_TABLE_INITIALIZER;
-    struct index_state *state = NULL;
-    search_query_t *query = NULL;
-    struct sortcrit *sortcrit = NULL;
-    struct searchargs *searchargs = NULL;
-    struct index_init init;
-    int foundupto = 0;
-    char *msgid = NULL;
-    int i, r;
+    /* Build index state */
+    search->init.userid = req->accountid;
+    search->init.authstate = req->authstate;
+    search->init.want_expunged = want_expunged;
 
-	/* TODO rework _email_search
-     * - JMAP spec kicked out threadIds from the Email/query response
-     *   somewhen late 2017. Now we should cache emailId -> threadId on the
-     *   request context to save lookups on conversations.db
-     * - JMAP spec introduced negative positions for search results, and
-     *   this is what breaks the camel's neck for the mess _email_search got.
-     *   This function requires a massive refactor before we can add any new
-     *   functionality.
-     *   Until then, we fail hard for negative positions
-     */
-    assert(window->position >= 0);
-
-    assert(!want_expunged || expungedids);
-
-    *total = 0;
-    if (*messageids == NULL) *messageids = json_pack("[]");
-    if (*threadids == NULL) *threadids = json_pack("[]");
-    if (want_expunged && *expungedids == NULL) *expungedids = json_pack("[]");
-
-    /* Build searchargs */
-    searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
-                                &jmap_namespace, req->accountid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, NULL);
-
-    /* Run the search query */
-    memset(&init, 0, sizeof(init));
-    init.userid = req->accountid;
-    init.authstate = req->authstate;
-    init.want_expunged = want_expunged;
-
-    r = index_open(req->inboxname, &init, &state);
+    r = index_open(req->inboxname, &search->init, &search->state);
     if (r) goto done;
 
-    query = search_query_new(state, searchargs);
-    query->sortcrit = sortcrit = _email_buildsort(sort);
-    query->multiple = 1;
-    query->need_ids = 1;
-    query->verbose = 1;
-    query->want_expunged = want_expunged;
+    /* Build query */
+    search->query = search_query_new(search->state, search->args);
+    search->query->sortcrit = search->sortcrit = _email_buildsort(sort);
+    search->query->multiple = 1;
+    search->query->need_ids = 1;
+    search->query->verbose = 0;
+    search->query->want_expunged = want_expunged;
 
-    if (search_is_mutable(sortcrit, searchargs)) {
-        if (window->sincemodseq) {
-            r = IMAP_SEARCH_MUTABLE;
-            goto done;
-        }
-    }
-    else {
-        window->cancalcupdates = 1;
-    }
+    search->is_mutable = search_is_mutable(search->sortcrit, search->args);
 
-
-    r = search_query_run(query);
+    /* Run query and process results */
+    r = search_query_run(search->query);
     if (r) goto done;
-
-    /* Initialize window state */
-    window->mdcount = query->merged_msgdata.count;
-    window->anchor_pos = (size_t)-1;
-    window->highestmodseq = 0;
-
-    memset(&ids, 0, sizeof(hash_table));
-    construct_hash_table(&ids, window->mdcount + 1, 0);
-
-    memset(&cids, 0, sizeof(hashu64_table));
-    construct_hashu64_table(&cids, query->merged_msgdata.count/4+4,0);
-
-    *total_threads = 0;
-
-    /* Special case: if threads are not collapsed and filter narrows
-     * search down to a single mailbox, then we can unambiguously
-     * identify in queryChanges if records need to be reported in
-     * 'added', e.g. we don't have to report them in both 'added'
-     * and 'removed'. */
-    int one_mailbox_only = 0;
-    if (!window->collapse) {
-        if (json_is_string(json_object_get(filter, "inMailbox"))) {
-            one_mailbox_only = 1;
-        }
-    }
-
-    for (i = 0 ; i < query->merged_msgdata.count ; i++) {
-        MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
-        search_folder_t *folder = md->folder;
-        json_t *msg = NULL;
-        size_t idcount = json_array_size(*messageids);
-
-        if (!folder) continue;
-
-        /* Ignore expunged messages, if not requested by caller */
-        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
-        if (is_expunged && !want_expunged)
-            goto doneloop;
-
-        /* Make sure we don't report any hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ))
-            goto doneloop;
-
-        free(msgid);
-        msgid = _email_id_from_guid(&md->guid);
-
-        /* Have we seen this message already? */
-        if (hash_lookup(msgid, &ids))
-            goto doneloop;
-
-        /* Add the message the list of reported messages */
-        hash_insert(msgid, (void*)1, &ids);
-
-        /* we're doing jmap_email_querychanges - we use the results differently */
-        if (window->sincemodseq) {
-            /* Keep track of the highest modseq */
-            if (!foundupto && window->highestmodseq < md->modseq)
-                window->highestmodseq = md->modseq;
-
-            /* trivial case - not collapsing conversations */
-            if (!window->collapse) {
-                if (is_expunged) {
-                    /* Don't count to total */
-                    if (foundupto) goto doneloop;
-                    if (md->modseq <= window->sincemodseq) goto doneloop;
-                    _email_querychanges_destroyed(*expungedids, msgid);
-                }
-                else {
-                    (*total)++;
-                    if (foundupto) goto doneloop;
-                    if (md->modseq <= window->sincemodseq) goto doneloop;
-                    /* The modseq of this message is higher than the last
-                     * client-seen state.
-                     *
-                     * The JMAP spec requires us to report
-                     * "every foo that has been added to the results since the
-                     * old state AND every foo in the current results that was
-                     * included in the removed array (due to a filter or sort
-                     * based upon a mutable property)"
-                     *
-                     * The latter case is a non-issue, because we reject
-                     * mutable searches with "cannotCalculateChanges".
-                     * But for the former case, we can't tell if the message
-                     * is a truly new search result by looking at its modseq
-                     * or index record. It might just have been an already
-                     * seen result that got its modseq bumped. If all results
-                     * are in the same mailbox, we can unambigously decide
-                     * what to do based on the UID.
-                     *
-                     * If search isn't narrowed to a single mailbox, we'll
-                     * report candiates both in removed AND added, as it's done
-                     * in the codepath for collapsed threads.
-                     */
-                    if (one_mailbox_only) {
-                        if (md->uid <= window->sinceuid) goto doneloop;
-                        _email_querychanges_added(*messageids, msgid, *total-1);
-                        /* Keep track of the highest uid */
-                        if (window->highestuid < md->uid)
-                            window->highestuid = md->uid;
-                    } else {
-                        _email_querychanges_destroyed(*expungedids, msgid);
-                        _email_querychanges_added(*messageids, msgid, *total-1);
-                    }
-                }
-                goto doneloop;
-            }
-
-            /* OK, we need to deal with the following possibilities */
-
-            /* cids:
-             * 1: exemplar for this CID seen
-             * 2: old exemplar for CID seen
-             * 4: deleted new item exists that might have exposed old record
-             *
-             * The concept of "exemplar" comes from the xconv* commands in index.c.
-             * The "exemplar" is the first message that matches the current sort/search
-             * for a given conversation.  For jmap_email_query this is fairly simple,
-             * just show the first message you find with a given cid, but for
-             * jmap_email_querychanges, you need to say "destroyed" for every message
-             * which MIGHT have been the previous exemplar, because it will be in the
-             * client cache, and you need to say both "destroyed" and "added" for the
-             * new exemplar unless you can be sure it was also the old exemplar.
-             *
-             * Of particular interest is the exposed old exemplar case.  Imagine
-             * 3 messages in the same conversation, A, C and D - delivered in that
-             * order (B was a different conversation - this is an example in the
-             * Cassandane test).  C and D are both in reply to A.  The sort is
-             * internaldate desc, so the messages are in this order D C B A.
-             * exemplars are D and B for the two conversations.
-             *
-             * Let's say the state is 1000 at this point.
-             *
-             * We then delete 'C' without changing D.  Since we know D must have been
-             * the old exemplar, there is no change to show between 1000 and 1001.
-             *
-             * We then delete 'D'.  Now, 'C' was changed at 1001, so asking for changes
-             * since 1001 we get destroyed: ['D', 'A'], added: ['A'] - because 'D' is now
-             * gone, and 'A' is now the exemplar - but we aren't sure if it was also the
-             * previous exemplay because we don't know if D was also deleted earlier and
-             * touched again for some unreleated reason.
-             *
-             */
-            off_t ciddata = (off_t)hashu64_lookup(md->cid, &cids);
-            if (ciddata == 3) goto doneloop; /* this message clearly can't have been seen and can't be seen */
-
-            if (!is_expunged && !(ciddata & 1)) {
-                (*total)++; /* this is the exemplar */
-                hashu64_insert(md->cid, (void*)(ciddata | 1), &cids);
-            }
-
-            if (foundupto) goto doneloop;
-
-            if (md->modseq <= window->sincemodseq) {
-                if (!is_expunged) {
-                    /* this may have been the old exemplar but is not the new exemplar */
-                    if (ciddata & 1) {
-                        _email_querychanges_destroyed(*expungedids, msgid);
-                    }
-                    else if (ciddata & 4) {
-                        /* we need to remove and re-add this record just in case we
-                         * got unmasked by the previous */
-                        _email_querychanges_destroyed(*expungedids, msgid);
-                        _email_querychanges_added(*messageids, msgid, *total-1);
-                    }
-                    /* nothing later could be the old exemplar */
-                    hashu64_insert(md->cid, (void *)3, &cids);
-                }
-                goto doneloop;
-            }
-
-            /* OK, so this message has changed since last time */
-
-            /* we don't know that we weren't the old exemplar, so we always tell a removal */
-            _email_querychanges_destroyed(*expungedids, msgid);
-
-            /* not the new exemplar because expunged */
-            if (is_expunged) {
-                hashu64_insert(md->cid, (void*)(ciddata | 4), &cids);
-                goto doneloop;
-            }
-            /* not the new exemplar because we've already seen that */
-            if (ciddata & 1) goto doneloop;
-
-            /* this is the new exemplar, so tell about it */
-            _email_querychanges_added(*messageids, msgid, *total-1);
-
-            goto doneloop;
-        }
-
-        /* Collapse threads, if requested */
-        if (window->collapse && hashu64_lookup(md->cid, &cids))
-            goto doneloop;
-
-        /* OK, that's a legit message */
-        (*total)++;
-
-        /* Keep track of conversation ids, inside and outside the window */
-        if (!hashu64_lookup(md->cid, &cids)) {
-            (*total_threads)++;
-            hashu64_insert(md->cid, (void*)1, &cids);
-        }
-
-        /* Check if the message is in the search window */
-        if (window->anchor) {
-            if (!strcmp(msgid, window->anchor)) {
-                /* This message is the anchor. Recalculate the search result */
-                json_t *anchored_ids = json_pack("[]");
-                json_t *anchored_cids = json_pack("[]");
-                size_t j;
-
-                /* Set countdown to enter the anchor window */
-                if (window->anchor_off < 0) {
-                    window->anchor_pos = -window->anchor_off;
-                } else {
-                    window->anchor_pos = 0;
-                }
-
-                /* Readjust the message and thread list */
-                for (j = idcount - window->anchor_off; j < idcount; j++) {
-                    json_array_append(anchored_ids, json_array_get(*messageids, j));
-                    json_array_append(anchored_cids, json_array_get(*threadids, j));
-                }
-                json_decref(*messageids);
-                *messageids = anchored_ids;
-                json_decref(*threadids);
-                *threadids = anchored_cids;
-
-                /* Adjust the window position for this anchor. This is
-                 * "[...] the 0-based index of the first result in the
-                 * threadIds array within the complete list". */
-                window->position = *total - json_array_size(anchored_ids) - 1;
-
-                /* Reset message counter */
-                idcount = json_array_size(*messageids);
-            }
-            if (window->anchor_pos != (size_t)-1 && window->anchor_pos) {
-                /* Found the anchor but haven't yet entered its window */
-                window->anchor_pos--;
-                /* But this message still counts to the window position */
-                window->position++;
-                goto doneloop;
-            }
-        }
-        else if (window->position > 0 && *total < ((size_t) window->position) + 1) {
-            goto doneloop;
-        }
-
-        if (window->limit && idcount && window->limit <= idcount)
-            goto doneloop;
-
-        /* Keep track of the highest modseq */
-        if (window->highestmodseq < md->modseq)
-            window->highestmodseq = md->modseq;
-
-        if (one_mailbox_only) {
-            /* Keep track of the highest uid */
-            if (window->highestuid < md->uid)
-                window->highestuid = md->uid;
-        }
-
-        /* Check if the message is expunged in all mailboxes */
-        r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid),
-                                       _email_is_expunged_cb, req);
-        switch (r) {
-            case IMAP_OK_COMPLETED:
-                is_expunged = 0;
-                break;
-            case 0:
-                is_expunged = 1;
-                break;
-            default:
-                goto done;
-        }
-        r = 0;
-
-        /* Add the message id to the result */
-        if (is_expunged && expungedids) {
-            json_array_append_new(*expungedids, json_string(msgid));
-        } else {
-            json_array_append_new(*messageids, json_string(msgid));
-        }
-
-        /* Add the thread id */
-        if (window->collapse)
-            hashu64_insert(md->cid, (void*)1, &cids);
-        char *thrid = _thread_id_from_cid(md->cid);
-        json_array_append_new(*threadids, json_string(thrid));
-        free(thrid);
-
-
-doneloop:
-        if (!foundupto && window->uptomsgid && !strcmp(msgid, window->uptomsgid))
-            foundupto = 1;
-        if (msg) json_decref(msg);
-    }
 
 done:
-    free(msgid);
-    free_hash_table(&ids, NULL);
-    free_hashu64_table(&cids, NULL);
-    if (sortcrit) freesortcrit(sortcrit);
-    if (query) search_query_free(query);
-    if (searchargs) freesearchargs(searchargs);
-    if (state) {
-        state->mailbox = NULL;
-        index_close(&state);
-    }
+    search->err = r;
     if (r) {
-        json_decref(*messageids);
-        *messageids = NULL;
-        json_decref(*threadids);
-        *threadids = NULL;
+        syslog(LOG_ERR, "jmap: _email_runsearch: %s", error_message(r));
+        return NULL;
     }
-    return r;
+    return search;
+}
+
+static void _email_search_free(struct email_search *search)
+{
+    if (search->state) {
+        search->state->mailbox = NULL;
+        index_close(&search->state);
+    }
+    search_query_free(search->query);
+    freesearchargs(search->args);
+    freesortcrit(search->sortcrit);
+    free(search);
 }
 
 static const char *msglist_sortfields[] = {
@@ -5174,6 +4834,137 @@ static int _email_parse_comparator(struct jmap_comparator *comp, void *rock __at
     }
 
     return 0;
+}
+
+static char *_email_make_querystate(modseq_t modseq, uint32_t uid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT ":%u", modseq, uid);
+    return buf_release(&buf);
+}
+
+static int _email_read_querystate(const char *s, modseq_t *modseq, uint32_t *uid)
+{
+    return sscanf(s, MODSEQ_FMT ":%u", modseq, uid) == 2;
+}
+
+static void _email_query(jmap_req_t *req, struct jmap_query *query,
+                         int collapse_threads, json_t **err)
+{
+    struct email_search *search = _email_runsearch(req, query->filter, query->sort, 0);
+    if (search->err) {
+        *err = json_pack("{s:s}", "type", "serverError");
+        goto done;
+    }
+    query->can_calculate_changes = search->is_mutable;
+
+    // TODO cache emailId -> threadId on the request context
+    // TODO support negative positions
+    assert(query->position >= 0);
+
+    /* If query filters by mailbox and threads are not collapsed,
+     * keep track of the highest uid for queryChanges. */
+    int one_mailbox_only = !collapse_threads &&
+        JNOTNULL(json_object_get(query->filter, "inMailbox"));
+
+    /* Initialize search result loop */
+    size_t mdcount = search->query->merged_msgdata.count;
+    size_t anchor_position = (size_t)-1;
+    uint32_t highest_uid = 0;
+    char *email_id = NULL;
+
+    hash_table seen_ids = HASH_TABLE_INITIALIZER;
+    memset(&seen_ids, 0, sizeof(hash_table));
+    construct_hash_table(&seen_ids, mdcount + 1, 0);
+
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    memset(&seen_cids, 0, sizeof(hashu64_table));
+    construct_hashu64_table(&seen_cids, mdcount/4+4,0);
+
+    int i;
+    for (i = 0 ; i < search->query->merged_msgdata.count; i++) {
+        MsgData *md = ptrarray_nth(&search->query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+        if (!folder) continue;
+
+        /* Skip expunged or hidden messages */
+        if (md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED))
+            continue;
+        int rights = jmap_myrights_byname(req, folder->mboxname);
+        if (!(rights & ACL_READ))
+            continue;
+
+        /* Have we seen this message already? */
+        free(email_id);
+        email_id = _email_id_from_guid(&md->guid);
+        if (hash_lookup(email_id, &seen_ids))
+            continue;
+        hash_insert(email_id, (void*)1, &seen_ids);
+        if (collapse_threads && hashu64_lookup(md->cid, &seen_cids))
+            continue;
+        hashu64_insert(md->cid, (void*)1, &seen_cids);
+
+        /* This message matches the query. */
+        size_t result_count = json_array_size(query->ids);
+        query->total++;
+
+        /* Apply query window, if any */
+        if (query->anchor) {
+            if (!strcmp(email_id, query->anchor)) {
+                /* This message is the anchor. Recalculate the search result */
+                json_t *anchored_ids = json_pack("[]");
+                size_t j;
+                /* Set countdown to enter the anchor window */
+                if (query->anchor_offset < 0) {
+                    anchor_position = -query->anchor_offset;
+                } else {
+                    anchor_position = 0;
+                }
+                /* Readjust the result list */
+                for (j = result_count - query->anchor_offset; j < result_count; j++) {
+                    json_array_append(anchored_ids, json_array_get(query->ids, j));
+                }
+                json_decref(query->ids);
+                query->ids = anchored_ids;
+                result_count = json_array_size(query->ids);
+
+                /* Adjust the window position for this anchor. This is
+                 * "[...] the 0-based index of the first result in the
+                 * threadIds array within the complete list". */
+                query->position = query->total - json_array_size(anchored_ids) - 1;
+            }
+            if (anchor_position != (size_t)-1 && anchor_position) {
+                /* Found the anchor but haven't yet entered its window */
+                anchor_position--;
+                /* But this message still counts to the window position */
+                query->position++;
+                continue;
+            }
+        }
+        else if (query->position > 0 && query->total < ((size_t) query->position) + 1) {
+            continue;
+        }
+
+        /* Apply limit */
+        if (query->limit && result_count && query->limit <= result_count)
+            continue;
+
+        /* Keep track of the highest modseq and uid */
+        if (one_mailbox_only && highest_uid < md->uid)
+            highest_uid = md->uid;
+
+        /* Add message to result */
+        json_array_append_new(query->ids, json_string(email_id));
+    }
+    free_hashu64_table(&seen_cids, NULL);
+    free_hash_table(&seen_ids, NULL);
+    free(email_id);
+
+    modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+    query->state = _email_make_querystate(modseq, highest_uid);
+
+done:
+    _email_search_free(search);
 }
 
 static int jmap_email_query(jmap_req_t *req)
@@ -5209,35 +5000,12 @@ static int jmap_email_query(jmap_req_t *req)
         goto done;
     }
 
-    size_t total_threads = 0;
-    json_t *threadids = NULL;
-    struct email_search_window window;
-    memset(&window, 0, sizeof(struct email_search_window));
-    window.position = query.position;
-    window.anchor = query.anchor;
-    window.anchor_off = query.anchor_offset;
-    window.limit = query.limit;
-    window.collapse = collapse_threads;
-    int r = _email_search(req, query.filter, query.sort, &window, 0,
-            &query.total, &total_threads, &query.ids, NULL, &threadids);
-    if (!JNOTNULL(query.ids)) query.ids = json_array();
-    json_decref(threadids);
-    if (r) {
-        json_t *err = r == IMAP_NOTFOUND ?
-            json_pack("{s:s}", "type", "unsupportedFilter") :
-            json_pack("{s:s}", "type", "serverError");
-        jmap_error(req, err);
+    /* Run query */
+    _email_query(req, &query, collapse_threads, &err);
+    if (err) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-    query.can_calculate_changes = window.cancalcupdates;
-    query.position = window.position;
-
-    /* State token is current modseq ':' highestuid - because queryChanges... */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%s:%u", json_string_value(jstate), window.highestuid);
-    query.state = buf_release(&buf);
-    json_decref(jstate);
 
     /* Build response */
     json_t *res = jmap_query_reply(&query);
@@ -5249,6 +5017,212 @@ done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
+}
+
+static void _email_querychanges(jmap_req_t *req, struct jmap_querychanges *query,
+                                int collapse_threads, json_t **err)
+{
+    modseq_t since_modseq;
+    uint32_t since_uid;
+
+    if (!_email_read_querystate(query->since_state, &since_modseq, &since_uid)) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        return;
+    }
+
+    /* Run search */
+    struct email_search *search = _email_runsearch(req, query->filter, query->sort, /*want_expunged*/1);
+    if (search->err) {
+        *err = json_pack("{s:s}", "type", "serverError");
+        goto done;
+    }
+    if (search->is_mutable) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        goto done;
+    }
+
+    /* Prepare result loop */
+    modseq_t highest_modseq = 0;
+    uint32_t highest_uid = 0;
+    char *email_id = NULL;
+    int found_up_to = 0;
+    size_t mdcount = search->query->merged_msgdata.count;
+
+    hash_table seen_ids = HASH_TABLE_INITIALIZER;
+    memset(&seen_ids, 0, sizeof(hash_table));
+    construct_hash_table(&seen_ids, mdcount + 1, 0);
+
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    memset(&seen_cids, 0, sizeof(hashu64_table));
+    construct_hashu64_table(&seen_cids, mdcount/4+4,0);
+
+    int one_mailbox_only = !collapse_threads &&
+        JNOTNULL(json_object_get(query->filter, "inMailbox"));
+
+    int i;
+    for (i = 0 ; i < search->query->merged_msgdata.count; i++) {
+        MsgData *md = ptrarray_nth(&search->query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+        if (!folder) continue;
+        free(email_id);
+        email_id = _email_id_from_guid(&md->guid);
+
+        /* Make sure we don't report any hidden messages */
+        int rights = jmap_myrights_byname(req, folder->mboxname);
+        if (!(rights & ACL_READ))
+            goto doneloop;
+
+        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+
+        if (hash_lookup(email_id, &seen_ids))
+            goto doneloop;
+        hash_insert(email_id, (void*)1, &seen_ids);
+
+        /* Keep track of the highest modseq */
+        if (!found_up_to && highest_modseq < md->modseq)
+            highest_modseq = md->modseq;
+
+        /* trivial case - not collapsing conversations */
+        if (!collapse_threads) {
+            if (is_expunged) {
+                /* Don't count to total */
+                if (found_up_to) goto doneloop;
+                if (md->modseq <= since_modseq) goto doneloop;
+                _email_querychanges_destroyed(query, email_id);
+            }
+            else {
+                query->total++;
+                if (found_up_to) goto doneloop;
+                if (md->modseq <= since_modseq) goto doneloop;
+                /* The modseq of this message is higher than the last
+                 * client-seen state.
+                 *
+                 * The JMAP spec requires us to report
+                 * "every foo that has been added to the results since the
+                 * old state AND every foo in the current results that was
+                 * included in the removed array (due to a filter or sort
+                 * based upon a mutable property)"
+                 *
+                 * The latter case is a non-issue, because we reject
+                 * mutable searches with "cannotCalculateChanges".
+                 * But for the former case, we can't tell if the message
+                 * is a truly new search result by looking at its modseq
+                 * or index record. It might just have been an already
+                 * seen result that got its modseq bumped. If all results
+                 * are in the same mailbox, we can unambigously decide
+                 * what to do based on the UID.
+                 *
+                 * If search isn't narrowed to a single mailbox, we'll
+                 * report candiates both in removed AND added, as it's done
+                 * in the codepath for collapsed threads.
+                 */
+                if (one_mailbox_only) {
+                    if (md->uid <= since_uid) goto doneloop;
+                    _email_querychanges_added(query, email_id);
+                    /* Keep track of the highest uid */
+                    if (highest_uid < md->uid)
+                        highest_uid = md->uid;
+                } else {
+                    _email_querychanges_destroyed(query, email_id);
+                    _email_querychanges_added(query, email_id);
+                }
+            }
+            goto doneloop;
+        }
+
+        /* OK, we need to deal with the following possibilities */
+
+        /* cids:
+         * 1: exemplar for this CID seen
+         * 2: old exemplar for CID seen
+         * 4: deleted new item exists that might have exposed old record
+         *
+         * The concept of "exemplar" comes from the xconv* commands in index.c.
+         * The "exemplar" is the first message that matches the current sort/search
+         * for a given conversation.  For jmap_email_query this is fairly simple,
+         * just show the first message you find with a given cid, but for
+         * jmap_email_querychanges, you need to say "destroyed" for every message
+         * which MIGHT have been the previous exemplar, because it will be in the
+         * client cache, and you need to say both "destroyed" and "added" for the
+         * new exemplar unless you can be sure it was also the old exemplar.
+         *
+         * Of particular interest is the exposed old exemplar case.  Imagine
+         * 3 messages in the same conversation, A, C and D - delivered in that
+         * order (B was a different conversation - this is an example in the
+         * Cassandane test).  C and D are both in reply to A.  The sort is
+         * internaldate desc, so the messages are in this order D C B A.
+         * exemplars are D and B for the two conversations.
+         *
+         * Let's say the state is 1000 at this point.
+         *
+         * We then delete 'C' without changing D.  Since we know D must have been
+         * the old exemplar, there is no change to show between 1000 and 1001.
+         *
+         * We then delete 'D'.  Now, 'C' was changed at 1001, so asking for changes
+         * since 1001 we get destroyed: ['D', 'A'], added: ['A'] - because 'D' is now
+         * gone, and 'A' is now the exemplar - but we aren't sure if it was also the
+         * previous exemplay because we don't know if D was also deleted earlier and
+         * touched again for some unreleated reason.
+         *
+         */
+        off_t ciddata = (off_t)hashu64_lookup(md->cid, &seen_cids);
+        if (ciddata == 3) goto doneloop; /* this message clearly can't have been seen and can't be seen */
+
+        if (!is_expunged && !(ciddata & 1)) {
+            query->total++; /* this is the exemplar */
+            hashu64_insert(md->cid, (void*)(ciddata | 1), &seen_cids);
+        }
+
+        if (found_up_to) goto doneloop;
+
+        if (md->modseq <= since_modseq) {
+            if (!is_expunged) {
+                /* this may have been the old exemplar but is not the new exemplar */
+                if (ciddata & 1) {
+                    _email_querychanges_destroyed(query, email_id);
+                }
+                else if (ciddata & 4) {
+                    /* we need to remove and re-add this record just in case we
+                     * got unmasked by the previous */
+                    _email_querychanges_destroyed(query, email_id);
+                    _email_querychanges_added(query, email_id);
+                }
+                /* nothing later could be the old exemplar */
+                hashu64_insert(md->cid, (void *)3, &seen_cids);
+            }
+            goto doneloop;
+        }
+
+        /* OK, so this message has changed since last time */
+
+        /* we don't know that we weren't the old exemplar, so we always tell a removal */
+        _email_querychanges_destroyed(query, email_id);
+
+        /* not the new exemplar because expunged */
+        if (is_expunged) {
+            hashu64_insert(md->cid, (void*)(ciddata | 4), &seen_cids);
+            goto doneloop;
+        }
+        /* not the new exemplar because we've already seen that */
+        if (ciddata & 1) goto doneloop;
+
+        /* this is the new exemplar, so tell about it */
+        _email_querychanges_added(query, email_id);
+
+doneloop:
+        if (!found_up_to && query->up_to_id && !strcmp(email_id, query->up_to_id))
+            found_up_to = 1;
+    }
+
+
+    free_hashu64_table(&seen_cids, NULL);
+    free_hash_table(&seen_ids, NULL);
+    free(email_id);
+
+    query->new_state = _email_make_querystate(highest_modseq, highest_uid);
+
+done:
+    _email_search_free(search);
 }
 
 static int jmap_email_querychanges(jmap_req_t *req)
@@ -5280,52 +5254,12 @@ static int jmap_email_querychanges(jmap_req_t *req)
         goto done;
 	}
 
-    /* XXX Guess, we don't need total_threads anymore */
-    size_t total_threads = 0;
-    json_t *threadids = NULL;
-    /* Set up search window */
-    struct email_search_window window;
-    memset(&window, 0, sizeof(struct email_search_window));
-
-    /* State token is current modseq ':' highestuid - because queryChanges... */
-    int nscan = sscanf(query.since_state, MODSEQ_FMT ":%u",
-                       &window.sincemodseq, &window.sinceuid);
-    if (nscan != 2) {
-        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+    /* Query changes */
+    _email_querychanges(req, &query, collapse_threads, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    window.uptomsgid = query.up_to_id;
-    window.collapse = collapse_threads;
-    int r = _email_search(req, query.filter, query.sort, &window, /*include_expunged*/1,
-            &query.total, &total_threads, &query.added, &query.removed, &threadids);
-    if (!JNOTNULL(query.added)) query.added = json_array();
-    if (!JNOTNULL(query.removed)) query.removed = json_array();
-    json_decref(threadids);
-    if (r == IMAP_SEARCH_MUTABLE) {
-        jmap_error(req, json_pack("{s:s,s:s}", "type", "cannotCalculateChanges",
-                    "error", "Search is mutable"));
-        goto done;
-    }
-    else if (r == IMAP_NOTFOUND) {
-        jmap_error(req, json_pack("{s:s}", "type", "unsupportedFilter"));
-        goto done;
-    }
-    else if (r) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
-        goto done;
-    }
-    if (query.max_changes) {
-        size_t nchanges = json_array_size(query.added) + json_array_size(query.removed);
-        if (nchanges > query.max_changes) {
-            jmap_error(req, json_pack("{s:s}", "type", "tooManyChanges"));
-            goto done;
-        }
-    }
-
-    /* State token is current modseq ':' highestuid - because queryChanges... */
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT ":%u", window.highestmodseq, window.highestuid);
-    query.new_state = buf_release(&buf);
 
     /* Build response */
     json_t *res = jmap_querychanges_reply(&query);
@@ -5339,11 +5273,97 @@ done:
     return 0;
 }
 
+static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
+{
+    /* Run search */
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes->since_state);
+    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
+    struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
+    if (search->err) {
+        *err = json_pack("{s:s}", "type", "serverError");
+        goto done;
+    }
+
+    /* Process results */
+    char *email_id = NULL;
+    size_t changes_count = 0;
+    modseq_t highest_modseq = 0;
+    int i;
+    hash_table seen_ids = HASH_TABLE_INITIALIZER;
+    memset(&seen_ids, 0, sizeof(hash_table));
+    construct_hash_table(&seen_ids, search->query->merged_msgdata.count + 1, 0);
+
+    for (i = 0 ; i < search->query->merged_msgdata.count; i++) {
+        MsgData *md = ptrarray_nth(&search->query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+        free(email_id);
+        email_id = _email_id_from_guid(&md->guid);
+
+        if (!folder)
+            continue;
+
+        /* Skip hidden messages */
+        int rights = jmap_myrights_byname(req, folder->mboxname);
+        if (!(rights & ACL_READ))
+            continue;
+
+        /* Check if the message is expunged in all mailboxes */
+        int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                           _email_is_expunged_cb, req);
+        if (r && r != IMAP_OK_COMPLETED) {
+            *err = json_pack("{s:s}", "type", "serverError");
+            goto done;
+        }
+        int is_expunged = r != IMAP_OK_COMPLETED;
+
+        /* Apply limit, if any */
+        int is_seen = hash_lookup(email_id, &seen_ids) != NULL;
+        if (!is_seen) {
+            if (changes->max_changes && ++changes_count > changes->max_changes) {
+                changes->has_more_changes = 1;
+                break;
+            }
+        }
+
+        /* Keep track of the highest modseq */
+        if (highest_modseq < md->modseq)
+            highest_modseq = md->modseq;
+
+        /* Skip already seen messages */
+        if (is_seen) continue;
+        hash_insert(email_id, (void*)1, &seen_ids);
+
+        /* Report message */
+        if (is_expunged)
+            json_array_append_new(changes->destroyed, json_string(email_id));
+        else
+            json_array_append_new(changes->changed, json_string(email_id));
+    }
+    free_hash_table(&seen_ids, NULL);
+    free(email_id);
+
+    /* Set new state */
+    if (changes_count) {
+        json_t *val = jmap_fmtstate(highest_modseq);
+        changes->new_state = xstrdup(json_string_value(val));
+        json_decref(val);
+    }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        changes->new_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
+    }
+
+done:
+    json_decref(filter);
+    json_decref(sort);
+    _email_search_free(search);
+}
+
 static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
-	int collapse_threads = 0;
 
     /* Parse request */
     json_t *err = NULL;
@@ -5352,16 +5372,9 @@ static int jmap_email_changes(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    modseq_t since_modseq = atomodseq_t(changes.since_state);
-    if (!since_modseq) {
+    if (!atomodseq_t(changes.since_state)) {
         jmap_parser_invalid(&parser, "sinceState");
     }
-	json_t *arg = json_object_get(req->args, "collapseThreads");
-	if (json_is_boolean(arg)) {
-		collapse_threads = json_boolean_value(arg);
-	} else if (arg) {
-		jmap_parser_invalid(&parser, "collapseThreads");
-	}
 	if (json_array_size(parser.invalid)) {
 		err = json_pack("{s:s}", "type", "invalidArguments");
 		json_object_set(err, "arguments", parser.invalid);
@@ -5370,41 +5383,13 @@ static int jmap_email_changes(jmap_req_t *req)
 	}
 
     /* Search for updates */
-    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
-    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct email_search_window window;
-    memset(&window, 0, sizeof(struct email_search_window));
-    window.collapse = collapse_threads;
-    window.limit = changes.max_changes;
-    size_t total = 0, total_threads = 0;
-    json_t *threads = json_array();
-    int r = _email_search(req, filter, sort, &window, /*want_expunge*/1,
-            &total, &total_threads,
-            &changes.changed, &changes.destroyed, &threads);
-    json_decref(filter);
-    json_decref(sort);
-    json_decref(threads);
-    if (r) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+    _email_changes(req, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 
-    changes.has_more_changes =
-        (json_array_size(changes.changed) + json_array_size(changes.destroyed)) < total;
-    if (changes.has_more_changes ||
-        json_array_size(changes.changed) > 0 ||
-        json_array_size(changes.destroyed) > 0) {
-        /* Determine new state */
-        json_t *val = jmap_fmtstate(window.highestmodseq);
-        changes.new_state = xstrdup(json_string_value(val));
-        json_decref(val);
-    }
-    else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
-        changes.new_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
-    }
-
+    /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
@@ -5413,12 +5398,93 @@ done:
     return 0;
 }
 
+static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
+{
+    /* Run search */
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes->since_state);
+    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
+    struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
+    if (search->err) {
+        *err = json_pack("{s:s}", "type", "serverError");
+        goto done;
+    }
+
+    /* Process results */
+    size_t changes_count = 0;
+    modseq_t highest_modseq = 0;
+    int i;
+
+    size_t mdcount = search->query->merged_msgdata.count;
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    memset(&seen_cids, 0, sizeof(hashu64_table));
+    construct_hashu64_table(&seen_cids, mdcount/4+4,0);
+
+    for (i = 0 ; i < search->query->merged_msgdata.count; i++) {
+        MsgData *md = ptrarray_nth(&search->query->merged_msgdata, i);
+        search_folder_t *folder = md->folder;
+
+        if (!folder)
+            continue;
+
+        /* Skip hidden messages */
+        int rights = jmap_myrights_byname(req, folder->mboxname);
+        if (!(rights & ACL_READ))
+            continue;
+
+        /* Determine if the thread got changed or destroyed */
+        conversation_t *conv = NULL;
+        if (conversation_load(req->cstate, md->cid, &conv) || !conv)
+            continue;
+        int has_thread = conv->thread != NULL;
+        conversation_free(conv);
+
+        /* Apply limit, if any */
+        int is_seen = hashu64_lookup(md->cid, &seen_cids) != NULL;
+        if (!is_seen) {
+            if (changes->max_changes && ++changes_count > changes->max_changes) {
+                changes->has_more_changes = 1;
+                break;
+            }
+        }
+
+        /* Keep track of the highest modseq */
+        if (highest_modseq < md->modseq)
+            highest_modseq = md->modseq;
+
+        /* Skip already seen threads */
+        if (is_seen) continue;
+        hashu64_insert(md->cid, (void*)1, &seen_cids);
+
+        /* Report thread */
+        json_t *to = has_thread ? changes->changed : changes->destroyed;
+        char *thread_id = _thread_id_from_cid(md->cid);
+        json_array_append_new(to, json_string(thread_id));
+        free(thread_id);
+    }
+    free_hashu64_table(&seen_cids, NULL);
+
+    /* Set new state */
+    if (changes_count) {
+        json_t *val = jmap_fmtstate(highest_modseq);
+        changes->new_state = xstrdup(json_string_value(val));
+        json_decref(val);
+    }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        changes->new_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
+    }
+
+done:
+    json_decref(filter);
+    json_decref(sort);
+    _email_search_free(search);
+}
+
 static int jmap_thread_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
-    conversation_t *conv = NULL;
-    json_t *threads = json_array();
 
     /* Parse request */
     json_t *err = NULL;
@@ -5427,73 +5493,27 @@ static int jmap_thread_changes(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    modseq_t since_modseq = atomodseq_t(changes.since_state);
-    if (!since_modseq) {
+    if (!atomodseq_t(changes.since_state)) {
         jmap_parser_invalid(&parser, "sinceState");
     }
+	if (json_array_size(parser.invalid)) {
+		err = json_pack("{s:s}", "type", "invalidArguments");
+		json_object_set(err, "arguments", parser.invalid);
+		jmap_error(req, err);
+		goto done;
+	}
 
     /* Search for updates */
-    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes.since_state);
-    json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct email_search_window window;
-    memset(&window, 0, sizeof(struct email_search_window));
-    window.collapse = 1;
-    window.limit = changes.max_changes;
-    size_t total = 0, total_threads = 0;
-    json_t *changed = json_array();
-    json_t *destroyed = json_array();
-    int r = _email_search(req, filter, sort, &window, /*want_expunge*/1,
-            &total, &total_threads, &changed, &destroyed, &threads);
-    json_decref(filter);
-    json_decref(sort);
-    json_decref(changed);
-    json_decref(destroyed);
-    if (r) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+    _thread_changes(req, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 
-    /* Split the collapsed threads into changed and destroyed -
-     * the values from _email_search are msgids */
-    size_t i;
-    json_t *val;
-    json_array_foreach(threads, i, val) {
-        const char *threadid = json_string_value(val);
-        conversation_id_t cid = _cid_from_id(threadid);
-        if (!cid) continue;
-
-        r = conversation_load(req->cstate, cid, &conv);
-        if (!conv) continue;
-        if (r == CYRUSDB_NOTFOUND)
-            continue;
-        else if (r) {
-            jmap_error(req, json_pack("{s:s}", "type", "serverError"));
-            goto done;
-        }
-
-        json_array_append(conv->thread ? changes.changed : changes.destroyed, val);
-        conversation_free(conv);
-        conv = NULL;
-    }
-
-    changes.has_more_changes =
-        (json_array_size(changes.changed) + json_array_size(changes.destroyed)) < total_threads;
-
-    if (changes.has_more_changes) {
-        json_t *val = jmap_fmtstate(window.highestmodseq);
-        changes.new_state = xstrdup(json_string_value(val));
-        json_decref(val);
-    } else {
-        json_t *val = jmap_fmtstate(jmap_highestmodseq(req, 0/*mbtype*/));
-        changes.new_state = xstrdup(json_string_value(val));
-        json_decref(val);
-    }
-
+    /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
-    conversation_free(conv);
-    json_decref(threads);
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;
