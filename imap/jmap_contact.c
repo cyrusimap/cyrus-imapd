@@ -525,13 +525,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
             const char *id = json_string_value(json_array_get(want, i));
             if (!id) continue;
             if (id[0] == '#') {
-                const char *newid;
-                if (kind == CARDDAV_KIND_GROUP) {
-                    newid = hash_lookup(id + 1, &req->idmap->contactgroups);
-                }
-                else {
-                    newid = hash_lookup(id + 1, &req->idmap->contacts);
-                }
+                const char *newid = jmap_lookup_id(req, id + 1);
                 if (newid) id = newid;
             }
             r = carddav_get_cards(db, mboxname, id, kind, cb, &rock);
@@ -727,7 +721,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
 static const char *_resolve_contactid(struct jmap_req *req, const char *id)
 {
     if (id && *id == '#') {
-        const char *newid = hash_lookup(id + 1, &req->idmap->contacts);
+        const char *newid = jmap_lookup_id(req, id + 1);
         if (newid) return newid;
     }
     return id;
@@ -906,8 +900,9 @@ static int setContactGroups(struct jmap_req *req)
             record = json_pack("{s:s}", "id", uid);
             json_object_set_new(created, key, record);
 
-            /* hash_insert takes ownership of uid here, skanky I know */
-            hash_insert(key, uid, &req->idmap->contactgroups);
+            /* Register creation id */
+            jmap_add_id(req, key, uid);
+            free(uid);
         }
 
         if (json_object_size(created))
@@ -2979,8 +2974,9 @@ static int setContacts(struct jmap_req *req)
             record = json_pack("{s:s}", "id", uid);
             json_object_set_new(created, key, record);
 
-            /* hash_insert takes ownership of uid here, skanky I know */
-            hash_insert(key, uid, &req->idmap->contacts);
+            /* Register creation id */
+            jmap_add_id(req, key, uid);
+            free(uid);
         }
 
         if (json_object_size(created))

@@ -410,7 +410,7 @@ static void parse_comparator(json_t *jsort, struct jmap_parser *parser,
 
 static void jmap_get_parse(json_t *jargs,
                            struct jmap_parser *parser,
-                           hash_table *creation_ids,
+                           jmap_req_t *req,
                            struct jmap_get *get,
                            json_t **err)
 {
@@ -446,10 +446,7 @@ static void jmap_get_parse(json_t *jargs,
              * it. But re-checking creation ids for their existence
              * later in the control flow just shifts the problem */
             if (*id == '#') {
-                const char *id2 = NULL;
-                if (creation_ids)  {
-                    id2 = hash_lookup(id+1, creation_ids);
-                }
+                const char *id2 = jmap_lookup_id(req, id + 1);
                 if (!id2) {
                     json_array_append_new(get->not_found, json_string(id));
                     continue;
@@ -1374,7 +1371,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     construct_hash_table(rock.roles, 8, 0);
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, &req->idmap->mailboxes, &get, &err);
+    jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2083,7 +2080,7 @@ static void _mbox_setargs_parse(json_t *jargs,
     if (json_is_string(jparentId)) {
         const char *parentid = json_string_value(jparentId);
         if (parentid && *parentid == '#') {
-            parentid = hash_lookup(parentid + 1, &req->idmap->mailboxes);
+            parentid = jmap_lookup_id(req, parentid + 1);
         }
         if (parentid) {
             args->parentid = xstrdup(parentid);
@@ -2622,7 +2619,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
                 json_t *jparentId = json_object_get(jmbox, "parentId");
                 const char *need_parent_id = json_string_value(jparentId);
                 if (need_parent_id && *need_parent_id == '#')
-                    if (!hash_lookup(need_parent_id + 1, &req->idmap->mailboxes))
+                    if (!jmap_lookup_id(req, need_parent_id + 1))
                         continue;
 
                 /* Ready to process */
@@ -2655,7 +2652,8 @@ static int jmap_mailbox_set(jmap_req_t *req)
                 }
                 json_object_set_new(set.created, creation_id,
                         json_pack("{s:s}", "id", mbox_id));
-                hash_insert(creation_id, mbox_id, &req->idmap->mailboxes);
+                jmap_add_id(req, creation_id, mbox_id);
+                free(mbox_id);
                 free(strarray_remove(&todo, i--));
             }
             if (!didsome) {
@@ -2671,7 +2669,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
     const char *mbox_id;
     json_object_foreach(set.update, mbox_id, jarg) {
         if (*mbox_id == '#') {
-            const char *id = hash_lookup(mbox_id + 1, &req->idmap->messages);
+            const char *id = jmap_lookup_id(req, mbox_id + 1);
             if (!id) {
                 json_object_set_new(set.not_updated, mbox_id,
                         json_pack("{s:s}", "type", "notFound"));
@@ -2715,7 +2713,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
         json_t *set_err = NULL;
         const char *mbox_id = json_string_value(jid);
         if (*mbox_id == '#') {
-            const char *id = hash_lookup(mbox_id + 1, &req->idmap->messages);
+            const char *id = jmap_lookup_id(req, mbox_id + 1);
             if (!id) {
                 json_object_set_new(set.not_updated, mbox_id,
                         json_pack("{s:s}", "type", "notFound"));
@@ -5803,7 +5801,7 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -6813,7 +6811,7 @@ static int jmap_email_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, &req->idmap->messages, &get, &err);
+    jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -7070,7 +7068,7 @@ static int _email_append(jmap_req_t *req,
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
     json_object_foreach(mailboxids, id, val) {
         if (id && *id == '#') {
-            id = hash_lookup(id + 1, &req->idmap->mailboxes);
+            id = jmap_lookup_id(req, id + 1);
         }
         if (!id) continue;
 
@@ -9227,7 +9225,7 @@ static void _email_update(jmap_req_t *req,
             }
             const char *mboxid = id;
             if (id && *id == '#') {
-                mboxid = hash_lookup(id + 1, &req->idmap->mailboxes);
+                mboxid = jmap_lookup_id(req, id + 1);
             }
             char *name = NULL;
             if (mboxid && (name = _mbox_find_uniqueid(req, mboxid))) {
@@ -9427,14 +9425,14 @@ static int jmap_email_set(jmap_req_t *req)
         }
         /* Report message as created */
         json_object_set_new(set.created, creation_id, new_email);
-        char *msg_id = xstrdup(json_string_value(json_object_get(new_email, "id")));
-        hash_insert(creation_id, msg_id, &req->idmap->messages);
+        const char *msg_id = json_string_value(json_object_get(new_email, "id"));
+        jmap_add_id(req, creation_id, msg_id);
     }
 
     const char *email_id;
     json_object_foreach(set.update, email_id, email) {
         if (*email_id == '#') {
-            const char *id = hash_lookup(email_id + 1, &req->idmap->messages);
+            const char *id = jmap_lookup_id(req, email_id + 1);
             if (!id) {
                 json_object_set_new(set.not_updated, email_id, json_pack("{s:s}",
                             "type", "notFound"));
@@ -9458,7 +9456,7 @@ static int jmap_email_set(jmap_req_t *req)
         json_t *set_err = NULL;
         const char *email_id = json_string_value(jid);
         if (*email_id == '#') {
-            const char *id = hash_lookup(email_id + 1, &req->idmap->messages);
+            const char *id = jmap_lookup_id(req, email_id + 1);
             if (!id) {
                 json_object_set_new(set.not_updated, email_id, json_pack("{s:s}",
                             "type", "notFound"));
@@ -9721,7 +9719,7 @@ static int jmap_email_import(jmap_req_t *req)
             json_object_foreach(mboxids, s, val) {
                 const char *mboxid = s;
                 if (*mboxid == '#') {
-                    mboxid = hash_lookup(mboxid + 1, &req->idmap->mailboxes);
+                    mboxid = jmap_lookup_id(req, mboxid + 1);
                 }
                 char *mboxname = _mbox_find_uniqueid(req, mboxid);
                 if (!mboxid || !mboxname || val != json_true()) {
@@ -9785,7 +9783,7 @@ static int jmap_email_import(jmap_req_t *req)
             /* Successful import */
             json_object_set_new(created, id, email);
             const char *newid = json_string_value(json_object_get(email, "id"));
-            hash_insert(id, xstrdup(newid), &req->idmap->messages);
+            jmap_add_id(req, id, newid);
         }
     }
 
@@ -9808,7 +9806,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -9924,7 +9922,7 @@ static int _emailsubmission_create(jmap_req_t *req,
     if (json_is_string(jemailId)) {
         msgid = json_string_value(jemailId);
         if (*msgid == '#') {
-            const char *id = hash_lookup(msgid + 1, &req->idmap->messages);
+            const char *id = jmap_lookup_id(req, msgid + 1);
             if (id) {
                 msgid = id;
             } else {
@@ -10177,7 +10175,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     struct jmap_get get;
     json_t *err = NULL;
 
-    jmap_get_parse(req->args, &parser, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

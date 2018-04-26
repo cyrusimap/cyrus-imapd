@@ -54,15 +54,6 @@
 
 extern struct namespace jmap_namespace;
 
-struct jmap_idmap {
-    struct hash_table mailboxes;
-    struct hash_table messages;
-    struct hash_table calendars;
-    struct hash_table calendarevents;
-    struct hash_table contactgroups;
-    struct hash_table contacts;
-};
-
 typedef struct jmap_req {
     const char           *method;
     const char           *userid;
@@ -70,7 +61,6 @@ typedef struct jmap_req {
     const char           *inboxname;
     struct conversations_state *cstate;
     struct auth_state    *authstate;
-    struct jmap_idmap    *idmap;
     json_t               *args;
     json_t               *response;
     const char           *tag;
@@ -93,6 +83,8 @@ typedef struct jmap_req {
     ptrarray_t *mboxes;
     int is_shared_account;
     hash_table *mboxrights;
+    hash_table *client_creation_ids;
+    hash_table *new_creation_ids;
 } jmap_req_t;
 
 typedef struct {
@@ -110,6 +102,10 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name,
                           struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
+
+/* Creation ids */
+extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);
+extern void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id);
 
 /* usermbox-like mailbox tree traversal, scoped by accountid.
  * Reports only active (not deleted) mailboxes. Checks presence

@@ -655,22 +655,39 @@ static int validate_request(struct transaction_t *txn, json_t *req)
     return 0;
 }
 
+static int _is_valid_id(const char *id)
+{
+    if (*id == '\0') return 0;
+    const char *p;
+    for (p = id; *p; p++) {
+        if (('0' <= *p && *p <= '9'))
+            continue;
+        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
+            continue;
+        if ((*p == '-') || (*p == '_'))
+            continue;
+        return 0;
+    }
+    return 1;
+}
+
+static void _make_created_ids(const char *creation_id, void *val, void *rock)
+{
+    json_t *jcreatedIds = rock;
+    const char *id = val;
+    json_object_set_new(jcreatedIds, creation_id, json_string(id));
+}
+
 /* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
-    json_t *req = NULL, *resp = NULL;
-    struct jmap_idmap idmap = {
-        HASH_TABLE_INITIALIZER,
-        HASH_TABLE_INITIALIZER,
-        HASH_TABLE_INITIALIZER,
-        HASH_TABLE_INITIALIZER,
-        HASH_TABLE_INITIALIZER,
-        HASH_TABLE_INITIALIZER
-    };
+    json_t *jreq = NULL, *resp = NULL;
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf, *inboxname = NULL;
+    hash_table *client_creation_ids = NULL;
+    hash_table *new_creation_ids = NULL;
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
@@ -688,11 +705,11 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* Regular JMAP POST request */
-    ret = parse_json_body(txn, &req);
+    ret = parse_json_body(txn, &jreq);
     if (ret) goto done;
 
     /* Validate Request object */
-    if ((ret = validate_request(txn, req))) {
+    if ((ret = validate_request(txn, jreq))) {
         goto done;
     }
 
@@ -704,20 +721,46 @@ static int jmap_post(struct transaction_t *txn,
         goto done;
     }
 
-    /* Allocate map to store uids */
-    construct_hash_table(&idmap.mailboxes, 64, 0);
-    construct_hash_table(&idmap.messages, 64, 0);
-    construct_hash_table(&idmap.calendars, 64, 0);
-    construct_hash_table(&idmap.calendarevents, 64, 0);
-    construct_hash_table(&idmap.contactgroups, 64, 0);
-    construct_hash_table(&idmap.contacts, 64, 0);
-
+    /* Set up request-internal state */
     construct_hash_table(&accounts, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
 
+    /* Set up creation ids */
+    long max_creation_ids = (jmap_max_calls_in_request + 1) * jmap_max_objects_in_set;
+    new_creation_ids = xzmalloc(sizeof(hash_table));
+    construct_hash_table(new_creation_ids, max_creation_ids, 0);
+
+    /* Parse client-supplied creation ids */
+    json_t *jcreationIds = json_object_get(jreq, "creationIds");
+    if (json_is_object(jcreationIds)) {
+        client_creation_ids = xzmalloc(sizeof(hash_table));
+        construct_hash_table(client_creation_ids, json_object_size(jcreationIds)+1, 0);
+        const char *creation_id;
+        json_t *jval;
+        json_object_foreach(jcreationIds, creation_id, jval) {
+            if (!json_is_string(jval)) {
+                txn->error.desc = "Invalid creationIds argument";
+                ret = HTTP_BAD_REQUEST;
+                goto done;
+            }
+            const char *id = json_string_value(jval);
+            if (!_is_valid_id(creation_id) || !_is_valid_id(id)) {
+                txn->error.desc = "Invalid creationIds argument";
+                ret = HTTP_BAD_REQUEST;
+                goto done;
+            }
+            hash_insert(creation_id, xstrdup(id), client_creation_ids);
+        }
+    }
+    else if (jcreationIds && jcreationIds != json_null()) {
+        txn->error.desc = "Invalid creationIds argument";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
     /* Process each method call in the request */
     json_t *mc;
-    json_array_foreach(json_object_get(req, "methodCalls"), i, mc) {
+    json_array_foreach(json_object_get(jreq, "methodCalls"), i, mc) {
         const jmap_method_t *mp;
         const char *mname = json_string_value(json_array_get(mc, 0));
         json_t *args = json_array_get(mc, 1), *arg;
@@ -785,7 +828,8 @@ static int jmap_post(struct transaction_t *txn,
         req.args = args;
         req.response = resp;
         req.tag = tag;
-        req.idmap = &idmap;
+        req.client_creation_ids = client_creation_ids;
+        req.new_creation_ids = new_creation_ids;
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.is_shared_account = strcmp(accountid, httpd_userid);
@@ -818,8 +862,15 @@ static int jmap_post(struct transaction_t *txn,
                        strarray_join(&methods, ","), txn->req_hdrs);
 
 
-    /* Dump JSON object into a text buffer */
+    /* Build responses */
     json_t *res = json_pack("{s:O}", "methodResponses", resp);
+    if (client_creation_ids) {
+        json_t *jcreatedIds = json_object();
+        hash_enumerate(new_creation_ids, _make_created_ids, jcreatedIds);
+        json_object_set_new(res, "createdIds", jcreatedIds);
+    }
+
+    /* Dump JSON object into a text buffer */
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
     buf = json_dumps(res, flags);
     json_decref(res);
@@ -836,21 +887,44 @@ static int jmap_post(struct transaction_t *txn,
     free(buf);
 
   done:
-    free_hash_table(&idmap.mailboxes, free);
-    free_hash_table(&idmap.messages, free);
-    free_hash_table(&idmap.calendars, free);
-    free_hash_table(&idmap.calendarevents, free);
-    free_hash_table(&idmap.contactgroups, free);
-    free_hash_table(&idmap.contacts, free);
+    free_hash_table(client_creation_ids, free);
+    free(client_creation_ids);
+    free_hash_table(new_creation_ids, free);
+    free(new_creation_ids);
     free_hash_table(&accounts, NULL);
     free_hash_table(&mboxrights, free);
     free(inboxname);
-    if (req) json_decref(req);
-    if (resp) json_decref(resp);
+    json_decref(jreq);
+    json_decref(resp);
     strarray_fini(&methods);
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
     return ret;
+}
+
+const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
+{
+    if (req->client_creation_ids) {
+        const char *id = hash_lookup(creation_id, req->client_creation_ids);
+        if (id) return id;
+    }
+    if (!req->new_creation_ids)
+        return NULL;
+    return hash_lookup(creation_id, req->new_creation_ids);
+}
+
+void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
+{
+    /* It's OK to overwrite existing ids, as per Foo/set:
+     * "A client SHOULD NOT reuse a creation id anywhere in the same API
+     * request. If a creation id is reused, the server MUST map the creation
+     * id to the most recently created item with that id."
+     */
+    if (!req->new_creation_ids) {
+        req->new_creation_ids = xzmalloc(sizeof(hash_table));
+        construct_hash_table(req->new_creation_ids, 128, 0);
+    }
+    hash_insert(creation_id, xstrdup(id), req->new_creation_ids);
 }
 
 struct _mboxcache_rec {
@@ -1164,7 +1238,8 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     req.args = NULL;
     req.response = NULL;
     req.tag = NULL;
-    req.idmap = NULL;
+    req.client_creation_ids = NULL;
+    req.new_creation_ids = NULL;
     req.txn = txn;
     req.is_shared_account = strcmp(req.accountid, req.userid);
     req.force_openmbox_rw = 0;
