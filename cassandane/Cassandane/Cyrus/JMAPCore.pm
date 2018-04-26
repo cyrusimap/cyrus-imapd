@@ -176,5 +176,77 @@ sub test_blob_download
     $self->assert_str_equals('some test', $resp->{content});
 }
 
+sub test_creationids
+:JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "send bogus creation ids map";
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => encode_json({
+            using => ['ietf:jmapmail'],
+            methodCalls => [['Identity/get', {}, 'R1']],
+            creationIds => 'bogus',
+        }),
+    };
+    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('400', $RawResponse->{status});
+
+    xlog "create a mailbox without any client-supplied creation ids";
+    my $JMAPRequest = {
+        using => ['ietf:jmapmail'],
+        methodCalls => [['Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    parentId => undef,
+                    role => undef
+                }
+            }
+        }, "R1"]],
+    };
+    my $JMAPResponse = $jmap->Request($JMAPRequest);
+    my $mboxid1 = $JMAPResponse->{methodResponses}->[0][1]{created}{1}{id};
+    $self->assert_not_null($mboxid1);
+    $self->assert_null($JMAPResponse->{createdIds});
+
+    xlog "get mailbox using client-supplied creation id";
+    $JMAPRequest = {
+        using => ['ietf:jmapmail'],
+        methodCalls => [['Mailbox/get', { ids => ['#1'] }, 'R1']],
+        creationIds => { 1 => $mboxid1 },
+    };
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_equals($mboxid1, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
+    $self->assert_not_null($JMAPResponse->{createdIds});
+
+    xlog "create a mailbox with empty client-supplied creation ids";
+    $JMAPRequest = {
+        using => ['ietf:jmapmail'],
+        methodCalls => [['Mailbox/set', {
+            create => {
+                "2" => {
+                    name => "bar",
+                    parentId => undef,
+                    role => undef
+                }
+            }
+        }, "R1"]],
+        creationIds => {},
+    };
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    my $mboxid2 = $JMAPResponse->{methodResponses}->[0][1]{created}{2}{id};
+    $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
+}
+
 
 1;

@@ -3595,22 +3595,22 @@ sub test_misc_creationids
 
     xlog "create and get calendar and event";
     my $res = $jmap->CallMethods([
-        ['Calendar/set', { create => { "1" => {
+        ['Calendar/set', { create => { "c1" => {
             name => "foo",
             color => "coral",
             sortOrder => 2,
             isVisible => \1,
         }}}, 'R1'],
-        ['CalendarEvent/set', { create => { "1" => {
-            "calendarId" => "#1",
+        ['CalendarEvent/set', { create => { "e1" => {
+            "calendarId" => "#c1",
             "title" => "bar",
             "description" => "description",
             "freeBusyStatus" => "busy",
             "isAllDay" => JSON::true,
             "start" => "2015-10-06T00:00:00",
         }}}, "R2"],
-        ['CalendarEvent/get', {ids => ["#1"]}, "R3"],
-        ['Calendar/get', {ids => ["#1"]}, "R4"],
+        ['CalendarEvent/get', {ids => ["#e1"]}, "R3"],
+        ['Calendar/get', {ids => ["#c1"]}, "R4"],
     ]);
     my $event = $res->[2][1]{list}[0];
     $self->assert_str_equals($event->{title}, "bar");

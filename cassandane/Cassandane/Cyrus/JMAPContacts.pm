@@ -1799,10 +1799,10 @@ sub test_misc_creationids
 
     xlog "create and get contact group and contact";
     my $res = $jmap->CallMethods([
-        ['Contact/set', {create => { "1" => { firstName => "foo", lastName => "last1" }, }}, "R2"],
-        ['ContactGroup/set', {create => { "1" => {name => "group1", contactIds => ["#1"]} }}, "R2"],
-        ['Contact/get', {ids => ["#1"]}, "R3"],
-        ['ContactGroup/get', {ids => ["#1"]}, "R4"],
+        ['Contact/set', {create => { "c1" => { firstName => "foo", lastName => "last1" }, }}, "R2"],
+        ['ContactGroup/set', {create => { "g1" => {name => "group1", contactIds => ["#c1"]} }}, "R2"],
+        ['Contact/get', {ids => ["#c1"]}, "R3"],
+        ['ContactGroup/get', {ids => ["#g1"]}, "R4"],
     ]);
     my $contact = $res->[2][1]{list}[0];
     $self->assert_str_equals($contact->{firstName}, "foo");
