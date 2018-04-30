@@ -405,17 +405,14 @@ static void test_getqstring(void)
  */
 static void test_getnstring(void)
 {
-    /* Simple sequences of ascii alphanumerics characters are atoms,
-     * which are not nstrings*/
+    /* Simple sequences of ascii alphanumerics characters are atoms */
     TESTCASE(getnstring, "hydrogen helium", EOF, "", 0);
     TESTCASE(getnstring, "258 uranium", EOF, "", 0);
     TESTCASE(getnstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is special for nstrings only */
     TESTCASE_NULL(getnstring, "NIL by mouth", ' ', BLEN("NIL "));
-    /* NELLY here is invalid because unquoted atoms are not permitted here */
-    /* XXX this should consume 0, but due to bug in NIL handling, 5 are consumed */
-    TESTCASE(getnstring, "NELLY ", EOF, "", BLEN("NELLY"));
+    TESTCASE(getnstring, "NELLY ", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -483,17 +480,14 @@ static void test_getnstring(void)
  */
 static void test_getbnstring(void)
 {
-    /* Simple sequences of ascii alphanumerics characters are atoms,
-     * which are not bnstrings*/
+    /* Simple sequences of ascii alphanumerics characters are atoms */
     TESTCASE(getbnstring, "hydrogen helium", EOF, "", 0);
     TESTCASE(getbnstring, "258 uranium", EOF, "", 0);
     TESTCASE(getbnstring, "uranium258 plutonium", EOF, "", 0);
 
     /* The character sequence NIL is special for nstrings only */
     TESTCASE_NULL(getbnstring, "NIL by mouth", ' ', BLEN("NIL "));
-    /* NELLY here is invalid because unquoted atoms are not permitted here */
-    /* XXX this should consume 0, but due to bug in NIL handling, 5 are consumed */
-    TESTCASE(getbnstring, "NELLY ", EOF, "", BLEN("NELLY"));
+    TESTCASE(getbnstring, "NELLY ", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
