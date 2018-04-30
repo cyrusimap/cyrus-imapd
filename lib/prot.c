@@ -1772,6 +1772,35 @@ EXPORTED int prot_peek(struct protstream *s)
     return c;
 }
 
+EXPORTED size_t prot_lookahead(struct protstream *s,
+                               const char *str,
+                               size_t len,
+                               int *sep)
+{
+    assert(!s->write);
+    int short_match = 0;
+
+    if (s->cnt == 0) {
+        int c = prot_fill(s);
+        prot_ungetc(c, s);
+    }
+
+    if (len >= s->cnt) {
+        len = s->cnt;
+        short_match = 1;
+    }
+
+    if (0 == memcmp(str, s->ptr, len)) {
+        if (!short_match) {
+            *sep = (int) s->ptr[len];
+            return len + 1;
+        }
+        return len;
+    }
+
+    return 0;
+}
+
 EXPORTED int prot_ungetc(int c, struct protstream *s)
 {
     assert(!s->write);

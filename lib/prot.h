@@ -167,6 +167,28 @@ extern int prot_peek(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
 
+/* prot_lookahead checks whether the next several buffered bytes match
+ * the string str (of length len).
+ *
+ * If there are enough buffered bytes available, and they match, then
+ * sep will be set to the first byte following str, and the return
+ * value will be equal to len+1.
+ *
+ * If there are not enough buffered bytes available, but those that
+ * are there match, then sep will remain unset, and the return value
+ * will be within 0 < x <= len, depending on how many matching bytes
+ * were available.
+ *
+ * If there is no match, sep will remain unset and the return value
+ * will be zero, regardless of how many bytes were available.
+ *
+ * The internal buffer will ONLY be filled if it is currently empty.
+ */
+extern size_t prot_lookahead(struct protstream *s,
+                             const char *str,
+                             size_t len,
+                             int *sep);
+
 /* The following two macros control the blocking nature of
  * the protstream.
  *
