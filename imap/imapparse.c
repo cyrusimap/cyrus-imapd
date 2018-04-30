@@ -211,18 +211,34 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         }
         else if ((flags & GXS_NIL)) {
             /*
-             * Look for "NIL"
+             * Look carefully for "NIL"
              */
-            if (c == 'N' && prot_peek(pin) == 'I') {
-                prot_ungetc(c, pin);
-                c = getword(pin, buf);
-                if (buf->len == 3 && !memcmp(buf->s, "NIL", 3)) {
-                    /* indicated NIL with a NULL buf.s pointer */
-                    buf_free(buf);
-                    return c;
+            if (c == 'N') {
+                int sep = 0;
+                int matched;
+
+                matched = prot_lookahead(pin, "IL", strlen("IL"), &sep);
+                if (matched == strlen("IL") + 1) {
+                    if (isspace(sep) || sep == '(' || sep == ')' || sep == '\"') {
+                        /* found NIL and a separator, consume it */
+                        prot_ungetc(c, pin);
+                        c = getword(pin, buf);
+                        /* indicate NIL with a NULL buf.s pointer */
+                        buf_free(buf);
+                        return c;
+                    }
                 }
-                if (c != EOF) prot_ungetc(c, pin);
-                return EOF;
+                else if (matched > 0) {
+                    /* partially matched NIL, but not enough buffer to be sure:
+                     * fall back to old behaviour */
+                    prot_ungetc(c, pin);
+                    c = getword(pin, buf);
+                    if (buf->len == 3 && !memcmp(buf->s, "NIL", 3)) {
+                        /* indicated NIL with a NULL buf.s pointer */
+                        buf_free(buf);
+                        return c;
+                    }
+                }
             }
         }
         goto fail;
