@@ -1756,6 +1756,22 @@ EXPORTED inline int prot_getc(struct protstream *s)
     return prot_fill(s);
 }
 
+EXPORTED int prot_peek(struct protstream *s)
+{
+    int c;
+    assert(!s->write);
+
+    if (s->cnt > 0) {
+        c = *(s->ptr);
+    }
+    else {
+        c = prot_fill(s);
+        if (c != EOF) prot_ungetc(c, s);
+    }
+
+    return c;
+}
+
 EXPORTED int prot_ungetc(int c, struct protstream *s)
 {
     assert(!s->write);

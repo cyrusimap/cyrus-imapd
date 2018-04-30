@@ -163,6 +163,7 @@ int prot_flush_internal(struct protstream *s, int force);
 struct protgroup; /* Opaque protgroup structure */
 
 extern int prot_getc(struct protstream *s);
+extern int prot_peek(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
 
