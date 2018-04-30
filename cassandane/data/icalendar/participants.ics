@@ -13,7 +13,7 @@ DESCRIPTION:
 SUMMARY:Yep
 LAST-MODIFIED:20150928T132434Z
 ATTENDEE;ROLE=OPT-PARTICIPANT;CN=Homer Simpson;PARTSTAT=ACCEPTED;X-JMAP-LOCATIONID="loc1":mailto:homer@example.com
-ATTENDEE;X-JMAP-ID="carl";PARTSTAT=TENTATIVE;DELEGATED-FROM="mailto:lenny@example.com";CN=Carl Carlson:mailto:carl@example.com
+ATTENDEE;X-JMAP-ID="carl";X-SEQUENCE=3;X-DTSTAMP=20170102T030405Z;PARTSTAT=TENTATIVE;DELEGATED-FROM="mailto:lenny@example.com";CN=Carl Carlson:mailto:carl@example.com
 ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl@example.com";CN=Lenny Leonard:mailto:lenny@example.com
 ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED;X-DTSTAMP=20150929T144423Z;CN=Larry Burns;MEMBER="mailto:projectA@example.com":mailto:larry@example.com
 ORGANIZER;CN="Monty Burns":mailto:smithers@example.com

@@ -770,6 +770,22 @@ sub normalize_event
     }
     if (not exists $event->{participants}) {
         $event->{participants} = undef;
+    } elsif (defined $event->{participants}) {
+        foreach my $p (values %{$event->{participants}}) {
+            if (not exists $p->{linkIds}) {
+                $p->{linkIds} = undef;
+            }
+            if (not exists $p->{participation}) {
+                $p->{participation} = 'required';
+            }
+            if (not exists $p->{rsvpResponse}) {
+                $p->{rsvpResponse} = 'needs-action';
+            }
+            if (exists $p->{roles}) {
+                my @roles = sort @{$p->{roles}};
+                $p->{roles} = \@roles;
+            }
+        }
     }
     if (not exists $event->{replyTo}) {
         $event->{replyTo} = undef;
@@ -834,7 +850,7 @@ sub assert_normalized_event_equals
     my $copyB = dclone($b);
     normalize_event($copyA);
     normalize_event($copyB);
-    return $self->assert_deep_equals($copyB, $copyA);
+    return $self->assert_deep_equals($copyA, $copyB);
 }
 
 sub putandget_vevent
@@ -1058,21 +1074,23 @@ sub test_calendarevent_get_participants
     $self->assert_str_equals("smithers\@example.com", $event->{participants}{"smithers\@example.com"}{email});
     $self->assert_str_equals("owner", $event->{participants}{"smithers\@example.com"}{roles}[0]);
     $self->assert_str_equals("Homer Simpson", $event->{participants}{"homer\@example.com"}{name});
-    $self->assert_str_equals("accepted", $event->{participants}{"homer\@example.com"}{scheduleStatus});
-    $self->assert_str_equals("optional", $event->{participants}{"homer\@example.com"}{schedulePriority});
+    $self->assert_str_equals("accepted", $event->{participants}{"homer\@example.com"}{rsvpResponse});
+    $self->assert_str_equals("optional", $event->{participants}{"homer\@example.com"}{participation});
     $self->assert_str_equals("homer\@example.com", $event->{participants}{"homer\@example.com"}{email});
     $self->assert_str_equals("attendee", $event->{participants}{"homer\@example.com"}{roles}[0]);
     $self->assert_str_equals("loc1", $event->{participants}{"homer\@example.com"}{locationId});
     $self->assert_str_equals("Carl Carlson", $event->{participants}{"carl"}{name});
-    $self->assert_str_equals("tentative", $event->{participants}{"carl"}{scheduleStatus});
+    $self->assert_str_equals("tentative", $event->{participants}{"carl"}{rsvpResponse});
     $self->assert_str_equals("carl\@example.com", $event->{participants}{"carl"}{email});
     $self->assert_str_equals("attendee", $event->{participants}{"carl"}{roles}[0]);
+    $self->assert_num_equals(3, $event->{participants}{"carl"}{scheduleSequence});
+    $self->assert_str_equals("2017-01-02T03:04:05Z", $event->{participants}{"carl"}{scheduleUpdated});
     $self->assert_str_equals("Lenny Leonard", $event->{participants}{"lenny\@example.com"}{name});
-    $self->assert_str_equals("tentative", $event->{participants}{"lenny\@example.com"}{scheduleStatus});
+    $self->assert_str_equals("tentative", $event->{participants}{"lenny\@example.com"}{rsvpResponse});
     $self->assert_str_equals("lenny\@example.com", $event->{participants}{"lenny\@example.com"}{email});
     $self->assert_str_equals("attendee", $event->{participants}{"lenny\@example.com"}{roles}[0]);
     $self->assert_str_equals("Larry Burns", $event->{participants}{"larry\@example.com"}{name});
-    $self->assert_str_equals("declined", $event->{participants}{"larry\@example.com"}{scheduleStatus});
+    $self->assert_str_equals("declined", $event->{participants}{"larry\@example.com"}{rsvpResponse});
     $self->assert_str_equals("larry\@example.com", $event->{participants}{"larry\@example.com"}{email});
     $self->assert_str_equals("attendee", $event->{participants}{"larry\@example.com"}{roles}[0]);
     $self->assert_str_equals("projectA\@example.com", $event->{participants}{"larry\@example.com"}{memberOf}[0]);
@@ -1341,8 +1359,13 @@ END:VCALENDAR
 EOF
 
     my $event = $self->putandget_vevent($id, $ical);
-    my $scheduleStatus = $event->{participants}{"lenny\@example.com"}{scheduleStatus};
-    $self->assert_str_equals("needs-action", $scheduleStatus);
+    my $p = $event->{participants}{"lenny\@example.com"};
+    $self->assert_str_equals("needs-action", $p->{rsvpResponse});
+    $self->assert_deep_equals(["carl\@example.com"], $p->{delegatedTo});
+    $p = $event->{participants}{"carl\@example.com"};
+    $self->assert_str_equals("needs-action", $p->{rsvpResponse});
+    $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedTo});
+    $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedFrom});
 }
 
 sub createandget_event
@@ -2043,20 +2066,8 @@ sub test_calendarevent_set_participants
     my $jmap = $self->{jmap};
     my $calid = "Default";
 
-    my $participants = {
-        "foo\@local" => {
-            name => "",
-            email => "foo\@local",
-            roles => ["owner"],
-            locationId => "locX",
-        },
-        "monty" => {
-            name => "Monty Burns",
-            email => "monty\@local",
-            roles => ["attendee"],
-            memberOf => ["bla\@local"],
-        },
-    };
+=pod
+=cut
 
     my $event =  {
         "calendarId" => $calid,
@@ -2073,15 +2084,81 @@ sub test_calendarevent_set_participants
             "web" => "http://local/rsvp",
 
         },
-        "participants" => $participants,
+        "participants" => {
+            'foo@local' => {
+                name => 'Foo',
+                email => 'foo@local',
+                kind => 'individual',
+                roles => [ 'owner', 'chair' ],
+                locationId => 'loc1',
+                rsvpResponse => 'accepted',
+                participation => 'required',
+                rsvpWanted => JSON::false,
+                linkIds => [ 'loc1' ],
+            },
+            'bar@local' => {
+                name => 'Bar',
+                email => 'bar@local',
+                kind => 'individual',
+                roles => [ 'attendee' ],
+                locationId => 'loc2',
+                rsvpResponse => 'needs-action',
+                participation => 'required',
+                rsvpWanted => JSON::true,
+                delegatedTo => [ 'bam@local' ],
+                memberOf => [ 'group@local' ],
+                linkIds => [ 'link1' ],
+            },
+            'bam@local' => {
+                name => 'Bam',
+                email => 'bam@local',
+                roles => [ 'attendee' ],
+                delegatedFrom => [ 'bar@local' ],
+                scheduleSequence => 7,
+                scheduleUpdated => '2018-07-06T05:03:02Z',
+            },
+            'group@local' => {
+                name => 'Group',
+                kind => 'group',
+                roles => [ 'attendee' ],
+                email => 'group@local',
+            },
+            'resource@local' => {
+                name => 'Some resource',
+                kind => 'resource',
+                roles => [ 'attendee' ],
+                email => 'resource@local',
+            },
+            'location@local' => {
+                name => 'Some location',
+                kind => 'location',
+                roles => [ 'attendee' ],
+                email => 'location@local',
+                locationId => 'loc1',
+            },
+        },
+        locations => {
+            loc1 => {
+                name => 'location1',
+                rel => 'virtual',
+                features => [ 'video', 'moderator' ],
+                uri => 'https://somewhere.local/moderator',
+            },
+            loc2 => {
+                name => 'location2',
+                rel => 'virtual',
+                features => [ 'video' ],
+                uri => 'https://somewhere.local',
+            },
+        },
+        links => {
+            link1 => {
+                href => 'https://somelink.local',
+            },
+        },
     };
 
     my $ret = $self->createandget_event($event);
-    $event->{id} = $ret->{id};
-    $event->{calendarId} = $ret->{calendarId};
-
-    $participants->{"monty"}{scheduleStatus} = "needs-action";
-    $participants->{"foo\@local"}{scheduleStatus} = "needs-action";
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -2179,8 +2256,6 @@ sub test_calendarevent_set_participantid
     $event->{calendarId} = $ret->{calendarId};
     $event->{participantId} = 'you';
 
-    $participants->{"you"}{scheduleStatus} = "needs-action";
-    $participants->{"foo\@local"}{scheduleStatus} = "needs-action";
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -3483,33 +3558,32 @@ sub test_calendarevent_set_schedule_reply
 
     xlog "create event";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-                        "1" => {
-                            "calendarId" => "Default",
-                            "title" => "foo",
-                            "description" => "foo's description",
-                            "freeBusyStatus" => "busy",
-                            "isAllDay" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "timeZone" => "Australia/Melbourne",
-                            "duration" => "PT1H",
-                            "replyTo" => { imip => "mailto:bugs\@example.com" },
-                            "participants" => $participants,
-                        }
-                    }}, "R1"]]);
+        "1" => {
+            "calendarId" => "Default",
+            "title" => "foo",
+            "description" => "foo's description",
+            "freeBusyStatus" => "busy",
+            "isAllDay" => JSON::false,
+            "start" => "2015-10-06T16:45:00",
+            "timeZone" => "Australia/Melbourne",
+            "duration" => "PT1H",
+            "replyTo" => { imip => "mailto:bugs\@example.com" },
+            "participants" => $participants,
+        }
+    }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     # clean notification cache
     $self->{instance}->getnotify();
 
     xlog "send reply as attendee to organizer";
-    $participants->{att}->{scheduleStatus} = "tentative";
+    $participants->{att}->{rsvpResponse} = "tentative";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
-                        "$id" => {
-                            replyTo => { imip => "mailto:bugs\@example.com" },
-                            participants => $participants,
-                        }
-                    }}, "R1"]]);
-
+        $id => {
+            replyTo => { imip => "mailto:bugs\@example.com" },
+            participants => $participants,
+         }
+    }}, "R1"]]);
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
