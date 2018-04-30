@@ -213,7 +213,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             /*
              * Look for "NIL"
              */
-            if (c == 'N') {
+            if (c == 'N' && prot_peek(pin) == 'I') {
                 prot_ungetc(c, pin);
                 c = getword(pin, buf);
                 if (buf->len == 3 && !memcmp(buf->s, "NIL", 3)) {
