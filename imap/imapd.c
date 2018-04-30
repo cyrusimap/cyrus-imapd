@@ -8913,6 +8913,7 @@ static void cmd_status(char *tag, char *name)
     c = parse_statusitems(&statusitems, &errstr);
     if (c == EOF) {
         prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
+        eatline(imapd_in, c);
         goto done;
     }
 
@@ -12271,7 +12272,7 @@ static int getlistretopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_STATUS;
             c = parse_statusitems(&args->statusitems, &errstr);
             if (c == EOF) {
-                prot_printf(imapd_out, "%s BAD %s", tag, errstr);
+                prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
                 return EOF;
             }
         }
