@@ -106,6 +106,7 @@ static void test_getastring(void)
     /* The character sequence NIL is not special, it's parsed as an atom */
     TESTCASE(getastring, "NIL by mouth", ' ', "NIL", BLEN("NIL "));
     TESTCASE(getastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
+    TESTCASE(getastring, "NILE in Egypt", ' ', "NILE", BLEN("NILE "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -181,6 +182,7 @@ static void test_getbastring(void)
     /* The character sequence NIL is not special, it's parsed as an atom */
     TESTCASE(getbastring, "NIL by mouth", ' ', "NIL", BLEN("NIL "));
     TESTCASE(getbastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
+    TESTCASE(getbastring, "NILE in Egypt", ' ', "NILE", BLEN("NILE "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -258,6 +260,7 @@ static void test_getstring(void)
     /* The character sequence NIL is not special, it's parsed as an atom */
     TESTCASE(getstring, "NIL by mouth", EOF, "", 0);
     TESTCASE(getstring, "NELLY the lamb", EOF, "", 0);
+    TESTCASE(getstring, "NILE in Egypt", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -337,6 +340,7 @@ static void test_getqstring(void)
     /* The character sequence NIL is not special, it's parsed as an atom */
     TESTCASE(getqstring, "NIL by mouth", EOF, "", 0);
     TESTCASE(getqstring, "NELLY the lamb", EOF, "", 0);
+    TESTCASE(getqstring, "NILE in Egypt", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -413,6 +417,7 @@ static void test_getnstring(void)
     /* The character sequence NIL is special for nstrings only */
     TESTCASE_NULL(getnstring, "NIL by mouth", ' ', BLEN("NIL "));
     TESTCASE(getnstring, "NELLY ", EOF, "", 0);
+    TESTCASE(getnstring, "NILE in Egypt", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -488,6 +493,7 @@ static void test_getbnstring(void)
     /* The character sequence NIL is special for nstrings only */
     TESTCASE_NULL(getbnstring, "NIL by mouth", ' ', BLEN("NIL "));
     TESTCASE(getbnstring, "NELLY ", EOF, "", 0);
+    TESTCASE(getbnstring, "NILE in Egypt", EOF, "", 0);
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
@@ -562,6 +568,7 @@ static void test_getnastring(void)
     /* The character sequence NIL is special, unless quoted */
     TESTCASE_NULL(getnastring, "NIL by mouth", ' ', BLEN("NIL "));
     TESTCASE(getnastring, "NELLY the lamb", ' ', "NELLY", BLEN("NELLY "));
+    TESTCASE(getnastring, "NILE in Egypt", ' ', "NILE", BLEN("NILE "));
 
     /*
      * List wildcards aren't part of an atom, but Cyrus accepts them
