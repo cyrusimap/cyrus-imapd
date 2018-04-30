@@ -1433,19 +1433,14 @@ replyto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
     return replyto;
 }
 
-static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
+static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts,
+                                     icalproperty *orga)
 {
-    json_t *p = json_pack("{}");
+    json_t *p = json_object();
     icalparameter *param;
-    int is_owner = icalproperty_isa(prop) == ICAL_ORGANIZER_PROPERTY;
+    struct buf buf = BUF_INITIALIZER;
 
-    /* name */
-    const char *name = NULL;
-    param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-    if (param) {
-        name = icalparameter_get_cn(param);
-    }
-    json_object_set_new(p, "name", json_string(name ? name : ""));
+    /* FIXME invitedBy */
 
     /* email */
     char *email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
@@ -1455,6 +1450,14 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
     }
     json_object_set_new(p, "email", json_string(email));
     free(email);
+
+    /* name */
+    const char *name = NULL;
+    param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+    if (param) {
+        name = icalparameter_get_cn(param);
+    }
+    json_object_set_new(p, "name", json_string(name ? name : ""));
 
     /* kind */
     const char *kind = NULL;
@@ -1482,22 +1485,58 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
         json_object_set_new(p, "kind", json_string(kind));
     }
 
+    /* participation */
+    const char *participation = NULL;
+    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
+    param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
+    if (param) {
+        ical_role = icalparameter_get_role(param);
+        switch (ical_role) {
+            case ICAL_ROLE_REQPARTICIPANT:
+                participation = "required";
+                break;
+            case ICAL_ROLE_OPTPARTICIPANT:
+                participation = "optional";
+                break;
+            case ICAL_ROLE_NONPARTICIPANT:
+                participation = "non-participant";
+                break;
+            case ICAL_ROLE_CHAIR:
+                /* fall through */
+            default:
+                participation = "required";
+        }
+    }
+    if (participation) {
+        json_object_set_new(p, "participation", json_string(participation));
+    }
+
     /* roles */
-    json_t *roles = json_pack("[]");
-    if (is_owner) {
-        json_array_append_new(roles, json_string("owner"));
-    } else {
+    json_t *roles = json_array();
+    int seen_owner = 0;
+    if (ical_role == ICAL_ROLE_CHAIR)
+        json_array_append_new(roles, json_string("chair"));
+    for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
+
+        if (strcmp(icalparameter_get_xname(param), JMAPICAL_XPARAM_ROLE))
+            continue;
+
+        buf_setcstr(&buf, icalparameter_get_xvalue(param));
+        json_array_append_new(roles, json_string(buf_lcase(&buf)));
+        if (!seen_owner) seen_owner = !strcmp(buf_cstring(&buf), "owner");
+    }
+    if (!seen_owner && orga) {
+        const char *o = icalproperty_get_organizer(orga);
+        const char *a = icalproperty_get_attendee(prop);
+        if (!strcasecmp(o, a))
+            json_array_append_new(roles, json_string("owner"));
+    }
+    if (!json_array_size(roles)) {
         json_array_append_new(roles, json_string("attendee"));
     }
-    param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
-    if (param && (icalparameter_get_role(param) == ICAL_ROLE_CHAIR)) {
-        json_array_append_new(roles, json_string("chair"));
-    }
-    if (json_array_size(roles)) {
-        json_object_set_new(p, "roles", roles);
-    } else {
-        json_decref(roles);
-    }
+    json_object_set_new(p, "roles", roles);
 
     /* locationId */
     const char *locid;
@@ -1505,124 +1544,157 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts)
         json_object_set_new(p, "locationId", json_string(locid));
     }
 
-    /* scheduleStatus */
-    const char *status = NULL;
+    /* rsvpResponse */
+    const char *rsvp = NULL;
     short depth = 0;
-    while (!status && !is_owner) {
-        param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+    icalproperty *rsvp_prop = prop;
+    while (!rsvp) {
+        param = icalproperty_get_first_parameter(rsvp_prop, ICAL_PARTSTAT_PARAMETER);
         if (!param) {
-            status = "needs-action";
+            rsvp = "needs-action";
             break;
         }
         icalparameter_partstat pst = icalparameter_get_partstat(param);
         switch (pst) {
             case ICAL_PARTSTAT_ACCEPTED:
-                status = "accepted";
+                rsvp = "accepted";
                 break;
             case ICAL_PARTSTAT_DECLINED:
-                status = "declined";
+                rsvp = "declined";
                 break;
             case ICAL_PARTSTAT_TENTATIVE:
-                status = "tentative";
+                rsvp = "tentative";
                 break;
             case ICAL_PARTSTAT_DELEGATED:
                 /* Follow the delegate chain */
-                param = icalproperty_get_first_parameter(prop,
-                                                         ICAL_DELEGATEDTO_PARAMETER);
+                param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
                 if (param) {
                     const char *to = icalparameter_get_delegatedto(param);
                     if (!to) continue;
-                    prop = hash_lookup(to, hatts);
-                    if (prop) {
+                    rsvp_prop = hash_lookup(to, hatts);
+                    if (rsvp_prop) {
                         /* Determine PARTSTAT from delegate. */
                         if (++depth > 64) {
                             /* This is a pathological case: libical does
                              * not check for infinite DELEGATE chains, so we
                              * make sure not to fall in an endless loop. */
-                            status = "needs-action";
+                            rsvp = "needs-action";
                         }
                         continue;
                     }
                 }
                 /* fallthrough */
             default:
-                status = "needs-action";
-        }
-    }
-    if (status) {
-        json_object_set_new(p, "scheduleStatus", json_string(status));
-    }
-
-    /* schedulePriority */
-    const char *prio = NULL;
-    param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
-    if (param) {
-        icalparameter_role role = icalparameter_get_role(param);
-        switch (role) {
-            case ICAL_ROLE_CHAIR:
-            case ICAL_ROLE_REQPARTICIPANT:
-                prio = "required";
-                break;
-            case ICAL_ROLE_OPTPARTICIPANT:
-                prio = "optional";
-                break;
-            case ICAL_ROLE_NONPARTICIPANT:
-                prio = "non-participant";
-                break;
-            default:
-                prio = "required";
-        }
-    }
-    if (prio) {
-        json_object_set_new(p, "schedulePriority", json_string(prio));
-    }
-
-    /* scheduleRSVP */
-    json_t *rsvp = NULL;
-    param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
-    if (param) {
-        icalparameter_rsvp val = icalparameter_get_rsvp(param);
-        if (val == ICAL_RSVP_TRUE) {
-            rsvp = json_true();
-        } else if (val == ICAL_RSVP_FALSE) {
-            rsvp = json_false();
+                rsvp = "needs-action";
         }
     }
     if (rsvp) {
-        json_object_set_new(p, "scheduleRSVP", rsvp);
+        json_object_set_new(p, "rsvpResponse", json_string(rsvp));
     }
 
-    /* scheduleUpdated */
-    const char *xdtstamp = get_icalxparam_value(prop, "X-DTSTAMP");
-    if (xdtstamp) {
-        struct icaltimetype dt = icaltime_from_string(xdtstamp);
-        if (icaltime_is_valid_time(dt)) {
-            char *t = utcdate_from_icaltime_r(dt);
-            if (t) {
-                json_object_set_new(p, "scheduleUpdated", json_string(t));
-                free(t);
-            }
-        }
+    /* rsvpWanted */
+    param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
+    if (param) {
+        icalparameter_rsvp val = icalparameter_get_rsvp(param);
+        json_object_set_new(p, "rsvpWanted",
+                json_boolean(val == ICAL_RSVP_TRUE));
     }
 
-    /* memberOf */
-    /* FIXME libical doesn't support multiple members */
-    json_t *members = json_pack("[]");
+    /* delegatedTo */
+    json_t *delegatedTo = json_array();
+    for (param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDTO_PARAMETER)) {
+
+        char *tmp = mailaddr_from_uri(icalparameter_get_delegatedto(param));
+        if (!tmp)
+            continue;
+        json_array_append_new(delegatedTo, json_string(tmp));
+        free(tmp);
+    }
+    if (json_array_size(delegatedTo)) {
+        json_object_set_new(p, "delegatedTo", delegatedTo);
+    }
+    else {
+        json_decref(delegatedTo);
+    }
+
+    /* delegatedFrom */
+    json_t *delegatedFrom = json_array();
+    for (param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDFROM_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDFROM_PARAMETER)) {
+
+        char *tmp = mailaddr_from_uri(icalparameter_get_delegatedfrom(param));
+        if (!tmp)
+            continue;
+        json_array_append_new(delegatedFrom, json_string(tmp));
+        free(tmp);
+    }
+    if (json_array_size(delegatedFrom)) {
+        json_object_set_new(p, "delegatedFrom", delegatedFrom);
+    }
+    else {
+        json_decref(delegatedFrom);
+    }
+
+    /* memberof */
+    json_t *memberOf = json_pack("[]");
     for (param = icalproperty_get_first_parameter(prop, ICAL_MEMBER_PARAMETER);
          param;
          param = icalproperty_get_next_parameter(prop, ICAL_MEMBER_PARAMETER)) {
 
-        char *addr = mailaddr_from_uri(icalparameter_get_member(param));
-        if (!addr) continue;
-        json_array_append_new(members, json_string(addr));
-        free(addr);
+        char *tmp = mailaddr_from_uri(icalparameter_get_member(param));
+        if (!tmp) continue;
+        json_array_append_new(memberOf, json_string(tmp));
+        free(tmp);
     }
-    if (json_array_size(members)) {
-        json_object_set_new(p, "memberOf", members);
+    if (json_array_size(memberOf)) {
+        json_object_set_new(p, "memberOf", memberOf);
     } else {
-        json_decref(members);
+        json_decref(memberOf);
     }
 
+    /* linkIds */
+    json_t *linkIds = json_array();
+    for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
+
+        if (strcmp(icalparameter_get_xname(param), JMAPICAL_XPARAM_LINKID))
+            continue;
+
+        buf_setcstr(&buf, icalparameter_get_xvalue(param));
+        json_array_append_new(linkIds, json_string(buf_lcase(&buf)));
+    }
+    if (json_array_size(linkIds)) {
+        json_object_set_new(p, "linkIds", linkIds);
+    }
+    else {
+        json_decref(linkIds);
+    } 
+
+    /* scheduleSequence */
+    const char *xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_SEQUENCE);
+    if (xval) {
+        bit64 res;
+        if (parsenum(xval, &xval, strlen(xval), &res) == 0) {
+            json_object_set_new(p, "scheduleSequence", json_integer(res));
+        }
+    }
+
+    /* scheduleUpdated */
+    if ((xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_DTSTAMP))) {
+        icaltimetype dtstamp = icaltime_from_string(xval);
+        if (!icaltime_is_null_time(dtstamp) && !dtstamp.is_date &&
+                dtstamp.zone == icaltimezone_get_utc_timezone()) {
+            char *tmp = utcdate_from_icaltime_r(dtstamp);
+            json_object_set_new(p, "scheduleUpdated", json_string(tmp));
+            free(tmp);
+        }
+    }
+
+    buf_free(&buf);
     return p;
 }
 
@@ -1631,103 +1703,34 @@ static json_t*
 participants_from_ical(context_t *ctx __attribute__((unused)),
                        icalcomponent *comp)
 {
-    struct hash_table hatts;
+    struct hash_table attmap;
     icalproperty *prop;
-    json_t *org, *participants = json_pack("{}");
-    const char *orgaddr;
+    json_t *participants = json_object();
 
     /* Collect all attendees in a map to lookup delegates. */
-    construct_hash_table(&hatts, 32, 0);
+    construct_hash_table(&attmap, 32, 0);
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-        hash_insert(icalproperty_get_value_as_string(prop), prop, &hatts);
+        hash_insert(icalproperty_get_value_as_string(prop), prop, &attmap);
     }
-    if (!hash_numrecords(&hatts)) {
+    if (!hash_numrecords(&attmap)) {
         goto done;
     }
 
-    /* Add ORGANIZER */
-    org = NULL;
-    orgaddr = NULL;
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (!prop) {
-        goto done;
-    }
-    if ((org = participant_from_ical(prop, &hatts))) {
-        char *id;
 
-        orgaddr = icalproperty_get_organizer(prop);
-        id = NULL;
+    /* Traverse ATTENDEES - find organizer first to not mess up the iterator */
+    icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-        /* Check if there's an ATTENDEE for this organizer */
-        for (prop = icalcomponent_get_first_property(comp,
-                                                     ICAL_ATTENDEE_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp,
-                                                    ICAL_ATTENDEE_PROPERTY)) {
-
-            const char *addr = icalproperty_get_attendee(prop);
-            json_t *p;
-
-            /* Match with mailto: URI of the ORGANIZER */
-            if (strcmp(addr, orgaddr)) {
-                continue;
-            }
-
-            /* Convert the participant */
-            p = participant_from_ical(prop, &hatts);
-            if (!p) continue;
-
-            /* Replace the organizer participant with this one */
-            json_decref(org);
-            org = p;
-            json_object_set_new(org, "roles", json_pack("[s]", "owner"));
-
-            /* Determine if it has a custom JMAP id */
-            if ((id = (char*) get_icalxparam_value(prop, JMAPICAL_XPARAM_ID))) {
-                id = xstrdup(id);
-            }
-            break;
-        }
-
-        if (!id) {
-            id = mailaddr_from_uri(orgaddr);
-        }
-
-        json_object_set_new(participants, id, org);
+        json_t *p = participant_from_ical(prop, &attmap, orga);
+        char *id = xstrdupnull(get_icalxparam_value(prop, JMAPICAL_XPARAM_ID));
+        if (!id) id = mailaddr_from_uri(icalproperty_get_attendee(prop));
+        json_object_set_new(participants, id, p);
         free(id);
-    }
-    if (!orgaddr || !org) {
-        goto done;
-    }
-
-    /* Add ATTENDEEs */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-        const char *addr = icalproperty_get_attendee(prop);
-        json_t *p;
-
-        p = participant_from_ical(prop, &hatts);
-        if (p && strcmp(addr, orgaddr)) {
-            /* Add ATTENDEE */
-            char *id;
-            if ((id = (char*) get_icalxparam_value(prop, JMAPICAL_XPARAM_ID))) {
-                id = xstrdup(id);
-            } else {
-                id = mailaddr_from_uri(icalproperty_get_attendee(prop));
-            }
-            if (json_object_get(participants, id)) {
-                json_object_update(json_object_get(participants, id), p);
-            } else {
-                json_object_set_new(participants, id, p);
-            }
-            free(id);
-        } else {
-            json_decref(p);
-        }
     }
 
 done:
@@ -1735,7 +1738,7 @@ done:
         json_decref(participants);
         participants = json_null();
     }
-    free_hash_table(&hatts, NULL);
+    free_hash_table(&attmap, NULL);
     return participants;
 }
 
@@ -2897,40 +2900,27 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 static void
 participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
 {
-    json_t *role;
-    const char *s;
-    size_t i;
-    int is_chair, pe;
     icalparameter *param;
 
     /* name */
-    pe = readprop(ctx, p, "name", 0, "s", &s);
-    if (pe > 0) {
-        param = icalparameter_new_cn(s);
+    json_t *name = json_object_get(p, "name");
+    if (json_is_string(name)) {
+        param = icalparameter_new_cn(json_string_value(name));
         icalproperty_add_parameter(prop, param);
     }
-
-    if (icalproperty_isa(prop) == ICAL_ORGANIZER_PROPERTY)
-        return;
-
-    /* roles */
-    is_chair = 0;
-    json_array_foreach(json_object_get(p, "roles"), i, role) {
-        if ((s = json_string_value(role)) && !strcasecmp(s, "chair")) {
-            is_chair = 1;
-        }
-    }
-    if (is_chair) {
-        param = icalparameter_new_role(ICAL_ROLE_CHAIR);
-        icalproperty_add_parameter(prop, param);
+    else if (JNOTNULL(name)) {
+        invalidprop(ctx, "name");
     }
 
     /* kind */
-    pe = readprop(ctx, p, "kind", 0, "s", &s);
-    if (pe > 0) {
-        char *tmp = xstrdup(s);
-        tmp = ucase(tmp);
-        icalparameter_cutype cu = icalparameter_string_to_enum(tmp);
+    json_t *kind = json_object_get(p, "kind");
+    if (json_is_string(kind)) {
+        char *tmp = ucase(xstrdup(json_string_value(kind)));
+        icalparameter_cutype cu;
+        if (!strcmp(tmp, "LOCATION"))
+            cu = ICAL_CUTYPE_ROOM;
+        else
+            cu = icalparameter_string_to_enum(tmp);
         switch (cu) {
             case ICAL_CUTYPE_INDIVIDUAL:
             case ICAL_CUTYPE_GROUP:
@@ -2944,124 +2934,257 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
         }
         free(tmp);
     }
-
-    /* locationId */
-    if (!json_is_null(json_object_get(p, "locationId"))) {
-        if ((pe = readprop(ctx, p, "locationId", 0, "s", &s)) > 0) {
-            set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID, s, 1);
-        }
-    } else {
-        remove_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID);
+    else if (JNOTNULL(kind)) {
+        invalidprop(ctx, "kind");
     }
 
-    /* scheduleStatus */
+    /* participation */
+    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
+    json_t *participation = json_object_get(p, "participation");
+    if (json_is_string(participation)) {
+        const char *s = json_string_value(participation);
+        if (!strcasecmp(s, "required")) {
+            ical_role = ICAL_ROLE_REQPARTICIPANT;
+        }
+        else if (!strcasecmp(s, "optional")) {
+            ical_role = ICAL_ROLE_OPTPARTICIPANT;
+        }
+        else if (!strcasecmp(s, "non-participant")) {
+            ical_role = ICAL_ROLE_NONPARTICIPANT;
+        }
+        if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
+            icalproperty_add_parameter(prop, icalparameter_new_role(ical_role));
+        }
+    }
+    else if (JNOTNULL(participation)) {
+        invalidprop(ctx, "participation");
+    }
+
+    /* roles */
+    json_t *roles = json_object_get(p, "roles");
+    if (json_array_size(roles)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(roles, i, jval) {
+            const char *s = json_string_value(jval);
+            if (!s) {
+                beginprop_idx(ctx, "roles", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            char *role = NULL;
+            if (!strcasecmp(s, "attendee"))
+                role = "ATTENDEE";
+            else if (!strcasecmp(s, "chair"))
+                role = "CHAIR";
+            else if (!strcasecmp(s, "owner"))
+                role = "OWNER";
+            if (!role) {
+                beginprop_idx(ctx, "roles", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            /* Try to use standard CHAIR role */
+            if (!strcmp(role, "CHAIR") && ical_role == ICAL_ROLE_REQPARTICIPANT) {
+                param = icalparameter_new_role(ICAL_ROLE_CHAIR);
+                icalproperty_add_parameter(prop, param);
+            } else {
+                set_icalxparam(prop, JMAPICAL_XPARAM_ROLE, role, 0);
+            }
+        }
+    }
+    else if (roles) {
+        invalidprop(ctx, "roles");
+    }
+
+    /* locationId */
+    json_t *locationId = json_object_get(p, "locationId");
+    if (json_is_string(locationId)) {
+        const char *s = json_string_value(locationId);
+        set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID, s, 1);
+    }
+    else if (JNOTNULL(locationId)) {
+        invalidprop(ctx, "locationId");
+    }
+
+    /* rsvpResponse */
     icalparameter_partstat ps = ICAL_PARTSTAT_NEEDSACTION;
-    pe = readprop(ctx, p, "scheduleStatus", 0, "s", &s);
-    if (pe > 0) {
-        char *tmp = xstrdup(s);
-        tmp = ucase(tmp);
+    json_t *rsvpResponse = json_object_get(p, "rsvpResponse");
+    if (json_is_string(rsvpResponse)) {
+        char *tmp = ucase(xstrdup(json_string_value(rsvpResponse)));
         ps = icalparameter_string_to_enum(tmp);
         switch (ps) {
             case ICAL_PARTSTAT_NEEDSACTION:
             case ICAL_PARTSTAT_ACCEPTED:
             case ICAL_PARTSTAT_DECLINED:
             case ICAL_PARTSTAT_TENTATIVE:
-                /* do nothing */
                 break;
             default:
+                invalidprop(ctx, "rsvpResponse");
                 ps = ICAL_PARTSTAT_NONE;
-                /* ignore */ ;
         }
         free(tmp);
+    }
+    else if (JNOTNULL(rsvpResponse)) {
+        invalidprop(ctx, "rsvpResponse");
     }
     if (ps != ICAL_PARTSTAT_NONE) {
         param = icalparameter_new_partstat(ps);
         icalproperty_add_parameter(prop, param);
     }
 
-    /* schedulePriority */
-    pe = readprop(ctx, p, "schedulePriority", 0, "s", &s);
-    if (pe > 0) {
-        icalparameter_role role = ICAL_ROLE_NONE;
-        if (!strcasecmp(s, "required") && !is_chair) {
-            role = ICAL_ROLE_REQPARTICIPANT;
-        } else if (!strcasecmp(s, "optional")) {
-            role = ICAL_ROLE_OPTPARTICIPANT;
-        } else if (!strcasecmp(s, "non-participant")) {
-            role = ICAL_ROLE_NONPARTICIPANT;
-        }
-        if (role != ICAL_ROLE_NONE) {
-            param = icalparameter_new_role(role);
-            icalproperty_add_parameter(prop, param);
-        }
+    /* rsvpWanted */
+    json_t *rsvpWanted = json_object_get(p, "rsvpWanted");
+    if (json_is_boolean(rsvpWanted)) {
+        if (rsvpWanted == json_true())
+            param = icalparameter_new_rsvp(ICAL_RSVP_TRUE);
+        else
+            param = icalparameter_new_rsvp(ICAL_RSVP_FALSE);
+        icalproperty_add_parameter(prop, param);
+    }
+    else if (JNOTNULL(rsvpWanted)) {
+        invalidprop(ctx, "rsvpWanted");
     }
 
-    /* scheduleRSVP */
-    int b;
-    pe = readprop(ctx, p, "scheduleRSVP", 0, "b", &b);
-    if (pe > 0) {
-        param = icalparameter_new_rsvp(b ? ICAL_RSVP_TRUE : ICAL_RSVP_FALSE);
-        icalproperty_add_parameter(prop, param);
+    /* delegatedTo */
+    json_t *delegatedTo = json_object_get(p, "delegatedTo");
+    if (json_array_size(delegatedTo)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(delegatedTo, i, jval) {
+            const char *s = json_string_value(jval);
+            if (!s) {
+                beginprop_idx(ctx, "delegatedTo", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            char *tmp = mailaddr_to_uri(json_string_value(jval));
+            param = icalparameter_new_delegatedto(tmp);
+            icalproperty_add_parameter(prop, param);
+            free(tmp);
+        }
+    }
+    else if (JNOTNULL(delegatedTo)) {
+        invalidprop(ctx, "delegatedTo");
+    }
+
+    /* delegatedFrom */
+    json_t *delegatedFrom = json_object_get(p, "delegatedFrom");
+    if (json_array_size(delegatedFrom)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(delegatedFrom, i, jval) {
+            const char *s = json_string_value(jval);
+            if (!s) {
+                beginprop_idx(ctx, "delegatedFrom", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            char *tmp = mailaddr_to_uri(json_string_value(jval));
+            param = icalparameter_new_delegatedfrom(tmp);
+            icalproperty_add_parameter(prop, param);
+            free(tmp);
+        }
+    }
+    else if (JNOTNULL(delegatedFrom)) {
+        invalidprop(ctx, "delegatedFrom");
+    }
+
+    /* memberOf */
+    json_t *memberOf = json_object_get(p, "memberOf");
+    if (json_array_size(memberOf)) {
+        size_t i;
+        json_t *jval;
+        struct buf buf = BUF_INITIALIZER;
+        /* libical already sets surrounding quotes on an x-value,
+         * so make sure not to set a start quote for the first
+         * mailto: URI and chomp of the QUOTE char of the last one */
+        json_array_foreach(memberOf, i, jval) {
+            const char *s = json_string_value(jval);
+            if (!s) {
+                beginprop_idx(ctx, "memberOf", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            char *tmp = mailaddr_to_uri(s);
+            if (i) buf_appendcstr(&buf, ",\"");
+            buf_appendcstr(&buf, tmp);
+            buf_appendcstr(&buf, "\"");
+            free(tmp);
+        }
+        buf_truncate(&buf, -1);
+        set_icalxparam(prop, "MEMBER", buf_cstring(&buf), 1);
+        buf_free(&buf);
+    }
+    else if (JNOTNULL(memberOf)) {
+        invalidprop(ctx, "memberOf");
+    }
+
+    /* linkIds */
+    json_t *linkIds = json_object_get(p, "linkIds");
+    if (json_array_size(linkIds)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(linkIds, i, jval) {
+            const char *s = json_string_value(jval);
+            if (!s) {
+                beginprop_idx(ctx, "linkIds", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            set_icalxparam(prop, JMAPICAL_XPARAM_LINKID, s, 0);
+        }
+    }
+    else if (JNOTNULL(linkIds)) {
+        invalidprop(ctx, "linkIds");
+    }
+
+    /* scheduleSequence */
+    json_t *scheduleSequence = json_object_get(p, "scheduleSequence");
+    if (json_is_integer(scheduleSequence) && json_integer_value(scheduleSequence) >= 0) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%lld", json_integer_value(scheduleSequence));
+        set_icalxparam(prop, JMAPICAL_XPARAM_SEQUENCE, buf_cstring(&buf), 0);
+        buf_free(&buf);
+    }
+    else if (JNOTNULL(scheduleSequence)) {
+        invalidprop(ctx, "scheduleSequence");
     }
 
     /* scheduleUpdated */
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    icaltimetype now = icaltime_current_time_with_zone(utc);
-    set_icalxparam(prop, "X-DTSTART", icaltime_as_ical_string(now), 1);
-
-    /* memberOf */
-    if (!json_is_null(json_object_get(p, "memberOf"))) {
-        json_t *members;
-        pe = readprop(ctx, p, "memberOf", 0, "o", &members);
-        if (pe > 0 && json_array_size(members)) {
-            size_t i;
-            json_t *m;
-            struct buf buf = BUF_INITIALIZER;
-            buf_setcstr(&buf, "");
-
-            json_array_foreach(members, i, m) {
-                beginprop_idx(ctx, "memberOf", i);
-                const char *addr = json_string_value(m);
-                if (addr) {
-                    /* FIXME libical doesn't support multiple MEMBERs.
-                     * As a workaround, set its value as an x-value,
-                     * which already comes with a start and end quote */
-                    char *tmp = mailaddr_to_uri(addr);
-                    if (i) {
-                        buf_appendcstr(&buf, ",");
-                        buf_appendcstr(&buf, "\"");
-                    }
-                    buf_appendcstr(&buf, tmp);
-                    if (i < json_array_size(members) - 1) {
-                        buf_appendcstr(&buf, "\"");
-                    }
-                    free(tmp);
-                } else {
-                    invalidprop(ctx, NULL);
-                }
-                endprop(ctx);
-            }
-            set_icalxparam(prop, "MEMBER", buf_cstring(&buf), 1);
-            buf_free(&buf);
-        } else if (pe > 0) {
-            invalidprop(ctx, "memberOf");
+    json_t *scheduleUpdated = json_object_get(p, "scheduleUpdated");
+    if (json_is_string(scheduleUpdated)) {
+        const char *s = json_string_value(scheduleUpdated);
+        icaltimetype dtstamp;
+        if (utcdate_to_icaltime(s, &dtstamp)) {
+            char *tmp = icaltime_as_ical_string_r(dtstamp);
+            set_icalxparam(prop, JMAPICAL_XPARAM_DTSTAMP, tmp, 0);
+            free(tmp);
         }
-    } else {
-        icalproperty_remove_parameter_by_kind(prop, ICAL_MEMBER_PARAMETER);
+        else {
+            invalidprop(ctx, "scheduleSequence");
+        }
+    }
+    else if (JNOTNULL(scheduleUpdated)) {
+        invalidprop(ctx, "scheduleSequence");
     }
 }
 
-/* Create or update the ORGANIZER/ATTENDEEs in the VEVENT component comp as
- * defined by the JMAP organizer and attendees. Purge any participants that
- * are not updated. */
+/* Create or update the ATTENDEEs in the VEVENT component comp as
+ * defined by the participants property. */
 static void
 participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *participants)
 {
     const char *id;
     json_t *p;
 
-    /* Purge existing ORGANIZER and ATTENDEEs */
-    remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
+    /* Purge existing ATTENDEEs */
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
 
     if (!JNOTNULL(participants)) {
@@ -3069,63 +3192,25 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *participants)
     }
 
     json_object_foreach(participants, id, p) {
-        const char *s, *email;
-        char *freeme;
-        json_t *roles, *role;
-        int is_owner, pe;
-        size_t i;
-        icalproperty *prop;
-
         if (!strlen(id))
             continue;
 
         beginprop_key(ctx, "participants", id);
 
-        /* email */
-        pe = readprop(ctx, p, "email", 1, "s", &email);
-        if (pe <= 0) {
+        const char *email = json_string_value(json_object_get(p, "email"));
+        if (!email) {
+            invalidprop(ctx, "email");
             endprop(ctx);
             continue;
         }
-
-        /* roles */
-        roles = NULL;
-        is_owner = 0;
-        pe = readprop(ctx, p, "roles", 1, "o", &roles);
-        if (pe >= 0 && !json_array_size(roles)) {
-            invalidprop(ctx, "roles");
-            endprop(ctx);
-            continue;
-        }
-        json_array_foreach(roles, i, role) {
-            if ((s = json_string_value(role)) && !strcasecmp(s, "owner")) {
-                is_owner = 1;
-            }
-        }
-
-        /* create participant */
-        freeme = mailaddr_to_uri(email);
-        if (is_owner) {
-            /* last owner wins */
-            remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
-            prop = icalproperty_new_organizer(freeme);
-            participant_to_ical(ctx, prop, p);
-            icalcomponent_add_property(comp, prop);
-        }
-
-        if (have_invalid_props(ctx)) {
-            endprop(ctx);
-            continue;
-        }
-
-        /* Create an ATTENDEE for every participants, including owners */
-        prop = icalproperty_new_attendee(freeme);
+        char *tmp = mailaddr_to_uri(email);
+        icalproperty *prop = icalproperty_new_attendee(tmp);
         participant_to_ical(ctx, prop, p);
         if (strcmp(id, email)) {
             set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
         }
         icalcomponent_add_property(comp, prop);
-        free(freeme);
+        free(tmp);
 
         endprop(ctx);
     }
@@ -4016,7 +4101,6 @@ location_to_ical(context_t *ctx, icalcomponent *comp, const char *id, json_t *lo
     s = json_string_value(json_object_get(loc, "coordinates"));
     if (s) set_icalxparam(prop, JMAPICAL_XPARAM_GEO, s, 0);
 
-    struct buf buf = BUF_INITIALIZER;
     json_t *jval;
     size_t i;
 
@@ -4027,6 +4111,7 @@ location_to_ical(context_t *ctx, icalcomponent *comp, const char *id, json_t *lo
     }
 
     /* feature */
+    struct buf buf = BUF_INITIALIZER;
     json_array_foreach(json_object_get(loc, "features"), i, jval) {
         if (i) buf_appendcstr(&buf, ",");
         buf_appendcstr(&buf, json_string_value(jval));
@@ -4114,6 +4199,9 @@ replyto_to_ical(context_t *ctx, icalcomponent *comp, json_t *replyto)
 
     remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
+    /* XXX(rsto): We want ORGANIZER always to have a mailto: URI
+     * for now, and without ORGANIZER we can't store the 'web'
+     * replyTo property. */
     if ((imip = json_object_get(replyto, "imip"))) {
         const char *addr = NULL;
 
@@ -4130,9 +4218,6 @@ replyto_to_ical(context_t *ctx, icalcomponent *comp, json_t *replyto)
         icalcomponent_add_property(comp, prop);
         endprop(ctx);
 
-        /* XXX(rsto): We want ORGANIZER always to have a mailto: URI
-         * for now, and without ORGANIZER we can't store the 'web'
-         * replyTo property. */
         if ((web = json_object_get(replyto, "web"))) {
             const char *uri = NULL;
 
@@ -4570,17 +4655,6 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
     }
 
-    /* participants */
-    json_t *participants = NULL;
-    pe = readprop(ctx, event, "participants", 0, "o", &participants);
-    if (pe > 0) {
-        if (json_is_null(participants) || json_object_size(participants)) {
-            participants_to_ical(ctx, comp, participants);
-        } else {
-            invalidprop(ctx, "participants");
-        }
-    }
-
     /* replyTo */
     json_t *replyto;
     if (!json_is_null(json_object_get(event, "replyTo"))) {
@@ -4590,6 +4664,17 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
     } else {
         remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
+    }
+
+    /* participants */
+    json_t *participants = NULL;
+    pe = readprop(ctx, event, "participants", 0, "o", &participants);
+    if (pe > 0) {
+        if (json_is_null(participants) || json_object_size(participants)) {
+            participants_to_ical(ctx, comp, participants);
+        } else {
+            invalidprop(ctx, "participants");
+        }
     }
 
     /* participantId: readonly */

@@ -75,7 +75,10 @@ extern "C" {
 #define JMAPICAL_XPARAM_NAME          "X-JMAP-NAME"
 #define JMAPICAL_XPARAM_PROPERTIES    "X-JMAP-PROPERTIES"
 #define JMAPICAL_XPARAM_REL           "X-JMAP-REL"
+#define JMAPICAL_XPARAM_ROLE          "X-JMAP-ROLE"
 #define JMAPICAL_XPARAM_RSVP_URI      "X-JMAP-RSVP-URI"
+#define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /* in use at FastMail */
+#define JMAPICAL_XPARAM_DTSTAMP       "X-DTSTAMP" /* in use at FastMail */
 #define JMAPICAL_XPARAM_TZID          "X-JMAP-TZID"
 
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
