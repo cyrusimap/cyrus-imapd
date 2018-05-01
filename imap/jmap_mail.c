@@ -4754,7 +4754,6 @@ done:
     search->err = r;
     if (r) {
         syslog(LOG_ERR, "jmap: _email_runsearch: %s", error_message(r));
-        return NULL;
     }
     return search;
 }
