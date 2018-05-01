@@ -1672,7 +1672,7 @@ sub test_mailbox_changes_counts
     $state = $res->[0][1]{newState};
 
     xlog "update email";
-    $res = $jmap->CallMethods([['Email/set', { update => { $msgid => { isUnread => JSON::false }}
+    $res = $jmap->CallMethods([['Email/set', { update => { $msgid => { 'keywords/$flagged' => JSON::true }}
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgid});
 
@@ -7532,7 +7532,7 @@ sub test_thread_changes
     xlog "destroy email b, update email d";
     $res = $jmap->CallMethods([['Email/set', {
         destroy => [ $msgB->{id} ],
-        update =>  { $msgD->{id} => { isUnread => JSON::false }},
+        update =>  { $msgD->{id} => { 'keywords/$foo' => JSON::true }},
     }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $msgB->{id});
     $self->assert(exists $res->[0][1]->{updated}{$msgD->{id}});
