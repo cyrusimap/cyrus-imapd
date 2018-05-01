@@ -6042,6 +6042,283 @@ sub test_misc_emptyids
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 }
 
+sub test_email_querychanges_basic
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $draftsmbox;
+
+    xlog "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+    }, 'R1']]);
+
+    $talk->select("INBOX");
+    $talk->store("3", "+flags", "(\\Flagged)");
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        sinceState => $old->{state},
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+}
+
+sub test_email_querychanges_basic_collapse
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $draftsmbox;
+
+    xlog "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        collapseThreads => $JSON::true,
+    }, 'R1']]);
+
+    $talk->select("INBOX");
+    $talk->store("3", "+flags", "(\\Flagged)");
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+}
+
+sub test_email_querychanges_basic_mb
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+    }, 'R1']]);
+
+    $talk->select("INBOX");
+    $talk->store("3", "+flags", "(\\Flagged)");
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        sinceState => $old->{state},
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    # nothing added or removed here
+    $self->assert_num_equals(0, scalar @{$new->{added}});
+    $self->assert_num_equals(0, scalar @{$new->{removed}});
+}
+
+sub test_email_querychanges_basic_mb_collapse
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+    }, 'R1']]);
+
+    $talk->select("INBOX");
+    $talk->store("3", "+flags", "(\\Flagged)");
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+        ##upToId => $old->{ids}[3],
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    # with collased threads we have to check
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+
+    xlog "now with upto past";
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+        upToId => $old->{ids}[3],
+    }, 'R2']]);
+
+    $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+
+    xlog "now with upto equal";
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+        upToId => $old->{ids}[2],
+    }, 'R2']]);
+
+    $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+
+    xlog "now with upto early";
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+        upToId => $old->{ids}[1],
+    }, 'R2']]);
+
+    $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_num_equals(0, scalar @{$new->{added}});
+    $self->assert_num_equals(0, scalar @{$new->{removed}});
+}
+
 sub test_email_changes
     :JMAP :min_version_3_1
 {
@@ -6435,13 +6712,13 @@ sub test_email_querychanges_implementation
     # for processing an Email/queryChanges request, depending
     # on the query arguments:
     #
-    # (1) 'trivial': if collapsedThreads is false and the
+    # (1) 'trivial': if collapseThreads is false and the
     #      mailboxIds filter argument is either not set or
     #      contains multiple mailbox ids
     #
-    # (2) 'collapse': if collapsedThreads is true
+    # (2) 'collapse': if collapseThreads is true
     #
-    # (3) 'concise': if collapsedThreads is false and the
+    # (3) 'concise': if collapseThreads is false and the
     #     mailboxIds filter argument contains exactly
     #     one mailboxId
     #
