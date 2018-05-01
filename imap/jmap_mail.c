@@ -5040,6 +5040,13 @@ static void _email_querychanges(jmap_req_t *req, struct jmap_querychanges *query
 
         int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
 
+        // was previously expunged and hasn't been changed, we can skip
+        // this message entirely.  Avoids issue where an old deleted email_id
+        // matches a later seen_id such that we don't count it, and get the
+        // added indexes off
+        if (is_expunged && md->modseq <= since_modseq)
+            goto doneloop;
+
         if (hash_lookup(email_id, &seen_ids))
             goto doneloop;
         hash_insert(email_id, (void*)1, &seen_ids);
