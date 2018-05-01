@@ -1066,6 +1066,8 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
                 role = "archive";
             } else if (!strcmp(use, "\\Drafts")) {
                 role = "drafts";
+            } else if (!strcmp(use, "\\Important")) {
+                role = "important";
             } else if (!strcmp(use, "\\Junk")) {
                 role = "junk";
             } else if (!strcmp(use, "\\Sent")) {
@@ -2107,6 +2109,8 @@ static void _mbox_setargs_parse(json_t *jargs,
             args->specialuse = "\\Archive";
         } else if (!strcmp(args->role, "drafts")) {
             args->specialuse = "\\Drafts";
+        } else if (!strcmp(args->role, "important")) {
+            args->specialuse = "\\Important";
         } else if (!strcmp(args->role, "junk")) {
             args->specialuse = "\\Junk";
         } else if (!strcmp(args->role, "sent")) {
