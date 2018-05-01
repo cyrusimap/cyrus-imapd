@@ -9099,6 +9099,9 @@ static int _email_flagupdate_write(jmap_req_t *req, struct email_flagupdate *upd
                                  json_t *cur_mailboxes,
                                  json_t *new_mailboxes)
 {
+    if (!update->keywords)
+        return 0;
+
     if (update->is_patch && !json_object_size(update->keywords))
         return 0;
 
