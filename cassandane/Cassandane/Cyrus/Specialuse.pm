@@ -209,5 +209,19 @@ sub test_delete_removed_delay
     $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 }
 
+sub test_important
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Important", "(USE (\\Important))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Important");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+}
+
 # compile
 1;
