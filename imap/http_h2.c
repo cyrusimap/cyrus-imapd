@@ -454,12 +454,11 @@ HIDDEN void http2_done()
 HIDDEN int http2_preface(struct transaction_t *txn)
 {
     if (http2_enabled()) {
-        struct protstream *pin = txn->conn->pin;
+        /* Check initial client input for HTTP/2 preface */
+        int c;
 
-        /* Force read of initial client input and check for HTTP/2 preface */
-        prot_ungetc(prot_getc(pin), pin);
-        if (pin->cnt >= NGHTTP2_CLIENT_MAGIC_LEN &&
-            !memcmp(pin->ptr, NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN)) {
+        if (prot_lookahead(txn->conn->pin,
+                           NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN, &c)) {
             syslog(LOG_DEBUG, "HTTP/2 client connection preface");
             return 1;
         }
