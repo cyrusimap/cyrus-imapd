@@ -8686,7 +8686,7 @@ static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
         /* Write quoted printable */
         size_t qp_len = 0;
         char *qp_text = charset_qpencode_mimebody(txtbuf.s, txtbuf.len, 1, &qp_len);
-        fputs("Content-Transfer-Encoding : quoted-printable\r\n", fp);
+        fputs("Content-Transfer-Encoding: quoted-printable\r\n", fp);
         fputs("\r\n", fp);
         fwrite(qp_text, 1, qp_len, fp);
         free(qp_text);
