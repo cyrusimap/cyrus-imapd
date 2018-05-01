@@ -9338,8 +9338,10 @@ done:
     free(mboxname);
     buf_free(&buf);
     if (r) {
-        *set_err = json_pack("{s:s}", "type", "serverError");
-        syslog(LOG_ERR, "_email_update: %s", error_message(r));
+        const char *errType = "serverError";
+        if (r == IMAP_NOTFOUND)
+            errType = "notFound";
+        *set_err = json_pack("{s:s}", "type", errType);
     }
 }
 
